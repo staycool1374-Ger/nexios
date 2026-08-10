@@ -21,7 +21,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
     {"buffer_pool",          25,    0,       0      },  // alloc/free/transfer + v0.3.11 B1-B3 PT-walk regressions
-    {"all",                 810,    0,       0      },  // +3 v0.3.11 buffer_pool B1-B3, -2 vacuous stubs, -1 iocd stub
+    {"all",                 850,    0,       0      },  // 810 baseline + v0.3.8 testbed additions (config_checks+5, infra+3, wcet_memory+2, no_dynamic_alloc+2, buffer_pool B1-B3+3) − stub removals (buffer_pool −2, iocd −1); 850 registered, 835 execute (TF_BENCH/TF_USER filtered)
     {"dmesg",                15,    0,       0      },  // DmesgBuffer + error strings + suppression  (daemon_restart_crash gated, T0-7)
     {"scheduler",            62,    0,       0      },  // sched + task + lifecycle + idle_task + zombie_cleanup + health + cpu_load + preemption(7)
     {"deadlock",              1,    0,       0      },  // starvation_deadlock (detect/recovery stubs deleted, T3-1)

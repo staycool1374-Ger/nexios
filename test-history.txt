@@ -1123,3 +1123,6 @@ SUMMARY: total=61 ok=60 fail=1
 2026-08-10 20:43:53 buffer_pool PASSED: 27 FAILED: 0 TIME: 623ms (v0.3.11 B1-B3 regression gate: +3 PT-walk tests, zero RESOURCE WARN)
 2026-08-10 20:50:06 buffer_pool PASSED: 25 FAILED: 0 TIME: 609ms (v0.3.11 post-stub-removal re-gate: 2 vacuous stubs deleted)
 2026-08-10 20:51:26 selftest PASSED: 132 FAILED: 0 TIME: 6763ms (final acceptance gate, v0.3.7-v0.3.11 binding)
+2026-08-10 21:10:00 ipc PASSED: 51 FAILED: 0 TIME: 2189ms (H2 residual check: ipc class clean; interactive selftest all hangs at ipc_send_sync_timeout 89/835)
+2026-08-10 21:20:00 all PASSED: 835 FAILED: 0 TIME: 193464ms (H2 residual re-verify: 835/835; first run 193s)
+2026-08-10 21:25:00 all PASSED: 835 FAILED: 0 TIME: 45888ms (post all-count fix: expected 850, TCOUNT clean)
