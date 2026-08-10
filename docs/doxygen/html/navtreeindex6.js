@@ -1,5 +1,6 @@
 var NAVTREEINDEX6 =
 {
+"nexios__config_8h.html#a7cf9db7fcc2c0bf9b1bb475b2bad3d93":[3,0,0,1,24,82],
 "nexios__config_8h.html#a804b850b1e890968b4dfb1f1004ee3b0":[3,0,0,1,24,78],
 "nexios__config_8h.html#a8125ddc77bbb15588608c8b894dfd1f3":[3,0,0,1,24,93],
 "nexios__config_8h.html#a835305cb9a116e1c539f8f2a6b880848":[3,0,0,1,24,7],
@@ -248,6 +249,5 @@ var NAVTREEINDEX6 =
 "stdio_8c.html#a3e29caa20f7cffe18f410f01278905a8":[3,0,0,3,9,0],
 "stdio_8c.html#a55f3d956bb2ba20b5059e9e25484a47f":[3,0,0,3,9,1],
 "stdio_8c.html#ac38cd16373d98782e1465bd3d5aba470":[3,0,0,3,9,5],
-"stdio_8c.html#ac4c69b212f10b94a455083ed6c51a8dd":[3,0,0,3,9,4],
-"stdio_8c.html#ad41876f99f190c7488e64ef39c50a23f":[3,0,0,3,9,3]
+"stdio_8c.html#ac4c69b212f10b94a455083ed6c51a8dd":[3,0,0,3,9,4]
 };

@@ -5132,6 +5132,10 @@
 │   │       ├── test__cleanup_8hpp_source.html
 │   │       ├── test__cleanup_8hpp.html
 │   │       ├── test__cleanup_8hpp.js
+│   │       ├── test__config__checks_8cpp__incl.md5
+│   │       ├── test__config__checks_8cpp_a1f3b5c5faec65c7c6e017cd029921fc4_cgraph.md5
+│   │       ├── test__config__checks_8cpp.html
+│   │       ├── test__config__checks_8cpp.js
 │   │       ├── test__config_8cpp__incl.md5
 │   │       ├── test__config_8cpp.html
 │   │       ├── test__config_8cpp.js
@@ -5465,6 +5469,12 @@
 │   │       ├── test__idt_8cpp_ab07c5b8b5ba0df0ed9d7625eccce9f56_cgraph.md5
 │   │       ├── test__idt_8cpp.html
 │   │       ├── test__idt_8cpp.js
+│   │       ├── test__infra_8cpp__incl.md5
+│   │       ├── test__infra_8cpp_a3bae1291956ab44e315fd8f23439e4f2_cgraph.md5
+│   │       ├── test__infra_8cpp_a8fa3e7a395b68620485b806172cdcef9_cgraph.md5
+│   │       ├── test__infra_8cpp_ae306f3322f4ac3fe18ffae51c90229b9_cgraph.md5
+│   │       ├── test__infra_8cpp.html
+│   │       ├── test__infra_8cpp.js
 │   │       ├── test__init_8cpp__incl.md5
 │   │       ├── test__init_8cpp_a2f730cd4bf2065a69f143baa64897427_cgraph.md5
 │   │       ├── test__init_8cpp_a5712e7f89995f7f91cfd5373b193f15a_cgraph.md5
@@ -5818,6 +5828,10 @@
 │   │       ├── test__net_8cpp_ae919a7f212fc0c9b92a64556bc7a4158_cgraph.md5
 │   │       ├── test__net_8cpp.html
 │   │       ├── test__net_8cpp.js
+│   │       ├── test__no__dynamic__alloc__after__init_8cpp__incl.md5
+│   │       ├── test__no__dynamic__alloc__after__init_8cpp_a0b8d0e8243778a6d3a24408a5bacc276_cgraph.md5
+│   │       ├── test__no__dynamic__alloc__after__init_8cpp.html
+│   │       ├── test__no__dynamic__alloc__after__init_8cpp.js
 │   │       ├── test__no__op__new_8cpp__incl.md5
 │   │       ├── test__no__op__new_8cpp_a882bc1cfddaa745b0bf04765daecc004_cgraph.md5
 │   │       ├── test__no__op__new_8cpp.html
@@ -6049,12 +6063,14 @@
 │   │       ├── test__registry_8cpp_a07bf5de326f03950b4012c1b42f5c171_cgraph.md5
 │   │       ├── test__registry_8cpp_a095aba4e9e7cc11cf7e5e9d48b2d28a3_cgraph.md5
 │   │       ├── test__registry_8cpp_a0aa04608f5608ad916b21f1d7639fce8_cgraph.md5
+│   │       ├── test__registry_8cpp_a0b8d0e8243778a6d3a24408a5bacc276_cgraph.md5
 │   │       ├── test__registry_8cpp_a0c04e1be6dff5d2e2cb370b41dbf82ef_cgraph.md5
 │   │       ├── test__registry_8cpp_a0dd08c3292aaf585484267f753d2f909_cgraph.md5
 │   │       ├── test__registry_8cpp_a10be64220ae82dd229d28dd75929225c_cgraph.md5
 │   │       ├── test__registry_8cpp_a13714cd376989323d066b68000c5ca93_cgraph.md5
 │   │       ├── test__registry_8cpp_a16eb105ce399cff6f8072eea1051cba7_cgraph.md5
 │   │       ├── test__registry_8cpp_a1e141c8be86050c9e3767514b07444ce_cgraph.md5
+│   │       ├── test__registry_8cpp_a1f3b5c5faec65c7c6e017cd029921fc4_cgraph.md5
 │   │       ├── test__registry_8cpp_a211f27122b0ca43dee5fbbfe29063a71_cgraph.md5
 │   │       ├── test__registry_8cpp_a2178c2241b17f9314f48a154c3277a06_cgraph.md5
 │   │       ├── test__registry_8cpp_a2216e41bebc7922c50a3516076f1df2f_cgraph.md5
@@ -6070,6 +6086,7 @@
 │   │       ├── test__registry_8cpp_a38cf6ea4c764224f982841b76981686e_cgraph.md5
 │   │       ├── test__registry_8cpp_a39c5492f5cb625ae1422d6db2bde1aff_cgraph.md5
 │   │       ├── test__registry_8cpp_a3ab66b0eea8703db9755ada9d14e2ff8_cgraph.md5
+│   │       ├── test__registry_8cpp_a3bae1291956ab44e315fd8f23439e4f2_cgraph.md5
 │   │       ├── test__registry_8cpp_a3d518bed95e93e3a73a4dd4542056939_cgraph.md5
 │   │       ├── test__registry_8cpp_a3d6fc4e035d5bfe0c8ea665fdc11d1d8_cgraph.md5
 │   │       ├── test__registry_8cpp_a3ed097dbc31b6e554bccae58bc68b8c5_cgraph.md5
@@ -6138,6 +6155,7 @@
 │   │       ├── test__registry_8cpp_aa1ee33b231f0a8f36f0d702c8c6a2964_cgraph.md5
 │   │       ├── test__registry_8cpp_aa59c860ec78de1ec56ff1fcac00994dd_cgraph.md5
 │   │       ├── test__registry_8cpp_aa8ad3f799634c9bf5f1a1580d604a61c_cgraph.md5
+│   │       ├── test__registry_8cpp_aa8c2a395545e38dc933007de776ce477_cgraph.md5
 │   │       ├── test__registry_8cpp_aa9c45cfc10c8edeb722e2df6b13b9267_cgraph.md5
 │   │       ├── test__registry_8cpp_aa9f37bd5f1eb1bb0acbb8ed99fdc5a33_cgraph.md5
 │   │       ├── test__registry_8cpp_aae15a79ba7cb568b6210f193130060ba_cgraph.md5
@@ -6259,6 +6277,7 @@
 │   │       ├── test__registry_8gen_8hpp_a36038a564443042f2f6749f9f70b84ed_cgraph.md5
 │   │       ├── test__registry_8gen_8hpp_a37ee2b7e896b730ea3b3cd4cfb7a812d_cgraph.md5
 │   │       ├── test__registry_8gen_8hpp_a38c2d7d8b41bc27f6821284b40ceaf4c_cgraph.md5
+│   │       ├── test__registry_8gen_8hpp_a3a6a69e858b9419664bb013011bb1d80_cgraph.md5
 │   │       ├── test__registry_8gen_8hpp_a3b80b478a382c64361f7fb448faf244d_cgraph.md5
 │   │       ├── test__registry_8gen_8hpp_a3c621d16d63645122a806dcd07ff20d6_cgraph.md5
 │   │       ├── test__registry_8gen_8hpp_a3e4b004ff238a35afcd5af5dc8e64a78_cgraph.md5
@@ -7204,6 +7223,12 @@
 │   │       ├── test__wcet__cleanup_8cpp_aae2f2e6075fb6fdb5a820f71867840b7_cgraph.md5
 │   │       ├── test__wcet__cleanup_8cpp.html
 │   │       ├── test__wcet__cleanup_8cpp.js
+│   │       ├── test__wcet__memory_8cpp__incl.md5
+│   │       ├── test__wcet__memory_8cpp_a727ba15c747c73e75d24650c2288403f_cgraph.md5
+│   │       ├── test__wcet__memory_8cpp_aa168e289f8d257b85eaff782ccd0406f_cgraph.md5
+│   │       ├── test__wcet__memory_8cpp_aa8c2a395545e38dc933007de776ce477_cgraph.md5
+│   │       ├── test__wcet__memory_8cpp.html
+│   │       ├── test__wcet__memory_8cpp.js
 │   │       ├── test__wcet__overrun_8cpp__incl.md5
 │   │       ├── test__wcet__overrun_8cpp_a56b7064223eff4dae2aac212a12b980d_cgraph.md5
 │   │       ├── test__wcet__overrun_8cpp_a853f018ba08d6aa906e5ca927dcb4b0b_cgraph.md5
@@ -9550,6 +9575,7 @@
 │   │   │   ├── test_checked_ptr.cpp
 │   │   │   ├── test_cleanup.cpp
 │   │   │   ├── test_cleanup.hpp
+│   │   │   ├── test_config_checks.cpp
 │   │   │   ├── test_config.cpp
 │   │   │   ├── test_config.hpp
 │   │   │   ├── test_cpu_load.cpp
@@ -9580,6 +9606,7 @@
 │   │   │   ├── test_idle_cleanup.cpp
 │   │   │   ├── test_idle_task.cpp
 │   │   │   ├── test_idt.cpp
+│   │   │   ├── test_infra.cpp
 │   │   │   ├── test_init.cpp
 │   │   │   ├── test_iocd.cpp
 │   │   │   ├── test_ipc_benchmark.cpp
@@ -9606,6 +9633,7 @@
 │   │   │   ├── test_microkernel_transition.cpp
 │   │   │   ├── test_mutex_pcp.cpp
 │   │   │   ├── test_net.cpp
+│   │   │   ├── test_no_dynamic_alloc_after_init.cpp
 │   │   │   ├── test_no_op_new.cpp
 │   │   │   ├── test_o1_scheduler.cpp
 │   │   │   ├── test_page_tables.cpp
@@ -9670,6 +9698,7 @@
 │   │   │   ├── test_watchdog.cpp
 │   │   │   ├── test_watchdog.hpp
 │   │   │   ├── test_wcet_cleanup.cpp
+│   │   │   ├── test_wcet_memory.cpp
 │   │   │   ├── test_wcet_overrun.cpp
 │   │   │   ├── test_wcet_scheduler.cpp
 │   │   │   ├── test_weak_stubs.cpp
@@ -9771,11 +9800,8 @@
 ├── test-history.txt
 ├── test-history.txt.bak
 ├── testcases-v0.3.10.md
-├── testcases-v0.3.11.md
 ├── testcases-v0.3.12.md
-├── testcases-v0.3.6.md
 ├── testcases-v0.3.7.md
-├── testcases-v0.3.8.md
 ├── testcases-v0.3.9.md
 ├── testcases-v0.4.x.md
 ├── testcases-v0.5.x.md
@@ -9936,4 +9962,4 @@
     ├── vfsd.c.d
     └── vfsd.c.elf
 
-115 directories, 9822 files
+115 directories, 9848 files

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.10</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.11</span>
    </div>
   </td>
  </tr>
@@ -162,6 +162,8 @@ Functions</h2></td></tr>
 <tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
 <tr class="memitem:ac3dcbb860f4f6469142dd4dd33b78398" id="r_ac3dcbb860f4f6469142dd4dd33b78398"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ac3dcbb860f4f6469142dd4dd33b78398">kernel::test::mark_vfs_touched</a> ()</td></tr>
 <tr class="memdesc:ac3dcbb860f4f6469142dd4dd33b78398"><td class="mdescLeft">&#160;</td><td class="mdescRight">Called by VFS syscall handlers to mark that VFS state was touched.  <br /></td></tr>
+<tr class="memitem:abec3b271acc661cda69074923732b6d4" id="r_abec3b271acc661cda69074923732b6d4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#abec3b271acc661cda69074923732b6d4">kernel::test::snapshot_is_active</a> ()</td></tr>
+<tr class="memdesc:abec3b271acc661cda69074923732b6d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a test-isolation snapshot exists (<a class="el" href="namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31">snapshot_create()</a> succeeded and <a class="el" href="namespacekernel_1_1test.html#ae4288686f519dcd0faacfe54ae2f1bff">snapshot_destroy()</a> has not yet run). Lets a test distinguish "running under the isolation harness" from a bare invocation where snapshot/restore is disabled.  <br /></td></tr>
 <tr class="memitem:a5b61544ff1676d3f6d4a777c3211be31" id="r_a5b61544ff1676d3f6d4a777c3211be31"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31">kernel::test::snapshot_create</a> ()</td></tr>
 <tr class="memitem:af41d7948ad158bc2d5390ece894e112c" id="r_af41d7948ad158bc2d5390ece894e112c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#af41d7948ad158bc2d5390ece894e112c">kernel::test::snapshot_canary_corrupted</a> ()</td></tr>
 <tr class="memdesc:af41d7948ad158bc2d5390ece894e112c"><td class="mdescLeft">&#160;</td><td class="mdescRight">DEBUG watchdog: true when the snapshot buffer's canary region has been overwritten by a stray write since the last snapshot_create. Polled by on_tick() / context-switch epilogue (CONFIG_DEBUG) so a corrupting write is detected within one tick instead of at the next snapshot_restore boundary. Read-only; never mutates snapshot state.  <br /></td></tr>

@@ -1,5 +1,6 @@
 var NAVTREEINDEX9 =
 {
+"structkernel_1_1vfs_1_1_pipe_buffer.html":[0,0,3,16,7],
 "structkernel_1_1vfs_1_1_pipe_buffer.html":[2,0,3,3,7],
 "structkernel_1_1vfs_1_1_pipe_buffer.html#a46cf2dc3fd037402dc96616bd20aa754":[0,0,3,16,7,4],
 "structkernel_1_1vfs_1_1_pipe_buffer.html#a46cf2dc3fd037402dc96616bd20aa754":[2,0,3,3,7,4],
@@ -248,6 +249,5 @@ var NAVTREEINDEX9 =
 "test__budget_8cpp.html#ad8258e72ac251675446260d91023cf98":[3,0,0,1,14,9,1],
 "test__budget_8cpp.html#ae6b8fcdc5040561adb9fc258741fe20d":[3,0,0,1,14,9,3],
 "test__buffer__pool_8cpp.html":[3,0,0,1,14,10],
-"test__buffer__pool_8cpp.html#a127a1ea64d5da0f8afec4e35b2879bbb":[3,0,0,1,14,10,9],
-"test__buffer__pool_8cpp.html#a394f8267e28146c15f60471947b6314d":[3,0,0,1,14,10,20]
+"test__buffer__pool_8cpp.html#a127a1ea64d5da0f8afec4e35b2879bbb":[3,0,0,1,14,10,10]
 };

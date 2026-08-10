@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.10</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.11</span>
    </div>
   </td>
  </tr>
@@ -154,6 +154,8 @@ Functions</h2></td></tr>
 <tr class="memitem:ae4288686f519dcd0faacfe54ae2f1bff" id="r_ae4288686f519dcd0faacfe54ae2f1bff"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ae4288686f519dcd0faacfe54ae2f1bff">kernel::test::snapshot_destroy</a> ()</td></tr>
 <tr class="memitem:af41d7948ad158bc2d5390ece894e112c" id="r_af41d7948ad158bc2d5390ece894e112c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#af41d7948ad158bc2d5390ece894e112c">kernel::test::snapshot_canary_corrupted</a> ()</td></tr>
 <tr class="memdesc:af41d7948ad158bc2d5390ece894e112c"><td class="mdescLeft">&#160;</td><td class="mdescRight">DEBUG watchdog: true when the snapshot buffer's canary region has been overwritten by a stray write since the last snapshot_create. Polled by on_tick() / context-switch epilogue (CONFIG_DEBUG) so a corrupting write is detected within one tick instead of at the next snapshot_restore boundary. Read-only; never mutates snapshot state.  <br /></td></tr>
+<tr class="memitem:abec3b271acc661cda69074923732b6d4" id="r_abec3b271acc661cda69074923732b6d4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#abec3b271acc661cda69074923732b6d4">kernel::test::snapshot_is_active</a> ()</td></tr>
+<tr class="memdesc:abec3b271acc661cda69074923732b6d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a test-isolation snapshot exists (<a class="el" href="namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31">snapshot_create()</a> succeeded and <a class="el" href="namespacekernel_1_1test.html#ae4288686f519dcd0faacfe54ae2f1bff">snapshot_destroy()</a> has not yet run). Lets a test distinguish "running under the isolation harness" from a bare invocation where snapshot/restore is disabled.  <br /></td></tr>
 <tr class="memitem:abbd641156133e294c60aa475e73dd520" id="r_abbd641156133e294c60aa475e73dd520"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#abbd641156133e294c60aa475e73dd520">kernel::test::reload_daemon_tasks</a> ()</td></tr>
 <tr class="memdesc:abbd641156133e294c60aa475e73dd520"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate old daemon tasks and reload them from initrd. Call AFTER snapshot_restore + snapshot_destroy to replace corrupted page tables with fresh ones from initrd.  <br /></td></tr>
 <tr class="memitem:ad8af3e26f5e10cffe7d3eecf79016c1d" id="r_ad8af3e26f5e10cffe7d3eecf79016c1d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ad8af3e26f5e10cffe7d3eecf79016c1d">kernel::test::run_all_isolated_tests</a> ()</td></tr>

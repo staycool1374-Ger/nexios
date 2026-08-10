@@ -1,5 +1,43 @@
 # Completed Roadmap Items
 
+## v0.3.11 — Released (BufferPool +1 PMM leak + Test-Suite Compliance + Notify deadlock fix)
+
+Released as NexIOS v0.3.11 (2026-08-10). Validated by the full release gate
+(`make execute-test x86_64 release all`, 84/84) and the debug `all` gate
+(835/835). SIL 3 audit: APPROVED.
+
+Key deliverables in this release:
+- **BufferPool +1 PMM leak FIXED** — `pool_pages_` captured/restored in the
+  snapshot, `free_page` `__atomic_fetch_add` pairing, overflow → PMM,
+  `alloc_page` slot-scrub + USER re-assert.  v0.3.11 B1-B3 PT-walk regression
+  tests added (`buffer_pool_pt_owner_bit_stays_user`,
+  `buffer_pool_shared_pdpt_walk_frees_all`, `buffer_pool_4mb_walk_balance`);
+  `buffer_pool` class 25/25 with zero PMM WARNs.
+- **Test-Suite Compliance (testcases v0.3.7-v0.3.11)** — implemented on
+  `testbed`, merged to `main`:
+  - `test_config_checks.cpp` (5) → `build` class
+  - `test_infra.cpp` (3) → `testrunner` class
+  - `test_wcet_memory.cpp` (2, TF_BENCH) → `bench` class
+  - `test_no_dynamic_alloc_after_init.cpp` (2) → `memory_determinism` class
+  - Removed 3 vacuous PASS stubs (buffer_pool_va_conflict_rejected,
+    buffer_pool_zero_va_rejected, iocd_mmio_map_via_capability)
+  - Feature-gated topics (hard_rt_config, /proc/syscall_stats, runelf RT,
+    admission control, HW WCET budget, sandboxed IPC caps, SHM, incremental
+    ELF, doc artifacts, multi-arch CI) tracked as deferred registers.
+- **Notify deadlock fix** — `Notify::wait()`/`wait_err()` released the
+  SpinLock before `Scheduler::reschedule()`; the lock was held across a
+  deferred context switch, so the ISR-side `notify()` deadlocked on the next
+  keyboard IRQ (GDB-confirmed).  Interactive shell garbage-input deadlock
+  eliminated.
+- **Interactive shell serial input** — `QEMU_FLAGS_INTERACTIVE` (mon:stdio)
+  for `class=none`; test runs keep the mux chardev.
+- **init reaper RT-budget clear** — period/deadline/wcet cleared when init
+  drops to background prio 0; deadline-monitor LOG_ONLY spam eliminated.
+- **all-class count fixed** — 810 → 850 after the testbed merge (835 execute
+  after TF_BENCH/TF_USER filter); TCOUNT clean.
+- **H2 residual re-verified FIXED** — debug `all` 835/835; interactive
+  `selftest all` completes (previously hung at `ipc_send_sync_timeout`).
+
 ## v0.3.10 — Released (Alloc/Free Return-Value Audit)
 
 Released as NexIOS v0.3.10 (2026-08-10). Implements the Alloc/Free
