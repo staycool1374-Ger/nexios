@@ -194,11 +194,42 @@ bool AhciDriver::port_init(uint8_t port) {
     // Allocate command tables (one per slot)
     size_t ct_size = sizeof(ahci::CmdTable);
     size_t ct_pages = (ct_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    // Roll back every slot allocated so far (incl. the current one) plus the
+    // CL/RFIS pages on failure — ~AhciDriver early-returns when init_done_ is
+    // false so it would never free these.  Maps were installed at
+    // HHDM_OFFSET+phys, so unmap at the same VA.
+    auto rollback = [&]() {
+        for (uint8_t r = 0; r < AHCI_MAX_CMDS; ++r) {
+            if (ct_phys_[port][r]) {
+                for (size_t i = 0; i < ct_pages; ++i) {
+                    VMM::unmap_page(HHDM_OFFSET + ct_phys_[port][r] +
+                                    i * PAGE_SIZE);
+                    PMM::free_page(ct_phys_[port][r] + i * PAGE_SIZE);
+                }
+                ct_phys_[port][r] = 0;
+            }
+            if (data_bufs_[port][r].phys_addr) {
+                dma::free_buffer(data_bufs_[port][r]);
+                data_bufs_[port][r] = {};
+            }
+        }
+        if (cl_phys_[port]) {
+            VMM::unmap_page(HHDM_OFFSET + cl_phys_[port]);
+            PMM::free_page(cl_phys_[port]);
+            cl_phys_[port] = 0;
+        }
+        if (rfis_phys_[port]) {
+            VMM::unmap_page(HHDM_OFFSET + rfis_phys_[port]);
+            PMM::free_page(rfis_phys_[port]);
+            rfis_phys_[port] = 0;
+        }
+    };
     for (uint8_t s = 0; s < AHCI_MAX_CMDS; ++s) {
         ct_phys_[port][s] = PMM::alloc_contiguous(ct_pages);
         if (!ct_phys_[port][s]) {
             Logger::error("ahci: port %u failed to alloc cmd table slot %u",
                           port, s);
+            rollback();
             return false;
         }
         for (size_t i = 0; i < ct_pages; ++i) {
@@ -215,6 +246,7 @@ bool AhciDriver::port_init(uint8_t port) {
         if (!data_bufs_[port][s].phys_addr) {
             Logger::error("ahci: port %u failed to alloc data buf slot %u",
                           port, s);
+            rollback();
             return false;
         }
     }

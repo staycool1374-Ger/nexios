@@ -208,13 +208,30 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
             return false;
     }
 
-    bool ok = tcb->msg_queue.push(msg);
-    if (!ok)
+    Message m = msg;
+    bool transferred = false;
+    if (msg.buf_handle != 0) {
+        auto *cur = Scheduler::current_task();
+        if (cur) {
+            transferred = BufferPool::transfer(msg.buf_handle, *cur, *tcb);
+            if (!transferred)
+                m.buf_handle = 0;   // drop buffer association; keep message
+        }
+    }
+
+    bool ok = tcb->msg_queue.push(m);
+    if (!ok) {
+        if (transferred) {
+            auto *cur = Scheduler::current_task();
+            if (cur)
+                BufferPool::transfer(msg.buf_handle, *tcb, *cur);  // rollback
+        }
         return false;
+    }
 
     IPC_SCHED_TRACE("[SEND]", "to=", dest_id, "from=",
                     (Scheduler::current_task() ? Scheduler::current_task()->id : 0),
-                    "ty=", msg.type, "q=", tcb->msg_queue.count);
+                    "ty=", m.type, "q=", tcb->msg_queue.count);
 
     // Wake a task blocked in send_sync() waiting for a reply on its own queue.
     // send_sync sets reply_wait and blocks; without this, the reply would sit
@@ -229,15 +246,6 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
                             tcb->msg_queue.count);
             Scheduler::set_task_ready(*tcb);
             tcb->remaining_ticks = tcb->period_ticks;
-        }
-    }
-
-    // Zero-copy buffer transfer: if the message carries a buffer handle,
-    // transfer ownership from current task to the destination.
-    if (msg.buf_handle != 0) {
-        auto *cur = Scheduler::current_task();
-        if (cur) {
-            BufferPool::transfer(msg.buf_handle, *cur, *tcb);
         }
     }
 

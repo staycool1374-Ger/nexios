@@ -560,6 +560,7 @@ void Scheduler::init(const SchedulerConfig &cfg) {
 
     idle_task_ = TaskControlBlock::create(kernel::integrity::idle_task_main, 0,
                                           TaskControlBlock::NO_PERIOD);
+    if (!idle_task_) panic("Scheduler::init: idle task OOM");
     idle_task_->state = TaskState::READY;
     __builtin_strncpy(idle_task_->name, "idle", CONFIG_TASK_NAME_LEN - 1);
     idle_task_->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
@@ -1617,13 +1618,21 @@ void Scheduler::reap_orphans() noexcept {
             auto *created = TaskControlBlock::create(
                 kernel::integrity::idle_task_main, 0,
                 TaskControlBlock::NO_PERIOD);
-            created->state = TaskState::READY;
-            if (!suppress_terminated_log_)
-                Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
-                             t->id);
-            t->cleanup();
-            MemPool::free(t);
-            new_idle = created;
+            if (created) {
+                created->state = TaskState::READY;
+                if (!suppress_terminated_log_)
+                    Logger::info("Scheduler: task '%s' (ID=%u) terminated",
+                                 t->name, t->id);
+                t->cleanup();
+                MemPool::free(t);
+                new_idle = created;
+            } else {
+                if (!suppress_terminated_log_)
+                    Logger::warn("Scheduler: idle recreate OOM — keeping old idle");
+                all_tasks_.append(*t);
+                ENSURE(id_table_insert(t->id, t) &&
+                       "id_table full in reap (idle restore)");
+            }
         } else {
             if (!suppress_terminated_log_)
                 Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,

@@ -181,9 +181,10 @@ void BufferPool::init() {
 ///        Falls back to PMM::alloc_user_page() when the pool is exhausted.
 uint64_t BufferPool::alloc_page() {
     if (__atomic_load_n(&pool_count_, __ATOMIC_RELAXED) > 0) {
-        uint64_t phys =
-            pool_pages_[__atomic_sub_fetch(&pool_count_, 1UL,
-                                           __ATOMIC_RELAXED)];
+        uint64_t idx = __atomic_sub_fetch(&pool_count_, 1UL,
+                                          __ATOMIC_RELAXED);
+        uint64_t phys = pool_pages_[idx];
+        pool_pages_[idx] = 0; // scrub stale slot (C4)
         // Pool pages may have been freed via PMM::free_page() in a prior
         // lifecycle (before the pool-only reclaim below), which resets the
         // owner bit to KERNEL.  Ensure USER ownership.

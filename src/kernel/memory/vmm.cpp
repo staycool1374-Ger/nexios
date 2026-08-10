@@ -138,7 +138,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             if (!create)
                 return nullptr;
             uint64_t new_page = PMM::alloc_page_table();
-            ENSURE(new_page != 0);
+            if (!new_page) return nullptr;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *new_table =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
@@ -221,12 +221,13 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     auto *l1 = get_table(l0, l0_idx, true);
+    if (!l1) return;
 
     // If L1 entry is a 2MB block, split it into 512 4KB entries
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
-        ENSURE(new_l2_phys != 0);
+        if (!new_l2_phys) return;
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
         uint64_t block_base = l1[l1_idx] & ~0x1FFFFFULL;
@@ -241,6 +242,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *l2 = get_table(l1, l1_idx, true);
+    if (!l2) return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -288,7 +290,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_page_table();
-        ENSURE(new_pt_phys != 0);
+        if (!new_pt_phys) return;
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
@@ -310,6 +312,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *pt = get_table(pd, pd_idx, true);
+    if (!pt) return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -477,7 +480,9 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     auto *l1 = get_table(l0, l0_idx, true, true);
+    if (!l1) return;
     auto *l2 = get_table(l1, l1_idx, true, true);
+    if (!l2) return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&

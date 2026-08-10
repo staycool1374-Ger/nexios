@@ -35,6 +35,35 @@ static bool virtio_net_send_frame(const uint8_t *data, size_t len);
 
 VirtioNetDevice *g_virtio_net_dev = nullptr;
 
+VirtioNetDevice::~VirtioNetDevice() {
+    if (queue_size == 0)
+        return;
+    auto pages_for = [](size_t bytes) {
+        return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+    };
+    size_t desc_pages =
+        pages_for(queue_size * sizeof(arch::VirtqDesc));
+    size_t avail_pages =
+        pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(uint16_t));
+    size_t used_pages =
+        pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(arch::VirtqUsedElem));
+    auto free_pages = [](uint64_t base, size_t n) {
+        if (!base) return;
+        for (size_t i = 0; i < n; ++i)
+            PMM::free_page(base + i * PAGE_SIZE);
+    };
+    free_pages(rx_desc_phys, desc_pages);
+    free_pages(rx_avail_phys, avail_pages);
+    free_pages(rx_used_phys, used_pages);
+    free_pages(tx_desc_phys, desc_pages);
+    free_pages(tx_avail_phys, avail_pages);
+    free_pages(tx_used_phys, used_pages);
+    for (uint64_t phys : rx_bufs_phys)
+        if (phys) PMM::free_page(phys);
+    if (tx_buf_phys)
+        PMM::free_page(tx_buf_phys);
+}
+
 static bool alloc_queue_pages(uint64_t &desc_phys, uint64_t &avail_phys,
                               uint64_t &used_phys, arch::VirtqDesc *&desc,
                               arch::VirtqAvail *&avail, arch::VirtqUsed *&used,

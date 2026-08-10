@@ -80,6 +80,8 @@ struct VirtioNetDevice {
     uint16_t tx_avail_idx;
     uint16_t rx_last_seen_used;
 
+    ~VirtioNetDevice();
+
     Nic *nic; // back-pointer to the NIC abstraction
 };
 

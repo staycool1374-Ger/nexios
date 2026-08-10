@@ -38,10 +38,10 @@ void DriverRegistry::register_driver(const char *name, const char *description,
     if (count_ >= MAX_DRIVERS)
         return;
     auto *drv = static_cast<Driver *>(MemPool::alloc(sizeof(Driver)));
-    if (drv) {
-        *drv = {name, description, init, exit, DriverState::UNLOADED, irq_line};
-        kernel::test::ResourceTracker::instance().track_driver_add();
-    }
+    if (!drv)
+        return;
+    *drv = {name, description, init, exit, DriverState::UNLOADED, irq_line};
+    kernel::test::ResourceTracker::instance().track_driver_add();
     drivers_[count_++] = drv;
 }
 

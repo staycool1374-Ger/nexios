@@ -487,8 +487,11 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
 
     uint64_t ustack_phys = 0;
     if (!load_segments_and_stack(hdr, data, new_pml4, &ustack_phys,
-                                 file_size))
+                                 file_size)) {
+        VMM::free_user_pages(new_pml4);
+        PMM::free_page(new_pml4);
         return false;
+    }
 
     uint64_t user_rsp = setup_user_stack(ustack_phys, argv, envp);
     if (user_rsp == 0) {
@@ -563,8 +566,8 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     if (old_pml4 && old_pml4 != VMM::get_kernel_pml4()) {
         if (!old_shared) {
             VMM::free_user_pages(old_pml4);
+            PMM::free_page(old_pml4);
         }
-        PMM::free_page(old_pml4);
     }
 
     return true;

@@ -449,6 +449,7 @@ void init_kstack_window() {
     uint64_t pdpt_phys = 0;
     if (!(pml4[pml4_idx] & P)) {
         pdpt_phys = PMM::alloc_page_table();
+        if (!pdpt_phys) panic("init_kstack_window: pdpt_phys OOM");
         auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
         __builtin_memset(pdpt, 0, 4096);
         pml4[pml4_idx] = pdpt_phys | P | W;
@@ -460,6 +461,7 @@ void init_kstack_window() {
     uint64_t pd_phys = 0;
     if (!(pdpt[pdpt_idx] & P)) {
         pd_phys = PMM::alloc_page_table();
+        if (!pd_phys) panic("init_kstack_window: pd_phys OOM");
         auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
         __builtin_memset(pd, 0, 4096);
         pdpt[pdpt_idx] = pd_phys | P | W;
@@ -471,6 +473,7 @@ void init_kstack_window() {
     for (unsigned i = 0; i < 8; ++i) {
         if (!(pd[pd_idx + i] & P)) {
             s_kstack_pt_pages[i] = PMM::alloc_page_table();
+            if (!s_kstack_pt_pages[i]) panic("init_kstack_window: pt page OOM");
             auto *pt = reinterpret_cast<uint64_t *>(
                 arch::HHDM_OFFSET + s_kstack_pt_pages[i]);
             __builtin_memset(pt, 0, 4096);
@@ -810,6 +813,9 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     uint64_t pml4 = VMM::clone_kernel_pml4();
     if (!pml4) {
         ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
+        size_t pages = (user_stack_size + 4095) / arch::PAGE_SIZE;
+        for (size_t i = 0; i < pages; ++i)
+            PMM::free_page(ustack_phys + i * arch::PAGE_SIZE);
         delete tcb;
         return nullptr;
     }
@@ -1412,12 +1418,12 @@ void TaskControlBlock::cleanup() noexcept {
 
         if (!page_table_shared_) {
             VMM::free_user_pages(page_table_);
+            PMM::free_page(page_table_);
         }
         if (stack_pdpt_phys_) {
             free_stack_pdpt(stack_pdpt_phys_);
             stack_pdpt_phys_ = 0;
         }
-        PMM::free_page(page_table_);
         page_table_ = 0;
     }
 
