@@ -9,6 +9,111 @@
 
 ## Active Development — v0.3.12
 
+### Fine-Grained Lock & Safety-Guardrail Enforcement
+
+Source: the three standing Safety & Concurrency Guardrails (§ above) are
+**partially enforced** in the current tree.  This milestone audits each against
+the live code, migrates every unjustified coarse-grain guard, and re-verifies
+the guardrail tests.  All counts below are VERIFIED against the code
+(2026-08-10).
+
+#### G1 — Fine-Grained Locks: eliminate non-boot/panic/test `IrqGuard`
+
+**Status:** 27 production `IrqGuard` sites remain outside boot/panic/test
+isolation: `scheduler.cpp` (15), `ipc.cpp` (5), `task.cpp` (4),
+`taskdefs.cpp` (2), `mutex.cpp` (1, comment-only).  The existing
+`test_irqguard_audit.cpp` doc-block claims "Scheduler, IPC, and tmpfs have all
+been migrated to SpinLock" — **stale** (scheduler has 15 IrqGuard sites).
+
+- [ ] **G1-A — Classify every IrqGuard site.**  For each of the 27 sites,
+      determine whether it is genuinely IRQ-exclusion (priority/effective-
+      priority snapshot vs the timer ISR — e.g. ipc.cpp:421,469) or a coarse
+      critical section that can be a `SpinLock`/`SpinLockGuard`/`sync::Mutex`.
+      Output a site-by-site ledger (`docs/irqguard-ledger.md`) with
+      justification per site.
+- [ ] **G1-B — Migrate migratable sites to fine-grained locks.**  Replace
+      every site classified as non-IRQ-exclusion with the sanctioned primitive
+      (SpinLock for short sections, `sync::Mutex` for blocking paths).  Keep
+      IrqGuard ONLY where the section must exclude the timer ISR (boot, panic,
+      test isolation, and priority-snapshot consistency).
+- [ ] **G1-C — Re-verify `test_irqguard_audit.cpp`.**  Update the stale
+      doc-block to match the post-migration reality; the audit test must
+      reflect the actual allowed site set (boot/panic/test + justified IRQ-
+      exclusion).
+- [ ] **G1-D — Regression gates.**  `scheduler`, `ipc`, `ipc_blocking`,
+      `ipc_robustness`, `mutex_pcp`, `queue_pip`, `priority_inheritance`,
+      `selftest`, `make build` (check-style Errors: 0).
+
+#### G2 — Reference-Enforced Tasks: audit raw-pointer TCB/IPC manipulation
+
+**Status:** scheduler/task/IPC manipulate TCB fields and IPC endpoints via raw
+pointers (e.g. `scheduler.cpp:564,1288` direct field writes; `ipc.cpp` owner
+priority snapshots).  Guardrail mandates references where the surrounding API
+already does (e.g. `set_task_ready(*tcb)`, `BufferPool::transfer(*from, *to)`).
+
+- [ ] **G2-A — Audit TCB endpoint APIs.**  Enumerate `Scheduler::` and `IPC::`
+      functions taking `TaskControlBlock*`/raw handles where a reference is
+      already the norm elsewhere; classify reference-migratable vs.
+      null-check-required.
+- [ ] **G2-B — Migrate reference-legal call sites.**  Convert to
+      `TaskControlBlock&` where the caller provably holds a live object; keep
+      raw pointers only where nullability is intrinsic (lookups, `find_task`).
+- [ ] **G2-C — Regression gates.**  `scheduler`, `process`, `ipc`,
+      `selftest`, `make build`.
+
+#### G3 — Zero-Allocation tmpfs: verify node/data allocation discipline
+
+**Status:** tmpfs nodes use `MemPool` (`tmpfs.cpp:190,195,292,297`) —
+compliant.  File data allocates on demand via
+`PMM::alloc_user_contiguous(16)` (`tmpfs.cpp:98`) — verify this is bounded and
+tracked (ResourceTracker), not an unbounded heap path.
+
+- [ ] **G3-A — Verify tmpfs node allocation is MemPool/BufferPool-only.**  Sweep
+      `tmpfs.cpp` for any `new`/heap path; confirm all node lifetimes use
+      MemPool alloc/free.
+- [ ] **G3-B — Verify file-data page allocation is bounded + tracked.**  Confirm
+      `PMM::alloc_user_contiguous` calls are accounted in ResourceTracker, freed
+      on vnode cleanup, and cannot grow unboundedly (per-file page cap).
+- [ ] **G3-C — Regression gates.**  `vfs`, `tmpfs` (if gated), `selftest`,
+      `make build`.
+
+#### G4 — Stale-doc cleanup (v0.3.10/0.3.11 residue)
+
+- [ ] **G4-A — `docs/specs/oom-rt.md` §3.**  The "v0.3.12 open items" (A1-A4)
+      are all landed in v0.3.10 (task.cpp:452, scheduler.cpp:563, vmm.cpp:465+
+      null guards).  Rewrite §3 as "landed/closed" or repoint to ROADMAP_done.
+- [ ] **G4-B — `testcases-v0.3.12.md`.**  Duplicates the v0.3.10 Alloc/Free
+      audit (implemented + released).  Either delete (after summary update) or
+      re-scope to the G1-G3 items above.
+- [ ] **G4-C — `test_irqguard_audit.cpp` doc-block** (covered by G1-C).
+
+**Required fix discipline (per AGENTS.md Mandatory Bugfix Sequence):**
+1. Classify each: G1 = lock migration, G2 = reference migration, G3 = tmpfs
+   allocation audit, G4 = doc cleanup (all concurrency/memory-safety, not
+   timing).
+2. Read the affected code + callers before editing (do not fix blind).
+3. One hypothesis per item, validated by build + the smallest applicable test
+   class.
+4. Implement, `make build` clean, run the class to 0 failures.
+5. After all items: `make execute-test x86_64 debug all` (835/835), then the
+   release gate `make execute-test x86_64 release all` (84/84).
+
+**Acceptance criteria (DONE when):**
+- G1-A ledger written; G1-B/G1-C migrate + re-verify (27 IrqGuard sites
+  reduced to the justified IRQ-exclusion set).
+- G2-B reference-migration complete; no new raw-pointer TCB/IPC endpoints in
+  the touched APIs.
+- G3-A/G3-B verified bounded + tracked (no ResourceTracker delta in
+  `vfs`/`tmpfs` classes).
+- G4-A/G4-B/G4-C stale docs resolved.
+- `make build` clean (check-style Errors: 0), `selftest` 132/132,
+  `all` 835/835, release gate 84/84.
+- `test-history.txt` rows appended for every class touched.
+
+**Out of scope:** ~~H2 race (v0.3.9)~~ (RESOLVED), ~~BufferPool +1 (v0.3.11)~~
+(RESOLVED), ISO 26262 certification artifacts, SMP (0.4.x), and userspace ABI
+(0.5.x).
+
 ## Past Releases
 
 See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.11 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak).
