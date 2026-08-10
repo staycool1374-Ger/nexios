@@ -82,16 +82,23 @@ errors::SyncError Notify::notify_err(uint64_t value) {
 
 /// @brief Block until notified. Returns the notifier's value.
 uint64_t Notify::wait() {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return 0;
 
-    if (waiter_ != nullptr)
-        return 0;
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (waiter_ != nullptr)
+            return 0;
 
-    waiter_ = task;
-    task->state = TaskState::BLOCKED;
+        waiter_ = task;
+        task->state = TaskState::BLOCKED;
+    } // lock released BEFORE reschedule: never hold a spinlock across a
+      // context switch.  reschedule() arms a deferred switch and re-enables
+      // IRQs; a timer tick before this frame unwinds would save the task
+      // holding lock_, and the ISR-side notify() would spin forever on it
+      // (threaded-IRQ keyboard deadlock).
+
     Scheduler::reschedule();
 
     return notify_value_;
@@ -99,17 +106,19 @@ uint64_t Notify::wait() {
 
 /// @brief Block until notified (error-returning overload).
 errors::SyncError Notify::wait_err(uint64_t *out_value) {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
 
-    if (waiter_ != nullptr) {
-        return errors::SYNC_ERR_ALREADY_WAITING;
-    }
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (waiter_ != nullptr)
+            return errors::SYNC_ERR_ALREADY_WAITING;
 
-    waiter_ = task;
-    task->state = TaskState::BLOCKED;
+        waiter_ = task;
+        task->state = TaskState::BLOCKED;
+    } // lock released BEFORE reschedule (see wait())
+
     Scheduler::reschedule();
 
     if (out_value)

@@ -247,9 +247,23 @@ QEMU_FLAGS     = -cdrom $(DEBUG_ISO) -m 256M \
                 -serial chardev:dbg -device isa-debugcon,chardev=dbg -mon chardev=dbg \
                 $(QEMU_NET) $(QEMU_ARCH_FLAGS)
 
+# Interactive shell (class=none) flags.  Default: same as QEMU_FLAGS (aarch64 /
+# riscv64 already use -serial mon:stdio, no mux).  On x86_64 the test flags use
+# the mux chardev, which gives stdin input focus to whichever frontend last
+# wrote; during/after selftest the debugcon steals keystrokes away from the
+# shell's COM1 polling, making the interactive shell appear input-dead.  Use a
+# plain serial console instead so the shell receives input directly; the
+# framebuffer window still mirrors the same in/out (kernel Terminal writes to
+# both; readline polls COM1 + PS/2 keyboard).  Test runs keep the mux so the
+# harness parses the combined debugcon+serial stream for the TEST SUMMARY.
+QEMU_FLAGS_INTERACTIVE = $(QEMU_FLAGS)
 # For x86_64 add IDE drive for FAT32
 ifeq ($(ARCH),x86_64)
 QEMU_FLAGS     += -drive file=$(FAT32_DISK),format=raw,if=ide,index=1,media=disk
+QEMU_FLAGS_INTERACTIVE = -cdrom $(DEBUG_ISO) -m 256M \
+                -serial mon:stdio \
+                $(QEMU_NET) $(QEMU_ARCH_FLAGS)
+QEMU_FLAGS_INTERACTIVE += -drive file=$(FAT32_DISK),format=raw,if=ide,index=1,media=disk
 endif
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
@@ -634,7 +648,7 @@ _do_execute_test:
 	if [ "$(CLASS)" = "none" ]; then \
 	    if command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then \
 	        printf '  %-7s %s\n' 'QEMU' 'Starting (Ctrl+A then X to exit)…'; \
-	        $(QEMU_SYSTEM) $(QEMU_FLAGS); \
+	        $(QEMU_SYSTEM) $(QEMU_FLAGS_INTERACTIVE); \
 	    else \
 	        echo "QEMU missing."; echo $(PKG_HINT); exit 1; \
 	    fi; \
