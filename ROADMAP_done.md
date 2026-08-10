@@ -1,5 +1,43 @@
 # Completed Roadmap Items
 
+## v0.3.10 — Released (Alloc/Free Return-Value Audit)
+
+Released as NexIOS v0.3.10 (2026-08-10). Implements the Alloc/Free
+Return-Value Audit for `src/kernel/**` — every unchecked alloc return,
+ignored transfer result, and latent double-free/stale-free path is guarded.
+Validated by the full release gate (`make execute-test x86_64 release all`,
+84/84) and the debug `all` gate (825/825). SIL 3 audit: APPROVED (0
+critical/high).  Out of scope (deferred to v0.3.11): BufferPool +1 PMM leak,
+ISO 26262 certification artifacts.
+
+Deliverables in this release:
+- **(A) CRITICAL — unchecked alloc → NULL/0 deref, all fixed:**
+  - A1 `init_kstack_window`: panic on `PMM::alloc_page_table` OOM (3 sites).
+  - A2 `Scheduler::init`: panic on idle-TCB create OOM.
+  - A3 `Scheduler::reap_orphans`: guard idle recreate; keep old idle
+    registered on OOM (system never left without an idle task).
+  - A4 `map_page_in_pml4` RV64: null-guard `l1`/`l2`.
+  - A5 `map_page` RV64: null-guard `l1`/`l2` (incl. huge-page split).
+  - A6 `map_page` x86_64: null-guard final `pt`.
+- **(B) HIGH / minor — ignored or partial validation, all fixed:**
+  - B1 `IPC::send`: `BufferPool::transfer` before queue push, drop handle on
+    transfer failure, rollback transfer on push failure (eliminates dual-list
+    ownership / physical-page double-free).
+  - B2 `exec_into_current`: free cloned PML4 + partial mappings on load failure.
+  - B3 `create_user`: free ustack before `delete tcb` on `clone_kernel_pml4` fail.
+  - B4 `VirtioNetDevice`: new destructor frees all queue pages on probe failure.
+  - B5 `AhciDriver::port_init`: rollback all allocated slots on failure
+    (`HHDM_OFFSET+phys` unmap inverse).
+  - B6 `get_table` split path: ENSURE → nullptr (mempool/buffer_pool boot
+    inits retain ENSURE by design — one-shot boot-only void inits).
+  - B7 `register_driver`: skip slot on MemPool OOM.
+- **(C) double-free / stale-free, all fixed:**
+  - C1 `TaskControlBlock::cleanup`: gate `PMM::free_page(page_table_)` on
+    `!page_table_shared_`.
+  - C2 `exec_into_current`: gate `free_page(old_pml4)` on `!old_shared`.
+  - C3 verified already fixed (v0.3.11 `pool_pages_` in snapshot); no change.
+  - C4 `BufferPool::alloc_page`: scrub `pool_pages_[idx]` slot on pop.
+
 ## v0.3.9 — Released (bundles v0.3.9.0 + v0.3.10 + v0.3.11 milestone work)
 
 Released as NexIOS v0.3.9 (2026-08-08). This release bundles the completed

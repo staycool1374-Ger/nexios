@@ -29,7 +29,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.3.9 — H2 deferred-switch race resolved, test-discipline rework, BufferPool leak fix
+* **Status:** v0.3.10 — Alloc/Free Return-Value Audit complete, unchecked alloc/free guarded, leak paths closed
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.

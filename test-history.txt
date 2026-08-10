@@ -1105,3 +1105,4 @@ SUMMARY: total=61 ok=60 fail=1
 2026-08-10 08:44:52 buffer_pool_deterministic PASSED: 6 FAILED: 0 TIME: 139ms (final acceptance re-gate)
 2026-08-10 08:47:45 all PASSED: 0 FAILED: 0 TIME: 150s STATUS: TIMEOUT (stall at buffer_pool_exhaustion 13/825, BUFLEAK dump; re-run passed 825/825 — flake)
 2026-08-10 08:56:06 all PASSED: 825 FAILED: 0 TIME: 39474ms (final acceptance all; 825 tests)
+2026-08-10 09:12:00 release all PASSED: 84 FAILED: 0 TIME: 3947ms (v0.3.10 release gate, trace OFF)

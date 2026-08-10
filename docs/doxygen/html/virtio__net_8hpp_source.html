@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.10-dev</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.10</span>
    </div>
   </td>
  </tr>
@@ -196,17 +196,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__net_8h
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tx_avail_idx;</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> rx_last_seen_used;</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span> </div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    Nic *nic; <span class="comment">// back-pointer to the NIC abstraction</span></div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>};</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span></div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">virtio_net_probe</a>(Nic &amp;nic);</div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span></div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">virtio_net_poll</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buf, <span class="keywordtype">size_t</span> &amp;len);</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span> </div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>} <span class="comment">// namespace kernel::net</span></div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    ~VirtioNetDevice();</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span> </div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    Nic *nic; <span class="comment">// back-pointer to the NIC abstraction</span></div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>};</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span></div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">virtio_net_probe</a>(Nic &amp;nic);</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span></div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">virtio_net_poll</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buf, <span class="keywordtype">size_t</span> &amp;len);</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span> </div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>} <span class="comment">// namespace kernel::net</span></div>
 <div class="ttc" id="anamespacekernel_1_1net_html"><div class="ttname"><a href="namespacekernel_1_1net.html">kernel::net</a></div><div class="ttdef"><b>Definition</b> virtio_net.cpp:32</div></div>
-<div class="ttc" id="anamespacekernel_1_1net_html_ac79735cf719349d1a7d42f5c788b1406"><div class="ttname"><a href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">kernel::net::virtio_net_probe</a></div><div class="ttdeci">bool virtio_net_probe(Nic &amp;nic)</div><div class="ttdef"><b>Definition</b> virtio_net.cpp:87</div></div>
-<div class="ttc" id="anamespacekernel_1_1net_html_ad963f2495bdf069ba09023e4b584c4b2"><div class="ttname"><a href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">kernel::net::virtio_net_poll</a></div><div class="ttdeci">bool virtio_net_poll(uint8_t *buf, size_t &amp;len)</div><div class="ttdef"><b>Definition</b> virtio_net.cpp:252</div></div>
+<div class="ttc" id="anamespacekernel_1_1net_html_ac79735cf719349d1a7d42f5c788b1406"><div class="ttname"><a href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">kernel::net::virtio_net_probe</a></div><div class="ttdeci">bool virtio_net_probe(Nic &amp;nic)</div><div class="ttdef"><b>Definition</b> virtio_net.cpp:116</div></div>
+<div class="ttc" id="anamespacekernel_1_1net_html_ad963f2495bdf069ba09023e4b584c4b2"><div class="ttname"><a href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">kernel::net::virtio_net_poll</a></div><div class="ttdeci">bool virtio_net_poll(uint8_t *buf, size_t &amp;len)</div><div class="ttdef"><b>Definition</b> virtio_net.cpp:281</div></div>
 <div class="ttc" id="anamespacekernel_html_aef2c5f8888b21de09ec3a76f5b964885"><div class="ttname"><a href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((noinline)) static uint64_t bucket_of(const TaskControlBlock *t</div><div class="ttdoc">Find the priority bucket a node currently lives in. A task&#39;s stored t-&gt;priority may have been changed...</div></div>
 <div class="ttc" id="anet_8hpp_html"><div class="ttname"><a href="net_8hpp.html">net.hpp</a></div><div class="ttdoc">Network stack core — NIC interface, packet dispatch.</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
