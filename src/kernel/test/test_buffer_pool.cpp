@@ -798,18 +798,6 @@ JARVIS_TEST(buffer_pool_transfer_adds_to_receiver_list,
 }
 
 // Runmode: kernel
-// Testidea: STUB - Alloc at VA X, alloc again at same VA X, second alloc
-// fails (BUF_ERR_VA_IN_USE)
-// Input: task, alloc at va, alloc again at same va
-// Expect: First alloc succeeds, second returns 0
-// Depends: kernel::BufferPool
-// Note: Kernel does not yet implement VA conflict detection; remains stub
-// until implemented.
-JARVIS_TEST(buffer_pool_va_conflict_rejected, "PRE: none | POST: none") {
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
 // Testidea: Alloc with VA >= USER_SPACE_LIMIT fails (BUF_ERR_VA_OUT_OF_RANGE)
 // Input: task, alloc at USER_SPACE_LIMIT and above
 // Expect: Both allocs return 0
@@ -823,17 +811,6 @@ JARVIS_TEST(buffer_pool_va_out_of_range_rejected, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(0ULL, h1);
     JARVIS_ASSERT_EQ(0ULL, h2);
 
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
-// Testidea: Alloc with VA=0 fails (guard page, below user space)
-// Input: task, alloc at va=0
-// Expect: Returns 0
-// Depends: kernel::BufferPool
-// Note: Kernel does not yet implement VA=0 rejection; remains stub until
-// implemented.
-JARVIS_TEST(buffer_pool_zero_va_rejected, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
@@ -1454,6 +1431,238 @@ JARVIS_TEST(buffer_pool_transfer_to_kernel_task, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// ======================================================================
+// v0.3.11 B1-B3 regression tests: BufferPool user-stack PT-page walk
+// (testcases-v0.3.11.md).  Direct PML4 walks pin the invariant that every
+// page-table page under a user mapping is USER-owned and that cleanup()
+// frees every PT page it allocated (net-zero PMM delta).
+// ======================================================================
+
+// Local page-table constants (VMM's PAGE_PRESENT/PAGE_FRAME_MASK are
+// private).  The frame mask covers both x86_64 (bits [51:12]) and aarch64
+// (bits [47:12]) — the extra upper bits are zero for aarch64 physical
+// addresses.
+static constexpr uint64_t kPtP = 1ULL << 0;
+static constexpr uint64_t kPtFrame = 0x000FFFFFFFFFF000ULL;
+
+/// @brief Walk a user PML4 and count present PT pages under a single PDPT
+///        entry.  Mirrors VMM::free_user_pages' walk (vmm.cpp) without
+///        freeing anything.  When @p first_non_user is non-null, the first
+///        PT page whose PMM owner bit is NOT user is recorded there (B1).
+static size_t count_pt_pages_under_pdpt(uint64_t pml4_phys, size_t pml4_idx,
+                                        size_t pdpt_idx,
+                                        uint64_t *first_non_user) {
+    auto *pml4 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+    if (!(pml4[pml4_idx] & kPtP))
+        return 0;
+    uint64_t pdpt_phys = pml4[pml4_idx] & kPtFrame;
+    auto *pdpt =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
+    if (!(pdpt[pdpt_idx] & kPtP))
+        return 0;
+    uint64_t pd_phys = pdpt[pdpt_idx] & kPtFrame;
+    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
+    size_t count = 0;
+    for (size_t i = 0; i < 512; ++i) {
+        if (!(pd[i] & kPtP))
+            continue;
+#if defined(CONFIG_ARCH_AARCH64)
+        // Block descriptor (bits[1:0]=01) — no PT page beneath.
+        if ((pd[i] & 0x3ULL) == 0x1ULL)
+            continue;
+#else
+        // x86_64 2 MB huge page (PS bit 7) — no PT page beneath.
+        if (pd[i] & (1ULL << 7))
+            continue;
+#endif
+        uint64_t pt_phys = pd[i] & kPtFrame;
+        if (first_non_user && *first_non_user == 0 &&
+            !PMM::is_user_page(pt_phys)) {
+            *first_non_user = pt_phys;
+        }
+        ++count;
+    }
+    return count;
+}
+
+// Runmode: kernel
+// Testidea: B1 — after pool-overflow free (owner → KERNEL) and re-map, the
+// PT page owner bit stays USER so free_user_pages never skips it.  A user
+// task mapping 1024 buffers under PDPT[1] (4 MB, PD[1..2]) must leave every
+// present PT page USER-owned, including the yield-stub (PD[0]) and stack
+// (PD[384]) pages sharing the same PDPT.
+// Input: create_user task; alloc MAX_BUFFERS buffers at 0x40200000; walk
+// PDPT[1] before cleanup.
+// Expect: exactly 2 new PT pages (PD[1], PD[2]); every PT page under PDPT[1]
+// is USER-owned; PMM free count net-zero after free + cleanup.
+// Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::VMM,
+//          kernel::PMM
+JARVIS_TEST(buffer_pool_pt_owner_bit_stays_user, "PRE: none | POST: none") {
+    uint64_t pmm_before = PMM::free_pages_ref();
+    uint64_t first_non_user = 0;
+
+    {
+        SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
+        JARVIS_ASSERT(task != nullptr);
+
+        // PT pages already present under PDPT[1]: stub (PD[0]) + stack
+        // (PD[384]).
+        size_t pre = count_pt_pages_under_pdpt(task->page_table_, 0, 1,
+                                               nullptr);
+
+        // Allocate MAX_BUFFERS buffers spanning 2 PT pages under PDPT[1]:
+        // 0x40200000 + 4 MB covers PD[1]..PD[2], clear of the stub
+        // (0x40000000, PD[0]) and the user stack (0x70000000, PD[384]).
+        uint64_t va = 0x40200000;
+        int alloc_count = 0;
+        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+            uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
+            if (h == 0)
+                break;
+            ++alloc_count;
+        }
+        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+
+        // Walk every present PD entry under PDPT[1] and pin the owner bit.
+        size_t post = count_pt_pages_under_pdpt(task->page_table_, 0, 1,
+                                                &first_non_user);
+        JARVIS_ASSERT_FMT(pre + 2 == post,
+                          "allocating 4 MB under PDPT[1] must add exactly 2 "
+                          "PT pages (pre=%lu post=%lu)",
+                          pre, post);
+        JARVIS_ASSERT_FMT(first_non_user == 0,
+                          "PT page 0x%lx under a user mapping is NOT "
+                          "USER-owned (owner-bit escape)",
+                          first_non_user);
+
+        // Free all buffers back to the pool (overflow spills to PMM).
+        int32_t idx = task->buf_list_head;
+        while (idx != -1) {
+            int32_t next = BufferPool::entries[idx].list_next;
+            uint32_t gen = BufferPool::entries[idx].generation;
+            uint64_t h = (static_cast<uint64_t>(gen) << 32) |
+                         static_cast<uint64_t>(idx);
+            JARVIS_ASSERT(BufferPool::free(*task, h));
+            idx = next;
+        }
+    }
+    // SimpleTaskPtr destroyed: cleanup() → BufferPool::unmap_all +
+    // VMM::free_user_pages frees every PT page and the stack.
+
+    JARVIS_ASSERT_EQ(pmm_before, PMM::free_pages_ref());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: B2 — stack and buffers share PDPT[1]; the free_user_pages walk
+// must cover ALL present PD entries (stub, buffer PTs, stack) so no PT page
+// survives cleanup.  Exhaustion alloc + free loop + cleanup leaves a
+// net-zero PMM delta.
+// Input: create_user task; alloc MAX_BUFFERS under PDPT[1]; free all; count
+// PT pages before cleanup; destroy task; recount PMM free pages.
+// Expect: PT-page count grows by exactly 2 and PMM free count is unchanged
+// (alloc-count == freed-count, net_new_pages == 0).
+// Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::VMM,
+//          kernel::PMM
+JARVIS_TEST(buffer_pool_shared_pdpt_walk_frees_all,
+            "PRE: none | POST: none") {
+    uint64_t pmm_before = PMM::free_pages_ref();
+    size_t pt_before_cleanup = 0;
+
+    {
+        SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
+        JARVIS_ASSERT(task != nullptr);
+
+        uint64_t va = 0x40200000;
+        int alloc_count = 0;
+        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+            uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
+            if (h == 0)
+                break;
+            ++alloc_count;
+        }
+        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+
+        // Free all buffers (exhaustion free loop).
+        int32_t idx = task->buf_list_head;
+        while (idx != -1) {
+            int32_t next = BufferPool::entries[idx].list_next;
+            uint32_t gen = BufferPool::entries[idx].generation;
+            uint64_t h = (static_cast<uint64_t>(gen) << 32) |
+                         static_cast<uint64_t>(idx);
+            JARVIS_ASSERT(BufferPool::free(*task, h));
+            idx = next;
+        }
+
+        // Count PT pages under the shared PDPT[1] (stub + buffers + stack)
+        // before cleanup — every one must be freed by free_user_pages.
+        pt_before_cleanup =
+            count_pt_pages_under_pdpt(task->page_table_, 0, 1, nullptr);
+        JARVIS_ASSERT_FMT(pt_before_cleanup >= 4,
+                          "expected stub+buffers+stack PT pages under PDPT[1] "
+                          "(got %lu)",
+                          pt_before_cleanup);
+    }
+    // SimpleTaskPtr destroyed: cleanup() → free_user_pages.
+
+    JARVIS_ASSERT_EQ(pmm_before, PMM::free_pages_ref());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: B3 — a 4 MB buffer range spanning 2 PT pages must balance
+// exactly: every PMM page allocated by the alloc loop is freed by the free
+// loop + cleanup (new_alloc == new_free via PMM free-page count).
+// Input: create_user task; alloc MAX_BUFFERS (4 MB) at 0x40200000; free all;
+// destroy task; compare PMM free count before/after.
+// Expect: pmm_before == pmm_after (net-zero balance).
+// Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::PMM
+JARVIS_TEST(buffer_pool_4mb_walk_balance, "PRE: none | POST: none") {
+    uint64_t pmm_before = PMM::free_pages_ref();
+    size_t pt_count = 0;
+
+    {
+        SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
+        JARVIS_ASSERT(task != nullptr);
+
+        uint64_t va = 0x40200000;
+        int alloc_count = 0;
+        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+            uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
+            if (h == 0)
+                break;
+            ++alloc_count;
+        }
+        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+        JARVIS_ASSERT_FMT(
+            va + alloc_count * arch::PAGE_SIZE - va == 4ULL * 1024 * 1024,
+            "MAX_BUFFERS allocs must span exactly 4 MB");
+
+        pt_count = count_pt_pages_under_pdpt(task->page_table_, 0, 1, nullptr);
+        JARVIS_ASSERT_FMT(pt_count >= 4,
+                          "expected 4 PT pages under PDPT[1] for the 4 MB "
+                          "range + stub + stack (got %lu)",
+                          pt_count);
+
+        // Free all buffers (overflow spills to PMM).
+        int32_t idx = task->buf_list_head;
+        while (idx != -1) {
+            int32_t next = BufferPool::entries[idx].list_next;
+            uint32_t gen = BufferPool::entries[idx].generation;
+            uint64_t h = (static_cast<uint64_t>(gen) << 32) |
+                         static_cast<uint64_t>(idx);
+            JARVIS_ASSERT(BufferPool::free(*task, h));
+            idx = next;
+        }
+    }
+    // SimpleTaskPtr destroyed: cleanup() → free_user_pages.
+
+    // new_alloc == new_free: the PMM free count must be byte-identical.
+    JARVIS_ASSERT_EQ(pmm_before, PMM::free_pages_ref());
+    JARVIS_TEST_PASS();
+}
+
 void register_buffer_pool_tests() {
     Logger::info("Registering BufferPool tests");
 
@@ -1470,9 +1679,7 @@ void register_buffer_pool_tests() {
     JARVIS_REGISTER_TEST(buffer_pool_cleanup_frees_buffers);
     JARVIS_REGISTER_TEST(buffer_pool_exec_into_current_clears_buffers);
     JARVIS_REGISTER_TEST(buffer_pool_transfer_adds_to_receiver_list);
-    JARVIS_REGISTER_TEST(buffer_pool_va_conflict_rejected);
     JARVIS_REGISTER_TEST(buffer_pool_va_out_of_range_rejected);
-    JARVIS_REGISTER_TEST(buffer_pool_zero_va_rejected);
     JARVIS_REGISTER_TEST(buffer_pool_kernel_task_alloc_fails);
     JARVIS_REGISTER_TEST(buffer_pool_forged_handle_after_free);
     JARVIS_REGISTER_TEST(buffer_pool_realloc_recycles_entry);
@@ -1481,5 +1688,8 @@ void register_buffer_pool_tests() {
     JARVIS_REGISTER_TEST(buffer_pool_transfer_race);
     JARVIS_REGISTER_TEST(buffer_pool_handle_reuse_security);
     JARVIS_REGISTER_TEST(buffer_pool_transfer_to_kernel_task);
+    JARVIS_REGISTER_TEST(buffer_pool_pt_owner_bit_stays_user);
+    JARVIS_REGISTER_TEST(buffer_pool_shared_pdpt_walk_frees_all);
+    JARVIS_REGISTER_TEST(buffer_pool_4mb_walk_balance);
 }
 #endif

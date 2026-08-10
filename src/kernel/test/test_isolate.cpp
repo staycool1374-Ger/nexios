@@ -74,6 +74,10 @@ void mark_vfs_touched() {
     g_vfs_touched = true;
 }
 
+bool snapshot_is_active() {
+    return g_snapshot != nullptr;
+}
+
 // Maximum kernel stack entries (one per task, conservatively bounded)
 static constexpr uint64_t KSTACK_ENTRY_SIZE =
     sizeof(uint64_t) * 2 // kernel_stack ptr + size

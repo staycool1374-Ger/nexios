@@ -218,6 +218,86 @@ All test files compile successfully with `g++ -target x86_64-elf -std=c++20 -Wal
 - **Status**: ✅ Real logic (debug diagnostic harness; registered in the
   `scheduler` class)
 
+### 16. test_config_checks.cpp (5 tests) — v0.3.7
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_config_checks.cpp`
+- **Tests**: compile-time configuration sanity checks (C-class queries, no dispatch):
+  - `config_ceiling_ge_max_prio` — CONFIG_PRIORITY_CEILING >= 127, CONFIG_MAX_TASKS > 0
+  - `config_tick_hz_sane` — CONFIG_TICK_HZ >= 1 (CONFIG_TIMER_CLOCK_HZ deliberately not referenced — absent)
+  - `config_stack_size_bounds` — CONFIG_STACK_SIZE >= CONFIG_MIN_STACK_SIZE and >= 4096
+  - `config_hard_rt_dependents` — CONFIG_PREEMPTION/MUTEX_PIP/USE_APIC_TIMER all 1; CONFIG_HARD_REAL_TIME guarded `#if defined(...)`
+  - `config_sporadic_budget_le_period` — real SporadicServer query: max_budget() <= period()
+- **Status**: ✅ Real logic
+- **Registered class**: `build` (with `register_buildsystem_tests`), also in `register_all_tests()`
+
+### 17. test_infra.cpp (3 tests) — v0.3.8
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_infra.cpp`
+- **Tests**: test-isolation infrastructure integrity:
+  - `infra_vfs_touched_defaults_false` — g_vfs_touched starts false
+  - `infra_mark_vfs_touched_sets_flag` — mark_vfs_touched() flips the lazy-daemon-restart flag
+  - `infra_daemon_state_preserved_when_vfs_untouched` — vfsd/iocd PIDs + tasks alive; JARVIS_FAIL if no snapshot (never passes vacuously)
+- **Status**: ✅ Real logic
+- **Registered class**: `testrunner` (registered BEFORE the expected-panic test so it executes), also in `register_all_tests()`
+
+### 18. test_wcet_memory.cpp (2 tests, TF_BENCH) — v0.3.8
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_wcet_memory.cpp`
+- **Tests**: rdtsc loop benchmarks:
+  - `wcet_mempool_alloc_free` — MemPool::alloc/free(32 B) min/avg/max cycles, `[WCET]` log
+  - `wcet_vmm_map_unmap` — VMM::map_page/unmap_page on a HHDM scratch alias; huge-page split warm-up + re-huge so PMM free count is net-zero
+- **Status**: ✅ Real logic (TF_BENCH — excluded from normal runs)
+- **Registered class**: `bench` (with `register_wcet_memory_tests`), also in `register_all_tests()`
+
+### 19. test_no_dynamic_alloc_after_init.cpp (2 tests) — v0.3.8
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_no_dynamic_alloc_after_init.cpp`
+- **Tests**: post-init allocation determinism:
+  - `no_dynamic_alloc_pmm_neutral_cycle` — 256 × (MemPool 32 B alloc/free + VMM map/unmap) with net-zero PMM free-pages assertion
+  - `no_dynamic_alloc_static_pools_gate` — `#if CONFIG_STATIC_POOLS_ONLY` gate (compiles out while the profile is 0)
+- **Status**: ✅ Real logic
+- **Registered class**: `memory_determinism` (with `register_memory_determinism_tests`), also in `register_all_tests()`
+
+## ✅ Updated Existing Test Files
+
+### test_buffer_pool.cpp
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_buffer_pool.cpp`
+- **New Tests Added** (v0.3.11 B1-B3 PT-page walk regressions):
+  - `buffer_pool_pt_owner_bit_stays_user` — every PT page under PDPT[1] (stub + buffers + stack) stays USER-owned after pool-overflow free / re-map (B1)
+  - `buffer_pool_shared_pdpt_walk_frees_all` — exhaustion alloc + free + cleanup leaves net-zero PMM delta; PT-page walk covered all shared-PDPT entries (B2)
+  - `buffer_pool_4mb_walk_balance` — 4 MB buffer range (2 PT pages) balances new_alloc == new_free (B3)
+- **Leak FIX pinned by B1-B3** (v0.3.10/v0.3.11 kernel fixes): `pool_pages_` snapshot/restore in test isolation, `__atomic_fetch_add` in `BufferPool::free_page` (off-by-one slot), overflow-to-PMM instead of silent drop, USER-owned PT alloc in `map_page_in_pml4`.
+- **Stubs removed**: `buffer_pool_va_conflict_rejected`, `buffer_pool_zero_va_rejected` (vacuous `JARVIS_TEST_PASS()` stubs deleted)
+
+### test_registry.cpp
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_registry.cpp`
+- **Changes**: forward declarations + class wiring for the four new files (`build`, `testrunner`, `bench`, `memory_determinism`) and `register_all_tests()` calls; `testrunner` class registers infra BEFORE the expected-panic test.
+
+### test_iocd.cpp
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_iocd.cpp`
+- **Changes**: stub `iocd_mmio_map_via_capability` removed (vacuous `JARVIS_TEST_PASS()` stub deleted).
+
+### test_isolate.hpp / test_isolate.cpp
+- **Location**: `/Users/arnold/jarvis/src/kernel/test/test_isolate.hpp` / `.cpp`
+- **Changes**: added `snapshot_is_active()` accessor so tests can guard on real snapshot isolation instead of passing vacuously.
+
+## ⏳ Deferred / Feature-gated
+
+No `JARVIS_TEST_PASS()` placeholder stubs exist for any of these — a stub that always passes documents nothing and hides the gap (T3-1 remediation):
+
+- CONFIG_HARD_REAL_TIME / CONFIG_WCET_ANALYSIS profile enforcement (macro absent; `config_hard_rt_dependents` compiles the reference out)
+- /proc/syscall_stats export (test_syscall_wcet.cpp)
+- Nested-IRQ synthetic injection / tail-chaining latency (test_nested_irq_latency.cpp)
+- runelf RT attributes (`--period`, `--wcet`; test_runelf_rt.cpp — see testcases-v0.3.9.md FEATURE-GAP REGISTER)
+- Admission control / `is_rm_schedulable` (Liu-Layland; test_admission_control.cpp)
+- Hardware WCET budget timer (HPET/APIC on context activation; test_wcet_monitor.cpp)
+- Sandboxed IPC capability routing (test_sandboxed_ipc.cpp)
+- Zero-overhead SHM SPSC ring across page boundaries (test_shm_rt.cpp)
+- Incremental ELF loading slices (test_incremental_elf.cpp)
+- Doc artifacts: docs/wcet_analysis.md, safety_manual.md, traceability.csv
+- Multi-arch CI (aarch64/riscv64 Renode when HAL ready)
+
+## ✅ Stub Remediation
+
+- 3 vacuous `JARVIS_TEST_PASS()` stubs deleted in this batch: `buffer_pool_va_conflict_rejected`, `buffer_pool_zero_va_rejected` (test_buffer_pool.cpp), `iocd_mmio_map_via_capability` (test_iocd.cpp).
+- testcases-v0.3.6.md / v0.3.8.md / v0.3.11.md removed after their gates passed; v0.3.7.md marked RESOLVED/FEATURE-GATED; v0.3.9.md converted to a FEATURE-GAP REGISTER; v0.3.10.md retained as the driven-test cookbook.
+
 ## ✅ Summary
 
 - **6 new TEST_CLASS-based test files** (24 test classes) covering IPC robustness, syscall fuzzing, starvation/deadlock, resource exhaustion, microkernel transition readiness, and SporadicServer budget enforcement

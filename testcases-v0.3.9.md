@@ -2,7 +2,11 @@
 
 ## Branch: testbed only
 
-*Outline — test details to be expanded when implementation begins.*
+*FEATURE-GAP REGISTER — none of the v0.3.9 kernel features exist yet in
+`src/kernel` on this branch. The sections below are retained as a backlog of
+intended test areas. NO `JARVIS_TEST_PASS()` placeholder stubs are created for
+these — a stub that always passes documents nothing and hides the gap (T3-1
+remediation). Re-open each section when its kernel feature lands on `main`.*
 
 ### Real-Time runelf Extensions — test_runelf_rt.cpp
 - `runelf` accepts real-time attributes (`--period`, `--wcet`) via shell invocation

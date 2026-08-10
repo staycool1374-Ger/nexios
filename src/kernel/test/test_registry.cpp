@@ -64,6 +64,10 @@ void register_idle_cleanup_tests();
 void register_testrunner_tests();
 void register_expected_panic_tests();
 void register_freelist_consistency_tests();
+void register_infra_tests();
+void register_config_checks_tests();
+void register_wcet_memory_tests();
+void register_no_dynamic_alloc_tests();
 void register_vfsd_tests();
 void register_iocd_tests();
 void register_health_tests();
@@ -190,7 +194,9 @@ static void register_all_tests_second_half();
 
 static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- buffer_pool: fundamental IPC primitive, run first on any failure --
-    {"testrunner", []() { register_testrunner_tests(); register_freelist_consistency_tests(); register_expected_panic_tests(); }},
+    // Note: register_infra_tests() runs BEFORE the expected-panic test (which
+    // halts the kernel) so the infra tests actually execute in this class.
+    {"testrunner", []() { register_testrunner_tests(); register_freelist_consistency_tests(); register_infra_tests(); register_expected_panic_tests(); }},
     {"buffer_pool", []() { register_buffer_pool_tests(); }},
 
     // -- o1_scheduler: atomic context switch + IRQ guard audit + O(1) scheduler
@@ -214,7 +220,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- memory_safety: buffer overflow and memory safety tests --
     {"memory_safety", []() { register_memory_safety_tests(); }},
-    {"memory_determinism", []() { register_memory_determinism_tests(); }},
+    {"memory_determinism", []() { register_memory_determinism_tests(); register_no_dynamic_alloc_tests(); }},
 
     // -- lib: core library tests (atomics, crc32, etc.) --
     {"lib", []() { register_lib_tests(); }},
@@ -466,7 +472,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     {"init", []() { register_init_tests(); }},
 
-    {"build", []() { register_buildsystem_tests(); }},
+    {"build", []() { register_buildsystem_tests(); register_config_checks_tests(); }},
 
     {"bench",
      []() {
@@ -476,6 +482,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_bench_irq_latency_tests();
          register_apic_timer_tests();
          register_jitter_tests();
+         register_wcet_memory_tests();
      }},
 
     {"bench_irq_latency",
@@ -503,6 +510,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 // ---- all / all-1 / all-2 function definitions ----
 static void register_all_tests() {
     register_testrunner_tests();
+    register_infra_tests();
     register_buffer_pool_tests();
     register_lib_tests();
     register_memory_tests();
@@ -588,6 +596,7 @@ static void register_all_tests() {
     register_daemon_restart_crash_tests();
     register_hal_tests();
     register_buildsystem_tests();
+    register_config_checks_tests();
     register_secure_exec_tests();
     register_pci_tests();
     register_virtio_tests();
@@ -595,6 +604,7 @@ static void register_all_tests() {
     register_net_tests();
     register_ipc_benchmark_tests();
     register_microkernel_transition_tests();
+    register_wcet_memory_tests();
     register_random_tests();
     register_random_vfs_tests();
     register_random_syscall_tests();
@@ -602,6 +612,7 @@ static void register_all_tests() {
     register_random_vfs_write_tests();
     register_memory_safety_tests();
     register_memory_determinism_tests();
+    register_no_dynamic_alloc_tests();
     register_sporadic_server_tests();
     register_atomic_tests();
     register_cross_arch_tests();

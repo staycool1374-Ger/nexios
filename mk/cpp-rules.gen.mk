@@ -242,6 +242,10 @@ build/kernel/test/bench_irq_latency.o: src/kernel/test/bench_irq_latency.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_no_dynamic_alloc_after_init.o: src/kernel/test/test_no_dynamic_alloc_after_init.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_zombie_cleanup.o: src/kernel/test/test_zombie_cleanup.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -310,6 +314,10 @@ build/kernel/test/test_pmm.o: src/kernel/test/test_pmm.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_infra.o: src/kernel/test/test_infra.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_elf.o: src/kernel/test/test_elf.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -355,6 +363,10 @@ build/kernel/test/test_tmpfs_invalid_mount.o: src/kernel/test/test_tmpfs_invalid
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_resource_exhaustion.o: src/kernel/test/test_resource_exhaustion.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_config_checks.o: src/kernel/test/test_config_checks.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
@@ -627,6 +639,10 @@ build/kernel/test/test_sync.o: src/kernel/test/test_sync.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_preemption.o: src/kernel/test/test_preemption.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_wcet_memory.o: src/kernel/test/test_wcet_memory.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

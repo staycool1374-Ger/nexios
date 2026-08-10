@@ -19,7 +19,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
-    {"all",                 810,    0,       0      },  // 891 + locking(13) + locking_stress(6) + preemption(7) + ipc_extended(9)  (daemon_restart_crash gated, T0-7)
+    {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+    {"buffer_pool",          25,    0,       0      },  // alloc/free/transfer + v0.3.11 B1-B3 PT-walk regressions
+    {"all",                 810,    0,       0      },  // +3 v0.3.11 buffer_pool B1-B3, -2 vacuous stubs, -1 iocd stub
     {"dmesg",                15,    0,       0      },  // DmesgBuffer + error strings + suppression  (daemon_restart_crash gated, T0-7)
     {"scheduler",            62,    0,       0      },  // sched + task + lifecycle + idle_task + zombie_cleanup + health + cpu_load + preemption(7)
     {"deadlock",              1,    0,       0      },  // starvation_deadlock (detect/recovery stubs deleted, T3-1)
@@ -27,12 +29,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"timer",                 5,    0,       0      },  // timer tests
     {"wfg",                   0,    0,       0      },  // wfg tests
     {"lock",                  0,    0,       0      },  // (mlock stubs deleted, T3-1)
-    {"memory",              51,     0,       0      },  // composite: pmm(5) + mempool(4) + slab_reclaim(5) + checked_ptr(4) + buffer_pool(24) + resource_exhaustion(5) + memory_determinism(2) + vmm(4 via all)
-    {"memory_determinism",   2,     0,       0      },  // PMM exhaustion cycle tests
+    {"memory",              48,     0,       0      },  // composite: pmm(5) + mempool(4) + slab_reclaim(5) + checked_ptr(4) + buffer_pool(25) + resource_exhaustion(5)
+    {"memory_determinism",   4,     0,       0      },  // PMM exhaustion cycle + no-dynamic-alloc neutral cycle (v0.3.8)
     {"ipc",                 55,     0,       0      },  // IPC + pipe + ipc_blocking + lock-free + robustness + ipc_extended(9)
     {"ipc_blocking",         4,     0,       0      },  // IPC blocking send_sync/handshake tests
     {"zombie_cleanup",       4,     0,       0      },  // zombie list deferred cleanup
-    {"vfs",                 132,    0,       0      },  // vfs + tmpfs + fat32 + block + fstab + sync + vfsd + iocd (vfs_internal/tmpfs stubs deleted, T3-1)
+    {"vfs",                 131,    0,       0      },  // vfs + tmpfs + fat32 + block + fstab + sync + vfsd + iocd (iocd mmio stub removed, T3-1)
     {"process",             43,     0,       0      },  // process + elf + signals + rlimit + waitpid + pml4_clone
     {"syscall",             28,     0,       0      },  // syscall + syscall_fuzz
     {"arch",                31,     0,       0      },  // cross_arch + GDT + IDT + bootparams + multiboot + address + PIC + HAL
@@ -64,8 +66,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"preemption_under_syscall", 4,  0,       0      },  // preemption during syscall, tmpfs write, brk, starvation
     {"stress",               3,     0,       0      },  // starvation_deadlock (stress stubs deleted, T3-1)
     {"init",                 3,     0,       0      },  // init tests
-    {"build",                5,     0,       0      },  // buildsystem tests
-    {"bench",               23,     0,       0      },  // IPC + microkernel + syscall + IRQ latency + APIC timer + jitter benchmarks
+    {"build",               10,     0,       0      },  // buildsystem + config checks (v0.3.7)
+    {"bench",               25,     0,       0      },  // IPC + microkernel + syscall + IRQ latency + APIC timer + jitter + wcet_memory (v0.3.8)
     {"bench_irq_latency",   3,      0,       0      },  // IRQ latency histogram tests
     {"sporadic",            25,     0,       0      },  // sporadic server tests
     {"atomic",              12,     0,       0      },  // atomic operation tests

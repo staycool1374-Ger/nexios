@@ -37,6 +37,12 @@ void snapshot_destroy();
 ///        snapshot_restore boundary.  Read-only; never mutates snapshot state.
 bool snapshot_canary_corrupted();
 
+/// @brief True while a test-isolation snapshot exists (snapshot_create()
+///        succeeded and snapshot_destroy() has not yet run).  Lets a test
+///        distinguish "running under the isolation harness" from a bare
+///        invocation where snapshot/restore is disabled.
+bool snapshot_is_active();
+
 /// @brief Terminate old daemon tasks and reload them from initrd.
 ///        Call AFTER snapshot_restore + snapshot_destroy to replace
 ///        corrupted page tables with fresh ones from initrd.

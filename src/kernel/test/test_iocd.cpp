@@ -69,15 +69,6 @@ JARVIS_TEST(iocd_serial_irq_to_event, "PRE: none | POST: iocd") {
 }
 
 // Runmode: kernel
-// Testidea: STUB - MMIO region mapped via a capability
-// Input: None (stub test)
-// Expect: Passes (stub)
-// Depends: kernel/task, kernel/ipc, kernel/driver
-JARVIS_TEST(iocd_mmio_map_via_capability, "PRE: none | POST: iocd") {
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
 // Testidea: STUB - MMIO region unmapped when task exits
 // Input: None (stub test)
 // Expect: Passes (stub)
@@ -156,7 +147,6 @@ void register_iocd_tests() {
     JARVIS_REGISTER_TEST(iocd_boots_and_registers);
     JARVIS_REGISTER_TEST(iocd_keyboard_irq_to_event);
     JARVIS_REGISTER_TEST(iocd_serial_irq_to_event);
-    JARVIS_REGISTER_TEST(iocd_mmio_map_via_capability);
     JARVIS_REGISTER_TEST(iocd_mmio_unmap_on_exit);
     JARVIS_REGISTER_TEST(iocd_unauthorized_mmio_rejected);
     JARVIS_REGISTER_TEST(iocd_multiple_device_handlers);
