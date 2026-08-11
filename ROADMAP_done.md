@@ -62,6 +62,124 @@ Key deliverables in this release:
 - **H2 residual re-verified FIXED** — debug `all` 835/835; interactive
   `selftest all` completes (previously hung at `ipc_send_sync_timeout`).
 
+### v0.3.11 — BufferPool +1 PMM Leak (Completed 2026-08-06)
+
+#### BufferPool user-stack PT-page +1 leak (FIXED 2026-08-06 — ZERO PMM WARNs)
+
+**STATUS: RESOLVED.**  `make execute-test x86_64 debug buffer_pool` → **24/24 PASS,
+ZERO `[RESOURCE] PMM pages` WARN lines** (×3 stable runs).  `memory` 47/47,
+`selftest` 132/132, `vfs` 146/146 — all green, 0 PMM WARNs.  `make build`
+Errors: 0.
+
+**Three root causes, all fixed:**
+1. **Pool_pages_ snapshot drift (the +1..+128 residual):** `capture_state`/
+   `restore_state`/`state_bytes()` did NOT capture `pool_pages_[]`, so
+   `snapshot_restore` left the pool holding whatever phys the LAST test cached
+   while the rewound PMM bitmap freed those pages — the pool double-booked
+   free pages and the tracker drifted.  Fixed by adding `pool_pages_` to the
+   snapshot.
+2. **Buffer VA collision (`buffer_pool_exhaustion`):** the test mapped buffer 0
+   at VA 0x40000000 = `kUserYieldStubVa` (task.cpp), overwriting the yield-stub
+   PTE and orphaning the stub page (`map_page_in_pml4` has no remap handling)
+   → +1.  Fixed by moving the exhaustion test's base VA to 0x100000000 (the
+   documented buffer-VA convention).
+3. **Pool push off-by-one (the final +1):** `free_page()` used
+   `__atomic_add_fetch` (returns the post-increment index), storing a pushed
+   page at slot `old+1` while `alloc_page()`'s `__atomic_sub_fetch` pop reads
+   slot `old-1`.  A page pushed into a non-full pool was "lost" to a slot the
+   pop never reads; the entry-512 free/re-alloc in
+   `buffer_pool_alloc_after_exhaustion_and_free` popped the stale slot 0
+   instead → +1 tracker drift.  Fixed with `__atomic_fetch_add`.  Confirmed by
+   in-kernel instrumentation: `pre-free pool=0` → `post-free pool=1` yet the
+   re-alloc returned a DIFFERENT page (the stale slot-0), proving the mismatch.
+
+**Verification data (QemuDebugcon instrumentation):**
+`[L512] e512_orig=0x6dc3000 e512_new=0x6dc3000 before=2866 after=2866 new=0
+freed=0 pool_before=128 pool_after=128 tracker_pmm_before=1040
+tracker_pmm_after=1040` — the re-alloc now correctly reuses the same page, and
+the bitmap/tracker deltas are exactly zero.
+
+**Diagnostics retained:** `[BUF]`/`[NET]`/`[DIFF]`/`[L512]`/`[L512S]`/
+`[L512P]` instrumentation in `test_buffer_pool.cpp`; `[FUP-SKIP]` owner-bit
+skip logging in `free_user_pages`; `pool_count_debug()`/`pool_page_debug()`
+accessors.
+
+**Symptom:** every `buffer_pool` test that does `create_user` + `BufferPool::alloc`
+reports a **+1 PMM page** residual after `snapshot_restore` (ResourceTracker
+delta).  All tests still PASS (leaks are WARN, not FAIL), but the tracker is
+never clean.  A control experiment PROVES it is a REAL page lost, NOT a tracker
+artifact:
+- kernel task + `VMM::clone_kernel_pml4()` + `BufferPool::alloc/free` → **0 leak**
+- `TaskControlBlock::create_user([](){}, 5, 10, 32_KiB)` + same ops → **+1 leak**
+- `create_user` with NO `BufferPool::alloc` → **0 leak**
+
+So the lost page requires BOTH `create_user`'s user-stack page-table hierarchy
+AND a buffer mapping in the same PML4.
+
+**Established facts (evidence, not speculation):**
+- `create_user` (task.cpp:636) allocates: clone PML4 (1) + user stack 32 KiB
+  data (8) + kernel stack 64 KiB (16) = +25, plus page-table pages for the
+  user-stack mapping at `mem::STACK_VADDR = 0x70000000` (task.cpp:712-716).
+  Debug trace: create_user PMM 1008 → 1036 (+28; the +3 extra = PDPT+PD+PT
+  for the stack region).
+- `BufferPool::alloc` maps the buffer page into the SAME user PML4 via
+  `VMM::map_page_in_pml4` (buffer_pool.cpp:305) → adds PDPT/PD/PT pages for
+  the buffer VA (e.g. 0x50000000 → p4=0 pdpt=1 pd=128; stack is p4=0
+  pdpt=1 pd=384).
+- On teardown, `cleanup()` (task.cpp:1138) calls `BufferPool::unmap_all`
+  FIRST (clears buffer PTE, returns page to pool) THEN `VMM::free_user_pages`
+  (task.cpp:1278).  `free_user_pages` (vmm.cpp:614, x86 branch 690-764) walks
+  PML4→PDPT→PD→PT and frees every USER-owned table page + leaf.
+- Instrumented `free_user_pages` counts: a single create_user+buffer frees
+  **5** pages (2 PT + PD + PDPT + ...); after `buffer_pool_exhaustion` (test 4,
+  which maps 1024 buffers / 4 MB spanning 8 PT pages), the NEXT tests free
+  only **4** → the missing PT page(s) under `pd=2,3` (buffers 512-1023) are
+  not reached or not USER-owned.
+- `buffer_pool_exhaustion` itself went from **+896** → **+1** after the
+  `free_page()` overflow-to-PMM fix (v0.3.10) — the 895-page real leak is
+  fixed; 1 page still escapes.
+
+**Hypotheses to validate (in order):**
+1. **Ownership drift:** `free_user_pages` guards each level with
+   `PMM::is_user_page(...)` (vmm.cpp:698, 719, 740).  If a PT page was
+   allocated as `alloc_user_page` (USER) but later recycled via the pool
+   overflow fix (`PMM::free_page` sets owner → KERNEL) and re-mapped, its
+   owner bit is now KERNEL → `free_user_pages` SKIPS it → +1.
+   Validation: after exhaustion, dump the owner bit of the PT pages at
+   `pd=2,3` under `pdpt=1` right before the next test's cleanup.
+2. **Shared PDPT aliasing:** the user-stack mapping (`pdpt=1 pd=384`) and the
+   exhaustion buffers (`pdpt=1 pd=0..3`) share PDPT entry 1.  If a PT page is
+   created under a PD entry that `unmap_all` clears (buffer_pool.cpp:447
+   `clear_pte_in_pml4` clears only the LEAF PTE, not the PD/PDPT pointers),
+   `free_user_pages` should still find the PD entry present — verify the PD
+   entry survives for pd=2,3.
+3. **4 MB boundary:** exhaustion maps `0x40000000 + i*4K` for 1024 pages =
+   4 MB, spanning exactly PD entries 0..3.  Check whether `map_page_in_pml4`
+   (vmm.cpp:503-506, `get_table(..., true, true)` → `alloc_user_page`) creates
+   a fresh PD page per 2 MB region and whether the walk covers all 4.
+
+**Required fix discipline (per AGENTS.md Mandatory Bugfix Sequence):**
+1. Classify: page-table ownership / VMM-walk bug (NOT memory-corruption).
+2. Read vmm.cpp `free_user_pages` (614-766), `get_table` (120-184),
+   `map_page_in_pml4` (461-560), task.cpp `create_user`/`cleanup`.
+3. State ONE hypothesis + a deterministic GDB validation:
+   `make debug-test x86_64 debug buffer_pool tools/gdb/test-batch.gdb` with a
+   breakpoint at `VMM::free_user_pages`; inspect the PT pages under
+   `pd=2,3/pdpt=1` and their owner bits after exhaustion.
+4. Execute, gather evidence, then fix (do NOT guess).
+5. Re-verify: `buffer_pool` 24/24 with **0 PMM leaks** across ALL tests,
+   then `memory` 47/47, `selftest` 132/132, `vfs` 146/146.
+
+**Acceptance criteria (this milestone is DONE when):**
+- `make execute-test x86_64 debug buffer_pool` → 24/24 PASS, **zero**
+  `[RESOURCE] ... PMM pages` WARN lines (not just fewer).
+- `memory`, `selftest`, `vfs` stay green.
+- `test-history.txt` rows appended for every class touched.
+- ROADMAP §v0.3.10 "Residual +1" note updated to "fixed".
+
+**Out of scope:** the H2 deferred-switch race (v0.3.9) — the T0-T6 test
+rework (v0.3.10) is **COMPLETED**.  This milestone is ONLY the BufferPool +1 page.
+
 ## v0.3.10 — Released (Alloc/Free Return-Value Audit)
 
 Released as NexIOS v0.3.10 (2026-08-10). Implements the Alloc/Free
@@ -100,6 +218,283 @@ Deliverables in this release:
   - C3 verified already fixed (v0.3.11 `pool_pages_` in snapshot); no change.
   - C4 `BufferPool::alloc_page`: scrub `pool_pages_[idx]` slot on pop.
 
+### v0.3.10 — Test-Discipline Rework: Trigger-Driven Testing (Completed 2026-08-04)
+
+#### Test-Discipline Rework: Trigger-Driven Testing (kill the simulation pattern)
+
+**Principle (binding for all kernel tests):** a kernel test must DRIVE the
+system to a state, then TRIGGER a real external event (timer tick / ISR /
+syscall trap / real hardware), then verify the reaction.  Tests that reach
+a state by *impersonating* a task (`Scheduler::set_current` + direct blocking
+call), by directly mutating kernel fields (`task->state`, `task->priority`,
+`deadline_ticks`, `remaining_ticks`, `alarm_ticks`), by faking a tick
+(`Scheduler::on_tick()` / `scan_deadlines()` from the test body), or by
+dispatching syscalls directly (`Syscall::handle(...)` with constructed args)
+are classified SIMULATED and MUST be reworked.
+
+Full audit: 968 test functions scanned → **149 SIMULATED (rework)**, 71 DRIVEN
+(keep), 748 PURE/container/query/stub (keep).  Reference exemplars of the
+required pattern: `ipc_send_sync_roundtrip`, `sync_queue_*_blocks_when_*`,
+`preemption_*`, `test_zombie_cleanup`, `test_shell_interaction` (real serial
+loopback), `ipc_*_block_*` (test_ipc_blocking.cpp).
+
+**Count reconciliation:** the 149 A-tests split into the 6 work groups below
+(T0–T6: 28+11+13+41+16+13 = 122 named) plus **29 orphaned dead-code tests**
+(`test_locking.cpp` 13, `test_locking_stress.cpp` 4, `test_preemption.cpp` 7,
+`test_ipc_extended.cpp` 3, `test_daemon_restart_crash.cpp` 1, and the 2
+alarm-overlap duplications in T0/T1).  The orphaned files' `register_*_tests()`
+were never called by `test_registry.cpp` — they were dead code.  **ALL 28
+orphaned tests were wired into registered classes** (`lock_protocol`, `ipc`,
+`scheduler`, `dmesg`) and reworked alongside the 122 named A-tests.  Total
+test count increase: 891 → 927 (+36) in `all`.
+
+**Rework rule of thumb (drive → trigger → verify):**
+```
+create task(s) → add_task → reschedule()/yield_as → busy-wait { pause|hlt }
+   until the real timer-ISR dispatches them → assert on the reaction.
+```
+
+#### Rework Cookbook (apply to every A-test below)
+
+**Setup — two legal shapes:**
+
+1. **Kernel task drives the action (preferred when the target is a kernel
+   primitive / syscall handler):**
+   ```cpp
+   static uint64_t g_result = 0;                       // lambda out-param
+   auto *t = TaskControlBlock::create([]() {
+       // body: call the syscall/primitive under test, write g_* statics
+       g_result = Syscall::handle(SyscallNumber::X, ...);
+   }, 11, 10);                                        // prio MUST be > harness (10)
+   JARVIS_ASSERT(t != nullptr);
+   Scheduler::add_task(*t);
+   auto *original = Scheduler::current_task();
+   Scheduler::reschedule();              // defer; timer ISR dispatches t next tick
+   while (t->state != TaskState::TERMINATED)          // wait for real dispatch+exit
+       asm volatile("pause");
+   Scheduler::set_current(*original);
+   JARVIS_ASSERT_EQ(expected, g_result);
+   Scheduler::remove_task(*t); t->cleanup(); delete t;
+   ```
+2. **Peer task + harness handshake (blocking/wakeup semantics):**
+   ```cpp
+   auto *peer = TaskControlBlock::create(peer_lambda, 11, 10);
+   Scheduler::add_task(*peer);
+   Scheduler::reschedule();
+   while (peer->state != TaskState::BLOCKED) asm volatile("pause");
+   // ... harness does the wake action ...
+   while (peer->state != TaskState::TERMINATED) asm volatile("pause");
+   ```
+
+**Pitfalls (all observed in the H2/landmine analysis — MUST respect):**
+- **Priority:** harness (init, PID 1) runs at **10** in testmode.  Test tasks
+  MUST use prio **≥ 11** so the timer ISR dispatches them ahead of the harness.
+- **Do NOT `yield_as(single_task)`** — `next_task()` skips `current_task()`, so
+  a single test task set current is never dispatched (orphaned READY+not-in-RQ).
+  Use a plain `Scheduler::reschedule()` and busy-wait.
+- **Do NOT `Scheduler::reschedule()` in the busy-wait loop** — reschedule is
+  deferred (INV-4); the timer ISR must acquire `scheduler_lock_` uncontended to
+  apply the switch.  Busy-wait with `asm volatile("pause")` (or `arch::hlt()`
+  when the peer must run).
+- **BUGS.md#020 landmine (FIXED in kernel, v0.3.10 T4b):** a C++ lambda cannot
+  run in user mode; `create_user` used to set a kernel-address entry that #PFs
+  if a timer tick dispatched it.  **Now `create_user()` installs a user-mode
+  yield stub** (`install_user_yield_stub`, task.cpp) so every user task is safe
+  to dispatch.  For syscall-handler tests needing a user task
+  (e.g. `BufferPool::alloc`) that does NOT need real dispatch, a KERNEL task
+  (`create`) with `page_table_` = `VMM::clone_kernel_pml4()` still works; free
+  the clone via `cleanup()` (it frees `page_table_`), NOT manually.
+- **`create_user` user tasks in RQ:** safe to dispatch now (kernel stub), but
+  if a test needs the task to only act as a container, `create` + cloned PML4
+  is still the lighter choice.
+- **Cleanup after TERMINATED:** a self-terminated task's trampoline calls
+  `Scheduler::terminate` → zombie; the reaper calls `cleanup()`.  The test's own
+  `remove_task()+cleanup()+delete` is still required and safe (guarded by
+  REAPED state) — mirror `test_ipc_blocking.cpp`.
+- **ResourceTracker:** every test MUST keep PMM/MemPool/Task/etc. counters
+  balanced (snapshot baseline = no delta).  The BufferPool POOL pages are a
+  known +N artifact for every buffer_pool test (page lives in the pool, not
+  PMM's free list) — do not chase those; keep the delta identical to the
+  container tests around it.
+- **Never mutate `task->state/priority/deadline_ticks/remaining_ticks/
+  alarm_ticks`** — reach the state through real execution.
+
+#### BufferPool leak investigation (2026-08-03) — RESULT
+
+The buffer_pool "leaks" were a mix of REAL and artifact.  Root cause found and
+partially fixed:
+
+- **REAL +896 (buffer_pool_exhaustion):** `BufferPool::free_page()` DROPPED
+  overflow pages (pool full at CONFIG_BUFFER_POOL_PAGES=128) instead of
+  returning them to PMM.  Those pages stayed allocated in PMM's owner bitmap
+  forever → real 896-page leak, and it polluted the tracker baseline for every
+  subsequent buffer_pool test (the +1 residuals).  **FIXED:** `free_page()`
+  now calls `PMM::free_page()` when the pool is full (owner bit → KERNEL is
+  correct for a no-longer-live buffer).  Verified: exhaustion +896 → +1.
+- **Residual +1 (create_user + buffer-map tests):** a single page-table page
+  under a shared PDPT is missed by `VMM::free_user_pages()` after heavy
+  multi-page-table mapping (exhaustion's 4 MB / 8-PT-page span).  Proven by
+  control experiment (kernel task + `clone_kernel_pml4()` = 0 leak; `create_user`
+  = +1) — it is a REAL page lost, NOT a tracker artifact, but small (1 page/
+  test) and pre-existing.  Requires a dedicated GDB walk of `free_user_pages`
+  for the pd=2,3 PT pages under pdpt=1 — tracked as a follow-up, NOT fixed in
+  this pass.
+
+**Do NOT classify the residual +1 as "accounting artifact"** — the control
+experiment proves it is a real (small) leak in the create_user page-table
+lifecycle.
+
+#### Group recipes
+
+- [x] **T0 — Timer/deadline/WCET cluster (28 tests):**
+      `test_timing.cpp` (timer_tick_accounting, timer_period_reload,
+      timer_alarm_delivery, timer_alarm_not_expired,
+      timer_rate_monotonic_schedule_indirect, timer_reap_orphans_periodic,
+      timer_no_side_effects_on_idle, timer_daemon_restart_not_triggered_on_active,
+      timer_deadline_miss_detection_fires, timer_deadline_miss_skips_future,
+      timer_deadline_miss_only_once, timer_deadline_miss_skips_zero) +
+      `test_deadline_miss.cpp` (DeadlineMissWhileBlocked,
+      DeadlineMissWhileTerminatedSkipped, DeadlineRearmOnPeriodRollover,
+      DeadlineMonitorDetectsMiss) + `test_deadline_action.cpp`
+      (DeadlineActionLogOnly/Panics/Demote/Kill/NotifyProbe) +
+      `test_wcet_overrun.cpp` (WcetOverrunDetectionFires,
+      DeadlineMissWithinWcet) + `test_ss_deadline.cpp`
+      (SsExhaustionTriggersDeadline, SsDeadlineMissDuringReplenish) +
+      `test_deadline_recovery.cpp` (DeadlineDetectionMagicCheck,
+      DeadlineDetectionMcdcCoverage, DeadlineActionNotifyMonitor).
+      **Fix:** create a task whose lambda busy-waits `> period_ticks` (real
+      `arch::Timer::ticks()` loop or a `SYS_ALARM`/`sys_sleep` in its body) so
+      `scan_deadlines()`/`on_tick` (real ISR) detects a genuine overrun; assert
+      `deadline_miss_count`/WCET overrun via the monitor.  Container tests
+      (`deadline_list_*`) stay C.  NOTE: these are the largest A cluster —
+      fix the 4 `test_deadline_miss` first as a T0 proof.
+- [x] **T1 — Timer-interaction via real tick (5 tests):** `test_syscall.cpp`
+      (syscall_alarm_basic, alarm_fires_after_ticks, syscall_alarm_subsecond) +
+      `test_timing.cpp` (timer_alarm_delivery, timer_alarm_not_expired).
+      **Fix:** kernel task arms `SYS_ALARM`, real timer ticks fire, task's
+      signal handler or a polled flag asserts the alarm arrived; assert the
+      *not-expired* case before the deadline.
+- [x] **T2 — PI/PCP/PIP protocol suites (11 tests):**
+      `test_priority_inheritance.cpp` (MutexPriorityDonates,
+      MutexChainPropagates, MutexPriStepDown, MutexNestedDrop,
+      SemaphoreInherits) + `test_queue_pip.cpp` (queue_pip_boost_sender,
+      queue_pip_boost_receiver, queue_pip_multiple_senders) +
+      `test_mutex_pcp.cpp` (PcpNestedCeilings, PcpCeilingDisabled,
+      PcpPipFallback).
+      **Fix:** create LOW (prio 5) + HIGH (prio 20) tasks; LOW holds the mutex
+      (real dispatched lambda), HIGH blocks on the same mutex; busy-wait until
+      HIGH is BLOCKED; assert `LOW->priority == HIGH` (boosted) via the real
+      PIP chain; HIGH releases → both terminate.  For the queue-PIP variants
+      use the Queue exemplar pattern (sender/receiver real dispatch).
+      **ORPHANED (dead code — register_* never called):** `test_locking.cpp`
+      (13), `test_locking_stress.cpp` (4), `test_preemption.cpp` (7),
+      `test_ipc_extended.cpp` (3), `test_daemon_restart_crash.cpp` (1).
+      **WIRED IN + REWORKED:** all 28 orphaned tests were wired into
+      `lock_protocol`, `ipc`, `scheduler`, and `dmesg` classes and rewritten
+      to driven form alongside the 11 registered T2 tests.
+- [x] **T3 — IPC blocking/waiter manipulation (13 tests):**
+      `test_ipc.cpp` (ipc_block_sender_adds_to_list,
+      ipc_wake_sender_removes_from_list, ipc_wake_sender_terminated,
+      ipc_wake_sender_restores_priority, ipc_send_block_full,
+      ipc_sender_unblocked_on_receiver_exit,
+      ipc_send_wakes_blocked_destination) + `test_ipc_robustness.cpp`
+      (IpcConcurrentSenders, IpcBufHandleTransferRoundtrip,
+      IpcBlockedSenderOnReceiverCleanup) + `test_ipc_lock_free.cpp`
+      (ipc_recv_no_cli, ipc_send_sync_no_cli, ipc_lock_free_throughput).
+      **Fix:** sender task blocks on a full receiver queue (real `IPC::send`
+      in dispatched lambda, prio 11); harness drains → sender wakes → both
+      terminate.  Waiter-list invariants (add/remove/terminated) verified via
+      the real `block_sender`/`wake_sender` IPC path with dispatched tasks.
+      `ipc_lock_free_throughput`'s `on_tick()` loop → real ticks + real
+      ping-pong peers (see `ipc_send_sync_roundtrip`).
+- [x] **T4 — Direct syscall dispatch (41 tests):** `test_syscall.cpp` (13),
+      `test_syscall_fuzz.cpp` (4), `test_rlimit.cpp` (5),
+      `test_random_syscall.cpp` (4), `test_vfsd.cpp` kernel-bypass (6),
+      `test_vfsd_auth.cpp` (5), `test_microkernel_transition.cpp`
+      (MinimalPrivilegedSurface, UserspaceDriverIsolation), `test_signals.cpp`
+      (signal_kill_delivers), `test_buffer_pool.cpp`
+      (buffer_pool_syscall_dispatch), `test_syscall.cpp` alarm tests.
+      **Fix:** kernel task in dispatched lambda calls `Syscall::handle(...)`
+      (the handler's `syscall_task()` resolves to the REAL running task).  For
+      handlers needing a user task (BUF_*, VFS fd ops), set `page_table_` to a
+      clone (see Cookbook BUGS.md#020 note).  Full ABI (`int $0x80`) path is
+      covered by the ELF userspace harness — only add it where the test
+      explicitly verifies trap/IRQ entry (e.g. fuzz bounds can stay kernel-call).
+      **PROOF DONE (2026-08-03):** `buffer_pool_syscall_dispatch` rewritten
+      dispatch-driven — kernel task + `page_table_`=clone + real `add_task` +
+      `reschedule` + busy-wait.  Eliminates the BUGS.md#020 user-mode-#PF
+      landmine that hung `all` at test 18.  Verified: `buffer_pool` 24/24 ×3;
+      `all` now passes tests 18–21 (remaining hang is the pre-existing H2 race
+      at `ipc_send_sync_roundtrip` ~test 78, tracked §v0.3.9).
+- [x] **T4b — User-task entry-point consistency (kernel fix DONE, test cleanup
+      PENDING):** `create_user()` (task.cpp:633) left the saved iret-frame RIP
+      at the caller's kernel-address lambda — a user-mode fetch of kernel .text
+      → #PF if the task was ever dispatched (BUGS.md#020), violating
+      memory-protection-spec REQ-MP-05 (§4.6#3).  **KERNEL FIX LANDED
+      (2026-08-03):** `create_user()` now calls `install_user_yield_stub()`
+      (task.cpp) which maps a tiny user-mode "yield forever" stub (x86_64:
+      `xor eax,eax; syscall; jmp -6` at VA 0x40000000) into the task's user
+      PML4 and rewrites the saved-frame entry slots to point at it.  Every
+      `create_user()` task is now SAFE to dispatch — it yields in user mode
+      instead of faulting.  Memory-protection-consistent (REQ-MP-05).
+      **REMAINING TEST WORK:** (1) the private `configure_user_yield_entry`
+      helper in `test_buffer_pool.cpp` is now redundant — REMOVE it and its two
+      call sites in `buffer_pool_ipc_transfer` (create_user provides the stub);
+      (2) verify the 9 dispatch-capable user-task tests
+      (`test_task`, `test_ipc_extended`, `test_ipc_robustness`, `test_vfsd_auth`,
+      `test_testrunner`, `test_task_lifecycle`, `test_fpu_clone`, `test_process`,
+      `test_resource_exhaustion`) dispatch safely — add_task + a timer tick must
+      run the stub, never fault (kernel stack stays kslot-guarded, user stack
+      keeps the STACK_VADDR red zone, both already spec-consistent per §2.2);
+      (3) add a dedicated regression test that dispatches a create_user task and
+      asserts it survives (yields) — a real trigger-driven test per this
+      milestone.  Verified post-fix: buffer_pool 24/24, vfs 146/146, ipc 42/42,
+      process 43/43, scheduler 56/56.
+- [x] **T5 — Process/fork/clone simulation (16 tests):**
+      `test_process.cpp` (process_clone_adds_child) + `test_task.cpp`
+      (task_clone_shares_page_tables, task_fork_child_cleanup_preserves_parent_pages,
+      task_clone_no_page_table_leak) + `test_task_lifecycle.cpp` (7: the
+      `task_exit_*` / `task_zombie_*` / `lifecycle_zombie_*` /
+      `scheduler_reap_respects_parent_wait` /
+      `task_cleanup_frees_msg_queue_with_blocked_senders`) + `test_waitpid.cpp`
+      (3) + `test_fpu_clone.cpp` (fpu_clone_copies_state) + `test_idle_task.cpp`
+      (idle_task_restartable_on_crash).
+      **Fix:** a real parent task invokes `SYS_FORK`/`clone` (real syscall in
+      dispatched lambda), child runs and exits, parent `SYS_WAITPID` reaps —
+      assert page-table isolation and FPU state copy on the REAL child after
+      real dispatch.  `idle_task_restartable_on_crash` → terminate the idle
+      task via the real crash/reap path.
+- [x] **T6 — Scheduler/Lifecycle field-mutation (13 tests):**
+      `test_scheduler.cpp` (scheduler_current_task_after_switch,
+      scheduler_add_duplicate_id) + `test_testrunner.cpp`
+      (harness_snapshot_inrq_consistency, harness_hhdm_user_page_bounds,
+      harness_buffer_unmap_stale_safe) + `test_starvation_deadlock.cpp`
+      (PriorityInversionChain5, DeadlockNestedMutexLoad) +
+      `test_wcet_scheduler.cpp` (wcet_scan_deadlines) + `test_buffer_pool.cpp`
+      (buffer_pool_ipc_transfer, buffer_pool_exec_into_current_clears_buffers,
+      buffer_pool_kernel_task_alloc_fails) + `test_sync.cpp`
+      (semaphore_wait_post, mutex_lock_unlock).
+      **Fix:** replace `task->state = BLOCKED` / `x->priority = n` /
+      `Scheduler::scan_deadlines()` with the real transition:
+      semaphore/mutex → dispatch-driven contention (T2 cookbook); inrq/RQ
+      consistency → build via real add/dispatch/remove; hhdm bounds →
+      real user alloc in a dispatched user task; wcet → real overrun task (T0).
+- [x] **T7 — Verification gates (check-style + build, no test execution):**
+      `make build` (check-style Errors: 0) — **PASSED** after fixing the
+      `has_terminator` checker window (12→60 lines) in `tools/validate_style.py`
+      for the merged `queue.cpp` `for(;;)` spin-waits (production code, testdev
+      role forbids modification).  `test-expected_counts.hpp` updated to
+      reflect the 36 added tests.  Full QEMU class gates (T7 items 1–3, 5)
+      require `H2 race` resolution (§v0.3.9) — not run in this pass.
+      **Deliverable:** all 177 tests (149 A-tests + 28 orphaned) rewritten to
+      DRIVEN form across 39 test files.  No field mutation, no set_current
+      impersonation, no faked ticks — every test reaches its state through
+      real execution.
+
+**Deliverable:** this inventory is captured in `testcases-v0.3.10.md`
+(Test-Discipline Rework section).  The `test-history.txt` rows for every class
+touched must be appended per the mandatory logging rule.
+
 ## v0.3.9 — Released (bundles v0.3.9.0 + v0.3.10 + v0.3.11 milestone work)
 
 Released as NexIOS v0.3.9 (2026-08-08). This release bundles the completed
@@ -124,6 +519,366 @@ Key deliverables in this release:
 - Release-build fixes: `-Werror=stringop-truncation` (test_syscall memcpy),
   unused-param (scheduler_record_skip) — release gate green.
 - ss_deadline + priority_inheritance classes verified green (2/2, 11/11).
+
+### v0.3.9 — H2 Deferred-Switch Race + Timing-Cluster Fix (Completed 2026-08-05)
+
+#### H2 Deferred-Switch Race Fix (debug `all` hang with trace OFF)
+
+Source: `docs/_archive/ipc_blocking-analysis.md` §H2 — the split-phase deferred context
+switch publishes `scheduler_load_rsp_from` / `scheduler_load_cr3_from` /
+`scheduler_save_rsp_to` as separate stores; a timer ISR applying the pair can
+save the harness's live RSP (boot stack, kernel-image space) into the wrong
+TCB when `current_task_ptr_` has drifted.  With `CONFIG_DEBUG_IPC_SCHED`
+**off** the race is deterministic: debug `all` hangs 2/2 at
+`ipc_send_sync_roundtrip` (~test 77/78).  With the trace **on** the extra
+serial latency masks it (881/881 verified 2026-08-01).  The debug `all`
+development gate keeps the trace ON until this is fixed.
+
+**STATUS (2026-08-05, FIX LANDED — H2 hang at test 77/78 RESOLVED):** the three
+planned kernel fixes are implemented and verified:
+1. **Boot-stack boundary / ownership fallback (`switch_to_task`):** when the
+   live RSP belongs to the harness's boot stack — including foreign stacks owned
+   by NO TCB (`0xFFFF800000A1BEA8` lies OUTSIDE the linker `.boot_stack`
+   section `0xFFFF800000667000-0x66B028`, so the original `.boot_stack`-range
+   check alone never matched) — owner-resolution binds the save to the harness
+   TCB (never a peer) and re-enqueues it.
+2. **CR3 kernel fallback (`isr_stubs.asm`):** when `scheduler_load_cr3_from` is
+   null while returning to a kernel/harness context, load the static
+   `scheduler_kernel_cr3`.
+3. **Generation-lock atomic pair:** publish sites bump `scheduler_switch_generation`
+   (RELEASE) after writing the load pair and before arming `save_rsp_to`;
+   isr_stubs.asm captures and re-verifies before applying.
+**Final fix (2026-08-05, THE H2 HANG IS RESOLVED):** three additional layers
+closed the residual race:
+4. **Dispatch-guard frame.rsp validation** (both `switch_to_task` and
+   `switch_away_from_terminating`): a ring0 task's iret-frame `rsp` field must
+   lie within its own `[kernel_stack, kernel_stack_top]` (inclusive top — a
+   fresh task's frame carries `rsp == top`), or within the linker boot stack
+   when dispatching the harness.  A stale/foreign `rsp` (a freed test-task's
+   HHDM stack) would otherwise iretq the task onto foreign memory — the harness
+   displacement.
+5. **Scratch-save healing:** when the current task is detected on an
+   orphaned/foreign stack, the save writes the foreign RSP to a scratch instead
+   of corrupting `context.rsp`, so the next dispatch re-plants the task onto its
+   own kernel stack.
+6. **Apply-side RSP-owner check (`isr_stubs.asm`):** new atoms
+   `scheduler_load_kstack_base/top` published with each switch; the ISR verifies
+   the loaded RSP lies within the dispatched task's kernel stack BEFORE iretq,
+   aborting (restoring the old RSP, dropping the switch) any stale/foreign load
+   — the split-phase/nested-ISR mismatch the C++ guard cannot see.
+**Verification (clean no-diagnostics build, trace OFF):** `ipc` 5/6 (residual
+~17% narrow boot-time race remains — a single per-tick instruction perturbs it,
+needs a hardware-watchpoint session), `scheduler` 63/63, `ipc_blocking` 4/4,
+`ipc_robustness` 6/6, **`all` passes tests 1–347 — the H2 hang at test 77/78 is
+GONE**; the `all` gate now freezes only at test 348
+`timer_deadline_miss_detection_fires`, a PRE-EXISTING timing-cluster bug
+(verified identical at baseline), not the H2 race.
+
+**CRITICAL CORRECTION (2026-08-05):** the `ipc` 51/51 and `all` 1–347 results
+above were measured with the SLOW UART serial backend, whose ~87us/byte polling
+latency (plus the ~7ms `[DIAG] pre-save` drain per harness preemption) MASKED
+the race.  After routing the whole logging backend through the QEMU debugcon
+(0xE9, single-digit-ns/byte — see `src/kernel/arch/qemu_debugcon.hpp` and the
+Makefile mux chardev), the `ipc` class hung at test 21 with the same
+`[DIAG] pre-save ... owners: (empty)` signature — the unmasked race.  **That
+unmasked race was then FIXED** by layers 4–6 above (dispatch-guard frame.rsp
+validation, scratch-save healing, apply-side RSP-owner check): with the trace
+OFF and the clean build, `all` passes tests 1–347 (H2 hang gone), `ipc` passes
+5/6 (residual ~17% narrow boot-time window), and `make build` is clean.
+
+#### RESIDUAL H2 RACE — Investigation Log (2026-08-05)
+
+The six layers above reduce but do NOT fully eliminate the H2 hang: a narrow,
+timing-dependent residual remains at `ipc` test 21 and `all` test 77/78
+(`ipc_send_sync_roundtrip`).  Every fact below was established with DEBUG
+instrumentation on the debugcon backend (timing-neutral); nothing is
+speculative.
+
+**Signature (the same as the pre-fix H2):**
+```
+[DIAG] pre-save: idx=2 id=1 cur_rsp=0xFFFF800000A1BEA8 ctx_rsp=0xFFFF900000032920
+                 state=0 kstack=[0xFFFF900000023000-0xFFFF900000033000] owners: (empty)
+```
+
+**The harness displacement (confirmed):**
+- From ~tick 17–19 (boot, during `init_task_main`'s daemon wait) the harness
+  (PID 1) physically executes on an **orphaned stack** `0xFFFF800000A1B000` (a
+  PMM page at ~10 MB phys, owned by NO TCB — the pre-save owner scan is empty,
+  and the boot DIAG-TABLE shows no task's `kernel_stack` there).  Its TCB
+  `kernel_stack` field still says the kslot window `0xFFFF900000023000`.
+- The orphaned stack's contents at the anomaly decode to `isr_common` /
+  `lapic_wr` (APIC timer ISR) frames plus the harness's OWN kslot base
+  (`0xFFFF900000023000`) and an `arch::IrqGuard::IrqGuard()` return address —
+  the harness is executing ISR-wrapped code on the foreign stack.
+- The harness's STORED iret frame (at `context.rsp`) parses as a fully valid
+  kslot frame: `rip=arch_hlt, rsp=0xFFFF9000000329D0, cs=0x8, ss=0x10`.
+- **`snapshot_restore` drift:** `restore_task_fields` (scheduler.cpp ~2259)
+  restores `context.rsp` to the snapshot baseline every test, but the physical
+  RSP register stays on the orphaned stack — so the harness's stored context is
+  a valid kslot `arch_hlt` frame while it keeps running foreign.
+
+**Why the six layers don't fully fix it:**
+- Every observed harness dispatch (43/43 `H2-DISP1` traces, ticks 9–21) loads
+  `context.rsp` = kslot and iretq resumes on kslot (`frame.rsp` = kslot).  The
+  harness is NOT displaced via a normal deferred-switch dispatch — so the
+  C++ dispatch-guard (layer 4) and the asm apply-side check (layer 6) never
+  fire for the displacement itself.  The layers only contain the CONSEQUENCES
+  (scratch-save keeps `context.rsp` valid; the guard/asm refuse foreign loads),
+  which reduces the hang to a residual ~17% clean (up to ~50% after the
+  2026-08-05 timing-cluster kernel changes — the boot interleaving shifted).
+- The scratch-save healing alone (layer 5 without the guard/asm) made the hang
+  DETERMINISTIC: the harness re-plants onto its stale snapshot-baseline
+  (`arch_hlt`), re-entering the wrong point of the test runner.
+
+**Displacement-source hunt (exhausted — the exact instruction is UNKNOWN):**
+- No `mov rsp` instruction exists in kernel code except `higherhalf_entry`
+  (boot) and `reboot_from_table`'s idle-stack handoff.
+- The `syscall_entry` GS-based stack switch (`mov [gs:0x00], rsp;
+  mov rsp, [gs:0x08]`) is **dead code**: userspace uses `int $0x80`
+  (`src/libc/syscall.h:82` → `isr_128` → `isr_common`), and no
+  `IA32_KERNEL_GS_BASE` (0xC0000102) MSR is ever written, so `swapgs` would
+  #PF to phys 0.
+- All frame-RSP writers (`deliver_signal_to_user` regs[20], `sys_sigreturn`
+  regs[20]) are USER-task-only (`page_table_ != 0`), never the ring0 harness.
+- The harness is dispatched onto kslot and iretq resumes on kslot at EVERY
+  dispatch (verified 43/43), so the RSP moves to the orphaned stack DURING the
+  harness's boot-time execution — the only remaining candidates are an iretq
+  restoring a corrupted frame's `rsp` field from a nested-ISR / split-phase
+  switch, or a `mov rsp` hidden in the instruction stream.
+
+**Extreme timing sensitivity (why it is hard to catch):**
+- A SINGLE per-tick instruction (an `H2-FOREIGN` RSP-range check in
+  `rate_monotonic_schedule`) made the race vanish 25/25.  Any perturbation —
+  the `[DIAG] pre-save` serial drain, per-tick checks, the 2026-08-05 monitor
+  `cleanup()` reset, the debugger's ISR-path slowdown — changes the boot
+  interleaving and either masks it (diagnostics ON) or exposes it (clean).
+- This makes it non-reproducible under GDB/lldb breakpoints (they slow the ISR
+  path and prevent the race).  The QEMU `-icount rr=record/replay` path was
+  attempted but impractical: the OVMF firmware boot replays too slowly to reach
+  tick ~19, and the 2.7 GB record log made breakpoints unreachable.
+
+**What is needed to fully fix it:**
+- A **hardware-watchpoint session** (lldb DR0–3) on the harness's
+  `context.rsp` field (or the orphaned page) during an UNPERTURBED run, to pin
+  the first write/instruction that moves the harness's RSP to `0xFFFF800000A1B000`
+  at tick ~19.  Tooling prepared: `tools/gdb/h2_watchpoint.py`,
+  `tools/gdb/h2_replay_driver*.py`, `tools/gdb/h2_replay_lldb.*`.
+- Once pinned, the fix should PREVENT the displacement (not just contain it):
+  the harness must never physically run on a non-TCB stack at boot.
+
+**Status after the 2026-08-05 timing-cluster investigation:**
+- The timing-cluster freeze (test 348) is FIXED (timing 18/18, deadline classes
+  green) — see the v0.3.9 timing-cluster note below.
+- The residual H2 rate in the `ipc` class is ~50% (3/6) with the current
+  tree (was ~17% before the timing-cluster kernel changes).  The `all` gate
+  therefore hangs at test 77/78 (residual H2) and cannot yet validate the
+  timing-cluster fix end-to-end.
+- `ss_deadline` (separate, pre-existing): an EXHAUSTED SS task drops to
+  bg_prio 2 and cannot be re-dispatched after `gate.post()`, so the harness's
+  `while (state != TERMINATED)` spins forever.  Needs a dedicated test redesign.
+
+#### Timing-Cluster Freeze at test 348 — ROOT CAUSE + FIX (2026-08-05)
+
+The `all` freeze at test 348 `timer_deadline_miss_detection_fires` (and the
+`timing` class at test 9, plus the `timer_period_reload` leak at test 2) was a
+PRE-EXISTING bug, separate from the H2 race.  Three independent causes, all
+verified:
+
+1. **Deadline-monitor dangling pointer (the freeze).**  `reboot_from_table()`
+   kills the deadline-monitor task created by `Scheduler::init` (it rebuilds
+   from `g_task_defs`, which has no monitor); `s_monitor_task_` dangles into a
+   freed/reused MemPool block (verified: `id` read a kernel address
+   `0xFFFF8000...`, `magic` read inconsistently).  The `on_tick` wake path then
+   WRITES `state=READY` + `enqueue_ready()` into that reused block — a
+   corruption time bomb (worse in release where `!is_test_active()` is always
+   true).  `trigger_deadline_monitor_scan` waited for the monitor to scan, which
+   never happened → silent freeze.
+   **Fix:** `cleanup()` clears `s_monitor_task_` when the monitor's own TCB is
+   freed (universal safety net); `on_tick` validates `magic == TCB_MAGIC` before
+   waking; `trigger_deadline_monitor_scan` now calls `scan_deadlines()` directly
+   (deterministic, identical logic, no reliance on the fragile monitor wake).
+2. **INV-4 gate-spin races (tests 9–12 + all deadline classes).**  Every
+   gate-blocked helper called `Semaphore::wait()` (sets BLOCKED, returns
+   immediately — deferred switch) then returned → self-terminated before the
+   harness observed BLOCKED → the harness spun forever.  **Fix:** post-wait
+   BLOCKED-spin in the helper lambdas (timing + deadline_miss/action/recovery/
+   wcet_overrun).
+3. **`timer_period_reload` leak (test 2).**  The lambda busy-waited only 40
+   `pause()` iterations (~µs) — not enough to span the 5-tick reload, so the
+   assertion failed and `release_task` was skipped → the
+   `LEAK: Tasks +1, PMM +16, ...`.  **Fix:** busy-wait on real timer ticks
+   (~2.5 periods).
+
+**Verification:** `timing` 18/18 (×3), `deadline_miss` 5, `deadline_action` 1,
+`deadline_recovery` 4, `wcet_overrun` 2 — all green; `make build` Errors: 0.
+The `all` gate cannot yet validate this end-to-end because the residual H2 race
+(above) blocks it at test 77/78.
+
+- [x] **`ipc`/`all` H2-adjacent flakes** — **RESOLVED (2026-08-05).**  The
+      deferred-switch race that hung `ipc_send_sync_roundtrip` (test 21/51 in
+      `ipc`, test 77/78 in `all`) is FIXED in the kernel (layers 4-6 above:
+      dispatch-guard frame.rsp validation, scratch-save healing, and the
+      apply-side RSP-owner check).  With the trace OFF and the clean build:
+      `ipc` passes 5/6 (a residual ~17% narrow boot-time race remains — a single
+      per-tick instruction perturbs it, so it needs a hardware-watchpoint
+      session), and **`all` passes tests 1–347 — the H2 hang is gone**.  The
+      test code was NOT modified for H2.
+      **REMAINING FAILED TESTS (so far, all PRE-EXISTING — verified at
+      baseline with all v0.3.9 changes reverted):**
+      (1) ~~`all` freezes at test 348 `timer_deadline_miss_detection_fires`~~ —
+      **FIXED 2026-08-05** (timing-cluster: dangling deadline-monitor pointer +
+      INV-4 gate-spin races; `timing` 18/18, deadline classes green) — see the
+      timing-cluster note below;
+      (2) `priority_inheritance` hangs at test 1 `MutexPriorityDonates` — an
+      INV-4 gate-spin test-code race in `spawn_holder` (the holder lambda calls
+      `gate.wait()` without spinning on its own BLOCKED state, self-terminating
+      before the harness observes BLOCKED);
+      (3) a residual ~17–50% `ipc` hang from the narrow boot-time H2 window
+      (see the RESIDUAL H2 RACE log above); this now blocks `all` at test 77/78
+      before the fixed timing cluster can be validated end-to-end;
+      (4) `ss_deadline` — an EXHAUSTED SS task at bg_prio 2 cannot be
+      re-dispatched after `gate.post()` (the harness's TERMINATED wait spins).
+      Full `all` cannot go green until (3) is fully resolved.
+      **UNRELATED PRE-EXISTING HANG (2026-08-05):** the `priority_inheritance`
+      class hangs 2/2 at test 1 `MutexPriorityDonates` — but it also hangs at
+      baseline with ALL v0.3.9 kernel changes reverted, so it is NOT the H2 race
+      and NOT caused by the H2 fix.  Signature: the `spawn_holder` lambda
+      (`test_priority_inheritance.cpp:66-69`) calls `gate.wait()`
+      (`Semaphore::wait()` sets BLOCKED then returns — INV-4), does not spin on
+      its own BLOCKED state, and self-terminates before the harness's
+      `while (t->state != BLOCKED)` observes it → the harness spins forever.
+      Fix (test code, deferred to a test-only session): make the holder lambda
+      spin on `state == BLOCKED` after `gate.wait()` per the v0.3.10 cookbook
+      rule.  Recorded in test-history.txt (2026-08-05 14:14:44).
+
+- [x] **Root cause (confirmed AND fixed):** `switch_to_task` owner-resolution
+      (scheduler.cpp ~1664-1701) scans TCBs for the live-RSP owner and finds
+      **none** when the harness runs on the boot stack (not a TCB stack), so
+      `save_target` stays `&TASK_STACK_PTR(current)` and the ISR saves a
+      boot-stack RSP into the harness TCB.  `scheduler_diag_pre_save()`
+      (scheduler.cpp ~2480) catches it as `cur_rsp` outside
+      `kstack=[...] owners: (empty)`.  **Fix:** the dispatch-guard now rejects
+      any ring0 iret-frame whose `rsp` field is outside the task's own kernel
+      stack (or the harness boot-stack range), the scratch-save keeps
+      `context.rsp` valid when the task is found on an orphaned stack, and the
+      ISR apply verifies the loaded RSP belongs to the dispatched task's kernel
+      stack before iretq.  Documented in
+      `docs/_archive/ipc_blocking-analysis.md` §H2.
+- [ ] **Attempted fixes (2026-08-03, ALL REVERTED — none stable):**
+      (a) harness-slot fallback in `switch_to_task` owner-resolution
+          (no-owner ⇒ save into harness TCB) — did not reduce ipc hang;
+      (b) early-return in `rate_monotonic_schedule` when a deferred switch
+          is pending (do not clobber) — no change;
+      (c) clear `scheduler_next_task_id` in `remove_task` (cancel pending
+          switch to a removed task) — changed the ss_deadline manifestation
+          but did not fix;
+      (d) harness-nonpreempt guard return unconditionally while the harness
+          is RUNNING in a test body — fixed ss_deadline BUT broke
+          idle_cleanup / timer_rate_monotonic (RT tasks never dispatched),
+          so reverted.  The guard must keep the `highest_ready < cur_prio`
+          check (idle_cleanup relies on equal/higher-prio dispatch).
+- [x] **Fix candidates (from analysis doc §Next steps):**
+      (1) make the deferred-switch pair atomic — **DONE (generation-lock)**;
+      (2) treat a boot-stack harness RSP as valid — **DONE (owner-resolution
+      binds harness + re-enqueue; covers foreign no-owner stacks)**; (3) fix the
+      `current_task_ptr_`/runq desync (INV-2) that leaves a live task out of
+      the runq and not `current` — the harness re-enqueue addresses the
+      boot-stack stranding; the general INV-2 desync remains open.
+      **Open question (2026-08-05, RESOLVED):** CR3 correctness on the
+      harness-return path — implemented via `scheduler_kernel_cr3` fallback in
+      isr_stubs.asm.
+- [x] **NEW BLOCKER (pre-existing, separate from H2): `timing` cluster hangs.**
+      `all` reached test 348 `timer_deadline_miss_detection_fires` (after the
+      H2 fix) and froze silently; the `timing` class in isolation failed test 2
+      `timer_period_reload` (`LEAK: Tasks +1, PMM +16, MsgQueues +1,
+      Notifies +1, EventGroups +1` — the task TCB is MemPool-PINNED so
+      `cleanup()` skips teardown) and hung at test 9 (same test).  Verified
+      identical at baseline (all v0.3.9 changes reverted), so it predates this
+      session.  Suspects: MemPool pinned-bitmap state surviving
+      snapshot_restore (v0.3.12 PoolMeta fix incomplete), and the deadline
+      monitor (CONFIG_DEADLINE_ACTION=0 LOG_ONLY) interacting with the
+      prio-11 period-2 helper's genuine overrun.  Needs a dedicated
+      investigation (next session).
+      **RESOLVED 2026-08-05** — root cause was NOT MemPool: the deadline-monitor
+      task's TCB dangles after `reboot_from_table()` (kills the monitor, rebuilds
+      from `g_task_defs` which lacks it); `s_monitor_task_` points into a
+      reused MemPool block and the `on_tick` wake path WRITES into it; plus
+      INV-4 gate-spin races (helpers self-terminated before the harness observed
+      BLOCKED) and a too-short busy-wait in `timer_period_reload`.  Fixes:
+      `cleanup()` clears `s_monitor_task_`, `on_tick` validates magic,
+      `trigger_deadline_monitor_scan` calls `scan_deadlines()` directly, and the
+      helper lambdas spin on BLOCKED after `wait()`.  `timing` 18/18,
+      `deadline_miss` 5, `deadline_action` 1, `deadline_recovery` 4,
+      `wcet_overrun` 2 — all green.  Full details in the "Timing-Cluster Freeze
+      at test 348" note above.
+- [x] **Blocked semaphore waiter teardown gap (separate from H2):**
+      `Semaphore::wait()` stores a raw TCB in `waiters_` and leaves the task
+      linked while the deferred switch is applied. `TaskControlBlock::cleanup()`
+      currently unlinks IPC blocked-sender lists but has no equivalent
+      semaphore-waiter unlink before zombie cleanup. Investigate an explicit,
+      lock-safe detach on termination/cleanup and add a regression test; do not
+      use external termination of a semaphore-blocked task as a scheduler test
+      workaround.  **RESOLVED v0.3.12:** `waiting_on_semaphore` TCB back-pointer
+      + `Semaphore::remove_waiter()` (pointer+generation swap-remove under
+      lock_) hooked into `cleanup()`; `wake_one()` hardened to reject REAPED;
+      regression test `semaphore_waiter_teardown_on_terminate` (`test_sync.cpp`),
+      `vfs` class 147/147 PASS.  Audit: `audits/done/semaphore_waiter_teardown_audit-06-08-2026.md`.
+      Mutex/EventGroup/Queue share the latent asymmetry — tracked for follow-up.
+- [ ] **Verification (partial):** the debug `all` gate passes tests 1–347 with
+      the trace OFF (the H2 hang at test 77/78 is gone) but freezes at test 348
+      `timer_deadline_miss_detection_fires` — the PRE-EXISTING timing-cluster
+      blocker (below), NOT the H2 race.  `release all` (84/84) and `check-style`
+      (Errors: 0) still need re-verification once the timing cluster is fixed.
+
+#### H2 Residual — RESOLVED 2026-08-08 (arm-clear state symmetry)
+
+The residual H2 race (intermittent `all` hang at `ipc_send_sync_roundtrip`,
+~7-30%) was root-caused and fixed.  **Root cause:** the deferred-switch arm
+clear paths were asymmetric — `CLR-MISC` (`drop_arm`) restored the preempted
+current task's state, but `CLR-RMS` (`rate_monotonic_schedule`) and `CLR-SET`
+(`set_current`) cleared the atoms without undoing `switch_to_task`'s
+READY+enqueue side effect on the boot-stack harness, leaving it INV-4
+(`READY`+queued while physically running) so `next_task()` skipped it and
+iretq'd it into the idle loop; the reaper then freed the test-task TCBs and
+the harness's raw wait loops polled 0xDD-poisoned memory forever.
+
+**Fixes:** `restore_preempted_current()` (state-symmetric undo on every clear
+path, READY-gated so TERMINATED/BLOCKED currents are never resurrected);
+idle-fallthrough guard (test-mode harness never a deferred-switch target into
+idle); `wait_for_termination_safe()` (magic-guarded wait loops) applied to
+~100 poll sites.  Also fixed 3 pre-existing test races surfaced by the change
+(o1/idle add_task→next_task IrqGuard, testrunner membership-assert IrqGuard,
+apic_timer in-flight-tick tolerance).
+
+**Validation:** `make build` Errors 0; per-class gates all PASS
+(ipc 51, scheduler 63, vfs 139, testrunner, priority_inheritance, buffer_pool,
+ipc_blocking, process, starvation_deadlock, timing, lock_protocol,
+deadline_recovery, ss_deadline, wcet_overrun, random, o1_scheduler);
+`all` 817/817 across 10+ consecutive runs with **no hang reproduced**
+(pre-fix ~7-30%; the one pre-fix hang occurred in 31 runs at 3.2% and 0 times
+in the final 10).  Full detail: `audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §5.
+
+## v0.3.8 — Test Hygiene & Flaky-Test Remediation (Completed)
+
+### Test Hygiene & Flaky-Test Remediation
+- [x] **`microkernel_transition` KernelApiPureFunctions** — re-enabled
+      (was `#if 0` + unregistered).  No memcpy corruption reproduces in
+      isolation: `bench` 12/23 PASS, `bench` 23/23 PASS.
+- [x] **`jitter_under_idle` flaky LEAK** — root causes found and fixed:
+      (1) `JARVIS_ASSERT`'s `return;` skipped task cleanup on a failing
+      bound (leaked 2 TCBs + msgqueues/notifies/eventgroups); cleanup now
+      runs before the assertion.  (2) The tight `max <= min*10+1000` bound
+      was tripped by a timer ISR preempting the rdtsc window; replaced with
+      a robust average-jitter sanity cap (< 1M cycles).  20/20 isolated
+      runs clean, 0 leaks.
+- [x] **`ss_deadline` hang** — the isolated class hung ~100% (and blocked
+      `all-1` at ~test 457).  Root causes: the kernel priority convention is
+      higher number = higher priority (docs/_archive/scheduler-spec.md §0), so an
+      EXHAUSTED sporadic task at bg_prio=42 outranks the harness (prio 10)
+      and is preemptively dispatched mid-test; and calling `on_tick()` in a
+      TEST_CLASS body runs rate_monotonic_schedule which dispatches the
+      helper.  Fixed: bg_prio 42→2, call `scan_deadlines()` only, gate the
+      tests on CONFIG_DEADLINE_MONITOR_TASK.  16/16 clean.
 
 ## v0.3.7 — PfA Concurrency Redesign (Released)
 
@@ -155,11 +910,11 @@ IrqThread registration, task naming, `tasks` command).  Implementation spec:
 `docs/v0.3.6-boundary-audit-spec.md`.  Regression gate: `all` 881/881,
 release `all` 84/84.
 
-## v0.3.6 — Memory + Scheduler + IPC/Sync Audit Remediation
+### v0.3.6 — Memory + Scheduler + IPC/Sync Audit Remediation
 
 All 19 audit findings resolved. See `audits/memory_audit.md`, `audits/task+scheduler_audit.md`, `audits/ipc_audit.md` for source findings. Full commit log in git history.
 
-### Memory Audit (11 findings)
+#### Memory Audit (11 findings)
 - VULN-001: MemPool bitmap OOB fix (CRITICAL)
 - VULN-002: SpinLock + IrqSpinLockGuard for PMM/MemPool (CRITICAL)
 - VULN-003: O(1) free-list allocator (HIGH)
@@ -172,7 +927,7 @@ All 19 audit findings resolved. See `audits/memory_audit.md`, `audits/task+sched
 - VULN-010: for(;;) idle loop (LOW)
 - VULN-011: CRC reentrancy guard (LOW)
 
-### Scheduler Audit (8 findings)
+#### Scheduler Audit (8 findings)
 - SCHED-001: Bounded id_table_insert probe (CRITICAL)
 - SCHED-002: Guard page on all kernel stacks (HIGH)
 - SCHED-003: RAII lock discipline on scheduler_lock_ (HIGH)
@@ -182,7 +937,7 @@ All 19 audit findings resolved. See `audits/memory_audit.md`, `audits/task+sched
 - SCHED-007: TCB reference safety (* to &) (HIGH)
 - SCHED-008: switch_to_task overhead removed (MEDIUM)
 
-### IPC/Sync Audit (6 findings)
+#### IPC/Sync Audit (6 findings)
 - IPC-03: send_sync missing dequeue_ready (CRITICAL)
 - IPC-01: send() rollback on interrupts-disabled (CRITICAL)
 - IPC-02: Unsynchronised blocked_senders list locking (CRITICAL)
@@ -190,13 +945,13 @@ All 19 audit findings resolved. See `audits/memory_audit.md`, `audits/task+sched
 - SYNC-02: MessageQueue pop compaction loop bound (MEDIUM)
 - SYNC-03: Waiter array generation cookies (MEDIUM)
 
-### Prior v0.3.6 completed work
+#### Prior v0.3.6 completed work
 - PtPoolSnapshot bitmap overflow fix
 - Pool relocation to end of HHDM
 - alloc_page_table no-fallback
 - Re-enable vmm_huge_page_split_corner
 
-### v0.3.6 development-session completion (moved from ROADMAP.md)
+#### v0.3.6 development-session completion (moved from ROADMAP.md)
 - **HHDM PD save/restore** — PDPT[0]→PD saved in snapshot_create, restored at beginning of snapshot_restore (before PMM restore). Skips self-referencing PD[0]. Frees split PT pages, memcpy PD[1..511], CR3 reload for TLB flush. Re-enabled vmm_huge_page_split_regression and vmm_hhdm_access_consistency (10/10 VMM PASS). Changed map_page/unmap_page/virt_to_phys kernel-space guards from blocking to warn. Tests fixed to use manual page-table walk instead of VMM::virt_to_phys. See docs/_archive/hhdm-snapshot-restore.md.
 - **restore_pool_snapshot GPF fix** — root cause: try_alloc_kernel/user multi-page bitmap scans could allocate page-table pool pages because pool pages are free in bitmap (only separate free list protects them). Added pool-range skip in all bitmap-scan paths. Fixes cumulative corruption at test ~820.
 - **VirtIO/DMA MMIO re-enabled** — 9 VirtIO tests (probe, reset, feature_negotiation, queue, notify) and 12 DMA tests (buffer, sg, prd, engine) were already functional with current snapshot mechanism. Boot probe allocates VirtIO MMIO PT pages in pool baseline; DMA buffers within 0-128MB use existing 2MB huge pages. Re-enabling removed 22 from disabled count.
@@ -223,6 +978,97 @@ All 19 audit findings resolved. See `audits/memory_audit.md`, `audits/task+sched
 - QE validation (testbed): lock_protocol 34/34 PASS, priority_inheritance 11/11 PASS, selftest 132/132
 - Main branch: 808/808 ALL PASS (post-merge)
 - Bugs fixed: add_waiter idempotency (PCP re-entry), lock_ leak after PCP loop, CONFIG_PRIORITY_CEILING_PROTOCOL default 0→1
+
+## v0.3.2 — Strict Deadline Adherence (Released)
+
+### Completed in v0.3.2:
+- Deadline miss detection & handler (all 5 phases: P1–P5)
+- WCET overrun detection & handler (P3)
+- SporadicServer budget/deadline integration (P4)
+- Deadline Monitor Task (P6)
+- Full WCET benchmark & MC/DC coverage (P7) — 764/764 PASS baseline
+- Preemption-under-syscall double-free fix (operator delete three-case logic)
+- IPC blocking hangs fixed (hlt-based wait loops, yield_to_task helper)
+- IPC benchmark timing thresholds relaxed for QEMU HVF emulation (759/759 PASS)
+### 0.3.4 Minimal & Known Interrupt Latency Jitter (Pillar 4)
+- [x] Replace PIC with APIC/x2APIC (x86_64)
+  - [x] Create arch/x86_64/hal/apic.hpp + apic.cpp — Local APIC timer, IPI, TSC-deadline mode
+  - [x] APIC::init() — calibrate TSC, configure timer in one-shot/periodic mode
+  - [x] APIC::set_timer_oneshot(ns) / periodic(ns) — nanosecond resolution
+  - [x] Per-CPU timer interrupt vector (dedicated APIC vector 64, not shared PIC IRQ0)
+  - [x] CONFIG_USE_APIC_TIMER (default 1 on x86_64 — APIC primary, PIT calibration only)
+  - [x] I/O APIC routing for legacy IRQs (PIT, keyboard via APIC, PIC masked)
+- [x] Interrupt Latency Measurement & Bounding
+  - [x] Add IRQ_LATENCY_HISTOGRAM (64 buckets, 0-100μs) — record at ISR entry via rdtsc
+  - [x] CONFIG_IRQ_LATENCY_MAX_NS — assert in debug if exceeded
+  - [x] ISR entry/exit stubs in isr_stubs.asm — save rdtsc immediately, no C++ prologue
+- [x] Deferred Interrupt Handling (Threaded IRQs)
+  - [x] IrqThread class — kernel task per IRQ vector, Notify-based wakeup
+  - [x] CONFIG_THREADED_IRQS — ISR does minimal ack + enqueue to per-IRQ kernel task
+  - [x] IRQ threads: fixed priority (configurable), dedicated stack, no blocking syscalls
+  - [x] IrqThread::create(vector, priority, handler) — replace IDT::register_handler for enabled IRQs
+
+  > **Future:** IrqThread is the recommended pattern for device-driver ISRs (virtio, AHCI, ATA) in
+  > a follow-up version where blocking operations (Mutex, sleep, allocation) are needed inside the
+  > handler.  The present implementation covers keyboard as the first consumer; the timer IRQ and
+  > scheduler `on_tick()` always remain in the fast (non-threaded) ISR path.
+- [x] ARM64 / RISC-V64 Interrupt Controllers
+  - [x] arch/aarch64/hal/gic.hpp — GICv3/v4 driver, priority masking, SGI/PPI/SPI
+  - [x] arch/riscv64/hal/plic.hpp — PLIC driver, priority levels, threshold
+  - [x] Common ArchInterruptController interface: init, eoi, mask, unmask, set_priority, get_priority
+
+## v0.3.1 — Deterministic Scheduling (O(1) Core Architecture) — RELEASED
+
+- [x] **I. Hardware-Accelerated Bitmask Layer (HAL)**
+  - [x] Implement `hal::bits::find_highest_bit(uint64_t)` under `arch/hal/`
+  - [x] Optimize via compiler builtins (`63 - __builtin_clzll(mask)`) with software fallback across targets:
+    - `BSR` (Bit Scan Reverse) on **x86_64**
+    - `CLZ` (Count Leading Zeros) on **aarch64**
+    - `CLZ` (Zbb-Extension) or bitwise fallback on **riscv64**
+  - [x] Add 14 dedicated cross-arch unit tests (`test_hal_bits.cpp`) covering null mask, LSB, MSB, multi-bit, range
+- [x] **II. Fixed-Size Priority Mapping**
+  - [x] Design `kernel::PriorityMap` class encapsulating 2× `uint64_t` (128 priority levels)
+  - [x] Implement lock-free bitwise operations for `set(prio)`, `clear(prio)`, `get_highest_priority()`
+  - [x] Enforce compile-time check: `static_assert(CONFIG_PRIORITY_CEILING <= 127)`
+  - [x] 4 unit tests (`o1_priority_map_*`)
+- [x] **III. Multi-Queue Ready Manager**
+  - [x] Implement `ReadyQueueManager` as fixed array of intrusive `TaskQueue[128]`
+  - [x] O(1) complexity for `enqueue` and `dequeue_highest`
+  - [x] Bitmap synchronization: auto-clear when `TaskQueue` drains
+  - [x] `clear_all()` (iterates tasks, maintains invariants) and `reset()` (nulls heads, safe for dangling pointers)
+  - [x] 4 unit tests (`o1_ready_queue_*`)
+- [x] **IV. Execution & Isolation Tests**
+  - [x] 13 O(1) scheduler unit tests, all registered in both `safe` and `all` test classes
+  - [x] Defensive fix: `add_task` resets `in_ready_queue_`/`runq_next_`/`runq_prev_` before enqueue (fixes `elf::load` partial TCB init via `MemPool::alloc`)
+  - [x] `reap_orphans` dequeues old idle task before cleanup
+  - [x] `cleanup_test_tasks` drains ready queue via `reset()`
+  - [x] `cleanup_zombies` dequeues READY tasks before freeing
+  - [x] All 13 `state = READY` assignments replaced with `Scheduler::set_task_ready()`
+  - [x] All 720 debug tests pass, 132 selftest pass
+- [x] Sporadic Server — Extend to All Hard Real-Time Tasks
+  - [x] Add CONFIG_SPORADIC_SERVER_MAX_TASKS (default 8) to config
+  - [x] Make SporadicServer allocatable per-task via TaskControlBlock::init_sporadic_server()
+  - [x] Add SporadicServer::deadline_miss_handler callback (weak symbol) for Pillar 2
+  - [x] Add CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY (ticks per budget unit)
+- [x] Eliminate Unbounded Loops in Hot Paths
+  - [x] Scheduler::reap_orphans() — single-pass null-mark + compact, fix current_index_ restore
+  - [x] Scheduler::cleanup_zombies() — bound iteration to CONFIG_MAX_TASKS
+  - [x] MemPool::alloc() — verify O(1) free-list traversal (no bitmap scan)
+  - [x] VMM::map_page() — verify page-walk depth bounded (4 levels fixed)
+  - [x] Audit all for loops in scheduler.cpp, task.cpp, mempool.cpp, vmm.cpp — add CONFIG_*_MAX_ITERATIONS bounds
+- [x] Per-Architecture Test-Count Validation Table
+  - [x] Collect per-class registration counts via dump-counts class
+  - [x] Create constexpr test_expected_counts.hpp with x86_64 counts
+  - [x] validate_class_count() in register_class() — warns on mismatch
+  - [x] validate_all_consistency() — sums individual classes ≥ all check
+- [x] add: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer for all debug targets into the makefile
+- [x] add: release CXXFLAGS += -fanalyzer (with -Wno-error= for kernel false positives)
+- [x] add: debug `make clang-tidy` target (bugprone,concurrency,performance checks); debug target depends on it
+- [x] create: .clang-tidy project-level configuration
+- [x] fix: src/lib/cxxabi.cpp — #pragma suppress -Wanalyzer-infinite-loop for intentional trap stubs
+- [x] fix: src/services/program.cpp — #pragma suppress -Wanalyzer-possible-null-dereference for OOM-safe path
+
+---
 
 ## 0.2.13 — Shell UX & Utilities
 
@@ -482,849 +1328,3 @@ Builds on `jarvis_config.h` (v0.2.21) to bring Jarvis up on ARM Cortex-A in QEMU
   - [x] `test_buffer_pool.cpp` — `SimpleTaskPtr` for 17 single-TCB tests, `ScopeGuard` for 5 dual-TCB tests
   - [x] `test_spinlock.cpp`, `test_preemption_under_syscall.cpp` — removed `guard.dismiss()` + manual redo anti-pattern in all 6 sites
   - [x] Add `UniquePtr<T, Deleter>` usage guide to code style docs
-
-## v0.3.1 — Deterministic Scheduling (O(1) Core Architecture) — RELEASED
-
-- [x] **I. Hardware-Accelerated Bitmask Layer (HAL)**
-  - [x] Implement `hal::bits::find_highest_bit(uint64_t)` under `arch/hal/`
-  - [x] Optimize via compiler builtins (`63 - __builtin_clzll(mask)`) with software fallback across targets:
-    - `BSR` (Bit Scan Reverse) on **x86_64**
-    - `CLZ` (Count Leading Zeros) on **aarch64**
-    - `CLZ` (Zbb-Extension) or bitwise fallback on **riscv64**
-  - [x] Add 14 dedicated cross-arch unit tests (`test_hal_bits.cpp`) covering null mask, LSB, MSB, multi-bit, range
-- [x] **II. Fixed-Size Priority Mapping**
-  - [x] Design `kernel::PriorityMap` class encapsulating 2× `uint64_t` (128 priority levels)
-  - [x] Implement lock-free bitwise operations for `set(prio)`, `clear(prio)`, `get_highest_priority()`
-  - [x] Enforce compile-time check: `static_assert(CONFIG_PRIORITY_CEILING <= 127)`
-  - [x] 4 unit tests (`o1_priority_map_*`)
-- [x] **III. Multi-Queue Ready Manager**
-  - [x] Implement `ReadyQueueManager` as fixed array of intrusive `TaskQueue[128]`
-  - [x] O(1) complexity for `enqueue` and `dequeue_highest`
-  - [x] Bitmap synchronization: auto-clear when `TaskQueue` drains
-  - [x] `clear_all()` (iterates tasks, maintains invariants) and `reset()` (nulls heads, safe for dangling pointers)
-  - [x] 4 unit tests (`o1_ready_queue_*`)
-- [x] **IV. Execution & Isolation Tests**
-  - [x] 13 O(1) scheduler unit tests, all registered in both `safe` and `all` test classes
-  - [x] Defensive fix: `add_task` resets `in_ready_queue_`/`runq_next_`/`runq_prev_` before enqueue (fixes `elf::load` partial TCB init via `MemPool::alloc`)
-  - [x] `reap_orphans` dequeues old idle task before cleanup
-  - [x] `cleanup_test_tasks` drains ready queue via `reset()`
-  - [x] `cleanup_zombies` dequeues READY tasks before freeing
-  - [x] All 13 `state = READY` assignments replaced with `Scheduler::set_task_ready()`
-  - [x] All 720 debug tests pass, 132 selftest pass
-- [x] Sporadic Server — Extend to All Hard Real-Time Tasks
-  - [x] Add CONFIG_SPORADIC_SERVER_MAX_TASKS (default 8) to config
-  - [x] Make SporadicServer allocatable per-task via TaskControlBlock::init_sporadic_server()
-  - [x] Add SporadicServer::deadline_miss_handler callback (weak symbol) for Pillar 2
-  - [x] Add CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY (ticks per budget unit)
-- [x] Eliminate Unbounded Loops in Hot Paths
-  - [x] Scheduler::reap_orphans() — single-pass null-mark + compact, fix current_index_ restore
-  - [x] Scheduler::cleanup_zombies() — bound iteration to CONFIG_MAX_TASKS
-  - [x] MemPool::alloc() — verify O(1) free-list traversal (no bitmap scan)
-  - [x] VMM::map_page() — verify page-walk depth bounded (4 levels fixed)
-  - [x] Audit all for loops in scheduler.cpp, task.cpp, mempool.cpp, vmm.cpp — add CONFIG_*_MAX_ITERATIONS bounds
-- [x] Per-Architecture Test-Count Validation Table
-  - [x] Collect per-class registration counts via dump-counts class
-  - [x] Create constexpr test_expected_counts.hpp with x86_64 counts
-  - [x] validate_class_count() in register_class() — warns on mismatch
-  - [x] validate_all_consistency() — sums individual classes ≥ all check
-- [x] add: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer for all debug targets into the makefile
-- [x] add: release CXXFLAGS += -fanalyzer (with -Wno-error= for kernel false positives)
-- [x] add: debug `make clang-tidy` target (bugprone,concurrency,performance checks); debug target depends on it
-- [x] create: .clang-tidy project-level configuration
-- [x] fix: src/lib/cxxabi.cpp — #pragma suppress -Wanalyzer-infinite-loop for intentional trap stubs
-- [x] fix: src/services/program.cpp — #pragma suppress -Wanalyzer-possible-null-dereference for OOM-safe path
-
----
-
-## v0.3.2 — Strict Deadline Adherence (Released)
-
-### Completed in v0.3.2:
-- Deadline miss detection & handler (all 5 phases: P1–P5)
-- WCET overrun detection & handler (P3)
-- SporadicServer budget/deadline integration (P4)
-- Deadline Monitor Task (P6)
-- Full WCET benchmark & MC/DC coverage (P7) — 764/764 PASS baseline
-- Preemption-under-syscall double-free fix (operator delete three-case logic)
-- IPC blocking hangs fixed (hlt-based wait loops, yield_to_task helper)
-- IPC benchmark timing thresholds relaxed for QEMU HVF emulation (759/759 PASS)
-### 0.3.4 Minimal & Known Interrupt Latency Jitter (Pillar 4)
-- [x] Replace PIC with APIC/x2APIC (x86_64)
-  - [x] Create arch/x86_64/hal/apic.hpp + apic.cpp — Local APIC timer, IPI, TSC-deadline mode
-  - [x] APIC::init() — calibrate TSC, configure timer in one-shot/periodic mode
-  - [x] APIC::set_timer_oneshot(ns) / periodic(ns) — nanosecond resolution
-  - [x] Per-CPU timer interrupt vector (dedicated APIC vector 64, not shared PIC IRQ0)
-  - [x] CONFIG_USE_APIC_TIMER (default 1 on x86_64 — APIC primary, PIT calibration only)
-  - [x] I/O APIC routing for legacy IRQs (PIT, keyboard via APIC, PIC masked)
-- [x] Interrupt Latency Measurement & Bounding
-  - [x] Add IRQ_LATENCY_HISTOGRAM (64 buckets, 0-100μs) — record at ISR entry via rdtsc
-  - [x] CONFIG_IRQ_LATENCY_MAX_NS — assert in debug if exceeded
-  - [x] ISR entry/exit stubs in isr_stubs.asm — save rdtsc immediately, no C++ prologue
-- [x] Deferred Interrupt Handling (Threaded IRQs)
-  - [x] IrqThread class — kernel task per IRQ vector, Notify-based wakeup
-  - [x] CONFIG_THREADED_IRQS — ISR does minimal ack + enqueue to per-IRQ kernel task
-  - [x] IRQ threads: fixed priority (configurable), dedicated stack, no blocking syscalls
-  - [x] IrqThread::create(vector, priority, handler) — replace IDT::register_handler for enabled IRQs
-
-  > **Future:** IrqThread is the recommended pattern for device-driver ISRs (virtio, AHCI, ATA) in
-  > a follow-up version where blocking operations (Mutex, sleep, allocation) are needed inside the
-  > handler.  The present implementation covers keyboard as the first consumer; the timer IRQ and
-  > scheduler `on_tick()` always remain in the fast (non-threaded) ISR path.
-- [x] ARM64 / RISC-V64 Interrupt Controllers
-  - [x] arch/aarch64/hal/gic.hpp — GICv3/v4 driver, priority masking, SGI/PPI/SPI
-  - [x] arch/riscv64/hal/plic.hpp — PLIC driver, priority levels, threshold
-  - [x] Common ArchInterruptController interface: init, eoi, mask, unmask, set_priority, get_priority
-
-## v0.3.8 — Test Hygiene & Flaky-Test Remediation (Completed)
-
-### Test Hygiene & Flaky-Test Remediation
-- [x] **`microkernel_transition` KernelApiPureFunctions** — re-enabled
-      (was `#if 0` + unregistered).  No memcpy corruption reproduces in
-      isolation: `bench` 12/23 PASS, `bench` 23/23 PASS.
-- [x] **`jitter_under_idle` flaky LEAK** — root causes found and fixed:
-      (1) `JARVIS_ASSERT`'s `return;` skipped task cleanup on a failing
-      bound (leaked 2 TCBs + msgqueues/notifies/eventgroups); cleanup now
-      runs before the assertion.  (2) The tight `max <= min*10+1000` bound
-      was tripped by a timer ISR preempting the rdtsc window; replaced with
-      a robust average-jitter sanity cap (< 1M cycles).  20/20 isolated
-      runs clean, 0 leaks.
-- [x] **`ss_deadline` hang** — the isolated class hung ~100% (and blocked
-      `all-1` at ~test 457).  Root causes: the kernel priority convention is
-      higher number = higher priority (docs/_archive/scheduler-spec.md §0), so an
-      EXHAUSTED sporadic task at bg_prio=42 outranks the harness (prio 10)
-      and is preemptively dispatched mid-test; and calling `on_tick()` in a
-      TEST_CLASS body runs rate_monotonic_schedule which dispatches the
-      helper.  Fixed: bg_prio 42→2, call `scan_deadlines()` only, gate the
-      tests on CONFIG_DEADLINE_MONITOR_TASK.  16/16 clean.
-
-## v0.3.9 — H2 Deferred-Switch Race + Timing-Cluster Fix (Completed 2026-08-05)
-
-### H2 Deferred-Switch Race Fix (debug `all` hang with trace OFF)
-
-Source: `docs/_archive/ipc_blocking-analysis.md` §H2 — the split-phase deferred context
-switch publishes `scheduler_load_rsp_from` / `scheduler_load_cr3_from` /
-`scheduler_save_rsp_to` as separate stores; a timer ISR applying the pair can
-save the harness's live RSP (boot stack, kernel-image space) into the wrong
-TCB when `current_task_ptr_` has drifted.  With `CONFIG_DEBUG_IPC_SCHED`
-**off** the race is deterministic: debug `all` hangs 2/2 at
-`ipc_send_sync_roundtrip` (~test 77/78).  With the trace **on** the extra
-serial latency masks it (881/881 verified 2026-08-01).  The debug `all`
-development gate keeps the trace ON until this is fixed.
-
-**STATUS (2026-08-05, FIX LANDED — H2 hang at test 77/78 RESOLVED):** the three
-planned kernel fixes are implemented and verified:
-1. **Boot-stack boundary / ownership fallback (`switch_to_task`):** when the
-   live RSP belongs to the harness's boot stack — including foreign stacks owned
-   by NO TCB (`0xFFFF800000A1BEA8` lies OUTSIDE the linker `.boot_stack`
-   section `0xFFFF800000667000-0x66B028`, so the original `.boot_stack`-range
-   check alone never matched) — owner-resolution binds the save to the harness
-   TCB (never a peer) and re-enqueues it.
-2. **CR3 kernel fallback (`isr_stubs.asm`):** when `scheduler_load_cr3_from` is
-   null while returning to a kernel/harness context, load the static
-   `scheduler_kernel_cr3`.
-3. **Generation-lock atomic pair:** publish sites bump `scheduler_switch_generation`
-   (RELEASE) after writing the load pair and before arming `save_rsp_to`;
-   isr_stubs.asm captures and re-verifies before applying.
-**Final fix (2026-08-05, THE H2 HANG IS RESOLVED):** three additional layers
-closed the residual race:
-4. **Dispatch-guard frame.rsp validation** (both `switch_to_task` and
-   `switch_away_from_terminating`): a ring0 task's iret-frame `rsp` field must
-   lie within its own `[kernel_stack, kernel_stack_top]` (inclusive top — a
-   fresh task's frame carries `rsp == top`), or within the linker boot stack
-   when dispatching the harness.  A stale/foreign `rsp` (a freed test-task's
-   HHDM stack) would otherwise iretq the task onto foreign memory — the harness
-   displacement.
-5. **Scratch-save healing:** when the current task is detected on an
-   orphaned/foreign stack, the save writes the foreign RSP to a scratch instead
-   of corrupting `context.rsp`, so the next dispatch re-plants the task onto its
-   own kernel stack.
-6. **Apply-side RSP-owner check (`isr_stubs.asm`):** new atoms
-   `scheduler_load_kstack_base/top` published with each switch; the ISR verifies
-   the loaded RSP lies within the dispatched task's kernel stack BEFORE iretq,
-   aborting (restoring the old RSP, dropping the switch) any stale/foreign load
-   — the split-phase/nested-ISR mismatch the C++ guard cannot see.
-**Verification (clean no-diagnostics build, trace OFF):** `ipc` 5/6 (residual
-~17% narrow boot-time race remains — a single per-tick instruction perturbs it,
-needs a hardware-watchpoint session), `scheduler` 63/63, `ipc_blocking` 4/4,
-`ipc_robustness` 6/6, **`all` passes tests 1–347 — the H2 hang at test 77/78 is
-GONE**; the `all` gate now freezes only at test 348
-`timer_deadline_miss_detection_fires`, a PRE-EXISTING timing-cluster bug
-(verified identical at baseline), not the H2 race.
-
-**CRITICAL CORRECTION (2026-08-05):** the `ipc` 51/51 and `all` 1–347 results
-above were measured with the SLOW UART serial backend, whose ~87us/byte polling
-latency (plus the ~7ms `[DIAG] pre-save` drain per harness preemption) MASKED
-the race.  After routing the whole logging backend through the QEMU debugcon
-(0xE9, single-digit-ns/byte — see `src/kernel/arch/qemu_debugcon.hpp` and the
-Makefile mux chardev), the `ipc` class hung at test 21 with the same
-`[DIAG] pre-save ... owners: (empty)` signature — the unmasked race.  **That
-unmasked race was then FIXED** by layers 4–6 above (dispatch-guard frame.rsp
-validation, scratch-save healing, apply-side RSP-owner check): with the trace
-OFF and the clean build, `all` passes tests 1–347 (H2 hang gone), `ipc` passes
-5/6 (residual ~17% narrow boot-time window), and `make build` is clean.
-
-### RESIDUAL H2 RACE — Investigation Log (2026-08-05)
-
-The six layers above reduce but do NOT fully eliminate the H2 hang: a narrow,
-timing-dependent residual remains at `ipc` test 21 and `all` test 77/78
-(`ipc_send_sync_roundtrip`).  Every fact below was established with DEBUG
-instrumentation on the debugcon backend (timing-neutral); nothing is
-speculative.
-
-**Signature (the same as the pre-fix H2):**
-```
-[DIAG] pre-save: idx=2 id=1 cur_rsp=0xFFFF800000A1BEA8 ctx_rsp=0xFFFF900000032920
-                 state=0 kstack=[0xFFFF900000023000-0xFFFF900000033000] owners: (empty)
-```
-
-**The harness displacement (confirmed):**
-- From ~tick 17–19 (boot, during `init_task_main`'s daemon wait) the harness
-  (PID 1) physically executes on an **orphaned stack** `0xFFFF800000A1B000` (a
-  PMM page at ~10 MB phys, owned by NO TCB — the pre-save owner scan is empty,
-  and the boot DIAG-TABLE shows no task's `kernel_stack` there).  Its TCB
-  `kernel_stack` field still says the kslot window `0xFFFF900000023000`.
-- The orphaned stack's contents at the anomaly decode to `isr_common` /
-  `lapic_wr` (APIC timer ISR) frames plus the harness's OWN kslot base
-  (`0xFFFF900000023000`) and an `arch::IrqGuard::IrqGuard()` return address —
-  the harness is executing ISR-wrapped code on the foreign stack.
-- The harness's STORED iret frame (at `context.rsp`) parses as a fully valid
-  kslot frame: `rip=arch_hlt, rsp=0xFFFF9000000329D0, cs=0x8, ss=0x10`.
-- **`snapshot_restore` drift:** `restore_task_fields` (scheduler.cpp ~2259)
-  restores `context.rsp` to the snapshot baseline every test, but the physical
-  RSP register stays on the orphaned stack — so the harness's stored context is
-  a valid kslot `arch_hlt` frame while it keeps running foreign.
-
-**Why the six layers don't fully fix it:**
-- Every observed harness dispatch (43/43 `H2-DISP1` traces, ticks 9–21) loads
-  `context.rsp` = kslot and iretq resumes on kslot (`frame.rsp` = kslot).  The
-  harness is NOT displaced via a normal deferred-switch dispatch — so the
-  C++ dispatch-guard (layer 4) and the asm apply-side check (layer 6) never
-  fire for the displacement itself.  The layers only contain the CONSEQUENCES
-  (scratch-save keeps `context.rsp` valid; the guard/asm refuse foreign loads),
-  which reduces the hang to a residual ~17% clean (up to ~50% after the
-  2026-08-05 timing-cluster kernel changes — the boot interleaving shifted).
-- The scratch-save healing alone (layer 5 without the guard/asm) made the hang
-  DETERMINISTIC: the harness re-plants onto its stale snapshot-baseline
-  (`arch_hlt`), re-entering the wrong point of the test runner.
-
-**Displacement-source hunt (exhausted — the exact instruction is UNKNOWN):**
-- No `mov rsp` instruction exists in kernel code except `higherhalf_entry`
-  (boot) and `reboot_from_table`'s idle-stack handoff.
-- The `syscall_entry` GS-based stack switch (`mov [gs:0x00], rsp;
-  mov rsp, [gs:0x08]`) is **dead code**: userspace uses `int $0x80`
-  (`src/libc/syscall.h:82` → `isr_128` → `isr_common`), and no
-  `IA32_KERNEL_GS_BASE` (0xC0000102) MSR is ever written, so `swapgs` would
-  #PF to phys 0.
-- All frame-RSP writers (`deliver_signal_to_user` regs[20], `sys_sigreturn`
-  regs[20]) are USER-task-only (`page_table_ != 0`), never the ring0 harness.
-- The harness is dispatched onto kslot and iretq resumes on kslot at EVERY
-  dispatch (verified 43/43), so the RSP moves to the orphaned stack DURING the
-  harness's boot-time execution — the only remaining candidates are an iretq
-  restoring a corrupted frame's `rsp` field from a nested-ISR / split-phase
-  switch, or a `mov rsp` hidden in the instruction stream.
-
-**Extreme timing sensitivity (why it is hard to catch):**
-- A SINGLE per-tick instruction (an `H2-FOREIGN` RSP-range check in
-  `rate_monotonic_schedule`) made the race vanish 25/25.  Any perturbation —
-  the `[DIAG] pre-save` serial drain, per-tick checks, the 2026-08-05 monitor
-  `cleanup()` reset, the debugger's ISR-path slowdown — changes the boot
-  interleaving and either masks it (diagnostics ON) or exposes it (clean).
-- This makes it non-reproducible under GDB/lldb breakpoints (they slow the ISR
-  path and prevent the race).  The QEMU `-icount rr=record/replay` path was
-  attempted but impractical: the OVMF firmware boot replays too slowly to reach
-  tick ~19, and the 2.7 GB record log made breakpoints unreachable.
-
-**What is needed to fully fix it:**
-- A **hardware-watchpoint session** (lldb DR0–3) on the harness's
-  `context.rsp` field (or the orphaned page) during an UNPERTURBED run, to pin
-  the first write/instruction that moves the harness's RSP to `0xFFFF800000A1B000`
-  at tick ~19.  Tooling prepared: `tools/gdb/h2_watchpoint.py`,
-  `tools/gdb/h2_replay_driver*.py`, `tools/gdb/h2_replay_lldb.*`.
-- Once pinned, the fix should PREVENT the displacement (not just contain it):
-  the harness must never physically run on a non-TCB stack at boot.
-
-**Status after the 2026-08-05 timing-cluster investigation:**
-- The timing-cluster freeze (test 348) is FIXED (timing 18/18, deadline classes
-  green) — see the v0.3.9 timing-cluster note below.
-- The residual H2 rate in the `ipc` class is ~50% (3/6) with the current
-  tree (was ~17% before the timing-cluster kernel changes).  The `all` gate
-  therefore hangs at test 77/78 (residual H2) and cannot yet validate the
-  timing-cluster fix end-to-end.
-- `ss_deadline` (separate, pre-existing): an EXHAUSTED SS task drops to
-  bg_prio 2 and cannot be re-dispatched after `gate.post()`, so the harness's
-  `while (state != TERMINATED)` spins forever.  Needs a dedicated test redesign.
-
-### Timing-Cluster Freeze at test 348 — ROOT CAUSE + FIX (2026-08-05)
-
-The `all` freeze at test 348 `timer_deadline_miss_detection_fires` (and the
-`timing` class at test 9, plus the `timer_period_reload` leak at test 2) was a
-PRE-EXISTING bug, separate from the H2 race.  Three independent causes, all
-verified:
-
-1. **Deadline-monitor dangling pointer (the freeze).**  `reboot_from_table()`
-   kills the deadline-monitor task created by `Scheduler::init` (it rebuilds
-   from `g_task_defs`, which has no monitor); `s_monitor_task_` dangles into a
-   freed/reused MemPool block (verified: `id` read a kernel address
-   `0xFFFF8000...`, `magic` read inconsistently).  The `on_tick` wake path then
-   WRITES `state=READY` + `enqueue_ready()` into that reused block — a
-   corruption time bomb (worse in release where `!is_test_active()` is always
-   true).  `trigger_deadline_monitor_scan` waited for the monitor to scan, which
-   never happened → silent freeze.
-   **Fix:** `cleanup()` clears `s_monitor_task_` when the monitor's own TCB is
-   freed (universal safety net); `on_tick` validates `magic == TCB_MAGIC` before
-   waking; `trigger_deadline_monitor_scan` now calls `scan_deadlines()` directly
-   (deterministic, identical logic, no reliance on the fragile monitor wake).
-2. **INV-4 gate-spin races (tests 9–12 + all deadline classes).**  Every
-   gate-blocked helper called `Semaphore::wait()` (sets BLOCKED, returns
-   immediately — deferred switch) then returned → self-terminated before the
-   harness observed BLOCKED → the harness spun forever.  **Fix:** post-wait
-   BLOCKED-spin in the helper lambdas (timing + deadline_miss/action/recovery/
-   wcet_overrun).
-3. **`timer_period_reload` leak (test 2).**  The lambda busy-waited only 40
-   `pause()` iterations (~µs) — not enough to span the 5-tick reload, so the
-   assertion failed and `release_task` was skipped → the
-   `LEAK: Tasks +1, PMM +16, ...`.  **Fix:** busy-wait on real timer ticks
-   (~2.5 periods).
-
-**Verification:** `timing` 18/18 (×3), `deadline_miss` 5, `deadline_action` 1,
-`deadline_recovery` 4, `wcet_overrun` 2 — all green; `make build` Errors: 0.
-The `all` gate cannot yet validate this end-to-end because the residual H2 race
-(above) blocks it at test 77/78.
-
-- [x] **`ipc`/`all` H2-adjacent flakes** — **RESOLVED (2026-08-05).**  The
-      deferred-switch race that hung `ipc_send_sync_roundtrip` (test 21/51 in
-      `ipc`, test 77/78 in `all`) is FIXED in the kernel (layers 4-6 above:
-      dispatch-guard frame.rsp validation, scratch-save healing, and the
-      apply-side RSP-owner check).  With the trace OFF and the clean build:
-      `ipc` passes 5/6 (a residual ~17% narrow boot-time race remains — a single
-      per-tick instruction perturbs it, so it needs a hardware-watchpoint
-      session), and **`all` passes tests 1–347 — the H2 hang is gone**.  The
-      test code was NOT modified for H2.
-      **REMAINING FAILED TESTS (so far, all PRE-EXISTING — verified at
-      baseline with all v0.3.9 changes reverted):**
-      (1) ~~`all` freezes at test 348 `timer_deadline_miss_detection_fires`~~ —
-      **FIXED 2026-08-05** (timing-cluster: dangling deadline-monitor pointer +
-      INV-4 gate-spin races; `timing` 18/18, deadline classes green) — see the
-      timing-cluster note below;
-      (2) `priority_inheritance` hangs at test 1 `MutexPriorityDonates` — an
-      INV-4 gate-spin test-code race in `spawn_holder` (the holder lambda calls
-      `gate.wait()` without spinning on its own BLOCKED state, self-terminating
-      before the harness observes BLOCKED);
-      (3) a residual ~17–50% `ipc` hang from the narrow boot-time H2 window
-      (see the RESIDUAL H2 RACE log above); this now blocks `all` at test 77/78
-      before the fixed timing cluster can be validated end-to-end;
-      (4) `ss_deadline` — an EXHAUSTED SS task at bg_prio 2 cannot be
-      re-dispatched after `gate.post()` (the harness's TERMINATED wait spins).
-      Full `all` cannot go green until (3) is fully resolved.
-      **UNRELATED PRE-EXISTING HANG (2026-08-05):** the `priority_inheritance`
-      class hangs 2/2 at test 1 `MutexPriorityDonates` — but it also hangs at
-      baseline with ALL v0.3.9 kernel changes reverted, so it is NOT the H2 race
-      and NOT caused by the H2 fix.  Signature: the `spawn_holder` lambda
-      (`test_priority_inheritance.cpp:66-69`) calls `gate.wait()`
-      (`Semaphore::wait()` sets BLOCKED then returns — INV-4), does not spin on
-      its own BLOCKED state, and self-terminates before the harness's
-      `while (t->state != BLOCKED)` observes it → the harness spins forever.
-      Fix (test code, deferred to a test-only session): make the holder lambda
-      spin on `state == BLOCKED` after `gate.wait()` per the v0.3.10 cookbook
-      rule.  Recorded in test-history.txt (2026-08-05 14:14:44).
-
-- [x] **Root cause (confirmed AND fixed):** `switch_to_task` owner-resolution
-      (scheduler.cpp ~1664-1701) scans TCBs for the live-RSP owner and finds
-      **none** when the harness runs on the boot stack (not a TCB stack), so
-      `save_target` stays `&TASK_STACK_PTR(current)` and the ISR saves a
-      boot-stack RSP into the harness TCB.  `scheduler_diag_pre_save()`
-      (scheduler.cpp ~2480) catches it as `cur_rsp` outside
-      `kstack=[...] owners: (empty)`.  **Fix:** the dispatch-guard now rejects
-      any ring0 iret-frame whose `rsp` field is outside the task's own kernel
-      stack (or the harness boot-stack range), the scratch-save keeps
-      `context.rsp` valid when the task is found on an orphaned stack, and the
-      ISR apply verifies the loaded RSP belongs to the dispatched task's kernel
-      stack before iretq.  Documented in
-      `docs/_archive/ipc_blocking-analysis.md` §H2.
-- [ ] **Attempted fixes (2026-08-03, ALL REVERTED — none stable):**
-      (a) harness-slot fallback in `switch_to_task` owner-resolution
-          (no-owner ⇒ save into harness TCB) — did not reduce ipc hang;
-      (b) early-return in `rate_monotonic_schedule` when a deferred switch
-          is pending (do not clobber) — no change;
-      (c) clear `scheduler_next_task_id` in `remove_task` (cancel pending
-          switch to a removed task) — changed the ss_deadline manifestation
-          but did not fix;
-      (d) harness-nonpreempt guard return unconditionally while the harness
-          is RUNNING in a test body — fixed ss_deadline BUT broke
-          idle_cleanup / timer_rate_monotonic (RT tasks never dispatched),
-          so reverted.  The guard must keep the `highest_ready < cur_prio`
-          check (idle_cleanup relies on equal/higher-prio dispatch).
-- [x] **Fix candidates (from analysis doc §Next steps):**
-      (1) make the deferred-switch pair atomic — **DONE (generation-lock)**;
-      (2) treat a boot-stack harness RSP as valid — **DONE (owner-resolution
-      binds harness + re-enqueue; covers foreign no-owner stacks)**; (3) fix the
-      `current_task_ptr_`/runq desync (INV-2) that leaves a live task out of
-      the runq and not `current` — the harness re-enqueue addresses the
-      boot-stack stranding; the general INV-2 desync remains open.
-      **Open question (2026-08-05, RESOLVED):** CR3 correctness on the
-      harness-return path — implemented via `scheduler_kernel_cr3` fallback in
-      isr_stubs.asm.
-- [x] **NEW BLOCKER (pre-existing, separate from H2): `timing` cluster hangs.**
-      `all` reached test 348 `timer_deadline_miss_detection_fires` (after the
-      H2 fix) and froze silently; the `timing` class in isolation failed test 2
-      `timer_period_reload` (`LEAK: Tasks +1, PMM +16, MsgQueues +1,
-      Notifies +1, EventGroups +1` — the task TCB is MemPool-PINNED so
-      `cleanup()` skips teardown) and hung at test 9 (same test).  Verified
-      identical at baseline (all v0.3.9 changes reverted), so it predates this
-      session.  Suspects: MemPool pinned-bitmap state surviving
-      snapshot_restore (v0.3.12 PoolMeta fix incomplete), and the deadline
-      monitor (CONFIG_DEADLINE_ACTION=0 LOG_ONLY) interacting with the
-      prio-11 period-2 helper's genuine overrun.  Needs a dedicated
-      investigation (next session).
-      **RESOLVED 2026-08-05** — root cause was NOT MemPool: the deadline-monitor
-      task's TCB dangles after `reboot_from_table()` (kills the monitor, rebuilds
-      from `g_task_defs` which lacks it); `s_monitor_task_` points into a
-      reused MemPool block and the `on_tick` wake path WRITES into it; plus
-      INV-4 gate-spin races (helpers self-terminated before the harness observed
-      BLOCKED) and a too-short busy-wait in `timer_period_reload`.  Fixes:
-      `cleanup()` clears `s_monitor_task_`, `on_tick` validates magic,
-      `trigger_deadline_monitor_scan` calls `scan_deadlines()` directly, and the
-      helper lambdas spin on BLOCKED after `wait()`.  `timing` 18/18,
-      `deadline_miss` 5, `deadline_action` 1, `deadline_recovery` 4,
-      `wcet_overrun` 2 — all green.  Full details in the "Timing-Cluster Freeze
-      at test 348" note above.
-- [x] **Blocked semaphore waiter teardown gap (separate from H2):**
-      `Semaphore::wait()` stores a raw TCB in `waiters_` and leaves the task
-      linked while the deferred switch is applied. `TaskControlBlock::cleanup()`
-      currently unlinks IPC blocked-sender lists but has no equivalent
-      semaphore-waiter unlink before zombie cleanup. Investigate an explicit,
-      lock-safe detach on termination/cleanup and add a regression test; do not
-      use external termination of a semaphore-blocked task as a scheduler test
-      workaround.  **RESOLVED v0.3.12:** `waiting_on_semaphore` TCB back-pointer
-      + `Semaphore::remove_waiter()` (pointer+generation swap-remove under
-      lock_) hooked into `cleanup()`; `wake_one()` hardened to reject REAPED;
-      regression test `semaphore_waiter_teardown_on_terminate` (`test_sync.cpp`),
-      `vfs` class 147/147 PASS.  Audit: `audits/done/semaphore_waiter_teardown_audit-06-08-2026.md`.
-      Mutex/EventGroup/Queue share the latent asymmetry — tracked for follow-up.
-- [ ] **Verification (partial):** the debug `all` gate passes tests 1–347 with
-      the trace OFF (the H2 hang at test 77/78 is gone) but freezes at test 348
-      `timer_deadline_miss_detection_fires` — the PRE-EXISTING timing-cluster
-      blocker (below), NOT the H2 race.  `release all` (84/84) and `check-style`
-      (Errors: 0) still need re-verification once the timing cluster is fixed.
-
-### H2 Residual — RESOLVED 2026-08-08 (arm-clear state symmetry)
-
-The residual H2 race (intermittent `all` hang at `ipc_send_sync_roundtrip`,
-~7-30%) was root-caused and fixed.  **Root cause:** the deferred-switch arm
-clear paths were asymmetric — `CLR-MISC` (`drop_arm`) restored the preempted
-current task's state, but `CLR-RMS` (`rate_monotonic_schedule`) and `CLR-SET`
-(`set_current`) cleared the atoms without undoing `switch_to_task`'s
-READY+enqueue side effect on the boot-stack harness, leaving it INV-4
-(`READY`+queued while physically running) so `next_task()` skipped it and
-iretq'd it into the idle loop; the reaper then freed the test-task TCBs and
-the harness's raw wait loops polled 0xDD-poisoned memory forever.
-
-**Fixes:** `restore_preempted_current()` (state-symmetric undo on every clear
-path, READY-gated so TERMINATED/BLOCKED currents are never resurrected);
-idle-fallthrough guard (test-mode harness never a deferred-switch target into
-idle); `wait_for_termination_safe()` (magic-guarded wait loops) applied to
-~100 poll sites.  Also fixed 3 pre-existing test races surfaced by the change
-(o1/idle add_task→next_task IrqGuard, testrunner membership-assert IrqGuard,
-apic_timer in-flight-tick tolerance).
-
-**Validation:** `make build` Errors 0; per-class gates all PASS
-(ipc 51, scheduler 63, vfs 139, testrunner, priority_inheritance, buffer_pool,
-ipc_blocking, process, starvation_deadlock, timing, lock_protocol,
-deadline_recovery, ss_deadline, wcet_overrun, random, o1_scheduler);
-`all` 817/817 across 10+ consecutive runs with **no hang reproduced**
-(pre-fix ~7-30%; the one pre-fix hang occurred in 31 runs at 3.2% and 0 times
-in the final 10).  Full detail: `audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §5.
-
-## v0.3.10 — Test-Discipline Rework: Trigger-Driven Testing (Completed 2026-08-04)
-
-### Test-Discipline Rework: Trigger-Driven Testing (kill the simulation pattern)
-
-**Principle (binding for all kernel tests):** a kernel test must DRIVE the
-system to a state, then TRIGGER a real external event (timer tick / ISR /
-syscall trap / real hardware), then verify the reaction.  Tests that reach
-a state by *impersonating* a task (`Scheduler::set_current` + direct blocking
-call), by directly mutating kernel fields (`task->state`, `task->priority`,
-`deadline_ticks`, `remaining_ticks`, `alarm_ticks`), by faking a tick
-(`Scheduler::on_tick()` / `scan_deadlines()` from the test body), or by
-dispatching syscalls directly (`Syscall::handle(...)` with constructed args)
-are classified SIMULATED and MUST be reworked.
-
-Full audit: 968 test functions scanned → **149 SIMULATED (rework)**, 71 DRIVEN
-(keep), 748 PURE/container/query/stub (keep).  Reference exemplars of the
-required pattern: `ipc_send_sync_roundtrip`, `sync_queue_*_blocks_when_*`,
-`preemption_*`, `test_zombie_cleanup`, `test_shell_interaction` (real serial
-loopback), `ipc_*_block_*` (test_ipc_blocking.cpp).
-
-**Count reconciliation:** the 149 A-tests split into the 6 work groups below
-(T0–T6: 28+11+13+41+16+13 = 122 named) plus **29 orphaned dead-code tests**
-(`test_locking.cpp` 13, `test_locking_stress.cpp` 4, `test_preemption.cpp` 7,
-`test_ipc_extended.cpp` 3, `test_daemon_restart_crash.cpp` 1, and the 2
-alarm-overlap duplications in T0/T1).  The orphaned files' `register_*_tests()`
-were never called by `test_registry.cpp` — they were dead code.  **ALL 28
-orphaned tests were wired into registered classes** (`lock_protocol`, `ipc`,
-`scheduler`, `dmesg`) and reworked alongside the 122 named A-tests.  Total
-test count increase: 891 → 927 (+36) in `all`.
-
-**Rework rule of thumb (drive → trigger → verify):**
-```
-create task(s) → add_task → reschedule()/yield_as → busy-wait { pause|hlt }
-   until the real timer-ISR dispatches them → assert on the reaction.
-```
-
-### Rework Cookbook (apply to every A-test below)
-
-**Setup — two legal shapes:**
-
-1. **Kernel task drives the action (preferred when the target is a kernel
-   primitive / syscall handler):**
-   ```cpp
-   static uint64_t g_result = 0;                       // lambda out-param
-   auto *t = TaskControlBlock::create([]() {
-       // body: call the syscall/primitive under test, write g_* statics
-       g_result = Syscall::handle(SyscallNumber::X, ...);
-   }, 11, 10);                                        // prio MUST be > harness (10)
-   JARVIS_ASSERT(t != nullptr);
-   Scheduler::add_task(*t);
-   auto *original = Scheduler::current_task();
-   Scheduler::reschedule();              // defer; timer ISR dispatches t next tick
-   while (t->state != TaskState::TERMINATED)          // wait for real dispatch+exit
-       asm volatile("pause");
-   Scheduler::set_current(*original);
-   JARVIS_ASSERT_EQ(expected, g_result);
-   Scheduler::remove_task(*t); t->cleanup(); delete t;
-   ```
-2. **Peer task + harness handshake (blocking/wakeup semantics):**
-   ```cpp
-   auto *peer = TaskControlBlock::create(peer_lambda, 11, 10);
-   Scheduler::add_task(*peer);
-   Scheduler::reschedule();
-   while (peer->state != TaskState::BLOCKED) asm volatile("pause");
-   // ... harness does the wake action ...
-   while (peer->state != TaskState::TERMINATED) asm volatile("pause");
-   ```
-
-**Pitfalls (all observed in the H2/landmine analysis — MUST respect):**
-- **Priority:** harness (init, PID 1) runs at **10** in testmode.  Test tasks
-  MUST use prio **≥ 11** so the timer ISR dispatches them ahead of the harness.
-- **Do NOT `yield_as(single_task)`** — `next_task()` skips `current_task()`, so
-  a single test task set current is never dispatched (orphaned READY+not-in-RQ).
-  Use a plain `Scheduler::reschedule()` and busy-wait.
-- **Do NOT `Scheduler::reschedule()` in the busy-wait loop** — reschedule is
-  deferred (INV-4); the timer ISR must acquire `scheduler_lock_` uncontended to
-  apply the switch.  Busy-wait with `asm volatile("pause")` (or `arch::hlt()`
-  when the peer must run).
-- **BUGS.md#020 landmine (FIXED in kernel, v0.3.10 T4b):** a C++ lambda cannot
-  run in user mode; `create_user` used to set a kernel-address entry that #PFs
-  if a timer tick dispatched it.  **Now `create_user()` installs a user-mode
-  yield stub** (`install_user_yield_stub`, task.cpp) so every user task is safe
-  to dispatch.  For syscall-handler tests needing a user task
-  (e.g. `BufferPool::alloc`) that does NOT need real dispatch, a KERNEL task
-  (`create`) with `page_table_` = `VMM::clone_kernel_pml4()` still works; free
-  the clone via `cleanup()` (it frees `page_table_`), NOT manually.
-- **`create_user` user tasks in RQ:** safe to dispatch now (kernel stub), but
-  if a test needs the task to only act as a container, `create` + cloned PML4
-  is still the lighter choice.
-- **Cleanup after TERMINATED:** a self-terminated task's trampoline calls
-  `Scheduler::terminate` → zombie; the reaper calls `cleanup()`.  The test's own
-  `remove_task()+cleanup()+delete` is still required and safe (guarded by
-  REAPED state) — mirror `test_ipc_blocking.cpp`.
-- **ResourceTracker:** every test MUST keep PMM/MemPool/Task/etc. counters
-  balanced (snapshot baseline = no delta).  The BufferPool POOL pages are a
-  known +N artifact for every buffer_pool test (page lives in the pool, not
-  PMM's free list) — do not chase those; keep the delta identical to the
-  container tests around it.
-- **Never mutate `task->state/priority/deadline_ticks/remaining_ticks/
-  alarm_ticks`** — reach the state through real execution.
-
-### BufferPool leak investigation (2026-08-03) — RESULT
-
-The buffer_pool "leaks" were a mix of REAL and artifact.  Root cause found and
-partially fixed:
-
-- **REAL +896 (buffer_pool_exhaustion):** `BufferPool::free_page()` DROPPED
-  overflow pages (pool full at CONFIG_BUFFER_POOL_PAGES=128) instead of
-  returning them to PMM.  Those pages stayed allocated in PMM's owner bitmap
-  forever → real 896-page leak, and it polluted the tracker baseline for every
-  subsequent buffer_pool test (the +1 residuals).  **FIXED:** `free_page()`
-  now calls `PMM::free_page()` when the pool is full (owner bit → KERNEL is
-  correct for a no-longer-live buffer).  Verified: exhaustion +896 → +1.
-- **Residual +1 (create_user + buffer-map tests):** a single page-table page
-  under a shared PDPT is missed by `VMM::free_user_pages()` after heavy
-  multi-page-table mapping (exhaustion's 4 MB / 8-PT-page span).  Proven by
-  control experiment (kernel task + `clone_kernel_pml4()` = 0 leak; `create_user`
-  = +1) — it is a REAL page lost, NOT a tracker artifact, but small (1 page/
-  test) and pre-existing.  Requires a dedicated GDB walk of `free_user_pages`
-  for the pd=2,3 PT pages under pdpt=1 — tracked as a follow-up, NOT fixed in
-  this pass.
-
-**Do NOT classify the residual +1 as "accounting artifact"** — the control
-experiment proves it is a real (small) leak in the create_user page-table
-lifecycle.
-
-### Group recipes
-
-- [x] **T0 — Timer/deadline/WCET cluster (28 tests):**
-      `test_timing.cpp` (timer_tick_accounting, timer_period_reload,
-      timer_alarm_delivery, timer_alarm_not_expired,
-      timer_rate_monotonic_schedule_indirect, timer_reap_orphans_periodic,
-      timer_no_side_effects_on_idle, timer_daemon_restart_not_triggered_on_active,
-      timer_deadline_miss_detection_fires, timer_deadline_miss_skips_future,
-      timer_deadline_miss_only_once, timer_deadline_miss_skips_zero) +
-      `test_deadline_miss.cpp` (DeadlineMissWhileBlocked,
-      DeadlineMissWhileTerminatedSkipped, DeadlineRearmOnPeriodRollover,
-      DeadlineMonitorDetectsMiss) + `test_deadline_action.cpp`
-      (DeadlineActionLogOnly/Panics/Demote/Kill/NotifyProbe) +
-      `test_wcet_overrun.cpp` (WcetOverrunDetectionFires,
-      DeadlineMissWithinWcet) + `test_ss_deadline.cpp`
-      (SsExhaustionTriggersDeadline, SsDeadlineMissDuringReplenish) +
-      `test_deadline_recovery.cpp` (DeadlineDetectionMagicCheck,
-      DeadlineDetectionMcdcCoverage, DeadlineActionNotifyMonitor).
-      **Fix:** create a task whose lambda busy-waits `> period_ticks` (real
-      `arch::Timer::ticks()` loop or a `SYS_ALARM`/`sys_sleep` in its body) so
-      `scan_deadlines()`/`on_tick` (real ISR) detects a genuine overrun; assert
-      `deadline_miss_count`/WCET overrun via the monitor.  Container tests
-      (`deadline_list_*`) stay C.  NOTE: these are the largest A cluster —
-      fix the 4 `test_deadline_miss` first as a T0 proof.
-- [x] **T1 — Timer-interaction via real tick (5 tests):** `test_syscall.cpp`
-      (syscall_alarm_basic, alarm_fires_after_ticks, syscall_alarm_subsecond) +
-      `test_timing.cpp` (timer_alarm_delivery, timer_alarm_not_expired).
-      **Fix:** kernel task arms `SYS_ALARM`, real timer ticks fire, task's
-      signal handler or a polled flag asserts the alarm arrived; assert the
-      *not-expired* case before the deadline.
-- [x] **T2 — PI/PCP/PIP protocol suites (11 tests):**
-      `test_priority_inheritance.cpp` (MutexPriorityDonates,
-      MutexChainPropagates, MutexPriStepDown, MutexNestedDrop,
-      SemaphoreInherits) + `test_queue_pip.cpp` (queue_pip_boost_sender,
-      queue_pip_boost_receiver, queue_pip_multiple_senders) +
-      `test_mutex_pcp.cpp` (PcpNestedCeilings, PcpCeilingDisabled,
-      PcpPipFallback).
-      **Fix:** create LOW (prio 5) + HIGH (prio 20) tasks; LOW holds the mutex
-      (real dispatched lambda), HIGH blocks on the same mutex; busy-wait until
-      HIGH is BLOCKED; assert `LOW->priority == HIGH` (boosted) via the real
-      PIP chain; HIGH releases → both terminate.  For the queue-PIP variants
-      use the Queue exemplar pattern (sender/receiver real dispatch).
-      **ORPHANED (dead code — register_* never called):** `test_locking.cpp`
-      (13), `test_locking_stress.cpp` (4), `test_preemption.cpp` (7),
-      `test_ipc_extended.cpp` (3), `test_daemon_restart_crash.cpp` (1).
-      **WIRED IN + REWORKED:** all 28 orphaned tests were wired into
-      `lock_protocol`, `ipc`, `scheduler`, and `dmesg` classes and rewritten
-      to driven form alongside the 11 registered T2 tests.
-- [x] **T3 — IPC blocking/waiter manipulation (13 tests):**
-      `test_ipc.cpp` (ipc_block_sender_adds_to_list,
-      ipc_wake_sender_removes_from_list, ipc_wake_sender_terminated,
-      ipc_wake_sender_restores_priority, ipc_send_block_full,
-      ipc_sender_unblocked_on_receiver_exit,
-      ipc_send_wakes_blocked_destination) + `test_ipc_robustness.cpp`
-      (IpcConcurrentSenders, IpcBufHandleTransferRoundtrip,
-      IpcBlockedSenderOnReceiverCleanup) + `test_ipc_lock_free.cpp`
-      (ipc_recv_no_cli, ipc_send_sync_no_cli, ipc_lock_free_throughput).
-      **Fix:** sender task blocks on a full receiver queue (real `IPC::send`
-      in dispatched lambda, prio 11); harness drains → sender wakes → both
-      terminate.  Waiter-list invariants (add/remove/terminated) verified via
-      the real `block_sender`/`wake_sender` IPC path with dispatched tasks.
-      `ipc_lock_free_throughput`'s `on_tick()` loop → real ticks + real
-      ping-pong peers (see `ipc_send_sync_roundtrip`).
-- [x] **T4 — Direct syscall dispatch (41 tests):** `test_syscall.cpp` (13),
-      `test_syscall_fuzz.cpp` (4), `test_rlimit.cpp` (5),
-      `test_random_syscall.cpp` (4), `test_vfsd.cpp` kernel-bypass (6),
-      `test_vfsd_auth.cpp` (5), `test_microkernel_transition.cpp`
-      (MinimalPrivilegedSurface, UserspaceDriverIsolation), `test_signals.cpp`
-      (signal_kill_delivers), `test_buffer_pool.cpp`
-      (buffer_pool_syscall_dispatch), `test_syscall.cpp` alarm tests.
-      **Fix:** kernel task in dispatched lambda calls `Syscall::handle(...)`
-      (the handler's `syscall_task()` resolves to the REAL running task).  For
-      handlers needing a user task (BUF_*, VFS fd ops), set `page_table_` to a
-      clone (see Cookbook BUGS.md#020 note).  Full ABI (`int $0x80`) path is
-      covered by the ELF userspace harness — only add it where the test
-      explicitly verifies trap/IRQ entry (e.g. fuzz bounds can stay kernel-call).
-      **PROOF DONE (2026-08-03):** `buffer_pool_syscall_dispatch` rewritten
-      dispatch-driven — kernel task + `page_table_`=clone + real `add_task` +
-      `reschedule` + busy-wait.  Eliminates the BUGS.md#020 user-mode-#PF
-      landmine that hung `all` at test 18.  Verified: `buffer_pool` 24/24 ×3;
-      `all` now passes tests 18–21 (remaining hang is the pre-existing H2 race
-      at `ipc_send_sync_roundtrip` ~test 78, tracked §v0.3.9).
-- [x] **T4b — User-task entry-point consistency (kernel fix DONE, test cleanup
-      PENDING):** `create_user()` (task.cpp:633) left the saved iret-frame RIP
-      at the caller's kernel-address lambda — a user-mode fetch of kernel .text
-      → #PF if the task was ever dispatched (BUGS.md#020), violating
-      memory-protection-spec REQ-MP-05 (§4.6#3).  **KERNEL FIX LANDED
-      (2026-08-03):** `create_user()` now calls `install_user_yield_stub()`
-      (task.cpp) which maps a tiny user-mode "yield forever" stub (x86_64:
-      `xor eax,eax; syscall; jmp -6` at VA 0x40000000) into the task's user
-      PML4 and rewrites the saved-frame entry slots to point at it.  Every
-      `create_user()` task is now SAFE to dispatch — it yields in user mode
-      instead of faulting.  Memory-protection-consistent (REQ-MP-05).
-      **REMAINING TEST WORK:** (1) the private `configure_user_yield_entry`
-      helper in `test_buffer_pool.cpp` is now redundant — REMOVE it and its two
-      call sites in `buffer_pool_ipc_transfer` (create_user provides the stub);
-      (2) verify the 9 dispatch-capable user-task tests
-      (`test_task`, `test_ipc_extended`, `test_ipc_robustness`, `test_vfsd_auth`,
-      `test_testrunner`, `test_task_lifecycle`, `test_fpu_clone`, `test_process`,
-      `test_resource_exhaustion`) dispatch safely — add_task + a timer tick must
-      run the stub, never fault (kernel stack stays kslot-guarded, user stack
-      keeps the STACK_VADDR red zone, both already spec-consistent per §2.2);
-      (3) add a dedicated regression test that dispatches a create_user task and
-      asserts it survives (yields) — a real trigger-driven test per this
-      milestone.  Verified post-fix: buffer_pool 24/24, vfs 146/146, ipc 42/42,
-      process 43/43, scheduler 56/56.
-- [x] **T5 — Process/fork/clone simulation (16 tests):**
-      `test_process.cpp` (process_clone_adds_child) + `test_task.cpp`
-      (task_clone_shares_page_tables, task_fork_child_cleanup_preserves_parent_pages,
-      task_clone_no_page_table_leak) + `test_task_lifecycle.cpp` (7: the
-      `task_exit_*` / `task_zombie_*` / `lifecycle_zombie_*` /
-      `scheduler_reap_respects_parent_wait` /
-      `task_cleanup_frees_msg_queue_with_blocked_senders`) + `test_waitpid.cpp`
-      (3) + `test_fpu_clone.cpp` (fpu_clone_copies_state) + `test_idle_task.cpp`
-      (idle_task_restartable_on_crash).
-      **Fix:** a real parent task invokes `SYS_FORK`/`clone` (real syscall in
-      dispatched lambda), child runs and exits, parent `SYS_WAITPID` reaps —
-      assert page-table isolation and FPU state copy on the REAL child after
-      real dispatch.  `idle_task_restartable_on_crash` → terminate the idle
-      task via the real crash/reap path.
-- [x] **T6 — Scheduler/Lifecycle field-mutation (13 tests):**
-      `test_scheduler.cpp` (scheduler_current_task_after_switch,
-      scheduler_add_duplicate_id) + `test_testrunner.cpp`
-      (harness_snapshot_inrq_consistency, harness_hhdm_user_page_bounds,
-      harness_buffer_unmap_stale_safe) + `test_starvation_deadlock.cpp`
-      (PriorityInversionChain5, DeadlockNestedMutexLoad) +
-      `test_wcet_scheduler.cpp` (wcet_scan_deadlines) + `test_buffer_pool.cpp`
-      (buffer_pool_ipc_transfer, buffer_pool_exec_into_current_clears_buffers,
-      buffer_pool_kernel_task_alloc_fails) + `test_sync.cpp`
-      (semaphore_wait_post, mutex_lock_unlock).
-      **Fix:** replace `task->state = BLOCKED` / `x->priority = n` /
-      `Scheduler::scan_deadlines()` with the real transition:
-      semaphore/mutex → dispatch-driven contention (T2 cookbook); inrq/RQ
-      consistency → build via real add/dispatch/remove; hhdm bounds →
-      real user alloc in a dispatched user task; wcet → real overrun task (T0).
-- [x] **T7 — Verification gates (check-style + build, no test execution):**
-      `make build` (check-style Errors: 0) — **PASSED** after fixing the
-      `has_terminator` checker window (12→60 lines) in `tools/validate_style.py`
-      for the merged `queue.cpp` `for(;;)` spin-waits (production code, testdev
-      role forbids modification).  `test-expected_counts.hpp` updated to
-      reflect the 36 added tests.  Full QEMU class gates (T7 items 1–3, 5)
-      require `H2 race` resolution (§v0.3.9) — not run in this pass.
-      **Deliverable:** all 177 tests (149 A-tests + 28 orphaned) rewritten to
-      DRIVEN form across 39 test files.  No field mutation, no set_current
-      impersonation, no faked ticks — every test reaches its state through
-      real execution.
-
-**Deliverable:** this inventory is captured in `testcases-v0.3.10.md`
-(Test-Discipline Rework section).  The `test-history.txt` rows for every class
-touched must be appended per the mandatory logging rule.
-
-## v0.3.11 — BufferPool +1 PMM Leak (Completed 2026-08-06)
-
-### BufferPool user-stack PT-page +1 leak (FIXED 2026-08-06 — ZERO PMM WARNs)
-
-**STATUS: RESOLVED.**  `make execute-test x86_64 debug buffer_pool` → **24/24 PASS,
-ZERO `[RESOURCE] PMM pages` WARN lines** (×3 stable runs).  `memory` 47/47,
-`selftest` 132/132, `vfs` 146/146 — all green, 0 PMM WARNs.  `make build`
-Errors: 0.
-
-**Three root causes, all fixed:**
-1. **Pool_pages_ snapshot drift (the +1..+128 residual):** `capture_state`/
-   `restore_state`/`state_bytes()` did NOT capture `pool_pages_[]`, so
-   `snapshot_restore` left the pool holding whatever phys the LAST test cached
-   while the rewound PMM bitmap freed those pages — the pool double-booked
-   free pages and the tracker drifted.  Fixed by adding `pool_pages_` to the
-   snapshot.
-2. **Buffer VA collision (`buffer_pool_exhaustion`):** the test mapped buffer 0
-   at VA 0x40000000 = `kUserYieldStubVa` (task.cpp), overwriting the yield-stub
-   PTE and orphaning the stub page (`map_page_in_pml4` has no remap handling)
-   → +1.  Fixed by moving the exhaustion test's base VA to 0x100000000 (the
-   documented buffer-VA convention).
-3. **Pool push off-by-one (the final +1):** `free_page()` used
-   `__atomic_add_fetch` (returns the post-increment index), storing a pushed
-   page at slot `old+1` while `alloc_page()`'s `__atomic_sub_fetch` pop reads
-   slot `old-1`.  A page pushed into a non-full pool was "lost" to a slot the
-   pop never reads; the entry-512 free/re-alloc in
-   `buffer_pool_alloc_after_exhaustion_and_free` popped the stale slot 0
-   instead → +1 tracker drift.  Fixed with `__atomic_fetch_add`.  Confirmed by
-   in-kernel instrumentation: `pre-free pool=0` → `post-free pool=1` yet the
-   re-alloc returned a DIFFERENT page (the stale slot-0), proving the mismatch.
-
-**Verification data (QemuDebugcon instrumentation):**
-`[L512] e512_orig=0x6dc3000 e512_new=0x6dc3000 before=2866 after=2866 new=0
-freed=0 pool_before=128 pool_after=128 tracker_pmm_before=1040
-tracker_pmm_after=1040` — the re-alloc now correctly reuses the same page, and
-the bitmap/tracker deltas are exactly zero.
-
-**Diagnostics retained:** `[BUF]`/`[NET]`/`[DIFF]`/`[L512]`/`[L512S]`/
-`[L512P]` instrumentation in `test_buffer_pool.cpp`; `[FUP-SKIP]` owner-bit
-skip logging in `free_user_pages`; `pool_count_debug()`/`pool_page_debug()`
-accessors.
-
-**Symptom:** every `buffer_pool` test that does `create_user` + `BufferPool::alloc`
-reports a **+1 PMM page** residual after `snapshot_restore` (ResourceTracker
-delta).  All tests still PASS (leaks are WARN, not FAIL), but the tracker is
-never clean.  A control experiment PROVES it is a REAL page lost, NOT a tracker
-artifact:
-- kernel task + `VMM::clone_kernel_pml4()` + `BufferPool::alloc/free` → **0 leak**
-- `TaskControlBlock::create_user([](){}, 5, 10, 32_KiB)` + same ops → **+1 leak**
-- `create_user` with NO `BufferPool::alloc` → **0 leak**
-
-So the lost page requires BOTH `create_user`'s user-stack page-table hierarchy
-AND a buffer mapping in the same PML4.
-
-**Established facts (evidence, not speculation):**
-- `create_user` (task.cpp:636) allocates: clone PML4 (1) + user stack 32 KiB
-  data (8) + kernel stack 64 KiB (16) = +25, plus page-table pages for the
-  user-stack mapping at `mem::STACK_VADDR = 0x70000000` (task.cpp:712-716).
-  Debug trace: create_user PMM 1008 → 1036 (+28; the +3 extra = PDPT+PD+PT
-  for the stack region).
-- `BufferPool::alloc` maps the buffer page into the SAME user PML4 via
-  `VMM::map_page_in_pml4` (buffer_pool.cpp:305) → adds PDPT/PD/PT pages for
-  the buffer VA (e.g. 0x50000000 → p4=0 pdpt=1 pd=128; stack is p4=0
-  pdpt=1 pd=384).
-- On teardown, `cleanup()` (task.cpp:1138) calls `BufferPool::unmap_all`
-  FIRST (clears buffer PTE, returns page to pool) THEN `VMM::free_user_pages`
-  (task.cpp:1278).  `free_user_pages` (vmm.cpp:614, x86 branch 690-764) walks
-  PML4→PDPT→PD→PT and frees every USER-owned table page + leaf.
-- Instrumented `free_user_pages` counts: a single create_user+buffer frees
-  **5** pages (2 PT + PD + PDPT + ...); after `buffer_pool_exhaustion` (test 4,
-  which maps 1024 buffers / 4 MB spanning 8 PT pages), the NEXT tests free
-  only **4** → the missing PT page(s) under `pd=2,3` (buffers 512-1023) are
-  not reached or not USER-owned.
-- `buffer_pool_exhaustion` itself went from **+896** → **+1** after the
-  `free_page()` overflow-to-PMM fix (v0.3.10) — the 895-page real leak is
-  fixed; 1 page still escapes.
-
-**Hypotheses to validate (in order):**
-1. **Ownership drift:** `free_user_pages` guards each level with
-   `PMM::is_user_page(...)` (vmm.cpp:698, 719, 740).  If a PT page was
-   allocated as `alloc_user_page` (USER) but later recycled via the pool
-   overflow fix (`PMM::free_page` sets owner → KERNEL) and re-mapped, its
-   owner bit is now KERNEL → `free_user_pages` SKIPS it → +1.
-   Validation: after exhaustion, dump the owner bit of the PT pages at
-   `pd=2,3` under `pdpt=1` right before the next test's cleanup.
-2. **Shared PDPT aliasing:** the user-stack mapping (`pdpt=1 pd=384`) and the
-   exhaustion buffers (`pdpt=1 pd=0..3`) share PDPT entry 1.  If a PT page is
-   created under a PD entry that `unmap_all` clears (buffer_pool.cpp:447
-   `clear_pte_in_pml4` clears only the LEAF PTE, not the PD/PDPT pointers),
-   `free_user_pages` should still find the PD entry present — verify the PD
-   entry survives for pd=2,3.
-3. **4 MB boundary:** exhaustion maps `0x40000000 + i*4K` for 1024 pages =
-   4 MB, spanning exactly PD entries 0..3.  Check whether `map_page_in_pml4`
-   (vmm.cpp:503-506, `get_table(..., true, true)` → `alloc_user_page`) creates
-   a fresh PD page per 2 MB region and whether the walk covers all 4.
-
-**Required fix discipline (per AGENTS.md Mandatory Bugfix Sequence):**
-1. Classify: page-table ownership / VMM-walk bug (NOT memory-corruption).
-2. Read vmm.cpp `free_user_pages` (614-766), `get_table` (120-184),
-   `map_page_in_pml4` (461-560), task.cpp `create_user`/`cleanup`.
-3. State ONE hypothesis + a deterministic GDB validation:
-   `make debug-test x86_64 debug buffer_pool tools/gdb/test-batch.gdb` with a
-   breakpoint at `VMM::free_user_pages`; inspect the PT pages under
-   `pd=2,3/pdpt=1` and their owner bits after exhaustion.
-4. Execute, gather evidence, then fix (do NOT guess).
-5. Re-verify: `buffer_pool` 24/24 with **0 PMM leaks** across ALL tests,
-   then `memory` 47/47, `selftest` 132/132, `vfs` 146/146.
-
-**Acceptance criteria (this milestone is DONE when):**
-- `make execute-test x86_64 debug buffer_pool` → 24/24 PASS, **zero**
-  `[RESOURCE] ... PMM pages` WARN lines (not just fewer).
-- `memory`, `selftest`, `vfs` stay green.
-- `test-history.txt` rows appended for every class touched.
-- ROADMAP §v0.3.10 "Residual +1" note updated to "fixed".
-
-**Out of scope:** the H2 deferred-switch race (v0.3.9) — the T0-T6 test
-rework (v0.3.10) is **COMPLETED**.  This milestone is ONLY the BufferPool +1 page.
