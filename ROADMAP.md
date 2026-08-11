@@ -213,6 +213,56 @@ the syscall handler audit is the gating prerequisite.
       update `test_expected_counts.hpp`; class gates `memory_safety`,
       `cross_arch`, `pmm`, `selftest`, `make build`.
 
+#### MP-8 — Rework existing tests for the MP-1..MP-7 memory model
+
+The Memory Protection work changes kernel/page-table invariants that several
+existing tests assert.  Rework them to match the post-MP model (driven
+cookbook, no field mutation, no shared-page-table assumptions) rather than
+leaving stale assertions.
+
+- [ ] **MP-8.1 — `test_pml4_clone.cpp` shared-table tests.**  Rework
+      `pml4_free_user_pages_shared_safe` (test_pml4_clone.cpp:339) — it
+      simulates a child sharing the parent's page tables, which MP-7
+      eliminates.  Rewrite to the deep-copy model: child has its own PD/PT
+      copies, `free_user_pages(child_pml4)` frees every copied table + data
+      page, and the parent's entries are provably untouched (phys differs).
+      Keep `pml4_fork_user_entries_match` / `pml4_fork_no_child_corrupt_parent`
+      (they already test deep-copy) but verify they still hold after MP-1
+      (private kernel half).
+- [ ] **MP-8.2 — `test_page_tables.cpp` stubs (9).**  Replace the
+      `JARVIS_TEST_PASS()` placeholders with real assertions against the MP-1
+      private-kernel PML4 / MP-7 deep-copy walk (page-table allocate/install/
+      walk/free round-trips on a cloned PML4).
+- [ ] **MP-8.3 — `test_stack_alloc.cpp` stubs (8).**  Implement real guard-page
+      assertions: allocate a kslot stack, verify the base page is unmapped,
+      verify an overrun hits `CONFIG_STACK_OVERFLOW_HOOK` (MP-6), and that the
+      slot is reclaimed on free (no ResourceTracker delta).
+- [ ] **MP-8.4 — `test_process.cpp` stubs (12).**  Replace placeholders with
+      real fork/clone/exit assertions under the deep-copy model (MP-7) and
+      private kernel page table (MP-1): child page-table independence, parent
+      preservation, teardown completeness.
+- [ ] **MP-8.5 — `test_memory.cpp` / `test_memory_safety.cpp`.**  Audit for
+      assertions that hard-code the pre-MP layout (e.g. specific PT-page
+      counts under a shared pdpt, or `free_user_pages` skip semantics).
+      Update to the post-MP expected counts.  `memory_safety_pmm_free_zero`
+      (test_memory_safety.cpp:82) — keep the reserved-page invariant assert.
+- [ ] **MP-8.6 — `test_fpu_clone.cpp` / FPU suite.**  Confirm FPU-state copy
+      on clone still holds when the child gets fresh page tables (MP-7) and a
+      private kernel half (MP-1); adjust if the clone path changes.
+- [ ] **MP-8.7 — driven-cookbook compliance.**  Any reworked test must follow
+      the v0.3.10 cookbook: real dispatch (create prio≥11 → add_task →
+      reschedule → busy-wait), no `set_current` impersonation, no direct
+      `task->state/priority/deadline_ticks` mutation, no fake `on_tick()`.
+- [ ] **MP-8.8 — Class gates:** `pml4_clone`, `process`, `memory_safety`,
+      `page_tables`, `stack_alloc`, `memory`, `selftest`, `make build`;
+      update `test_expected_counts.hpp`; `test-history.txt` rows.
+
+**Hypothesis:** the shared-table and stub tests encode pre-MP invariants that
+MP-1/MP-7 invalidate; reworking them to the deep-copy + private-kernel model
+keeps the suite truthful and prevents false green.  **Validation:** each
+reworked class to 0 failures with zero ResourceTracker delta; `selftest`
+132/132; `all` 835/835.
+
 **Required fix discipline (per AGENTS.md Mandatory Bugfix Sequence):**
 1. Classify each: MP-1/MP-2/MP-6/MP-7 = memory/page-table, MP-3 = canary,
    MP-4 = HW enforcement, MP-5 = verification suite.
@@ -224,10 +274,12 @@ the syscall handler audit is the gating prerequisite.
    release gate `make execute-test x86_64 release all` (84/84).
 
 **Acceptance criteria (DONE when):**
-- MP-1..MP-7 fixed (each verified by build + class gate).
+- MP-1..MP-8 fixed (each verified by build + class gate).
 - `page_table_shared_` fully removed (MP-7); every kernel task has a private
   kernel-half page table (MP-1).
 - Guard pages + canaries active; SMAP/SMEP enforced on x86_64 (MP-2/3/4).
+- Existing tests reworked to the post-MP model; no stale shared-table or stub
+  assertions (MP-8).
 - MP-5 verification suite passes; `make build` clean (check-style Errors: 0),
   `selftest` 132/132, `all` 835/835, release 84/84.
 - `test-history.txt` rows appended for every class touched.
