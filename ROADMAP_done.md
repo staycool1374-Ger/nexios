@@ -1,5 +1,29 @@
 # Completed Roadmap Items
 
+## v0.3.12 — Released (Fine-Grained Lock & Safety-Guardrail Enforcement)
+
+Released as NexIOS v0.3.12 (2026-08-11). Validated by the release gate
+(`make execute-test x86_64 release all`, 84/84) and the debug `all` gate
+(835/835). SIL 3 audit: REJECTED once (CRITICAL), then APPROVED after revert.
+
+Key deliverables in this release:
+- **G1 Fine-Grained Locks** — `docs/irqguard-ledger.md`: 18-site IrqGuard
+  audit, result **18 KEEP / 0 MIGRATE**. Every ISR-reachable site (scheduler
+  11, task kslot+cleanup 4, taskdefs reboot 1, ipc 2) keeps IrqGuard.  The
+  kslot `s_kslot_lock` SpinLock migration was attempted and **REVERTED** after
+  SIL-3 found it ISR-reachable (`on_tick` → `reap_orphans` → idle `create` →
+  `alloc_kslot`), a single-core spin deadlock.  Stale `ipc.cpp:365-366`
+  `dequeue_ready` comment corrected (`ReadyQueueManager::remove` is lock-free).
+- **G2 Reference-Enforced Tasks** — `Scheduler::init` idle bind,
+  `on_tick` monitor wake bind, `IPC::block_sender` `q.owner` reference,
+  `deadline_miss_handler(TaskControlBlock&)` (3 call sites).
+- **G3 Zero-Allocation tmpfs** — `TMPFS_MAX_FILE_PAGES=16` /
+  `TMPFS_MAX_FILE_SIZE=64_KiB` constants; MemPool-only node discipline
+  verified; alloc/free balance unchanged (16 in/16 out).
+- **G4 Stale-doc cleanup** — `oom-rt.md` A1-A4 marked LANDED with verified
+  live refs (A3 keep-old-idle at scheduler.cpp:1624-1643); test_irqguard_audit
+  doc-block updated to the post-audit reality.
+
 ## v0.3.11 — Released (BufferPool +1 PMM leak + Test-Suite Compliance + Notify deadlock fix)
 
 Released as NexIOS v0.3.11 (2026-08-10). Validated by the full release gate

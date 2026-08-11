@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.11</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
    </div>
   </td>
  </tr>
@@ -491,7 +491,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8hpp
 <div class="line"><a id="l00666" name="l00666"></a><span class="lineno">  666</span> </div>
 <div class="line"><a id="l00667" name="l00667"></a><span class="lineno">  667</span><span class="preprocessor">#if CONFIG_DEADLINE_MISS_DETECTION</span></div>
 <div class="line"><a id="l00673" name="l00673"></a><span class="lineno">  673</span><a class="code hl_function" href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">__attribute__</a>((weak)) <span class="keywordtype">void</span></div>
-<div class="line"><a id="l00674" name="l00674"></a><span class="lineno">  674</span>deadline_miss_handler(TaskControlBlock *task,</div>
+<div class="line"><a id="l00674" name="l00674"></a><span class="lineno">  674</span>deadline_miss_handler(TaskControlBlock &amp;task,</div>
 <div class="line"><a id="l00675" name="l00675"></a><span class="lineno">  675</span>                      <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> missed_by_ticks) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00676" name="l00676"></a><span class="lineno">  676</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00677" name="l00677"></a><span class="lineno">  677</span> </div>

@@ -1159,3 +1159,4 @@ SUMMARY: total=61 ok=60 fail=1
 2026-08-11 08:20:43 all PASSED: 835 FAILED: 0 TIME: ~50s (v0.3.12 G1-B-01 IrqGuard revert gate 6: debug all 835/835)
 2026-08-11 08:21:06 release all PASSED: 84 FAILED: 0 TIME: ~4s (v0.3.12 G1-B-01 IrqGuard revert gate: release all 84/84, trace OFF)
 2026-08-11 09:00:00 all PASSED: 835 FAILED: 0 TIME: 46869ms (v0.3.12 G1-G4 full debug suite verification)
+2026-08-11 09:15:00 release all PASSED: 84 FAILED: 0 TIME: 17222ms (v0.3.12 release gate, trace OFF)
