@@ -43,6 +43,11 @@ static Vnode tmpfs_root{};
 
 static uint64_t next_ino = 1;
 
+// tmpfs file storage bounds (v0.3.12 G3-B): one contiguous allocation of
+// TMPFS_MAX_FILE_PAGES pages, capped at TMPFS_MAX_FILE_SIZE.
+static constexpr uint64_t TMPFS_MAX_FILE_PAGES = 16;
+static constexpr uint64_t TMPFS_MAX_FILE_SIZE  = 64_KiB;
+
 static sync::Mutex tmpfs_lock{};
 
 /// @brief Find a directory entry by name in a tmpfs directory.
@@ -87,7 +92,7 @@ static int64_t tmpfs_file_write(Vnode &self, const uint8_t *buffer,
                                 uint64_t count, uint64_t offset) {
     tmpfs_lock.lock();
     uint64_t needed = offset + count;
-    if (needed > 64_KiB) {
+    if (needed > TMPFS_MAX_FILE_SIZE) {
         tmpfs_lock.unlock();
         return VFS_INVALID;
     }
@@ -95,7 +100,7 @@ static int64_t tmpfs_file_write(Vnode &self, const uint8_t *buffer,
     // Need to allocate pages if not already
     uint64_t phys = reinterpret_cast<uint64_t>(self.private_data);
     if (!phys) {
-        phys = PMM::alloc_user_contiguous(16); // 16 pages = 64 KiB max
+        phys = PMM::alloc_user_contiguous(TMPFS_MAX_FILE_PAGES);
         if (!phys) {
             tmpfs_lock.unlock();
             return VFS_INVALID;
@@ -104,7 +109,7 @@ static int64_t tmpfs_file_write(Vnode &self, const uint8_t *buffer,
         self.private_data = reinterpret_cast<void *>(phys);
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0,
-                         64_KiB);
+                         TMPFS_MAX_FILE_SIZE);
     }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -187,6 +192,8 @@ static int tmpfs_mkdir(Vnode &self, const char *name, uint16_t) {
         tmpfs_lock.unlock();
         return VFS_INVALID;
     }
+    // MemPool-only discipline (v0.3.12 G3-A): no heap path —
+    // ResourceTracker-tracked via MemPool.
     auto *entry = static_cast<TmpfsEntry *>(MemPool::alloc(sizeof(TmpfsEntry)));
     if (!entry) {
         tmpfs_lock.unlock();
@@ -253,9 +260,10 @@ static int tmpfs_unlink(Vnode &self, const char *name) {
                 uint64_t phys =
                     reinterpret_cast<uint64_t>(e->vnode->private_data);
                 if (phys) {
-                    // tmpfs_file_write always allocates 16 contiguous pages
-                    // (64 KiB max per file).  Free all 16.
-                    for (uint64_t i = 0; i < 16; ++i)
+                    // tmpfs_file_write always allocates
+                    // TMPFS_MAX_FILE_PAGES contiguous pages
+                    // (TMPFS_MAX_FILE_SIZE max per file).  Free all.
+                    for (uint64_t i = 0; i < TMPFS_MAX_FILE_PAGES; ++i)
                         PMM::free_page(phys + i * arch::PAGE_SIZE);
                 }
             }
@@ -289,6 +297,8 @@ static int tmpfs_create(Vnode &self, const char *name, uint16_t) {
         tmpfs_lock.unlock();
         return VFS_INVALID;
     }
+    // MemPool-only discipline (v0.3.12 G3-A): no heap path —
+    // ResourceTracker-tracked via MemPool.
     auto *entry = static_cast<TmpfsEntry *>(MemPool::alloc(sizeof(TmpfsEntry)));
     if (!entry) {
         tmpfs_lock.unlock();

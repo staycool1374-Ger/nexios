@@ -362,10 +362,14 @@ MessageQueue &IPC::queue(uint64_t task_id) {
 ///
 /// **Caller discipline:**
 ///   - The scheduler lock (`scheduler_lock_`) must NOT be held when
-///     entering this function — `dequeue_ready()` acquires it via
-///     `ready_queue_.remove()`.  If the lock is already held the call
-///     will spin-wait on the spinlock until released, which can deadlock
-///     if the holder is the same CPU (non-recursive spinlock).
+///     entering this function.  Note: `ReadyQueueManager::remove` is
+///     lock-free (ready_queue_manager.cpp:75-91) — the section is protected
+///     by IRQ exclusion (`arch::IrqGuard`, see docs/irqguard-ledger.md S1),
+///     not by a lock; dequeue_ready does not acquire scheduler_lock_.
+///     If the caller holds the lock it must release it first, otherwise any
+///     later non-lock-free scheduler call will spin-wait on the spinlock
+///     until released, which can deadlock if the holder is the same CPU
+///     (non-recursive spinlock).
 ///   - Interrupts: `dequeue_ready` does not disable interrupts.  Callers
 ///     should ensure IRQ safety is managed externally (e.g., via
 ///     `arch::IrqGuard` in `IPC::send`).
@@ -419,11 +423,15 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
         // old/new effective_priority snapshots stay consistent.
         if (q.owner && task.priority > q.owner->priority) {
             arch::IrqGuard irq_guard{};
-            uint64_t old_prio = Scheduler::effective_priority(q.owner);
-            q.owner->priority = task.priority;
-            uint64_t new_prio = Scheduler::effective_priority(q.owner);
+            // G2: q.owner is magic-guarded live here — bind a reference
+            // (docs/irqguard-ledger.md §G2-A).  move_priority MUST stay
+            // between the old/new effective_priority snapshots.
+            TaskControlBlock &owner = *q.owner;
+            uint64_t old_prio = Scheduler::effective_priority(&owner);
+            owner.priority = task.priority;
+            uint64_t new_prio = Scheduler::effective_priority(&owner);
             if (old_prio != new_prio)
-                Scheduler::move_priority(*q.owner, old_prio, new_prio);
+                Scheduler::move_priority(owner, old_prio, new_prio);
         }
     }
 

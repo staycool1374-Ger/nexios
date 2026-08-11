@@ -248,6 +248,11 @@ static KSlotEntry s_kslot_pool[KSLOT_POOL_SIZE];
 static int32_t    s_kslot_free_head = -1;
 static int32_t    s_kslot_list      = -1;
 static uint64_t   s_kslot_bump      = CONFIG_KSTACK_WINDOW_BASE;
+// kslot state is ISR-reachable: the timer ISR (on_tick -> reap_orphans ->
+// idle TaskControlBlock::create) calls alloc_kslot() every 100 ticks, and
+// free_kslot() runs at task exit.  A plain SpinLock would deadlock (task
+// holder preempted by the ISR can never release it) — IRQ masking via
+// arch::IrqGuard is REQUIRED (docs/irqguard-ledger.md T1-T3).
 
 __attribute__((constructor)) static void init_kslot_pool() {
     for (int32_t i = 0; i < KSLOT_POOL_SIZE - 1; ++i)

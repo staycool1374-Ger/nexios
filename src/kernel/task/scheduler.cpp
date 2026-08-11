@@ -561,9 +561,12 @@ void Scheduler::init(const SchedulerConfig &cfg) {
     idle_task_ = TaskControlBlock::create(kernel::integrity::idle_task_main, 0,
                                           TaskControlBlock::NO_PERIOD);
     if (!idle_task_) panic("Scheduler::init: idle task OOM");
-    idle_task_->state = TaskState::READY;
-    __builtin_strncpy(idle_task_->name, "idle", CONFIG_TASK_NAME_LEN - 1);
-    idle_task_->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
+    // G2: after the panic guard the object is provably live — bind a
+    // reference (docs/irqguard-ledger.md §G2-A).
+    TaskControlBlock &idle = *idle_task_;
+    idle.state = TaskState::READY;
+    __builtin_strncpy(idle.name, "idle", CONFIG_TASK_NAME_LEN - 1);
+    idle.name[CONFIG_TASK_NAME_LEN - 1] = '\0';
 
     all_tasks_.append(*idle_task_);
     ENSURE(id_table_insert(idle_task_->id, idle_task_) && "id_table full at init");
@@ -1285,8 +1288,11 @@ void Scheduler::on_tick() noexcept {
             if (s_monitor_task_ &&
                 s_monitor_task_->magic == TaskControlBlock::TCB_MAGIC &&
                 s_monitor_task_->state == TaskState::BLOCKED) {
-                s_monitor_task_->state = TaskState::READY;
-                enqueue_ready(*s_monitor_task_);
+                // G2: magic-guarded, provably live — bind a reference
+                // (docs/irqguard-ledger.md §G2-A).
+                TaskControlBlock &m = *s_monitor_task_;
+                m.state = TaskState::READY;
+                enqueue_ready(m);
             }
         }
 #else
@@ -1301,7 +1307,7 @@ void Scheduler::on_tick() noexcept {
             }
             task->deadline_missed = true;
             ++task->deadline_miss_count;
-            deadline_miss_handler(task,
+            deadline_miss_handler(*task,
                                   arch::Timer::ticks() - task->deadline_ticks);
         }
 #endif
@@ -1470,7 +1476,7 @@ void Scheduler::on_tick() noexcept {
                                 t->sporadic_server->remaining_budget();
                             t->deadline_missed = true;
                             ++t->deadline_miss_count;
-                            deadline_miss_handler(t, 0);
+                            deadline_miss_handler(*t, 0);
                         }
 #endif
                         uint64_t rsp{};
@@ -2834,7 +2840,7 @@ void Scheduler::scan_deadlines() noexcept {
         }
         task->deadline_missed = true;
         ++task->deadline_miss_count;
-        deadline_miss_handler(task, now - task->deadline_ticks);
+        deadline_miss_handler(*task, now - task->deadline_ticks);
         task->deadline_ticks += task->period_ticks;
         task->deadline_missed = false;
 #if CONFIG_WCET_OVERRUN_DETECTION
@@ -2902,53 +2908,53 @@ void Scheduler::ensure_monitor() noexcept {
 
 #if CONFIG_DEADLINE_MISS_DETECTION
 __attribute__((weak)) void
-deadline_miss_handler(TaskControlBlock *task,
+deadline_miss_handler(TaskControlBlock &task,
                       uint64_t missed_by_ticks) noexcept {
-    bool budget_exhausted = (task->sporadic_server != nullptr &&
+    bool budget_exhausted = (task.sporadic_server != nullptr &&
                              static_cast<task::SporadicServer::State>(
-                                 task->ss_state_on_deadline_miss) ==
+                                 task.ss_state_on_deadline_miss) ==
                                  task::SporadicServer::State::EXHAUSTED);
 
 #if CONFIG_DEADLINE_ACTION == 1
     if (budget_exhausted)
         Logger::error("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
                       "action=PANIC)",
-                      task->id, task->name);
+                      task.id, task.name);
     else
         Logger::error("[DMD] Task %lu (%s) missed deadline by %lu ticks "
                       "(action=PANIC)",
-                      task->id, task->name, missed_by_ticks);
+                      task.id, task.name, missed_by_ticks);
     panic("[DMD] deadline miss (action=PANIC)");
 #elif CONFIG_DEADLINE_ACTION == 2
     if (budget_exhausted)
         Logger::warn("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
                      "action=DEMOTE)",
-                     task->id, task->name);
+                     task.id, task.name);
     else
         Logger::warn(
             "[DMD] Task %lu (%s) missed deadline by %lu ticks (action=DEMOTE)",
-            task->id, task->name, missed_by_ticks);
-    if (task->priority > 1) {
-        uint64_t old_prio = effective_priority(task);
-        task->priority >>= 1;
-        uint64_t new_prio = effective_priority(task);
+            task.id, task.name, missed_by_ticks);
+    if (task.priority > 1) {
+        uint64_t old_prio = effective_priority(&task);
+        task.priority >>= 1;
+        uint64_t new_prio = effective_priority(&task);
         if (old_prio != new_prio)
-            ready_queue_.move_priority(*task, old_prio, new_prio);
+            ready_queue_.move_priority(task, old_prio, new_prio);
     }
 #elif CONFIG_DEADLINE_ACTION == 3
     if (budget_exhausted)
         Logger::warn("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
                      "action=KILL)",
-                     task->id, task->name);
+                     task.id, task.name);
     else
         Logger::warn(
             "[DMD] Task %lu (%s) missed deadline by %lu ticks (action=KILL)",
-            task->id, task->name, missed_by_ticks);
-    task->state = TaskState::TERMINATED;
-    task->exit_code =
+            task.id, task.name, missed_by_ticks);
+    task.state = TaskState::TERMINATED;
+    task.exit_code =
         static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
-    wake_waiting_parent(*task);
-    Scheduler::defer_kill(task);
+    wake_waiting_parent(task);
+    Scheduler::defer_kill(&task);
 #elif CONFIG_DEADLINE_ACTION == 4
     if (budget_exhausted)
         Logger::info("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
@@ -2975,11 +2981,11 @@ deadline_miss_handler(TaskControlBlock *task,
     if (budget_exhausted)
         Logger::info("[DMD] Task %lu (%s) budget exhausted (budget=%lu, "
                      "state=EXHAUSTED, action=LOG_ONLY)",
-                     task->id, task->name, task->ss_budget_on_deadline_miss);
+                     task.id, task.name, task.ss_budget_on_deadline_miss);
     else
         Logger::info(
             "[DMD] Task %lu (%s) missed deadline by %lu ticks (action=LOG_ONLY)",
-            task->id, task->name, missed_by_ticks);
+            task.id, task.name, missed_by_ticks);
 #endif
 }
 #endif

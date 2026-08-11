@@ -26,22 +26,26 @@
 using namespace kernel;
 
 // Runmode: kernel
-// Testidea: Validate only boot, panic, and test isolation use IrqGuard.
-// Input: Hardcoded list of allowed IrqGuard include sites.
-// Expect: IrqGuard functions correctly; no production code uses it.
+// Testidea: Validate IrqGuard use is restricted to its allowed categories:
+//           boot/panic/test-isolation + justified IRQ-exclusion sites.
+// Input: Hardcoded list of allowed IrqGuard categories (see
+//        docs/irqguard-ledger.md — v0.3.12 G1 audit).
+// Expect: IrqGuard functions correctly (save/disable/restore nesting).
 // Depends: arch::IrqGuard, arch::interrupts_enabled
 JARVIS_TEST(irqguard_remaining_sites_validated, "PRE: none | POST: none") {
-    /* Pseudocode: Enumerate all remaining #include <arch/irq_guard.hpp> sites.
-     * Currently only 2 test files include it (verified by grep):
-     *   - src/kernel/test/test_irq_guard.cpp (test coverage)
-     *   - src/kernel/test/test_isolate.cpp (test isolation)
-     * Boot and panic code should also be the only production sites.
-     * The sync primitives (Mutex, Semaphore, Queue, Notify, EventGroup),
-     * Scheduler, IPC, and tmpfs have all been migrated to SpinLock.
+    /* Pseudocode: IrqGuard is permitted only for
+     *   (1) boot/panic/test-isolation, and
+     *   (2) justified IRQ-exclusion sites: 18 kept per
+     *       docs/irqguard-ledger.md (S1-S11, T1-T3, T4, TD1, I1, I2).
+     * The task.cpp kslot alloc/free sites (T1-T3) were reverted to IrqGuard
+     * in v0.3.12 G1-B-01 (SIL-3 finding): the earlier plain SpinLock migration
+     * deadlocked because alloc_kslot() is ISR-reachable via on_tick →
+     * reap_orphans → idle TaskControlBlock::create. New production sites must
+     * be justified in the ledger.
      *
      * This test verifies IrqGuard still functions correctly.
      * If new production code includes IrqGuard, this test must be reviewed
-     * and the new site justified as boot/panic-only.
+     * and the new site classified (A keep / B migrate) in the ledger.
      */
     // Correct boot/panic behavior: save interrupt state, disable, restore
     bool was_enabled = arch::interrupts_enabled();

@@ -671,7 +671,7 @@ extern TaskControlBlock *fpu_owner;
 /// In task context (CONFIG_DEADLINE_MONITOR_TASK): may hold scheduler_lock_
 /// and perform inline cleanup.
 __attribute__((weak)) void
-deadline_miss_handler(TaskControlBlock *task,
+deadline_miss_handler(TaskControlBlock &task,
                       uint64_t missed_by_ticks) noexcept;
 #endif
 

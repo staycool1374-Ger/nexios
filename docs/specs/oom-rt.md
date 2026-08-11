@@ -47,15 +47,24 @@ Binding rules for every alloc/free site:
 3. **OOM handler callbacks** release the allocator lock before invoking the
    handler and re-acquire for retry.
 
-### v0.3.12 open items (not yet landed)
-- **A1** `init_kstack_window` (task.cpp:344/355/366): unchecked
-  `alloc_page_table()` → on OOM writes phys 0 + maps it present+write.  Guard
-  each alloc.
-- **A2** `Scheduler::init` (scheduler.cpp:421): unchecked `create(idle)`
-  → null deref of `idle_task_->state`.
-- **A3** `Scheduler::reap` (scheduler.cpp:1448): unchecked re-create of idle
-  + old idle freed even on failure → NO idle task.  Guard + keep old idle.
-- **A4** `map_page_in_pml4` RV64 (vmm.cpp:478/492): unchecked alloc.
+### v0.3.12 open items — landed/closed disposition
+- **A1** LANDED — `init_kstack_window` (task.cpp:455/467/479): each
+  `alloc_page_table()` is guarded by `panic("init_kstack_window: ... OOM")`
+  before the physical address is stored or mapped.
+- **A2** LANDED — `Scheduler::init` (scheduler.cpp:563):
+  `if (!idle_task_) panic("Scheduler::init: idle task OOM");` before any
+  `idle_task_->` deref.
+- **A3** LANDED — `Scheduler::reap_orphans` (scheduler.cpp:1624-1643): when
+  idle re-create fails, the old idle is re-inserted into `all_tasks_` /
+  `id_table_` and the warn "idle recreate OOM — keeping old idle" is logged —
+  the idle task is never freed on failure.
+- **A4** LANDED — `map_page_in_pml4` RV64 (vmm.cpp:483/485) and x86_64
+  (vmm.cpp:510/512): `get_table()` results are null-guarded (`if (!l1) return;`
+  / `if (!l2) return;` / `if (!pdpt) return;` / `if (!pd) return;`).
+
+Verified 2026-08-11 against commit `55fde391` (v0.3.12 milestone definition).
+Regression coverage: testcases-v0.3.10.md (idle-keep guard) and
+ROADMAP_done.md v0.3.10/v0.3.11 entries (OOM guards, G1-G3 of this binding).
 
 ## 4. WCET / Bounding Contract
 
