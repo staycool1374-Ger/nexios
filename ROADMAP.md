@@ -290,7 +290,7 @@ boot), microkernel capability foundation (0.4.x), and userspace ABI (0.5.x).
 
 ## Past Releases
 
-See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.11 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak).
+See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.12 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak, Fine-Grained Lock & Safety-Guardrail Enforcement).
 
 ---
 
@@ -321,12 +321,11 @@ See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.11 (boundary audit, P
 - [ ] **Per-CPU asm for `isr_nesting_depth`** — move from the single global symbol to GS-relative access on x86_64 (TPIDR/tp on aarch64/riscv64); the C++ side already uses `__atomic_*` (v0.3.7 PfA-B). CpuContext plumbing (`current_cpu()`) is in place.
 - [ ] **`hhdm_modified_` (VAR-17) re-audit** — task-context only today (single-core safe); re-audit under SMP with per-CPU ownership or atomics.
 
-#### 0.4.5— Per-CPU Scheduling & Cache
+#### 0.4.5 — Per-CPU Scheduling & Cache
 - [ ] Distributed run queues, real-time load balancer, SYS_SET/GET_AFFINITY
 - [ ] Cache coloring allocator, SMP spinlocks/rwlocks, WCET re-audit
 
-#### 0.4.
-6 — TLB Shootdown & IPI Reduction
+#### 0.4.6 — TLB Shootdown & IPI Reduction
 - [ ] PCID, selective INVPCID, lazy shootdowns, IPI batching, latency profiling
 
 ### Phase 6: System Integration / Userspace ABI (0.5.x)
