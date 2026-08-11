@@ -11,6 +11,18 @@ until dispatched → assert on real state → `terminate_and_drain` →
 `task->state/priority/deadline_ticks` mutation, no fake `on_tick()`.
 ResourceTracker snapshot baseline = zero delta.*
 
+**Spec traceability (`docs/specs/memory.md` §7 REQ-MP-01..06):**
+- REQ-MP-01 kernel↔user isolation — `user_red_zone_*_overflow_pf`,
+  `cross_task_page_fault_isolated`, `guard_page_fault_not_kernel_fatal`.
+- REQ-MP-02 kernel-task↔kernel-task private tables — MP-1
+  `kernel_priv_*` suite (the OPEN gap this milestone closes).
+- REQ-MP-03 user↔user isolation (deep-copy fork) — MP-7 `fork_*` suite.
+- REQ-MP-04 kernel→user via direct map — `hhdm_kernel_reads_user_page`.
+- REQ-MP-05 user→data only via syscalls; SMAP/SMEP — MP-4 `smep_*`/`smap_*`.
+- REQ-MP-06 canary-protected segments — MP-3 `canary_*` suite (acceptance:
+  overwrite → controlled panic at next syscall/context-switch,
+  memory.md:161-163).
+
 ---
 
 ## MP-7 — `page_table_shared_` removal (deep-copy fork)
@@ -148,11 +160,15 @@ ResourceTracker snapshot baseline = zero delta.*
     text/data/heap/stack.
   - **Depends:** MP-3.2.
 - **canary_tamper_detected_on_syscall**
-  - **Testidea:** corrupting a canary is detected on syscall entry (panic or
-    detection callback).
+  - **Testidea:** corrupting a canary is detected on syscall entry — per
+    `docs/specs/memory.md:161-163` (REQ-MP-06 acceptance) it must cause a
+    **controlled panic** (panic with task id + segment + RIP), not silent
+    corruption.
   - **Input:** write `0xDD` over `canary_after[stack]`; invoke a trivial
     syscall.
-  - **Expect:** detection fires (gated callback, not a silent pass).
+  - **Expect:** controlled panic fires with task id + segment + faulting RIP
+    (assert the panic path, or a test-gated detection callback if the
+    harness cannot halt); never a silent pass.
   - **Depends:** MP-3.3.
 - **canary_intact_after_normal_dispatch**
   - **Testidea:** normal dispatch + syscall leaves canaries intact (no false
@@ -166,6 +182,15 @@ ResourceTracker snapshot baseline = zero delta.*
 ## MP-4 — SMAP/SMEP (x86_64) — recommended-not-mandatory
 
 ### `test_cross_arch.cpp` (new, gated on CONFIG_SMAP/CONFIG_SMEP)
+
+> **Dependency note:** `CONFIG_SMAP` / `CONFIG_SMEP` do NOT exist yet in
+> `src/kernel/nexios_config.h` — they are introduced by MP-4.1/MP-4.2.
+> Until MP-4 lands, gate these three tests with
+> `#if defined(CONFIG_SMAP) || defined(CONFIG_SMEP)` so they compile out;
+> on x86_64 fall back to `#if defined(CONFIG_ARCH_X86_64)` + a
+> CR4-read probe that asserts the SMEP/SMAP bit is set once MP-4.1/4.2
+> enable it.  Class gate `cross_arch` (16 tests today; count bumps when
+> the MP-4 tests are enabled).
 
 - **smep_user_exec_kernel_va_pf**
   - **Testidea:** a user task executing a kernel VA triggers SMEP #PF.
@@ -231,8 +256,8 @@ ResourceTracker snapshot baseline = zero delta.*
 
 - New classes: `kernel_isolation` (MP-1), `memory_isolation` (MP-5).
   New tests in existing classes: `memory_safety` (MP-2/MP-3),
-  `cross_arch` (MP-4, gated), `pml4_clone`/`page_tables`/`stack_alloc`/
-  `process` (MP-7/MP-8 rework).
+  `cross_arch` (MP-4, gated), `page_tables`/`stack_alloc`/`process` (MP-7/MP-8 rework; `pml4_clone`
+  tests live inside the `process` class — test_registry.cpp:375).
 - Update `test_expected_counts.hpp` for every touched class + the `all` row;
   run `dump_class_counts` to confirm no `[TCOUNT] MISMATCH`.
 - Register new tests `JARVIS_REGISTER_TEST` (TF_KERNEL) unless
@@ -241,13 +266,13 @@ ResourceTracker snapshot baseline = zero delta.*
 
 ## Verification gates (per group, in order)
 
-1. MP-7: `pml4_clone`, `process`, `memory` → 0 failures.
-2. MP-1: `scheduler`, `process`, `kernel_isolation`, `pml4_clone` → 0.
+1. MP-7: `process` (contains `pml4_clone` tests), `memory` → 0 failures.
+2. MP-1: `scheduler`, `process` (incl. `pml4_clone`), `kernel_isolation` → 0.
 3. MP-6: `stack_alloc`, `stack_profiler`, `scheduler` → 0.
 4. MP-2/MP-3: `memory_safety`, `process`, `pmm` → 0.
 5. MP-4: `cross_arch`, `memory_safety` → 0 (gated).
 6. MP-5: `memory_isolation`, `memory_safety`, `cross_arch`, `pmm` → 0.
-7. MP-8 rework: `pml4_clone`, `process`, `page_tables`, `stack_alloc`,
+7. MP-8 rework: `process` (incl. `pml4_clone`), `page_tables`, `stack_alloc`,
    `memory` → 0.
 8. `make execute-test x86_64 debug selftest` → 132/132.
 9. `make build` (check-style Errors: 0).
