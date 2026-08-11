@@ -210,16 +210,28 @@ TEST_CLASS(SyscallFuzzPrivilege) {
 
     auto *ktask = TaskControlBlock::create(
         []() {
-            if (Scheduler::current_task()->page_table_ != 0) {
+            // v0.4.0 MP-1: kernel tasks own a private kernel-half PML4, so
+            // the user discriminator is is_user_.
+            if (Scheduler::current_task()->is_user_) {
                 g_failed = 1;
                 return;
             }
             uint64_t ret;
+            // v0.4.0 MP-1/MP-8: BUF_ALLOC now SUCCEEDS for a kernel task
+            // (its private PML4 provides an empty user half to map into);
+            // the buffer must free cleanly afterwards.
             ret = Syscall::handle(
                 static_cast<uint64_t>(SyscallNumber::BUF_ALLOC), 0x80000000, 0,
                 0, 0, nullptr);
-            if (!(ret == 0 || ret == UINT64_MAX))
+            if (ret == 0 || ret == UINT64_MAX)
                 g_failed = 1;
+            if (ret != 0 && ret != UINT64_MAX) {
+                uint64_t free_ret = Syscall::handle(
+                    static_cast<uint64_t>(SyscallNumber::BUF_FREE), ret, 0, 0,
+                    0, nullptr);
+                if (free_ret != 0)
+                    g_failed = 1;
+            }
 
             ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::EXEC),
                                   0, // null path
@@ -244,7 +256,7 @@ TEST_CLASS(SyscallFuzzPrivilege) {
         },
         11, 10);
     CT_ASSERT(ktask != nullptr);
-    CT_ASSERT(ktask->page_table_ == 0); // kernel task
+    CT_ASSERT(ktask->is_user_ == false); // kernel task (MP-1)
     Scheduler::add_task(*ktask);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(ktask);

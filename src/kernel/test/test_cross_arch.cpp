@@ -31,6 +31,8 @@
 #include <kernel/arch/page_table.hpp>
 #include <kernel/arch/context.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/memory/pmm.hpp>
@@ -38,6 +40,10 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/ipc/ipc.hpp>
+#include <kernel/elf/elf.hpp>
+#include <initrd/initrd.hpp>
+#include "test_sched_helpers.hpp"
+#include <kernel/nexios_config.h>
 #include <kernel/vfs/vfs.hpp>
 
 using namespace kernel;
@@ -308,7 +314,13 @@ JARVIS_TEST(cross_timer_ns_delta, "PRE: iocd | POST: none") {
 // Input: set_ticks_for_test(0) then handle_irq() then check ticks()
 // Expect: ticks() == 1
 // Depends: kernel::arch::Timer
+// CHANGED (v0.4.0 MP-4): the live PIT/APIC timer IRQ fires every tick and
+// could increment the counter between set_ticks_for_test(0) and the exact
+// assertion, making the test timing-racy (observed under the MP-1/MP-3
+// per-switch overhead).  Run the exact-value section under IrqGuard so no
+// timer IRQ can interleave.
 JARVIS_TEST(cross_timer_irq_handler, "PRE: iocd | POST: none") {
+    arch::IrqGuard guard;
     arch::Timer::set_ticks_for_test(0);
     JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::ticks());
     arch::Timer::handle_irq();
@@ -518,6 +530,135 @@ JARVIS_TEST(cross_vfs_resolve_nonexistent, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+#if CONFIG_SMEP
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4 — SMEP (CR4 bit 20) is enabled by the boot path on
+// x86_64 when the CPU supports it (CPUID leaf 7 EBX[7]).
+// Input: arch::read_cr4()
+// Expect: bit 20 set.
+// Depends: kernel::arch (x86_64 boot path)
+JARVIS_TEST(smep_cr4_bit_set, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_ASSERT(arch::read_cr4() & (1ULL << 20));
+#else
+    JARVIS_ASSERT(CONFIG_SMEP == 0);
+#endif
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+
+// Minimal ELF64 section-header / symbol layouts (kernel::elf::elf.hpp only
+// exposes the file + program headers).
+struct TestElfShdr {
+    uint32_t sh_name;
+    uint32_t sh_type;
+    uint64_t sh_flags;
+    uint64_t sh_addr;
+    uint64_t sh_offset;
+    uint64_t sh_size;
+    uint32_t sh_link;
+    uint32_t sh_info;
+    uint64_t sh_addralign;
+    uint64_t sh_entsize;
+} __attribute__((packed));
+
+struct TestElfSym {
+    uint32_t st_name;
+    uint8_t st_info;
+    uint8_t st_other;
+    uint16_t st_shndx;
+    uint64_t st_value;
+    uint64_t st_size;
+} __attribute__((packed));
+
+/// @brief Find the runtime VA of a symbol in a loaded ELF image (symtab
+///        walk).  Returns 0 when the symbol is absent.
+uint64_t elf_find_symbol_va(const uint8_t *data, const char *name) {
+    constexpr uint32_t SHT_SYMTAB = 2;
+    constexpr uint32_t SHT_STRTAB = 3;
+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(data);
+    if (!kernel::elf::validate_header(hdr) || hdr->shoff == 0)
+        return 0;
+    auto *shdr = reinterpret_cast<const TestElfShdr *>(data + hdr->shoff);
+    if (hdr->shentsize < sizeof(TestElfShdr) || hdr->shnum == 0)
+        return 0;
+    for (uint16_t i = 0; i < hdr->shnum; ++i) {
+        if (shdr[i].sh_type != SHT_SYMTAB)
+            continue;
+        if (shdr[i].sh_link >= hdr->shnum)
+            continue;
+        const TestElfShdr &strtab = shdr[shdr[i].sh_link];
+        if (strtab.sh_type != SHT_STRTAB)
+            continue;
+        size_t sym_count =
+            shdr[i].sh_entsize ? shdr[i].sh_size / shdr[i].sh_entsize : 0;
+        for (size_t s = 0; s < sym_count; ++s) {
+            auto *sym = reinterpret_cast<const TestElfSym *>(
+                data + shdr[i].sh_offset + s * shdr[i].sh_entsize);
+            if (sym->st_name == 0 || sym->st_name >= strtab.sh_size)
+                continue;
+            const char *sym_name =
+                reinterpret_cast<const char *>(data + strtab.sh_offset +
+                                               sym->st_name);
+            if (__builtin_strcmp(sym_name, name) == 0)
+                return sym->st_value;
+        }
+    }
+    return 0;
+}
+
+} // namespace
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4 — a user task that jumps to a kernel-text VA cannot
+// execute it: SMEP (plus the U/S bit independently) turns the ring-3
+// instruction fetch into a #PF → SIGSEGV → task TERMINATED, kernel survives.
+// Input: load kva-probe; patch its g_kva global (via HHDM) with the address
+// of a kernel function; dispatch.
+// Expect: task state == TERMINATED (no kernel panic, no hang).
+// Depends: elf loader, SMEP enablement, signal path
+JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
+    initrd::InitrdFile f = initrd::find("./kva-probe.c.elf");
+    if (!f.data)
+        f = initrd::find("kva-probe.c.elf");
+    if (!f.data) {
+        JARVIS_TEST_PASS(); // probe ELF not built — skip
+        return;
+    }
+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
+    if (!kernel::elf::validate_header(hdr)) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    auto *t = kernel::elf::load(hdr, f.data, f.size);
+    if (!t) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint64_t g_kva_va = elf_find_symbol_va(f.data, "g_kva");
+    JARVIS_ASSERT(g_kva_va != 0);
+    // Point the probe at a kernel-text function (supervisor page).
+    uint64_t kernel_va = reinterpret_cast<uint64_t>(&test_smep_user_exec_kernel_va_pf);
+    JARVIS_ASSERT(kernel_va >= 0xFFFF800000000000ULL);
+    uint64_t g_kva_phys =
+        VMM::virt_to_phys_in_pml4(g_kva_va, t->page_table_);
+    JARVIS_ASSERT(g_kva_phys != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + g_kva_phys),
+                     &kernel_va, 8);
+
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    // U/S + SMEP both enforce: the ring-3 call into supervisor text must
+    // fault and terminate the task, never panic the kernel.
+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+    kernel::test::terminate_and_drain(*t);
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_SMEP
+
 // ============================================================================
 // Registration
 // ============================================================================
@@ -540,4 +681,8 @@ void register_cross_arch_tests() {
     JARVIS_REGISTER_TEST(cross_ipc_queue_full_behavior);
     JARVIS_REGISTER_TEST(cross_vfs_resolve_root);
     JARVIS_REGISTER_TEST(cross_vfs_resolve_nonexistent);
+#if CONFIG_SMEP
+    JARVIS_REGISTER_TEST(smep_cr4_bit_set);
+    JARVIS_REGISTER_TEST(smep_user_exec_kernel_va_pf);
+#endif
 }

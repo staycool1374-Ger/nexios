@@ -79,7 +79,8 @@ static int64_t tty_read(Vnode &self, uint8_t *buffer, uint64_t count,
             return VFS_INVALID;
         cur->state = TaskState::BLOCKED;
         kernel::Scheduler::reschedule();
-        if (cur->page_table_) {
+        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
+        if (cur->is_user_) {
             arch::sti();
             arch::hlt();
             arch::cli();
@@ -276,7 +277,8 @@ static int64_t kbd_read(Vnode &self, uint8_t *buffer, uint64_t count,
             return VFS_INVALID;
         cur->state = TaskState::BLOCKED;
         kernel::Scheduler::reschedule();
-        if (cur->page_table_) {
+        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
+        if (cur->is_user_) {
             arch::sti();
             arch::hlt();
             arch::cli();

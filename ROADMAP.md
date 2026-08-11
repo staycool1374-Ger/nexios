@@ -67,11 +67,17 @@ failures, zero ResourceTracker delta, `make build` clean.
       PML4), its own kernel stack frame, and the HHDM direct map (preserved
       for kernel→user access, REQ-MP-04).  Decide which kernel VA regions are
       per-task-private vs. shared-readonly (text) vs. shared (HHDM).
-- [ ] **MP-1.2 — Private kernel PML4 clone.**  Add `VMM::clone_kernel_pml4()`
+- [x] **MP-1.2 — Private kernel PML4 clone.**  Add `VMM::clone_kernel_pml4()`
       for the kernel half that copies only the kernel entries (PML4 indices ≥
       `PML4_USER_COUNT`) into a fresh top-level table, and maps the task's
       private kernel-stack frame (text/data/bss shared-readonly).  Reuse
       `alloc_kslot`/`kstack_slot_va_` for the private stack VA window.
+      **DEVIATION (binding):** the kernel stack stays in the boot-shared kslot
+      window (`CONFIG_KSTACK_WINDOW_BASE`, PML4 index 498 ≥ PML4_KERNEL_START).
+      Every private clone inherits the window's PD/PT entries by value; per-task
+      private kstack page tables are NOT allocated.  The guard page below each
+      slot plus the MP-6 hook enforce stack isolation (docs/specs/memory.md
+      §7.1).
 - [ ] **MP-1.3 — CR3 switch plumbing.**  In `switch_to_task` /
       `scheduler_on_context_switch` (scheduler.cpp:2264, isr epilogue), load
       the task's private kernel PML4 phys into CR3 when dispatching a kernel

@@ -83,7 +83,7 @@ JARVIS_TEST(ipc_recv_no_cli, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(task != nullptr);
-    JARVIS_ASSERT(task->page_table_ == 0);
+    JARVIS_ASSERT(task->is_user_ == false); // kernel task (MP-1)
     Scheduler::add_task(*task);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(task);
@@ -150,7 +150,7 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
-    JARVIS_ASSERT(sender->page_table_ == 0);
+    JARVIS_ASSERT(sender->is_user_ == false); // kernel task (MP-1)
 
     {
         arch::IrqGuard _guard;

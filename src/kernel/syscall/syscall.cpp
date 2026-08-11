@@ -32,6 +32,10 @@ extern "C" void syscall_entry();
 
 namespace kernel {
 
+/// @brief v0.4.0 MP-3 canary-trip latch (defined here; declared in
+///        syscall.hpp).  Tests read it after driving a tampered task.
+CanaryTrip g_canary_trip = {0, 0, 0, 0};
+
 /// @brief Initialise the syscall interface (MSR setup, syscall-table built at
 /// compile time).
 void Syscall::init() {
@@ -53,11 +57,12 @@ TaskControlBlock *syscall_task() {
     return Scheduler::current_task();
 }
 
-/// @brief Check if the current task is a user-space task (has its own page
-/// table).
+/// @brief Check if the current task is a user-space task (is_user_ flag —
+///        MP-1: page_table_ != 0 no longer discriminates, every task owns a
+///        private kernel-half PML4).
 bool syscall_is_user_task() {
     auto *t = syscall_task();
-    return t && t->page_table_ != 0;
+    return t && t->is_user_;
 }
 
 /// @brief Open a vnode as a file descriptor in the current task's fd table.
@@ -92,6 +97,36 @@ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                          uint64_t arg2, uint64_t arg3, uint64_t *regs) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
         return static_cast<uint64_t>(-1);
+
+#if CONFIG_CANARY_GUARD
+    // v0.4.0 MP-3: verify the user-segment sentinel canaries on syscall entry
+    // (pure page-table reads, no locks).  Mismatch → controlled panic in
+    // production; test mode latches g_canary_trip and the syscall returns -1
+    // so the harness survives.
+    {
+        auto *t = syscall_task();
+        if (t && t->is_user_) {
+            uint8_t bad_seg = 0;
+            uint64_t bad_va = 0;
+            if (!canary_verify_user_segments(t, bad_seg, bad_va)) {
+                uint64_t rip = regs ? regs[17] : 0;
+                if (kernel::Scheduler::is_test_active()) {
+                    g_canary_trip.task_id = t->id;
+                    g_canary_trip.segment = bad_seg;
+                    g_canary_trip.rip = rip;
+                    ++g_canary_trip.count;
+                    return static_cast<uint64_t>(-1);
+                }
+                kernel::Logger::fatal(
+                    "CANARY TRIP: task '%s' id=%u segment=%u va=0x%lx rip=0x%lx",
+                    t->name, static_cast<unsigned>(t->id),
+                    static_cast<unsigned>(bad_seg), bad_va, rip);
+                panic("software sentinel canary violated");
+            }
+        }
+    }
+#endif
+
     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 }
 

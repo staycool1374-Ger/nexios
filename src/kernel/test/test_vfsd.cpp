@@ -50,7 +50,7 @@ void release_task(TaskControlBlock *t) {
 void run_kernel_task(void (*entry)()) {
     auto *t = TaskControlBlock::create(entry, 11, 10);
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT(t->page_table_ == 0);
+    JARVIS_ASSERT(t->is_user_ == false); // kernel task (MP-1)
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);

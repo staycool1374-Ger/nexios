@@ -39,9 +39,9 @@ namespace kernel {
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static bool vfsd_authorize(uint64_t op_type, uint64_t pid, const char *path,
                            uint64_t ino = 0) {
-    // Kernel tasks (no page table) are trusted — bypass IPC authorization
+    // Kernel tasks (is_user_ == false) are trusted — bypass IPC authorization
     auto *cur = kernel::Scheduler::current_task();
-    if (cur && !cur->page_table_)
+    if (cur && !cur->is_user_)
         return true;
 
     uint64_t vfsd_pid = vfsd::get_vfsd_pid();
@@ -104,9 +104,9 @@ static bool vfsd_authorize_fd_op(uint64_t op_type, uint64_t pid, int fd) {
     }
     fd_str[len] = '\0';
 
-    // Kernel tasks (no page table) are trusted — bypass IPC authorization
+    // Kernel tasks (is_user_ == false) are trusted — bypass IPC authorization
     auto *cur = kernel::Scheduler::current_task();
-    if (cur && !cur->page_table_)
+    if (cur && !cur->is_user_)
         return true;
 
     uint64_t vfsd_pid = vfsd::get_vfsd_pid();

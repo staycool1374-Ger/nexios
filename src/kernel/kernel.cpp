@@ -574,6 +574,26 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     uint64_t cr4 = arch::read_cr4();
     cr4 |= (1ULL << 9);
     cr4 |= (1ULL << 10);
+
+    // v0.4.0 MP-4: SMEP (CR4 bit 20) — supervisor-mode execution prevention.
+    // When supported, ring-3 code can no longer execute kernel text/data VAs.
+    // SMAP (CR4 bit 21) is deferred (CONFIG_SMAP stays 0).
+#if CONFIG_SMEP
+    {
+        uint32_t max_leaf = 0, ebx = 0, ecx = 0, edx = 0;
+        asm volatile("cpuid"
+                     : "=a"(max_leaf), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                     : "a"(7), "c"(0));
+        (void)max_leaf;
+        (void)ecx;
+        (void)edx;
+        if (ebx & (1u << 7)) {
+            cr4 |= (1ULL << 20); // CR4.SMEP
+        } else {
+            debug_write("[BOOT] SMEP not supported by CPU — leaving off\n");
+        }
+    }
+#endif
     arch::write_cr4(cr4);
 
 #endif
@@ -664,6 +684,18 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend);
     kernel::VMM::init();
 
+    // v0.4.0 MP-1.5: the per-kernel-task private-data window must not overlap
+    // anything the boot kernel PML4 maps — a task that maps a page there gets
+    // TRUE cross-task isolation, not an aliased kernel mapping.
+    {
+        constexpr uint64_t priv_base = CONFIG_KERNEL_PRIV_DATA_BASE;
+        size_t pml4_idx = (priv_base >> 39) & 0x1FF;
+        auto *kpml4 = reinterpret_cast<const uint64_t *>(
+            arch::HHDM_OFFSET + (kernel::VMM::get_kernel_pml4() & ~0xFFFULL));
+        if (kpml4[pml4_idx] & 1ULL)
+            panic("CONFIG_KERNEL_PRIV_DATA_BASE overlaps kernel PML4 entry");
+    }
+
     // Map APIC MMIO pages and initialise the local/I/O APIC.
     if (arch::APIC::is_apic_supported()) {
         arch::APIC::map_mmio();
@@ -725,7 +757,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             if (t->state != kernel::TaskState::READY &&
                 t->state != kernel::TaskState::RUNNING)
                 continue;
-            if (!t->page_table_)
+            if (!t->is_user_)
                 continue;
             if (t->priority < victim_priority) {
                 victim = t;
@@ -1069,6 +1101,16 @@ static void dump_regs(uint64_t *regs) {
 
 #endif // CONFIG_ARCH_X86_64
 
+#if CONFIG_STACK_OVERFLOW_HOOK
+// v0.4.0 MP-6.2: weak default stack-overflow hook — production panics.  A
+// strong override (test suites) may instead recover the faulting task; see
+// the guard-page #PF handler in handle_interrupt_c.
+__attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
+    (void)task;
+    panic("kernel stack overflow");
+}
+#endif // CONFIG_STACK_OVERFLOW_HOOK
+
 static const char *exception_name(uint64_t vector) __attribute__((unused));
 static const char *exception_name(uint64_t vector) {
 #if defined(CONFIG_ARCH_X86_64)
@@ -1340,7 +1382,6 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         uint64_t cs = regs ? regs[18] : 0;
         bool from_user =
             (cs == arch::SEG_USER_CODE || cs == arch::SEG_USER_DATA);
-
         if (from_user && t) {
             auto mapping = kernel::exception_to_signal(vector);
             uint64_t sig = static_cast<uint64_t>(mapping.signal);
@@ -1373,7 +1414,20 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
                     t->kstack_slot_va_,
                     t->kernel_stack_top);
                 dump_regs(regs);
+#if CONFIG_STACK_OVERFLOW_HOOK
+                // v0.4.0 MP-6.2: invoke the overflow hook.  The weak default
+                // panics internally — production behaviour is unchanged.  A
+                // strong override (test suite) may recover the faulting task
+                // (rewrite the iret frame + TERMINATE), in which case we
+                // return instead of panicking (mirrors the
+                // g_user_access_recover_ip recovery).  The weak symbol always
+                // resolves (to the default or the override), so no null
+                // check is needed.
+                stack_overflow_hook(t);
+                return;
+#else
                 panic("kernel stack overflow");
+#endif
             }
         }
 
@@ -1402,7 +1456,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     if (vector < 32) {
         auto *t = kernel::Scheduler::current_task();
         (void)t;
-        if (t && t->page_table_ != 0) {
+        if (t && t->is_user_) {
             auto mapping = kernel::exception_to_signal(vector);
             uint64_t sig = static_cast<uint64_t>(mapping.signal);
             kernel::Logger::warn("Task %x: exception vector=%x (%s)", t->id,
@@ -1429,7 +1483,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         auto *task = kernel::Scheduler::current_task();
 
         // After syscall, check for pending signals on the current task
-        if (task && task->pending_signals && task->page_table_ != 0) {
+        if (task && task->pending_signals && task->is_user_) {
             // Find the highest-priority pending signal
             uint64_t sig = __builtin_ctzll(task->pending_signals);
             if (sig < 32) {

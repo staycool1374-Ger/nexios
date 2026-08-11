@@ -193,7 +193,7 @@ JARVIS_TEST(ipc_userspace_block_uses_sti_hlt_cli, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(user_task != nullptr);
-    JARVIS_ASSERT(user_task->page_table_ == 0); // kernel task
+    JARVIS_ASSERT(user_task->is_user_ == false); // kernel task (MP-1)
     Scheduler::add_task(*user_task);
 
     auto *original = Scheduler::current_task();
@@ -248,7 +248,7 @@ JARVIS_TEST(ipc_kernel_block_skips_sti, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(kernel_task != nullptr);
-    JARVIS_ASSERT(kernel_task->page_table_ == 0); // kernel task
+    JARVIS_ASSERT(kernel_task->is_user_ == false); // kernel task (MP-1)
     Scheduler::add_task(*kernel_task);
 
     auto *original = Scheduler::current_task();

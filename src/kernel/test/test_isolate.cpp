@@ -190,8 +190,15 @@ static size_t off_pt_pool(size_t user_page_count, uint64_t num_kstacks) {
     return off_hhdm_pd(user_page_count, num_kstacks) + HHDM_PD_BYTES;
 }
 
-static size_t total_size(size_t user_page_count, uint64_t num_kstacks) {
+// v0.4.0 MP-6.3: kernel-stack window snapshot (8 PT page contents + slot
+// bookkeeping) — see kslot_snapshot_capture/restore in task.cpp.
+static size_t off_kslot_snapshot(size_t user_page_count, uint64_t num_kstacks) {
     return off_pt_pool(user_page_count, num_kstacks) + sizeof(PtPoolSnapshot);
+}
+
+static size_t total_size(size_t user_page_count, uint64_t num_kstacks) {
+    return off_kslot_snapshot(user_page_count, num_kstacks) +
+           kernel::kslot_snapshot_bytes();
 }
 
 // ---------------------------------------------------------------------------
@@ -470,6 +477,10 @@ bool snapshot_create() {
             g_snapshot + off_pt_pool(user_page_count, task_count));
         PMM::capture_pool_snapshot(*pool);
     }
+
+    // ---- Kernel-stack window snapshot (v0.4.0 MP-6.3) ----
+    kernel::kslot_snapshot_capture(
+        g_snapshot + off_kslot_snapshot(user_page_count, task_count));
 
     // ---- HHDM PD save ----
     // Save PDPT[0]→PD (512 entries) so snapshot_restore can undo any
@@ -801,6 +812,22 @@ void snapshot_restore(const char *test_name) {
     // freelist entries that may now reference allocated pages).  Rebuild
     // both freelists from the restored bitmaps to prevent double-alloc.
     PMM::rebuild_free_list();
+
+    // ---- Kernel-stack window restore (v0.4.0 MP-6.3) ----
+    // Rewind the kstack-window PT contents and slot bookkeeping so test-time
+    // kslot map/unmap + slot allocations do not leak PTEs or slots across
+    // test boundaries.  kslot_snapshot_restore also invlpg's the window VAs.
+    {
+        uint64_t nk = *reinterpret_cast<uint64_t *>(
+            g_snapshot + off_kstack_header(
+                *reinterpret_cast<uint64_t *>(g_snapshot +
+                                              off_user_page_count())));
+        kernel::kslot_snapshot_restore(
+            g_snapshot + off_kslot_snapshot(
+                *reinterpret_cast<uint64_t *>(g_snapshot +
+                                              off_user_page_count()),
+                nk));
+    }
 
     // ---- Restore kernel PML4 user entries ----
     // Restore PML4[0..255] from the snapshot so user-space mappings

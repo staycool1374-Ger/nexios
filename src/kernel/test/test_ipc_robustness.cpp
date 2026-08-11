@@ -319,10 +319,6 @@ TEST_CLASS(IpcBufHandleTransferRoundtrip) {
         },
         11, 10);
     if (!sender || !receiver) { JARVIS_FAIL("task create failed (OOM)"); return; }
-    sender->page_table_ = VMM::clone_kernel_pml4();
-    receiver->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(sender->page_table_ != 0);
-    JARVIS_ASSERT(receiver->page_table_ != 0);
 
     uint64_t sctx[2];
     sctx[0] = receiver->id;

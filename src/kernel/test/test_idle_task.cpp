@@ -104,8 +104,9 @@ JARVIS_TEST(idle_task_calls_pause_syscall, "PRE: none | POST: none") {
     JARVIS_ASSERT(idle != nullptr);
     JARVIS_ASSERT(idle->kernel_stack != nullptr);
     // Idle task runs an infinite loop with arch::hlt() - verify it's a kernel
-    // task
-    JARVIS_ASSERT(idle->page_table_ == 0);
+    // task.  v0.4.0 MP-1: kernel tasks own a private kernel-half PML4, so the
+    // authoritative discriminator is is_user_.
+    JARVIS_ASSERT(idle->is_user_ == false);
     JARVIS_ASSERT(idle->user_stack_ == 0);
     JARVIS_TEST_PASS();
 }

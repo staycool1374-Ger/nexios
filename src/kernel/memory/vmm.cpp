@@ -609,7 +609,7 @@ uint64_t VMM::clone_kernel_pml4() {
 }
 
 /// @brief Free all user-space pages and page tables owned by a user PML4.
-///        Skips kernel-owned pages and honours page_table_shared_ flag.
+///        Skips kernel-owned pages (PMM::is_user_page owner-bit check).
 /// @param pml4_phys Physical address of the user PML4 to tear down.
 /// @brief Free all user-accessible pages in a page table.
 ///        Worst-case iterations: PML4_USER_COUNT (256) × 512 × 512 × 512

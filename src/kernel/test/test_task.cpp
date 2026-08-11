@@ -78,14 +78,15 @@ JARVIS_TEST(task_create_user_page_table, "PRE: none | POST: none") {
 // Testidea: Verifies that TaskControlBlock::clone() deep-copies page tables.
 // Input: A REAL dispatched kernel task (prio 11) with a cloned PML4 calls
 //        clone(); the child is created in the running task's own context.
-// Expect: child has own page tables (page_table_shared_ == false),
-// child user stack exists
+// Expect: child has own page tables (deep-copied — page_table_ != 0 and
+// != parent's), child user stack exists
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
 JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
     static uint64_t g_child_pt = 0;
     static uint64_t g_child_shared = 0;
     static uint64_t g_child_stack = 0;
     static uint64_t g_child_ok = 0;
+    static uint64_t g_parent_pt = 0;
 
     auto *parent = TaskControlBlock::create(
         []() {
@@ -100,7 +101,9 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
             if (child == nullptr)
                 return;
             g_child_pt = child->page_table_;
-            g_child_shared = child->page_table_shared_ ? 1 : 0;
+            // v0.4.0 MP-7: page_table_shared_ removed — deep copy means the
+            // child's PML4 must differ from the parent's.
+            g_child_shared = (g_child_pt != g_parent_pt) ? 0 : 1;
             g_child_stack = child->user_stack_;
             g_child_ok = (g_child_pt != 0 && g_child_stack != 0) ? 1 : 0;
             child->cleanup();
@@ -108,8 +111,8 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    parent->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(parent->page_table_ != 0);
+    g_parent_pt = parent->page_table_;
+    parent->is_user_ = true;           // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
     parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
     Scheduler::add_task(*parent);
@@ -197,8 +200,7 @@ JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    parent->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(parent->page_table_ != 0);
+    parent->is_user_ = true; // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;
     parent->user_stack_size_ = 32_KiB;
     Scheduler::add_task(*parent);
@@ -238,8 +240,7 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    parent->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(parent->page_table_ != 0);
+    parent->is_user_ = true; // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;
     parent->user_stack_size_ = 32_KiB;
     Scheduler::add_task(*parent);

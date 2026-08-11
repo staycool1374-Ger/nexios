@@ -86,8 +86,7 @@ JARVIS_TEST(fpu_clone_copies_state, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(parent != nullptr);
-    parent->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(parent->page_table_ != 0);
+    parent->is_user_ = true; // simulate a user parent for clone()
     parent->user_stack_ = 0x80000000;
     Scheduler::add_task(*parent);
     Scheduler::reschedule();

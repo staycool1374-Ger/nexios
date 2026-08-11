@@ -185,6 +185,10 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
 
 uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                             uint64_t *) {
+    // v0.4.0 MP-1 hardening: a null buffer must be rejected for ANY caller —
+    // pre-MP-1 the boot identity map masked the write to address 0x0.
+    if (arg0 == 0)
+        return static_cast<uint64_t>(-1);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto uts_ptr = checked(reinterpret_cast<Utsname *>(arg0));
     if (syscall_is_user_task() && !uts_ptr.valid())
@@ -245,6 +249,11 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // Cannot expand beyond stack area
     if (arg0 > mem::STACK_VADDR)
         return static_cast<uint64_t>(-1);
+    // v0.4.0 MP-2: the guard page at STACK_VADDR must never become the heap
+    // end — brk(STACK_VADDR) would make the next heap page the unmapped
+    // guard, so reject it explicitly.
+    if (arg0 == mem::STACK_VADDR)
+        return static_cast<uint64_t>(-1);
 
     uint64_t old_break = t->program_break;
 
@@ -271,6 +280,21 @@ uint64_t Syscall::sys_brk(uint64_t arg0, uint64_t, uint64_t, uint64_t,
 
     // Contract: could unmap pages but it's optional — leave them mapped
     t->program_break = arg0;
+
+    // v0.4.0 MP-3: re-arm the heap-after canary at the new break top.
+    {
+        const uint64_t heap = TaskControlBlock::SEG_HEAP;
+        if (t->canary_installed & (1u << heap)) {
+            uint64_t new_top =
+                ((arg0 + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1)) - 8;
+            if (new_top >= mem::HEAP_VADDR) {
+                t->canary_after[heap] = new_top;
+                canary_write_at(new_top,
+                                TaskControlBlock::CANARY_MAGIC ^ (heap + 1),
+                                t->page_table_);
+            }
+        }
+    }
     return t->program_break;
 }
 
@@ -340,6 +364,10 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         return static_cast<uint64_t>(-1);
     if (arg1 == 0)
         return 0;
+    // v0.4.0 MP-1 hardening: reject a null buffer for ANY caller (the boot
+    // identity map previously masked writes to address 0x0).
+    if (arg0 == 0)
+        return static_cast<uint64_t>(-1);
 
     if (syscall_is_user_task()) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)

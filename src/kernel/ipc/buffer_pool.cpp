@@ -306,6 +306,9 @@ int32_t BufferPool::validate(uint64_t handle) {
 /// @return handle, or 0 on failure.
 uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) {
     bp_check_guard();
+    // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
+    // is effectively always open — kernel driver tasks (is_user_ == false)
+    // may still map a user buffer through their (otherwise empty) user half.
     if (!task.page_table_)
         return 0;
 

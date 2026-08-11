@@ -247,6 +247,12 @@ QEMU_FLAGS     = -cdrom $(DEBUG_ISO) -m 256M \
                 -serial chardev:dbg -device isa-debugcon,chardev=dbg -mon chardev=dbg \
                 $(QEMU_NET) $(QEMU_ARCH_FLAGS)
 
+# v0.4.0 MP-4: x86_64 needs SMEP (CR4 bit 20) for the SMEP tests; QEMU's
+# default CPU model does not advertise it, so select 'max' (all TCG features).
+ifeq ($(ARCH),x86_64)
+QEMU_ARCH_FLAGS += -cpu max
+endif
+
 # Interactive shell (class=none) flags.  Default: same as QEMU_FLAGS (aarch64 /
 # riscv64 already use -serial mon:stdio, no mux).  On x86_64 the test flags use
 # the mux chardev, which gives stdin input focus to whichever frontend last

@@ -374,6 +374,10 @@ build/kernel/test/test_rlimit.o: src/kernel/test/test_rlimit.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_kernel_isolation.o: src/kernel/test/test_kernel_isolation.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_tmpfs.o: src/kernel/test/test_tmpfs.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -563,6 +567,10 @@ build/kernel/test/test_wcet_cleanup.o: src/kernel/test/test_wcet_cleanup.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_timing.o: src/kernel/test/test_timing.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_memory_isolation.o: src/kernel/test/test_memory_isolation.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

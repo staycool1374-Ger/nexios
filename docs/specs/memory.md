@@ -160,3 +160,33 @@ Constraints:
 
 Acceptance (REQ-MP-06): "Overwriting a segment-boundary software canary is
 detected at the next syscall/context-switch and causes a controlled panic."
+
+## 7.1 Private kernel-half page tables (v0.4.0 MP-1 addendum)
+
+Since MP-1 every task — kernel AND user — owns a private PML4 (`page_table_`)
+whose kernel half (entries `>= PML4_KERNEL_START`, i.e. 256..511 on x86_64) is
+copied **by value** from the boot kernel PML4 via `VMM::clone_kernel_pml4()`:
+
+- **Kernel text/data/bss** map (higher-half kernel region): inherited by value.
+- **HHDM direct map** (phys↔virt, all of RAM): inherited by value; kernel code
+  that touches arbitrary user frames keeps working in every task context.
+- **Shared kslot window** (`CONFIG_KSTACK_WINDOW_BASE`, PML4 index 498 >=
+  `PML4_KERNEL_START`): the window's PDPT/PD/PT pages are wired once into the
+  boot kernel PML4 at `init_kstack_window()`; every private clone inherits the
+  PD/PT entries **by value**, so the window tables are shared by reference.
+  Per-task private kstack page tables are NOT allocated.  Stack isolation is
+  enforced by the guard page below each slot and by the MP-6 hook.
+- **User half** (entries 0..255): zeroed in every kernel task's PML4; user
+  tasks populate it via ELF load / `create_user()` / fork deep copy.
+
+Consequences (authoritative discriminator change):
+- `page_table_ != 0` no longer identifies a user task — use `is_user_`.
+- `syscall_is_user_task()`, OOM-victim selection, exception/signal delivery and
+  VFS IPC authorization all key on `is_user_`.
+- `switch_to_task` publishes `scheduler_load_cr3_from = next.page_table_` for
+  every task, so every context switch reloads CR3 in the same ISR-epilogue
+  path; the CR3-clear paths (`clear_switch_globals`, deferred-switch CLR,
+  `scheduler_validate_pending_switch`) zero it unconditionally.
+- Teardown: `cleanup()` frees the PML4 page unconditionally (MP-7.3); the
+  kslot-window tables are boot-shared and NOT freed individually; kernel-task
+  user halves are empty so only the PML4 page is reclaimed.

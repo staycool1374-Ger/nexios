@@ -51,16 +51,35 @@ JARVIS_TEST(page_tables_pool_size_configured, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-JARVIS_TEST(page_tables_kernel_task_no_page_table,
-            "PRE: none | POST: none") {
+// Runmode: kernel
+// Testidea: v0.4.0 MP-1 — every kernel task owns a private kernel-half PML4:
+// non-zero, distinct from the boot kernel PML4, kernel half present, user
+// half empty, and reclaimed by cleanup().
+// Input: Create a kernel task; inspect page_table_; cleanup.
+// Expect: page_table_ != 0 && != kernel PML4; user entries 0..255 zero;
+// kernel entries match the kernel PML4; cleanup frees the PML4 page.
+// Depends: kernel::memory::VMM, PMM
+JARVIS_TEST(page_tables_kernel_task_private_pml4, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(t != nullptr);
     auto cleanup = ScopeGuard([&]() {
         t->cleanup();
         delete t;
     });
-    JARVIS_ASSERT(t->page_table_ == 0);
-    JARVIS_ASSERT(t->page_table_shared_ == false);
+    JARVIS_ASSERT(t->page_table_ != 0);
+    JARVIS_ASSERT(t->page_table_ != VMM::get_kernel_pml4());
+    JARVIS_ASSERT(t->is_user_ == false);
+
+    auto *priv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (t->page_table_ & ~0xFFFULL));
+    auto *kern = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
+        JARVIS_ASSERT(priv[i] == 0);
+    }
+    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
+        JARVIS_ASSERT(priv[i] == kern[i]);
+    }
     JARVIS_TEST_PASS();
 }
 
@@ -72,7 +91,6 @@ JARVIS_TEST(page_tables_user_task_page_table_set, "PRE: none | POST: none") {
         delete t;
     });
     JARVIS_ASSERT(t->page_table_ != 0);
-    JARVIS_ASSERT(t->page_table_shared_ == false);
     JARVIS_TEST_PASS();
 }
 
@@ -158,7 +176,7 @@ void register_page_tables_tests() {
     JARVIS_REGISTER_TEST(page_tables_alloc_from_pool);
     JARVIS_REGISTER_TEST(page_tables_pool_multiple_allocs);
     JARVIS_REGISTER_TEST(page_tables_pool_size_configured);
-    JARVIS_REGISTER_TEST(page_tables_kernel_task_no_page_table);
+    JARVIS_REGISTER_TEST(page_tables_kernel_task_private_pml4);
     JARVIS_REGISTER_TEST(page_tables_user_task_page_table_set);
     JARVIS_REGISTER_TEST(page_tables_free_pages_on_cleanup);
     JARVIS_REGISTER_TEST(page_tables_max_process_pages_config);

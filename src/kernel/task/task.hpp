@@ -209,9 +209,11 @@ struct TaskControlBlock {
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0), page_table_shared_(false),
+          page_table_(0),
           stack_pdpt_phys_(0), user_stack_(0), user_stack_size_(0),
-          user_data(nullptr), fpu_used(false), fpu_state{}, program_break(0),
+          user_data(nullptr), is_user_(false),
+          canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
+          canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
           program_break_start(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
@@ -262,10 +264,6 @@ struct TaskControlBlock {
     /// @brief Total slot size (stack + guard page).  0 if HHDM.
     uint64_t kstack_slot_size_;
     uint64_t page_table_;
-    /// @brief If true, this task shares the parent's user page tables
-    /// (fork). free_user_pages() is skipped on cleanup/exec to avoid
-    /// double-free.
-    bool page_table_shared_;
     /// @brief Physical address of the private PDPT page allocated in
     /// clone() for the user stack region. Zero when not applicable.
     /// Used by cleanup() to free the private PDPT and its child PD/PT
@@ -274,6 +272,36 @@ struct TaskControlBlock {
     uint64_t user_stack_;
     uint64_t user_stack_size_;
     void *user_data;
+    /// @brief True for user-mode tasks (own user half in page_table_).
+    ///        v0.4.0 MP-1: every task — kernel AND user — now owns a private
+    ///        PML4 whose kernel half is copied from the kernel PML4, so
+    ///        `page_table_ != 0` is no longer a valid user-task
+    ///        discriminator.  This flag is the authoritative one.
+    bool is_user_;
+
+    // ------------------------------------------------------------------
+    // Software sentinel canaries (v0.4.0 MP-3)
+    // ------------------------------------------------------------------
+    /// @brief Base magic for segment-boundary canaries.
+    static constexpr uint64_t CANARY_MAGIC = 0x4E45584943414E59ULL;
+
+    /// @brief User-visible segment kinds guarded by a before/after sentinel.
+    enum CanarySegment : uint8_t {
+        SEG_TEXT = 0,
+        SEG_DATA = 1,
+        SEG_HEAP = 2,
+        SEG_STACK = 3,
+        CANARY_SEGMENTS = 4,
+    };
+
+    /// @brief VA of the canary slot before each segment (0 = not installed).
+    ///        The expected value is derived: CANARY_MAGIC ^ (segment + 1).
+    uint64_t canary_before[CANARY_SEGMENTS];
+    /// @brief VA of the canary slot after each segment (0 = not installed).
+    uint64_t canary_after[CANARY_SEGMENTS];
+    /// @brief Bitmask: bit i set when segment i's canaries are installed;
+    ///        bit CANARY_SEGMENTS set when the kernel-stack canary is armed.
+    uint8_t canary_installed;
 
     /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes, 16-byte aligned).
     ///        Zeroed on task creation; populated lazily via #NM handler.
@@ -524,5 +552,31 @@ struct TaskControlBlock {
     /// @brief Finds a child by PID.
     TaskControlBlock *find_child(uint64_t pid) noexcept;
 };
+
+/// @brief Total snapshot bytes for the kernel-stack window state
+///        (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.
+/// @return Byte count consumed by kslot_snapshot_capture/restore.
+size_t kslot_snapshot_bytes();
+
+/// @brief Capture the kstack-window PT contents and slot bookkeeping into
+///        @p dst (must hold >= kslot_snapshot_bytes() bytes).
+void kslot_snapshot_capture(uint8_t *dst);
+
+/// @brief Restore the kstack-window PT contents and slot bookkeeping from
+///        @p src, and flush the TLB for every window VA.
+void kslot_snapshot_restore(const uint8_t *src);
+
+// --- Software sentinel canaries (v0.4.0 MP-3) ---
+/// @brief Write an 8-byte canary value at @p va through @p pml4.
+void canary_write_at(uint64_t va, uint64_t value, uint64_t pml4);
+/// @brief Install the user-stack and initial-heap canaries for @p t.
+void canary_install_user_segments(TaskControlBlock *t);
+/// @brief Install the kernel-stack canary at kernel_stack[0..8).
+void canary_install_kernel_stack(TaskControlBlock *t);
+/// @brief Verify all installed user-segment canaries (pure reads).
+bool canary_verify_user_segments(const TaskControlBlock *t,
+                                 uint8_t &bad_segment, uint64_t &bad_va);
+/// @brief Verify the kernel-stack canary (pure read).
+bool canary_verify_kernel_stack(const TaskControlBlock *t);
 
 } // namespace kernel

@@ -187,7 +187,6 @@ JARVIS_TEST(task_exit_frees_page_tables_correctly, "PRE: none | POST: none") {
     JARVIS_ASSERT(tcb != nullptr);
     JARVIS_ASSERT(tcb->page_table_ != 0);
     JARVIS_ASSERT(tcb->user_stack_ != 0);
-    JARVIS_ASSERT(tcb->page_table_shared_ == false);
 
     tcb->cleanup();
 

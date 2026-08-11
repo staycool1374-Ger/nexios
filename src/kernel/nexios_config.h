@@ -529,6 +529,14 @@
 #define CONFIG_KSTACK_WINDOW_SIZE 0x1000000ULL  // 16 MiB
 #endif
 
+/// Base virtual address of the per-kernel-task private-data window
+/// (v0.4.0 MP-1.5).  Tests map one private page here in a task's PML4 and
+/// prove cross-task isolation.  The PML4 index must NOT be present in the
+/// boot kernel PML4 (kernel_init asserts this).
+#ifndef CONFIG_KERNEL_PRIV_DATA_BASE
+#define CONFIG_KERNEL_PRIV_DATA_BASE 0xFFFFA00000000000ULL
+#endif
+
 /// Kernel stack sizes per priority tier (bytes).  Indexed by priority.
 #ifndef CONFIG_STACK_SIZE_TABLE
 #define CONFIG_STACK_SIZE_TABLE \
@@ -593,8 +601,33 @@
 #endif
 
 /// If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*).
+/// v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page
+/// #PF before the fatal panic (belt-and-braces; tests override it strongly).
 #ifndef CONFIG_STACK_OVERFLOW_HOOK
-#define CONFIG_STACK_OVERFLOW_HOOK 0
+#define CONFIG_STACK_OVERFLOW_HOOK 1
+#endif
+
+/// If non-zero, the kernel verifies per-task software sentinel canaries
+/// (v0.4.0 MP-3) on syscall entry (user segments) and on context switch
+/// (kernel-stack canary).  Mismatch → controlled panic (or test latch).
+#ifndef CONFIG_CANARY_GUARD
+#define CONFIG_CANARY_GUARD 1
+#endif
+
+/// v0.4.0 MP-4: SMEP (supervisor-mode execution prevention) — CR4 bit 20.
+/// On x86_64 the boot path sets it when CPUID leaf 7 EBX[7] is supported.
+#ifndef CONFIG_SMEP
+#if defined(CONFIG_ARCH_X86_64)
+#define CONFIG_SMEP 1
+#else
+#define CONFIG_SMEP 0
+#endif
+#endif
+
+/// v0.4.0 MP-4: SMAP (supervisor-mode access prevention) — CR4 bit 21.
+/// Deferred: always 0 in this milestone.
+#ifndef CONFIG_SMAP
+#define CONFIG_SMAP 0
 #endif
 
 /// If non-zero, declares weak symbol oom_hook(size_t requested_size).
