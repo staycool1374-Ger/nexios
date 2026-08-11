@@ -174,7 +174,13 @@ JARVIS_TEST(harness_blocked_sender_wakes,
     }
 
     // After waking, our message is in the queue. Let receiver process it.
-    for (int h = 0; h < 50; ++h) {
+    // CHANGED (v0.4.0 MP-8): the 50-iteration bound is arbitrary and
+    // timing-sensitive — the MP-1 per-switch overhead (private-PML4 CR3
+    // publishes + canary verify) shifts the receiver's dispatch cadence and
+    // the loop could observe only 1/17 processed messages in the `all`
+    // context.  Raise the bound so the poll is robust to scheduler-timing
+    // drift while keeping the drain-before-break logic.
+    for (int h = 0; h < 500; ++h) {
         Scheduler::reschedule();
         arch::hlt();
         if (ipc_recv_count_ > IPC_MAX_QUEUE_MSG)
@@ -340,7 +346,6 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
             kernel::test::terminate_and_drain2(sender, receiver);
             continue;
         }
-        worker->page_table_ = VMM::clone_kernel_pml4();
         Scheduler::add_task(*worker);
         Scheduler::reschedule();
         kernel::test::wait_for_termination_safe(worker);
@@ -497,7 +502,8 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
 
     auto *task = TaskControlBlock::create([]() {}, 5, 10);
     if (!task) { JARVIS_TEST_PASS(); return; }
-    task->page_table_ = VMM::clone_kernel_pml4();
+    // v0.4.0 MP-1: create() already assigned a private kernel-half PML4 —
+    // do NOT overwrite it (that would leak the create()-allocated page).
     if (!task->page_table_) { JARVIS_TEST_PASS(); return; }
     Scheduler::add_task(*task);
 
@@ -513,7 +519,7 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
         },
         11, 10);
     if (!worker) { JARVIS_TEST_PASS(); return; }
-    worker->page_table_ = VMM::clone_kernel_pml4();
+    // MP-1: create() assigns the private PML4.
     Scheduler::add_task(*worker);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(worker);

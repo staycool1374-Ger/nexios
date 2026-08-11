@@ -152,7 +152,7 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.waiting_on_eventgroup = nullptr;
     tcb.waiting_on_queue = nullptr;
     tcb.stack_pdpt_phys_ = 0;
-    tcb.page_table_shared_ = false;
+    tcb.is_user_ = false;
     tcb.user_stack_ = 0;
     tcb.user_stack_size_ = 0;
 
@@ -521,6 +521,187 @@ static void unmap_kstack_page(uint64_t virt) {
 
 } // anonymous namespace
 
+// ---------------------------------------------------------------------------
+// kslot snapshot support (v0.4.0 MP-6.3)
+// ---------------------------------------------------------------------------
+// The kstack-window PT pages are boot-shared (referenced by value from every
+// private kernel-half PML4), and the slot bookkeeping (bump pointer, free
+// list, pool) is NOT rewound by the MemPool/PMM snapshots.  Tests that map /
+// unmap kstack pages or allocate/free slots would otherwise leak stale PTEs
+// or slots across test boundaries.  test_isolate.cpp snapshots and restores
+// this state at every test boundary.
+
+size_t kslot_snapshot_bytes() {
+    return 8 * arch::PAGE_SIZE + sizeof(uint64_t) + 2 * sizeof(int32_t) +
+           KSLOT_POOL_SIZE * sizeof(KSlotEntry);
+}
+
+void kslot_snapshot_capture(uint8_t *dst) {
+    size_t off = 0;
+    for (unsigned i = 0; i < 8; ++i) {
+        if (s_kstack_pt_pages[i]) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            __builtin_memcpy(dst + off,
+                             reinterpret_cast<const void *>(
+                                 arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
+                             arch::PAGE_SIZE);
+        } else {
+            __builtin_memset(dst + off, 0, arch::PAGE_SIZE);
+        }
+        off += arch::PAGE_SIZE;
+    }
+    __builtin_memcpy(dst + off, &s_kslot_bump, sizeof(s_kslot_bump));
+    off += sizeof(s_kslot_bump);
+    __builtin_memcpy(dst + off, &s_kslot_list, sizeof(s_kslot_list));
+    off += sizeof(s_kslot_list);
+    __builtin_memcpy(dst + off, &s_kslot_free_head, sizeof(s_kslot_free_head));
+    off += sizeof(s_kslot_free_head);
+    __builtin_memcpy(dst + off, s_kslot_pool,
+                     KSLOT_POOL_SIZE * sizeof(KSlotEntry));
+}
+
+void kslot_snapshot_restore(const uint8_t *src) {
+    size_t off = 0;
+    for (unsigned i = 0; i < 8; ++i) {
+        if (!s_kstack_pt_pages[i])
+            continue;
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET +
+                                                  s_kstack_pt_pages[i]),
+                         src + off, arch::PAGE_SIZE);
+        // Flush the TLB for every window VA backed by this PT page.  invlpg
+        // on an unmapped VA is a documented no-op (no exception).
+        uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
+                           static_cast<uint64_t>(i) * 512 * arch::PAGE_SIZE;
+        for (unsigned e = 0; e < 512; ++e)
+            asm volatile("invlpg (%0)"
+                         :
+                         : "r"(base_va + e * arch::PAGE_SIZE)
+                         : "memory");
+        off += arch::PAGE_SIZE;
+    }
+    __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
+    off += sizeof(s_kslot_bump);
+    __builtin_memcpy(&s_kslot_list, src + off, sizeof(s_kslot_list));
+    off += sizeof(s_kslot_list);
+    __builtin_memcpy(&s_kslot_free_head, src + off, sizeof(s_kslot_free_head));
+    off += sizeof(s_kslot_free_head);
+    __builtin_memcpy(s_kslot_pool, src + off,
+                     KSLOT_POOL_SIZE * sizeof(KSlotEntry));
+}
+
+// ---------------------------------------------------------------------------
+// Software sentinel canaries (v0.4.0 MP-3)
+// ---------------------------------------------------------------------------
+// Each user-visible segment (text/data/heap/stack) gets an 8-byte sentinel at
+// its before/after boundary.  The canary_before/after TCB fields store the
+// canary SLOT VAs; the expected value is derived from CANARY_MAGIC.  The
+// kernel-stack canary lives at kernel_stack[0..8) (the base, normally
+// untouched because stacks grow down from kernel_stack_top).
+
+static uint64_t canary_expected(unsigned seg) {
+    return TaskControlBlock::CANARY_MAGIC ^ (static_cast<uint64_t>(seg) + 1);
+}
+
+static constexpr uint64_t KERNEL_STACK_CANARY_MAGIC =
+    TaskControlBlock::CANARY_MAGIC ^ 0x40ULL;
+
+/// @brief Write an 8-byte canary value at @p va through @p pml4 (resolving
+///        the frame via HHDM).  No-op when the page is not present.
+void canary_write_at(uint64_t va, uint64_t value, uint64_t pml4) {
+    if (!va)
+        return;
+    uint64_t phys = VMM::virt_to_phys_in_pml4(va, pml4);
+    if (!phys)
+        return;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
+                     &value, 8);
+}
+
+/// @brief Install the user-stack and initial-heap canaries for @p t
+///        (call after the user stack + heap are mapped and program_break set).
+void canary_install_user_segments(TaskControlBlock *t) {
+    if (!t || !t->page_table_)
+        return;
+    const uint64_t stk = TaskControlBlock::SEG_STACK;
+    if (t->user_stack_size_ > 0) {
+        t->canary_before[stk] = mem::STACK_VADDR + arch::PAGE_SIZE;
+        t->canary_after[stk] =
+            mem::STACK_VADDR + arch::PAGE_SIZE + t->user_stack_size_ - 8;
+        canary_write_at(t->canary_before[stk], canary_expected(stk),
+                        t->page_table_);
+        canary_write_at(t->canary_after[stk], canary_expected(stk),
+                        t->page_table_);
+        t->canary_installed |= (1u << stk);
+    }
+    const uint64_t heap = TaskControlBlock::SEG_HEAP;
+    if (t->program_break >= mem::HEAP_VADDR + arch::PAGE_SIZE) {
+        t->canary_before[heap] = mem::HEAP_VADDR;
+        t->canary_after[heap] =
+            ((t->program_break + arch::PAGE_SIZE - 1) &
+             ~(arch::PAGE_SIZE - 1)) -
+            8;
+        canary_write_at(t->canary_before[heap], canary_expected(heap),
+                        t->page_table_);
+        canary_write_at(t->canary_after[heap], canary_expected(heap),
+                        t->page_table_);
+        t->canary_installed |= (1u << heap);
+    }
+}
+
+/// @brief Install the kernel-stack canary at kernel_stack[0..8).
+void canary_install_kernel_stack(TaskControlBlock *t) {
+    if (!t || !t->kernel_stack)
+        return;
+    __builtin_memcpy(t->kernel_stack, &KERNEL_STACK_CANARY_MAGIC, 8);
+    t->canary_installed |= (1u << TaskControlBlock::CANARY_SEGMENTS);
+}
+
+/// @brief Verify all installed user-segment canaries of @p t (pure reads).
+/// @return true when intact; on mismatch sets @p bad_segment / @p bad_va.
+bool canary_verify_user_segments(const TaskControlBlock *t, uint8_t &bad_segment,
+                                 uint64_t &bad_va) {
+    for (unsigned i = 0; i < TaskControlBlock::CANARY_SEGMENTS; ++i) {
+        if (!(t->canary_installed & (1u << i)))
+            continue;
+        const uint64_t expected = canary_expected(i);
+        const uint64_t vas[2] = {t->canary_before[i], t->canary_after[i]};
+        for (int k = 0; k < 2; ++k) {
+            if (!vas[k])
+                continue;
+            uint64_t phys = VMM::virt_to_phys_in_pml4(vas[k], t->page_table_);
+            if (!phys) {
+                bad_segment = static_cast<uint8_t>(i);
+                bad_va = vas[k];
+                return false;
+            }
+            uint64_t live = 0;
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            __builtin_memcpy(&live,
+                             reinterpret_cast<const void *>(arch::HHDM_OFFSET +
+                                                           phys),
+                             8);
+            if (live != expected) {
+                bad_segment = static_cast<uint8_t>(i);
+                bad_va = vas[k];
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/// @brief Verify the kernel-stack canary of @p t (pure read).
+bool canary_verify_kernel_stack(const TaskControlBlock *t) {
+    if (!t || !t->kernel_stack ||
+        !(t->canary_installed & (1u << TaskControlBlock::CANARY_SEGMENTS)))
+        return true;
+    uint64_t live = 0;
+    __builtin_memcpy(&live, t->kernel_stack, 8);
+    return live == KERNEL_STACK_CANARY_MAGIC;
+}
+
 /// @brief Creates a new kernel-space TaskControlBlock.
 /// Allocates a TCB from MemPool, sets up a kernel stack with an
 /// architecture-specific initial register frame, and returns it.
@@ -668,6 +849,19 @@ uint64_t stack_size = stack_size_for_priority(priority);
     }
 done_stack:
 
+    // v0.4.0 MP-1.2: every kernel task gets a private kernel-half PML4.
+    // clone_kernel_pml4() zeroes the user entries (0..255) and copies the
+    // kernel entries (>= PML4_KERNEL_START — kernel text/data/bss, HHDM, and
+    // the shared kslot window) by value from the boot kernel PML4.  The kslot
+    // window PD/PT pages are boot-shared (see docs/specs/memory.md §7.1) —
+    // per-task private kstack tables are NOT allocated.
+    tcb->page_table_ = VMM::clone_kernel_pml4();
+    if (!tcb->page_table_) {
+        ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
+        delete tcb;
+        return nullptr;
+    }
+
     // PMM does not zero freed pages (it poison-fills them, e.g. with 0x0b),
     // so a stack allocated from recycled memory can retain stale poison in
     // the region below the initial frame.  Zero the entire stack up front so
@@ -675,6 +869,9 @@ done_stack:
     // addresses — starts from a known state instead of tripping a fault on a
     // leftover 0x0b return address.
     __builtin_memset(tcb->kernel_stack, 0, stack_size);
+
+    // v0.4.0 MP-3: arm the kernel-stack canary at the stack base.
+    canary_install_kernel_stack(tcb);
 
 #if defined(CONFIG_ARCH_X86_64)
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -825,6 +1022,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
         return nullptr;
     }
     tcb->page_table_ = pml4;
+    tcb->is_user_ = true;
 
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
@@ -836,6 +1034,10 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = user_stack_size;
     uint64_t user_rsp = user_stack_virt + user_stack_size;
+
+    // v0.4.0 MP-3: kernel-stack canary + user-stack canaries.
+    canary_install_kernel_stack(tcb);
+    canary_install_user_segments(tcb);
 
 #if defined(CONFIG_ARCH_X86_64)
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -1016,7 +1218,10 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->stack_phys_ = kstack_phys;
 
     // Route through kslot for guard page below kernel stack.
-    bool is_user_task = (parent->page_table_ != 0);
+    // v0.4.0 MP-1 prerequisite: use the is_user_ flag, not `page_table_ != 0`
+    // (every task now owns a private kernel-half PML4).
+    bool is_user_task = parent->is_user_;
+    tcb->is_user_ = is_user_task;
     uint64_t slot_va = alloc_kslot(STACK_SIZE);
     if (slot_va) {
         tcb->kstack_slot_va_ = slot_va;
@@ -1104,7 +1309,6 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
             return nullptr;
         }
         tcb->page_table_ = new_pml4;
-        tcb->page_table_shared_ = false;  // deep copy → no sharing
 
         // Copy kernel entries from the kernel PML4.
         auto *new_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -1169,6 +1373,17 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
                 ] = reinterpret_cast<const uint8_t *>(src_virt)[j];
             }
         }
+
+        // v0.4.0 MP-3: clone copies canary fields (deep copy carried the
+        // TEXT/DATA/HEAP sentinel bytes; the fresh user-stack copy carries the
+        // STACK sentinels) and arms the child's kernel-stack canary.
+        for (size_t ci = 0; ci < TaskControlBlock::CANARY_SEGMENTS; ++ci) {
+            tcb->canary_before[ci] = parent->canary_before[ci];
+            tcb->canary_after[ci] = parent->canary_after[ci];
+        }
+        tcb->canary_installed = parent->canary_installed;
+        canary_install_kernel_stack(tcb);
+        canary_install_user_segments(tcb);
     }
 
     return tcb;
@@ -1381,7 +1596,9 @@ void TaskControlBlock::cleanup() noexcept {
         }
     }
 
-    if (user_stack_ && page_table_) {
+    // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
+    // owns a private kernel-half PML4 but never a user stack.
+    if (is_user_ && user_stack_) {
         size_t pages = (user_stack_size_ + 4095) / arch::PAGE_SIZE;
         for (size_t i = 0; i < pages; ++i) {
             PMM::free_page(user_stack_ + i * arch::PAGE_SIZE);
@@ -1421,10 +1638,14 @@ void TaskControlBlock::cleanup() noexcept {
         // page tables
         BufferPool::unmap_all(*this);
 
-        if (!page_table_shared_) {
-            VMM::free_user_pages(page_table_);
-            PMM::free_page(page_table_);
-        }
+        // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
+        // (deep-copied or freshly built via clone_kernel_pml4) or the boot
+        // kernel PML4; no task ever shares another task's user entries.
+        // free_user_pages() skips kernel-owned table/data pages via
+        // PMM::is_user_page, so a partially deep-copied address space (OOM
+        // during clone) is fully reclaimed here — no leak.
+        VMM::free_user_pages(page_table_);
+        PMM::free_page(page_table_);
         if (stack_pdpt_phys_) {
             free_stack_pdpt(stack_pdpt_phys_);
             stack_pdpt_phys_ = 0;

@@ -133,8 +133,9 @@ class VMM {
 
     /// @brief Frees all user-space pages and page tables from a
     /// user PML4. Used during exec() to clean up the old address
-    /// space. Skips kernel-owned pages (HHDM-mapped) and honours
-    /// page_table_shared_ flag.
+    /// space. Skips kernel-owned pages (PMM::is_user_page owner-bit
+    /// check) — v0.4.0 MP-7: no task shares another's user entries, so
+    /// this is always the full teardown of a private address space.
     /// @param pml4_phys Physical address of the user PML4.
     /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
     ///        Allocates new PDPT/PD/PT pages and copies data page content.

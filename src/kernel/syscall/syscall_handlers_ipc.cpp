@@ -82,7 +82,9 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
         cur->state = TaskState::BLOCKED;
         was_blocked = true;
         Scheduler::reschedule();
-        if (cur->page_table_) {
+        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern;
+        // key on is_user_ (every task now owns a PML4).
+        if (cur->is_user_) {
             arch::sti();
             arch::hlt();
             arch::cli();

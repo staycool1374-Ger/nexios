@@ -163,6 +163,8 @@ void register_static_pools_tests();
 void register_stack_profiler_tests();
 void register_stack_alloc_tests();
 void register_page_tables_tests();
+void register_kernel_isolation_tests();
+void register_memory_isolation_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 #if defined(CONFIG_ARCH_AARCH64)
@@ -239,6 +241,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- page_tables: page-table pre-allocated pool, budget, no sharing --
     {"page_tables", []() { register_page_tables_tests(); }},
+
+    // -- kernel_isolation: v0.4.0 MP-1 private kernel-half page tables --
+    {"kernel_isolation", []() { register_kernel_isolation_tests(); }},
+
+    // -- memory_isolation: v0.4.0 MP-5 cross-task / HHDM / guard-page proof --
+    {"memory_isolation", []() { register_memory_isolation_tests(); }},
 
     // -- buffer_pool_deterministic: pre-allocated buffers, zero-copy, no alloc after init --
     {"buffer_pool_deterministic",
@@ -630,6 +638,8 @@ static void register_all_tests() {
     register_stack_profiler_tests();
     register_stack_alloc_tests();
     register_page_tables_tests();
+    register_kernel_isolation_tests();
+    register_memory_isolation_tests();
     register_buffer_pool_deterministic_tests();
     register_no_op_new_tests();
     register_locking_tests();

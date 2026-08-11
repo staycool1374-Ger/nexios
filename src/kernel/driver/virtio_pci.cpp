@@ -141,6 +141,18 @@ bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
 }
 
 bool virtio_init_transport(VirtioTransport &transport) {
+    // v0.4.0 MP-1 hardening: a transport with no MMIO mapping (null
+    // virt_addr — e.g. a default-constructed transport) must be rejected
+    // instead of dereferencing address 0x14 (the status register offset).
+    // Pre-MP-1 the boot identity map in the kernel PML4 masked this latent
+    // null-deref; private kernel-half PML4s no longer carry it.
+    if (transport.common_cfg.virt_addr == 0 &&
+        transport.notify_cfg.virt_addr == 0 &&
+        transport.isr_cfg.virt_addr == 0 &&
+        transport.device_cfg.virt_addr == 0) {
+        return false;
+    }
+
     virtio_write_status(transport, VIRTIO_STATUS_RESET);
     for (int i = 0; i < 100; ++i) {
         if (virtio_read_status(transport) == VIRTIO_STATUS_RESET)

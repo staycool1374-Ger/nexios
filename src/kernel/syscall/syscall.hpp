@@ -87,6 +87,19 @@ enum class SyscallNumber : uint8_t {
 using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                     uint64_t arg3, uint64_t *regs);
 
+/// @brief v0.4.0 MP-3 canary-trip latch.  Set by the syscall canary verify
+///        when a segment canary mismatch is detected in test mode; the
+///        syscall then returns -1 so the harness survives.
+struct CanaryTrip {
+    uint64_t task_id;
+    uint8_t segment;
+    uint64_t rip;
+    uint64_t count;
+};
+
+/// @brief Global canary-trip latch (see CanaryTrip).  Reset by tests.
+extern CanaryTrip g_canary_trip;
+
 /// @brief System call handler and dispatcher.
 class Syscall {
   public:

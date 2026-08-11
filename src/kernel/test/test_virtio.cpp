@@ -82,15 +82,18 @@ JARVIS_TEST(virtio_map_mmio_invalid, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Verifies virtio_init_transport returns true even on a
-// device that isn't a real Virtio device (it only writes status).
+// Testidea: v0.4.0 MP-1 — virtio_init_transport rejects a transport with no
+// MMIO mapping (null virt_addr) instead of dereferencing address 0x14.
+// CHANGED (v0.4.0 MP-8): pre-MP-1 the boot identity map in the kernel PML4
+// masked the null-deref; private kernel-half PML4s no longer carry it, so
+// the hardened function must return false.
 // Input: Default-constructed VirtioTransport
-// Expect: Returns true (harmless without real device)
+// Expect: Returns false (no MMIO mapping — rejected, no write to 0x14)
 // Depends: arch::virtio_init_transport
 JARVIS_TEST(virtio_init_transport_noop, "PRE: iocd | POST: none") {
     arch::VirtioTransport t = {};
     bool ok = arch::virtio_init_transport(t);
-    JARVIS_ASSERT(ok);
+    JARVIS_ASSERT(!ok);
     JARVIS_TEST_PASS();
 }
 

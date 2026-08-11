@@ -309,7 +309,8 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
         Scheduler::dequeue_ready(*cur);
         was_blocked = true;
         Scheduler::reschedule();
-        if (cur->page_table_) {
+        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
+        if (cur->is_user_) {
             arch::sti();
             arch::hlt();
             arch::cli();

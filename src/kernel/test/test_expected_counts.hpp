@@ -21,7 +21,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
     {"buffer_pool",          25,    0,       0      },  // alloc/free/transfer + v0.3.11 B1-B3 PT-walk regressions
-    {"all",                 850,    0,       0      },  // 810 baseline + v0.3.8 testbed additions (config_checks+5, infra+3, wcet_memory+2, no_dynamic_alloc+2, buffer_pool B1-B3+3) − stub removals (buffer_pool −2, iocd −1); 850 registered, 835 execute (TF_BENCH/TF_USER filtered)
+    {"all",                 872,    0,       0      },  // v0.4.0 MP-1..MP-8: 869 + process driven-cookbook(+3); dump_class_counts verified
     {"dmesg",                15,    0,       0      },  // DmesgBuffer + error strings + suppression  (daemon_restart_crash gated, T0-7)
     {"scheduler",            62,    0,       0      },  // sched + task + lifecycle + idle_task + zombie_cleanup + health + cpu_load + preemption(7)
     {"deadlock",              1,    0,       0      },  // starvation_deadlock (detect/recovery stubs deleted, T3-1)
@@ -35,11 +35,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_blocking",         4,     0,       0      },  // IPC blocking send_sync/handshake tests
     {"zombie_cleanup",       4,     0,       0      },  // zombie list deferred cleanup
     {"vfs",                 131,    0,       0      },  // vfs + tmpfs + fat32 + block + fstab + sync + vfsd + iocd (iocd mmio stub removed, T3-1)
-    {"process",             43,     0,       0      },  // process + elf + signals + rlimit + waitpid + pml4_clone
+    {"process",             47,     0,       0      },  // process + elf + signals + rlimit + waitpid + pml4_clone (+3 MP-1/MP-7 driven-cookbook)
     {"syscall",             28,     0,       0      },  // syscall + syscall_fuzz
     {"arch",                31,     0,       0      },  // cross_arch + GDT + IDT + bootparams + multiboot + address + PIC + HAL
-    {"cross_arch",          16,     0,       0      },  // cross-architecture tests
+    {"cross_arch",          18,     0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated, x86_64 only)
     {"vmm",                 11,     0,       0      },  // VMM unit tests (7 original + 2 unconditional + 2 x86_64 = 11 on x86_64)
+    {"kernel_isolation",     4,     0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
+    {"memory_isolation",     3,     0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
+    {"memory_safety",       11,     0,       0      },  // MemPool/PMM invariants + v0.4.0 MP-2 red zones + MP-3 canaries
     {"pmm",                  5,     0,       0      },  // PMM alloc/free unit tests
     {"mempool",              4,     0,       0      },  // MemPool allocator tests
     {"slab_reclaim",         5,     0,       0      },  // Slab reclaim tests
@@ -83,7 +86,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"static_pools",          4,     0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
 #endif
     {"stack_profiler",        6,     0,       0      },  // kernel stack depth profiling
-    {"stack_alloc",           8,     0,       0      },  // stack allocation, guard pages, overflow hook
+    {"stack_alloc",          11,     0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6)
     {"page_tables",           9,     0,       0      },  // page-table pool, budget, no sharing
     {"buffer_pool_deterministic", 6, 0,       0      },  // pre-allocated buffers, zero-copy, no alloc after init
     {"no_op_new",             6,     0,       0      },  // no operator new/delete, all MemPool / placement-new

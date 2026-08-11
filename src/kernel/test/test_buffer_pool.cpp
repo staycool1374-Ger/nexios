@@ -523,8 +523,6 @@ JARVIS_TEST(buffer_pool_syscall_dispatch, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(task != nullptr);
-    task->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(task->page_table_ != 0);
     Scheduler::add_task(*task);
 
     auto *original = Scheduler::current_task();
@@ -604,10 +602,6 @@ JARVIS_TEST(buffer_pool_ipc_transfer, "PRE: none | POST: none") {
         },
         11, 10);
     if (!sender || !receiver) { JARVIS_FAIL("task create failed (OOM)"); return; }
-    sender->page_table_ = VMM::clone_kernel_pml4();
-    receiver->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(sender->page_table_ != 0);
-    JARVIS_ASSERT(receiver->page_table_ != 0);
 
     uint64_t sctx[1];
     sctx[0] = receiver->id;
@@ -680,8 +674,6 @@ JARVIS_TEST(buffer_pool_exec_into_current_clears_buffers,
         },
         11, 10);
     JARVIS_ASSERT(worker != nullptr);
-    worker->page_table_ = VMM::clone_kernel_pml4();
-    JARVIS_ASSERT(worker->page_table_ != 0);
     worker->user_data = &context;
     Scheduler::add_task(*worker);
     Scheduler::reschedule();
@@ -815,11 +807,13 @@ JARVIS_TEST(buffer_pool_va_out_of_range_rejected, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Kernel task (no page_table_) alloc fails — driven: a REAL kernel
-// task (page_table_==0) calls BufferPool::alloc in its own dispatched
-// context.
-// Input: Dispatch a real kernel task (no page table); its lambda allocs.
-// Expect: Returns 0
+// Testidea: v0.4.0 MP-1 — a kernel task now owns a private kernel-half PML4,
+// so BufferPool::alloc (address-space gate) SUCCEEDS for it: the buffer maps
+// into the task's otherwise-empty user half and is reclaimed by cleanup.
+// CHANGED (v0.4.0 MP-8): the pre-MP-1 premise "kernel task has no page
+// table → alloc fails" is invalidated — every task has a PML4.
+// Input: Dispatch a real kernel task; its lambda allocs a buffer.
+// Expect: g_handle != 0 (buffer mapped in the kernel task's user half).
 // Depends: kernel::BufferPool, kernel::TaskControlBlock
 JARVIS_TEST(buffer_pool_kernel_task_alloc_fails, "PRE: none | POST: none") {
     static uint64_t g_handle = 0;
@@ -831,13 +825,15 @@ JARVIS_TEST(buffer_pool_kernel_task_alloc_fails, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(task != nullptr);
-    JARVIS_ASSERT(task->page_table_ == 0); // real kernel task
+    JARVIS_ASSERT(task->is_user_ == false); // real kernel task (MP-1)
     Scheduler::add_task(*task);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(task);
 
+    // MP-1: the alloc succeeds; cleanup (via the drain) frees the user-half
+    // mapping + buffer page.
     kernel::test::terminate_and_drain(*task);
-    JARVIS_ASSERT_EQ(0ULL, g_handle);
+    JARVIS_ASSERT(g_handle != 0);
     JARVIS_TEST_PASS();
 }
 
@@ -1405,7 +1401,7 @@ JARVIS_TEST(buffer_pool_transfer_to_kernel_task, "PRE: none | POST: none") {
     auto *user = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     auto *kernel_task = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(user != nullptr && kernel_task != nullptr);
-    JARVIS_ASSERT(kernel_task->page_table_ == 0);
+    JARVIS_ASSERT(kernel_task->is_user_ == false); // kernel task (MP-1)
 
     auto cleanup = ScopeGuard([&]() {
         user->cleanup();

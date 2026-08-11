@@ -192,62 +192,54 @@ JARVIS_TEST(pml4_clone_kernel_entries_match, "PRE: none | POST: none") {
 // Expect: Child's user entries match parent's, kernel entries match kernel PML4
 // Depends: kernel::memory::VMM, PMM
 JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
-    uint64_t parent_pml4 = PMM::alloc_page();
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(parent_pml4 != 0);
-    auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                     (parent_pml4 & ~0xFFFULL));
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
 
-    uint64_t pdpt = PMM::alloc_page_table();
-    JARVIS_ASSERT(pdpt != 0);
-    uint64_t pd = PMM::alloc_page_table();
-    JARVIS_ASSERT(pd != 0);
-    uint64_t pt = PMM::alloc_page_table();
-    JARVIS_ASSERT(pt != 0);
-
-    // Set up a user mapping at virtual address 0x400000 (typical ELF base)
+    // Set up a USER-owned mapping at virtual address 0x400000 (typical ELF
+    // base) via map_page_in_pml4 — table pages become USER-owned so
+    // free_user_pages reclaims them.
     constexpr uint64_t TEST_VA = 0x400000;
-    size_t pml4_idx = (TEST_VA >> PML4_SHIFT) & 0x1FF;
-    size_t pdpt_idx = (TEST_VA >> PDPT_SHIFT) & 0x1FF;
-    size_t pd_idx = (TEST_VA >> PD_SHIFT) & 0x1FF;
-    size_t pt_idx = (TEST_VA >> PT_SHIFT) & 0x1FF;
-    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
-
-    parent_virt[pml4_idx] = pdpt | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-    auto *pdpt_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt);
-    pdpt_v[pdpt_idx] = pd | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-    auto *pd_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd);
-    pd_v[pd_idx] = pt | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    auto *pt_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt);
-    pt_v[pt_idx] = user_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
 
-    // Create child PML4 (fork-style: copy user entries from parent, kernel
-    // entries from kernel)
-    uint64_t kernel_pml4 = VMM::get_kernel_pml4();
-    auto *kern_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                   (kernel_pml4 & ~0xFFFULL));
+    // v0.4.0 MP-7 fork semantics: deep copy, never shared tables.
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
 
-    uint64_t child_pml4 = PMM::alloc_page();
-    JARVIS_ASSERT(child_pml4 != 0);
+    size_t pml4_idx = (TEST_VA >> PML4_SHIFT) & 0x1FF;
+    size_t pdpt_idx = (TEST_VA >> PDPT_SHIFT) & 0x1FF;
+    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
+
+    auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                     (parent_pml4 & ~0xFFFULL));
     auto *child_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                     (child_pml4 & ~0xFFFULL));
+    auto *kern_virt = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
 
-    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
-        child_virt[i] = parent_virt[i];
-    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
-        child_virt[i] = kern_virt[i];
+    // User entries are present in both (deep copy preserved the mapping).
+    JARVIS_ASSERT(child_virt[pml4_idx] & PAGE_PRESENT);
+    // But the table pages differ: the child owns its own PDPT/PD/PT chain.
+    JARVIS_ASSERT((child_virt[pml4_idx] & ~0xFFFULL) !=
+                  (parent_virt[pml4_idx] & ~0xFFFULL));
+    auto *child_pdpt = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (child_virt[pml4_idx] & ~0xFFFULL));
+    auto *parent_pdpt = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (parent_virt[pml4_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((child_pdpt[pdpt_idx] & ~0xFFFULL) !=
+                  (parent_pdpt[pdpt_idx] & ~0xFFFULL));
 
-    // Verify user entries match parent
-    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
-        if (child_virt[i] != parent_virt[i]) {
-            JARVIS_FAIL("USER MISMATCH entry %u: child=0x%x parent=0x%x", i,
-                        child_virt[i], parent_virt[i]);
-        }
-    }
+    // The leaf data page differs too (deep copy of content).
+    uint64_t parent_leaf =
+        VMM::virt_to_phys_in_pml4(TEST_VA, parent_pml4);
+    uint64_t child_leaf = VMM::virt_to_phys_in_pml4(TEST_VA, child_pml4);
+    JARVIS_ASSERT(parent_leaf == user_page);
+    JARVIS_ASSERT(child_leaf != 0);
+    JARVIS_ASSERT(child_leaf != parent_leaf);
 
-    // Verify kernel entries match kernel PML4
+    // Kernel entries still mirror the kernel PML4 in the child.
     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
         if (child_virt[i] != kern_virt[i]) {
             JARVIS_FAIL("KERN MISMATCH entry %u: child=0x%x kernel=0x%x", i,
@@ -255,15 +247,11 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
         }
     }
 
-    // Clean up: free the user data page, page table pages, PML4 pages
-    // Note: parent and child share page table pages (pdpt, pd, pt).
-    // free_user_pages on either would skip them (kernel-owned), so we must
-    // free manually.
-    PMM::free_page(user_page);
-    PMM::free_page(pt);
-    PMM::free_page(pd);
-    PMM::free_page(pdpt);
+    // Teardown: free_user_pages on each address space reclaims its own
+    // USER-owned table pages + data (MP-7 unconditional semantics).
+    VMM::free_user_pages(child_pml4);
     PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
     PMM::free_page(parent_pml4);
     JARVIS_TEST_PASS();
 }
@@ -331,72 +319,109 @@ JARVIS_TEST(pml4_fork_no_child_corrupt_parent, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Verifies free_user_pages skips shared (kernel-owned) page table
-// pages.
-// Input: Create shared PML4 hierarchy, call free_user_pages on child
-// Expect: Only user data pages freed, shared page table pages remain
+// Testidea: v0.4.0 MP-7 — verifies deep_copy_user_pages() produces a
+// no-alias address space: the child's data frame AND its table pages
+// (PDPT/PD/PT) all differ from the parent's, and a write through the
+// child's frame does not disturb the parent's frame.
+// Input: Parent PML4 via clone_kernel_pml4; map a USER-owned data page at
+// TEST_VA via map_page_in_pml4 (user=true so the table pages are also
+// USER-owned and reclaimed by free_user_pages); deep_copy_user_pages into a
+// fresh child PML4.
+// Expect: virt_to_phys_in_pml4(TEST_VA, child) != parent phys; writing 0xA5
+// into the child frame via HHDM leaves the parent frame at its original
+// 0x5A; the child's PDPT page differs from the parent's.
+// Depends: kernel::memory::VMM, PMM
+JARVIS_TEST(pml4_deep_copy_no_alias, "PRE: none | POST: none") {
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+
+    constexpr uint64_t TEST_VA = 0x400000;
+    uint64_t parent_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(parent_phys != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *parent_frame =
+        reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + parent_phys);
+    parent_frame[0] = 0x5A;
+    VMM::map_page_in_pml4(TEST_VA, parent_phys, true, parent_pml4);
+
+    // Deep-copy user entries from parent to child.
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    // Data frames must differ: child has its own copy.
+    uint64_t child_phys = VMM::virt_to_phys_in_pml4(TEST_VA, child_pml4);
+    JARVIS_ASSERT(child_phys != 0);
+    JARVIS_ASSERT(child_phys != parent_phys);
+
+    // Write through the child's frame: parent frame must stay untouched.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *child_frame =
+        reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_phys);
+    child_frame[0] = 0xA5;
+    JARVIS_ASSERT(child_frame[0] == 0xA5);
+    JARVIS_ASSERT(parent_frame[0] == 0x5A);
+
+    // Table pages must differ too: the PML4 entries point to distinct PDPT
+    // pages.
+    auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                     (parent_pml4 & ~0xFFFULL));
+    auto *child_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    (child_pml4 & ~0xFFFULL));
+    size_t pml4_idx = (TEST_VA >> PML4_SHIFT) & 0x1FF;
+    JARVIS_ASSERT((parent_virt[pml4_idx] & ~0xFFFULL) !=
+                  (child_virt[pml4_idx] & ~0xFFFULL));
+
+    // Teardown: free_user_pages reclaims the USER-owned table pages AND the
+    // data page in each address space (MP-7 unconditional semantics).
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-7 — free_user_pages with deep-copy fork semantics:
+// tearing down the CHILD's address space frees only the child's own
+// USER-owned table pages + data; the parent's tables and data survive
+// untouched (no sharing, no double-free).
+// Input: Parent PML4 with a USER-owned mapping at 0x10000000; deep copy to
+// child; free_user_pages(child) + free_page(child PML4).
+// Expect: child's VA no longer resolves; parent's VA still resolves to its
+// own leaf; parent tables are distinct from the (freed) child tables.
 // Depends: kernel::memory::VMM, PMM
 JARVIS_TEST(pml4_free_user_pages_shared_safe, "PRE: none | POST: none") {
     uint64_t parent_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(parent_pml4 != 0);
-    auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                     (parent_pml4 & ~0xFFFULL));
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
 
-    // Create a user mapping in parent (using the fresh PML4)
-    uint64_t va = 0x10000000;
-    size_t pml4_idx = (va >> PML4_SHIFT) & 0x1FF;
-    uint64_t pdpt = PMM::alloc_page_table();
-    uint64_t pd = PMM::alloc_page_table();
-    uint64_t pt = PMM::alloc_page_table();
-    JARVIS_ASSERT(pdpt != 0 && pd != 0 && pt != 0);
-
-    parent_virt[pml4_idx] = pdpt | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-    auto *pdpt_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt);
-    pdpt_v[(va >> PDPT_SHIFT) & 0x1FF] =
-        pd | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-    auto *pd_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd);
-    pd_v[(va >> PD_SHIFT) & 0x1FF] = pt | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
-
+    constexpr uint64_t va = 0x10000000;
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
-    auto *pt_v = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt);
-    pt_v[(va >> PT_SHIFT) & 0x1FF] =
-        user_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+    VMM::map_page_in_pml4(va, user_page, true, parent_pml4);
 
-    // Simulate fork child that shares parent's page tables
-    uint64_t child_pml4 = PMM::alloc_page();
-    auto *child_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (child_pml4 & ~0xFFFULL));
-    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
-        child_virt[i] = parent_virt[i];
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
 
-    // free_user_pages on child should not crash. It skips kernel-owned
-    // page table pages (pdpt, pd, pt) — the user data page is behind them
-    // and is NOT reached (by design: shared fork page tables must not
-    // corrupt the parent's mappings).
+    uint64_t parent_leaf = VMM::virt_to_phys_in_pml4(va, parent_pml4);
+    uint64_t child_leaf = VMM::virt_to_phys_in_pml4(va, child_pml4);
+    JARVIS_ASSERT(parent_leaf == user_page);
+    JARVIS_ASSERT(child_leaf != 0);
+    JARVIS_ASSERT(child_leaf != parent_leaf);
+
+    // Tear down the CHILD address space completely.
     VMM::free_user_pages(child_pml4);
-
-    // Page table pages remain allocated (kernel-owned, never freed by
-    // free_user_pages)
-    // The data page also remains because free_user_pages cannot reach it
-    // through kernel-owned page tables.
-    JARVIS_ASSERT(PMM::is_user_page(pdpt) == false);
-    JARVIS_ASSERT(PMM::is_user_page(pd) == false);
-    JARVIS_ASSERT(PMM::is_user_page(pt) == false);
-
-    // Parent's PML4 entry is untouched
-    JARVIS_ASSERT((parent_virt[pml4_idx] & ~0xFFFULL) == pdpt);
-
-    // Clean up manually: unmap in reverse order, free data + page tables
-    pt_v[(va >> PT_SHIFT) & 0x1FF] = 0;
-    PMM::free_page(user_page);
-    pd_v[(va >> PD_SHIFT) & 0x1FF] = 0;
-    PMM::free_page(pt);
-    pdpt_v[(va >> PDPT_SHIFT) & 0x1FF] = 0;
-    PMM::free_page(pd);
-    parent_virt[pml4_idx] = 0;
-    PMM::free_page(pdpt);
     PMM::free_page(child_pml4);
+
+    // The child's VA must be gone (its USER-owned tables + data reclaimed).
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, child_pml4) == 0);
+
+    // The parent is untouched: same leaf, still mapped.
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, parent_pml4) == user_page);
+
+    // Parent teardown reclaims its own USER-owned tables + data.
+    VMM::free_user_pages(parent_pml4);
     PMM::free_page(parent_pml4);
     JARVIS_TEST_PASS();
 }
@@ -439,6 +464,7 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(pml4_clone_kernel_entries_match);
     JARVIS_REGISTER_TEST(pml4_fork_user_entries_match);
     JARVIS_REGISTER_TEST(pml4_fork_no_child_corrupt_parent);
+    JARVIS_REGISTER_TEST(pml4_deep_copy_no_alias);
     JARVIS_REGISTER_TEST(pml4_free_user_pages_shared_safe);
     JARVIS_REGISTER_TEST(pml4_dump_no_user_entries);
 }

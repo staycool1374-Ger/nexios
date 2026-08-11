@@ -363,6 +363,10 @@ def validate(cfg: dict[str, int]):
     check_bool("CONFIG_STACK_OVERFLOW_HOOK", cfg.get("CONFIG_STACK_OVERFLOW_HOOK", 0))
     check_bool("CONFIG_OOM_HOOK", cfg.get("CONFIG_OOM_HOOK", 0))
     check_bool("CONFIG_INIT_HOOK", cfg.get("CONFIG_INIT_HOOK", 0))
+    # v0.4.0 MP-3/MP-4: sentinel canaries + SMEP/SMAP (SMAP deferred).
+    check_bool("CONFIG_CANARY_GUARD", cfg.get("CONFIG_CANARY_GUARD", 1))
+    check_bool("CONFIG_SMEP", cfg.get("CONFIG_SMEP", 1))
+    check_bool("CONFIG_SMAP", cfg.get("CONFIG_SMAP", 0))
     check_bool("CONFIG_SPORADIC_SERVER_DEADLINE_HOOK",
                cfg.get("CONFIG_SPORADIC_SERVER_DEADLINE_HOOK", 1))
 

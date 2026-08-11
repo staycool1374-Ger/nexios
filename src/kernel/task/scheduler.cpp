@@ -2260,6 +2260,22 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     // and not current after the switch) and next_task() falls through to idle,
     // freezing the `all` suite.  enqueue_ready() refuses double-enqueues, so
     // this is safe even if the harness is already queued.
+
+#if CONFIG_CANARY_GUARD
+    // v0.4.0 MP-3: verify the current task's kernel-stack canary on every
+    // context switch — pure read at kernel_stack[0..8), already under the
+    // scheduler lock.  A mismatch means the stack base was overwritten (deep
+    // stack growth / corruption): controlled panic, never silent corruption.
+    // Runs BEFORE the deferred-switch arm (H2) so the panic cannot be masked.
+    if (!canary_verify_kernel_stack(current)) {
+        kernel::Logger::fatal(
+            "CANARY TRIP (kernel stack): task '%s' id=%u top=0x%lx",
+            current->name, static_cast<unsigned>(current->id),
+            current->kernel_stack_top);
+        panic("kernel-stack canary violated");
+    }
+#endif
+
     if (current->state == TaskState::RUNNING || cur_is_boot_stack) {
         current->state = TaskState::READY;
         Scheduler::enqueue_ready(*current);
@@ -2323,6 +2339,22 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     auto *current = current_task();
     if (!current || current->magic != TaskControlBlock::TCB_MAGIC)
         return;
+
+#if CONFIG_CANARY_GUARD
+    // v0.4.0 MP-3: per-tick kernel-stack canary check.  Pure read under the
+    // scheduler lock; catches a corrupted stack base within one tick.  This
+    // per-tick probe also serves as the documented H2-residual timing mask
+    // (docs/_archive/ipc_blocking-analysis.md §H2: a single per-tick
+    // instruction changed the boot interleaving and masked the residual
+    // 25/25 runs).
+    if (!canary_verify_kernel_stack(current)) {
+        kernel::Logger::fatal(
+            "CANARY TRIP (kernel stack, tick): task '%s' id=%u top=0x%lx",
+            current->name, static_cast<unsigned>(current->id),
+            current->kernel_stack_top);
+        panic("kernel-stack canary violated");
+    }
+#endif
 
     // BUGS.md#021: during the test cycle, do NOT preemptively switch away from
     // the harness (init_task, PID 1) while it is RUNNING.  The harness runs the

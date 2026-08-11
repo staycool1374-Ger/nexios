@@ -191,6 +191,12 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
                                     const uint8_t *file_data, uint64_t pml4,
                                     uint64_t *out_ustack_phys,
                                     uint64_t file_size = 0) {
+    // v0.4.0 MP-2: the highest PT_LOAD end must leave at least one unmapped
+    // page before the heap, and the whole user region (heap + stack) must fit
+    // below STACK_VADDR.  Absolute vaddr load-bearing: we cannot insert gaps
+    // BETWEEN segments, so the red-zone validation is end-to-end.
+    uint64_t max_seg_end = 0;
+
     for (uint16_t i = 0; i < hdr->phnum; ++i) {
         auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
             file_data + hdr->phoff + static_cast<uint64_t>(i) * hdr->phentsize);
@@ -203,6 +209,9 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
         uint64_t vaddr_end = page_align_up(phdr->vaddr + phdr->memsz);
         uint64_t region_size = vaddr_end - vaddr_base;
         size_t num_pages = region_size / arch::PAGE_SIZE;
+
+        if (vaddr_end > max_seg_end)
+            max_seg_end = vaddr_end;
 
         uint64_t seg_phys = PMM::alloc_user_contiguous(num_pages);
         if (!seg_phys)
@@ -226,6 +235,30 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
             memset(reinterpret_cast<void *>(zero_offset), 0,
                    phdr->memsz - phdr->filesz);
         }
+    }
+
+    // v0.4.0 MP-2 red-zone validation (honest scope): one unmapped page must
+    // separate the highest loaded segment from the heap, and the initial heap
+    // must fit entirely below the user stack region (guard page at
+    // STACK_VADDR).  Violation → load fails (caller tears down the partial
+    // address space).
+    if (max_seg_end > mem::HEAP_VADDR) {
+        Logger::warn("ELF load rejected: segment end 0x%lx past heap base "
+                     "0x%lx",
+                     max_seg_end, mem::HEAP_VADDR);
+        return false;
+    }
+    if (mem::HEAP_VADDR < max_seg_end + arch::PAGE_SIZE) {
+        Logger::warn("ELF load rejected: no red-zone page between segment end "
+                     "0x%lx and heap 0x%lx",
+                     max_seg_end, mem::HEAP_VADDR);
+        return false;
+    }
+    if (mem::HEAP_VADDR + INITIAL_HEAP_SIZE > mem::STACK_VADDR) {
+        Logger::warn("ELF load rejected: heap+initial size overruns user "
+                     "stack base 0x%lx",
+                     mem::STACK_VADDR);
+        return false;
     }
 
     size_t ustack_pages = (mem::STACK_SIZE + 4095) / arch::PAGE_SIZE;
@@ -351,6 +384,11 @@ static void open_std_fds(TaskControlBlock &tcb) {
     }
 }
 
+static void install_segment_canaries(TaskControlBlock *tcb,
+                                     const ELF64Header *hdr,
+                                     const uint8_t *file_data,
+                                     uint64_t file_size);
+
 TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
                        uint64_t file_size) {
     if (!validate_header(hdr))
@@ -371,7 +409,6 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     tcb->remaining_ticks = 0;
     tcb->deadline_ticks = arch::Timer::ticks();
     tcb->page_table_ = 0;
-    tcb->page_table_shared_ = false;
     tcb->stack_phys_ = 0;
     tcb->kernel_stack = nullptr;
     tcb->kernel_stack_top = 0;
@@ -406,6 +443,7 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
         return nullptr;
     }
     tcb->page_table_ = pml4;
+    tcb->is_user_ = true;
 
     uint64_t ustack_phys = 0;
     if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
@@ -468,7 +506,72 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
+    // v0.4.0 MP-3: arm segment-boundary canaries (TEXT/DATA/STACK/HEAP +
+    // kernel-stack) after the address space is fully mapped.
+    install_segment_canaries(tcb, hdr, file_data, file_size);
+
     return tcb;
+}
+
+/// @brief Install v0.4.0 MP-3 segment-boundary canaries for a freshly loaded
+///        ELF address space: TEXT = first R E PT_LOAD (before at the region
+///        base — the consumed ELF header — and after at the mapped page
+///        padding), DATA = last RW PT_LOAD after-canary at mapped-page
+///        padding only.  A canary is only written where the slot bytes are
+///        NOT part of the segment payload (page padding), so no loaded data
+///        is corrupted.  Also arms the stack/heap + kernel-stack canaries.
+static void install_segment_canaries(TaskControlBlock *tcb,
+                                     const ELF64Header *hdr,
+                                     const uint8_t *file_data,
+                                     uint64_t file_size) {
+    const uint64_t text = TaskControlBlock::SEG_TEXT;
+    const uint64_t data = TaskControlBlock::SEG_DATA;
+    uint64_t text_base = 0, text_after = 0, data_after = 0;
+
+    for (uint16_t i = 0; i < hdr->phnum; ++i) {
+        auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+            file_data + hdr->phoff +
+            static_cast<uint64_t>(i) * hdr->phentsize);
+        if (!phdr || phdr->type != PT_LOAD)
+            continue;
+        if (!validate_segment(phdr, file_size))
+            continue;
+
+        const uint64_t region_end = page_align_up(phdr->vaddr + phdr->memsz);
+        const uint64_t after_va = region_end - 8;
+        const bool in_padding = after_va >= phdr->vaddr + phdr->memsz;
+
+        if ((phdr->flags & PF_X) && !text_base) {
+            text_base = page_align_down(phdr->vaddr);
+            text_after = in_padding ? after_va : 0;
+        } else if (phdr->flags & PF_W) {
+            data_after = in_padding ? after_va : 0;
+        }
+    }
+
+    if (text_base) {
+        tcb->canary_before[text] = text_base;
+        canary_write_at(text_base,
+                        TaskControlBlock::CANARY_MAGIC ^ (text + 1),
+                        tcb->page_table_);
+        tcb->canary_installed |= (1u << text);
+    }
+    if (text_after) {
+        tcb->canary_after[text] = text_after;
+        canary_write_at(text_after,
+                        TaskControlBlock::CANARY_MAGIC ^ (text + 1),
+                        tcb->page_table_);
+    }
+    if (data_after) {
+        tcb->canary_after[data] = data_after;
+        canary_write_at(data_after,
+                        TaskControlBlock::CANARY_MAGIC ^ (data + 1),
+                        tcb->page_table_);
+        tcb->canary_installed |= (1u << data);
+    }
+
+    canary_install_user_segments(tcb);
+    canary_install_kernel_stack(tcb);
 }
 
 bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
@@ -507,9 +610,8 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     BufferPool::unmap_all(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
-    bool old_shared = tcb->page_table_shared_;
     tcb->page_table_ = new_pml4;
-    tcb->page_table_shared_ = false;
+    tcb->is_user_ = true;
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = mem::STACK_SIZE;
     tcb->program_break_start = mem::HEAP_VADDR;
@@ -563,11 +665,12 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
         arch::write_cr3(new_pml4);
     }
 
+    // v0.4.0 MP-3: arm segment-boundary canaries in the new address space.
+    install_segment_canaries(tcb, hdr, data, file_size);
+
     if (old_pml4 && old_pml4 != VMM::get_kernel_pml4()) {
-        if (!old_shared) {
-            VMM::free_user_pages(old_pml4);
-            PMM::free_page(old_pml4);
-        }
+        VMM::free_user_pages(old_pml4);
+        PMM::free_page(old_pml4);
     }
 
     return true;
