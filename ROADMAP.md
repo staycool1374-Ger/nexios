@@ -1,4 +1,4 @@
-# Jarvis RTOS — Development Roadmap
+# NexIOS RTOS — Development Roadmap
 
 **Build:** v0.3.13-dev | **Last Release:** v0.3.12 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.3.12)
 
