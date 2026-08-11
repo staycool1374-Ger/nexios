@@ -25,7 +25,7 @@
 
 /// @brief Kernel version — single source of truth.
 /// Format: "vmajor.minor.patch-stage"
-#define KERNEL_VERSION_STRING "v0.3.12"
+#define KERNEL_VERSION_STRING "v0.3.13-dev"
 
 namespace kernel {
 
@@ -34,8 +34,8 @@ namespace kernel {
 struct Version {
     static constexpr unsigned major = 0;
     static constexpr unsigned minor = 3;
-    static constexpr unsigned patch = 12;
-    static constexpr const char* stage = "";
+    static constexpr unsigned patch = 13;
+    static constexpr const char* stage = "dev";
 
     static const char* string();
     static const char* build_date();
