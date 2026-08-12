@@ -57,8 +57,10 @@ struct PipeBuffer : public KernelObject {
 
     /// @brief Final teardown on the last release: releases the pipe-buffer
     ///        ResourceTracker slot and returns the block to the MemPool.
-    ///        Must NOT invoke ~Semaphore (the data_avail dtor asserts on
-    ///        non-zero waiter/count and would trip at teardown).
+    ///        Semaphore has no user-defined destructor (its members are
+    ///        trivial), so freeing without invoking it is safe; waiters are
+    ///        drained by the close paths (post() + closed flags) before the
+    ///        last release.  On SMP, drain must be synchronized with dispose.
     void dispose() noexcept override {
         kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
         MemPool::free(this);
