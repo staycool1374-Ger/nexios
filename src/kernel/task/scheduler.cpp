@@ -188,6 +188,30 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
 }
 
 void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    // H2 enqueue liveness audit (cold): dump when a task is enqueued into the
+    // runq that is no longer a live id_table member (already removed/terminated)
+    // — the source of the orphan runq node next_task() later returns.
+    {
+        auto *t = Scheduler::find_task(task.id);
+        if (!t || t != &task) {
+            kernel::Logger::raw_write("[H2-ENQDEAD] id=");
+            kernel::Logger::print_dec(task.id);
+            kernel::Logger::raw_write(" st=");
+            kernel::Logger::print_dec(static_cast<uint64_t>(task.state));
+            kernel::Logger::raw_write(" inrq=");
+            kernel::Logger::print_dec(task.in_ready_queue_ ? 1u : 0u);
+            kernel::Logger::raw_write(" ra=0x");
+            kernel::Logger::print_hex(
+                reinterpret_cast<uint64_t>(__builtin_return_address(0)));
+            kernel::Logger::raw_write(" tcb=0x");
+            kernel::Logger::print_hex(reinterpret_cast<uint64_t>(&task));
+            kernel::Logger::raw_write(" tick=");
+            kernel::Logger::print_dec(arch::Timer::ticks());
+            kernel::Logger::raw_write("\n");
+        }
+    }
+#endif
     ready_queue_.enqueue(task, effective_priority(&task));
 }
 
@@ -476,6 +500,22 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    if (task.id == 6) {
+        auto *cur = current_task();
+        kernel::Logger::raw_write("[H2-TERM6] cur=");
+        kernel::Logger::print_dec(cur ? cur->id : 0u);
+        kernel::Logger::raw_write(" st=");
+        kernel::Logger::print_dec(static_cast<uint64_t>(task.state));
+        kernel::Logger::raw_write(" inrq=");
+        kernel::Logger::print_dec(task.in_ready_queue_ ? 1u : 0u);
+        kernel::Logger::raw_write(" rq_prio=");
+        kernel::Logger::print_dec(task.rq_priority_);
+        kernel::Logger::raw_write(" tick=");
+        kernel::Logger::print_dec(arch::Timer::ticks());
+        kernel::Logger::raw_write("\n");
+    }
+#endif
     dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;
@@ -2296,6 +2336,28 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             H2_REC(H2_EV_IDLE_ARM, current->id, 0, 0);
         }
         __atomic_store_n(&scheduler_next_task_id, next.id, __ATOMIC_RELEASE);
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+        // H2 arm-time liveness audit (cold): dump when a deferred-switch arm
+        // is published to a target that is NOT a live id_table member — i.e.
+        // the arm is stale at publish time (task already removed).
+        {
+            auto *tgt = Scheduler::find_task(next.id);
+            if (!tgt || tgt != &next) {
+                kernel::Logger::raw_write("[H2-ARMDEAD] cur=");
+                kernel::Logger::print_dec(current->id);
+                kernel::Logger::raw_write(" next=");
+                kernel::Logger::print_dec(next.id);
+                kernel::Logger::raw_write(" tgt=");
+                kernel::Logger::print_hex(reinterpret_cast<uint64_t>(tgt));
+                kernel::Logger::raw_write(" st=");
+                kernel::Logger::print_dec(
+                    static_cast<uint64_t>(next.state));
+                kernel::Logger::raw_write(" tick=");
+                kernel::Logger::print_dec(arch::Timer::ticks());
+                kernel::Logger::raw_write("\n");
+            }
+        }
+#endif
         // Generation-lock: commit the deferred-switch pair.  The generation is
         // bumped only after load_rsp_from / load_cr3_from / next_task_id are
         // visible (all written before this IRQ-guarded block), and the arm
@@ -3097,6 +3159,76 @@ extern "C" void scheduler_diag_pre_save() {
 #endif
 }
 
+/// @brief ISR-epilogue depth-skip hook (isr_stubs.asm:133-134).  Fires when a
+///        pending deferred-switch apply is skipped because the ISR nesting
+///        depth exceeds 2.  Cold path.  Dumps the arm target + the RFLAGS the
+///        interrupted task will return to (H2 IF=0 freeze hypothesis).
+/// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
+extern "C" void scheduler_diag_depth_skip() {
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+                                  __ATOMIC_ACQUIRE);
+    uint64_t rfl = 0;
+    asm volatile("pushfq; pop %0" : "=r"(rfl));
+    kernel::Logger::raw_write("[H2-DEPTH] id=");
+    kernel::Logger::print_dec(id);
+    kernel::Logger::raw_write(" depth=");
+    kernel::Logger::print_dec(
+        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+    kernel::Logger::raw_write(" rfl=0x");
+    kernel::Logger::print_hex(rfl);
+    kernel::Logger::raw_write(" if=");
+    kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
+    kernel::Logger::raw_write(" tick=");
+    kernel::Logger::print_dec(arch::Timer::ticks());
+    kernel::Logger::raw_write("\n");
+#else
+    (void)0;
+#endif
+}
+
+/// @brief ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275).  Fires
+///        when a pending deferred-switch apply is aborted because the loaded
+///        RSP lies outside [scheduler_load_kstack_base, top) — the asm-side
+///        stale/foreign-frame guard.  Cold path.  Dumps the rejected RSP, the
+///        kstack range, the arm target, and the RFLAGS the interrupted task
+///        will return to (H2 IF=0 freeze hypothesis).
+/// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
+extern "C" void scheduler_diag_rsp_abort() {
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+                                  __ATOMIC_ACQUIRE);
+    uint64_t rsp = __atomic_load_n(&kernel::scheduler_load_rsp_from,
+                                   __ATOMIC_ACQUIRE);
+    uint64_t base = __atomic_load_n(&kernel::scheduler_load_kstack_base,
+                                    __ATOMIC_ACQUIRE);
+    uint64_t top = __atomic_load_n(&kernel::scheduler_load_kstack_top,
+                                   __ATOMIC_ACQUIRE);
+    uint64_t rfl = 0;
+    asm volatile("pushfq; pop %0" : "=r"(rfl));
+    kernel::Logger::raw_write("[H2-RSPABORT] id=");
+    kernel::Logger::print_dec(id);
+    kernel::Logger::raw_write(" rsp=0x");
+    kernel::Logger::print_hex(rsp);
+    kernel::Logger::raw_write(" base=0x");
+    kernel::Logger::print_hex(base);
+    kernel::Logger::raw_write(" top=0x");
+    kernel::Logger::print_hex(top);
+    kernel::Logger::raw_write(" depth=");
+    kernel::Logger::print_dec(
+        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+    kernel::Logger::raw_write(" rfl=0x");
+    kernel::Logger::print_hex(rfl);
+    kernel::Logger::raw_write(" if=");
+    kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
+    kernel::Logger::raw_write(" tick=");
+    kernel::Logger::print_dec(arch::Timer::ticks());
+    kernel::Logger::raw_write("\n");
+#else
+    (void)0;
+#endif
+}
+
 namespace kernel {
 using namespace errors;
 
@@ -3168,9 +3300,35 @@ SchedulerError Scheduler::alloc_id_err(uint64_t &out_id) {
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_record_skip(uint64_t captured_gen,
                                       uint64_t current_gen) {
-    (void)captured_gen;
-    (void)current_gen;
     H2_REC(kernel::H2_EV_SKIP, captured_gen, current_gen, 0);
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    // H2 apply-skip audit (cold: fires only when the generation re-check
+    // rejects a deferred-switch apply).  Dump the arm target, ISR depth and
+    // the RFLAGS the interrupted task will return to (tests the IF=0
+    // hypothesis for the freeze: the harness's hlt() must not run with IF off).
+    {
+        uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+                                      __ATOMIC_ACQUIRE);
+        uint64_t rfl = 0;
+        asm volatile("pushfq; pop %0" : "=r"(rfl));
+        kernel::Logger::raw_write("[H2-SKIP] cap=0x");
+        kernel::Logger::print_hex(captured_gen);
+        kernel::Logger::raw_write(" cur=0x");
+        kernel::Logger::print_hex(current_gen);
+        kernel::Logger::raw_write(" id=");
+        kernel::Logger::print_dec(id);
+        kernel::Logger::raw_write(" depth=");
+        kernel::Logger::print_dec(
+            __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+        kernel::Logger::raw_write(" rfl=0x");
+        kernel::Logger::print_hex(rfl);
+        kernel::Logger::raw_write(" if=");
+        kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
+        kernel::Logger::raw_write(" tick=");
+        kernel::Logger::print_dec(arch::Timer::ticks());
+        kernel::Logger::raw_write("\n");
+    }
+#endif
 }
 
 extern "C" int scheduler_validate_pending_switch() {
@@ -3218,6 +3376,15 @@ extern "C" int scheduler_validate_pending_switch() {
     auto *t = kernel::Scheduler::find_task(id);
     if (!t || t->magic != kernel::TaskControlBlock::TCB_MAGIC) {
         // Target removed/freed — a stale arm to a dead task.  Drop it.
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+        kernel::Logger::raw_write("[H2-DEAD] id=");
+        kernel::Logger::print_dec(id);
+        kernel::Logger::raw_write(" t=");
+        kernel::Logger::print_hex(reinterpret_cast<uint64_t>(t));
+        kernel::Logger::raw_write(" tick=");
+        kernel::Logger::print_dec(arch::Timer::ticks());
+        kernel::Logger::raw_write("\n");
+#endif
         drop_arm(nullptr);
         return 0;
     }
@@ -3234,6 +3401,21 @@ extern "C" int scheduler_validate_pending_switch() {
         // Stale arm: the published RSP no longer lies inside the target's
         // CURRENT kernel stack (it drifted to a foreign/direct-map address —
         // the H2 displacement).  Drop the arm and re-enqueue the target.
+        kernel::Logger::raw_write("[H2-ABORT] id=");
+        kernel::Logger::print_dec(t->id);
+        kernel::Logger::raw_write(" st=");
+        kernel::Logger::print_dec(static_cast<uint64_t>(t->state));
+        kernel::Logger::raw_write(" inrq=");
+        kernel::Logger::print_dec(t->in_ready_queue_ ? 1u : 0u);
+        kernel::Logger::raw_write(" rsp=0x");
+        kernel::Logger::print_hex(rsp);
+        kernel::Logger::raw_write(" base=0x");
+        kernel::Logger::print_hex(base);
+        kernel::Logger::raw_write(" top=0x");
+        kernel::Logger::print_hex(top);
+        kernel::Logger::raw_write(" tick=");
+        kernel::Logger::print_dec(arch::Timer::ticks());
+        kernel::Logger::raw_write("\n");
         drop_arm(t);
         return 0;
     }
@@ -3279,6 +3461,29 @@ extern "C" void scheduler_on_context_switch() {
     auto *t = kernel::Scheduler::find_task(id);
     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
         kernel::Scheduler::set_current_task(t);
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    // H2 apply-side frame audit (cold: fires only when a deferred switch
+    // APPLIES to the harness).  The ISR epilogue has just loaded the harness's
+    // context.rsp as the iret frame — dump its content to see whether the
+    // harness resumes at a valid arch_hlt wait-loop frame or at stale test code.
+    if (id == 1) {
+        uint64_t nsp = TASK_STACK_PTR(t);
+        const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+        kernel::Logger::raw_write("[H2-APPLY] id=1 ctx.rsp=0x");
+        kernel::Logger::print_hex(nsp);
+        kernel::Logger::raw_write(" rip=0x");
+        kernel::Logger::print_hex(f[136 / 8]);
+        kernel::Logger::raw_write(" cs=0x");
+        kernel::Logger::print_hex(f[144 / 8]);
+        kernel::Logger::raw_write(" rfl=0x");
+        kernel::Logger::print_hex(f[152 / 8]);
+        kernel::Logger::raw_write(" frsp=0x");
+        kernel::Logger::print_hex(f[160 / 8]);
+        kernel::Logger::raw_write(" ss=0x");
+        kernel::Logger::print_hex(f[168 / 8]);
+        kernel::Logger::raw_write("\n");
+    }
+#endif
 #if defined(CONFIG_SNAPSHOT_CANARY_WATCH)
     // Snapshot-canary watchdog on every context switch (DEBUG): catches a
     // stray write into the snapshot buffer within one switch of occurring,

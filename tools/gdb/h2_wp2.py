@@ -9,13 +9,13 @@ import sys
 
 import lldb
 
-CPU_CTX = 0xFFFF800000476B20          # kernel::current_cpu()::cpu (CpuContext)
+CPU_CTX = 0xFFFF8000004A9C60          # kernel::current_cpu()::cpu (CpuContext)
 OFF_ID = 0x360
 OFF_STATE = 0x370
 OFF_CTX_RSP = 0x478
 OFF_KST = 0x488
 OFF_KST_TOP = 0x490
-TICKS = 0xFFFF800000476B30            # CpuContext.ticks (+0x10)
+TICKS = 0xFFFF8000004A9C70            # CpuContext.ticks (+0x10)
 
 
 def rd(tgt, addr):

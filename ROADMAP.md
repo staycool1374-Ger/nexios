@@ -294,6 +294,53 @@ reworked class to 0 failures with zero ResourceTracker delta; `selftest`
 (RESOLVED), ~~IrqGuard guardrails (v0.3.12)~~ (RESOLVED), SMP (0.4.x APIC
 boot), microkernel capability foundation (0.4.x), and userspace ABI (0.5.x).
 
+---
+
+## H2 Deferred-Switch Race — RE-OPENED (v0.4.0-dev)
+
+**Note (2026-08-12):** the §v0.3.9 "H2 RESOLVED" status was premature.  The
+`ipc_core` class wedges at test 21 `ipc_send_sync_roundtrip` (~50%, reproduced
+repeatedly on `main` @ `464f1fbc` / `testbed` @ `a2750bd2`).  Fix for this
+version with the directions below.  Full evidence + instrumentation in
+`audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §6.
+
+**Root cause (pinned, 2026-08-12):** the harness's stored `context.rsp` can be a
+stale frame pointing into a test body's **setup path** (not the wait loop).  On
+resume the harness re-executes `yield_to_task(task)`'s
+`Scheduler::enqueue_ready(task)` (test_sched_helpers.hpp:80) on a task that has
+already self-terminated and been removed from `id_table` — recreating an orphan
+runq node.  `next_task()` returns it, the harness arms a deferred switch to it,
+the apply-side `find_task(id)==NULL` drops the arm, and the harness hlt-waits
+forever (timer fires but no task is ever runnable → no more `[TICK]`).
+
+Trace chain (one failing run, cold-path diagnostics):
+`[H2-TERM6] → [H2-APPLY] stale frame → [H2-ENQDEAD] ra=yield_to_task → [SW]
+cur=1 next=6 → [H2-ARMDEAD]/[H2-DEAD] find_task(6)==NULL → silence`.
+
+**Fix directions (implement one or more for v0.4.0):**
+1. **Refuse enqueue on removed tasks (defense-in-depth, minimal).**
+   In `Scheduler::enqueue_ready`/`set_task_ready`, if
+   `find_task(task.id) != &task`, drop the enqueue (the scheduler no longer owns
+   the TCB) instead of inserting an orphan node.  Neutralizes the orphan
+   regardless of which stale path resurrects it.
+2. **`next_task()` liveness guard.**  Skip/remove runq candidates whose id is
+   not in `id_table` (belt-and-braces at selection time, mirroring §1.2's
+   stale-arm-to-removed-task guard but on the selection side).
+3. **Prevent the stale-frame resume.**  The harness's `context.rsp` must not be
+   restored/re-pointed to a test-body setup frame; keep it at a valid
+   wait-loop `arch_hlt` frame across `restore_task_fields` and the save path.
+   (Hardest; prior §4.6/§Option-1 attempts to re-point it regressed the race —
+   validate carefully.)
+4. **Harness wait-loop resilience (test-side).**  Ensure test-21 (and any
+   `yield_to_task` user) never re-runs `yield_to_task` on a task that may have
+   terminated; document the deferred-enqueue hazard in `test_sched_helpers.hpp`.
+
+**Validation:** `make build` clean (check-style Errors: 0); `ipc_core` 23/23
+across ≥ 10 consecutive runs (pre-fix ~50% hang); `all-1` reaches tests 485+
+(pml4_clone, BUGS.md #21) without a hang; then the `all` gate per the debug
+procedure.  Append a `test-history.txt` row after every class run.
+
+
 ## Past Releases
 
 See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.12 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak, Fine-Grained Lock & Safety-Guardrail Enforcement).
