@@ -1289,9 +1289,16 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     kernel::test::ResourceTracker::instance().track_event_group_add();
 
 
-    // Copy fd_table
+    // Copy fd_table.  Each copied used vnode gets a vnode_ref_inc (mirrors the
+    // dup2/open/dup discipline): the child owns an independent reference and
+    // must decrement it at cleanup.  Without the bump a forked child
+    // over-decrements vnodes at teardown -> premature vnode close -> double
+    // release of a shared object (e.g. a pipe's PipeBuffer) once it is
+    // reference-counted.
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         tcb->fd_table.fds[i] = parent->fd_table.fds[i];
+        if (tcb->fd_table.fds[i].used && tcb->fd_table.fds[i].vnode)
+            vfs::vnode_ref_inc(tcb->fd_table.fds[i].vnode);
     }
 
     // Copy cwd

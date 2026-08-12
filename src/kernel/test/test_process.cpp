@@ -30,6 +30,7 @@
 #include <scope_guard.hpp>
 #include <constants.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
+#include <kernel/vfs/pipe.hpp>
 
 using namespace kernel;
 
@@ -600,6 +601,65 @@ JARVIS_TEST(process_kernel_half_private, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A forked child copies the parent's fd_table; every copied used
+// vnode must receive a vnode_ref_inc so the child's cleanup does not
+// over-decrement and prematurely close a shared object (a pipe's PipeBuffer).
+// Regression guard for the clone fd-copy fix: without the vnode_ref_inc the
+// child over-releases at teardown and a refcounted pipe buffer is disposed
+// twice (or its ResourceTracker delta goes negative).
+// Input: Kernel task creates a pipe, clones a child (fd table copied with
+//        vnode_ref_inc), then both ends are closed in parent + child.
+// Expect: pipe closes cleanly exactly once, zero ResourceTracker delta.
+JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
+    static volatile int g_ret = -1;
+
+    auto *parent = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            int fds[2];
+            int ret = vfs::create_pipe(fds);
+            if (ret != 0)
+                return;
+            g_ret = 0;
+
+            uint64_t regs[22] = {};
+            regs[17] = 0x1000;
+            regs[18] = arch::SEG_USER_CODE;
+            regs[19] = arch::RFLAGS_DEFAULT;
+            regs[20] = 0x80000000;
+            regs[21] = arch::SEG_USER_DATA;
+
+            // clone() copies the fd_table (with vnode_ref_inc on each used
+            // vnode).  The child is never add_task'd; cleanup + delete frees
+            // its copied fds (each decs the pipe vnode -> pb release).
+            auto *child = TaskControlBlock::clone(regs);
+            if (child == nullptr)
+                return;
+            // Child closes its copy of both pipe ends.
+            child->fd_table.free(fds[0]);
+            child->fd_table.free(fds[1]);
+            child->cleanup();
+            delete child;
+
+            // Parent closes its ends; the pb refcount (read+write ends, both
+            // copied) must now hit zero exactly once -> dispose.
+            self->fd_table.free(fds[0]);
+            self->fd_table.free(fds[1]);
+        },
+        11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->is_user_ = true;
+    parent->user_stack_ = 0x80000000;
+    parent->user_stack_size_ = 32_KiB;
+    Scheduler::add_task(*parent);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(parent);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(0, static_cast<int>(g_ret));
+    JARVIS_TEST_PASS();
+}
+
 void register_process_tests() {
     Logger::info("Registering process tests");
     JARVIS_REGISTER_TEST(process_add_child);
@@ -618,5 +678,6 @@ void register_process_tests() {
     JARVIS_REGISTER_TEST(process_clone_child_table_independent);
     JARVIS_REGISTER_TEST(process_clone_teardown_zero_delta);
     JARVIS_REGISTER_TEST(process_kernel_half_private);
+    JARVIS_REGISTER_TEST(process_clone_pipe_fd_refcount);
 }
 #endif
