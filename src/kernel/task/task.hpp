@@ -32,7 +32,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
-#include <kernel/memory/refcounted.hpp>
+#include <kernel/memory/kernel_object.hpp>
 #include <signal.hpp>
 
 namespace kernel {
@@ -389,14 +389,14 @@ struct TaskControlBlock {
     int32_t buf_list_head;
 
     /// @brief Head of the intrusive doubly-linked list of heap-allocated,
-    /// pool-backed RefCounted objects owned by this task (e.g. its
+    /// pool-backed KernelObject objects owned by this task (e.g. its
     /// SporadicServer).  The list is the single source of truth for
     /// per-task object lifecycle: teardown walks this list and releases
     /// every node; snapshot restore detaches every node without releasing.
     /// Only mutated outside IRQ context (before add_task, or inside
     /// cleanup() under scheduler_lock_ / IrqGuard).
-    RefCounted *task_obj_head_;
-    RefCounted *task_obj_tail_;
+    KernelObject *task_obj_head_;
+    KernelObject *task_obj_tail_;
 
     /// @brief Linked-list pointers for the blocked-sender chain
     /// (singly linked via next).
@@ -561,13 +561,13 @@ struct TaskControlBlock {
     /// @brief Attaches @p obj to this task's intrusive object list.
     ///        The task takes ownership of exactly one reference
     ///        (refcount == 1 at attach).  O(1), head insert.
-    void attach_object(RefCounted *obj) noexcept;
+    void attach_object(KernelObject *obj) noexcept;
 
     /// @brief Unlinks @p obj from this task's object list WITHOUT releasing
     ///        it.  O(1).  Used when ownership transfers or when snapshot
     ///        restore must drop links without freeing (the pool restore has
     ///        already rewound the block).
-    void detach_object(RefCounted *obj) noexcept;
+    void detach_object(KernelObject *obj) noexcept;
 
     /// @brief Unlinks every node from this task's object list WITHOUT
     ///        releasing any of them.  Bounded by CONFIG_MAX_PER_TASK_OBJECTS

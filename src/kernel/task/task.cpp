@@ -31,7 +31,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/page_table.hpp>
-#include <kernel/memory/refcounted.hpp>
+#include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
@@ -121,7 +121,7 @@ void TaskControlBlock::init_sporadic_server(
     ss->init(budget_c, period_t, bg_prio, budget_granularity);
     ss->set_base_priority(priority);
     ss->set_kind(kernel::KIND_SPORADIC_SERVER);
-    ss->set_disposer(kernel::RefCounted::dispose_via_mempool);
+    ss->set_disposer(kernel::KernelObject::dispose_via_mempool);
     attach_object(ss);
     Scheduler::inc_sporadic_count();
 }
@@ -130,7 +130,7 @@ void TaskControlBlock::init_sporadic_server(
 ///        Only called while the task is not visible to the scheduler
 ///        (pre-add_task or inside cleanup under IrqGuard), so the list
 ///        is never mutated from IRQ context.
-void TaskControlBlock::attach_object(RefCounted *obj) noexcept {
+void TaskControlBlock::attach_object(KernelObject *obj) noexcept {
     if (!obj)
         return;
     obj->task_obj_prev_ = nullptr;
@@ -145,7 +145,7 @@ void TaskControlBlock::attach_object(RefCounted *obj) noexcept {
 }
 
 /// @brief Unlinks @p obj from this task's object list WITHOUT releasing it.
-void TaskControlBlock::detach_object(RefCounted *obj) noexcept {
+void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
     if (!obj)
         return;
     if (obj->task_obj_prev_)
@@ -172,7 +172,7 @@ void TaskControlBlock::detach_object(RefCounted *obj) noexcept {
 void TaskControlBlock::detach_all_objects() noexcept {
     for (uint32_t i = 0; i < CONFIG_MAX_PER_TASK_OBJECTS && task_obj_head_;
          ++i) {
-        RefCounted *obj = task_obj_head_;
+        KernelObject *obj = task_obj_head_;
         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
         // CONFIG_DEBUG.  Stop the walk rather than following garbage links.
         if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
@@ -198,7 +198,7 @@ void TaskControlBlock::detach_all_objects() noexcept {
 ///        (which frees the pool-backed block via the disposer).
 void TaskControlBlock::release_all_objects() noexcept {
     while (task_obj_head_) {
-        RefCounted *obj = task_obj_head_;
+        KernelObject *obj = task_obj_head_;
         task_obj_head_ = obj->task_obj_next_;
         if (task_obj_head_)
             task_obj_head_->task_obj_prev_ = nullptr;

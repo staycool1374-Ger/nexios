@@ -142,7 +142,7 @@ build/kernel/memory/markers.o: src/kernel/memory/markers.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
-build/kernel/memory/refcounted.o: src/kernel/memory/refcounted.cpp
+build/kernel/memory/kernel_object.o: src/kernel/memory/kernel_object.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

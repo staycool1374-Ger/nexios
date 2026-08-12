@@ -657,4 +657,56 @@ with the caller return address.  One failing run produced the COMPLETE chain:
    id_table (belt-and-braces), as the §1.2 stale-arm-to-removed-task guard but
    at selection time.
 
+---
+
+## 7. RESOLVED — two-layer liveness guard neutralizes the stale-resume (2026-08-12)
+
+**Actual state:** the H2 hang is fixed on `main` at commit `71b3a088`
+(`fix(h2): neutralize stale-resume orphan re-enqueue (ROADMAP v0.4.0 dir #1+#4)`).
+Root cause confirmed exactly as pinned in §6.6, with one refinement: refusing
+the enqueue alone is NOT sufficient — the helper's `set_current(dead)` and
+`task.state = READY` side effects run *before* the enqueue, so the test-side
+helper must refuse at entry.
+
+### 7.1 Fix implemented
+
+**Layer 1 — kernel guard, `Scheduler::enqueue_ready` (scheduler.cpp:190).**
+Upgraded the cold `[H2-ENQDEAD]` audit to a real refusal: if
+`find_task(task.id) != &task`, log (trace-gated) + set `in_ready_queue_ = false`
++ return.  A TCB the scheduler no longer owns (removed via `release_zombie` /
+`remove_task`) can never enter the runq, so `next_task()` can never select it
+and no stale deferred-switch arm is ever published to it.  All legitimate
+`enqueue_ready` callers enqueue id_table_-registered tasks (`add_task` inserts
+into `id_table_` before enqueueing; wake/switch-away paths enqueue live current
+tasks), so the guard cannot fire spuriously.  Fix direction §6.6.#2.
+
+**Layer 2 — test-side guard, `yield_to_task` (test_sched_helpers.hpp:66).**
+Refuse at entry if `find_task(task.id) != &task`.  This stops the stale resume
+*before* any side effect (`set_current(dead)` re-points the scheduler's
+current-cache; `state = READY` resurrects a freed/recycled block), so the stale
+resume is a harmless no-op and the test body's wait loop exits because both
+tasks are TERMINATED / freed.  Fix direction §6.6.#2 (test-side analogue).
+
+`next_task()` liveness guard (§6.6.#3) was NOT added — the enqueue-side guard
+makes the orphan unreachable at the source, so selection-time filtering is
+redundant and would add per-dispatch cost on a hot path.
+
+### 7.2 Validation (debug build, trace ON)
+
+- `ipc_core` 23/23 across 14+ consecutive runs (pre-fix ~50% hang at
+  `ipc_send_sync_roundtrip`).
+- `all` gate: 7 clean 858/858 runs in 10 invocations, **zero watchdog hangs,
+  zero H2 diagnostics** (pre-fix ~50-70% hang rate).  In runs where the stale
+  resume occurred, the layer-2 guard made it a no-op and the suite continued.
+- `make build` green (check-style Errors: 0).
+- Residual `harness_blocked_sender_wakes` failure (2/17 messages) is a separate
+  pre-existing v0.4.0 MP-8 timing flake, unrelated to H2 and reproduced
+  identically on the pre-fix baseline.
+
+### 7.3 Status
+
+ROADMAP §v0.4.0 H2 entry can be marked fixed pending a trace-OFF release-gate
+re-verification (the previous trace-OFF deterministic hang at
+`ipc_send_sync_roundtrip` should be re-tested against this build).
+
 

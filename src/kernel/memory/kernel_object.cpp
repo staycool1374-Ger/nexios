@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <kernel/memory/refcounted.hpp>
+#include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
 
 namespace kernel {
 
-void RefCounted::dispose_via_mempool(RefCounted *self) noexcept {
+void KernelObject::dispose_via_mempool(KernelObject *self) noexcept {
     MemPool::free(self);
 }
 
