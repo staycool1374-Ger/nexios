@@ -32,6 +32,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
+#include <kernel/memory/refcounted.hpp>
 #include <signal.hpp>
 
 namespace kernel {
@@ -221,6 +222,7 @@ struct TaskControlBlock {
           waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
           alarm_armed(false), sporadic_server(nullptr), buf_list_head(0),
+          task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
           waiting_on_mutex(nullptr),
@@ -375,13 +377,26 @@ struct TaskControlBlock {
 
     /// @brief Optional per-task SporadicServer for aperiodic
     /// daemon budget management (vfsd, iocd).  nullptr for normal tasks.
-    /// Allocated from MemPool in init_sporadic_server().
+    /// Allocated from MemPool in init_sporadic_server() and attached to
+    /// the intrusive object list (task_obj_head_/task_obj_tail_).  This
+    /// pointer is an O(1) read cache kept in sync with the list by
+    /// attach_object()/detach_object(); ownership lives in the list.
     task::SporadicServer *sporadic_server;
 
     /// @brief Head of doubly-linked list of buffer handles owned by
     /// this task. -1 means the list is empty. Used by the BufferPool
     /// for zero-copy IPC.
     int32_t buf_list_head;
+
+    /// @brief Head of the intrusive doubly-linked list of heap-allocated,
+    /// pool-backed RefCounted objects owned by this task (e.g. its
+    /// SporadicServer).  The list is the single source of truth for
+    /// per-task object lifecycle: teardown walks this list and releases
+    /// every node; snapshot restore detaches every node without releasing.
+    /// Only mutated outside IRQ context (before add_task, or inside
+    /// cleanup() under scheduler_lock_ / IrqGuard).
+    RefCounted *task_obj_head_;
+    RefCounted *task_obj_tail_;
 
     /// @brief Linked-list pointers for the blocked-sender chain
     /// (singly linked via next).
@@ -542,6 +557,37 @@ struct TaskControlBlock {
         uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
         uint64_t budget_granularity =
             CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY) noexcept;
+
+    /// @brief Attaches @p obj to this task's intrusive object list.
+    ///        The task takes ownership of exactly one reference
+    ///        (refcount == 1 at attach).  O(1), head insert.
+    void attach_object(RefCounted *obj) noexcept;
+
+    /// @brief Unlinks @p obj from this task's object list WITHOUT releasing
+    ///        it.  O(1).  Used when ownership transfers or when snapshot
+    ///        restore must drop links without freeing (the pool restore has
+    ///        already rewound the block).
+    void detach_object(RefCounted *obj) noexcept;
+
+    /// @brief Unlinks every node from this task's object list WITHOUT
+    ///        releasing any of them.  Bounded by CONFIG_MAX_PER_TASK_OBJECTS
+    ///        pop-head iterations (runaway-link protection).  Used by
+    ///        snapshot restore where blocks are reclaimed by the pool rewind,
+    ///        never by release().
+    void detach_all_objects() noexcept;
+
+    /// @brief Releases every node on this task's object list (teardown).
+    ///        Runs the kind-specific hook (e.g. Scheduler::dec_sporadic_count)
+    ///        then drops the ownership reference, freeing pool-backed blocks.
+    ///        Called exactly once from cleanup().
+    void release_all_objects() noexcept;
+
+    /// @brief Returns this task's SporadicServer (or nullptr).  O(1) read
+    ///        cache kept in sync with the intrusive object list; safe to
+    ///        call from ISR context (never mutates).
+    task::SporadicServer *get_sporadic_server() const noexcept {
+        return sporadic_server;
+    }
 
     /// @brief Adds a child to this task's process hierarchy.
     void add_child(TaskControlBlock *child) noexcept;

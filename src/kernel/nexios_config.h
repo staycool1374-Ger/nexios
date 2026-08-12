@@ -482,6 +482,16 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// Per-Task Intrusive Object List Configuration
+// ---------------------------------------------------------------------------
+/// Maximum number of heap-allocated, RefCounted objects a single task may own
+/// (attached to its intrusive per-task object list).  Bounds the teardown and
+/// snapshot-restore walks.  One SporadicServer per daemon is the common case.
+#ifndef CONFIG_MAX_PER_TASK_OBJECTS
+#define CONFIG_MAX_PER_TASK_OBJECTS 32
+#endif
+
+// ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------
 /// Enable Priority Inheritance Protocol for Mutex.

@@ -58,9 +58,9 @@ TaskControlBlock *spawn_ss_exhausted(sync::Semaphore &gate) {
                 arch::pause();
             // Now genuinely exhaust the budget in the running task's own
             // context: activate, then consume the 3-tick budget to EXHAUSTED.
-            self->sporadic_server->on_activation(arch::Timer::ticks());
+            self->get_sporadic_server()->on_activation(arch::Timer::ticks());
             for (int i = 0; i < 5; ++i)
-                self->sporadic_server->consume(arch::Timer::ticks());
+                self->get_sporadic_server()->consume(arch::Timer::ticks());
             reinterpret_cast<sync::Semaphore *>(self->user_data)->wait();
             // INV-4: Semaphore::wait() sets BLOCKED then returns immediately
             // (the switch is deferred).  Spin on our own BLOCKED state so the
@@ -111,10 +111,10 @@ TEST_CLASS(SsExhaustionTriggersDeadline) {
     gate.init(0, 1);
     auto *helper = spawn_ss_exhausted(gate);
     CT_ASSERT(helper != nullptr);
-    CT_ASSERT(helper->sporadic_server != nullptr);
-    CT_ASSERT(helper->sporadic_server->state() ==
+    CT_ASSERT(helper->get_sporadic_server() != nullptr);
+    CT_ASSERT(helper->get_sporadic_server()->state() ==
               task::SporadicServer::State::EXHAUSTED);
-    CT_ASSERT(helper->sporadic_server->remaining_budget() == 0);
+    CT_ASSERT(helper->get_sporadic_server()->remaining_budget() == 0);
 
     // Genuine overrun: the real deadline (create-time + 10) is in the past by
     // the time the task exhausted and terminated.
@@ -155,10 +155,10 @@ TEST_CLASS(SsDeadlineMissDuringReplenish) {
     gate.init(0, 1);
     auto *helper = spawn_ss_exhausted(gate);
     CT_ASSERT(helper != nullptr);
-    CT_ASSERT(helper->sporadic_server != nullptr);
-    CT_ASSERT(helper->sporadic_server->state() ==
+    CT_ASSERT(helper->get_sporadic_server() != nullptr);
+    CT_ASSERT(helper->get_sporadic_server()->state() ==
               task::SporadicServer::State::EXHAUSTED);
-    CT_ASSERT(helper->sporadic_server->remaining_budget() == 0);
+    CT_ASSERT(helper->get_sporadic_server()->remaining_budget() == 0);
 
     // Drive the real deadline-detection scan only (see
     // SsExhaustionTriggersDeadline — do NOT call on_tick() here).
@@ -182,8 +182,58 @@ TEST_CLASS(SsDeadlineMissDuringReplenish) {
 };
 #endif // CONFIG_DEADLINE_MONITOR_TASK
 
+// Runmode: kernel
+// Testidea: The intrusive per-task object list must survive the snapshot_restore
+//           protocol (detach_all_objects with no release) and then allow the
+//           daemon-style ensure_running() re-init to attach a fresh object.
+//           Introduced with the intrusive RefCounted per-task object list:
+//           the live TCB is the single source of truth for object lifecycle.
+//           The FULL snapshot path (MemPool rewind + restore_task_fields) is
+//           exercised automatically by the framework at every test boundary;
+//           this class validates the list/cache mechanics the snapshot relies
+//           on: attach → detach_all (no release) → re-init → teardown.
+// Input: a real kernel task with a SporadicServer attached to its object list.
+// Expect: after detach_all_objects (the snapshot-restore path) the cache is
+//         null and the list is empty; init_sporadic_server re-attaches cleanly;
+//         teardown via terminate/drain releases the block with zero
+//         ResourceTracker delta.
+TEST_CLASS(SsObjectListSnapshotCycle) {
+    // Fresh task — NO SporadicServer yet.
+    auto *t = kernel::test::create_forever_task(12, 100, "ss-list");
+    CT_ASSERT(t != nullptr);
+    CT_ASSERT(t->get_sporadic_server() == nullptr);
+
+    // Attach via the factory: cache + intrusive list must be in sync.
+    t->init_sporadic_server(3, 100, 2);
+    CT_ASSERT(t->get_sporadic_server() != nullptr);
+    CT_ASSERT(t->get_sporadic_server()->remaining_budget() == 3);
+    CT_ASSERT(t->task_obj_head_ ==
+              static_cast<kernel::RefCounted *>(t->get_sporadic_server()));
+
+    // Snapshot-restore path: unlink WITHOUT releasing (the pool rewind owns the
+    // block).  The cache and list head must both clear.
+    t->detach_all_objects();
+    CT_ASSERT(t->get_sporadic_server() == nullptr);
+    CT_ASSERT(t->task_obj_head_ == nullptr);
+    CT_ASSERT(t->task_obj_tail_ == nullptr);
+
+    // Daemon ensure_running()-style re-init on the SAME live TCB must attach a
+    // fresh server object (this previously leaked/dangled under the old
+    // raw-pointer model).
+    t->init_sporadic_server(3, 100, 2);
+    CT_ASSERT(t->get_sporadic_server() != nullptr);
+    CT_ASSERT(t->get_sporadic_server()->remaining_budget() == 3);
+    CT_ASSERT(t->task_obj_head_ ==
+              static_cast<kernel::RefCounted *>(t->get_sporadic_server()));
+
+    // Teardown: terminate + drain runs release_all_objects() → the block is
+    // freed via the disposer.  No double-free, no leak.
+    kernel::test::terminate_and_drain(*t);
+};
+
 void register_ss_deadline_tests() {
     Logger::info("Registering SS deadline integration tests");
+    REGISTER_CLASS(SsObjectListSnapshotCycle);
 #if CONFIG_DEADLINE_MONITOR_TASK
     REGISTER_CLASS(SsExhaustionTriggersDeadline);
     REGISTER_CLASS(SsDeadlineMissDuringReplenish);
