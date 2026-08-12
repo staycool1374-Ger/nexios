@@ -20,76 +20,174 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"buffer_pool",          25,    0,       0      },  // alloc/free/transfer + v0.3.11 B1-B3 PT-walk regressions
     {"all",                 872,    0,       0      },  // v0.4.0 MP-1..MP-8: 869 + process driven-cookbook(+3); dump_class_counts verified
-    {"dmesg",                15,    0,       0      },  // DmesgBuffer + error strings + suppression  (daemon_restart_crash gated, T0-7)
-    {"scheduler",            62,    0,       0      },  // sched + task + lifecycle + idle_task + zombie_cleanup + health + cpu_load + preemption(7)
-    {"deadlock",              1,    0,       0      },  // starvation_deadlock (detect/recovery stubs deleted, T3-1)
-    {"lock_protocol",        53,    0,       0      },  // lock_order + budget + pip + pcp + queue_pip + mutex_pcp + lock_validator + locking(13) + locking_stress(6)
-    {"timer",                 5,    0,       0      },  // timer tests
-    {"wfg",                   0,    0,       0      },  // wfg tests
-    {"lock",                  0,    0,       0      },  // (mlock stubs deleted, T3-1)
-    {"memory",              48,     0,       0      },  // composite: pmm(5) + mempool(4) + slab_reclaim(5) + checked_ptr(4) + buffer_pool(25) + resource_exhaustion(5)
-    {"memory_determinism",   4,     0,       0      },  // PMM exhaustion cycle + no-dynamic-alloc neutral cycle (v0.3.8)
-    {"ipc",                 55,     0,       0      },  // IPC + pipe + ipc_blocking + lock-free + robustness + ipc_extended(9)
-    {"ipc_blocking",         4,     0,       0      },  // IPC blocking send_sync/handshake tests
-    {"zombie_cleanup",       4,     0,       0      },  // zombie list deferred cleanup
-    {"vfs",                 131,    0,       0      },  // vfs + tmpfs + fat32 + block + fstab + sync + vfsd + iocd (iocd mmio stub removed, T3-1)
-    {"process",             47,     0,       0      },  // process + elf + signals + rlimit + waitpid + pml4_clone (+3 MP-1/MP-7 driven-cookbook)
-    {"syscall",             28,     0,       0      },  // syscall + syscall_fuzz
-    {"arch",                31,     0,       0      },  // cross_arch + GDT + IDT + bootparams + multiboot + address + PIC + HAL
-    {"cross_arch",          18,     0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated, x86_64 only)
-    {"vmm",                 11,     0,       0      },  // VMM unit tests (7 original + 2 unconditional + 2 x86_64 = 11 on x86_64)
-    {"kernel_isolation",     4,     0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
-    {"memory_isolation",     3,     0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-    {"memory_safety",       11,     0,       0      },  // MemPool/PMM invariants + v0.4.0 MP-2 red zones + MP-3 canaries
-    {"pmm",                  5,     0,       0      },  // PMM alloc/free unit tests
-    {"mempool",              4,     0,       0      },  // MemPool allocator tests
-    {"slab_reclaim",         5,     0,       0      },  // Slab reclaim tests
-    {"checked_ptr",          4,     0,       0      },  // Checked pointer + signal frame tests
-    {"resource_exhaustion",  5,     0,       0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
-    {"device",              22,     0,       0      },  // spsc + irq_guard + framebuffer + rtc + driver (serial/keyboard stubs deleted, T3-1)
-    {"shell",               22,     0,       0      },  // shell_interaction + shell_redirect + textutils
-    {"net",                 42,     0,       0      },  // net + PCI + virtio + DMA
-    {"security",            10,     0,       0      },  // secure_exec + vfsd_authorization (capability stubs deleted, T3-1)
-    {"debug",               14,     0,       0      },  // debug + gcov + klog
-    {"integration",          0,     0,       0      },  // integration smoke tests
-    {"starvation_deadlock",  4,     0,       0      },  // SchedulerStarvation + PriorityInversionChain5 + DeadlockNestedMutexLoad + DeadlockRecoveryResourceReclamation
-#if CONFIG_DEADLINE_MONITOR_TASK
-    {"deadline_miss",        5,     0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss
-#else
-    {"deadline_miss",        3,     0,       0      },  // DeadlineMissWhileBlocked + DeadlineMissWhileTerminatedSkipped + DeadlineRearmOnPeriodRollover
-#endif
-    {"wcet_overrun",         2,     0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
-    {"ss_deadline",          2,     0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish
-    {"deadline_recovery",    4,     0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
-    {"deadline_action",      1,     0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)
-    {"wcet",                 1,     0,       0      },  // WCET benchmark for scan_deadlines (P7b)
-    {"priority_inheritance", 11,    0,       0      },  // MutexPriorityDonates + MutexChainPropagates + MutexPriStepDown + MutexNestedDrop + SemaphoreInherits + queue_pip(3) + mutex_pcp(3)
-    {"preemption_under_syscall", 4,  0,       0      },  // preemption during syscall, tmpfs write, brk, starvation
-    {"stress",               3,     0,       0      },  // starvation_deadlock (stress stubs deleted, T3-1)
-    {"init",                 3,     0,       0      },  // init tests
-    {"build",               10,     0,       0      },  // buildsystem + config checks (v0.3.7)
-    {"bench",               25,     0,       0      },  // IPC + microkernel + syscall + IRQ latency + APIC timer + jitter + wcet_memory (v0.3.8)
-    {"bench_irq_latency",   3,      0,       0      },  // IRQ latency histogram tests
-    {"sporadic",            25,     0,       0      },  // sporadic server tests
-    {"atomic",              12,     0,       0      },  // atomic operation tests
-    {"apic_timer",           3,     0,       0      },  // APIC timer tick rate, one-shot, stop
-    {"irq_alloc",            0,     0,       0      },  // (IRQ-alloc stubs deleted, T3-1)
-    {"jitter",               2,     0,       0      },  // Schedule-to-schedule jitter benchmarks
-    {"threaded_irq",         0,     0,       0      },  // (threaded-irq stubs deleted, T3-1)
-    {"gic",                  0,     0,       0      },  // (GIC stubs deleted, T3-1)
-    {"plic",                 0,     0,       0      },  // (PLIC stubs deleted, T3-1)
+
+    // basic
+    {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+    {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
+
+    // configuration
+    {"configuration_build",  10,    0,       0      },  // buildsystem + compile-time config sanity (v0.3.7)
+
+    // data_structures
+    {"data_structures_spsc",  8,    0,       0      },  // SPSC queue primitives
+    {"data_structures_buffer_pool", 25, 0,    0      },  // alloc/free/transfer + v0.3.11 B1-B3 PT-walk regressions
+    {"data_structures_buffer_pool_deterministic", 6, 0, 0},  // pre-allocated buffers, zero-copy, no alloc after init
+
+    // synchronization
+    {"synchronization_spinlock", 10, 0,      0      },  // spinlock(9) + spinlock_stress(1)
+    {"synchronization_sync", 13,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives
+    {"synchronization_locking", 19, 0,       0      },  // locking(13) + locking_stress(6)
+    {"synchronization_lock_order",  4, 0,    0      },  // nested SpinLock acquisition order
+    {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
+    {"synchronization_irq_guard",  4, 0,    0      },  // irq_guard(3) + irqguard_audit(1)
+    {"synchronization_pip",  10,    0,       0      },  // pip(7) + queue_pip(3)
+    {"synchronization_pcp",   8,    0,       0      },  // pcp(5) + mutex_pcp(3)
+    {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
+
+    // scheduler
+    {"scheduler_core",       16,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO
+    {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
+    {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
+    {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
+    {"scheduler_idle",       11,    0,       0      },  // idle_task(10) + idle_cleanup(1)
+    {"scheduler_zombie",      5,    0,       0      },  // zombie_cleanup(4) + wcet_cleanup(1)
+    {"scheduler_preemption", 11,    0,       0      },  // preemption(7) + preemption_under_syscall(4)
+    {"scheduler_budget",      6,    0,       0      },  // task budget accounting
+    {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
+    {"scheduler_starvation",  3,    0,       0      },  // SchedulerStarvation + PriorityInversionChain5 + DeadlockNestedMutexLoad
+
+    // task
+    {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
+    {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
+    {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+    {"task_init",             3,    0,       0      },  // init task exists/reparents
+    {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
+
+    // syscall
+    {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)
+    {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+
+    // process
+    {"process_lifecycle",    15,    0,       0      },  // process lifecycle, child table
+    {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+    {"process_signals",       8,    0,       0      },  // signal delivery/handling
+    {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+    {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
+    {"process_pml4_clone",    7,    0,       0      },  // fork deep-copy page tables
+    {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
+
+    // ipc
+    {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
+    {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
+    {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
+    {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
+    {"ipc_robustness",        6,    0,       0      },  // misformed/wraparound/concurrent/cleanup
+    {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
+
+    // vfs
+    {"vfs_core",             20,    0,       0      },  // fdtable/resolve/mount/mkdir/unlink
+    {"vfs_tmpfs",            10,    0,       0      },  // tmpfs(6) + invalid_mount(2) + mount_unmount_failure(2)
+    {"vfs_fstab",             5,    0,       0      },  // fstab parsing
+    {"vfs_fat32",            40,    0,       0      },  // FAT32 fs unit tests
+    {"vfs_fat32_integration", 14,    0,       0      },  // VFS-on-FAT32
+
+    // servers
+    {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
+    {"servers_vfsd_auth",     5,    0,       0      },  // VFS daemon authorization
+    {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
+    {"servers_daemon_restart", 0,    0,       0      },  // daemon-restart crash test #if 0-disabled in source; reserved home
+    {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
+
+    // memory
+    {"memory_pmm",            5,    0,       0      },  // PMM alloc/free unit tests (hosts 0-test delegate)
+    {"memory_mempool",        4,    0,       0      },  // MemPool allocator tests
+    {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
+    {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
+    {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
+    {"memory_checked_ptr",    4,    0,       0      },  // Checked pointer + signal frame tests
+    {"memory_resource_exhaustion", 5, 0,      0      },  // FdTable, TaskLimit, MaxBuffers, MempoolFrag, PmmExhaustion
+    {"memory_stack_alloc",   11,    0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6)
+    {"memory_stack_profiler", 6,    0,       0      },  // kernel stack depth profiling
 #if CONFIG_STATIC_POOLS_ONLY
-    {"static_pools",          6,     0,       0      },  // CONFIG_STATIC_POOLS_ONLY, MemPool::reserve
+    {"memory_static_pools",   6,    0,       0      },  // CONFIG_STATIC_POOLS_ONLY, MemPool::reserve
 #else
-    {"static_pools",          4,     0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
+    {"memory_static_pools",   4,    0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
 #endif
-    {"stack_profiler",        6,     0,       0      },  // kernel stack depth profiling
-    {"stack_alloc",          11,     0,       0      },  // stack allocation, guard pages, overflow hook (8 + 3 MP-6)
-    {"page_tables",           9,     0,       0      },  // page-table pool, budget, no sharing
-    {"buffer_pool_deterministic", 6, 0,       0      },  // pre-allocated buffers, zero-copy, no alloc after init
-    {"no_op_new",             6,     0,       0      },  // no operator new/delete, all MemPool / placement-new
+    {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
+    {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
+    {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
+    {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
+    {"memory_vmm",           10,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm
+
+    // wcet / deadline
+    {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
+    {"wcet_scheduler",        1,    0,       0      },  // WCET benchmark for scan_deadlines (P7b)
+    {"bench_wcet_memory",    2,    0,       0      },  // WCET mempool/vmm (TF_BENCH)
+#if CONFIG_DEADLINE_MONITOR_TASK
+    {"deadline_miss",         5,    0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss
+#else
+    {"deadline_miss",         3,    0,       0      },  // DeadlineMissWhileBlocked + DeadlineMissWhileTerminatedSkipped + DeadlineRearmOnPeriodRollover
+#endif
+    {"deadline_recovery",     4,    0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
+    {"deadline_action",       1,    0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)
+    {"deadline_ss",           2,    0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish
+
+    // timing
+    {"timing_core",          18,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list
+
+    // hal
+    {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
+    {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
+    {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
+    {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
+    {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
+    {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
+
+    // drivers
+    {"drivers_core",          6,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps
+    {"drivers_block",        11,    0,       0      },  // block device, ATA_PIO, AHCI
+    {"drivers_pci",          16,    0,       0      },  // PCI enumeration/MSI/BARs (bounded-time test commented out)
+    {"drivers_virtio",        9,    0,       0      },  // VirtIO probe/feature/queue
+    {"drivers_dma",          12,    0,       0      },  // DMA buffer/SG/PRD
+
+    // network
+    {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
+
+    // shell / ui
+    {"shell_interaction",    18,    0,       0      },  // shell commands
+    {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
+    {"shell_textutils",       1,    0,       0      },  // text utilities
+    {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
+
+    // random
+    {"random_core",           7,    0,       0      },  // RNG smoke/non-repeating
+    {"random_seed",           2,    0,       0      },  // random seed init
+    {"random_syscall",        4,    0,       0      },  // getrandom syscall
+    {"random_vfs",            2,    0,       0      },  // /dev/random VFS node
+    {"random_vfs_write",      2,    0,       0      },  // /dev/random VFS write
+
+    // logging / debug
+    {"logging_dmesg",        15,    0,       0      },  // DmesgBuffer + error strings + suppression
+    {"logging_klog",          8,    0,       0      },  // kernel log read/wrap/concurrent
+    {"debug_core",            2,    0,       0      },  // write formats + switch logs (qemu_debug_exit tests disabled)
+    {"debug_gcov",            4,    0,       0      },  // GCOV coverage metadata
+
+    // arch
+    {"arch_cross",           18,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated, x86_64 only)
+#if defined(CONFIG_ARCH_AARCH64)
+    {"arch_aarch64",          0,    0,       0      },
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    {"arch_riscv64",          0,    0,       0      },
+#endif
+
+    // bench
+    {"bench_ipc",             7,    0,       0      },  // IPC throughput (TF_BENCH)
+    {"bench_syscall",         3,    0,       0      },  // syscall latency (TF_BENCH)
+    {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
+    {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
+    {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
 };
 
 static constexpr size_t k_expected_count_size =
