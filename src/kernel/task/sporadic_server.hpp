@@ -27,7 +27,7 @@
 
 #include <types.hpp>
 #include <kernel/nexios_config.h>
-#include <kernel/memory/refcounted.hpp>
+#include <kernel/memory/kernel_object.hpp>
 
 namespace kernel {
 namespace task {
@@ -42,7 +42,7 @@ namespace task {
 ///   - process_replenishments() once per timer tick.
 ///
 /// All times are in integer ticks.  No libc, no FP, no dynamic allocation.
-class SporadicServer : public RefCounted {
+class SporadicServer : public KernelObject {
   public:
     /// @brief Maximum number of simultaneously pending replenishments.
     /// Sufficient for all practical cases: at most one replenishment per

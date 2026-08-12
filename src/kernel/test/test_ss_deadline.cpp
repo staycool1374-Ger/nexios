@@ -186,7 +186,7 @@ TEST_CLASS(SsDeadlineMissDuringReplenish) {
 // Testidea: The intrusive per-task object list must survive the snapshot_restore
 //           protocol (detach_all_objects with no release) and then allow the
 //           daemon-style ensure_running() re-init to attach a fresh object.
-//           Introduced with the intrusive RefCounted per-task object list:
+//           Introduced with the intrusive KernelObject per-task object list:
 //           the live TCB is the single source of truth for object lifecycle.
 //           The FULL snapshot path (MemPool rewind + restore_task_fields) is
 //           exercised automatically by the framework at every test boundary;
@@ -208,7 +208,7 @@ TEST_CLASS(SsObjectListSnapshotCycle) {
     CT_ASSERT(t->get_sporadic_server() != nullptr);
     CT_ASSERT(t->get_sporadic_server()->remaining_budget() == 3);
     CT_ASSERT(t->task_obj_head_ ==
-              static_cast<kernel::RefCounted *>(t->get_sporadic_server()));
+              static_cast<kernel::KernelObject *>(t->get_sporadic_server()));
 
     // Snapshot-restore path: unlink WITHOUT releasing (the pool rewind owns the
     // block).  The cache and list head must both clear.
@@ -224,7 +224,7 @@ TEST_CLASS(SsObjectListSnapshotCycle) {
     CT_ASSERT(t->get_sporadic_server() != nullptr);
     CT_ASSERT(t->get_sporadic_server()->remaining_budget() == 3);
     CT_ASSERT(t->task_obj_head_ ==
-              static_cast<kernel::RefCounted *>(t->get_sporadic_server()));
+              static_cast<kernel::KernelObject *>(t->get_sporadic_server()));
 
     // Teardown: terminate + drain runs release_all_objects() → the block is
     // freed via the disposer.  No double-free, no leak.

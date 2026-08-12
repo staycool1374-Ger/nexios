@@ -172,3 +172,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-12 22:36:20 all PASSED: 858 FAILED: 0 TIME: 51s
 2026-08-12 22:36:20 all PASSED: 858 FAILED: 0 TIME: 53s
 2026-08-12 22:36:20 all PASSED: 857 FAILED: 1 TIME: -- STATUS: harness_blocked_sender_wakes (pre-existing flake, 0 H2 diag, no watchdog)
+2026-08-12 23:19:57 BASELINE M0 sizeof(TCB)=5568 make build green
+2026-08-12 23:22:53 M1 rename RefCounted->KernelObject: build green; scheduler_sporadic 25/25, deadline_ss 3/3, memory_mempool 4/4, testrunner 15/16 (harness_blocked_sender_wakes baseline-flake)

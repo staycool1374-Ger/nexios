@@ -42,13 +42,13 @@ enum ObjectKind : uint8_t {
 ///
 /// @note Stack-allocated instances (tests) leave the disposer null; an
 ///       accidental release() is then a no-op and never frees the block.
-class RefCounted {
+class KernelObject {
   public:
     /// @brief Function invoked when the last reference is released.
-    using Disposer = void (*)(RefCounted *) noexcept;
+    using Disposer = void (*)(KernelObject *) noexcept;
 
     /// @brief Default disposer: returns the block to the kernel MemPool.
-    static void dispose_via_mempool(RefCounted *self) noexcept;
+    static void dispose_via_mempool(KernelObject *self) noexcept;
 
     /// @brief Takes a new reference. Relaxed ordering is sufficient: the
     ///        reference count is only used as a lifetime guard, not as an
@@ -87,8 +87,8 @@ class RefCounted {
 
     /// @brief Intrusive per-task object-list links. The list is owned by the
     ///        TaskControlBlock and is only ever mutated outside IRQ context.
-    RefCounted *task_obj_next_ = nullptr;
-    RefCounted *task_obj_prev_ = nullptr;
+    KernelObject *task_obj_next_ = nullptr;
+    KernelObject *task_obj_prev_ = nullptr;
 
   protected:
     volatile uint32_t ref_count_{1};
@@ -96,14 +96,14 @@ class RefCounted {
     uint8_t kind_{KIND_NONE};
 };
 
-/// @brief RAII scoped reference guard for RefCounted objects.
+/// @brief RAII scoped reference guard for KernelObject objects.
 ///
 /// Acquires on construction and releases on destruction.  Used to pin a
 /// pool-backed object (e.g. a SporadicServer) while a code path that is not
 /// serialized against the task's teardown dereferences it.
 class ScopedRef {
   public:
-    explicit ScopedRef(RefCounted *p) noexcept : p_(p) {
+    explicit ScopedRef(KernelObject *p) noexcept : p_(p) {
         if (p_) {
             p_->acquire();
         }
@@ -117,7 +117,7 @@ class ScopedRef {
     ScopedRef &operator=(const ScopedRef &) = delete;
 
   private:
-    RefCounted *p_;
+    KernelObject *p_;
 };
 
 } // namespace kernel
