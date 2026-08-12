@@ -64,6 +64,18 @@ inline void yield_as(TaskControlBlock &task) noexcept {
 ///         leaving the RQ with only the re-enqueued task.  The timer ISR would
 ///         then dispatch the wrong task first.
 inline void yield_to_task(TaskControlBlock &task) noexcept {
+    // H2 stale-resume liveness guard (ROADMAP §v0.4.0 direction #4): the
+    // harness's stored context.rsp can occasionally point into a test body's
+    // setup path; on resume the harness re-executes this helper on a task that
+    // may already have self-terminated and been removed from id_table_.  Acting
+    // on a dead task here corrupts state BEFORE any enqueue could be refused:
+    // set_current(dead) re-points the scheduler's current-cache, and
+    // `task.state = READY` resurrects a freed/recycled block.  Refuse at entry
+    // so the stale resume is a harmless no-op (the test body's wait loop then
+    // exits because both tasks are TERMINATED / freed).
+    if (Scheduler::find_task(task.id) != &task)
+        return;
+
     arch::IrqGuard guard;
     auto *original = Scheduler::current_task();
     Scheduler::set_current(task);
