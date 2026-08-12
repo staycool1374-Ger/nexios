@@ -76,8 +76,9 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
         // exhausted instead of blocking indefinitely.
         if (deadline && arch::Timer::ticks() >= deadline)
             return static_cast<uint64_t>(-1);
-        if (cur->sporadic_server) {
-            cur->sporadic_server->on_completion(arch::Timer::ticks());
+        if (cur->get_sporadic_server()) {
+            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
         }
         cur->state = TaskState::BLOCKED;
         was_blocked = true;
@@ -92,8 +93,9 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     }
     if (was_blocked) {
         cur->remaining_ticks = cur->period_ticks;
-        if (cur->sporadic_server) {
-            cur->sporadic_server->on_activation(arch::Timer::ticks());
+        if (cur->get_sporadic_server()) {
+            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+            cur->get_sporadic_server()->on_activation(arch::Timer::ticks());
         }
     }
     uint64_t copy_size = msg.data_size;

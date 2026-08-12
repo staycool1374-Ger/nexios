@@ -31,6 +31,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/page_table.hpp>
+#include <kernel/memory/refcounted.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
@@ -116,10 +117,109 @@ void TaskControlBlock::init_sporadic_server(
     if (!ss)
         return;
     memset(ss, 0, sizeof(task::SporadicServer));
+    ss->reset_refcount();
     ss->init(budget_c, period_t, bg_prio, budget_granularity);
     ss->set_base_priority(priority);
-    sporadic_server = ss;
+    ss->set_kind(kernel::KIND_SPORADIC_SERVER);
+    ss->set_disposer(kernel::RefCounted::dispose_via_mempool);
+    attach_object(ss);
     Scheduler::inc_sporadic_count();
+}
+
+/// @brief Attaches @p obj to this task's intrusive object list.
+///        Only called while the task is not visible to the scheduler
+///        (pre-add_task or inside cleanup under IrqGuard), so the list
+///        is never mutated from IRQ context.
+void TaskControlBlock::attach_object(RefCounted *obj) noexcept {
+    if (!obj)
+        return;
+    obj->task_obj_prev_ = nullptr;
+    obj->task_obj_next_ = task_obj_head_;
+    if (task_obj_head_)
+        task_obj_head_->task_obj_prev_ = obj;
+    else
+        task_obj_tail_ = obj;
+    task_obj_head_ = obj;
+    if (obj->kind() == kernel::KIND_SPORADIC_SERVER)
+        sporadic_server = static_cast<task::SporadicServer *>(obj);
+}
+
+/// @brief Unlinks @p obj from this task's object list WITHOUT releasing it.
+void TaskControlBlock::detach_object(RefCounted *obj) noexcept {
+    if (!obj)
+        return;
+    if (obj->task_obj_prev_)
+        obj->task_obj_prev_->task_obj_next_ = obj->task_obj_next_;
+    else
+        task_obj_head_ = obj->task_obj_next_;
+    if (obj->task_obj_next_)
+        obj->task_obj_next_->task_obj_prev_ = obj->task_obj_prev_;
+    else
+        task_obj_tail_ = obj->task_obj_prev_;
+    obj->task_obj_prev_ = nullptr;
+    obj->task_obj_next_ = nullptr;
+    if (sporadic_server == obj)
+        sporadic_server = nullptr;
+}
+
+/// @brief Unlinks every node from this task's object list WITHOUT releasing
+///        any of them.  Bounded by CONFIG_MAX_PER_TASK_OBJECTS.
+/// @note Snapshot-restore path: the MemPool restore (pool rewind) runs BEFORE
+///       this in snapshot_restore(), so blocks freed during the test have been
+///       returned to the free list and may be 0xDD-poisoned.  This routine only
+///       ever unlinks (never releases) and stops the walk if it encounters a
+///       poisoned block, so it can never double-free or follow a garbage chain.
+void TaskControlBlock::detach_all_objects() noexcept {
+    for (uint32_t i = 0; i < CONFIG_MAX_PER_TASK_OBJECTS && task_obj_head_;
+         ++i) {
+        RefCounted *obj = task_obj_head_;
+        // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
+        // CONFIG_DEBUG.  Stop the walk rather than following garbage links.
+        if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
+            *reinterpret_cast<const uint64_t *>(obj) ==
+                0xDDDDDDDDDDDDDDDDULL) {
+            break;
+        }
+        task_obj_head_ = obj->task_obj_next_;
+        if (task_obj_head_)
+            task_obj_head_->task_obj_prev_ = nullptr;
+        else
+            task_obj_tail_ = nullptr;
+        obj->task_obj_next_ = nullptr;
+        obj->task_obj_prev_ = nullptr;
+    }
+    task_obj_head_ = nullptr;
+    task_obj_tail_ = nullptr;
+    sporadic_server = nullptr;
+}
+
+/// @brief Releases every node on this task's object list (teardown).
+///        Runs the kind-specific hook, then drops the ownership reference
+///        (which frees the pool-backed block via the disposer).
+void TaskControlBlock::release_all_objects() noexcept {
+    while (task_obj_head_) {
+        RefCounted *obj = task_obj_head_;
+        task_obj_head_ = obj->task_obj_next_;
+        if (task_obj_head_)
+            task_obj_head_->task_obj_prev_ = nullptr;
+        else
+            task_obj_tail_ = nullptr;
+        obj->task_obj_next_ = nullptr;
+        obj->task_obj_prev_ = nullptr;
+        if (obj->kind() == kernel::KIND_SPORADIC_SERVER)
+            Scheduler::dec_sporadic_count();
+        // Double-release guard: at teardown every node must still hold exactly
+        // the TCB ownership reference (refcount==1).  Any other value means a
+        // stray acquire/release imbalance — fail fast in debug instead of
+        // freeing an object that another owner may still reference.
+#if defined(CONFIG_DEBUG)
+        ENSURE(obj->refcount() == 1U);
+#endif
+        obj->release();
+    }
+    task_obj_head_ = nullptr;
+    task_obj_tail_ = nullptr;
+    sporadic_server = nullptr;
 }
 
 /// @brief Initialises common fields of a newly allocated TaskControlBlock.
@@ -209,7 +309,7 @@ static void debug_check_tcb_reuse(TaskControlBlock *tcb) {
         if (!t || t == tcb)
             continue;
         if (t->first_child == tcb || t->next_sibling == tcb ||
-            reinterpret_cast<void *>(t->sporadic_server) ==
+            reinterpret_cast<void *>(t->get_sporadic_server()) ==
                 reinterpret_cast<void *>(tcb) ||
             t->runq_next_ == tcb || t->blocked_next == tcb ||
             t->dl_next_ == tcb ||
@@ -219,7 +319,7 @@ static void debug_check_tcb_reuse(TaskControlBlock *tcb) {
                                   "still referenced by task %u (child=%p sib=%p "
                                   "spor=%p par=%lu)",
                                   tcb, t->id, t->first_child, t->next_sibling,
-                                  t->sporadic_server,
+                                  t->get_sporadic_server(),
                                   static_cast<uint64_t>(t->parent_id));
             kernel::debug::dump_scheduler_info();
             panic("TCB reuse of live-referenced block (UAF)");
@@ -1662,11 +1762,7 @@ void TaskControlBlock::cleanup() noexcept {
     event_group.~EventGroup();
     kernel::test::ResourceTracker::instance().track_event_group_remove();
 
-    if (sporadic_server) {
-        Scheduler::dec_sporadic_count();
-        MemPool::free(sporadic_server);
-        sporadic_server = nullptr;
-    }
+    release_all_objects();
     if (cwd_vnode)
         vfs::vnode_ref_dec(cwd_vnode);
     cwd_vnode = nullptr;

@@ -175,14 +175,14 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
     // snapshot.  IrqGuard is a no-op when IRQs are already disabled (ISR
     // context) and cheap otherwise; on single-core it excludes the timer ISR.
     arch::IrqGuard irq_guard{};
-    if (t && t->sporadic_server) {
-        uintptr_t ss = reinterpret_cast<uintptr_t>(t->sporadic_server);
+    if (t && t->get_sporadic_server()) {
+        uintptr_t ss = reinterpret_cast<uintptr_t>(t->get_sporadic_server());
         if (ss < 0xFFFF800000000000ULL)
             return t->priority;
         const uint64_t *vp = reinterpret_cast<const uint64_t *>(ss);
         if (*vp == 0xDDDDDDDDDDDDDDDDULL)
             return t->priority;
-        return t->sporadic_server->current_priority();
+        return t->get_sporadic_server()->current_priority();
     }
     return t ? t->priority : 0;
 }
@@ -667,8 +667,9 @@ void Scheduler::add_task(TaskControlBlock &task) {
                 uint64_t wcet =
                     t->wcet_ticks > 0
                         ? t->wcet_ticks
-                        : (t->sporadic_server ? t->sporadic_server->max_budget()
-                                              : t->remaining_ticks);
+                        : (t->get_sporadic_server()
+                               ? t->get_sporadic_server()->max_budget()
+                               : t->remaining_ticks);
                 uint64_t util = (wcet * 1000000) / t->period_ticks;
                 total_util += util;
             }
@@ -1339,11 +1340,11 @@ void Scheduler::on_tick() noexcept {
 #if CONFIG_DEADLINE_MISS_DETECTION
         // O(1) deadline scan via DeadlineList
         while (auto *task = deadline_list_.pop_earliest_if_expired()) {
-            if (task->sporadic_server) {
+            if (task->get_sporadic_server()) {
                 task->ss_state_on_deadline_miss =
-                    static_cast<uint8_t>(task->sporadic_server->state());
+                    static_cast<uint8_t>(task->get_sporadic_server()->state());
                 task->ss_budget_on_deadline_miss =
-                    task->sporadic_server->remaining_budget();
+                    task->get_sporadic_server()->remaining_budget();
             }
             task->deadline_missed = true;
             ++task->deadline_miss_count;
@@ -1472,9 +1473,9 @@ void Scheduler::on_tick() noexcept {
                 break;
             if (t->magic != TaskControlBlock::TCB_MAGIC)
                 continue;
-            if (t->sporadic_server) {
+            if (t->get_sporadic_server()) {
                 found++;
-                if (reinterpret_cast<uint64_t>(t->sporadic_server) ==
+                if (reinterpret_cast<uint64_t>(t->get_sporadic_server()) ==
                     0xFFFFFFFFFFFFFFFFULL) {
                     Logger::raw_write("[BUG] on_tick: sporadic_server=-1\n");
                     continue;
@@ -1488,9 +1489,17 @@ void Scheduler::on_tick() noexcept {
                 // This check is safe because no active task has a valid pointer
                 // that matches the poison pattern — the poison value is chosen
                 // to be outside any valid allocation.
-                if (is_poisoned_block(t->sporadic_server)) {
+                if (is_poisoned_block(t->get_sporadic_server())) {
                     continue;
                 }
+                // Ownership contract: the getter returns the O(1) read-cache;
+                // teardown is serialized against on_tick by scheduler_lock_,
+                // and effective_priority() guards the pointer with
+                // is_poisoned_block() + the canonical-address check, so no
+                // ScopedRef is needed on this hot path (it would add two
+                // atomics per sporadic task per tick, perturbing the
+                // timing-sensitive H2 race — ROADMAP §v0.3.9).
+                task::SporadicServer *ss = t->get_sporadic_server();
                 // FIX(rms-o1): Effective priority may change after replenishment
                 // (e.g. budget restored → sporadic server priority rises).
                 // The O(1) queue does not re-derive position from tcb.priority,
@@ -1501,19 +1510,19 @@ void Scheduler::on_tick() noexcept {
                 // queue and move_priority on a non-enqueued task is undefined.
                 {
                     uint64_t old_eff = effective_priority(t);
-                    t->sporadic_server->process_replenishments(current_tick);
+                    ss->process_replenishments(current_tick);
                     uint64_t new_eff = effective_priority(t);
                     if (old_eff != new_eff && t != cur)
                         ready_queue_.move_priority(*t, old_eff, new_eff);
                 }
-                if (t == cur && t->sporadic_server->is_active()) {
-                    if (!t->sporadic_server->consume(current_tick)) {
+                if (t == cur && ss->is_active()) {
+                    if (!ss->consume(current_tick)) {
 #if CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE
                         if (!t->deadline_missed) {
-                            t->ss_state_on_deadline_miss = static_cast<uint8_t>(
-                                t->sporadic_server->state());
+                            t->ss_state_on_deadline_miss =
+                                static_cast<uint8_t>(ss->state());
                             t->ss_budget_on_deadline_miss =
-                                t->sporadic_server->remaining_budget();
+                                ss->remaining_budget();
                             t->deadline_missed = true;
                             ++t->deadline_miss_count;
                             deadline_miss_handler(*t, 0);
@@ -2851,10 +2860,13 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->alarm_ticks = saved[j].alarm_ticks;
             t->alarm_armed = saved[j].alarm_armed;
             // Snapshot does not capture SporadicServer state nor PMM page-table
-            // pools — clear the pointer so stale UAF (0xDD-poisoned block) from
-            // a restored MemPool free-list cannot crash effective_priority().
+            // pools — clear the pointer and the intrusive object list so stale
+            // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
+            // crash effective_priority().  detach_all_objects() only unlinks
+            // (bounded, never releases): the pool restore has already rewound
+            // test-allocated blocks, so calling release() here would double-free.
             // Daemon ensure_running() recreates the SporadicServer if needed.
-            t->sporadic_server = nullptr;
+            t->detach_all_objects();
             t->runq_next_ = saved[j].runq_next;
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;
@@ -2888,8 +2900,16 @@ void Scheduler::process_deferred_kills() noexcept {
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
             continue;
 
-        if (task->sporadic_server) {
-            task->sporadic_server->on_completion(arch::Timer::ticks());
+        if (task->get_sporadic_server()) {
+            // Contract: SporadicServer::on_completion() (and on_activation /
+            // consume / process_replenishments) must NEVER release the object.
+            // The ScopedRef pins it across the call; the ownership reference
+            // (refcount==1) is dropped by the delete task → cleanup() →
+            // release_all_objects() below.  If a future change lets the SS
+            // callback trigger teardown, extend this guard to cover the
+            // `delete task` statement instead.
+            kernel::ScopedRef ss_ref{task->get_sporadic_server()};
+            task->get_sporadic_server()->on_completion(arch::Timer::ticks());
         }
 
         Logger::info("[DMD] Task %lu (%s) killed and cleaned up", task->id,
@@ -2926,11 +2946,12 @@ void Scheduler::scan_deadlines() noexcept {
             continue;
         if (task->deadline_ticks >= now)
             continue;
-        if (task->sporadic_server) {
-            task->ss_state_on_deadline_miss =
-                static_cast<uint8_t>(task->sporadic_server->state());
+        if (task->get_sporadic_server()) {
+            kernel::ScopedRef ss_ref{task->get_sporadic_server()};
+            task->ss_state_on_deadline_miss = static_cast<uint8_t>(
+                task->get_sporadic_server()->state());
             task->ss_budget_on_deadline_miss =
-                task->sporadic_server->remaining_budget();
+                task->get_sporadic_server()->remaining_budget();
         }
         task->deadline_missed = true;
         ++task->deadline_miss_count;
@@ -3004,7 +3025,7 @@ void Scheduler::ensure_monitor() noexcept {
 __attribute__((weak)) void
 deadline_miss_handler(TaskControlBlock &task,
                       uint64_t missed_by_ticks) noexcept {
-    bool budget_exhausted = (task.sporadic_server != nullptr &&
+    bool budget_exhausted = (task.get_sporadic_server() != nullptr &&
                              static_cast<task::SporadicServer::State>(
                                  task.ss_state_on_deadline_miss) ==
                                  task::SporadicServer::State::EXHAUSTED);
@@ -3298,8 +3319,8 @@ SchedulerError Scheduler::alloc_id_err(uint64_t &out_id) {
 ///        its epilogue, so it skipped applying the deferred switch — leaving
 ///        the dequeued target stranded until the next tick.  H2 ring event.
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
-extern "C" void scheduler_record_skip(uint64_t captured_gen,
-                                      uint64_t current_gen) {
+extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
+                                      [[maybe_unused]] uint64_t current_gen) {
     H2_REC(kernel::H2_EV_SKIP, captured_gen, current_gen, 0);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     // H2 apply-skip audit (cold: fires only when the generation re-check

@@ -142,6 +142,10 @@ build/kernel/memory/markers.o: src/kernel/memory/markers.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/memory/refcounted.o: src/kernel/memory/refcounted.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_deadline_recovery.o: src/kernel/test/test_deadline_recovery.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
