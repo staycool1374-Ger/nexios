@@ -24,6 +24,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/memory/kernel_object.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
@@ -39,15 +40,32 @@ namespace vfs {
 static constexpr size_t PIPE_BUF_SIZE = 4096;
 
 /// @brief Ring buffer shared between the read and write ends of a pipe.
-struct PipeBuffer {
+///
+/// Shared-ownership class (Class C): the two vnode endpoints each hold one
+/// reference; the creator holds a transient reference during create_pipe().
+/// The last reference invokes dispose() (KernelObject), which returns the
+/// block to the MemPool.  Refcount is atomic (SMP-safe) — the previous plain
+/// `int refcount` decrement raced on a multi-CPU target.
+struct PipeBuffer : public KernelObject {
     uint8_t data[PIPE_BUF_SIZE]; ///< Circular buffer.
     size_t read_pos = 0;         ///< Read cursor position.
     size_t write_pos = 0;        ///< Write cursor position.
     size_t count = 0;            ///< Number of bytes currently in the buffer.
-    int refcount = 2;            ///< Number of open references (read + write).
     bool read_closed = false;    ///< True when the read end is closed.
     bool write_closed = false;   ///< True when the write end is closed.
     sync::Semaphore data_avail;  ///< Semaphore signalled when data is written.
+
+    /// @brief Final teardown on the last release: releases the pipe-buffer
+    ///        ResourceTracker slot and returns the block to the MemPool.
+    ///        Must NOT invoke ~Semaphore (the data_avail dtor asserts on
+    ///        non-zero waiter/count and would trip at teardown).
+    void dispose() noexcept override {
+        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
+        MemPool::free(this);
+    }
+
+    /// @brief Genuinely shared across the two pipe endpoints.
+    bool is_shared() const noexcept override { return true; }
 };
 
 /// @brief Read data from the pipe.
@@ -106,11 +124,10 @@ static void pipe_read_close(Vnode &self) {
     if (!pb)
         return;
     pb->read_closed = true;
-    --pb->refcount;
-    if (pb->refcount <= 0) {
-        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
-        MemPool::free(pb);
-    }
+    // Drop this endpoint's reference.  The last release (both ends closed)
+    // invokes dispose() -> track_remove + MemPool::free.  Never touch pb
+    // after this — it may be freed here.
+    pb->release();
     self.private_data = nullptr;
     kernel::test::ResourceTracker::instance().track_vnode_remove();
     MemPool::free(&self);
@@ -122,12 +139,10 @@ static void pipe_write_close(Vnode &self) {
     if (!pb)
         return;
     pb->write_closed = true;
+    // Wake readers while pb is still alive (before release).
     pb->data_avail.post();
-    --pb->refcount;
-    if (pb->refcount <= 0) {
-        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
-        MemPool::free(pb);
-    }
+    // Drop this endpoint's reference; last release disposes the block.
+    pb->release();
     self.private_data = nullptr;
     kernel::test::ResourceTracker::instance().track_vnode_remove();
     MemPool::free(&self);
@@ -172,19 +187,30 @@ static const VnodeOps pipe_write_ops = {
 
 /// @brief Create a pair of connected pipe file descriptors.
 /// @return 0 on success, VFS_INVALID on failure.
+///
+/// Refcount handoff (creator-ref -> two-end-refs):
+///   1. alloc + placement-new: refcount=1 (creator), mark_pool_backed.
+///   2. alloc rnode/wnode — failure -> pb->release() (1->0 -> dispose).
+///   3. alloc rfd/wfd — failure -> pb->release() (creator) + free vnodes/fds.
+///   4. set vnode fields incl. private_data = pb (NOT published yet).
+///   5. pb->acquire() for read end, pb->acquire() for write end -> refcount 3.
+///   6. publish both vnodes into the fd_table slots.
+///   7. pb->release() (creator drop) -> refcount 2 (one per endpoint).
+/// Every error path is a single symmetric release of the references taken so
+/// far; no path can double-free or leak the block.
 int create_pipe(int fds[2]) {
     auto *pb = static_cast<PipeBuffer *>(MemPool::alloc(sizeof(PipeBuffer)));
     if (!pb)
         return VFS_INVALID;
     new (pb) PipeBuffer;
+    pb->mark_pool_backed();
     pb->data_avail.init(0, PIPE_BUF_SIZE);
     kernel::test::ResourceTracker::instance().track_pipe_buffer_add();
 
     auto *rnode = static_cast<Vnode *>(MemPool::alloc(sizeof(Vnode)));
     auto *wnode = static_cast<Vnode *>(MemPool::alloc(sizeof(Vnode)));
     if (!rnode || !wnode) {
-        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
-        MemPool::free(pb);
+        pb->release(); // creator -> dispose
         MemPool::free(rnode);
         MemPool::free(wnode);
         return VFS_INVALID;
@@ -208,10 +234,9 @@ int create_pipe(int fds[2]) {
 
     auto *task = Scheduler::current_task();
     if (!task) {
-        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
         kernel::test::ResourceTracker::instance().track_vnode_remove();
         kernel::test::ResourceTracker::instance().track_vnode_remove();
-        MemPool::free(pb);
+        pb->release(); // creator -> dispose
         MemPool::free(rnode);
         MemPool::free(wnode);
         return VFS_INVALID;
@@ -224,14 +249,18 @@ int create_pipe(int fds[2]) {
             task->fd_table.free(rfd);
         if (wfd >= 0)
             task->fd_table.free(wfd);
-        kernel::test::ResourceTracker::instance().track_pipe_buffer_remove();
         kernel::test::ResourceTracker::instance().track_vnode_remove();
         kernel::test::ResourceTracker::instance().track_vnode_remove();
-        MemPool::free(pb);
+        pb->release(); // creator -> dispose
         MemPool::free(rnode);
         MemPool::free(wnode);
         return VFS_INVALID;
     }
+
+    // Take the two endpoint references BEFORE publishing the vnodes so a
+    // close on either fd can never observe an under-referenced pb.
+    pb->acquire(); // read end
+    pb->acquire(); // write end
 
     task->fd_table.fds[rfd].vnode = rnode;
     task->fd_table.fds[rfd].offset = 0;
@@ -243,6 +272,8 @@ int create_pipe(int fds[2]) {
 
     fds[0] = rfd;
     fds[1] = wfd;
+
+    pb->release(); // creator drop -> refcount 2 (one per endpoint)
     return 0;
 }
 
