@@ -431,7 +431,12 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
             uint64_t old_prio = Scheduler::effective_priority(&owner);
             owner.priority = task.priority;
             uint64_t new_prio = Scheduler::effective_priority(&owner);
-            if (old_prio != new_prio)
+            // Only re-bucket when the owner is a ready-queue member.  A
+            // BLOCKED owner has no bucket; enqueueing it here would insert a
+            // BLOCKED task into the runq ([WEDGE] INV-2).  The field write
+            // above is always correct — set_task_ready() later enqueues it at
+            // the boosted priority.  Mirrors Scheduler::set_priority.
+            if (old_prio != new_prio && owner.in_ready_queue_)
                 Scheduler::move_priority(owner, old_prio, new_prio);
         }
     }
@@ -479,7 +484,9 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
         uint64_t old_prio = Scheduler::effective_priority(&receiver);
         receiver.priority = max_prio;
         uint64_t new_prio = Scheduler::effective_priority(&receiver);
-        if (old_prio != new_prio)
+        // Re-bucket only runq members; a BLOCKED/RUNNING receiver has no
+        // bucket to move and is re-enqueued later via effective_priority.
+        if (old_prio != new_prio && receiver.in_ready_queue_)
             Scheduler::move_priority(receiver, old_prio, new_prio);
     }
 }
