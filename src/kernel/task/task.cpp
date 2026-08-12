@@ -116,13 +116,18 @@ void TaskControlBlock::init_sporadic_server(
         MemPool::alloc(sizeof(task::SporadicServer)));
     if (!ss)
         return;
+    // Vptr hazard: memset(0) would wipe the KernelObject vptr, so the block is
+    // memset FIRST (preserving zero-init of the derived POD members), then
+    // placement-news the default ctor to install the vptr + base state, then
+    // mark_pool_backed (stack test instances stay unmarked), then init() sets
+    // every derived member.
     memset(ss, 0, sizeof(task::SporadicServer));
-    ss->reset_refcount();
+    new (ss) task::SporadicServer;
+    ss->mark_pool_backed();
     ss->init(budget_c, period_t, bg_prio, budget_granularity);
     ss->set_base_priority(priority);
-    ss->set_kind(kernel::KIND_SPORADIC_SERVER);
-    ss->set_disposer(kernel::KernelObject::dispose_via_mempool);
     attach_object(ss);
+    sporadic_server = ss;
     Scheduler::inc_sporadic_count();
 }
 
@@ -140,8 +145,6 @@ void TaskControlBlock::attach_object(KernelObject *obj) noexcept {
     else
         task_obj_tail_ = obj;
     task_obj_head_ = obj;
-    if (obj->kind() == kernel::KIND_SPORADIC_SERVER)
-        sporadic_server = static_cast<task::SporadicServer *>(obj);
 }
 
 /// @brief Unlinks @p obj from this task's object list WITHOUT releasing it.
@@ -174,7 +177,9 @@ void TaskControlBlock::detach_all_objects() noexcept {
          ++i) {
         KernelObject *obj = task_obj_head_;
         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
-        // CONFIG_DEBUG.  Stop the walk rather than following garbage links.
+        // CONFIG_DEBUG.  A live object's first qword is its vptr (a kernel-high
+        // ≥ 0xFFFF800000000000 address), which passes the low-address check.
+        // Stop the walk rather than following garbage links.
         if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
             *reinterpret_cast<const uint64_t *>(obj) ==
                 0xDDDDDDDDDDDDDDDDULL) {
@@ -194,8 +199,15 @@ void TaskControlBlock::detach_all_objects() noexcept {
 }
 
 /// @brief Releases every node on this task's object list (teardown).
-///        Runs the kind-specific hook, then drops the ownership reference
-///        (which frees the pool-backed block via the disposer).
+///        Drops the TCB's own reference on each node.  The last reference
+///        invokes the node's virtual dispose() (SporadicServer frees itself and
+///        decrements the sporadic count; a future shared object survives if
+///        other holders remain).
+/// @note The refcount invariant is `>= 1` universally (double-release guard);
+///       `== 1` only for non-shared (private-owned) nodes, where the TCB is the
+///       only long-lived holder and a stray ScopedRef pin at teardown is a bug.
+///       Shared nodes (is_shared() == true) may hold references from other
+///       tasks/CPUs and legitimately survive this release.
 void TaskControlBlock::release_all_objects() noexcept {
     while (task_obj_head_) {
         KernelObject *obj = task_obj_head_;
@@ -206,14 +218,15 @@ void TaskControlBlock::release_all_objects() noexcept {
             task_obj_tail_ = nullptr;
         obj->task_obj_next_ = nullptr;
         obj->task_obj_prev_ = nullptr;
-        if (obj->kind() == kernel::KIND_SPORADIC_SERVER)
-            Scheduler::dec_sporadic_count();
-        // Double-release guard: at teardown every node must still hold exactly
-        // the TCB ownership reference (refcount==1).  Any other value means a
-        // stray acquire/release imbalance — fail fast in debug instead of
-        // freeing an object that another owner may still reference.
+        // Double-release guard: at teardown every node must still hold at
+        // least the TCB ownership reference.  A 0-count node means a prior
+        // release already ran dispose() — fail fast in debug instead of
+        // freeing an object that another owner may still reference.  For
+        // non-shared (private) nodes the count must be exactly 1.
 #if defined(CONFIG_DEBUG)
-        ENSURE(obj->refcount() == 1U);
+        ENSURE(obj->refcount() >= 1U);
+        if (!obj->is_shared())
+            ENSURE(obj->refcount() == 1U);
 #endif
         obj->release();
     }
