@@ -188,13 +188,21 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
 }
 
 void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    // H2 enqueue liveness audit (cold): dump when a task is enqueued into the
-    // runq that is no longer a live id_table member (already removed/terminated)
-    // — the source of the orphan runq node next_task() later returns.
+    // H2 liveness guard (ROADMAP §v0.4.0 direction #1): the scheduler must not
+    // enqueue a TCB it no longer owns.  A task removed from id_table_ (via
+    // release_zombie / remove_task) is dead — the harness can still re-run
+    // yield_to_task()'s enqueue_ready() on it when its stored context.rsp is a
+    // stale frame from a test body's setup path, recreating an orphan runq
+    // node.  next_task() then returns it, the harness arms a deferred switch
+    // to it, the apply-side find_task(id)==NULL drops the arm, and the harness
+    // hlt-waits forever.  Refusing the enqueue neutralizes the orphan at the
+    // source: a task not owned by id_table_ must never enter the runq.
     {
         auto *t = Scheduler::find_task(task.id);
         if (!t || t != &task) {
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+            // H2 enqueue liveness audit (cold): dump the orphan source so the
+            // stale-resume path that triggered it is traceable in the log.
             kernel::Logger::raw_write("[H2-ENQDEAD] id=");
             kernel::Logger::print_dec(task.id);
             kernel::Logger::raw_write(" st=");
@@ -209,9 +217,12 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
             kernel::Logger::raw_write(" tick=");
             kernel::Logger::print_dec(arch::Timer::ticks());
             kernel::Logger::raw_write("\n");
+#endif
+            // Refuse the enqueue: the scheduler no longer owns this TCB.
+            task.in_ready_queue_ = false;
+            return;
         }
     }
-#endif
     ready_queue_.enqueue(task, effective_priority(&task));
 }
 
