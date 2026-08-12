@@ -20,6 +20,9 @@
 /// @brief Implementation of the Sporadic Server replenishment mechanism.
 
 #include <kernel/task/sporadic_server.hpp>
+#include <kernel/memory/mempool.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <assert.hpp>
 
 namespace kernel {
 namespace task {
@@ -182,6 +185,22 @@ sporadic_server_deadline_handler(SporadicServer * /*ss*/,
     // default no-op — user code may override
 }
 #endif
+
+/// @brief Final teardown on the last release (KernelObject::dispose).
+///        Moves the sporadic-task-count decrement here from the TCB teardown
+///        hook so a future shared SporadicServer fires the accounting on the
+///        correct last-release event.  Stack-allocated test instances are not
+///        pool-backed and are never freed.
+void SporadicServer::dispose() noexcept {
+    if (!is_pool_backed()) {
+#if defined(CONFIG_DEBUG)
+        ENSURE(false && "dispose() on a non-pool-backed SporadicServer");
+#endif
+        return;
+    }
+    Scheduler::dec_sporadic_count();
+    MemPool::free(this);
+}
 
 } // namespace task
 } // namespace kernel

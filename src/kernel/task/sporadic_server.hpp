@@ -44,6 +44,18 @@ namespace task {
 /// All times are in integer ticks.  No libc, no FP, no dynamic allocation.
 class SporadicServer : public KernelObject {
   public:
+    /// @brief Default constructor (placement-new protocol: the TCB factory
+    ///        memsets the MemPool block first, then placement-news to install
+    ///        the vptr, then init() sets the derived members).
+    SporadicServer() noexcept = default;
+
+    /// @brief Final teardown on the last release.  Decrements the scheduler's
+    ///        sporadic-task count (moved from the TCB teardown hook so a
+    ///        future shared SS fires the accounting on the correct last-
+    ///        release event) and returns the block to the MemPool.  Stack-
+    ///        allocated test instances are never pool-backed and are not freed.
+    void dispose() noexcept override;
+
     /// @brief Maximum number of simultaneously pending replenishments.
     /// Sufficient for all practical cases: at most one replenishment per
     /// period, and the queue drains in T ticks.
