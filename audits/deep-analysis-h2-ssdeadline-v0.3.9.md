@@ -467,3 +467,194 @@ Ring signature: `[ARM a=6] -> [CLR-* a=6] -> [ARM a=0 idle] -> [IDLE-ARM] -> [AP
 **Status: H2 deferred-switch residual — CLOSED.**  ROADMAP v0.3.9 marked done.
 The `ss_deadline` and `priority_inheritance` open issues are separate
 pre-existing items (see ROADMAP "Open Issues").
+
+---
+
+## 6. RE-OPENED 2026-08-12 — apply-side skip instrumentation (developer session)
+
+### 6.1 Context
+BUGS.md re-opened the H2 race on 2026-08-12 (`testbed` @ `a2750bd2`): the
+`ipc_core` class wedges at test 21 `ipc_send_sync_roundtrip` (~50%, 2/4, 4/8),
+exactly the §5-closed signature but still firing.  Session findings on
+branch `main` @ `464f1fbc`:
+
+1. **The `[WEDGE] blocked-in-runq` INV-2 violation is a REAL but SEPARATE bug.**
+   `IPC::block_sender()`/`wake_sender()` PI boost called `Scheduler::move_priority()`
+   unconditionally, re-enqueueing a BLOCKED owner into the runq
+   (`[WEDGE] blocked-in-runq id=6 st=2 inrq=1 phys=1`, 15 hits/run).  Fixed and
+   committed `b7dce519` (gate on `owner.in_ready_queue_`, mirroring
+   `set_priority`).  `[WEDGE]` count 15→0, all ipc/sync classes still green.
+   The hang persists → the WEDGE was NOT the hang's root cause.
+
+2. **Hardware-watchpoint session re-attempted, confirmed broken** (consistent
+   with §4.4): both lldb `WatchpointCreateByAddress` and
+   `x86_64-elf-gdb watch` on `scheduler_next_task_id`/`scheduler_load_rsp_from`
+   accept but never fire over the QEMU `-s` gdb-stub; breakpoints DO fire.
+   Updated `tools/gdb/h2_wp2.py` + `h2_replay*.gdb` to current v0.4.0 addresses
+   (`current_cpu()::cpu` = `0xFFFF8000004A9C60`, ticks +0x10; TCB offsets
+   id=0x360/state=0x370/ctx.rsp=0x478/kst=0x488/top=0x490 confirmed stable).
+
+3. **Kernel-side cold-path diagnostics added** (`CONFIG_DEBUG_IPC_SCHED`-gated,
+   zero hot-path perturbation — verified the race still reproduces ~50% with
+   them ON):
+   - `[H2-ABORT]` in `scheduler_validate_pending_switch` — fires ONLY on the
+     stale-RSP arm drop.  In failing runs it never fired → the freeze is NOT a
+     validate-abort.
+   - `[H2-APPLY]` in `scheduler_on_context_switch` (id==1) — dumps the harness's
+     stored iret frame (ctx.rsp, rip, cs, rfl, frsp, ss) at every APPLY to the
+     harness.
+
+### 6.2 Freeze-frame evidence (apply side) — corrects the "stale frame" theory
+Freeze chain in test 21 (all failing runs):
+```
+[SW] cur=7 next=1 (x2)    <- sender 7 terminates → harness
+[H2-APPLY] id=1 ctx.rsp=0xFFFF900000032930 rip=0xFFFF80000023E726 cs=0x8
+           rfl=0x10202 frsp=0xFFFF9000000329E8 ss=0x10
+[APPLY] id=1              <- harness iretq'd onto this frame
+[SW] cur=1 next=6         <- harness (resumed) arms switch to receiver 6
+<no further [TICK]/[SW]/[APPLY]>
+```
+`objdump` (NOT addr2line, whose discriminator misleads) proves
+`0xFFFF80000023E726 = test_ipc_send_sync_roundtrip + 0x143` — the harness's
+**own test-21 body** (a `jmp` back into the wait loop after `call arch_sti`).
+So the frame is VALID (`rip ∈ .text`, `cs=0x8`, `IF=1`), NOT garbage, NOT a
+stale daemon-wait `arch_hlt`, and NOT stale test-19 code.
+
+Distinct RFLAGS signature:
+- Freeze frame: `rfl=0x10202` (IF set; CF=AF=SF=0 — "clean" flags).
+- All legitimate harness frames (PASS and earlier FAIL): `rfl=0x10293`
+  (IF set; CF=AF=SF=1 — arithmetic flags from the interrupted instruction).
+The `0x10202` clean-flag frame is the distinguishing marker of the displaced
+resume — a frame whose flags were not produced by the interrupted test code.
+
+### 6.3 Mechanism (updated)
+Receiver 6 is **preempted** by the woken higher-priority sender 7 (prio 12 >
+11) *before* its trampoline `terminate()` runs — it stays `READY` in the runq
+and never terminates.  The harness's test-21 wait loop
+(`is_valid(receiver) && receiver->state != TERMINATED`) is correctly TRUE, so
+it arms a deferred switch to run receiver 6 to completion.  That switch is
+**armed but never applied** (no `[APPLY] id=6`, no `[H2-ABORT]`), and then the
+timer ISR stops firing — the harness's `arch::hlt()` is executing with
+interrupts effectively disabled after the skipped apply.
+
+This is the §4.5/§5 "armed-never-applied" mechanism re-surfacing: the §5
+asymmetric-arm-clear fix (restore_preempted_current on CLR-RMS/CLR-SET)
+reduced but did not eliminate it.  The residual is now isolated to the
+**apply-side skip path** in `isr_stubs.asm` — the generation re-check
+(`jne .restore`, §isr_stubs.asm:168-193) or the nesting-depth guard
+(`ja .restore`, :133-134) leaving the arm published while the CPU returns to
+the harness with a state that prevents the next tick from being serviced.
+
+### 6.4 Next step (in progress)
+Instrument the apply-side skip paths in `isr_stubs.asm`:
+- log `scheduler_record_skip` (generation-skip) with captured/current gen, the
+  arm target id, ISR depth, and the live RFLAGS at skip time;
+- log the nesting-depth skip (`ja .restore`) with target id + depth.
+This will confirm whether the freeze is a generation-skip or a depth-skip, and
+capture the RFLAGS the harness returns to (the IF=0 hypothesis).
+
+### 6.5 Apply-side skip instrumentation — result (2026-08-12, continuing)
+Added cold-path (`CONFIG_DEBUG_IPC_SCHED`) hooks on EVERY apply-side skip path:
+`[H2-SKIP]` (generation re-check, `scheduler_record_skip`),
+`[H2-DEPTH]` (nesting-depth guard, new `scheduler_diag_depth_skip`),
+`[H2-RSPABORT]` (asm RSP-owner check, new `scheduler_diag_rsp_abort`),
+`[H2-DEAD]` (find_task(id)==NULL in `scheduler_validate_pending_switch`),
+`[H2-ABORT]` (stale-RSP drop in the C validator),
+`[H2-ARMDEAD]` (arm-time liveness check in `switch_to_task` publish).
+
+**Result — root cause now pinned by direct evidence (freeze, test 21):**
+```
+[SW] cur=1 next=6 rsp=...                # harness (cur=1) arms switch to receiver 6
+[H2-ARMDEAD] cur=1 next=6 tgt=0x0 st=1 tick=23   # task 6 ALREADY removed at ARM time
+[H2-DEAD]    id=6 t=0x0 tick=23                  # apply-side: find_task(6)==NULL
+<silence>
+```
+- `[H2-SKIP]`, `[H2-DEPTH]`, `[H2-RSPABORT]`, `[H2-ABORT]` all **never fired** →
+  the freeze is NOT a generation-skip, depth-skip, asm RSP abort, or C
+  stale-RSP abort.
+- The freeze is a **stale runq node for a removed task**: `next_task()` returned
+  receiver 6 as a READY candidate (its stale TCB reads `state=RUNNING` on
+  freed/reused memory), and `switch_to_task` published the arm — but
+  `find_task(6)==NULL` (id_table already cleared).  The §1.3
+  `invalidate_pending_switch_to` fires on `release_zombie` and cannot help
+  here: the arm is published AFTER the target was released.
+- This refines §4.5/§5: the asymmetric-arm-clear fix closed the
+  CLR-RMS/CLR-SET paths, but the residual is an **orphan runq node** — a task
+  whose runq membership was not torn down when it terminated (PI-boost
+  re-bucket / wake_sender restore interacting with enqueue/dequeue bucket,
+  or a terminate path that released id_table without a matching dequeue_ready
+  in the correct priority bucket).
+
+**Open questions for the fix:**
+1. Which removal path cleared task 6's id_table without fully dequeuing its
+   runq node?  Candidates: `terminate()` → `dequeue_ready` using
+   `effective_priority()` while the boosted/restored priority disagrees with
+   the bucket the node was enqueued in (PI boost at 12, restore to 11), or a
+   re-enqueue after release.
+2. Whether `next_task()` should skip runq candidates whose id is not in
+   id_table (belt-and-braces liveness check at dequeue/selection time) in
+   addition to fixing the orphan-producing teardown.
+
+### 6.6 ROOT CAUSE FULLY PINNED — stale harness resume re-enqueues a removed task (2026-08-12)
+
+Added `[H2-ENQDEAD]` (enqueue-liveness audit in `Scheduler::enqueue_ready`,
+cold, fires when a task is enqueued that is no longer a live id_table member)
+with the caller return address.  One failing run produced the COMPLETE chain:
+
+```
+[H2-TERM6] cur=6 st=1 inrq=0 rq_prio=0 tick=20   <- receiver 6 self-terminates
+                                                     (lambda done → trampoline →
+                                                      terminate → dequeue+release,
+                                                      id_table_remove)
+[H2-APPLY] id=1 ... rip=0xFFFF80000023E726 rfl=0x10202  <- harness resumed onto
+                                                     STALE test-21 setup frame
+[H2-ENQDEAD] id=6 st=0 inrq=0 ra=0xFFFF80000023E5AB tcb=0xFFFF8000007E3000 tick=22
+                                      ^ yield_to_task's Scheduler::enqueue_ready(task)
+[SW] cur=1 next=6                    <- harness arms switch to re-enqueued dead task
+[H2-ARMDEAD] cur=1 next=6 tgt=0x0 st=1 tick=23   <- find_task(6)==NULL at arm time
+[H2-DEAD] id=6 t=0x0 tick=23                      <- apply-side confirms
+<silence>
+```
+
+**Decoded control flow (objdump, test_ipc_send_sync_roundtrip):**
+- Wait loop = 0x23e72b..0x23e79d (is_valid(sender)/is_valid(receiver) checks +
+  `call arch_hlt` + set need_resched).  It NEVER calls yield_to_task.
+- Setup path = 0x23e680..0x23e726: `yield_to_task(receiver)` (call at 0x23e69d,
+  addr 0xffff80000023e538) then set need_resched.  Executed ONCE at test-21
+  start.
+- Freeze resume frame rip = 0x23E726 = `jmp 0x23e69d` (after `call arch_sti`),
+  i.e. a frame from the SETUP path — NOT the wait loop.
+
+**Mechanism (complete):**
+1. Receiver 6 self-terminates (tick 20): dequeued, `id_table_remove`,
+   `release_zombie`.  `invalidate_pending_switch_to(6)` runs (no-op — no arm
+   to 6 pending yet).
+2. Sender 7 terminates; harness is resumed (`[APPLY] id=1`) but onto a STALE
+   saved frame whose rip is in the test-21 SETUP path (0x23e726), not the wait
+   loop.  This is the residual §4.6 displacement: `context.rsp` was
+   snapshot-restored to the setup-path frame (arch_hlt-free variant) and the
+   live-save did not refresh it in this path.
+3. Resuming at 0x23e726 re-enters the setup path, which calls
+   `yield_to_task(receiver)` AGAIN at tick 22.  `yield_to_task`'s final
+   `Scheduler::enqueue_ready(task)` (test_sched_helpers.hpp:80) executes on the
+   receiver TCB (`tcb=0xFFFF8000007E3000`) whose id_table entry is gone →
+   `[H2-ENQDEAD]` — the orphan runq node is CREATED HERE.
+4. `next_task()` returns the orphan node (state reads stale READY), the harness
+   arms a switch to it, the apply-side finds `find_task(6)==NULL`
+   (`[H2-DEAD]`), drops the arm, and the harness hlt-waits forever — no further
+   ticks service the wait loop → freeze.
+
+**Fix directions (now precise):**
+1. **Prevent the stale-frame resume** (the audit's long-standing goal): the
+   harness's `context.rsp` must not be restored/re-pointed to the test-body
+   setup path.  The §5 fix closed CLR-RMS/CLR-SET asymmetry but the harness
+   resume frame can still be a snapshot/setup-path frame.
+2. **Make `enqueue_ready`/`set_task_ready` refuse removed tasks** (defense in
+   depth): if `find_task(task.id) != &task`, log + drop instead of inserting a
+   node for a task the scheduler no longer owns.  This neutralizes the orphan
+   regardless of which stale path resurrects it.
+3. **`next_task()` liveness guard**: skip runq candidates whose id is not in
+   id_table (belt-and-braces), as the §1.2 stale-arm-to-removed-task guard but
+   at selection time.
+
+

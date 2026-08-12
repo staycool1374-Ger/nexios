@@ -31,7 +31,7 @@
 #include <lib/types.hpp>
 
 // DEBUGGING ONLY — comment out to deactivate (release procedure requires this).
-// #define CONFIG_DEBUG_IPC_SCHED 1
+#define CONFIG_DEBUG_IPC_SCHED 1
 
 // The formatting helpers (fmt_u64/fmt_str/trace) are ALWAYS available: they are
 // tiny, side-effect-free buffer formatters reused by tcb_write_log.cpp.  Only

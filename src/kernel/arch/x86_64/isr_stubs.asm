@@ -28,6 +28,8 @@ extern scheduler_validate_pending_switch
 extern scheduler_record_skip
 extern scheduler_abort_switch_fixup
 extern scheduler_diag_pre_save
+extern scheduler_diag_depth_skip
+extern scheduler_diag_rsp_abort
 extern isr_nesting_depth
 extern irq_entry_tsc
 
@@ -131,7 +133,30 @@ isr_common:
     ; Perform context switch at any nesting depth ≤ 2 (normal = 1, SYSCALL+timer = 2).
     ; Deeper nesting (≥ 3) indicates a bug — skip to avoid stack corruption.
     cmp qword [rel isr_nesting_depth], 2
-    ja .restore
+    jbe .depth_ok
+    ; H2 depth-skip audit (cold: fires only when a pending apply is skipped due
+    ; to excessive ISR nesting).  Preserve every GPR .restore pops.
+    push rax
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    call scheduler_diag_depth_skip
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rax
+    jmp .restore
+.depth_ok:
 
     ; Generation-lock: capture the generation that published this deferred-switch
     ; pair (load_rsp_from / load_cr3_from).  RCX is preserved across the
@@ -246,9 +271,35 @@ isr_common:
     mov rcx, [rel scheduler_load_kstack_base]
     mov rdx, [rel scheduler_load_kstack_top]
     cmp rsp, rcx
-    jb .abort_switch
+    jb .h2_rsp_abort
     cmp rsp, rdx
-    jae .abort_switch
+    jae .h2_rsp_abort
+    jmp .rsp_owner_ok
+.h2_rsp_abort:
+    ; H2 asm RSP-owner abort audit (cold): dump the rejected RSP and the kstack
+    ; range so we can confirm whether the freeze is this silent abort.  RBX
+    ; still holds the original RSP.  Preserve every GPR .restore pops.
+    push rax
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    call scheduler_diag_rsp_abort
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rax
+    jmp .abort_switch
+.rsp_owner_ok:
 
     ; Context switch complete — update current_index_ to the next task
     push rax
