@@ -71,15 +71,18 @@ class KernelObject {
     ///        mark itself revoked; after revoke(), acquire() refuses and the
     ///        object's capability references are invalidated.  Called under
     ///        the object's own serialization.
-    virtual void revoke() noexcept { revoked_ = true; }
+    virtual void revoke() noexcept {
+        __atomic_store_n(&revoked_, true, __ATOMIC_RELEASE);
+    }
 
-    /// @brief Takes a new reference.  Relaxed ordering is sufficient: the
-    ///        reference count is a lifetime guard, not a payload ordering
-    ///        barrier.  Refuses after revoke() (capability revocation).
+    /// @brief Takes a new reference.  Relaxed ordering is sufficient for the
+    ///        reference count (a lifetime guard, not a payload ordering
+    ///        barrier).  Acquire ordering on the revoked check makes the
+    ///        revoke() publication visible on SMP (ROADMAP 0.4.x).
     /// @return true if a reference was taken, false if the object is revoked
     ///         (caller must not use the pointer).
     bool acquire() noexcept {
-        if (__atomic_load_n(&revoked_, __ATOMIC_RELAXED))
+        if (__atomic_load_n(&revoked_, __ATOMIC_ACQUIRE))
             return false;
         __atomic_fetch_add(&ref_count_, 1U, __ATOMIC_RELAXED);
         return true;
@@ -144,6 +147,13 @@ class KernelObject {
 /// shared/pool-backed object while a code path that is not serialized against
 /// the owner's teardown dereferences it.  Safe on shared objects — that is
 /// its purpose.  If acquire() refuses (revoked object), the pin is a no-op.
+///
+/// @note Contract: a ScopedRef must never outlive the owning task's teardown
+///       for a private-owned (non-shared) object.  release_all_objects()
+///       asserts refcount==1 for non-shared nodes; a pin still live at
+///       teardown trips that assert (debug) or drops the ownership ref early.
+///       For shared objects the assert is skipped (>=1 only) and a pin merely
+///       delays the last release until it goes out of scope.
 class ScopedRef {
   public:
     explicit ScopedRef(KernelObject *p) noexcept : p_(nullptr) {

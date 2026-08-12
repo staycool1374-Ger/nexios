@@ -179,3 +179,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-12 23:35:40 M-extra step1 PipeBuffer shared KernelObject: ipc_pipe 6/6, servers_vfsd 18/18, process_lifecycle 16/16, ipc_blocking 4/4, ipc_core 23/23, memory_mempool 4/4, memory_safety 11/11
 2026-08-12 23:39:32 all PASSED: 859 FAILED: 0 TIME: 53s
 2026-08-12 23:40:09 all PASSED: 84 FAILED: 0 TIME: 4s (release, trace OFF — H2 trace-OFF hang no longer reproduces)
+2026-08-13 00:28:59 SIL3 audit fixes: acquire/revoke SMP ordering, stale ~Semaphore comment, ScopedRef contract; scheduler_sporadic 25/25, deadline_ss 3/3, ipc_pipe 6/6, ipc_core 23/23, memory_mempool 4/4, memory_safety 11/11, servers_vfsd 18/18, process_lifecycle 16/16
