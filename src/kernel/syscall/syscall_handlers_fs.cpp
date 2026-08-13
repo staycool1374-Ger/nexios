@@ -242,11 +242,24 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         return static_cast<uint64_t>(-1);
     if (!f->vnode || !f->vnode->ops->read)
         return static_cast<uint64_t>(-1);
+    // MP-4 (SMAP): ops->read writes user memory directly (generic vnode code
+    // uses kernel buffers elsewhere, so stac cannot live inside the op).
+    // Arm fault recovery + stac around the call so a #PF on the user buffer
+    // returns -1 instead of panicking, and AC is cleared on every path.
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_read);
+    arch::stac();
     int64_t r =
         f->vnode->ops->read(*f->vnode, buf.unsafe_ptr(), count, f->offset);
+    arch::clac();
+    g_user_access_recover_ip = 0;
     if (r > 0)
         f->offset += static_cast<uint64_t>(r);
     return static_cast<uint64_t>(r >= 0 ? r : -1);
+
+recover_read:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return static_cast<uint64_t>(-1);
 }
 
 uint64_t Syscall::sys_close(uint64_t arg0, uint64_t, uint64_t, uint64_t,
@@ -277,7 +290,16 @@ uint64_t Syscall::sys_fstat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
     if (syscall_is_user_task() && !st.valid())
         return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(f->vnode->ops->fstat(*f->vnode, *st.unsafe_ptr()));
+    // MP-4 (SMAP): build into a kernel-local VfsStat, then safe_copy to user
+    // (the vnode op derefs a kernel buffer; the user copy is stac-wrapped).
+    vfs::VfsStat kst{};
+    int rstat = f->vnode->ops->fstat(*f->vnode, kst);
+    if (rstat != 0)
+        return static_cast<uint64_t>(rstat);
+    if (syscall_is_user_task() &&
+        !safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
+        return static_cast<uint64_t>(-1);
+    return 0;
 }
 
 uint64_t Syscall::sys_write(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -394,9 +416,16 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (syscall_is_user_task() && (!pos_chk.valid() || !dent_chk.valid()))
         return static_cast<uint64_t>(-1);
     uint64_t position = pos_chk.read();
-    int r = f->vnode->ops->readdir(*f->vnode, position, *dent_chk.unsafe_ptr());
-    if (r == 0)
+    // MP-4 (SMAP): readdir writes the Dirent through a generic vnode op; build
+    // into a kernel local, then safe_copy to user (stac-wrapped).
+    vfs::Dirent kdent{};
+    int r = f->vnode->ops->readdir(*f->vnode, position, kdent);
+    if (r == 0) {
+        if (syscall_is_user_task() &&
+            !safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))
+            return static_cast<uint64_t>(-1);
         pos_chk.write(position);
+    }
     return static_cast<uint64_t>(r == 0 ? 0 : -1);
 }
 
@@ -421,7 +450,15 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     auto st = checked(reinterpret_cast<vfs::VfsStat *>(arg1));
     if (syscall_is_user_task() && !st.valid())
         return static_cast<uint64_t>(-1);
-    return static_cast<uint64_t>(vn->ops->fstat(*vn, *st.unsafe_ptr()));
+    // MP-4 (SMAP): local VfsStat + safe_copy_to_user (see sys_fstat).
+    vfs::VfsStat kst{};
+    int rstat = vn->ops->fstat(*vn, kst);
+    if (rstat != 0)
+        return static_cast<uint64_t>(rstat);
+    if (syscall_is_user_task() &&
+        !safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
+        return static_cast<uint64_t>(-1);
+    return 0;
 }
 
 uint64_t Syscall::sys_dup(uint64_t arg0, uint64_t, uint64_t, uint64_t,

@@ -27,6 +27,7 @@
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/vfs/vfs.hpp>
@@ -153,13 +154,26 @@ static constexpr size_t INITIAL_HEAP_SIZE =
     INITIAL_HEAP_PAGES * arch::PAGE_SIZE;
 
 /// @brief Count strings in a null-terminated array (argc/envc helper).
+/// @note MP-4 (SMAP): called with USER argv/envp on the exec path; the array
+///       and every string window are pre-certified mapped by
+///       validate_argv_envp, but SMAP faults on PRESENT U/S=1 pages without
+///       AC, so each read runs under stac/clac with fault recovery.
 static int count_strings(const char *const *arr) {
     if (!arr)
         return 0;
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cnt);
+    arch::stac();
     int n = 0;
     while (arr[n])
         ++n;
+    arch::clac();
+    g_user_access_recover_ip = 0;
     return n;
+
+recover_cnt:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return 0;
 }
 
 /// @brief Sum the lengths (including null terminators) of all strings in an
@@ -167,10 +181,19 @@ static int count_strings(const char *const *arr) {
 static uint64_t total_string_len(const char *const *arr) {
     if (!arr)
         return 0;
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_len);
+    arch::stac();
     uint64_t total = 0;
     for (int i = 0; arr[i]; ++i)
         total += strlen(arr[i]) + 1;
+    arch::clac();
+    g_user_access_recover_ip = 0;
     return total;
+
+recover_len:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return 0;
 }
 
 /// @brief Copy all strings from a null-terminated array into a contiguous
@@ -178,11 +201,21 @@ static uint64_t total_string_len(const char *const *arr) {
 static void copy_strings(uint8_t *dest, const char *const *arr) {
     if (!arr)
         return;
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cpy);
+    arch::stac();
     for (int i = 0; arr[i]; ++i) {
         size_t len = strlen(arr[i]) + 1;
         memcpy(dest, arr[i], len);
         dest += len;
     }
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return;
+
+recover_cpy:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return;
 }
 
 /// @brief Load all PT_LOAD segments and allocate user stack + initial heap.
@@ -340,10 +373,14 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     uint64_t *envp_start = ptr;
     if (envp) {
         uint8_t *str_pos = sp;
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_envp);
+        arch::stac();
         for (int i = 0; i < envc; ++i) {
             envp_start[i] = reinterpret_cast<uint64_t>(str_pos);
             str_pos += strlen(envp[i]) + 1;
         }
+        arch::clac();
+        g_user_access_recover_ip = 0;
     }
 
     for (int i = argc; i >= 0; --i) {
@@ -352,10 +389,14 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     uint64_t *argv_start = ptr;
     if (argv) {
         uint8_t *str_pos = sp + total_string_len(envp);
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_argv);
+        arch::stac();
         for (int i = 0; i < argc; ++i) {
             argv_start[i] = reinterpret_cast<uint64_t>(str_pos);
             str_pos += strlen(argv[i]) + 1;
         }
+        arch::clac();
+        g_user_access_recover_ip = 0;
     }
 
     *--ptr = static_cast<uint64_t>(argc);
@@ -365,6 +406,16 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
                mem::STACK_VADDR + arch::PAGE_SIZE + mem::STACK_SIZE;
 
     return user_rsp;
+
+recover_envp:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return 0;
+
+recover_argv:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return 0;
 }
 
 /// @brief Open /dev/tty as stdin/stdout/stderr for a new task.

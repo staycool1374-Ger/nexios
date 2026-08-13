@@ -73,8 +73,17 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (!child)
         return static_cast<uint64_t>(-1);
     if (child->state == TaskState::TERMINATED) {
-        if (status_ptr)
-            *status_ptr = child->exit_code;
+        if (status_ptr) {
+            // MP-4 (SMAP): user write via safe_copy_to_user (stac-wrapped);
+            // kernel-task callers write directly.
+            uint64_t code = child->exit_code;
+            if (syscall_is_user_task()) {
+                if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
+                    return static_cast<uint64_t>(-1);
+            } else {
+                *status_ptr = code;
+            }
+        }
         uint64_t cid = child->id;
         cur->remove_child(child);
         child->cleanup();
@@ -85,6 +94,17 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     if (arg2 & 1)
         return 0;
     cur->waiting_child_pid = target_pid;
+    // MP-4 (SMAP): the stored status pointer is written later by
+    // Scheduler::wake_waiting_parent under the parent's CR3.  For user tasks
+    // pre-certify the page is MAPPED (range validity alone is insufficient —
+    // an unmapped-but-valid VA would #PF in the wake path).  Kernel tasks pass
+    // a kernel pointer (no user page check needed).
+    if (syscall_is_user_task() && status.unsafe_ptr() &&
+        VMM::virt_to_phys_in_pml4(
+            reinterpret_cast<uint64_t>(status.unsafe_ptr()),
+            cur->page_table_) == 0) {
+        return static_cast<uint64_t>(-1);
+    }
     cur->waiting_child_status = status_ptr;
     Scheduler::dequeue_ready(*cur);
     cur->state = TaskState::BLOCKED;
@@ -114,30 +134,52 @@ static bool validate_argv_envp(const char *const *ptr, bool is_user_task,
             return false;
         const char *const *p = ptr;
         size_t arg_count = 0;
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_exec);
+        arch::stac();
         while (*p) {
-            if (++arg_count > MAX_EXEC_ARGS)
+            if (++arg_count > MAX_EXEC_ARGS) {
+                arch::clac();
+                g_user_access_recover_ip = 0;
                 return false;
+            }
             // Validate the ENTIRE maximum-length window up front, so every
             // byte touched by the scan below is already certified mapped.
             auto s = checked(*p, static_cast<uint64_t>(MAX_EXEC_ARG_LEN));
-            if (!s.valid())
+            if (!s.valid()) {
+                arch::clac();
+                g_user_access_recover_ip = 0;
                 return false;
+            }
             size_t len = 0;
             for (; len < MAX_EXEC_ARG_LEN; ++len) {
                 if (s.unsafe_ptr()[len] == '\0')
                     break;
-                if (len == MAX_EXEC_ARG_LEN - 1)
+                if (len == MAX_EXEC_ARG_LEN - 1) {
+                    arch::clac();
+                    g_user_access_recover_ip = 0;
                     return false; // unterminated within the window
+                }
             }
             if (out_total_len)
                 *out_total_len += len + 1;
             ++p;
             auto next = checked(p, static_cast<size_t>(1));
-            if (!next.valid())
+            if (!next.valid()) {
+                arch::clac();
+                g_user_access_recover_ip = 0;
                 return false;
+            }
         }
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return true;
     }
     return true;
+
+recover_exec:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return false;
 }
 
 uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -252,11 +294,16 @@ uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
     auto chk = checked(frame, 1);
     if (!chk.valid())
         return static_cast<uint64_t>(-1);
-    regs[17] = frame->saved_rip;
-    regs[20] = frame->saved_rsp;
-    regs[19] = frame->saved_rflags;
-    regs[18] = frame->saved_cs;
-    regs[21] = frame->saved_ss;
+    // MP-4 (SMAP): copy the frame to a kernel local (stac-wrapped) instead of
+    // dereferencing user memory directly.
+    kernel::SignalFrame kf{};
+    if (!safe_copy_from_user(&kf, frame, 1))
+        return static_cast<uint64_t>(-1);
+    regs[17] = kf.saved_rip;
+    regs[20] = kf.saved_rsp;
+    regs[19] = kf.saved_rflags;
+    regs[18] = kf.saved_cs;
+    regs[21] = kf.saved_ss;
     regs[0] = 0;
     return 0;
 }

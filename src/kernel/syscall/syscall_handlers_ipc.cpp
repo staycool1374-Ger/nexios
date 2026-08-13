@@ -101,8 +101,11 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     uint64_t copy_size = msg.data_size;
     if (copy_size > max_size)
         copy_size = max_size;
-    for (size_t i = 0; i < copy_size; ++i)
-        raw_buf[i] = msg.data[i];
+    // MP-4 (SMAP): safe_copy_to_user (stac-wrapped) instead of a raw write
+    // loop into user memory.
+    if (copy_size > 0 &&
+        !safe_copy_to_user(raw_buf, msg.data, copy_size))
+        return static_cast<uint64_t>(-1);
     return msg.type;
 }
 
