@@ -196,3 +196,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-13 10:45:20 memory_checked_ptr PASSED: 4 FAILED: 0 TIME: 632ms
 2026-08-13 10:49:22 M1/M2 MP-4 stac/clac infra + checked_ptr wrapping: memory_checked_ptr 4/4, memory_safety 11/11, selftest 132/132, ipc_core 23/23, process_lifecycle 16/16
 2026-08-13 11:02:26 M3 MP-4 direct user-VA deref fixes: process_lifecycle 16/16, process_elf 9/9, process_secure_exec 5/5, selftest 132/132, ipc_core 23/23, servers_vfsd 18/18, servers_iocd 7/7, memory_safety 11/11
+2026-08-13 11:05:07 M4/M5 MP-4 CR4.SMAP cpuid probe + AC-0 debug assert: selftest 132/132, ipc_core 23/23, process_lifecycle 16/16, process_elf 9/9, memory_safety 11/11

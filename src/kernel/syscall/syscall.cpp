@@ -26,6 +26,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/arch/msr.hpp>
+#include <kernel/arch/io.hpp>
 #include <constants.hpp>
 
 extern "C" void syscall_entry();
@@ -93,10 +94,19 @@ int syscall_path_open(const char *path, uint64_t flags) {
     return syscall_task_open(vn, flags);
 }
 
-uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
+ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                          uint64_t arg2, uint64_t arg3, uint64_t *regs) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
         return static_cast<uint64_t>(-1);
+
+#if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_X86_64)
+    // MP-4 (SMAP) AC-leak detector: AC must be 0 on syscall entry.  A leaked
+    // AC=1 (a missed clac in a user-access path) would otherwise be handed to
+    // user mode via sysret (IA32_FMASK masks IF only, not AC), letting ring-3
+    // access supervisor pages.  Fail fast in debug.
+    if ((arch::read_rflags() & (1ULL << 18)) != 0)
+        panic("MP-4: AC flag leaked into syscall entry (missing clac)");
+#endif
 
 #if CONFIG_CANARY_GUARD
     // v0.4.0 MP-3: verify the user-segment sentinel canaries on syscall entry

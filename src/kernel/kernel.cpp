@@ -575,10 +575,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     cr4 |= (1ULL << 9);
     cr4 |= (1ULL << 10);
 
-    // v0.4.0 MP-4: SMEP (CR4 bit 20) — supervisor-mode execution prevention.
-    // When supported, ring-3 code can no longer execute kernel text/data VAs.
-    // SMAP (CR4 bit 21) is deferred (CONFIG_SMAP stays 0).
-#if CONFIG_SMEP
+    // v0.4.0 MP-4: SMEP (CR4 bit 20) + SMAP (CR4 bit 21) — supervisor-mode
+    // execution/prevention.  When supported, ring-3 code can no longer execute
+    // kernel text/data VAs (SMEP) and the kernel must stac/clac around any
+    // user-memory access (SMAP; every such site is wrapped in checked_ptr /
+    // the syscall handlers).
+#if CONFIG_SMEP || CONFIG_SMAP
     {
         uint32_t max_leaf = 0, ebx = 0, ecx = 0, edx = 0;
         asm volatile("cpuid"
@@ -587,11 +589,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         (void)max_leaf;
         (void)ecx;
         (void)edx;
+#if CONFIG_SMEP
         if (ebx & (1u << 7)) {
             cr4 |= (1ULL << 20); // CR4.SMEP
         } else {
             debug_write("[BOOT] SMEP not supported by CPU — leaving off\n");
         }
+#endif
+#if CONFIG_SMAP
+        if (ebx & (1u << 20)) {
+            cr4 |= (1ULL << 21); // CR4.SMAP
+        } else {
+            debug_write("[BOOT] SMAP not supported by CPU — leaving off\n");
+        }
+#endif
     }
 #endif
     arch::write_cr4(cr4);
