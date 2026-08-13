@@ -26,6 +26,7 @@
 #include <kernel/random.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/timer.hpp>
 #include <string.hpp>
 
@@ -179,7 +180,12 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     Timeval tv = {};
     tv.tv_sec = static_cast<int64_t>(secs);
     tv.tv_usec = 0;
-    *tv_ptr.unsafe_ptr() = tv;
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
+    if (syscall_is_user_task() &&
+        !safe_copy_to_user(tv_ptr.unsafe_ptr(), &tv, 1))
+        return static_cast<uint64_t>(-1);
+    else
+        *tv_ptr.unsafe_ptr() = tv;
     return 0;
 }
 
@@ -201,7 +207,12 @@ uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     strlcpy(uts.version, Version::build_date(), sizeof(uts.version));
     strlcpy(uts.machine, "x86_64", sizeof(uts.machine));
     strlcpy(uts.domainname, "(none)", sizeof(uts.domainname));
-    *uts_ptr.unsafe_ptr() = uts;
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
+    if (syscall_is_user_task() &&
+        !safe_copy_to_user(uts_ptr.unsafe_ptr(), &uts, 1))
+        return static_cast<uint64_t>(-1);
+    else
+        *uts_ptr.unsafe_ptr() = uts;
     return 0;
 }
 
@@ -337,7 +348,12 @@ uint64_t Syscall::sys_getrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
     auto rl_ptr = checked(reinterpret_cast<Rlimit *>(arg1));
     if (syscall_is_user_task() && !rl_ptr.valid())
         return static_cast<uint64_t>(-1);
-    *rl_ptr.unsafe_ptr() = rl;
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
+    if (syscall_is_user_task() &&
+        !safe_copy_to_user(rl_ptr.unsafe_ptr(), &rl, 1))
+        return static_cast<uint64_t>(-1);
+    else
+        *rl_ptr.unsafe_ptr() = rl;
     return 0;
 }
 
@@ -351,7 +367,14 @@ uint64_t Syscall::sys_setrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
     auto rl_ptr = checked(reinterpret_cast<const Rlimit *>(arg1));
     if (syscall_is_user_task() && !rl_ptr.valid())
         return static_cast<uint64_t>(-1);
-    Rlimit rl = *rl_ptr.unsafe_ptr();
+    // MP-4 (SMAP): safe_copy_from_user (stac-wrapped).
+    Rlimit rl{};
+    if (syscall_is_user_task()) {
+        if (!safe_copy_from_user(&rl, rl_ptr.unsafe_ptr(), 1))
+            return static_cast<uint64_t>(-1);
+    } else {
+        rl = *rl_ptr.unsafe_ptr();
+    }
     (void)rl;
     (void)arg0;
     return 0;
@@ -374,13 +397,25 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         auto buf = checked(reinterpret_cast<uint8_t *>(arg0), arg1);
         if (!buf.valid())
             return static_cast<uint64_t>(-1);
+        // MP-4 (SMAP): random_fill is generic (kernel buffers elsewhere); the
+        // user write is stac-wrapped with fault recovery.
+        g_user_access_recover_ip =
+            reinterpret_cast<uint64_t>(&&recover_rand);
+        arch::stac();
         random_fill(buf.unsafe_ptr(), static_cast<size_t>(arg1));
+        arch::clac();
+        g_user_access_recover_ip = 0;
     } else {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         random_fill(reinterpret_cast<uint8_t *>(arg0),
                     static_cast<size_t>(arg1));
     }
     return arg1;
+
+recover_rand:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return static_cast<uint64_t>(-1);
 }
 
 uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -403,6 +438,9 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (!buf.valid())
             return static_cast<uint64_t>(-1);
         user_buf = buf.unsafe_ptr();
+        // MP-4 (SMAP): arm fault recovery for the user writes inside the
+        // for_each callback below.
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_klog);
     }
 
     kernel::log::g_dmesg.for_each([&](const kernel::log::LogEntry &e) {
@@ -495,11 +533,23 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                               ? entry_len
                               : (user_size - written);
         if (copy_len > 0) {
+            // MP-4 (SMAP): user write inside a generic for_each callback.
+            // stac/recover armed for the whole walk; a fault redirects to
+            // recover_klog with AC cleared and returns the partial count.
+            arch::stac();
             memcpy(user_buf + written, entry_buf, copy_len);
+            arch::clac();
             written += copy_len;
         }
     });
 
+    // Clear the armed recovery on the success path.
+    g_user_access_recover_ip = 0;
+    return written;
+
+recover_klog:
+    arch::clac();
+    g_user_access_recover_ip = 0;
     return written;
 }
 

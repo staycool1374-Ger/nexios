@@ -477,7 +477,14 @@ static void wake_waiting_parent(TaskControlBlock &child) {
             arch::write_cr3(p->page_table_);
             switched = true;
         }
+        // MP-4 (SMAP): the status page is a user page pre-certified MAPPED by
+        // waitpid's virt_to_phys_in_pml4 check (syscall_handlers_process.cpp).
+        // The write runs with AC set (stac) — the page cannot fault (present),
+        // so no recover_ip is needed.  clac restores AC for the kernel after
+        // the user-page store.
+        arch::stac();
         *p->waiting_child_status = child.exit_code;
+        arch::clac();
         if (switched)
             arch::write_cr3(old_cr3);
         p->waiting_child_status = nullptr;
