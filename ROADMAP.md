@@ -62,11 +62,15 @@ failures, zero ResourceTracker delta, `make build` clean.
 
 #### MP-1 — Private kernel-half page tables per kernel task
 
-- [ ] **MP-1.1 — Kernel-half layout spec.**  Document the private kernel map a
+- [x] **MP-1.1 — Kernel-half layout spec.**  Document the private kernel map a
       kernel task needs: kernel text/data/bss (already mapped in the kernel
       PML4), its own kernel stack frame, and the HHDM direct map (preserved
       for kernel→user access, REQ-MP-04).  Decide which kernel VA regions are
       per-task-private vs. shared-readonly (text) vs. shared (HHDM).
+      **DONE (2026-08-13):** `docs/specs/memory.md` §7.1.1 — per-region
+      classification table (per-task-private = user half + stack guard only;
+      shared-readonly = kernel text; shared = data/bss + HHDM + kslot window,
+      all copied by value from the boot kernel PML4).
 - [x] **MP-1.2 — Private kernel PML4 clone.**  Add `VMM::clone_kernel_pml4()`
       for the kernel half that copies only the kernel entries (PML4 indices ≥
       `PML4_USER_COUNT`) into a fresh top-level table, and maps the task's
@@ -78,15 +82,32 @@ failures, zero ResourceTracker delta, `make build` clean.
       private kstack page tables are NOT allocated.  The guard page below each
       slot plus the MP-6 hook enforce stack isolation (docs/specs/memory.md
       §7.1).
-- [ ] **MP-1.3 — CR3 switch plumbing.**  In `switch_to_task` /
+- [x] **MP-1.3 — CR3 switch plumbing.**  In `switch_to_task` /
       `scheduler_on_context_switch` (scheduler.cpp:2264, isr epilogue), load
       the task's private kernel PML4 phys into CR3 when dispatching a kernel
       task (currently only user tasks switch CR3 via
       `scheduler_load_cr3_from`).  Preserve HHDM + kernel text in every
       private table so kernel code keeps running after the switch.
-- [ ] **MP-1.4 — Teardown.**  Extend `TaskControlBlock::cleanup()` to free the
+      **DONE (2026-08-13):** every task (kernel AND user) owns a private
+      `page_table_` (MP-1.2), so `switch_to_task` always publishes
+      `scheduler_load_cr3_from = next.page_table_` and the ISR epilogue loads
+      it for all dispatches; the static `scheduler_kernel_cr3` fallback is hit
+      only when no CR3 was published.  Proven by
+      `memory_kernel_isolation`/`kernel_priv_cr3_switch_on_dispatch`
+      (`g_cr3 == a->page_table_` inside the dispatched task) +
+      `kernel_priv_cross_task_data_isolation`.  HHDM + kernel text preserved by
+      `clone_kernel_pml4()` (kernel half copied by value).
+- [x] **MP-1.4 — Teardown.**  Extend `TaskControlBlock::cleanup()` to free the
       private kernel PML4 + its private kernel-stack PT/PDPT/PD (mirror
       `free_user_pages` + `free_stack_pdpt` for the kernel half).
+      **DONE (2026-08-13):** `cleanup()` → `VMM::free_user_pages(page_table_)`
+      (walks user half only, `PMM::is_user_page` guard skips all boot-shared
+      kernel pages) + `PMM::free_page(page_table_)` reclaims the single private
+      PML4; kernel tasks have empty user halves so only one page is freed.
+      The kslot-window/HHDM/text pages are boot-shared and NOT freed
+      individually (spec §7.1.1 rule 4).  Proven by
+      `memory_kernel_isolation`/`kernel_priv_teardown_frees_pml4_stack` (zero
+      PMM delta after kernel-task create+dispatch+teardown).
 - [ ] **MP-1.5 — Kernel-task isolation proof.**  Two kernel tasks with
       different data pages: write to task A's private page from task A, read
       from task B (dispatched) → must #PF (unmapped in B's private table).

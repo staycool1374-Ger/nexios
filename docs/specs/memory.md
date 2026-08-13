@@ -152,7 +152,7 @@ Constraints:
 | Req | Semantics | Status |
 |---|---|---|
 | REQ-MP-01 | kernel↔user complete isolation (text/data/stack) | present |
-| REQ-MP-02 | kernel-task↔kernel-task private kernel-half page tables | **OPEN (gap)** |
+| REQ-MP-02 | kernel-task↔kernel-task private kernel-half page tables | present (MP-1, `memory_kernel_isolation`) |
 | REQ-MP-03 | user-task↔user-task isolation | present (deep-copy fork) |
 | REQ-MP-04 | kernel→user access via direct map | present |
 | REQ-MP-05 | user→data only via syscalls; SMAP/SMEP recommended-not-mandatory | present |
@@ -190,3 +190,40 @@ Consequences (authoritative discriminator change):
 - Teardown: `cleanup()` frees the PML4 page unconditionally (MP-7.3); the
   kslot-window tables are boot-shared and NOT freed individually; kernel-task
   user halves are empty so only the PML4 page is reclaimed.
+
+### 7.1.1 Kernel-half region classification (MP-1.1 layout spec)
+
+Which kernel-VA regions are per-task-private vs. shared-readonly vs. shared,
+and how teardown treats each.  All values x86_64; other arches analogous.
+
+| Region | PML4 idx | Entries | Class | Copied/created per task? | Freed at teardown? |
+|---|---|---|---|---|---|
+| Kernel text/data/bss (kernel map base, ~`0xFFFF8000...`) | 256..497 | PD/PT pages | **shared-readonly (text), shared (data/bss)** | copied **by value** (pointer-shared PD/PT) | **No** — boot-owned, refcounted by `PMM::is_user_page` false → skipped |
+| HHDM direct map (`HHDM_OFFSET` + phys) | within kernel half | leaf/PD entries | **shared** (all tasks see all of RAM) | copied **by value** | **No** — boot-owned |
+| kslot window (`CONFIG_KSTACK_WINDOW_BASE`, PML4 idx 498) | 498 | PDPT/PD/PT | **shared by reference** (window tables wired once at `init_kstack_window()`) | PD/PT entries inherited **by value**; no per-task tables | **No** — window tables boot-shared; per-slot guard pages remain |
+| Deadline-monitor / misc kernel mappings | kernel half | — | shared | by value | No |
+| User half (0xFFFF800000000000 below, PML4 idx 0..255) | 0..255 | — | **per-task-private** | zeroed for kernel tasks; ELF/deep-copy populated for user tasks | **Yes** — via `free_user_pages()` (user pages only) |
+| Per-task kernel stack VA | inside kslot window | PT | private slot (guard page below) | slot allocated in shared window | slot/guard reclaimed by kslot allocator |
+
+Classification rules (authoritative):
+1. **Per-task-private:** only the user half (0..255) and the per-slot stack
+   guard region.  Kernel tasks own an *empty* user half — exactly one PML4
+   page is private and freed at teardown.
+2. **Shared-readonly / shared:** every kernel-half entry (256..511) is copied
+   **by value** from the boot kernel PML4 by `clone_kernel_pml4()`.  The
+   underlying PD/PT pages are boot-owned; `free_user_pages()` never touches
+   them because `PMM::is_user_page()` is false for all kernel PD/PT/leaf
+   pages.  No task ever allocates a private kernel-half table.
+3. **CR3 contract (MP-1.3):** because every task's `page_table_` is non-zero
+   (a private PML4), `switch_to_task` always publishes
+   `scheduler_load_cr3_from = next.page_table_`, and the ISR epilogue loads it
+   for kernel AND user tasks alike.  The static `scheduler_kernel_cr3`
+   fallback in `isr_stubs.asm` is hit only when no CR3 was published (a
+   cleared/consumed switch), never for a normal kernel-task dispatch.
+   Preserving HHDM + kernel text in every private table (rule 2) is what keeps
+   kernel code running after the switch.
+4. **Teardown (MP-1.4):** `cleanup()` → `VMM::free_user_pages(page_table_)`
+   walks only user entries and frees only `PMM::is_user_page` pages (empty for
+   a kernel task), then `PMM::free_page(page_table_)` reclaims the single
+   private PML4 page.  The kslot window, HHDM and kernel text/data/bss pages
+   are boot-shared and intentionally NOT freed individually.
