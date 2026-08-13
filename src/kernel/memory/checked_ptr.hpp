@@ -186,9 +186,13 @@ static inline bool is_user_string(const void *user_ptr,
         return false;
     // Check if the page is actually mapped before dereferencing.
     // After snapshot_restore clears kernel PML4 user entries, unmapped
-    // user addresses would cause a Page Fault here.  virt_to_phys
+    // user addresses would cause a Page Fault here.  Probe the CURRENTLY
+    // ACTIVE page table (the current task's private PML4 under MP-1 — the
+    // boot kernel_pml4_ has its user entries zeroed, so VMM::virt_to_phys
+    // would wrongly report every user string unmapped).  virt_to_phys_in_pml4
     // returns 0 for unmapped pages without faulting.
-    if (VMM::virt_to_phys(addr) == 0)
+    uint64_t probe_cr3 = arch::read_cr3();
+    if (VMM::virt_to_phys_in_pml4(addr, probe_cr3) == 0)
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
     arch::stac();
