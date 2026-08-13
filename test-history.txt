@@ -190,3 +190,8 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-13 10:37:04 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 371ms
 2026-08-13 10:37:04 memory_stack_profiler PASSED: 6 FAILED: 0 TIME: 931ms
 2026-08-13 10:37:04 scheduler_core PASSED: 16 FAILED: 0 TIME: 460ms
+2026-08-13 10:45:20 arch_cross PASSED: 18 FAILED: 0 TIME: 1786ms
+2026-08-13 10:45:20 selftest PASSED: 132 FAILED: 0 TIME: 6837ms
+2026-08-13 10:45:20 memory_safety PASSED: 11 FAILED: 0 TIME: 291ms
+2026-08-13 10:45:20 memory_checked_ptr PASSED: 4 FAILED: 0 TIME: 632ms
+2026-08-13 10:49:22 M1/M2 MP-4 stac/clac infra + checked_ptr wrapping: memory_checked_ptr 4/4, memory_safety 11/11, selftest 132/132, ipc_core 23/23, process_lifecycle 16/16

@@ -112,6 +112,15 @@ inline void hlt() {
 inline void pause() {
     asm volatile("yield");
 }
+/// @brief Set AC-equivalent (PAN clear) — no-op until aarch64 PAN/PXN
+///        enforcement lands (ROADMAP MP-4.4).  Shared with x86_64 SMAP code.
+inline void stac() {}
+/// @brief Clear AC-equivalent — no-op (see stac()).
+inline void clac() {}
+/// @brief Read the AC-equivalent PSTATE bit — no-op placeholder.
+inline uint64_t read_rflags() {
+    return 0;
+}
 /// @brief Disable IRQ interrupts (set DAIF bit).
 inline void cli() {
     asm volatile("msr daifset, #2" : : : "memory");
