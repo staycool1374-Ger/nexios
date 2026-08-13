@@ -155,7 +155,7 @@ Constraints:
 | REQ-MP-02 | kernel-task↔kernel-task private kernel-half page tables | present (MP-1, `memory_kernel_isolation`) |
 | REQ-MP-03 | user-task↔user-task isolation | present (deep-copy fork) |
 | REQ-MP-04 | kernel→user access via direct map | present |
-| REQ-MP-05 | user→data only via syscalls; SMAP/SMEP recommended-not-mandatory | present |
+| REQ-MP-05 | user→data only via syscalls; SMAP/SMEP recommended-not-mandatory | present + HW-enforced (MP-4, x86_64: CR4.SMEP + CR4.SMAP; aarch64 PAN/PXN deferred) |
 | REQ-MP-06 | per-task canary-protected segments (MMU + software sentinels) | partial (guard pages only) |
 
 Acceptance (REQ-MP-06): "Overwriting a segment-boundary software canary is
