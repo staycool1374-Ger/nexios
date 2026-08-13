@@ -635,9 +635,15 @@
 #endif
 
 /// v0.4.0 MP-4: SMAP (supervisor-mode access prevention) — CR4 bit 21.
-/// Deferred: always 0 in this milestone.
+/// On x86_64 the boot path sets it when CPUID leaf 7 EBX[20] is supported.
+/// Every kernel->user deref is stac/clac-wrapped (checked_ptr.hpp + syscall
+/// handlers) so enabling this is safe.
 #ifndef CONFIG_SMAP
+#if defined(CONFIG_ARCH_X86_64)
+#define CONFIG_SMAP 1
+#else
 #define CONFIG_SMAP 0
+#endif
 #endif
 
 /// If non-zero, declares weak symbol oom_hook(size_t requested_size).

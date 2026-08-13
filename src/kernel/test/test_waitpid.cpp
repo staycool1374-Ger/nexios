@@ -239,7 +239,12 @@ JARVIS_TEST(waitpid_cr3_switch_on_status_write, "PRE: none | POST: none") {
 
     // --- Test the CR3 switch fix ---
     arch::write_cr3(parent_pml4);
+    // MP-4 (SMAP): the write targets a user VA under the parent's CR3; run it
+    // with AC set (mirrors Scheduler::wake_waiting_parent's stac/clac around
+    // the exit-status store).  The page is present + mapped (certified above).
+    arch::stac();
     *reinterpret_cast<uint64_t *>(TEST_VA) = 0x42;
+    arch::clac();
     arch::write_cr3(saved_cr3);
 
     // Verify: parent's physical page got the write
