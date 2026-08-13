@@ -187,3 +187,6 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 221s
 2026-08-13 07:45:20 all PASSED: 859 FAILED: 0 TIME: 48s
 2026-08-13 07:50:21 memory_kernel_isolation PASSED: 4 FAILED: 0 TIME: 187ms (MP-1.1/1.3/1.4 verified + documented)
+2026-08-13 10:37:04 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 371ms
+2026-08-13 10:37:04 memory_stack_profiler PASSED: 6 FAILED: 0 TIME: 931ms
+2026-08-13 10:37:04 scheduler_core PASSED: 16 FAILED: 0 TIME: 460ms
