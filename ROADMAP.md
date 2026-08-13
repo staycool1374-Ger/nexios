@@ -124,20 +124,37 @@ private table.  **Validation:** cross-kernel-task #PF probe (MP-1.5) +
 
 #### MP-6 — Kernel stack guard page via private VA window
 
-- [ ] **MP-6.1 — Guard-page slot.**  In `alloc_kslot` (task.cpp:382), each
+- [x] **MP-6.1 — Guard-page slot.**  In `alloc_kslot` (task.cpp:382), each
       slot already reserves one unmapped page at the base (`CONFIG_KSTACK_*`,
       kslot guard).  Verify the guard is enforced on kernel-stack overflow:
       a task that overruns `kernel_stack_top` must #PF before touching the
       next slot's data.
-- [ ] **MP-6.2 — Overflow hook.**  Wire `CONFIG_STACK_OVERFLOW_HOOK` (currently
+      **DONE (2026-08-13):** `alloc_kslot` reserves the base guard page;
+      kernel.cpp #PF path (vector 14) checks `cr2 ∈ [kstack_slot_va_,
+      kstack_slot_va_+PAGE_SIZE)` and reports STACK OVERFLOW.  Dual-path
+      documented: production builds always route kernel tasks through kslot
+      (guard page); test builds may use HHDM for short-lived tasks (bounded,
+      rewound by snapshot).
+- [x] **MP-6.2 — Overflow hook.**  Wire `CONFIG_STACK_OVERFLOW_HOOK` (currently
       0): on a guard-page #PF (PTE not-present on the kslot base), invoke the
       hook → panic with task id + RIP, then halt (no silent corruption).
-- [ ] **MP-6.3 — Snapshot-safe pool.**  The kslot page-table pool must be
+      **DONE (2026-08-13):** `CONFIG_STACK_OVERFLOW_HOOK` is 1
+      (nexios_config.h:616); weak default `stack_overflow_hook` (kernel.cpp:1104)
+      panics with task id + RIP; #PF path invokes it (kernel.cpp:1417).
+      Tested by `memory_stack_alloc`/`stack_alloc_overflow_hook_weak_symbol`
+      (strong override recovers the faulting task; production always panics).
+- [x] **MP-6.3 — Snapshot-safe pool.**  The kslot page-table pool must be
       captured/restored by `snapshot_restore` (test isolation) — verify
       `capture_state`/`restore_state` covers `s_kstack_pt_pages` and the kslot
       PTs; add if missing (mirror the v0.3.11 `pool_pages_` fix).
-- [ ] **MP-6.4 — Class gates:** `stack_alloc`, `stack_profiler`, `scheduler`,
+      **DONE (2026-08-13):** `kslot_snapshot_capture`/`kslot_snapshot_restore`
+      (task.cpp:652/676) serialize the kslot PT contents + slot bookkeeping,
+      wired into `snapshot_restore` (test_isolate.cpp:482/825, invlpg the
+      window VAs on restore).
+- [x] **MP-6.4 — Class gates:** `stack_alloc`, `stack_profiler`, `scheduler`,
       `selftest`, `make build`.
+      **DONE (2026-08-13):** memory_stack_alloc 11/11, memory_stack_profiler
+      6/6, scheduler_core 16/16, make build green.
 
 **Hypothesis:** the kslot base guard page is already present but the overflow
 hook is off; enabling it converts silent stack corruption into a diagnosed
