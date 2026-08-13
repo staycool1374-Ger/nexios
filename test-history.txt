@@ -200,3 +200,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-13 11:23:22 M7/M8 SMAP=1: arch_cross 21/21, selftest 132/132, scheduler_sporadic 25/25, deadline_ss 3/3, servers_vfsd 18/18, servers_iocd 7/7, task_lifecycle 9/9, memory_mempool 4/4, memory_safety 11/11, hal_core 14/14; fixed dump_regs user-RBP SMAP recursion + waitpid test stac
 2026-08-13 11:24:02 all PASSED: 862 FAILED: 0 TIME: 219s (SMAP=1, trace ON)
 2026-08-13 11:24:51 all PASSED: 84 FAILED: 0 TIME: 4s (release, SMAP=1, trace OFF)
+2026-08-13 11:25:53 MP-4 roadmap + REQ-MP-05 docs updated

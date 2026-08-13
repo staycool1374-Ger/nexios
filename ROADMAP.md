@@ -211,26 +211,54 @@ deterministic (MP-3.4).
 
 #### MP-4 — Optional HW enforcement: SMAP/SMEP (x86_64) / PAN/PXN (aarch64)
 
-- [ ] **MP-4.1 — CR4 SMEP enable.**  In `arch_init` (x86_64), set
+- [x] **MP-4.1 — CR4 SMEP enable.**  In `arch_init` (x86_64), set
       `CR4.SMEP` (bit 20).  Kernel code that legitimately reads user memory
       (copy_from_user paths, syscall arg fetch) must be wrapped in
       `stac`/`clac` (or use explicit `__get_user`-style accessors) — audit
       every user-pointer deref in syscall handlers first.
-- [ ] **MP-4.2 — CR4 SMAP enable.**  Set `CR4.SMAP` (bit 21) after the SMEP
+      **DONE (2026-08-13, commit `7ac305a5`..`cdbbc13e`):** SMEP was already
+      enabled (`CONFIG_SMEP=1`, kernel.cpp cpuid leaf-7 EBX[7] gate).  The
+      stac/clac audit is complete (M1-M3).
+- [x] **MP-4.2 — CR4 SMAP enable.**  Set `CR4.SMAP` (bit 21) after the SMEP
       audit passes.  Add `stac` before / `clac` after every direct user-memory
       access in the kernel.
-- [ ] **MP-4.3 — stac/clac audit.**  Grep `copy_from|copy_to|user_ptr|args` in
+      **DONE (2026-08-13):** `CONFIG_SMAP=1` (x86_64); boot path sets
+      CR4.SMAP when CPUID EBX[20] supported.  Every direct user deref is
+      stac/clac + recover_ip wrapped: checked_ptr.hpp (7 chokepoints incl.
+      CheckedPtr read/write which had no recovery before), safe_copy_*,
+      is_user_string/strncpy_from_user (had NO fault recovery — a real DoS
+      fixed), and all raw derefs in fs/misc/ipc/process/elf handlers +
+      Scheduler::wake_waiting_parent.
+- [x] **MP-4.3 — stac/clac audit.**  Grep `copy_from|copy_to|user_ptr|args` in
       syscall handlers; wrap each in the AC-flag save/restore pair.  Verify no
       kernel→user deref executes with AC=0 (SMAP fault).
+      **DONE (2026-08-13):** sys_read/fstat/stat/readdir/gettimeofday/uname/
+      getrlimit/setrlimit/getrandom/klog/receive/waitpid/sigreturn/
+      validate_argv_envp + elf count_strings/total_string_len/copy_strings/
+      setup_user_stack all wrapped.  SMAP-exposed latent bugs fixed: dump_regs
+      walked a USER RBP (recursive #PF in the #PF handler), test_waitpid's CR3
+      write.  Debug AC-0 assert in Syscall::handle.
 - [ ] **MP-4.4 — aarch64 PAN/PXN.**  Enable `PAN` (bit 22 of SCTLR_EL1) and
       `PXN` on kernel PTEs; mirror the stac/clac discipline with
       `ldtr/`PAN-clear on kernel→user loads.
-- [ ] **MP-4.5 — Negative tests.**  MP-5 suite: user task executes kernel VA
+      **DEFERRED (2026-08-13):** no-op stac/clac/read_rflags stubs added to
+      aarch64/riscv64 (checked_ptr.hpp compiles on all arches).  Real PAN
+      (SCTLR_EL1 bit 22) + PXN require an aarch64 boot path + test class;
+      enable only after that exists.  The M3 site fixes (kernel->user access
+      wrapping) are arch-independent correctness fixes that apply regardless.
+- [x] **MP-4.5 — Negative tests.**  MP-5 suite: user task executes kernel VA
       (SMEP #PF), kernel derefs user VA without AC (SMAP #PF), HHDM read still
       works (REQ-MP-04).
-- [ ] **MP-4.6 — Class gates:** `memory_safety`, `cross_arch`, `selftest`,
+      **DONE (2026-08-13):** arch_cross 18 -> 21.  smep_user_exec_kernel_va_pf
+      (existing, SMEP), smap_cr4_bit_set, smap_kernel_deref_user_va_without_ac_pf
+      (dispatched task, recover_ip redirect, no panic), smap_stac_clac_roundtrip_ok.
+      HHDM reads unaffected (kernel VAs not subject to SMAP).
+- [x] **MP-4.6 — Class gates:** `memory_safety`, `cross_arch`, `selftest`,
       `make build`.  Mark MP-4 "recommended-not-mandatory" — if SMAP breaks a
       syscall path, keep SMEP only and log the gap.
+      **DONE (2026-08-13):** debug all 862/862 (trace ON), release all 84/84
+      (trace OFF), all per-class gates green.  No syscall path broke — SMAP is
+      fully enabled with zero gaps.
 
 **Hypothesis:** SMEP/SMAP are safe once every kernel→user access is AC-wrapped;
 the syscall handler audit is the gating prerequisite.
