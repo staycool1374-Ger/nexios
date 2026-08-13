@@ -100,6 +100,14 @@ inline void hlt() {
 inline void pause() {
     asm volatile("nop");
 }
+/// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
+inline void stac() {}
+/// @brief Clear AC-equivalent — no-op (see stac()).
+inline void clac() {}
+/// @brief Read the AC-equivalent flag — no-op placeholder.
+inline uint64_t read_rflags() {
+    return 0;
+}
 /// @brief Disable interrupts (clear SIE bit in sstatus).
 /// @brief Disable interrupts (clear SIE bit in sstatus).
 inline void cli() {

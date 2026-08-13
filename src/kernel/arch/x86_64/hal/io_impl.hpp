@@ -72,6 +72,19 @@ inline void write_cr4(uint64_t v) {
     asm volatile("mov %0, %%cr4" : : "r"(v) : "memory");
 }
 
+/// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
+///        user pages while SMAP is active.  Must be paired with clac().
+inline void stac() { asm volatile("stac" ::: "cc"); }
+/// @brief Clear AC — SMAP faults on any further kernel deref of user pages.
+inline void clac() { asm volatile("clac" ::: "cc"); }
+/// @brief Read RFLAGS (AC = bit 18).
+/// @return Current RFLAGS value.
+inline uint64_t read_rflags() {
+    uint64_t v{};
+    asm volatile("pushfq; pop %0" : "=r"(v));
+    return v;
+}
+
 /// @brief Initialise the x87 FPU (FNINIT instruction).
 inline void fninit() {
     asm volatile("fninit");

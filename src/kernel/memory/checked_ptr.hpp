@@ -24,6 +24,7 @@
 #include <string.hpp>
 #include <concepts.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/arch/hal/io.hpp>
 
 namespace kernel {
 
@@ -95,8 +96,17 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
     bool copy_from(T *kernel_dst) const {
         if (!valid())
             return false;
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cf);
+        arch::stac();
         memcpy(kernel_dst, unsafe_ptr(), count_ * sizeof(T));
+        arch::clac();
+        g_user_access_recover_ip = 0;
         return true;
+
+    recover_cf:
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return false;
     }
 
     /// @brief Copy count elements from kernel buffer to user space.
@@ -104,8 +114,17 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
     bool copy_to(const T *kernel_src) const {
         if (!valid())
             return false;
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_ct);
+        arch::stac();
         memcpy(unsafe_ptr(), kernel_src, count_ * sizeof(T));
+        arch::clac();
+        g_user_access_recover_ip = 0;
         return true;
+
+    recover_ct:
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return false;
     }
 
     /// @brief Read one element from user space at the given index.
@@ -113,7 +132,17 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
     T read(size_t index = 0) const {
         if (!valid())
             return T{};
-        return unsafe_ptr()[index];
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_rd);
+        arch::stac();
+        T value = unsafe_ptr()[index];
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return value;
+
+    recover_rd:
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return T{};
     }
 
     /// @brief Write one element to user space at the given index.
@@ -121,8 +150,17 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
     bool write(const T &value, size_t index = 0) {
         if (!valid())
             return false;
+        g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_wr);
+        arch::stac();
         unsafe_ptr()[index] = value;
+        arch::clac();
+        g_user_access_recover_ip = 0;
         return true;
+
+    recover_wr:
+        arch::clac();
+        g_user_access_recover_ip = 0;
+        return false;
     }
 };
 
@@ -152,27 +190,56 @@ static inline bool is_user_string(const void *user_ptr,
     // returns 0 for unmapped pages without faulting.
     if (VMM::virt_to_phys(addr) == 0)
         return false;
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
+    arch::stac();
     auto *p = static_cast<const volatile char *>(user_ptr);
     for (uint64_t i = 0; i < max_len; ++i) {
-        if (p[i] == '\0')
+        if (p[i] == '\0') {
+            arch::clac();
+            g_user_access_recover_ip = 0;
             return true;
+        }
     }
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    return false;
+
+recover_str_chk:
+    arch::clac();
+    g_user_access_recover_ip = 0;
     return false;
 }
 
 /// @brief Copy a null-terminated string from user space to kernel buffer.
 /// @return true on success, false if the source is not a valid user string.
+/// @note Fault-recovery-safe: a #PF mid-loop redirects to recover_str (the
+///       pointer passed is_user_string but a page beyond the probe could be
+///       unmapped).  With SMAP active the loop runs with AC=1 (stac/clac).
 static inline bool strncpy_from_user(char *dst, const char *src,
                                      uint64_t max_len) {
     if (!is_user_string(src, max_len))
         return false;
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str);
+    arch::stac();
     for (uint64_t i = 0; i < max_len; ++i) {
         dst[i] = src[i];
-        if (src[i] == '\0')
+        if (src[i] == '\0') {
+            arch::clac();
+            g_user_access_recover_ip = 0;
             return true;
+        }
     }
     dst[max_len - 1] = '\0';
+    arch::clac();
+    g_user_access_recover_ip = 0;
     return true;
+
+recover_str:
+    arch::clac();
+    g_user_access_recover_ip = 0;
+    if (max_len > 0)
+        dst[0] = '\0';
+    return false;
 }
 
 /// @brief Safely copies memory from user-space to kernel buffer.
@@ -183,11 +250,14 @@ static inline bool safe_copy_from_user(T *dst, const T *src, uint64_t count) {
     if (!is_user_range(src, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
+    arch::stac();
     memcpy(dst, src, count * sizeof(T));
+    arch::clac();
     g_user_access_recover_ip = 0;
     return true;
 
 recover_from:
+    arch::clac();
     g_user_access_recover_ip = 0;
     return false;
 }
@@ -200,11 +270,14 @@ static inline bool safe_copy_to_user(T *dst, const T *src, uint64_t count) {
     if (!is_user_range(dst, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
+    arch::stac();
     memcpy(dst, src, count * sizeof(T));
+    arch::clac();
     g_user_access_recover_ip = 0;
     return true;
 
 recover_to:
+    arch::clac();
     g_user_access_recover_ip = 0;
     return false;
 }
