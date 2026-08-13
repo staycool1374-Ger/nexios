@@ -37,10 +37,12 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/checked_ptr.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/elf/elf.hpp>
+#include <scope_guard.hpp>
 #include <initrd/initrd.hpp>
 #include "test_sched_helpers.hpp"
 #include <kernel/nexios_config.h>
@@ -659,6 +661,114 @@ JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
 }
 #endif // CONFIG_SMEP
 
+// ---------------------------------------------------------------------------
+// MP-4.5 — SMAP negative/positive tests (x86_64, CONFIG_SMAP)
+// ---------------------------------------------------------------------------
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.2 — CR4.SMAP (bit 21) is set when CONFIG_SMAP and the
+// CPU supports it.
+JARVIS_TEST(smap_cr4_bit_set, "PRE: none | POST: none") {
+    JARVIS_ASSERT(arch::read_cr4() & (1ULL << 21));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.5 — a kernel-context deref of a PRESENT user page with
+// AC=0 must #PF and be redirected by g_user_access_recover_ip (not panic).
+// A dispatched kernel task maps a user page into its own private PML4 and
+// deliberately derefs it with AC=0; the fault handler redirects to the
+// recover label inside the task, the task self-terminates cleanly, and
+// cleanup() reclaims the page + tables (zero PMM delta).
+JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
+    static volatile int g_recovered = 0;
+    g_recovered = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            uint64_t phys = PMM::alloc_user_page();
+            if (!phys)
+                return;
+            uint64_t user_va = 0x70000000ULL;
+            VMM::map_page_in_pml4(user_va, phys, true, true,
+                                  self->page_table_);
+            // Arm fault recovery, then deliberately write to the present
+            // U/S=1 page with AC=0.  With SMAP active this #PFs; the handler
+            // redirects to recover_smap (regs[17] = g_user_access_recover_ip).
+            kernel::g_user_access_recover_ip =
+                reinterpret_cast<uint64_t>(&&recover_smap);
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            reinterpret_cast<volatile uint32_t *>(user_va)[0] = 0xAB;
+            kernel::g_user_access_recover_ip = 0;
+
+        recover_smap:
+            arch::clac();
+            kernel::g_user_access_recover_ip = 0;
+            g_recovered = 1;
+            // Do NOT free phys here: cleanup()'s free_user_pages reclaims the
+            // user page + its PT pages and free_page reclaims the PML4.
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::terminate_and_drain(*t);
+
+    JARVIS_ASSERT(g_recovered == 1);
+    JARVIS_ASSERT((arch::read_rflags() & (1ULL << 18)) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.2 — stac/clac roundtrip on a mapped user page: a
+// safe_copy_to_user under stac succeeds, AC is restored to 0, and the user
+// page content is correct.
+JARVIS_TEST(smap_stac_clac_roundtrip_ok, "PRE: none | POST: none") {
+    static volatile uint64_t g_val_readback = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            uint64_t phys = PMM::alloc_user_page();
+            if (!phys)
+                return;
+            uint64_t user_va = 0x70000000ULL;
+            VMM::map_page_in_pml4(user_va, phys, true, true,
+                                  self->page_table_);
+            uint64_t val = 0x1122334455667788ULL;
+            // safe_copy_to_user internally does stac/memcpy/clac.
+            bool ok = kernel::safe_copy_to_user(
+                reinterpret_cast<uint64_t *>(user_va), &val, 1);
+            if (!ok)
+                return;
+            // AC must be restored to 0 after the copy.
+            if ((arch::read_rflags() & (1ULL << 18)) != 0)
+                return;
+            // Verify via HHDM (kernel mapping of the same frame).
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            g_val_readback =
+                *reinterpret_cast<volatile uint64_t *>(arch::HHDM_OFFSET +
+                                                       phys);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::terminate_and_drain(*t);
+
+    JARVIS_ASSERT(g_val_readback == 0x1122334455667788ULL);
+    JARVIS_ASSERT((arch::read_rflags() & (1ULL << 18)) == 0);
+    JARVIS_TEST_PASS();
+}
+
+#endif // x86_64 && CONFIG_SMAP
+
 // ============================================================================
 // Registration
 // ============================================================================
@@ -684,5 +794,10 @@ void register_cross_arch_tests() {
 #if CONFIG_SMEP
     JARVIS_REGISTER_TEST(smep_cr4_bit_set);
     JARVIS_REGISTER_TEST(smep_user_exec_kernel_va_pf);
+#endif
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP
+    JARVIS_REGISTER_TEST(smap_cr4_bit_set);
+    JARVIS_REGISTER_TEST(smap_kernel_deref_user_va_without_ac_pf);
+    JARVIS_REGISTER_TEST(smap_stac_clac_roundtrip_ok);
 #endif
 }

@@ -1083,14 +1083,23 @@ static void dump_regs(uint64_t *regs) {
     L::raw_write("  Stack trace:\n");
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     uint64_t *rbp = reinterpret_cast<uint64_t *>(regs[6]);
-    for (int i = 0; i < 8 && rbp && rbp[1]; ++i) {
-        L::raw_write("    [");
-        L::print_dec(i);
-        L::raw_write("] ");
-        L::print_hex(rbp[1]);
-        L::raw_write("\n");
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        rbp = reinterpret_cast<uint64_t *>(rbp[0]);
+    // MP-4 (SMAP): only walk the frame-pointer chain when it is a KERNEL
+    // frame.  A user task's RBP (regs[6]) points into user memory; dereferencing
+    // it from kernel mode with AC=0 is a SMAP fault (recursive panic in the
+    // #PF handler).  Kernel stacks live in the kslot window / HHDM (>= the
+    // kstack window base); user RBP is far below it.
+    if (rbp && reinterpret_cast<uint64_t>(rbp) >= 0xFFFF900000000000ULL) {
+        for (int i = 0; i < 8 && rbp && rbp[1]; ++i) {
+            L::raw_write("    [");
+            L::print_dec(i);
+            L::raw_write("] ");
+            L::print_hex(rbp[1]);
+            L::raw_write("\n");
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            rbp = reinterpret_cast<uint64_t *>(rbp[0]);
+        }
+    } else {
+        L::raw_write("    (user-mode fault — kernel stack trace unavailable)\n");
     }
 #elif defined(CONFIG_ARCH_AARCH64)
     L::raw_write("  ELR: ");
@@ -1099,13 +1108,19 @@ static void dump_regs(uint64_t *regs) {
     L::print_hex(regs[32]);
     L::raw_write("\n  Stack trace:\n");
     uint64_t *fp = reinterpret_cast<uint64_t *>(regs[29]);
-    for (int i = 0; i < 8 && fp && fp[1]; ++i) {
-        L::raw_write("    [");
-        L::print_dec(i);
-        L::raw_write("] ");
-        L::print_hex(fp[1]);
-        L::raw_write("\n");
-        fp = reinterpret_cast<uint64_t *>(fp[0]);
+    // MP-4 (PAN): only walk a KERNEL frame chain; a user FP deref would be a
+    // PAN fault on aarch64.  Kernel stacks live in the kslot/HHDM region.
+    if (fp && reinterpret_cast<uint64_t>(fp) >= 0xFFFF000000000000ULL) {
+        for (int i = 0; i < 8 && fp && fp[1]; ++i) {
+            L::raw_write("    [");
+            L::print_dec(i);
+            L::raw_write("] ");
+            L::print_hex(fp[1]);
+            L::raw_write("\n");
+            fp = reinterpret_cast<uint64_t *>(fp[0]);
+        }
+    } else {
+        L::raw_write("    (user-mode fault — kernel stack trace unavailable)\n");
     }
 #endif
 }
