@@ -290,19 +290,23 @@ reworked class to 0 failures with zero ResourceTracker delta; `selftest`
   `selftest` 132/132, `all` 835/835, release 84/84.
 - `test-history.txt` rows appended for every class touched.
 
-**Out of scope:** ~~H2 race (v0.3.9)~~ (RESOLVED), ~~BufferPool +1 (v0.3.11)~~
+**Out of scope:** ~~H2 race (v0.3.9)~~ (RESOLVED 2026-08-13, commit `71b3a088`),
+~~BufferPool +1 (v0.3.11)~~
 (RESOLVED), ~~IrqGuard guardrails (v0.3.12)~~ (RESOLVED), SMP (0.4.x APIC
 boot), microkernel capability foundation (0.4.x), and userspace ABI (0.5.x).
+The KernelObject shared-reference-count foundation (prerequisite for 0.4.1
+CSpace) is complete — see the section below.
 
 ---
 
-## H2 Deferred-Switch Race — RE-OPENED (v0.4.0-dev)
+## H2 Deferred-Switch Race — RESOLVED (v0.4.0-dev)
 
 **Note (2026-08-12):** the §v0.3.9 "H2 RESOLVED" status was premature.  The
 `ipc_core` class wedges at test 21 `ipc_send_sync_roundtrip` (~50%, reproduced
 repeatedly on `main` @ `464f1fbc` / `testbed` @ `a2750bd2`).  Fix for this
 version with the directions below.  Full evidence + instrumentation in
-`audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §6.
+`audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §6.  **RESOLVED 2026-08-13** by
+commit `71b3a088` (see the RESOLVED subsection at the end of this section).
 
 **Root cause (pinned, 2026-08-12):** the harness's stored `context.rsp` can be a
 stale frame pointing into a test body's **setup path** (not the wait loop).  On
@@ -340,6 +344,91 @@ across ≥ 10 consecutive runs (pre-fix ~50% hang); `all-1` reaches tests 485+
 (pml4_clone, BUGS.md #21) without a hang; then the `all` gate per the debug
 procedure.  Append a `test-history.txt` row after every class run.
 
+### RESOLVED (2026-08-13) — commit `71b3a088` (fix directions #1 + #4)
+
+Fixed with a two-layer liveness guard:
+
+1. **Kernel guard — `Scheduler::enqueue_ready` (scheduler.cpp:190).**  Refuses
+   to enqueue any TCB not owned by `id_table_` (`find_task(task.id) != &task`),
+   so the orphan runq node can never be created.  The cold `[H2-ENQDEAD]` dump
+   is preserved (trace-gated).  All legitimate enqueue callers enqueue
+   registered tasks (`add_task` registers before enqueue; wake/switch-away
+   paths enqueue live current tasks) — the guard cannot fire spuriously.
+2. **Test-side guard — `yield_to_task` (test_sched_helpers.hpp:66).**  Refuses
+   at entry if the task is dead, before any side effect.  The kernel guard alone
+   was insufficient because the helper ran `set_current(dead)` + `state = READY`
+   *before* the enqueue could be refused.
+
+The `next_task()` liveness guard (direction #2) was deliberately NOT added —
+the enqueue-side guard makes the orphan unreachable at the source, and a
+selection-time filter would add per-dispatch cost on a hot path.
+
+**Validation results (2026-08-13):**
+- `ipc_core` 23/23 across 14+ consecutive runs (pre-fix ~50% hang at
+  `ipc_send_sync_roundtrip`).
+- Debug `all` gate: 7 clean runs in 10 invocations, **zero watchdog hangs, zero
+  H2 diagnostics** (pre-fix ~50-70% hang rate); runs where the stale resume
+  occurred recovered via the guard.
+- Release gate (trace OFF): **84/84** — the previously documented trace-OFF
+  deterministic hang at `ipc_send_sync_roundtrip` no longer reproduces.
+- Full evidence + mechanism in `audits/deep-analysis-h2-ssdeadline-v0.3.9.md` §7.
+
+**Status:** H2 RESOLVED.  ROADMAP §v0.3.9 entry superseded; the trace-OFF
+release-gate caveat in AGENTS.md is no longer applicable.
+
+---
+
+## KernelObject Shared-Reference-Count Foundation (2026-08-13, commits `ee2f24c0`..`62467804`)
+
+**Purpose:** the reference-counting primitive ROADMAP 0.4.1 (CSpace) builds on.
+Establishes the "TCB is the single source of truth for task-owned objects"
+model with a genuine multi-holder shared refcount, SMP-ready.
+
+### Commits
+- `ee2f24c0` — intrusive RefCounted per-task object list on TCB (v1: concrete
+  base, disposer fn-pointer + kind-tag, TCB-owned object list, SporadicServer
+  migrated; closed the "SporadicServer never freed" lifecycle gap)
+- `71b3a088` — H2 stale-resume orphan re-enqueue fix (see above)
+- `07de8527` — M1: rename `RefCounted` → `KernelObject` (mechanical)
+- `d1a16de3` — M2: pure-virtual `KernelObject` — `dispose()` (last-release
+  teardown, CPU-agnostic), `revoke()` (capability revocation hook), `is_shared()`
+  (ownership-class marker), atomic acquire/release (ACQUIRE/RELEASE on revoke),
+  `ScopedRef::valid()`; SporadicServer virtualized (placement-new factory,
+  dispose → dec_sporadic_count + MemPool::free); TCB teardown asserts `>=1`
+  universal + `==1` non-shared
+- `4f9e404c` — M-extra step0: clone fd-copy `vnode_ref_inc` fix (latent
+  over-decrement → premature close/double release) + `process_clone_pipe_fd_
+  refcount` regression test
+- `caf35962` — M-extra step1: PipeBuffer migrated to shared KernelObject
+  (creator-ref → two-end-refs handoff; replaced the non-atomic `int refcount`
+  which raced on SMP)
+- `62467804` — SIL 3 audit fixes (SMP ordering, stale comment, ScopedRef
+  contract)
+
+### Ownership classes
+- **Class A — private-owned heap** (SporadicServer): TCB list holds the only
+  long-lived reference; teardown asserts refcount==1; dispose frees the block.
+- **Class B — embedded objects** (per-task MessageQueue/Notify/EventGroup):
+  NOT KernelObject-derived, NOT on the list, NO refcount.  Storage lives inside
+  the TCB block and cannot outlive it; cross-task references are raw and
+  detached at owner teardown.  Avoids vptr-wipe-by-memset and dangling-into-
+  owner-block hazards.
+- **Class C — genuinely shared heap** (PipeBuffer, future capability objects):
+  real multi-holder refcount; every holder acquires/releases; dispose() runs on
+  the last release regardless of CPU.  CSpace capability objects (ROADMAP 0.4.1)
+  follow this class, using `revoke()` for deterministic revocation.
+
+### Validation
+- `make build` green (style Errors: 0).  Debug `all` **859/859** (trace ON);
+  release `all` **84/84** (trace OFF).  All per-class gates green.
+- SIL 3 audit (independent): **APPROVED**, no BLOCKER/HIGH; applied SMP ordering
+  + documentation items.  Auditor finding #2 (dup2 double-release) verified
+  FALSE — `FdTable::free` gates `ops->close` on `vnode_ref_dec` reaching 0, so
+  dup2/clone `vnode_ref_inc` means pb is released exactly once per endpoint.
+- Residual `harness_blocked_sender_wakes` flake: pre-existing v0.4.0 MP-8
+  timing issue, reproduces identically on the pre-rework baseline.
+
+---
 
 ## Past Releases
 

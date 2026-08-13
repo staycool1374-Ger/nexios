@@ -139,17 +139,23 @@ JARVIS_TEST(harness_blocked_sender_wakes,
     ipc_recv_count_ = 0;
     ipc_test_done_ = false;
 
-    // Receiver at LOW priority (10) — drains queue when higher-prio sender blocks
+    // Receiver at priority 5 (LOWER than init/harness's 10) — runs when the
+    // harness blocks as a sender.  When the harness wakes and continues, its
+    // higher priority (10) preempts the receiver.  NOTE: the priority MUST be
+    // strictly below the harness's 10.  At an equal priority the receiver
+    // competes with the harness during the drain poll and the reschedule()
+    // in its loop keeps re-selecting the harness, so the drain can stall
+    // (the pre-fix harness_blocked_sender_wakes flake: "processed 2/17").
     // Loops until ipc_test_done_ is set, so it never terminates early.
     auto *receiver = TaskControlBlock::create([]() {
         while (!ipc_test_done_) {
             Message msg;
             if (IPC::recv(msg)) {
                 __atomic_add_fetch(&ipc_recv_count_, 1, __ATOMIC_RELAXED);
-                Scheduler::reschedule();
             }
+            arch::pause();
         }
-    }, 10, 10);
+    }, 5, 10);
     JARVIS_ASSERT(receiver != nullptr);
     uint64_t rcv_id = receiver->id;
     Scheduler::add_task(*receiver);
