@@ -140,7 +140,15 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                             arch::write_cr3(p->page_table_);
                             switched = true;
                         }
+                        // MP-4 (SMAP): the status page is a user page in the
+                        // parent's address space, pre-certified MAPPED by
+                        // waitpid's virt_to_phys_in_pml4 check.  The write
+                        // runs with AC set (stac) — the page is present so no
+                        // recover_ip is needed; clac restores AC for the
+                        // kernel after the user-page store.
+                        arch::stac();
                         *p->waiting_child_status = t->exit_code;
+                        arch::clac();
                         if (switched)
                             arch::write_cr3(old_cr3);
                         p->waiting_child_status = nullptr;
