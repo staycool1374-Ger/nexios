@@ -20,6 +20,7 @@
 /// @brief Network stack core implementation.
 
 #include <kernel/net/net.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <string.hpp>
@@ -31,8 +32,6 @@ namespace net {
 
 static ArpCache g_arp_cache{};
 static uint16_t g_ip_ident = 0;
-
-constinit Nic *g_nic = nullptr;
 
 // Last ICMP echo reply (for ping)
 static IcmpEchoReply g_icmp_reply{};
@@ -70,7 +69,7 @@ void net_init(Nic &nic, MacAddr mac, Ipv4Addr ip, Ipv4Addr subnet,
     nic.subnet = subnet;
     nic.gateway = gateway;
     g_arp_cache.clear();
-    g_nic = &nic;
+    kernel::gs::try_set_nic(&nic);
     Logger::info("net: initialized %d.%d.%d.%d", ip.addr[0], ip.addr[1],
                  ip.addr[2], ip.addr[3]);
 }

@@ -2112,12 +2112,12 @@ static void print_mac(net::MacAddr mac) {
 }
 
 void Shell::cmd_ifconfig(int argc, const char** argv) {
-    if (!net::g_nic) {
+    if (!kernel::gs::get_nic()) {
         shell_error("ifconfig", "no network interface");
         return;
     }
 
-    auto& nic = *net::g_nic;
+    auto& nic = *kernel::gs::get_nic();
 
     if (argc >= 2) {
         // Parse IP
@@ -2216,7 +2216,7 @@ void Shell::cmd_ping(int argc, const char** argv) {
 
     bool is_loopback = (dst.as_u32() == 0x7F000001);
 
-    if (!net::g_nic && !is_loopback) {
+    if (!kernel::gs::get_nic() && !is_loopback) {
         shell_error("ping", "no network interface");
         return;
     }
@@ -2250,7 +2250,7 @@ void Shell::cmd_ping(int argc, const char** argv) {
             net::net_icmp_set_reply(id, seq, dst);
             sent = true;
         } else {
-            sent = net::net_send_icmp_echo(*net::g_nic, dst, id, seq, payload, sizeof(payload));
+            sent = net::net_send_icmp_echo(*kernel::gs::get_nic(), dst, id, seq, payload, sizeof(payload));
         }
 
         ++pkt_tx;
@@ -2258,7 +2258,7 @@ void Shell::cmd_ping(int argc, const char** argv) {
             uint64_t deadline = sent_tick + 1000;
             while (arch::Timer::ticks() < deadline) {
                 for (int p = 0; p < 10; ++p)
-                    if (net::net_poll(*net::g_nic)) break;
+                    if (net::net_poll(*kernel::gs::get_nic())) break;
                 auto* r = net::net_icmp_last_reply();
                 if (r && r->ident == id && r->seq == seq) break;
                 arch::pause();
