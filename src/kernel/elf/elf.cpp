@@ -95,8 +95,7 @@ bool validate_header(const ELF64Header *hdr) {
 
 /// @brief Validate a single program header segment.
 /// Checks bounds, permissions (W^X), size limits, and overflow safety.
-static bool validate_segment(const ELF64ProgramHeader *phdr,
-                             uint64_t file_size = 0) {
+bool validate_segment(const ELF64ProgramHeader *phdr, uint64_t file_size) {
     if (phdr->type != PT_LOAD)
         return true;
     // Basic size sanity
@@ -230,7 +229,8 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
     // BETWEEN segments, so the red-zone validation is end-to-end.
     uint64_t max_seg_end = 0;
 
-    for (uint16_t i = 0; i < hdr->phnum; ++i) {
+    if (hdr) {
+        for (uint16_t i = 0; i < hdr->phnum; ++i) {
         auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
             file_data + hdr->phoff + static_cast<uint64_t>(i) * hdr->phentsize);
         if (!phdr || phdr->type != PT_LOAD)
@@ -269,6 +269,7 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
                    phdr->memsz - phdr->filesz);
         }
     }
+    } // if (hdr)
 
     // v0.4.0 MP-2 red-zone validation (honest scope): one unmapped page must
     // separate the highest loaded segment from the heap, and the initial heap
@@ -330,6 +331,14 @@ static bool load_segments_and_stack(const ELF64Header *hdr,
     if (out_ustack_phys)
         *out_ustack_phys = ustack_phys;
     return true;
+}
+
+/// @brief Allocate and map the user stack (guard page + pages) and the
+///        initial heap into @p pml4.  Extracted from load_segments_and_stack
+///        for reuse by the background ElfLoader (chunked loader) which maps
+///        segments itself and only needs the stack + heap tail.
+bool alloc_user_stack_and_heap(uint64_t pml4, uint64_t *out_ustack_phys) {
+    return load_segments_and_stack(nullptr, nullptr, pml4, out_ustack_phys);
 }
 
 /// @brief Set up argv/envp on the user stack and return the initial RSP.
@@ -445,6 +454,36 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     if (!validate_header(hdr))
         return nullptr;
 
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    if (!pml4)
+        return nullptr;
+
+    uint64_t ustack_phys = 0;
+    if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
+                                 file_size)) {
+        VMM::free_user_pages(pml4);
+        PMM::free_page(pml4);
+        return nullptr;
+    }
+
+    return finalize_loaded_task(hdr, pml4, ustack_phys, file_data, file_size);
+}
+
+/// @brief Finish a partially-built load: allocate the TCB, kernel stack,
+///        adopt @p pml4 as page_table_, wire std fds, setup the user stack
+///        frame and install segment canaries.  Extracted from elf::load for
+///        reuse by the background ElfLoader (chunked loader).
+/// @param hdr Validated ELF header.
+/// @param pml4 The built PML4 (user pages already mapped).
+/// @param ustack_phys Physical base of the user stack.
+/// @param phdr_image Buffer holding the ELF header followed by the full
+///        program-header table (for canary installation).
+/// @param file_size Total file size in bytes.
+/// @return New TaskControlBlock, or nullptr on failure (partial state freed).
+TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+                                       uint64_t ustack_phys,
+                                       const uint8_t *phdr_image,
+                                       uint64_t file_size) {
     auto *tcb = static_cast<TaskControlBlock *>(
         MemPool::alloc(sizeof(TaskControlBlock)));
     if (!tcb)
@@ -487,22 +526,8 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
     tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
 
-    uint64_t pml4 = VMM::clone_kernel_pml4();
-    if (!pml4) {
-        tcb->cleanup();
-        delete tcb;
-        return nullptr;
-    }
     tcb->page_table_ = pml4;
     tcb->is_user_ = true;
-
-    uint64_t ustack_phys = 0;
-    if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
-                                 file_size)) {
-        tcb->cleanup();
-        delete tcb;
-        return nullptr;
-    }
 
     open_std_fds(*tcb);
 
@@ -559,7 +584,7 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
 
     // v0.4.0 MP-3: arm segment-boundary canaries (TEXT/DATA/STACK/HEAP +
     // kernel-stack) after the address space is fully mapped.
-    install_segment_canaries(tcb, hdr, file_data, file_size);
+    install_segment_canaries(tcb, hdr, phdr_image, file_size);
 
     return tcb;
 }
