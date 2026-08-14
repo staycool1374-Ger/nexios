@@ -43,6 +43,7 @@
 #include <kernel/sync/sync.hpp>
 #include <kernel/multiboot2.hpp>
 #include <kernel/elf/elf.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/log/dmesg.hpp>
@@ -280,6 +281,10 @@ void init_task_main() {
         // would deadlock — we'd never be resumed after yielding.
         arch::hlt();
     }
+
+    // ── Background ELF loader task (created before the test runner so it is
+    //    part of the snapshot baseline and survives snapshot_restore). ──
+    kernel::elf::ElfLoader::ensure_task();
 
     // ── Run tests from init-task context (IF=1) ──────────────────
     kernel::Logger::info(
