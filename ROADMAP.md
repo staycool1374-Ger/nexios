@@ -363,7 +363,7 @@ existing tests assert.  Rework them to match the post-MP model (driven
 cookbook, no field mutation, no shared-page-table assumptions) rather than
 leaving stale assertions.
 
-- [ ] **MP-8.1 — `test_pml4_clone.cpp` shared-table tests.**  Rework
+- [x] **MP-8.1 — `test_pml4_clone.cpp` shared-table tests.**  Rework
       `pml4_free_user_pages_shared_safe` (test_pml4_clone.cpp:339) — it
       simulates a child sharing the parent's page tables, which MP-7
       eliminates.  Rewrite to the deep-copy model: child has its own PD/PT
@@ -372,33 +372,66 @@ leaving stale assertions.
       Keep `pml4_fork_user_entries_match` / `pml4_fork_no_child_corrupt_parent`
       (they already test deep-copy) but verify they still hold after MP-1
       (private kernel half).
-- [ ] **MP-8.2 — `test_page_tables.cpp` stubs (9).**  Replace the
+      **DONE (2026-08-14):** `pml4_free_user_pages_shared_safe` uses
+      `deep_copy_user_pages`, asserts child leaf != parent leaf, child teardown
+      frees copied tables + data while the parent's leaf survives untouched.
+      `pml4_fork_user_entries_match` / `pml4_fork_no_child_corrupt_parent` /
+      `pml4_deep_copy_no_alias` all hold.  process_pml4_clone 7/7.
+- [x] **MP-8.2 — `test_page_tables.cpp` stubs (9).**  Replace the
       `JARVIS_TEST_PASS()` placeholders with real assertions against the MP-1
       private-kernel PML4 / MP-7 deep-copy walk (page-table allocate/install/
       walk/free round-trips on a cloned PML4).
-- [ ] **MP-8.3 — `test_stack_alloc.cpp` stubs (8).**  Implement real guard-page
+      **DONE (2026-08-14):** all 9 tests real — pool alloc/multi/size,
+      `page_tables_kernel_task_private_pml4` (user half zero, kernel half
+      matches), user-task table, cleanup frees, pool exhaustion, cross-task
+      isolation.  memory_page_tables 9/9.
+- [x] **MP-8.3 — `test_stack_alloc.cpp` stubs (8).**  Implement real guard-page
       assertions: allocate a kslot stack, verify the base page is unmapped,
       verify an overrun hits `CONFIG_STACK_OVERFLOW_HOOK` (MP-6), and that the
       slot is reclaimed on free (no ResourceTracker delta).
-- [ ] **MP-8.4 — `test_process.cpp` stubs (12).**  Replace placeholders with
+      **DONE (2026-08-14):** all 11 tests real — `stack_alloc_user_task_has_
+      guard_page` (walk-based), kslot guard (`kernel_red_zone_between_stack_
+      data`-style), `stack_alloc_overflow_hook_weak_symbol` (MP-6.2),
+      alignment/distinct-stacks/teardown.  memory_stack_alloc 11/11.
+- [x] **MP-8.4 — `test_process.cpp` stubs (12).**  Replace placeholders with
       real fork/clone/exit assertions under the deep-copy model (MP-7) and
       private kernel page table (MP-1): child page-table independence, parent
       preservation, teardown completeness.
-- [ ] **MP-8.5 — `test_memory.cpp` / `test_memory_safety.cpp`.**  Audit for
+      **DONE (2026-08-14):** all 16 test_process tests real (child table
+      independence, parent preservation, teardown zero-delta, kernel-half
+      private, clone fd-refcount).  process_lifecycle 16/16.
+- [x] **MP-8.5 — `test_memory.cpp` / `test_memory_safety.cpp`.**  Audit for
       assertions that hard-code the pre-MP layout (e.g. specific PT-page
       counts under a shared pdpt, or `free_user_pages` skip semantics).
       Update to the post-MP expected counts.  `memory_safety_pmm_free_zero`
       (test_memory_safety.cpp:82) — keep the reserved-page invariant assert.
-- [ ] **MP-8.6 — `test_fpu_clone.cpp` / FPU suite.**  Confirm FPU-state copy
+      **DONE (2026-08-14):** audit clean — no pre-MP shared-pdpt/PT-count
+      hardcoding; memory_pmm 5/5, memory_safety 11/11 (incl. reserved-page
+      invariant).
+- [x] **MP-8.6 — `test_fpu_clone.cpp` / FPU suite.**  Confirm FPU-state copy
       on clone still holds when the child gets fresh page tables (MP-7) and a
       private kernel half (MP-1); adjust if the clone path changes.
-- [ ] **MP-8.7 — driven-cookbook compliance.**  Any reworked test must follow
+      **DONE (2026-08-14):** test_fpu_clone asserts child/parent FPU state +
+      tags independent after clone (real assertions).  FPU test files are
+      excluded from the x86_64 build (GCC 16, documented in
+      test_expected_counts.hpp task_fpu=0); task_fpu is a reserved 0-test
+      home, task_core 6/6 covers the runnable FPU-independent subset.
+- [x] **MP-8.7 — driven-cookbook compliance.**  Any reworked test must follow
       the v0.3.10 cookbook: real dispatch (create prio≥11 → add_task →
       reschedule → busy-wait), no `set_current` impersonation, no direct
       `task->state/priority/deadline_ticks` mutation, no fake `on_tick()`.
-- [ ] **MP-8.8 — Class gates:** `pml4_clone`, `process`, `memory_safety`,
+      **DONE (2026-08-14):** all reworked tests use real dispatch +
+      wait_for_termination_safe/terminate_and_drain; no set_current
+      impersonation or fake on_tick in the reworked set.
+- [x] **MP-8.8 — Class gates:** `pml4_clone`, `process`, `memory_safety`,
       `page_tables`, `stack_alloc`, `memory`, `selftest`, `make build`;
       update `test_expected_counts.hpp`; `test-history.txt` rows.
+      **DONE (2026-08-14):** process_pml4_clone 7/7, process_lifecycle 16/16,
+      memory_safety 11/11, memory_page_tables 9/9, memory_stack_alloc 11/11,
+      memory_pmm 5/5, selftest 132/132, task_core 6/6, debug all 862/862
+      (trace ON); build green (style Errors: 0).
+
+**Memory-Protection Phase 4.5 (MP-1..MP-8) is COMPLETE.**
 
 **Hypothesis:** the shared-table and stub tests encode pre-MP invariants that
 MP-1/MP-7 invalidate; reworking them to the deep-copy + private-kernel model
