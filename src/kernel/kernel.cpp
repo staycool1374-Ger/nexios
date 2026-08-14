@@ -457,38 +457,6 @@ extern "C" void debug_task_switch(uint64_t old_id, uint64_t new_id,
     debug_write("\n");
 }
 
-extern "C" {
-uint64_t *scheduler_save_rsp_to = nullptr;
-uint64_t scheduler_load_rsp_from = 0;
-uint64_t scheduler_load_cr3_from = 0;
-uint64_t scheduler_next_task_id = UINT64_MAX;
-/// @brief Kernel-stack range of the task being dispatched.  isr_stubs.asm
-///        verifies scheduler_load_rsp_from lies within
-///        [scheduler_load_kstack_base, scheduler_load_kstack_top) before
-///        iretq, refusing to dispatch a task onto a foreign RSP (the H2
-///        harness-displacement race).
-uint64_t scheduler_load_kstack_base = 0;
-uint64_t scheduler_load_kstack_top = 0;
-/// @brief Generation sequence counter for the deferred-switch pair
-///        (load_rsp_from / load_cr3_from).  A publisher bumps it after writing
-///        the pair and before arming save_rsp_to; isr_stubs.asm captures it and
-///        re-verifies before applying so a timer ISR never applies a
-///        half-written / superseded pair.
-uint64_t scheduler_switch_generation = 0;
-/// @brief Static kernel PML4 (physical).  isr_stubs.asm falls back to this when
-///        scheduler_load_cr3_from is null/outdated while returning to the
-///        kernel/harness context, so the harness never resumes on a stale user
-///        CR3.  Initialised in Scheduler::init from VMM::get_kernel_pml4().
-uint64_t scheduler_kernel_cr3 = 0;
-bool scheduler_need_resched = false;
-uint64_t isr_nesting_depth = 0;
-uint64_t irq_entry_tsc = 0;
-uint64_t scheduler_corruption_count = 0;
-uint64_t deadline_detection_integrity = 0;
-kernel::TaskControlBlock *fpu_owner = nullptr;
-
-}
-
 extern char kernel_virt_end[];
 extern "C" uint8_t _binary_initrd_cpio_start[];
 extern "C" uint8_t _binary_initrd_cpio_end[];
@@ -1367,7 +1335,8 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         arch::write_cr0(cr0);
 
         // Save previous owner's FPU state
-        auto *prev_fpu_owner = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
+        auto *prev_fpu_owner =
+            __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
         if (prev_fpu_owner && prev_fpu_owner != current) {
             arch::fxsave(prev_fpu_owner->fpu_state);
         }
@@ -1382,7 +1351,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             current->fpu_used = true;
         }
 
-        __atomic_store_n(&fpu_owner, current, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
         return;
     }
 #endif

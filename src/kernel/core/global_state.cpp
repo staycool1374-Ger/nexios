@@ -26,6 +26,8 @@
 
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/task/task.hpp>
+#include <lib/constants.hpp>
 
 // ---------------------------------------------------------------------------
 // Storage — defined at the scope matching the extern declarations.
@@ -37,6 +39,33 @@ extern "C" {
 uint64_t multiboot_magic = 0;
 uint64_t multiboot_info_ptr = 0;
 }
+
+// ---------------------------------------------------------------------------
+// AsmSwitchState — deferred-context-switch globals shared with isr_stubs.asm.
+//
+// These symbols are read/written by the x86_64 ISR assembly (isr_stubs.asm)
+// and by C++ via the extern declarations in scheduler.hpp.  They are defined
+// here (single definition point) and MUST keep their exact symbol names and
+// initializers — isr_stubs.asm accesses them by name.
+// ---------------------------------------------------------------------------
+extern "C" {
+uint64_t *scheduler_save_rsp_to = nullptr;
+uint64_t scheduler_load_rsp_from = 0;
+uint64_t scheduler_load_cr3_from = 0;
+uint64_t scheduler_next_task_id = UINT64_MAX;
+uint64_t scheduler_load_kstack_base = 0;
+uint64_t scheduler_load_kstack_top = 0;
+uint64_t scheduler_switch_generation = 0;
+uint64_t scheduler_kernel_cr3 = 0;
+bool scheduler_need_resched = false;
+uint64_t isr_nesting_depth = 0;
+uint64_t irq_entry_tsc = 0;
+uint64_t scheduler_corruption_count = 0;
+uint64_t deadline_detection_integrity = 0;
+// Tracks which task's FPU state is currently in the registers (declared in
+// scheduler.hpp's extern "C" block).
+kernel::TaskControlBlock *fpu_owner = nullptr;
+} // extern "C"
 
 namespace kernel {
 
