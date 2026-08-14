@@ -22,18 +22,22 @@
 /// @brief Central home for cross-TU kernel globals — consolidated from the
 /// former ad-hoc `extern` symbols scattered across TUs.  Every variable lives
 /// in exactly one owning state group (BootState / FaultState / TestState /
-/// AsmSwitchState / NetState / VfsState) and is accessed only through inline
+/// AsmSwitchState / NetState / VfsState) and is accessed through documented
 /// getters and verified setters.
 ///
 /// Why one file: maintainability.  A single owner per global makes it possible
 /// to (a) grep who reads/writes it, (b) attach a per-write verification rule,
 /// and (c) guarantee nobody reaches around the accessor.  Grouping follows the
 /// synchronization model each variable needs:
-///   - BootState   : written once in higherhalf_entry, then immutable
-///                   (no locking required; const-correct getters).
-///   - FaultState  : fault-atomic single-writer (SMAP recovery, canary latch).
-///   - TestState   : single-threaded test harness state (no locking).
-///   - AsmSwitchState, NetState, VfsState: added in later phases.
+///   - BootState      : written once in higherhalf_entry, then immutable
+///                      (no locking required; const-correct getters).
+///   - FaultState     : fault-atomic single-writer (SMAP recovery, canary latch).
+///   - TestState      : single-threaded test harness state (no locking).
+///   - AsmSwitchState : deferred-context-switch globals shared with
+///                      isr_stubs.asm — exact extern "C" symbols, atomics +
+///                      publish-generation protocol.
+///   - VfsState       : cross-module FAT32 partition pointer, RANGE_CHECKED.
+///   - NetState       : NIC instance pointer, RANGE_CHECKED.
 
 #include <types.hpp>
 #include <kernel/boot/bootinfo.hpp>
