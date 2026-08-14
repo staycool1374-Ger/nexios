@@ -15,6 +15,7 @@ For any non-trivial code modification or user request, you MUST adhere strictly 
 3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step)**
    - Invoke the `auditor` subagent (Nemotron) to review the modified files against safety rules.
    - Fix any rejected code immediately if the auditor finds flaws.
+   - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
 ## Branch Safeguard
 Before writing or modifying kernel tests, run `git branch --show-current`:
 - If `main` → production development
