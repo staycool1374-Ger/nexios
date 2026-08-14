@@ -44,6 +44,9 @@
     },
     "no_const_cast": {
       "severity": "error"
+    },
+    "global_state_api": {
+      "severity": "error"
     }
   },
   "kernel_only_rules": {
