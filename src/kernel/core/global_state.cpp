@@ -167,6 +167,27 @@ void set_kernel_entry_ns() noexcept {
     test::g_kernel_entry_ns = arch::Timer::ns();
 }
 
+// ---------------------------------------------------------------------------
+// VfsState definitions
+// ---------------------------------------------------------------------------
+
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+kernel::fat32::Fat32Partition *g_fat32_partition = nullptr;
+
+kernel::fat32::Fat32Partition *get_fat32_partition() noexcept {
+    return g_fat32_partition;
+}
+
+bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept {
+    const uint64_t addr = reinterpret_cast<uint64_t>(p);
+    // Legal range: null, or any kernel-half address (>= HHDM base).  User
+    // pointers (low canonical) and garbage are rejected.
+    if (addr != 0 && addr < CONFIG_HHDM_OFFSET)
+        return false;
+    g_fat32_partition = p;
+    return true;
+}
+
 // -- Audit ring (CONFIG_DEBUG only) ------------------------------------------
 
 #ifdef CONFIG_DEBUG

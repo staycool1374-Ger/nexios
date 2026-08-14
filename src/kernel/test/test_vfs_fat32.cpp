@@ -31,6 +31,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/fat32.hpp>
 #include <kernel/vfs/fat32_fs.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/driver/block_device.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/test/test_isolate.hpp>
@@ -66,7 +67,7 @@ static Fat32TestFixture *g_fixture = nullptr;
 
 static void setup_fat32_fs() {
     kernel::test::mark_vfs_touched();
-    if (fat32_partition_instance)
+    if (kernel::gs::get_fat32_partition())
         return;
 
     uint64_t bytes = static_cast<uint64_t>(_binary_build_fat32_img_end -
@@ -76,15 +77,15 @@ static void setup_fat32_fs() {
         _binary_build_fat32_img_start, bytes / fat32::SECTOR_SIZE, true);
     auto *partition = new fat32::Fat32Partition(*dev);
     if (partition && partition->mount()) {
-        fat32_partition_instance = partition;
+        kernel::gs::try_set_fat32_partition(partition);
         g_fixture = new Fat32TestFixture{partition, dev};
     }
 }
 
 JARVIS_TEST(vfs_fat32_mount, "PRE: vfsd, iocd | POST: none") {
     setup_fat32_fs();
-    JARVIS_ASSERT(fat32_partition_instance != nullptr);
-    JARVIS_ASSERT(fat32_partition_instance->bpb().valid);
+    JARVIS_ASSERT(kernel::gs::get_fat32_partition() != nullptr);
+    JARVIS_ASSERT(kernel::gs::get_fat32_partition()->bpb().valid);
 }
 
 JARVIS_TEST(vfs_fat32_open_root, "PRE: vfsd, iocd | POST: none") {
@@ -217,8 +218,8 @@ static Fat32TestFixture create_writable_partition() {
 JARVIS_TEST(vfs_fat32_mkdir, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -233,7 +234,7 @@ JARVIS_TEST(vfs_fat32_mkdir, "PRE: vfsd, iocd | POST: none") {
 
     child->ops->close(*child);
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }
@@ -246,8 +247,8 @@ JARVIS_TEST(vfs_fat32_mkdir, "PRE: vfsd, iocd | POST: none") {
 JARVIS_TEST(vfs_fat32_unlink, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -260,7 +261,7 @@ JARVIS_TEST(vfs_fat32_unlink, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(child == nullptr);
 
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }
@@ -273,8 +274,8 @@ JARVIS_TEST(vfs_fat32_unlink, "PRE: vfsd, iocd | POST: none") {
 JARVIS_TEST(vfs_fat32_mkdir_then_readdir, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -293,7 +294,7 @@ JARVIS_TEST(vfs_fat32_mkdir_then_readdir, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(found);
 
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }
@@ -306,8 +307,8 @@ JARVIS_TEST(vfs_fat32_mkdir_then_readdir, "PRE: vfsd, iocd | POST: none") {
 JARVIS_TEST(vfs_fat32_rmdir_empty, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -328,7 +329,7 @@ JARVIS_TEST(vfs_fat32_rmdir_empty, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(child == nullptr);
 
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }
@@ -341,8 +342,8 @@ JARVIS_TEST(vfs_fat32_rmdir_empty, "PRE: vfsd, iocd | POST: none") {
 JARVIS_TEST(vfs_fat32_rmdir_nonempty_fails, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -373,7 +374,7 @@ JARVIS_TEST(vfs_fat32_rmdir_nonempty_fails, "PRE: vfsd, iocd | POST: none") {
 
     parent->ops->close(*parent);
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }
@@ -387,8 +388,8 @@ JARVIS_TEST(vfs_fat32_rmdir_nonempty_fails, "PRE: vfsd, iocd | POST: none") {
 JARVIS_TEST(vfs_fat32_unlink_frees_clusters, "PRE: vfsd, iocd | POST: none") {
     auto fix = create_writable_partition();
     JARVIS_ASSERT(fix.partition->mount());
-    auto *old = fat32_partition_instance;
-    fat32_partition_instance = fix.partition;
+    auto *old = kernel::gs::get_fat32_partition();
+    kernel::gs::try_set_fat32_partition(fix.partition);
 
     Vnode *root = fat32_fs.get_root();
     JARVIS_ASSERT(root != nullptr);
@@ -420,7 +421,7 @@ JARVIS_TEST(vfs_fat32_unlink_frees_clusters, "PRE: vfsd, iocd | POST: none") {
 
     testdir->ops->close(*testdir);
     root->ops->close(*root);
-    fat32_partition_instance = old;
+    kernel::gs::try_set_fat32_partition(old);
     fat32_fs.get_root();
     JARVIS_TEST_PASS();
 }

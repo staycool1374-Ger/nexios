@@ -233,3 +233,7 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 20:09:50 process_secure_exec PASSED: 5 FAILED: 0 TIME: 1034ms (Phase3)
 2026-08-14 20:09:50 memory_safety PASSED: 11 FAILED: 0 TIME: 1516ms (Phase3)
 2026-08-14 20:09:50 selftest PASSED: 132 FAILED: 0 TIME: 7858ms (Phase3; 1/3 H2-flake CPU EXCEPTION pre-existing)
+2026-08-14 20:39:19 vfs_core PASSED: 20 FAILED: 0 TIME: 552ms (Phase4 VfsState)
+2026-08-14 20:39:19 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 4684ms (Phase4)
+2026-08-14 20:39:19 vfs_fstab PASSED: 5 FAILED: 0 TIME: 1049ms (Phase4)
+2026-08-14 20:39:19 vfs_fat32_integration PASSED: 14 FAILED: 0 TIME: 2530ms (Phase4)

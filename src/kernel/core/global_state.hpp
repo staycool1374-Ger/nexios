@@ -39,6 +39,16 @@
 #include <kernel/boot/bootinfo.hpp>
 #include <kernel/syscall/syscall.hpp>
 
+// The Filesystem singletons (initrd_fs/dev_fs/proc_fs/tmpfs_fs/fat32_fs) are
+// module-owned objects defined with file-static ops tables in their own
+// modules — they remain there (correct encapsulation).  This header adds
+// verified access only to the cross-module FAT32 partition pointer.
+namespace kernel {
+namespace fat32 {
+struct Fat32Partition;
+} // namespace fat32
+} // namespace kernel
+
 namespace kernel {
 namespace gs {
 
@@ -159,6 +169,19 @@ void mark_vfs_touched(bool v) noexcept;
 /// @brief Timer::ns() snapshot at kernel entry (timing printout).
 uint64_t get_kernel_entry_ns() noexcept;
 void set_kernel_entry_ns() noexcept;
+
+// ---------------------------------------------------------------------------
+// VfsState — cross-module FAT32 partition pointer
+// ---------------------------------------------------------------------------
+
+/// @brief Current FAT32 partition instance (nullptr when no FAT32 device is
+///        mounted).  Written at boot by the block-driver probe and by tests.
+///        RANGE_CHECKED: must be null or a kernel-half address.
+kernel::fat32::Fat32Partition *get_fat32_partition() noexcept;
+/// @brief Set the FAT32 partition instance.  Rejected unless @p p is null or
+///        lies in the kernel half (>= CONFIG_HHDM_OFFSET) — guards against
+///        writing a user-space / garbage pointer.
+bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept;
 
 } // namespace gs
 } // namespace kernel
