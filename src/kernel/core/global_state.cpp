@@ -188,6 +188,25 @@ bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// NetState definitions
+// ---------------------------------------------------------------------------
+
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+::net::Nic *g_nic = nullptr;
+
+::net::Nic *get_nic() noexcept {
+    return g_nic;
+}
+
+bool try_set_nic(::net::Nic *nic) noexcept {
+    const uint64_t addr = reinterpret_cast<uint64_t>(nic);
+    if (addr != 0 && addr < CONFIG_HHDM_OFFSET)
+        return false;
+    g_nic = nic;
+    return true;
+}
+
 // -- Audit ring (CONFIG_DEBUG only) ------------------------------------------
 
 #ifdef CONFIG_DEBUG

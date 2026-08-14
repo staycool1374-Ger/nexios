@@ -237,3 +237,6 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 20:39:19 vfs_fat32 PASSED: 40 FAILED: 0 TIME: 4684ms (Phase4)
 2026-08-14 20:39:19 vfs_fstab PASSED: 5 FAILED: 0 TIME: 1049ms (Phase4)
 2026-08-14 20:39:19 vfs_fat32_integration PASSED: 14 FAILED: 0 TIME: 2530ms (Phase4)
+2026-08-14 20:44:52 network_core PASSED: 5 FAILED: 0 TIME: 1156ms (Phase5 NetState)
+2026-08-14 20:44:52 servers_vfsd PASSED: 18 FAILED: 0 TIME: 2464ms (Phase5)
+2026-08-14 20:44:52 servers_iocd PASSED: 7 FAILED: 0 TIME: 1165ms (Phase5)

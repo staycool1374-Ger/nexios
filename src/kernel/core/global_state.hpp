@@ -49,6 +49,13 @@ struct Fat32Partition;
 } // namespace fat32
 } // namespace kernel
 
+// The NIC abstraction lives in the GLOBAL `net` namespace (net.hpp uses
+// `namespace net { struct Nic {...}; }`; virtio_net.hpp re-exports it as
+// kernel::net::Nic via `using ::net::Nic;`).
+namespace net {
+struct Nic;
+} // namespace net
+
 namespace kernel {
 namespace gs {
 
@@ -182,6 +189,17 @@ kernel::fat32::Fat32Partition *get_fat32_partition() noexcept;
 ///        lies in the kernel half (>= CONFIG_HHDM_OFFSET) — guards against
 ///        writing a user-space / garbage pointer.
 bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept;
+
+// ---------------------------------------------------------------------------
+// NetState — NIC instance pointer
+// ---------------------------------------------------------------------------
+
+/// @brief Current NIC instance (nullptr before net_init / without a device).
+///        Written once at boot; read by the shell network commands.
+///        RANGE_CHECKED: must be null or a kernel-half address.
+::net::Nic *get_nic() noexcept;
+/// @brief Set the NIC instance.  Rejected unless null or kernel-half.
+bool try_set_nic(::net::Nic *nic) noexcept;
 
 } // namespace gs
 } // namespace kernel

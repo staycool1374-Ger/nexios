@@ -79,8 +79,7 @@ ArpCache &net_arp_cache();
 bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
                         const uint8_t *data, size_t data_len);
 
-/// Globally registered NIC (set by the first call to net_init).
-extern constinit Nic *g_nic;
+/// Globally registered NIC — now owned by kernel::gs (get_nic/try_set_nic).
 
 /// @brief ICMP echo reply record for ping.
 struct IcmpEchoReply {
