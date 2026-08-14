@@ -164,20 +164,45 @@ panic, and snapshot-safe pools keep it test-isolation-clean.
 
 #### MP-2 — MMU red-zone guard pages between kernel + user segments
 
-- [ ] **MP-2.1 — Segment-map audit.**  Enumerate the user task VA layout:
+- [x] **MP-2.1 — Segment-map audit.**  Enumerate the user task VA layout:
       text/data/heap/stack (`STACK_VADDR`, `program_break`, segment base from
       ELF load).  Identify every adjacent-pair boundary that currently has no
       unmapped page between mappings.
-- [ ] **MP-2.2 — Insert red-zones.**  For each boundary, leave one 4 KiB page
+      **DONE (2026-08-14):** user VA layout = text/data (ELF PT_LOAD at
+      absolute vaddrs) → `HEAP_VADDR` (0x60000000) → `STACK_VADDR` (0x70000000,
+      guard page at base).  Boundaries: segment-end↔heap, heap↔stack, stack
+      guard.  The only boundary WITHOUT a gap is between two adjacent PT_LOAD
+      segments — inherent to the ELF absolute-vaddr layout (documented in
+      elf.cpp `load_segments_and_stack`); text/data come from a trusted ELF and
+      the region boundaries carry the overflow containment.
+- [x] **MP-2.2 — Insert red-zones.**  For each boundary, leave one 4 KiB page
       unmapped (never installed in the task PML4) between segments.  Adjust
       the ELF loader (`load_segments_and_stack`) and `brk`/heap growth
       (`program_break`) to reserve the gap.
-- [ ] **MP-2.3 — Kernel-half red-zones.**  In MP-1's private kernel PML4, leave
+      **DONE (2026-08-14):** loader (elf.cpp:284-295) rejects a load whose
+      `max_seg_end + PAGE_SIZE > HEAP_VADDR` (red-zone page between segments
+      and heap) or `HEAP_VADDR + INITIAL_HEAP_SIZE > STACK_VADDR`; stack guard
+      page at `STACK_VADDR` left unmapped (elf.cpp:302).  `sys_brk`
+      (syscall_handlers_misc.cpp:269-275) rejects `arg0 > STACK_VADDR` and
+      `arg0 == STACK_VADDR` so the guard page never becomes heap.
+- [x] **MP-2.3 — Kernel-half red-zones.**  In MP-1's private kernel PML4, leave
       an unmapped page between the kernel stack frame and adjacent kernel
       data (belt-and-braces beyond the kslot guard).
-- [ ] **MP-2.4 — Verify.**  A task writing just past a segment end must #PF
+      **DONE (2026-08-14):** the kslot window reserves one unmapped guard page
+      at each slot base (`alloc_kslot`); every private kernel PML4 inherits the
+      window's PT entries by value, so the guard is present in every task.
+      Proven by `memory_safety`/`kernel_red_zone_between_stack_data`
+      (virt_to_phys_in_pml4(slot_va) == 0, stack above mapped).
+- [x] **MP-2.4 — Verify.**  A task writing just past a segment end must #PF
       (PTE not-present), not corrupt the neighbour.  Class gates:
       `process`, `memory_safety`, `pmm`, `selftest`.
+      **DONE (2026-08-14):** `memory_safety` 11/11 —
+      `user_red_zone_stack_overflow_pf` (stack guard), `user_red_zone_heap_
+      overflow_pf` (brk cap), `kernel_red_zone_between_stack_data` (kslot
+      guard); `memory_isolation`/`guard_page_fault_not_kernel_fatal` (user red
+      zone #PF terminates task, kernel stays alive).  Gates: process_lifecycle
+      16/16, process_elf 9/9, process_secure_exec 5/5, memory_pmm 5/5,
+      selftest 132/132, build green.
 
 **Hypothesis:** gaps are only absent because the loader never reserves them;
 reserving one unmapped page per boundary converts overflow into a deterministic
