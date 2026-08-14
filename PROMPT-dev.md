@@ -96,13 +96,26 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Commit: `git add -A && git commit -m "bump: v$(next)-dev"`
 - Push: `git push origin main`
 
-## PARALLEL AUDIT TRIGGER RULE:
-You are running concurrently with a SIL 3 Audit Subagent via MCP. 
-For every code modification you plan:
-1. Write the intended changes to `audits/pending_patch.diff` FIRST.
-2. Call the subagent explicitly using: `@sil3_auditor analyze the pending patch for entry 512.`
-3. Do not apply the changes to the real src/ directory until the subagent replies with 'APPROVED'. 
-If it replies 'REJECTED', resolve its objections in a new iteration.
+## PARALLEL AUDIT TRIGGER RULE (diff-patch protocol):
+You are running concurrently with a SIL 3 Audit Subagent via MCP.
+Minimize information exchange by passing **diff patches**, never full file contents:
+
+1. **coder → auditor:** write the intended changes as a patch against `main`:
+   `git diff main -- <changed files> > audits/pending_patch.diff`
+   (if working from a feature branch, use `git diff $(git merge-base main HEAD) -- <files>`).
+   The auditor reads ONLY that patch; it opens additional source files only when
+   the patch is ambiguous.
+2. Call the subagent explicitly using:
+   `@sil3_auditor review audits/pending_patch.diff` (no code is pasted into the prompt).
+3. Do NOT apply the changes to the real src/ directory until the subagent replies
+   with 'APPROVED'.
+4. **auditor → coder:** if it replies 'REJECTED', it writes a corrective patch to
+   `audits/rejected_patch.diff` (machine-applicable, `git apply`-able) showing the
+   required changes, with only minimal prose notes. Apply it with:
+   `git apply audits/rejected_patch.diff`
+   then re-verify and re-audit in a new iteration (goto step 1). If the rejected
+   patch does not apply cleanly, resolve its objections manually and re-generate
+   `audits/pending_patch.diff`.
 
 ---
 
