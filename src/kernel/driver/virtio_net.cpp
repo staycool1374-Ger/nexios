@@ -33,7 +33,7 @@ namespace kernel::net {
 
 static bool virtio_net_send_frame(const uint8_t *data, size_t len);
 
-VirtioNetDevice *g_virtio_net_dev = nullptr;
+static VirtioNetDevice *g_virtio_net_dev = nullptr;
 
 VirtioNetDevice::~VirtioNetDevice() {
     if (queue_size == 0)

@@ -38,7 +38,7 @@ struct Fat32VnodeData {
 constinit fat32::Fat32Partition *fat32_partition_instance = nullptr;
 
 // Forward declarations
-extern Vnode fat32_root_vnode;
+static Vnode fat32_root_vnode = {};
 static Vnode *fat32_dir_lookup(Vnode &self, const char *name);
 static Vnode *fat32_file_lookup(Vnode &, const char *);
 static int fat32_dir_mkdir(Vnode &self, const char *name, uint16_t mode);
@@ -426,7 +426,6 @@ static Vnode *fat32_dir_lookup(Vnode &self, const char *name) {
 // Filesystem root
 // -------------------------------------------------------------------
 
-Vnode fat32_root_vnode = {};
 static Fat32VnodeData fat32_root_vdata{};
 static bool root_initialized = false;
 

@@ -7,9 +7,6 @@
 
 namespace kernel::test {
 
-extern constinit uint64_t g_watchdog_deadline_ns;
-extern constinit uint64_t g_watchdog_task_id;
-
 /// @brief Arm the watchdog with both TSC-based and PIT-based timers.
 ///        PIT channel 1 one-shot (~55ms) + TSC deadline.
 void watchdog_arm(uint64_t ms, const char *test_name);

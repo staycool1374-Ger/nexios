@@ -53,8 +53,6 @@ extern uint8_t kernel_stack[];
 /// @brief Boot-time RTC epoch (UNIX seconds) and Timer::ns() snapshot.
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t g_boot_epoch;
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t g_boot_ns;
 
 /// @brief Format wall-clock nanoseconds since epoch into "YYYY-MM-DD
 /// hh:mm:ss:mmm".
