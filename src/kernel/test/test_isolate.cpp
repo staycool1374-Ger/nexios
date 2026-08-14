@@ -1413,6 +1413,10 @@ void reload_daemon_tasks() {
         if (t != current && t != idle && t != Scheduler::get_shell_task() &&
             t != Scheduler::get_harness_task() &&
             !IrqThread::is_irq_thread_task(t) &&
+            // The background ELF loader is a long-lived kernel task (like the
+            // shell/harness): it must survive cleanup_test_tasks, or every
+            // test boundary reaps it and the loader never processes requests.
+            __builtin_strcmp(t->name, "elf-load") != 0 &&
             t->magic == TaskControlBlock::TCB_MAGIC) {
             to_kill[num_to_kill++] = t;
         }

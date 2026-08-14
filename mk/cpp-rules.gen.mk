@@ -142,10 +142,6 @@ build/kernel/memory/markers.o: src/kernel/memory/markers.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
-build/kernel/memory/kernel_object.o: src/kernel/memory/kernel_object.cpp
-	@mkdir -p $(dir $@)
-	@printf "  %s %s\n" CC $@
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_deadline_recovery.o: src/kernel/test/test_deadline_recovery.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -407,6 +403,10 @@ build/kernel/test/test_random.o: src/kernel/test/test_random.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_lock_validator.o: src/kernel/test/test_lock_validator.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_elf_loader.o: src/kernel/test/test_elf_loader.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
@@ -819,6 +819,10 @@ build/kernel/syscall/syscall_handlers_fs.o: src/kernel/syscall/syscall_handlers_
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/syscall/syscall_handlers_misc.o: src/kernel/syscall/syscall_handlers_misc.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/elf/elf_loader.o: src/kernel/elf/elf_loader.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

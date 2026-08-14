@@ -24,11 +24,14 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/mempool.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
+#include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/test/resource_tracker.hpp>
 #include <logger.hpp>
 #include <string.hpp>
 #include <assert.hpp>
@@ -107,6 +110,11 @@ LoadResult ElfLoader::request_load(const char *path) {
     start_ticks_ = arch::Timer::ticks();
     ++load_generation_;
     state_ = LoadState::VALIDATING;
+    // Wake the blocked loader (it sets itself BLOCKED when idle).
+    if (loader_tcb_ &&
+        loader_tcb_->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*loader_tcb_);
+    }
     return LoadResult::OK;
 }
 
@@ -137,10 +145,70 @@ TaskControlBlock *ElfLoader::take_completed() {
 void ElfLoader::release_completed() {
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (completed_tcb_) {
-        completed_tcb_->cleanup();
-        delete completed_tcb_;
+        destroy_completed_tcb(completed_tcb_);
         completed_tcb_ = nullptr;
     }
+}
+
+/// @brief Tear down a completed-but-never-scheduled TCB.  It was built by
+///        finalize_loaded_task and never add_task'd, so cleanup()'s
+///        Scheduler::unregister_task / parent / daemon logic must NOT run.
+///        Frees the same resources: PML4 user pages + page, user stack,
+///        kernel stack, IPC objects, fd table, then the MemPool block.
+void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
+    if (!tcb || tcb->magic != TaskControlBlock::TCB_MAGIC)
+        return;
+    if (loader_tcb_ && tcb == loader_tcb_)
+        return;
+    // Teardown of a completed-but-NEVER-scheduled TCB (built by
+    // finalize_loaded_task, never add_task'd).  cleanup() is unsafe here
+    // (Scheduler::unregister_task removes an absent task; parent/daemon logic
+    // and track_task_remove assume add_task ran).  Free the resources directly,
+    // mirroring cleanup()'s frees but skipping all scheduler + task-accounting
+    // interactions.
+    if (tcb->page_table_) {
+        kernel::BufferPool::unmap_all(*tcb);
+        VMM::free_user_pages(tcb->page_table_);
+        PMM::free_page(tcb->page_table_);
+        tcb->page_table_ = 0;
+    }
+    if (tcb->user_stack_ && tcb->is_user_) {
+        size_t pages = (tcb->user_stack_size_ + 4095) / arch::PAGE_SIZE;
+        for (size_t i = 0; i < pages; ++i)
+            PMM::free_page(tcb->user_stack_ + i * arch::PAGE_SIZE);
+        tcb->user_stack_ = 0;
+    }
+    if (tcb->stack_phys_) {
+        size_t pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+        for (size_t i = 0; i < pages; ++i)
+            PMM::free_page(tcb->stack_phys_ + i * arch::PAGE_SIZE);
+        tcb->stack_phys_ = 0;
+    }
+    // IPC objects (track_*_add'd by init_task_common).
+    tcb->msg_queue.~MessageQueue();
+    kernel::test::ResourceTracker::instance().track_msg_queue_remove();
+    tcb->notify.~Notify();
+    kernel::test::ResourceTracker::instance().track_notify_remove();
+    tcb->event_group.~EventGroup();
+    kernel::test::ResourceTracker::instance().track_event_group_remove();
+    // std fds (open_std_fds: alloc'd via fd_table.alloc => track_fd_add) share
+    // /dev/tty WITHOUT vnode_ref_inc.  Close them manually: track_fd_remove +
+    // ops->close, but NOT vnode_ref_dec (would over-decrement /dev/tty).
+    for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
+        if (tcb->fd_table.fds[i].used) {
+            auto *vn = tcb->fd_table.fds[i].vnode;
+            if (vn && vn->ops && vn->ops->close)
+                vn->ops->close(*vn);
+            kernel::test::ResourceTracker::instance().track_fd_remove();
+            tcb->fd_table.fds[i].used = false;
+            tcb->fd_table.fds[i].vnode = nullptr;
+        }
+    }
+    if (tcb->cwd_vnode)
+        vfs::vnode_ref_dec(tcb->cwd_vnode);
+    tcb->cwd_vnode = nullptr;
+    tcb->magic = 0;
+    kernel::MemPool::free(tcb);
 }
 
 void ElfLoader::reset() {
@@ -158,10 +226,9 @@ void ElfLoader::reset() {
 }
 
 void ElfLoader::wait_loader_idle() {
-    // The loader is more urgent than the harness (prio 1 vs 10) — no: on this
-    // kernel HIGHER number = MORE urgent, so the loader (1) is LESS urgent
-    // than the harness (10).  The harness must explicitly reschedule() for the
-    // loader to run; spin with reschedule+pause.
+    // request_load woke the loader (set_task_ready), so it is READY + queued
+    // and the harness's reschedule() dispatches it on the next tick.  Spin
+    // until the loader returns to IDLE.
     for (uint64_t spins = 0; spins < 1000000 && state() != LoadState::IDLE;
          ++spins) {
         Scheduler::reschedule();
@@ -176,12 +243,17 @@ void ElfLoader::wait_loader_idle() {
 
 void ElfLoader::task_main() {
     for (;;) {
-        // Idle: the loader is the lowest-priority task; yield so every
-        // higher-priority task (daemons, shell, harness) runs, and poll the
-        // request flag.  A posted request transitions state out of IDLE.
+        // Idle: block the loader (BLOCKED + reschedule) so it leaves the
+        // ready queue and is selectable again when request_load wakes it.
+        // A RUNNING task that hlt()'s or spins stays RUNNING-not-queued (INV-4)
+        // and is stranded.  request_load() calls set_task_ready() to wake us.
         if (state_ == LoadState::IDLE) {
-            Scheduler::reschedule();
-            arch::hlt();
+            auto *self = Scheduler::current_task();
+            if (self) {
+                self->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*self);
+                Scheduler::reschedule();
+            }
             continue;
         }
         run_load();
@@ -434,7 +506,7 @@ void ElfLoader::run_load() {
     completed_tcb_ = tcb;
     state_ = LoadState::DONE;
     uint64_t elapsed = arch::Timer::ticks() - start_ticks_;
-    post_event(0xDB02, " completed in", file_size_, elapsed, true);
+    post_event(0xDB02, " completed", file_size_, elapsed, true);
 
     if (fd_ >= 0 && loader_tcb_) {
         loader_tcb_->fd_table.free(fd_);
