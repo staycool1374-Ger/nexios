@@ -1377,7 +1377,7 @@ void reload_daemon_tasks() {
         for (uint64_t j = 0; j < daemon::MAX_DAEMONS; ++j) {
             const auto &entry = daemon::get_entry(j);
             if (entry.pid == daemon_pids[i]) {
-                dmesg_push_base(0xDA05, entry.name, entry.pid);
+                log::dmesg_push_base(0xDA05, entry.name, entry.pid);
                 if (task && task->magic == TaskControlBlock::TCB_MAGIC &&
                     task != current) {
                     Scheduler::terminate(*task, 0);

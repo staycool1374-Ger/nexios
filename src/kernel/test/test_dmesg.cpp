@@ -32,7 +32,7 @@ using namespace kernel;
 // Expect: empty() returns true, size() returns 0
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_initially_empty, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     JARVIS_ASSERT(db.empty());
     JARVIS_ASSERT_EQ((size_t)0, db.size());
@@ -46,7 +46,7 @@ JARVIS_TEST(dmesg_initially_empty, "PRE: none | POST: none") {
 // Expect: empty() false, size() == 1
 // Depends: kernel::log::DmesgBuffer::push
 JARVIS_TEST(dmesg_push_once, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     bool ok = db.push(log::ErrorSubsystem::BASE, 0, "hello dmesg");
     JARVIS_ASSERT(ok);
@@ -62,7 +62,7 @@ JARVIS_TEST(dmesg_push_once, "PRE: none | POST: none") {
 //         entry.message matches, entry.context == 0xDEAD
 // Depends: kernel::log::DmesgBuffer::push, ::pop
 JARVIS_TEST(dmesg_push_and_pop, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     db.push(log::ErrorSubsystem::BASE, 42, "test message",
             static_cast<uintptr_t>(0xDEAD));
@@ -82,7 +82,7 @@ JARVIS_TEST(dmesg_push_and_pop, "PRE: none | POST: none") {
 // Expect: pop codes in order 10, 20, 30; buffer empty after third pop
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_push_multiple_fifo, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     db.push(log::ErrorSubsystem::SYNC, 10, "first");
     db.push(log::ErrorSubsystem::VFS, 20, "second");
@@ -106,7 +106,7 @@ JARVIS_TEST(dmesg_push_multiple_fifo, "PRE: none | POST: none") {
 // Expect: pop() returns false
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_pop_empty, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     log::LogEntry e;
     bool ok = db.pop(e);
@@ -120,7 +120,7 @@ JARVIS_TEST(dmesg_pop_empty, "PRE: none | POST: none") {
 // Expect: empty() true, pop() returns false
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_clear, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     db.push(log::ErrorSubsystem::SCHED, 1, "before clear");
     db.push(log::ErrorSubsystem::MEMPOOL, 2, "before clear2");
@@ -138,7 +138,7 @@ JARVIS_TEST(dmesg_clear, "PRE: none | POST: none") {
 // Expect: for_each callback invoked exactly 3 times; all entries remain after
 // Depends: kernel::log::DmesgBuffer::for_each
 JARVIS_TEST(dmesg_for_each, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     db.push(log::ErrorSubsystem::BASE, 1, "a");
     db.push(log::ErrorSubsystem::BASE, 2, "b");
@@ -158,7 +158,7 @@ JARVIS_TEST(dmesg_for_each, "PRE: none | POST: none") {
 // Expect: callback never called
 // Depends: kernel::log::DmesgBuffer::for_each
 JARVIS_TEST(dmesg_for_each_empty, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     size_t count = 0;
     db.for_each([&count](const log::LogEntry &) { ++count; });
@@ -172,7 +172,7 @@ JARVIS_TEST(dmesg_for_each_empty, "PRE: none | POST: none") {
 // Expect: head == N, tail == M after N pushes and M pops
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_head_tail_indices, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     size_t h0 = db.head_index();
     size_t t0 = db.tail_index();
@@ -201,7 +201,7 @@ JARVIS_TEST(dmesg_head_tail_indices, "PRE: none | POST: none") {
 // Expect: first pop yields entry with error_code 1 (second push), not 0
 // Depends: kernel::log::DmesgBuffer
 JARVIS_TEST(dmesg_overflow, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     size_t cap = log::DMESG_CAPACITY;
     size_t max_fill = cap - 1;
@@ -444,7 +444,7 @@ JARVIS_TEST(dmesg_suppression_toggle, "PRE: none | POST: none") {
 // Expect: timestamp > 0, task_id == Scheduler::current_task()->id
 // Depends: kernel::log::DmesgBuffer, kernel::Scheduler
 JARVIS_TEST(dmesg_timestamp_and_task_id, "PRE: none | POST: none") {
-    auto &db = log::g_dmesg;
+    auto &db = log::DmesgService::instance();
     db.clear();
     db.push(log::ErrorSubsystem::BASE, 0, "ts-check");
     log::LogEntry entry;

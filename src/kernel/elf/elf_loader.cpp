@@ -330,7 +330,7 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t size,
         append_dec(ticks);
     }
     slot[n] = '\0';
-    dmesg_push_base(code, slot, 0);
+    log::dmesg_push_base(code, slot, 0);
     kernel::Logger::info("%s", slot);
 }
 

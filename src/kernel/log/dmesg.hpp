@@ -20,12 +20,11 @@
 
 /// @file dmesg.hpp
 /// @brief Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer,
-/// macros, error-string helpers.
-
-#pragma once
+/// DmesgService singleton, error-string helpers.
 
 #include <types.hpp>
 #include <lib/error.hpp>
+#include <lib/utils.hpp>
 #include <kernel/sync/sync_errors.hpp>
 #include <kernel/vfs/vfs_errors.hpp>
 #include <kernel/memory/mempool_errors.hpp>
@@ -129,19 +128,92 @@ template <size_t Capacity> class DmesgBuffer {
 
 /// Capacity of the global dmesg ring buffer (from Kconfig).
 constexpr size_t DMESG_CAPACITY = CONFIG_DMESG_CAPACITY;
-/// @brief Global dmesg buffer instance.
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern DmesgBuffer<DMESG_CAPACITY> g_dmesg;
 
-/// @brief Shorthand: push an entry to the global dmesg buffer.
-#define dmesg_push(subsys, err, msg, ctx)                                      \
-    kernel::log::g_dmesg.push(kernel::log::ErrorSubsystem::subsys,             \
-                              static_cast<uint64_t>(err), msg, ctx)
+/// @brief Sole owner of the kernel dmesg ring.
+///
+/// Replaces the former mutable global object `g_dmesg`. The buffer lives as a
+/// private member; producers write through push(), the dmesg_task drains via
+/// pop(), and readers iterate with for_each(). All access is routed through
+/// this service so the buffer's lifecycle and suppression policy are
+/// encapsulated.
+class DmesgService {
+  public:
+    DmesgService(const DmesgService &) = delete;
+    DmesgService &operator=(const DmesgService &) = delete;
 
-/// @brief Shorthand: push a base-subsystem error to the global dmesg buffer.
-#define dmesg_push_base(err, msg, ctx)                                         \
-    kernel::log::g_dmesg.push(kernel::log::ErrorSubsystem::BASE,               \
-                              static_cast<uint64_t>(err), msg, ctx)
+    /// @brief Get the singleton service instance.
+    static DmesgService &instance() noexcept;
+
+    /// @brief Push a structured entry. Thread-safe (SPSC atomics).
+    /// @return true unless an entry was overwritten.
+    bool push(ErrorSubsystem subsys, uint64_t err_code, const char *msg,
+              uintptr_t ctx = 0) noexcept {
+        return buffer_.push(subsys, err_code, msg, ctx);
+    }
+
+    /// @brief Pop the oldest entry (dmesg_task consumer side).
+    /// @return true if an entry was available.
+    bool pop(LogEntry &entry) noexcept {
+        return buffer_.pop(entry);
+    }
+
+    /// @brief Iterate over all entries without removing them.
+    template <typename Fn> void for_each(Fn &&fn) const {
+        buffer_.for_each(::forward<Fn>(fn));
+    }
+
+    /// @brief Discard all entries.
+    void clear() noexcept {
+        buffer_.clear();
+    }
+
+    /// @brief Check whether the buffer is empty.
+    bool empty() const noexcept {
+        return buffer_.empty();
+    }
+
+    /// @brief Return the number of entries currently in the buffer.
+    size_t size() const noexcept {
+        return buffer_.size();
+    }
+
+    /// @brief Suppress future pushes (release mode: quiet boot).
+    void set_suppressed(bool v) noexcept {
+        buffer_.set_suppressed(v);
+    }
+
+    /// @brief Check whether pushes are currently suppressed.
+    bool is_suppressed() const noexcept {
+        return buffer_.is_suppressed();
+    }
+
+    size_t head_index() const noexcept {
+        return buffer_.head_index();
+    }
+
+    size_t tail_index() const noexcept {
+        return buffer_.tail_index();
+    }
+
+  private:
+    /// @brief Private ctor — only instance() may create the service.
+    DmesgService() = default;
+
+    /// @brief The encapsulated ring buffer (no external linkage).
+    DmesgBuffer<DMESG_CAPACITY> buffer_{};
+};
+
+/// @brief Shorthand: push an entry to the kernel dmesg service.
+inline bool dmesg_push(ErrorSubsystem subsys, uint64_t err, const char *msg,
+                       uintptr_t ctx = 0) noexcept {
+    return DmesgService::instance().push(subsys, err, msg, ctx);
+}
+
+/// @brief Shorthand: push a base-subsystem error to the kernel dmesg service.
+inline bool dmesg_push_base(uint64_t err, const char *msg,
+                            uintptr_t ctx = 0) noexcept {
+    return DmesgService::instance().push(ErrorSubsystem::BASE, err, msg, ctx);
+}
 
 /// @brief Return a human-readable string for a base-subsystem error code.
 ///        The code space is split into kernel::Error values (0–9) and

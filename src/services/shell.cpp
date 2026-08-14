@@ -505,7 +505,7 @@ void Shell::shell_task_main() {
 
     // Enable dmesg recording now that the shell is interactive
     // (release mode suppresses boot/test entries for a clean console).
-    kernel::log::g_dmesg.set_suppressed(false);
+    kernel::log::DmesgService::instance().set_suppressed(false);
 
     Terminal::clear();
     Terminal::write("\n");
@@ -2431,13 +2431,15 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
                 const char* s = argv[3]; while (*s) { code = code * 10 + (*s - '0'); ++s; }
             }
             const char* msg = (argc >= 5) ? argv[4] : "(no message)";
-            kernel::log::g_dmesg.push(static_cast<kernel::log::ErrorSubsystem>(subsys), code, msg, 0);
+            kernel::log::DmesgService::instance().push(
+                static_cast<kernel::log::ErrorSubsystem>(subsys), code, msg, 0);
             Terminal::write("ok\n");
             return;
         }
     }
     size_t total = 0;
-    kernel::log::g_dmesg.for_each([&](const kernel::log::LogEntry& e) {
+    kernel::log::DmesgService::instance().for_each(
+        [&](const kernel::log::LogEntry& e) {
         char buf[256];
         char* p = buf;
         char* end = buf + sizeof(buf) - 1;

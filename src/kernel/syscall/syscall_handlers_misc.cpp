@@ -430,7 +430,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                            uint64_t, uint64_t *) {
     // arg0 = buffer, arg1 = size, arg2 = flags (0=read, 1=clear)
     if (arg2 == 1) {
-        kernel::log::g_dmesg.clear();
+        kernel::log::DmesgService::instance().clear();
         return 0;
     }
     if (arg0 == 0 || arg1 == 0)
@@ -451,7 +451,8 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_klog);
     }
 
-    kernel::log::g_dmesg.for_each([&](const kernel::log::LogEntry &e) {
+    kernel::log::DmesgService::instance().for_each(
+        [&](const kernel::log::LogEntry &e) {
         if (written >= user_size)
             return;
         char entry_buf[256];

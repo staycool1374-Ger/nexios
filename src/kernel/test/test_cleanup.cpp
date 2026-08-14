@@ -62,7 +62,7 @@ void test_cleanup_all() {
     DriverRegistry::unload_all();
 
     // ---- 4. Clear dmesg ----
-    kernel::log::g_dmesg.clear();
+    kernel::log::DmesgService::instance().clear();
 
     // ---- 5. Reset ResourceTracker counters to zero ----
     ResourceCounters zero = {};

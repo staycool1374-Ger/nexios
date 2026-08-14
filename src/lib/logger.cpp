@@ -51,7 +51,7 @@ void Logger::putchar(char c) {
     if (Scheduler::is_test_active()) {
         arch::QemuDebugcon::putc(c);
         if (initialized_) {
-            kernel::log::g_klog.putchar(c);
+            kernel::log::KlogService::instance().putchar(c);
         }
         return;
     }
@@ -61,7 +61,7 @@ void Logger::putchar(char c) {
     arch::Serial::putchar(c);
 #endif
     if (initialized_) {
-        kernel::log::g_klog.putchar(c);
+        kernel::log::KlogService::instance().putchar(c);
     }
 }
 
@@ -71,7 +71,7 @@ void Logger::puts(const char* s) {
     if (Scheduler::is_test_active()) {
         arch::QemuDebugcon::write(s);
         if (initialized_) {
-            kernel::log::g_klog.puts(s);
+            kernel::log::KlogService::instance().puts(s);
         }
         return;
     }
@@ -81,7 +81,7 @@ void Logger::puts(const char* s) {
     arch::Serial::puts(s);
 #endif
     if (initialized_) {
-        kernel::log::g_klog.puts(s);
+        kernel::log::KlogService::instance().puts(s);
     }
 }
 
