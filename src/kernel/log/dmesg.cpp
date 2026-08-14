@@ -50,7 +50,23 @@ bool DmesgBuffer<Capacity>::push(ErrorSubsystem subsys, uint64_t err_code,
         atomic_store(&tail, (t + 1) & MASK, __ATOMIC_RELEASE);
     }
 
-    buffer[h] = LogEntry{ts, tid, subsys, err_code, ctx, msg};
+    buffer[h] = LogEntry{};
+    buffer[h].timestamp = ts;
+    buffer[h].task_id = tid;
+    buffer[h].subsystem = subsys;
+    buffer[h].error_code = err_code;
+    buffer[h].context = ctx;
+    // Owned copy (SIL3): the entry stores a bounded char array, so producers
+    // may pass transient/ring buffers (e.g. the ELF loader's message slots)
+    // without dangling once the source is reused.
+    size_t i = 0;
+    if (msg) {
+        while (msg[i] && i < LogEntry::kMessageCap - 1) {
+            buffer[h].message[i] = msg[i];
+            ++i;
+        }
+    }
+    buffer[h].message[i] = '\0';
 
     atomic_store(&head, next_h, __ATOMIC_RELEASE);
     return !overwrote;

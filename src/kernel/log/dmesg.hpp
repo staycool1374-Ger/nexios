@@ -52,12 +52,13 @@ enum class ErrorSubsystem : uint8_t {
 
 /// @brief A single dmesg log entry.
 struct LogEntry {
+    static constexpr size_t kMessageCap = 96;
     uint64_t timestamp;       ///< Tick count at log time.
     uint64_t task_id;         ///< ID of the task that logged the entry.
     ErrorSubsystem subsystem; ///< Subsystem that generated the error.
     uint64_t error_code;      ///< Subsystem-specific error code.
     uintptr_t context;   ///< Optional context pointer (e.g. address involved).
-    const char *message; ///< Human-readable description.
+    char message[kMessageCap]; ///< Human-readable description (owned copy).
 };
 
 /// @brief Lock-free single-producer single-consumer ring buffer for structured

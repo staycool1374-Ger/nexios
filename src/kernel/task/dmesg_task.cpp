@@ -98,7 +98,7 @@ void dmesg_task_main() {
             const char *msg_str = ": ";
             while (*msg_str && p < end)
                 *p++ = *msg_str++;
-            const char *msg = entry.message ? entry.message : "(null)";
+            const char *msg = entry.message; // owned char array, never null
             while (*msg && p < end)
                 *p++ = *msg++;
 

@@ -529,7 +529,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         const char *msg_str = ": ";
         while (*msg_str && p < end)
             *p++ = *msg_str++;
-        const char *msg = e.message ? e.message : "(null)";
+        const char *msg = e.message; // owned char array, never null
         while (*msg && p < end)
             *p++ = *msg++;
 
