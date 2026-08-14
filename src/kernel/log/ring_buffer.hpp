@@ -86,9 +86,53 @@ class RingBuffer {
     alignas(64) volatile size_t read_pos_ = 0;  ///< Consumer index.
 };
 
-/// @brief Global kernel log ring buffer.
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern RingBuffer g_klog;
+/// @brief Sole owner of the kernel log (klog) ring.
+///
+/// Replaces the former mutable global object `g_klog`. The character ring
+/// lives as a private member; the kernel console producer writes via
+/// putchar()/puts(), and consumers (SYS_KLOG readers, tests) drain via
+/// read()/clear().
+class KlogService {
+  public:
+    KlogService(const KlogService &) = delete;
+    KlogService &operator=(const KlogService &) = delete;
+
+    /// @brief Get the singleton service instance.
+    static KlogService &instance() noexcept;
+
+    /// @brief Write a single character (discards if full).
+    void putchar(char c) noexcept {
+        buffer_.putchar(c);
+    }
+
+    /// @brief Write a null-terminated string.
+    void puts(const char *s) noexcept {
+        buffer_.puts(s);
+    }
+
+    /// @brief Read up to @p size bytes into @p dst.
+    /// @return number of bytes read.
+    size_t read(char *dst, size_t size) noexcept {
+        return buffer_.read(dst, size);
+    }
+
+    /// @brief Discard all buffered data.
+    void clear() noexcept {
+        buffer_.clear();
+    }
+
+    /// @brief Check whether the buffer contains no data.
+    bool empty() const noexcept {
+        return buffer_.empty();
+    }
+
+  private:
+    /// @brief Private ctor — only instance() may create the service.
+    KlogService() = default;
+
+    /// @brief The encapsulated character ring (no external linkage).
+    RingBuffer buffer_{};
+};
 
 } // namespace log
 } // namespace kernel

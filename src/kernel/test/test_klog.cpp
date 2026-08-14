@@ -57,7 +57,7 @@ static bool contains(const char *haystack, const char *needle) {
  * 5. Test with flags=1 (clear) and verify buffer emptied
  */
 JARVIS_TEST(klog_read_entries, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
 
     rb.clear();
     rb.puts("KLOG_TEST_MARKER_1\n");
@@ -77,7 +77,7 @@ JARVIS_TEST(klog_read_entries, "PRE: none | POST: none") {
 }
 
 JARVIS_TEST(klog_ringbuffer_wrap, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
 
     rb.clear();
     JARVIS_ASSERT(rb.empty());
@@ -99,7 +99,7 @@ JARVIS_TEST(klog_ringbuffer_wrap, "PRE: none | POST: none") {
 }
 
 JARVIS_TEST(klog_concurrent_readers, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
 
     rb.puts("CONCURRENT_READER_TEST\n");
 
@@ -139,7 +139,7 @@ JARVIS_TEST(klog_invalid_buffer_eFault, "PRE: none | POST: none") {
 }
 
 JARVIS_TEST(dmesg_prints_kernel_log, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
 
     rb.clear();
     rb.puts("DMESG_TEST_MARKER\n");
@@ -160,7 +160,7 @@ JARVIS_TEST(dmesg_prints_kernel_log, "PRE: none | POST: none") {
 // Expect: read returns 0
 // Depends: kernel::log::RingBuffer
 JARVIS_TEST(klog_empty_read, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
     rb.clear();
     JARVIS_ASSERT(rb.empty());
     char buf[64];
@@ -175,7 +175,7 @@ JARVIS_TEST(klog_empty_read, "PRE: none | POST: none") {
 // Expect: empty() returns true after clear
 // Depends: kernel::log::RingBuffer
 JARVIS_TEST(klog_clear, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
     rb.puts("SOME_DATA_TO_CLEAR\n");
     JARVIS_ASSERT(!rb.empty());
     rb.clear();
@@ -190,7 +190,7 @@ JARVIS_TEST(klog_clear, "PRE: none | POST: none") {
 // Expect: read returns exactly the small buffer size
 // Depends: kernel::log::RingBuffer
 JARVIS_TEST(klog_read_partial, "PRE: none | POST: none") {
-    auto &rb = kernel::log::g_klog;
+    auto &rb = kernel::log::KlogService::instance();
     rb.clear();
     for (int i = 0; i < 50; ++i)
         rb.putchar('B');

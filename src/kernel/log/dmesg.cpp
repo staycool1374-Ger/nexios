@@ -17,7 +17,8 @@
  */
 
 /// @file dmesg.cpp
-/// @brief DmesgBuffer member-function template instantiations.
+/// @brief DmesgService singleton + DmesgBuffer member-function template
+/// instantiations.
 
 #include <kernel/log/dmesg.hpp>
 #include <kernel/arch/timer.hpp>
@@ -25,7 +26,12 @@
 
 namespace kernel::log {
 
-DmesgBuffer<DMESG_CAPACITY> g_dmesg;
+/// @brief The one and only DmesgService (Meyers singleton). Defined here so
+/// the buffer has no external linkage — all access flows through instance().
+DmesgService &DmesgService::instance() noexcept {
+    static DmesgService service{};
+    return service;
+}
 
 /// @brief Push an entry (overwrites oldest if full).
 /// @return true unless an entry was overwritten.

@@ -1,5 +1,8 @@
 # Open Issues
 
+## Kernel — ElfLoader (H2 deferred-switch family)
+- [ ] **`elf_loader` class flake — `wait_loader_idle` ENSURE panic** (`state() == LoadState::IDLE` at elf_loader.cpp:245). Intermittent, ~50% (baseline `2f1a7faf` 2/3 pass, 1 fail; observed 1–4/8 on `main`). Fails at test 2 (`loader_load_invalid_elf`) right after `[SNAP:RESTORE]`+`[RUN_PRE]`: the loader task (ID=5, prio 15) is BLOCKED with non-IDLE state and never re-enters the ready queue (`[RS] cur=1 next=0 hi=0`), so `wait_loader_idle()`'s 1M-spin loop times out → ENSURE panics. Same family as the H2 deferred-switch race (BUGS.md below): the harness/loader task resumes on a stale iret frame after snapshot_restore. Not caused by Phase-2 dmesg/klog encapsulation (baseline reproduces). Needs the same GDB watchpoint investigation (`scheduler_load_rsp_from`/`scheduler_switch_generation`) as H2. Symptom signature identical to `ipc_send_sync_roundtrip` hang (armed deferred switch never applied; no further dispatch).
+
 ## Kernel — VM / Page Table
 - [ ] **pml4_clone test class crashes** — Page Fault after `pml4_fork_no_child_corrupt_parent` and `pml4_free_user_pages_shared_safe` with CR3 corruption (tests 485-486 in all-1). Triggered during snapshot_restore after PML4 clone/fork operations. CR3=0x1000 suggests freed page table. Blocked by HHDM snapshot restore.
 

@@ -17,14 +17,19 @@
  */
 
 /// @file ring_buffer.cpp
-/// @brief Global kernel log ring buffer instance.
+/// @brief KlogService singleton — kernel console character ring.
 
 #include <kernel/log/ring_buffer.hpp>
 
 namespace kernel {
 namespace log {
 
-RingBuffer g_klog{};
+/// @brief The one and only KlogService (Meyers singleton). Defined here so the
+/// ring has no external linkage — all access flows through instance().
+KlogService &KlogService::instance() noexcept {
+    static KlogService service{};
+    return service;
+}
 
 } // namespace log
 } // namespace kernel

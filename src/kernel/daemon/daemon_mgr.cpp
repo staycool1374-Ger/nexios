@@ -101,7 +101,7 @@ void notify_death(uint64_t pid, bool log_only) {
                 debug_write("\n");
             }
             if (!log_only) {
-                dmesg_push_base(0xDA01, entries_[i].name, pid);
+                log::dmesg_push_base(0xDA01, entries_[i].name, pid);
             }
 
             // Reset PID via the module's setter so all IPC
@@ -220,7 +220,7 @@ void restart_stale_daemons() {
         debug_write(", restart #");
         debug_write_hex(entries_[i].restart_count);
         debug_write(")\n");
-        dmesg_push_base(0xDA02, entries_[i].name, task->id);
+        log::dmesg_push_base(0xDA02, entries_[i].name, task->id);
     }
 }
 
@@ -309,7 +309,7 @@ void ensure_running(const char *name) {
         debug_write("' ensured (PID=");
         debug_write_hex(task->id);
         debug_write(")\n");
-        dmesg_push_base(0xDA03, entries_[i].name, task->id);
+        log::dmesg_push_base(0xDA03, entries_[i].name, task->id);
         return;
     }
 
@@ -343,7 +343,7 @@ void terminate(const char *name) {
         debug_write("[DAEMON] '");
         debug_write(entries_[i].name);
         debug_write("' terminated\n");
-        dmesg_push_base(0xDA04, entries_[i].name, 0);
+        log::dmesg_push_base(0xDA04, entries_[i].name, 0);
         return;
     }
 

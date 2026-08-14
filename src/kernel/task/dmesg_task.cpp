@@ -64,7 +64,7 @@ void dmesg_task_main() {
 
     while (true) {
         arch::pause();
-        while (log::g_dmesg.pop(entry)) {
+        while (log::DmesgService::instance().pop(entry)) {
             char *p = buf;
             char *end = buf + sizeof(buf) - 1;
 
