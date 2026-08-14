@@ -281,6 +281,40 @@ JARVIS_TEST(loader_preemption_yield, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: v0.4.2 — hammer request_load/request_cancel to hit the
+// IDLE->BLOCKED lost-wakeup window (SIL3 BLOCKER #1): a request arriving
+// between run_load setting IDLE and the loader blocking itself must still be
+// processed.  Regression guard for the atomic-block fix in task_main().
+JARVIS_TEST(loader_lost_wakeup_race, "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    uint8_t img[8192];
+    elf::ELF64Header hdr{};
+    uint64_t sz = build_minimal_elf(&hdr, img);
+    uint64_t written = write_file("/tmp/loadrace.elf", img, sz);
+    JARVIS_ASSERT(written == sz);
+
+    // Interleave request_load + cancel + yield many times.  Each request must
+    // eventually be serviced (state returns to IDLE) — a lost wakeup would
+    // leave state=VALIDATING and wait_loader_idle would hang.
+    for (int i = 0; i < 20; ++i) {
+        auto r = elf::ElfLoader::request_load("/tmp/loadrace.elf");
+        JARVIS_ASSERT(r == elf::LoadResult::OK ||
+                      r == elf::LoadResult::ALREADY_LOADING);
+        // Cancel some, let others complete; always allow progress.
+        if (i % 2 == 0)
+            elf::ElfLoader::request_cancel();
+        for (int y = 0; y < 4; ++y)
+            Scheduler::reschedule();
+    }
+    // Drain: cancel anything in flight and wait for IDLE.
+    elf::ElfLoader::request_cancel();
+    elf::ElfLoader::wait_loader_idle();
+    JARVIS_ASSERT(elf::ElfLoader::state() == elf::LoadState::IDLE);
+    cleanup_file("/tmp/loadrace.elf");
+    JARVIS_TEST_PASS();
+}
+
 void register_elf_loader_tests() {
     Logger::info("Registering background ELF loader tests");
     JARVIS_REGISTER_TEST(loader_load_success);
@@ -290,4 +324,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(loader_cancel_not_loading);
     JARVIS_REGISTER_TEST(loader_multiple_cycles);
     JARVIS_REGISTER_TEST(loader_preemption_yield);
+    JARVIS_REGISTER_TEST(loader_lost_wakeup_race);
 }
