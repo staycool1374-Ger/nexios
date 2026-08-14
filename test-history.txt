@@ -253,3 +253,6 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 22:04:53 memory_safety PASSED: 11 FAILED: 0 TIME: 1637ms (Phase6)
 2026-08-14 22:06:43 all PASSED: 870 FAILED: 0 TIME: 54072ms (Phase7 debug gate, trace ON)
 2026-08-14 22:06:43 release all PASSED: 84 FAILED: 0 TIME: 4248ms (Phase7 release gate, trace OFF)
+2026-08-14 22:43:27 logging_dmesg PASSED: 15 FAILED: 0 TIME: 510ms (DmesgBuffer private + friend tests)
+2026-08-14 22:43:27 logging_klog PASSED: 8 FAILED: 0 TIME: 330ms
+2026-08-14 22:43:27 selftest PASSED: 132 FAILED: 0 TIME: 31576ms
