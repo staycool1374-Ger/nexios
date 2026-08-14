@@ -22,6 +22,7 @@
 #include <services/program.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -2447,7 +2448,8 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
         if (human) {
             // Human-readable: "YYYY-MM-DD hh:mm:ss:mmm task  ERR_NAME  msg"
             // Convert ticks to wall-clock nanoseconds (assumes 1 tick = 1 ms = 1e6 ns)
-            uint64_t wall_ns = g_boot_epoch * 1000000000ULL + e.timestamp * 1000000ULL;
+            uint64_t wall_ns = kernel::gs::get_boot_epoch() * 1000000000ULL +
+                               e.timestamp * 1000000ULL;
             char dt[24];
             format_datetime(dt, sizeof(dt), wall_ns);
             const char* dp = dt;

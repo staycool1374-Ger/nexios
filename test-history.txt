@@ -229,3 +229,7 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 19:27:22 logging_dmesg PASSED: 15 FAILED: 0 TIME: 438ms (Phase2 DmesgService)
 2026-08-14 19:27:22 logging_klog PASSED: 8 FAILED: 0 TIME: 1095ms (Phase2 KlogService)
 2026-08-14 19:27:22 selftest PASSED: 132 FAILED: 0 TIME: 32066ms (Phase2)
+2026-08-14 20:09:50 syscall_core PASSED: 15 FAILED: 0 TIME: 601ms (Phase3 global_state)
+2026-08-14 20:09:50 process_secure_exec PASSED: 5 FAILED: 0 TIME: 1034ms (Phase3)
+2026-08-14 20:09:50 memory_safety PASSED: 11 FAILED: 0 TIME: 1516ms (Phase3)
+2026-08-14 20:09:50 selftest PASSED: 132 FAILED: 0 TIME: 7858ms (Phase3; 1/3 H2-flake CPU EXCEPTION pre-existing)

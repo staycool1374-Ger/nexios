@@ -38,7 +38,7 @@
 
 using namespace kernel;
 
-extern BootInfo g_boot_info;
+#include <kernel/core/global_state.hpp>
 
 /// @brief Verify 4-level page table walk starting from TTBR1_EL1.
 /// Walks L0→L1→L2→L3 for a known higher-half virtual address.
@@ -408,15 +408,15 @@ JARVIS_TEST(aarch64_rtc_read) {
 /// @brief Verify the DTB pointer from boot info is valid, correctly aligned,
 /// and has a valid FDT header.
 JARVIS_TEST(aarch64_boot_dtb_pointer) {
-    JARVIS_ASSERT_FMT(g_boot_info.dtb_ptr != 0, "DTB pointer is zero");
+    JARVIS_ASSERT_FMT(kernel::gs::boot_info().dtb_ptr != 0, "DTB pointer is zero");
 
-    uintptr_t dtb_addr = static_cast<uintptr_t>(g_boot_info.dtb_ptr);
+    uintptr_t dtb_addr = static_cast<uintptr_t>(kernel::gs::boot_info().dtb_ptr);
     JARVIS_ASSERT_FMT(
         dtb_addr >= 0x40000000ULL && dtb_addr <= 0x50000000ULL,
         "DTB pointer 0x%lx not in expected RAM range (0x40000000-0x50000000)",
         dtb_addr);
 
-    void *dtb = reinterpret_cast<void *>(g_boot_info.dtb_ptr);
+    void *dtb = reinterpret_cast<void *>(kernel::gs::boot_info().dtb_ptr);
     JARVIS_ASSERT_FMT(fdt_check_header(dtb) == 0,
                       "FDT header validation failed");
 
@@ -425,9 +425,9 @@ JARVIS_TEST(aarch64_boot_dtb_pointer) {
     JARVIS_ASSERT_FMT(magic == 0xD00DFEED,
                       "DTB magic mismatch: 0x%x (expected 0xD00DFEED)", magic);
 
-    JARVIS_ASSERT_FMT(g_boot_info.num_mem_regions > 0,
+    JARVIS_ASSERT_FMT(kernel::gs::boot_info().num_mem_regions > 0,
                       "No memory regions parsed from DTB");
-    JARVIS_ASSERT_FMT(g_boot_info.total_mem_size > 0,
+    JARVIS_ASSERT_FMT(kernel::gs::boot_info().total_mem_size > 0,
                       "Total memory size is zero after DTB parsing");
 
     JARVIS_TEST_PASS();

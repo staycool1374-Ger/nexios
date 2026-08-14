@@ -72,10 +72,6 @@ extern "C" void __chkstk() {
 extern "C" void __chkstk_ms() {
 }
 
-extern "C" {
-uint64_t g_user_access_recover_ip = 0;
-}
-
 extern "C" void* memset(void* s, int c, size_t n) {
     unsigned char* p = static_cast<unsigned char*>(s);
     while (n--) *p++ = static_cast<unsigned char>(c);

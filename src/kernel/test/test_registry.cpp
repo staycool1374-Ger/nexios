@@ -28,6 +28,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <string.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/test/test_expected_counts.hpp>
 
 using namespace kernel;
@@ -720,7 +721,7 @@ static constexpr size_t g_test_class_count =
 // Looks up `name` in g_test_classes[], calls its register_fn, and records
 // a class section boundary for output grouping.  Returns true on success.
 bool kernel::test::register_class(const char *name) {
-    g_current_class = name;
+    kernel::gs::set_current_class(name);
     for (size_t i = 0; i < g_test_class_count; ++i) {
         if (strcmp(name, g_test_classes[i].name) == 0) {
             size_t before = Registry::count();

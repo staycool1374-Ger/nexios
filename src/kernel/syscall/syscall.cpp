@@ -22,6 +22,7 @@
 
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
@@ -32,10 +33,6 @@
 extern "C" void syscall_entry();
 
 namespace kernel {
-
-/// @brief v0.4.0 MP-3 canary-trip latch (defined here; declared in
-///        syscall.hpp).  Tests read it after driving a tampered task.
-CanaryTrip g_canary_trip = {0, 0, 0, 0};
 
 /// @brief Initialise the syscall interface (MSR setup, syscall-table built at
 /// compile time).
@@ -121,10 +118,7 @@ int syscall_path_open(const char *path, uint64_t flags) {
             if (!canary_verify_user_segments(t, bad_seg, bad_va)) {
                 uint64_t rip = regs ? regs[17] : 0;
                 if (kernel::Scheduler::is_test_active()) {
-                    g_canary_trip.task_id = t->id;
-                    g_canary_trip.segment = bad_seg;
-                    g_canary_trip.rip = rip;
-                    ++g_canary_trip.count;
+                    kernel::gs::set_canary_trip(t->id, bad_seg, rip);
                     return static_cast<uint64_t>(-1);
                 }
                 kernel::Logger::fatal(

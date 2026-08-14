@@ -21,6 +21,7 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -285,14 +286,14 @@ JARVIS_TEST(canary_tamper_detected_on_syscall, "PRE: none | POST: none") {
     __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,
                      8);
 
-    g_canary_trip = {0, 0, 0, 0};
+    kernel::gs::reset_canary_trip();
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
 
-    JARVIS_ASSERT(g_canary_trip.count > 0);
-    JARVIS_ASSERT(g_canary_trip.task_id == t->id);
-    JARVIS_ASSERT(g_canary_trip.segment ==
+    JARVIS_ASSERT(kernel::gs::canary_trip().count > 0);
+    JARVIS_ASSERT(kernel::gs::canary_trip().task_id == t->id);
+    JARVIS_ASSERT(kernel::gs::canary_trip().segment ==
                   static_cast<uint8_t>(TaskControlBlock::SEG_STACK));
     JARVIS_ASSERT(t->state == TaskState::TERMINATED);
 
@@ -313,13 +314,13 @@ JARVIS_TEST(canary_intact_after_normal_dispatch, "PRE: none | POST: none") {
         JARVIS_TEST_PASS();
         return;
     }
-    g_canary_trip = {0, 0, 0, 0};
+    kernel::gs::reset_canary_trip();
 
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
 
-    JARVIS_ASSERT(g_canary_trip.count == 0);
+    JARVIS_ASSERT(kernel::gs::canary_trip().count == 0);
     JARVIS_ASSERT(t->state == TaskState::TERMINATED);
 
     kernel::test::terminate_and_drain(*t);

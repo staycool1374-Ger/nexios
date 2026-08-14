@@ -81,7 +81,7 @@ struct PtPoolSnapshot {
 /// @brief Tracks whether any VFS syscall was invoked during the current test.
 /// snapshot_restore() checks this flag to decide whether daemon tasks need
 /// a full reload (VFS touched) or can be left running (VFS not touched).
-extern bool g_vfs_touched; // NOLINT(bugprone-dynamic-static-initializers)
+/// Read/write via kernel::gs::get_vfs_touched() / mark_vfs_touched().
 
 /// @brief Called by VFS syscall handlers to mark that VFS state was touched.
 void mark_vfs_touched();
