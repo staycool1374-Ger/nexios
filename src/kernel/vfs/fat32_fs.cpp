@@ -20,6 +20,7 @@
 /// @brief FAT32 VFS filesystem implementation (file/dir vnode ops, mounting).
 
 #include <kernel/vfs/fat32_fs.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
@@ -34,8 +35,6 @@ struct Fat32VnodeData {
     uint32_t size;             ///< File size in bytes.
     Vnode *parent;             ///< Parent directory vnode.
 };
-
-constinit fat32::Fat32Partition *fat32_partition_instance = nullptr;
 
 // Forward declarations
 static Vnode fat32_root_vnode = {};
@@ -431,12 +430,15 @@ static bool root_initialized = false;
 
 /// @brief Get the FAT32 root vnode (lazily initialised).
 static Vnode *fat32_get_root() {
-    if (!fat32_partition_instance || !fat32_partition_instance->bpb().valid)
+    if (!kernel::gs::get_fat32_partition() ||
+        !kernel::gs::get_fat32_partition()->bpb().valid)
         return nullptr;
 
-    if (!root_initialized || fat32_root_vdata.fs != fat32_partition_instance) {
-        fat32_root_vdata.fs = fat32_partition_instance;
-        fat32_root_vdata.cluster = fat32_partition_instance->bpb().root_cluster;
+    if (!root_initialized ||
+        fat32_root_vdata.fs != kernel::gs::get_fat32_partition()) {
+        fat32_root_vdata.fs = kernel::gs::get_fat32_partition();
+        fat32_root_vdata.cluster =
+            kernel::gs::get_fat32_partition()->bpb().root_cluster;
         fat32_root_vdata.size = 0;
 
         fat32_root_vnode.ops = &fat32_dir_ops;
@@ -459,7 +461,8 @@ Filesystem fat32_fs = {
 /// @brief Mount the FAT32 filesystem at the given mount point.
 /// @return 0 on success, VFS_INVALID on error.
 int mount_fat32(const char *mount_point) {
-    if (!fat32_partition_instance || !fat32_partition_instance->bpb().valid)
+    if (!kernel::gs::get_fat32_partition() ||
+        !kernel::gs::get_fat32_partition()->bpb().valid)
         return VFS_INVALID;
     return mount(fat32_fs, mount_point);
 }

@@ -822,7 +822,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                 auto *part = new (part_mem) kernel::fat32::Fat32Partition(*ahci);
                 if (part->mount()) {
                     debug_write("[BOOT] FAT32 partition mounted via AHCI\n");
-                    kernel::vfs::fat32_partition_instance = part;
+                    kernel::gs::try_set_fat32_partition(part);
                     if (kernel::vfs::mount_fat32("/mnt") == 0) {
                         debug_write("[BOOT] FAT32 filesystem mounted at /mnt\n");
                     } else {
@@ -846,7 +846,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                     auto *part = new (part_mem) kernel::fat32::Fat32Partition(*ata);
                     if (part->mount()) {
                         debug_write("[BOOT] FAT32 partition mounted via PIO\n");
-                        kernel::vfs::fat32_partition_instance = part;
+                        kernel::gs::try_set_fat32_partition(part);
                         if (kernel::vfs::mount_fat32("/mnt") == 0) {
                             debug_write("[BOOT] FAT32 filesystem mounted at /mnt\n");
                         } else {
@@ -878,8 +878,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                 auto *part = new (part_mem) kernel::fat32::Fat32Partition(*vblk);
                 if (part->mount()) {
                     debug_write("[BOOT] FAT32 partition mounted via virtio-blk\n");
-                    if (!kernel::vfs::fat32_partition_instance) {
-                        kernel::vfs::fat32_partition_instance = part;
+                    if (!kernel::gs::get_fat32_partition()) {
+                        kernel::gs::try_set_fat32_partition(part);
                         if (kernel::vfs::mount_fat32("/mnt") == 0) {
                             debug_write(
                                 "[BOOT] FAT32 filesystem mounted at /mnt\n");
