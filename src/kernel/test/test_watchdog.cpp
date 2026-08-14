@@ -9,8 +9,8 @@
 
 namespace kernel::test {
 
-uint64_t g_watchdog_deadline_ns = 0;
-uint64_t g_watchdog_task_id = 0;
+static uint64_t g_watchdog_deadline_ns = 0;
+static uint64_t g_watchdog_task_id = 0;
 static char g_test_name[128] = {};
 
 // ---------------------------------------------------------------------------

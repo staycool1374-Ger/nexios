@@ -928,7 +928,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
     arch::RTC::init();
     g_boot_epoch = arch::RTC::read_seconds();
-    g_boot_ns = arch::Timer::ns();
     kernel::random_init();
     debug_write("[BOOT] Hardware init done\n");
 
@@ -1583,8 +1582,6 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
 // ── Boot-time clock capture ──────────────────────────────────────────────────
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 uint64_t g_boot_epoch = 0; // RTC read_seconds() at boot
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-uint64_t g_boot_ns = 0; // Timer::ns() at boot
 
 // ── Epoch-to-date conversion (no libc) ──────────────────────────────────────
 static const uint16_t s_days_in_mon[12] = {31, 28, 31, 30, 31, 30,

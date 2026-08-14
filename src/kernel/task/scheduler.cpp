@@ -102,8 +102,8 @@ struct H2Event {
     uint64_t gen;   ///< scheduler_switch_generation at record time
     uint64_t depth; ///< isr_nesting_depth at record time
 };
-H2Event g_h2_ring[H2_RING_SIZE];
-uint64_t g_h2_idx = 0;
+static H2Event g_h2_ring[H2_RING_SIZE];
+static uint64_t g_h2_idx = 0;
 
 inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
     uint64_t idx = g_h2_idx++;
