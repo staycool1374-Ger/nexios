@@ -873,7 +873,173 @@ class NoConstCastChecker(Checker):
             if line_text.startswith("//") or line_text.startswith("*"):
                 continue
             self.add(rel_path, line,
-                     "const_cast is forbidden — use 'mutable' or redesign to avoid const modification")
+                      "const_cast is forbidden — use 'mutable' or redesign to avoid const modification")
+
+
+# ---------------------------------------------------------------------------
+# 16. Global-state API (kernel/core/global_state) — consolidated globals must
+#     be accessed through the sanctioned accessors, not as raw extern symbols.
+# ---------------------------------------------------------------------------
+
+class GlobalStateApiChecker(Checker):
+    name = "global_state_api"
+
+    # Consolidated global symbol -> sanctioned accessor + allowlisted files
+    # where the raw name may legitimately appear (owner, extern-decl headers,
+    # documented fault-atomic / boot paths).  The asm-lockstep switch globals
+    # (scheduler_*, isr_nesting_depth, fpu_owner, …) are a DOCUMENTED
+    # exception: isr_stubs.asm references them by exact symbol name and the
+    # scheduler uses atomics on them — they have no gs:: accessor and are
+    # intentionally NOT in this registry.
+    GLOBALS: dict[str, dict] = {
+        # -- BootState --
+        "g_boot_info": {
+            "accessor": "kernel::gs::boot_info()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_boot_epoch": {
+            "accessor": "kernel::gs::get_boot_epoch()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "multiboot_magic": {
+            "accessor": "kernel::gs::get_multiboot_magic()",
+            "allow": {
+                "src/kernel/core/global_state.cpp",
+                "src/kernel/multiboot2.hpp",    # extern decl + mb2_find_tag
+                "src/kernel/boot/bootinfo.hpp", # BootInfo::multiboot_magic FIELD
+            },
+        },
+        "multiboot_info_ptr": {
+            "accessor": "kernel::gs::get_multiboot_info_ptr()",
+            "allow": {
+                "src/kernel/core/global_state.cpp",
+                "src/kernel/multiboot2.hpp",
+            },
+        },
+        # -- FaultState --
+        "g_canary_trip": {
+            "accessor": "kernel::gs::canary_trip()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_user_access_recover_ip": {
+            "accessor": "kernel::gs::user_access_recover_ip()",
+            "allow": {
+                "src/kernel/core/global_state.cpp",
+                "src/kernel/elf/elf.cpp",           # fault-atomic SMAP path
+                "src/kernel/kernel.cpp",            # fault handler
+                "src/kernel/memory/checked_ptr.hpp",# fault-atomic inline
+                "src/kernel/syscall/syscall_handlers_fs.cpp",
+                "src/kernel/syscall/syscall_handlers_misc.cpp",
+                "src/kernel/syscall/syscall_handlers_process.cpp",
+                "src/lib/signal.hpp",               # extern decl
+            },
+        },
+        # -- VfsState / NetState (internal storage; accessor-only from outside) --
+        "g_fat32_partition": {
+            "accessor": "kernel::gs::get_fat32_partition()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_nic": {
+            "accessor": "kernel::gs::get_nic()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        # -- TestState --
+        "g_current_class": {
+            "accessor": "kernel::gs::get_current_class()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_filter_bench": {
+            "accessor": "kernel::gs::get_filter_bench()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_class_auto_shutdown": {
+            "accessor": "kernel::gs::get_class_auto_shutdown()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_vfs_touched": {
+            "accessor": "kernel::gs::get_vfs_touched()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        "g_kernel_entry_ns": {
+            "accessor": "kernel::gs::get_kernel_entry_ns()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
+        # -- Removed globals that must never reappear --
+        "g_dmesg": {
+            "accessor": "log::DmesgService::instance()",
+            "allow": {"src/kernel/log/dmesg.hpp", "src/kernel/log/dmesg.cpp"},
+        },
+        "g_klog": {
+            "accessor": "log::KlogService::instance()",
+            "allow": {"src/kernel/log/ring_buffer.hpp"},
+        },
+        "fat32_partition_instance": {
+            "accessor": "kernel::gs::try_set_fat32_partition()",
+            "allow": set(),
+        },
+    }
+
+    # Preceded by '.', '->', '::' or a word char → member/namespace access or
+    # part of a longer identifier (e.g. BootInfo::multiboot_magic FIELD), not
+    # the global.
+    def check_file(self, rel_path: str, text: str) -> None:
+        if not is_kernel_file(rel_path, self.cfg):
+            return
+        if rel_path.endswith((".S", ".asm")):
+            return
+
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            stripped = self._strip_comment(line)
+            if not stripped:
+                continue
+            for sym, info in self.GLOBALS.items():
+                if rel_path in info["allow"]:
+                    continue
+                regex = re.compile(r"(?<![\w.>:-])\b" + re.escape(sym) + r"\b")
+                if regex.search(stripped):
+                    self.add(rel_path, i + 1,
+                             f"Global '{sym}' must be accessed via "
+                             f"{info['accessor']} (kernel/core/global_state "
+                             f"consolidation), not the raw symbol")
+
+    @staticmethod
+    def _strip_comment(line: str) -> str:
+        # Drop // and /* */ comments and string literals so doc prose / logs
+        # never false-positive.
+        out = []
+        i = 0
+        n = len(line)
+        in_str = False
+        while i < n:
+            c = line[i]
+            if in_str:
+                if c == '"' and (i == 0 or line[i - 1] != '\\'):
+                    in_str = False
+                i += 1
+                continue
+            if c == '"':
+                in_str = True
+                i += 1
+                continue
+            if c == '/' and i + 1 < n and line[i + 1] == '/':
+                break
+            if c == '/' and i + 1 < n and line[i + 1] == '*':
+                depth = 1
+                i += 2
+                while i < n and depth > 0:
+                    if line[i] == '/' and i + 1 < n and line[i + 1] == '*':
+                        depth += 1
+                        i += 2
+                    elif line[i] == '*' and i + 1 < n and line[i + 1] == '/':
+                        depth -= 1
+                        i += 2
+                    else:
+                        i += 1
+                continue
+            out.append(c)
+            i += 1
+        return "".join(out)
 
 
 # ---------------------------------------------------------------------------
@@ -941,6 +1107,7 @@ def main() -> int:
         SentinelEnumChecker(cfg),
         DescriptiveNamesChecker(cfg),
         NoConstCastChecker(cfg),
+        GlobalStateApiChecker(cfg),
     ]
 
     root = os.path.abspath(args.root)
