@@ -251,3 +251,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 22:04:53 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3604ms (Phase6)
 2026-08-14 22:04:53 process_lifecycle PASSED: 16 FAILED: 0 TIME: 614ms (Phase6)
 2026-08-14 22:04:53 memory_safety PASSED: 11 FAILED: 0 TIME: 1637ms (Phase6)
+2026-08-14 22:06:43 all PASSED: 870 FAILED: 0 TIME: 54072ms (Phase7 debug gate, trace ON)
+2026-08-14 22:06:43 release all PASSED: 84 FAILED: 0 TIME: 4248ms (Phase7 release gate, trace OFF)
