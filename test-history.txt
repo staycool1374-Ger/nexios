@@ -204,3 +204,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-13 23:14:17 process_waitpid PASSED: 3 FAILED: 0 TIME: 193ms (sys_exit stac fix)
 2026-08-13 23:28:10 F5 fix is_user_string probes active CR3 (not boot kernel PML4): process_elf 9/9, process_secure_exec 5/5, selftest 132/132, servers_vfsd 18/18, ipc_core 23/23
 2026-08-14 07:17:26 MP-2 verification: memory_safety 11/11 (3 red-zone tests), process_lifecycle 16/16, process_elf 9/9, process_secure_exec 5/5, memory_pmm 5/5, selftest 132/132
+2026-08-14 07:26:28 MP-3 verification: memory_safety 11/11 (canary_tamper 10/11 + canary_intact 11/11), process_lifecycle 16/16, process_elf 9/9, process_secure_exec 5/5, selftest 132/132

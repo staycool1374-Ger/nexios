@@ -212,20 +212,42 @@ reserving one unmapped page per boundary converts overflow into a deterministic
 
 #### MP-3 — Software sentinel canaries at segment boundaries
 
-- [ ] **MP-3.1 — Canary layout.**  Define a per-task canary structure: a
+- [x] **MP-3.1 — Canary layout.**  Define a per-task canary structure: a
       known 8-byte magic placed immediately before and after each guarded
       segment (text/data/heap/stack), aligned to 8 bytes.
-- [ ] **MP-3.2 — Install canaries.**  On segment init (ELF load, heap grow,
+      **DONE (2026-08-14):** `TaskControlBlock::CANARY_MAGIC`
+      (0x4E45584943414E59, task.hpp:288); per-segment `canary_before`/
+      `canary_after[SEG_TEXT..SEG_STACK]` (task.hpp:301-303); expected value
+      = `CANARY_MAGIC ^ (segment + 1)` (task.hpp:300); `canary_installed`
+      bitmask.
+- [x] **MP-3.2 — Install canaries.**  On segment init (ELF load, heap grow,
       stack setup), write the canary into the guard slots.  Store the expected
       canary values in the TCB (`canary_before`/`canary_after` per segment,
       fixed-size array).
-- [ ] **MP-3.3 — Verify on entry.**  On `syscall` entry and on
+      **DONE (2026-08-14):** `canary_install_user_segments` (task.cpp:737)
+      installs stack + heap canaries via `canary_write_at`; `canary_install_
+      kernel_stack` (task.cpp:767) at kernel_stack[0..8).  Wired into create/
+      create_user/clone/ELF-load (task.cpp:987, 1152-1153, 1505-1506); sys_brk
+      re-arms the heap-after canary on growth (misc.cpp:303-316).
+- [x] **MP-3.3 — Verify on entry.**  On `syscall` entry and on
       `switch_to_task` dispatch, check every canary matches; on mismatch,
       panic with task id + segment + faulting RIP (no silent corruption).
-- [ ] **MP-3.4 — Test:** canary-tamper — write 0xDD over a canary, trigger a
+      **DONE (2026-08-14):** `Syscall::handle` (syscall.cpp:101-125,
+      CONFIG_CANARY_GUARD) verifies user segments, latches `g_canary_trip`
+      {task_id, segment, rip} in test mode (returns -1) or panics in
+      production; `canary_verify_kernel_stack` runs on every context switch
+      (scheduler.cpp:2330, 2432, CONFIG_CANARY_GUARD).
+- [x] **MP-3.4 — Test:** canary-tamper — write 0xDD over a canary, trigger a
       syscall, assert the panic/detection path fires (MP-5 companion).
-- [ ] **MP-3.5 — Class gates:** `memory_safety`, `process`, `selftest`,
+      **DONE (2026-08-14):** `memory_safety` 10/11 `canary_tamper_detected_
+      on_syscall` (writes 0xDD over `canary_after[STACK]` via HHDM, dispatches
+      user-app; asserts `g_canary_trip.count>0`, task_id match, segment==SEG_
+      STACK, task TERMINATED) and 11/11 `canary_intact_after_normal_dispatch`
+      (negative: no false positive).  Deterministic per the hypothesis.
+- [x] **MP-3.5 — Class gates:** `memory_safety`, `process`, `selftest`,
       `make build`.
+      **DONE (2026-08-14):** memory_safety 11/11, process_lifecycle 16/16,
+      process_elf 9/9, process_secure_exec 5/5, selftest 132/132, build green.
 
 **Hypothesis:** canaries give a software-detectable overflow signature at
 segment boundaries that the MMU guard alone cannot catch (sub-page overflows
