@@ -424,16 +424,16 @@ JARVIS_TEST(dmesg_error_string_dispatch, "PRE: none | POST: none") {
 // suppression.
 // Input: save, set_suppressed(true/false), is_suppressed()
 // Expect: is_suppressed reflects the last set value
-// Depends: kernel::log::DmesgBuffer::set_suppressed, is_suppressed
+// Depends: DmesgService::DmesgBuffer (friend access)::set_suppressed, is_suppressed
 JARVIS_TEST(dmesg_suppression_toggle, "PRE: none | POST: none") {
-    bool saved = log::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed();
-    log::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(true);
+    bool saved = log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed();
+    log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(true);
     JARVIS_ASSERT(
-        log::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed());
-    log::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(false);
+        log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed());
+    log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(false);
     JARVIS_ASSERT(
-        !log::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed());
-    log::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(saved);
+        !log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::is_suppressed());
+    log::DmesgService::DmesgBuffer<log::DMESG_CAPACITY>::set_suppressed(saved);
     JARVIS_TEST_PASS();
 }
 

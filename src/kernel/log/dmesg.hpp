@@ -32,8 +32,28 @@
 #include <kernel/ipc/ipc_errors.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/nexios_config.h>
 #include <lib/atomic.hpp>
+
+// Forward declarations of the dmesg unit tests (global scope; friends of
+// DmesgService so they can exercise the private ring buffer directly).
+// Defined in src/kernel/test/test_dmesg.cpp.
+void test_dmesg_initially_empty();
+void test_dmesg_push_once();
+void test_dmesg_push_and_pop();
+void test_dmesg_push_multiple_fifo();
+void test_dmesg_pop_empty();
+void test_dmesg_clear();
+void test_dmesg_for_each();
+void test_dmesg_for_each_empty();
+void test_dmesg_head_tail_indices();
+void test_dmesg_overflow();
+void test_dmesg_subsystem_names();
+void test_dmesg_base_error_strings();
+void test_dmesg_error_string_dispatch();
+void test_dmesg_suppression_toggle();
+void test_dmesg_timestamp_and_task_id();
 
 namespace kernel::log {
 
@@ -60,82 +80,15 @@ struct LogEntry {
     char message[kMessageCap]; ///< Human-readable description (owned copy).
 };
 
-/// @brief Lock-free single-producer single-consumer ring buffer for structured
-/// kernel logs.
-/// @tparam Capacity  Must be a power of two.
-template <size_t Capacity> class DmesgBuffer {
-    static_assert((Capacity & (Capacity - 1)) == 0,
-                  "Capacity must be power of 2");
-    static constexpr size_t MASK = Capacity - 1;
-
-    LogEntry buffer[Capacity];           ///< Fixed-size entry array.
-    alignas(64) volatile size_t head{0}; ///< Write index (producer).
-    alignas(64) volatile size_t tail{0}; ///< Read index (consumer).
-
-  public:
-    /// @brief Push an entry (overwrites oldest if full).
-    /// @return true unless an entry was overwritten.
-    bool push(ErrorSubsystem subsys, uint64_t err_code, const char *msg,
-              uintptr_t ctx = 0);
-    /// @brief Pop the oldest entry.
-    /// @return true if an entry was available.
-    bool pop(LogEntry &entry);
-
-    /// @brief Iterate over all entries without removing them.
-    template <typename Fn> void for_each(Fn &&fn) const {
-        size_t t = atomic_load(&tail, __ATOMIC_ACQUIRE);
-        size_t h = atomic_load(&head, __ATOMIC_ACQUIRE);
-
-        while (t != h) {
-            fn(buffer[t]);
-            t = (t + 1) & MASK;
-        }
-    }
-
-    /// @brief Check whether the buffer is empty.
-    bool empty() const;
-    /// @brief Return the number of entries currently in the buffer.
-    size_t size() const;
-    /// @brief Discard all entries (reset tail to head).
-    void clear();
-
-    /// @brief Suppress future pushes (release mode: quiet boot).
-    static void set_suppressed(bool v) {
-        s_suppressed_ = v;
-    }
-    /// @brief Check whether pushes are currently suppressed.
-    static bool is_suppressed() {
-        return s_suppressed_;
-    }
-
-    size_t head_index() const {
-        return head;
-    }
-    size_t tail_index() const {
-        return tail;
-    }
-
-  private:
-    // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-    static inline bool s_suppressed_ =
-#ifdef CONFIG_DEBUG
-        false
-#else
-        true
-#endif
-        ;
-};
-
-/// Capacity of the global dmesg ring buffer (from Kconfig).
+/// Capacity of the kernel dmesg ring buffer (from Kconfig).
 constexpr size_t DMESG_CAPACITY = CONFIG_DMESG_CAPACITY;
 
 /// @brief Sole owner of the kernel dmesg ring.
 ///
-/// Replaces the former mutable global object `g_dmesg`. The buffer lives as a
-/// private member; producers write through push(), the dmesg_task drains via
-/// pop(), and readers iterate with for_each(). All access is routed through
-/// this service so the buffer's lifecycle and suppression policy are
-/// encapsulated.
+/// The ring buffer is a private nested implementation detail (not public API);
+/// producers write through push(), the dmesg_task drains via pop(), and
+/// readers iterate with for_each().  The dmesg test functions are declared
+/// friends so the unit tests can exercise the buffer internals directly.
 class DmesgService {
   public:
     DmesgService(const DmesgService &) = delete;
@@ -198,6 +151,151 @@ class DmesgService {
   private:
     /// @brief Private ctor — only instance() may create the service.
     DmesgService() = default;
+
+    // ---- Test friends (dmesg unit tests exercise the buffer directly) ----
+    friend void ::test_dmesg_initially_empty();
+    friend void ::test_dmesg_push_once();
+    friend void ::test_dmesg_push_and_pop();
+    friend void ::test_dmesg_push_multiple_fifo();
+    friend void ::test_dmesg_pop_empty();
+    friend void ::test_dmesg_clear();
+    friend void ::test_dmesg_for_each();
+    friend void ::test_dmesg_for_each_empty();
+    friend void ::test_dmesg_head_tail_indices();
+    friend void ::test_dmesg_overflow();
+    friend void ::test_dmesg_subsystem_names();
+    friend void ::test_dmesg_base_error_strings();
+    friend void ::test_dmesg_error_string_dispatch();
+    friend void ::test_dmesg_suppression_toggle();
+    friend void ::test_dmesg_timestamp_and_task_id();
+
+    /// @brief Lock-free single-producer single-consumer ring buffer for
+    /// structured kernel logs.  Private implementation detail of the service.
+    /// @tparam Capacity  Must be a power of two.
+    template <size_t Capacity> class DmesgBuffer {
+        static_assert((Capacity & (Capacity - 1)) == 0,
+                      "Capacity must be power of 2");
+        static constexpr size_t MASK = Capacity - 1;
+
+        LogEntry buffer[Capacity];           ///< Fixed-size entry array.
+        alignas(64) volatile size_t head{0}; ///< Write index (producer).
+        alignas(64) volatile size_t tail{0}; ///< Read index (consumer).
+
+      public:
+        /// @brief Push an entry (overwrites oldest if full).
+        /// @return true unless an entry was overwritten.
+        bool push(ErrorSubsystem subsys, uint64_t err_code, const char *msg,
+                  uintptr_t ctx = 0) {
+            if (s_suppressed_)
+                return true;
+            const uint64_t ts = arch::Timer::ticks();
+            const uint64_t tid = kernel::Scheduler::current_task()
+                                     ? kernel::Scheduler::current_task()->id
+                                     : 0;
+
+            size_t h = atomic_load(&head, __ATOMIC_RELAXED);
+            size_t t = atomic_load(&tail, __ATOMIC_ACQUIRE);
+
+            size_t next_h = (h + 1) & MASK;
+            bool overwrote = false;
+
+            if (next_h == t) {
+                overwrote = true;
+                atomic_store(&tail, (t + 1) & MASK, __ATOMIC_RELEASE);
+            }
+
+            buffer[h] = LogEntry{};
+            buffer[h].timestamp = ts;
+            buffer[h].task_id = tid;
+            buffer[h].subsystem = subsys;
+            buffer[h].error_code = err_code;
+            buffer[h].context = ctx;
+            // Owned copy (SIL3): the entry stores a bounded char array, so
+            // producers may pass transient/ring buffers (e.g. the ELF loader's
+            // message slots) without dangling once the source is reused.
+            size_t i = 0;
+            if (msg) {
+                while (msg[i] && i < LogEntry::kMessageCap - 1) {
+                    buffer[h].message[i] = msg[i];
+                    ++i;
+                }
+            }
+            buffer[h].message[i] = '\0';
+
+            atomic_store(&head, next_h, __ATOMIC_RELEASE);
+            return !overwrote;
+        }
+
+        /// @brief Pop the oldest entry.
+        /// @return true if an entry was available.
+        bool pop(LogEntry &entry) {
+            size_t t = atomic_load(&tail, __ATOMIC_RELAXED);
+            size_t h = atomic_load(&head, __ATOMIC_ACQUIRE);
+
+            if (t == h)
+                return false;
+
+            entry = buffer[t];
+            atomic_store(&tail, (t + 1) & MASK, __ATOMIC_RELEASE);
+            return true;
+        }
+
+        /// @brief Iterate over all entries without removing them.
+        template <typename Fn> void for_each(Fn &&fn) const {
+            size_t t = atomic_load(&tail, __ATOMIC_ACQUIRE);
+            size_t h = atomic_load(&head, __ATOMIC_ACQUIRE);
+
+            while (t != h) {
+                fn(buffer[t]);
+                t = (t + 1) & MASK;
+            }
+        }
+
+        /// @brief Check whether the buffer is empty.
+        bool empty() const {
+            return atomic_load(&head, __ATOMIC_ACQUIRE) ==
+                   atomic_load(&tail, __ATOMIC_ACQUIRE);
+        }
+
+        /// @brief Return the number of entries currently in the buffer.
+        size_t size() const {
+            size_t h = atomic_load(&head, __ATOMIC_ACQUIRE);
+            size_t t = atomic_load(&tail, __ATOMIC_ACQUIRE);
+            return (h - t) & MASK;
+        }
+
+        /// @brief Discard all entries (reset tail to head).
+        void clear() {
+            size_t h = atomic_load(&head, __ATOMIC_RELAXED);
+            atomic_store(&tail, h, __ATOMIC_RELEASE);
+        }
+
+        /// @brief Suppress future pushes (release mode: quiet boot).
+        static void set_suppressed(bool v) {
+            s_suppressed_ = v;
+        }
+        /// @brief Check whether pushes are currently suppressed.
+        static bool is_suppressed() {
+            return s_suppressed_;
+        }
+
+        size_t head_index() const {
+            return head;
+        }
+        size_t tail_index() const {
+            return tail;
+        }
+
+      private:
+        // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+        static inline bool s_suppressed_ =
+#ifdef CONFIG_DEBUG
+            false
+#else
+            true
+#endif
+            ;
+    };
 
     /// @brief The encapsulated ring buffer (no external linkage).
     DmesgBuffer<DMESG_CAPACITY> buffer_{};
