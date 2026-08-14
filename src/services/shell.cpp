@@ -2479,7 +2479,7 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
             *p++ = ' ';
 
             // Message (inline context)
-            const char* msg = e.message ? e.message : "(null)";
+            const char *msg = e.message; // owned char array, never null
             while (*msg && p < end) *p++ = *msg++;
             *p++ = '\n';
             *p = '\0';
@@ -2528,7 +2528,7 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
         }
         *p++ = ':'; *p++ = ' ';
 
-        const char* msg = e.message ? e.message : "(null)";
+        const char *msg = e.message; // owned char array, never null
         while (*msg && p < end) *p++ = *msg++;
         *p++ = '\n';
         *p = '\0';
