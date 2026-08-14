@@ -63,7 +63,10 @@ enum class LoadResult : uint8_t {
 class ElfLoader {
   public:
     static constexpr uint64_t kChunkSize = 4096;
-    static constexpr uint64_t kLoaderPriority = 1;   // below shell (2)
+    static constexpr uint64_t kLoaderPriority = 15;  // above harness (10),
+                                                       // below daemons (20);
+                                                       // yields per chunk so
+                                                       // daemons stay on-time
     static constexpr size_t kMaxPath = 128;
 
     /// @brief Create the background loader task (idempotent).  Called from
@@ -109,6 +112,10 @@ class ElfLoader {
     ///        elf_loader_task_main bridge).  Blocks on the wake semaphore,
     ///        runs one load per accepted request.
     static void task_main();
+
+    /// @brief Tear down a completed-but-never-scheduled TCB (built by
+    ///        finalize_loaded_task).  Skips all scheduler interactions.
+    static void destroy_completed_tcb(TaskControlBlock *tcb);
 
   private:
     // One full load cycle; ends IDLE (or DONE-with-completed_tcb_).

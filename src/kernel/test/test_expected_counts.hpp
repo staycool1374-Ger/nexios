@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 875,    0,       0      },  // v0.4.0 MP-1..MP-8: 869 + process driven-cookbook(+3) + MP-4 SMAP tests(+3); dump_class_counts verified
+    {"all",                 882,    0,       0      },  // 869 + process(+3) + MP-4 SMAP(+3) + elf_loader(+7); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -71,6 +71,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    15,    0,       0      },  // process lifecycle, child table
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+    {"elf_loader",            7,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield)
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap

@@ -17,6 +17,7 @@ __attribute__((weak)) void register_tmpfs_mount_unmount_failure_tests() {}
 __attribute__((weak)) void register_signals_tests() {}
 __attribute__((weak)) void register_process_tests() {}
 __attribute__((weak)) void register_elf_tests() {}
+__attribute__((weak)) void register_elf_loader_tests() {}
 __attribute__((weak)) void register_fstab_tests() {}
 __attribute__((weak)) void register_rtc_tests() {}
 __attribute__((weak)) void register_rlimit_tests() {}
