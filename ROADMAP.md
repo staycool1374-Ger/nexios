@@ -314,23 +314,47 @@ the syscall handler audit is the gating prerequisite.
 
 #### MP-5 — Verification suite (cross-task #PF, canary-tamper, HHDM, SMAP/PAN negatives)
 
-- [ ] **MP-5.1 — Cross-task #PF.**  Dispatched kernel task A maps a private
+- [x] **MP-5.1 — Cross-task #PF.**  Dispatched kernel task A maps a private
       page; dispatched kernel task B derefs A's VA → assert #PF (fault
       handler records) and task B is terminated cleanly (no system hang).
-- [ ] **MP-5.2 — User-overflow #PF.**  User task writes past its stack/text/
+      **DONE (2026-08-14):** `memory_isolation`/`cross_task_page_fault_isolated`
+      — user task A maps 0x10000000 (writes 0xAB), user task B derefs it
+      (unmapped in B) → SIGSEGV → TERMINATED, A's frame intact, harness
+      responsive.
+- [x] **MP-5.2 — User-overflow #PF.**  User task writes past its stack/text/
       heap red-zone → assert the guard #PF fires and the task is killed, not
       the kernel.
-- [ ] **MP-5.3 — Canary-tamper detection.**  Corrupt a canary, trigger the
+      **DONE (2026-08-14):** `memory_safety`/`user_red_zone_stack_overflow_pf`
+      + `user_red_zone_heap_overflow_pf`; `memory_isolation`/
+      `guard_page_fault_not_kernel_fatal` (user red-zone #PF terminates task,
+      kernel + scheduler stay alive).
+- [x] **MP-5.3 — Canary-tamper detection.**  Corrupt a canary, trigger the
       verify path → assert panic/detection (MP-3.4 companion, may be
       `#if`-gated to a detection callback rather than a hard halt in tests).
-- [ ] **MP-5.4 — HHDM kernel→user read.**  Kernel reads a user page via the
+      **DONE (2026-08-14):** `memory_safety`/`canary_tamper_detected_on_syscall`
+      — 0xDD over the stack canary, syscall trips the verify, `g_canary_trip`
+      latches (test mode), task TERMINATED; `canary_intact_after_normal_dispatch`
+      negative.
+- [x] **MP-5.4 — HHDM kernel→user read.**  Kernel reads a user page via the
       direct map → succeeds (REQ-MP-04 negative stays green).
-- [ ] **MP-5.5 — SMAP/PAN negatives.**  If MP-4 landed: kernel deref of user VA
+      **DONE (2026-08-14):** `memory_isolation`/`hhdm_kernel_reads_user_page` —
+      kernel reads a user-written page via HHDM, value matches (and survives
+      SMAP, which does not apply to kernel-half VAs).
+- [x] **MP-5.5 — SMAP/PAN negatives.**  If MP-4 landed: kernel deref of user VA
       without AC → #PF; with AC → success.  Gate the asserts on
       `CONFIG_SMAP/SMEP`.
-- [ ] **MP-5.6 — Register under `memory_safety` + `cross_arch` classes;**
+      **DONE (2026-08-14):** `arch_cross`/`smap_kernel_deref_user_va_without_ac_pf`
+      (dispatched task, recover-IP redirect, no panic) +
+      `smap_stac_clac_roundtrip_ok` (with AC → success, AC restored);
+      `smap_cr4_bit_set`; SMEP negative `smep_user_exec_kernel_va_pf`.  All
+      gated on CONFIG_SMAP/SMEP.
+- [x] **MP-5.6 — Register under `memory_safety` + `cross_arch` classes;**
       update `test_expected_counts.hpp`; class gates `memory_safety`,
       `cross_arch`, `pmm`, `selftest`, `make build`.
+      **DONE (2026-08-14):** tests registered under `memory_isolation`,
+      `memory_safety`, `arch_cross` (all in the `all` suite).  counts updated
+      for the MP-4 SMAP tests.  Gates: memory_safety 11/11, memory_isolation
+      3/3, arch_cross 21/21, memory_pmm 5/5, selftest 132/132, build green.
 
 #### MP-8 — Rework existing tests for the MP-1..MP-7 memory model
 
