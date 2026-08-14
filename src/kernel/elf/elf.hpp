@@ -88,6 +88,12 @@ enum : uint8_t {
 /// @brief Validate an ELF64 header (magic, class, endianness, version).
 /// @return true if the header is valid.
 bool validate_header(const ELF64Header *hdr);
+/// @brief Validate a single ELF program-header segment (bounds, W^X, sizes).
+/// @param phdr The program header to validate.
+/// @param file_size Total file size in bytes (0 = unvalidated).
+/// @return true if the segment is safe to load.
+bool validate_segment(const ELF64ProgramHeader *phdr,
+                      uint64_t file_size = 0);
 /// @brief Load an ELF binary into a new task.
 /// @param hdr Pointer to the ELF header.
 /// @param data Raw ELF file data.
@@ -96,6 +102,30 @@ bool validate_header(const ELF64Header *hdr);
 /// @return New TaskControlBlock, or nullptr on failure.
 TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *data,
                        uint64_t file_size = 0);
+
+/// @brief Allocate and map the user stack (guard page + pages) and the
+///        initial heap into @p pml4.  Extracted from elf::load for reuse by
+///        the background ElfLoader (chunked loader).
+/// @param pml4 The task PML4 to map into.
+/// @param[out] out_ustack_phys Physical base of the user stack.
+/// @return true on success.
+bool alloc_user_stack_and_heap(uint64_t pml4, uint64_t *out_ustack_phys);
+
+/// @brief Finish a partially-built load: allocate the TCB, kernel stack,
+///        adopt @p pml4 as page_table_, wire std fds, setup the user stack
+///        frame and install segment canaries.  Extracted from elf::load for
+///        reuse by the background ElfLoader.
+/// @param hdr Validated ELF header.
+/// @param pml4 The built PML4 (user pages already mapped).
+/// @param ustack_phys Physical base of the user stack.
+/// @param phdr_image Buffer holding the ELF header followed by the full
+///        program-header table (for canary installation).
+/// @param file_size Total file size in bytes.
+/// @return New TaskControlBlock, or nullptr on failure (partial state freed).
+TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+                                       uint64_t ustack_phys,
+                                       const uint8_t *phdr_image,
+                                       uint64_t file_size);
 
 /// @brief Replace the current task's address space with an ELF binary (exec).
 /// @param regs Register state to update with new entry point and stack.
