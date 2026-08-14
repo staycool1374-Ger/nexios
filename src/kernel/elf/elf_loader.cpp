@@ -78,7 +78,7 @@ uint8_t ElfLoader::phdr_image_[sizeof(ELF64Header) +
 uint8_t ElfLoader::chunk_buf_[ElfLoader::kChunkSize] = {};
 TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
 TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
-char ElfLoader::msg_buf_[4][160] = {};
+char ElfLoader::msg_buf_[16][160] = {};
 uint32_t ElfLoader::msg_idx_ = 0;
 
 /// @brief The loader task's entry: block on the wake semaphore, run one load
@@ -105,17 +105,18 @@ void ElfLoader::ensure_task() {
 LoadResult ElfLoader::request_load(const char *path) {
     if (!path)
         return LoadResult::FILE_NOT_FOUND;
-    SpinLockGuard<sync::SpinLock> guard(lock_);
-    if (state_ != LoadState::IDLE)
-        return LoadResult::ALREADY_LOADING;
-
+    // Resolve the file OUTSIDE the spinlock (vfs::resolve may block on I/O).
     vfs::Vnode *vn = vfs::resolve(path);
     if (!vn)
         return LoadResult::FILE_NOT_FOUND;
-    file_size_ = vn->size;
+    uint64_t fsize = vn->size;
+
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (state_ != LoadState::IDLE)
+        return LoadResult::ALREADY_LOADING;
+    file_size_ = fsize;
 
     copy_bounded(path_, path, kMaxPath);
-    path_[kMaxPath - 1] = '\0';
     cancel_requested_ = false;
     start_ticks_ = arch::Timer::ticks();
     ++load_generation_;
@@ -178,15 +179,12 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
     // interactions.
     if (tcb->page_table_) {
         kernel::BufferPool::unmap_all(*tcb);
+        // free_user_pages reclaims ALL user pages in the PML4 — including the
+        // user stack and heap (mapped there by alloc_user_stack_and_heap).  Do
+        // NOT free tcb->user_stack_ separately (double-free).
         VMM::free_user_pages(tcb->page_table_);
         PMM::free_page(tcb->page_table_);
         tcb->page_table_ = 0;
-    }
-    if (tcb->user_stack_ && tcb->is_user_) {
-        size_t pages = (tcb->user_stack_size_ + 4095) / arch::PAGE_SIZE;
-        for (size_t i = 0; i < pages; ++i)
-            PMM::free_page(tcb->user_stack_ + i * arch::PAGE_SIZE);
-        tcb->user_stack_ = 0;
     }
     if (tcb->stack_phys_) {
         size_t pages = (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
@@ -253,17 +251,29 @@ void ElfLoader::wait_loader_idle() {
 
 void ElfLoader::task_main() {
     for (;;) {
-        // Idle: block the loader (BLOCKED + reschedule) so it leaves the
+        // Idle: block the loader (BLOCKED + dequeue_ready) so it leaves the
         // ready queue and is selectable again when request_load wakes it.
-        // A RUNNING task that hlt()'s or spins stays RUNNING-not-queued (INV-4)
-        // and is stranded.  request_load() calls set_task_ready() to wake us.
+        // The state check + block is ATOMIC under lock_: request_load sets
+        // state=VALIDATING under the SAME lock, so a request arriving between
+        // our IDLE check and our BLOCKED store is seen here — we skip blocking
+        // and run it.  Without this, a request firing in the IDLE->BLOCKED
+        // window would see the loader RUNNING (not BLOCKED), skip set_task_ready,
+        // and the loader would block forever with state=VALIDATING (lost wakeup).
         if (state_ == LoadState::IDLE) {
-            auto *self = Scheduler::current_task();
-            if (self) {
-                self->state = TaskState::BLOCKED;
-                Scheduler::dequeue_ready(*self);
-                Scheduler::reschedule();
+            bool should_block = false;
+            {
+                SpinLockGuard<sync::SpinLock> guard(lock_);
+                if (state_ == LoadState::IDLE) {
+                    auto *self = Scheduler::current_task();
+                    if (self) {
+                        self->state = TaskState::BLOCKED;
+                        Scheduler::dequeue_ready(*self);
+                        should_block = true;
+                    }
+                }
             }
+            if (should_block)
+                Scheduler::reschedule();
             continue;
         }
         run_load();
@@ -283,7 +293,7 @@ int ElfLoader::open_owned_file(const char *path) {
 
 char *ElfLoader::next_msg_slot() {
     uint32_t i = __atomic_fetch_add(&msg_idx_, 1U, __ATOMIC_RELAXED);
-    return msg_buf_[i % 4];
+    return msg_buf_[i % 16];
 }
 
 /// @brief Build "loading <path> <size> <verb>[ in <ticks>]" into the stable

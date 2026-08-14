@@ -148,7 +148,7 @@ class ElfLoader {
     static uint8_t chunk_buf_[kChunkSize];
     static TaskControlBlock *loader_tcb_;
     static TaskControlBlock *completed_tcb_;
-    static char msg_buf_[4][160];
+    static char msg_buf_[16][160];
     static uint32_t msg_idx_;
 };
 
