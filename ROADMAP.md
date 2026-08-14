@@ -433,6 +433,29 @@ leaving stale assertions.
 
 **Memory-Protection Phase 4.5 (MP-1..MP-8) is COMPLETE.**
 
+### Background ELF Loader (2026-08-14, commits `b7e66aa9`..`8e0482bb`) — DONE
+
+A deadline-safe background ELF loader (`ElfLoader` singleton + fixed low-priority
+kernel task) per `docs/specs/elf-loader.md` — precursor to 0.4.2 user-space
+drivers / 0.4.3 zero-copy IPC (loading a general ELF without breaking
+deadline criteria):
+- **Chunked, preemptible**: loads a file from the VFS in 4 KiB chunks, yielding
+  between chunks so the daemons/deadline monitor keep their deadlines.
+- **Cancellable**: shell `load <path.elf>` (returns immediately) +
+  `cancel-load`; loader is the single owner of all cleanup (idempotent guards).
+- **Errors**: invalid elf-file / not enough memory / file not found / read
+  error → shell + dmesg (0xDB00 range) + full resource release.
+- **Future runelf hook**: completed TCB retained (take_completed /
+  release_completed) — one command from schedulable.
+- **elf.cpp refactor**: validate_segment public, alloc_user_stack_and_heap +
+  finalize_loaded_task extracted.
+- **SIL 3 APPROVED** after fixing: lost-wakeup (atomic block under lock),
+  user-stack double-free, dmesg message copy (LogEntry owns char[96]), spinlock
+  under vfs::resolve.
+- Tests: `elf_loader` 8/8 (success/invalid/cancel-mid/already/not-loading/
+  multi-cycle/preemption-yield/lost-wakeup-race).  Gates: debug `all` 870/870
+  (trace ON), release `all` 84/84 (trace OFF).
+
 **Hypothesis:** the shared-table and stub tests encode pre-MP invariants that
 MP-1/MP-7 invalidate; reworking them to the deep-copy + private-kernel model
 keeps the suite truthful and prevents false green.  **Validation:** each

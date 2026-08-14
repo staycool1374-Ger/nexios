@@ -1,7 +1,7 @@
 # Background ELF Loader — Spec (ROADMAP 0.4.2/0.4.3 precursor)
 
 **Doc ID:** NEX-SPEC-2026-08-14-001
-**Status:** DRAFT → IMPLEMENTED (2026-08-14)
+**Status:** DRAFT → IMPLEMENTED + SIL 3 APPROVED (2026-08-14)
 **Branch:** main, x86_64 primary
 
 ## 1. Overview & Goals
