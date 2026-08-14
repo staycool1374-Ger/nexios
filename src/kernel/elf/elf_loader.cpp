@@ -39,6 +39,16 @@
 namespace kernel {
 namespace elf {
 
+/// @brief Copy a bounded string (release-safe: no libc strncpy dependency).
+static inline void copy_bounded(char *dst, const char *src, size_t max) {
+    size_t i = 0;
+    while (src[i] && i < max - 1) {
+        dst[i] = src[i];
+        ++i;
+    }
+    dst[i] = '\0';
+}
+
 /// @brief Page-align a virtual address up (round toward +inf).
 static inline uint64_t page_align_up(uint64_t addr) {
     return (addr + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
@@ -86,7 +96,7 @@ void ElfLoader::ensure_task() {
                                        0);
     if (!t)
         return;
-    __builtin_strncpy(t->name, "elf-load", CONFIG_TASK_NAME_LEN - 1);
+    copy_bounded(t->name, "elf-load", CONFIG_TASK_NAME_LEN);
     t->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
     Scheduler::add_task(*t);
     loader_tcb_ = t;
@@ -104,7 +114,7 @@ LoadResult ElfLoader::request_load(const char *path) {
         return LoadResult::FILE_NOT_FOUND;
     file_size_ = vn->size;
 
-    __builtin_strncpy(path_, path, kMaxPath - 1);
+    copy_bounded(path_, path, kMaxPath);
     path_[kMaxPath - 1] = '\0';
     cancel_requested_ = false;
     start_ticks_ = arch::Timer::ticks();
@@ -499,7 +509,7 @@ void ElfLoader::run_load() {
                 slash = p + 1;
             ++p;
         }
-        __builtin_strncpy(tcb->name, slash, CONFIG_TASK_NAME_LEN - 1);
+        copy_bounded(tcb->name, slash, CONFIG_TASK_NAME_LEN);
         tcb->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
     }
 

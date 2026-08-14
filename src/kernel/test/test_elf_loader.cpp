@@ -57,18 +57,21 @@ uint64_t build_minimal_elf(elf::ELF64Header *hdr, uint8_t *data) {
     hdr->shnum = 0;
     hdr->shstrndx = 0;
 
-    auto *phdr = reinterpret_cast<elf::ELF64ProgramHeader *>(hdr + 1);
-    phdr->type = elf::PT_LOAD;
-    phdr->flags = elf::PF_R | elf::PF_X;
-    phdr->offset = sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader);
-    phdr->vaddr = 0x400000;
-    phdr->paddr = 0x400000;
-    phdr->filesz = 0x1000;
-    phdr->memsz = 0x1000;
-    phdr->align = 0x1000;
+    // Build the phdr into the DATA buffer (not hdr+1 — that would read past
+    // the 64-byte caller `hdr` object).
+    auto *data_phdr = reinterpret_cast<elf::ELF64ProgramHeader *>(
+        data + sizeof(elf::ELF64Header));
+    data_phdr->type = elf::PT_LOAD;
+    data_phdr->flags = elf::PF_R | elf::PF_X;
+    data_phdr->offset =
+        sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader);
+    data_phdr->vaddr = 0x400000;
+    data_phdr->paddr = 0x400000;
+    data_phdr->filesz = 0x1000;
+    data_phdr->memsz = 0x1000;
+    data_phdr->align = 0x1000;
 
     __builtin_memcpy(data, hdr, sizeof(elf::ELF64Header));
-    __builtin_memcpy(data + hdr->phoff, phdr, sizeof(elf::ELF64ProgramHeader));
     uint64_t code_offset =
         sizeof(elf::ELF64Header) + sizeof(elf::ELF64ProgramHeader);
     for (size_t i = 0; i < 0x1000; ++i)
