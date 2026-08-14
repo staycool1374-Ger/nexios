@@ -17,6 +17,7 @@
  */
 
 #include <kernel/kernel.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
@@ -485,19 +486,12 @@ uint64_t irq_entry_tsc = 0;
 uint64_t scheduler_corruption_count = 0;
 uint64_t deadline_detection_integrity = 0;
 kernel::TaskControlBlock *fpu_owner = nullptr;
-#if defined(CONFIG_ARCH_X86_64)
-constinit uint64_t multiboot_magic = 0;
-constinit uint64_t multiboot_info_ptr = 0;
-
-#endif
 
 }
 
 extern char kernel_virt_end[];
 extern "C" uint8_t _binary_initrd_cpio_start[];
 extern "C" uint8_t _binary_initrd_cpio_end[];
-
-BootInfo g_boot_info{};
 
 #if defined(CONFIG_ARCH_AARCH64)
 extern "C" {
@@ -522,23 +516,23 @@ static void init_pic() {
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-    g_boot_info = BootInfo();
+    kernel::gs::boot_info() = BootInfo();
+    kernel::gs::WriteContext ctx{kernel::gs::StatePhase::BOOT, 0};
 
 #if defined(CONFIG_ARCH_X86_64)
-    multiboot_magic = magic;
-    multiboot_info_ptr = mb_info;
+    kernel::gs::try_set_multiboot(magic, mb_info, ctx);
     extern const uint64_t kernel_stack_top;
     asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
-    g_boot_info.multiboot_magic = magic;
-    g_boot_info.multiboot_info = mb_info;
+    kernel::gs::boot_info().multiboot_magic = magic;
+    kernel::gs::boot_info().multiboot_info = mb_info;
 #elif defined(CONFIG_ARCH_AARCH64)
     g_dtb_ptr = reinterpret_cast<void *>(magic);
-    g_boot_info.dtb_ptr = magic;
+    kernel::gs::boot_info().dtb_ptr = magic;
     (void)mb_info;
     arch::fp_enable();
 #elif defined(CONFIG_ARCH_RISCV64)
-    g_boot_info.hart_id = static_cast<int>(magic);
-    g_boot_info.dtb_ptr = mb_info;
+    kernel::gs::boot_info().hart_id = static_cast<int>(magic);
+    kernel::gs::boot_info().dtb_ptr = mb_info;
     arch::fp_enable();
 
 #endif
@@ -633,7 +627,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                 (mem_tag->size - sizeof(MemoryMapTag)) / mem_tag->entry_size;
             for (uint64_t i = 0; i < entries; ++i) {
                 auto &entry = mem_tag->entries[i];
-                g_boot_info.add_region(entry.base_addr, entry.length,
+                kernel::gs::boot_info().add_region(entry.base_addr, entry.length,
                                        entry.type);
             }
         }
@@ -642,7 +636,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
     {
-        void *dtb = reinterpret_cast<void *>(g_boot_info.dtb_ptr);
+        void *dtb = reinterpret_cast<void *>(kernel::gs::boot_info().dtb_ptr);
         if (dtb && fdt_check_header(dtb) == 0) {
             int offset = fdt_node_offset_by_prop_value(dtb, -1, "device_type",
                                                        "memory", 7);
@@ -660,7 +654,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                     uint64_t size =
                         (static_cast<uint64_t>(fdt32_to_cpu(reg[2])) << 32) |
                         fdt32_to_cpu(reg[3]);
-                    g_boot_info.add_region(base, size, 1);
+                    kernel::gs::boot_info().add_region(base, size, 1);
                 }
             }
             int chosen = fdt_subnode_offset_namelen(dtb, 0, "chosen", 6);
@@ -669,7 +663,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
                 const char *bootargs = static_cast<const char *>(
                     fdt_getprop_namelen(dtb, chosen, "bootargs", &len));
                 if (bootargs && len > 0 && len < 256) {
-                    strlcpy(g_boot_info.cmdline, bootargs, 256);
+                    strlcpy(kernel::gs::boot_info().cmdline, bootargs, 256);
                 }
             }
         }
@@ -679,10 +673,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     uint64_t kend =
         reinterpret_cast<uint64_t>(kernel_virt_end) - arch::HHDM_OFFSET;
     uint64_t mem_size = 0;
-    if (g_boot_info.num_mem_regions > 0) {
-        for (int i = 0; i < g_boot_info.num_mem_regions; ++i) {
-            uint64_t end = g_boot_info.mem_regions[i].base +
-                           g_boot_info.mem_regions[i].size;
+    if (kernel::gs::boot_info().num_mem_regions > 0) {
+        for (int i = 0; i < kernel::gs::boot_info().num_mem_regions; ++i) {
+            uint64_t end = kernel::gs::boot_info().mem_regions[i].base +
+                           kernel::gs::boot_info().mem_regions[i].size;
             if (end > mem_size)
                 mem_size = end;
         }
@@ -717,8 +711,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         arch::APIC::map_mmio();
         arch::APIC::init();
     }
-    if (g_boot_info.cmdline[0]) {
-        kernel::BootParams::parse_cstr(g_boot_info.cmdline);
+    if (kernel::gs::boot_info().cmdline[0]) {
+        kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
     }
 #if defined(CONFIG_ARCH_X86_64)
     kernel::BootParams::parse_multiboot_cmdline();
@@ -927,7 +921,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
 
     arch::RTC::init();
-    g_boot_epoch = arch::RTC::read_seconds();
+    kernel::gs::WriteContext bctx{kernel::gs::StatePhase::BOOT, 0};
+    kernel::gs::try_set_boot_epoch(arch::RTC::read_seconds(), bctx);
     kernel::random_init();
     debug_write("[BOOT] Hardware init done\n");
 
@@ -1580,9 +1575,6 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
 }
 
 // ── Boot-time clock capture ──────────────────────────────────────────────────
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-uint64_t g_boot_epoch = 0; // RTC read_seconds() at boot
-
 // ── Epoch-to-date conversion (no libc) ──────────────────────────────────────
 static const uint16_t s_days_in_mon[12] = {31, 28, 31, 30, 31, 30,
                                            31, 31, 30, 31, 30, 31};

@@ -20,6 +20,7 @@
 /// @brief Test isolation snapshot/restore implementation.
 
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/core/global_state.hpp>
 #include <test.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -68,10 +69,8 @@ static size_t g_snapshot_guard_pages = 0;
 // the canary VA differs from this, the PTE was remapped (mechanism 1).
 static uint64_t g_snapshot_buf_frame = 0;
 
-bool g_vfs_touched = false;
-
 void mark_vfs_touched() {
-    g_vfs_touched = true;
+    kernel::gs::mark_vfs_touched(true);
 }
 
 bool snapshot_is_active() {
@@ -1196,14 +1195,14 @@ void snapshot_restore(const char *test_name) {
     // their pre-snapshot state, which is correct because no VFS syscall was
     // issued.  Only the ready queue needs rebuilding (runq links desync from
     // cleanup_test_tasks).
-    if (g_vfs_touched) {
+    if (kernel::gs::get_vfs_touched()) {
         kernel::vfs::reset_and_remount();
         kernel::vfs::tmpfs_reset_root();
         reload_daemon_tasks();
     } else {
         Scheduler::rebuild_ready_queue();
     }
-    g_vfs_touched = false;
+    kernel::gs::mark_vfs_touched(false);
 
     // ---- Daemon ----
     {

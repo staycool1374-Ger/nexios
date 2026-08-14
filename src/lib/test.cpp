@@ -22,6 +22,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <string.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/memory/pmm.hpp>
@@ -37,9 +38,6 @@
 namespace kernel {
 namespace test {
 
-const char *g_current_class = nullptr;
-bool g_filter_bench = false;
-
 TestCase Registry::tests_[MAX_TESTS];
 size_t Registry::count_ = 0;
 size_t Registry::passed_ = 0;
@@ -50,8 +48,6 @@ ClassSection Registry::sections_[MAX_CLASSES] = {};
 size_t Registry::class_count_ = 0;
 size_t Registry::expected_count_ = 0;
 const char *Registry::current_name_ = nullptr;
-bool g_class_auto_shutdown = false;
-static uint64_t g_kernel_entry_ns = 0;
 
 // PfA-A: the harness injects one TestContext so the scheduler's ISR-visible
 // test flags live here (not as scheduler globals).  Production boots with
@@ -60,7 +56,7 @@ static TestContext g_test_context;
 static bool g_test_context_injected = false;
 
 void set_kernel_entry_ns() {
-    g_kernel_entry_ns = arch::Timer::ns();
+    kernel::gs::set_kernel_entry_ns();
 }
 
 void Registry::init() {
@@ -379,7 +375,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
         auto& tc = Registry::tests()[i];
         if (tc.flags & TF_USER) continue;
         if (required_flags && !(tc.flags & required_flags)) continue;
-        if (g_filter_bench && (tc.flags & TF_BENCH)) continue;
+        if (kernel::gs::get_filter_bench() && (tc.flags & TF_BENCH)) continue;
         ++expected;
     }
     Registry::set_expected_count(expected);
@@ -420,7 +416,7 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
         // If required_flags has TF_RELEASE set, run only tests with TF_RELEASE.
         if (tc.flags & TF_USER) continue;
         if (required_flags && !(tc.flags & required_flags)) continue;
-        if (g_filter_bench && (tc.flags & TF_BENCH)) continue;
+        if (kernel::gs::get_filter_bench() && (tc.flags & TF_BENCH)) continue;
 
         for (size_t ci = 0; ci < Registry::class_count(); ++ci) {
             auto* cs = Registry::class_section(ci);
@@ -572,25 +568,25 @@ void run_registered(uint8_t required_flags) {
     // When no explicit flags and the current class is a bench variant,
     // run benchmarks only.  For non-bench classes (e.g. "all", "safe"),
     // skip TF_BENCH tests to keep the suite within QEMU timeout.
-    bool is_bench = g_current_class &&
-                    g_current_class[0] == 'b' &&
-                    g_current_class[1] == 'e';
+    bool is_bench = kernel::gs::get_current_class() &&
+                    kernel::gs::get_current_class()[0] == 'b' &&
+                    kernel::gs::get_current_class()[1] == 'e';
     if (required_flags == 0 && !is_bench) {
         // Run non-benchmark tests only
-        g_filter_bench = true;
+        kernel::gs::set_filter_bench(true);
         run_filtered(0, true);
-        g_filter_bench = false;
+        kernel::gs::set_filter_bench(false);
     } else {
         run_filtered(required_flags, true);
     }
-    if (g_class_auto_shutdown) {
+    if (kernel::gs::get_class_auto_shutdown()) {
         uint64_t result = (Registry::test_failed() == 0) ? 0 : 1;
         shutdown_kernel(result);
     }
 }
 
 void set_class_auto_shutdown(bool enabled) {
-    g_class_auto_shutdown = enabled;
+    kernel::gs::set_class_auto_shutdown(enabled);
 }
 
 void run_suite(const char* suite_name) {
@@ -681,8 +677,9 @@ void print_report(uint64_t start_ns, uint64_t end_ns) {
     Logger::raw_write("  PLANNED:    "); write_num(exp); Logger::raw_write("\n");
     Logger::raw_write("  EXECUTED:   "); write_num(tt); Logger::raw_write("\n");
     Logger::raw_write("  TIME_ELAPSED_MS: "); write_num(elapsed_ms); Logger::raw_write("\n");
-    if (g_kernel_entry_ns > 0 && start_ns > g_kernel_entry_ns) {
-        uint64_t boot_ms = (start_ns - g_kernel_entry_ns) / 1000000ULL;
+    uint64_t entry_ns = kernel::gs::get_kernel_entry_ns();
+    if (entry_ns > 0 && start_ns > entry_ns) {
+        uint64_t boot_ms = (start_ns - entry_ns) / 1000000ULL;
         Logger::raw_write("  BOOT_TIME_MS:    "); write_num(boot_ms); Logger::raw_write("\n");
     }
     Logger::raw_write("  PASSED:     "); write_num(tp); Logger::raw_write("\n");

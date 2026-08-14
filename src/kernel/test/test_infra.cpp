@@ -24,6 +24,7 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/vfs/vfsd.hpp>
@@ -38,9 +39,9 @@ using namespace kernel;
 // Expect: false.
 // Depends: kernel/test/test_isolate.hpp
 JARVIS_TEST(infra_vfs_touched_defaults_false, "PRE: none | POST: none") {
-    JARVIS_ASSERT_FMT(kernel::test::g_vfs_touched == false,
+    JARVIS_ASSERT_FMT(kernel::gs::get_vfs_touched() == false,
                       "g_vfs_touched must default to false (got %d)",
-                      (int)kernel::test::g_vfs_touched);
+                      (int)kernel::gs::get_vfs_touched());
     JARVIS_TEST_PASS();
 }
 
@@ -52,13 +53,13 @@ JARVIS_TEST(infra_vfs_touched_defaults_false, "PRE: none | POST: none") {
 // Expect: true.
 // Depends: kernel/test/test_isolate.hpp
 JARVIS_TEST(infra_mark_vfs_touched_sets_flag, "PRE: none | POST: none") {
-    JARVIS_ASSERT_FMT(kernel::test::g_vfs_touched == false,
+    JARVIS_ASSERT_FMT(kernel::gs::get_vfs_touched() == false,
                       "precondition: g_vfs_touched must start false (got %d)",
-                      (int)kernel::test::g_vfs_touched);
+                      (int)kernel::gs::get_vfs_touched());
     kernel::test::mark_vfs_touched();
-    JARVIS_ASSERT_FMT(kernel::test::g_vfs_touched == true,
+    JARVIS_ASSERT_FMT(kernel::gs::get_vfs_touched() == true,
                       "mark_vfs_touched() must set g_vfs_touched (got %d)",
-                      (int)kernel::test::g_vfs_touched);
+                      (int)kernel::gs::get_vfs_touched());
     JARVIS_TEST_PASS();
 }
 

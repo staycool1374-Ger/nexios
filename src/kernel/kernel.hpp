@@ -26,9 +26,6 @@
 #include <types.hpp>
 #include <kernel/boot/bootinfo.hpp>
 
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern BootInfo g_boot_info;
-
 extern "C" {
 /// @brief Entry point after transitioning to the higher half.
 /// @param magic   Multiboot2 magic value.
@@ -49,10 +46,6 @@ void handle_interrupt_c(uint64_t vector, uint64_t error_code, uint64_t rip,
 /// @brief Kernel stack base (bottom address).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint8_t kernel_stack[];
-
-/// @brief Boot-time RTC epoch (UNIX seconds) and Timer::ns() snapshot.
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t g_boot_epoch;
 
 /// @brief Format wall-clock nanoseconds since epoch into "YYYY-MM-DD
 /// hh:mm:ss:mmm".

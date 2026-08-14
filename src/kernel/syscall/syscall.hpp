@@ -97,9 +97,6 @@ struct CanaryTrip {
     uint64_t count;
 };
 
-/// @brief Global canary-trip latch (see CanaryTrip).  Reset by tests.
-extern CanaryTrip g_canary_trip;
-
 /// @brief System call handler and dispatcher.
 class Syscall {
   public:

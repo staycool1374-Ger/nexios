@@ -118,6 +118,10 @@ build/kernel/net/net.o: src/kernel/net/net.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/core/global_state.o: src/kernel/core/global_state.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/kernel.o: src/kernel/kernel.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@

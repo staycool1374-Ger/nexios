@@ -156,10 +156,6 @@ void add_task_named(TaskControlBlock &task, const char *tag = nullptr);
 void run_all();
 void run_safe();
 void run_filtered(uint8_t required_flags, bool use_isolation = true);
-/// @brief Name of the currently loaded test class (set by register_class).
-extern const char *g_current_class;
-/// @brief When true, run_filtered will skip TF_BENCH tests.
-extern bool g_filter_bench;
 
 /// @brief Run all registered non-benchmark tests.
 void run_debug();
@@ -172,8 +168,6 @@ void print_report(uint64_t start_ns, uint64_t end_ns);
 
 void set_kernel_entry_ns();
 void set_class_auto_shutdown(bool enabled);
-// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern bool g_class_auto_shutdown;
 
 struct TestClass {
     const char* name;
