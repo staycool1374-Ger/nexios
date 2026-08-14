@@ -146,6 +146,7 @@ extern DmesgBuffer<DMESG_CAPACITY> g_dmesg;
 ///        The code space is split into kernel::Error values (0–9) and
 ///        a custom range for event codes:
 ///          0xDA00 – 0xDAFF  daemon lifecycle events
+///          0xDB00 – 0xDBFF  background ELF loader events
 inline const char *base_error_string(uint64_t code) {
     // Custom event ranges
     if ((code & ~0xFFULL) == 0xDA00) {
@@ -166,6 +167,31 @@ inline const char *base_error_string(uint64_t code) {
             break;
         }
         return "Daemon event";
+    }
+    if ((code & ~0xFFULL) == 0xDB00) {
+        switch (code) {
+        case 0xDB01:
+            return "ELF load started";
+        case 0xDB02:
+            return "ELF load completed";
+        case 0xDB03:
+            return "ELF load canceled";
+        case 0xDB04:
+            return "ELF load failed: invalid elf-file";
+        case 0xDB05:
+            return "ELF load failed: not enough memory";
+        case 0xDB06:
+            return "ELF load failed: file not found";
+        case 0xDB07:
+            return "ELF load failed: read error";
+        case 0xDB08:
+            return "ELF load rejected: already loading";
+        case 0xDB09:
+            return "ELF load rejected: not loading";
+        default:
+            break;
+        }
+        return "ELF loader event";
     }
     // Standard kernel::Error range (0–9)
     switch (static_cast<kernel::Error>(code)) {

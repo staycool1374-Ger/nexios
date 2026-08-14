@@ -136,6 +136,10 @@ private:
     static void cmd_export(int argc, const char** argv);
     /// @brief Built-in: run a userspace ELF from initrd as a new task.
     static void cmd_runelf(int argc, const char** argv);
+    /// @brief Built-in: start a background ELF load (returns immediately).
+    static void cmd_load(int argc, const char** argv);
+    /// @brief Built-in: cancel the in-flight background ELF load.
+    static void cmd_cancel_load(int argc, const char** argv);
     /// @brief Built-in: shut down the system.
     static void cmd_exit(int argc, const char** argv);
     /// @brief Built-in: run kernel self-tests.

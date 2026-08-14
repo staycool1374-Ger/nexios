@@ -22,6 +22,7 @@
 #include <services/program.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/elf/elf_loader.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
@@ -134,6 +135,8 @@ void Shell::init() {
     register_command("cd",      "Change working directory",          cmd_cd);
     register_command("export",  "Set environment variable",          cmd_export);
     register_command("runelf",  "Run userspace ELF from initrd",     cmd_runelf);
+    register_command("load",    "Background-load an ELF file (returns immediately)", cmd_load);
+    register_command("cancel-load", "Cancel the background ELF load", cmd_cancel_load);
     register_command("exit",    "Shut down the system",              cmd_exit);
     register_command("shutdown","Shut down the system",              cmd_exit);
     register_command("selftest","Run kernel self-tests",             cmd_selftest);
@@ -1154,6 +1157,50 @@ void Shell::cmd_runelf(int argc, const char** argv) {
     Terminal::write(path);
     Terminal::putchar('\n');
     Terminal::set_fg(COLOR_DEFAULT);
+}
+
+/// @brief Built-in: start a background ELF load (returns immediately).
+void Shell::cmd_load(int argc, const char** argv) {
+    if (argc < 2) {
+        Terminal::write("Usage: load <path.elf>\n");
+        return;
+    }
+    const char* path = argv[1];
+    auto result = kernel::elf::ElfLoader::request_load(path);
+    switch (result) {
+    case kernel::elf::LoadResult::OK:
+        // request_load already posted the "started" event (loader prints the
+        // start line + dmesg).  Return immediately.
+        Terminal::write("loading ");
+        Terminal::write(path);
+        Terminal::write(" started\n");
+        return;
+    case kernel::elf::LoadResult::ALREADY_LOADING:
+        shell_error_path("load", path, "already loading");
+        return;
+    case kernel::elf::LoadResult::FILE_NOT_FOUND:
+        shell_error_path("load", path, "file not found");
+        return;
+    default:
+        return;
+    }
+}
+
+/// @brief Built-in: cancel the in-flight background ELF load.
+void Shell::cmd_cancel_load(int, const char**) {
+    auto result = kernel::elf::ElfLoader::request_cancel();
+    switch (result) {
+    case kernel::elf::LoadResult::OK:
+        Terminal::write("loading ");
+        Terminal::write(kernel::elf::ElfLoader::current_path());
+        Terminal::write(" canceled\n");
+        return;
+    case kernel::elf::LoadResult::NOT_LOADING:
+        shell_error("cancel-load", "not loading");
+        return;
+    default:
+        return;
+    }
 }
 
 void Shell::cmd_selftest(int argc, const char** argv) {

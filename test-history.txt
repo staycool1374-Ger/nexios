@@ -209,3 +209,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 08:22:45 MP-8 verification: process_pml4_clone 7/7, memory_page_tables 9/9, memory_stack_alloc 11/11, process_lifecycle 16/16, memory_pmm 5/5, task_core 6/6, memory_safety 11/11, selftest 132/132
 2026-08-14 08:23:26 all PASSED: 862 FAILED: 0 TIME: 208s (MP-8 verification)
 2026-08-14 08:44:13 elf refactor (validate_segment public, alloc_user_stack_and_heap + finalize_loaded_task extracted): process_elf 9/9, process_secure_exec 5/5
+2026-08-14 08:59:08 ElfLoader impl + shell load/cancel-load: selftest 132/132, process_elf 9/9, process_secure_exec 5/5, memory_safety 11/11
