@@ -85,6 +85,26 @@ IPC and driver work built on top of them.
 - [ ] **Capability Shared-Memory Granules** — Zero-copy ring buffer shared memory mappings (`SYS_SHM_MAP`) backed by capabilities for high-throughput client-server I/O.
 - [ ] **Priority-Ordered Blocked-Sender Wakeup** — `wake_sender` pops the **highest-priority** blocked sender instead of FIFO (spec gap: `docs/specs/ipc.md` §6 confirms NOT implemented) under the queue lock; prerequisite for deterministic IPC latency on the zero-copy fastpath.
 
+### Phase 4.7: Time, Deterministic Scheduling & Bounded I/O (0.4.x)
+
+**Ordering note:** 0.4.7–0.4.8 are pulled ahead of the SMP phase (0.4.4–0.4.6)
+because the 0.4.5 WCET re-audit and 0.4.6 latency profiling require the
+high-resolution clock and deadline-aware scheduling first. 0.4.9 remains after
+the SMP phase.
+
+#### 0.4.7 — High-Resolution Time & Event Timers
+- [ ] **High-Resolution Monotonic Clock** — TSC-based monotonic clock with calibration; optional HPET source (`CONFIG_HAS_HPET`); unified tick-source abstraction over APIC TSC-deadline / HPET / PIT fallback with sub-tick resolution for deadlines and metering.
+- [ ] **Event-Timer Wheel** — per-CPU O(1) arm/cancel timer queue powering bounded sleeps, driver timeouts, deadline release queues, and watchdog pre-timeouts.
+- [ ] **Bounded-Wait Primitive** — blocking paths use the timer wheel for bounded waits; verify and close the unconfirmed `sys_receive` arg3 timeout (VULN-W3, `docs/specs/boundary.md`).
+
+#### 0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control
+- [ ] **Deadline-Aware Preemptive Scheduling** — land deadline-monotonic fixed-priority assignment first (bitmap-compatible), then EDF with a deadline-ordered run queue; **`deadline_rush` is NOT implemented per `docs/specs/deadline.md` §7** — this item tracks its implementation from scratch.
+- [ ] **Enforced Admission Control** — Liu-Leyland utilization bound **checked** at task create/activate (reject or defer on violation; **spec I-8 currently states advisory-only — this item tracks upgrading to enforced**); per-task WCET/budget admission; memory-budget admission with `CONFIG_MEMORY_BUDGET` enabled by default (`docs/specs/oom-rt.md` §2).
+- [ ] **Per-Task Execution-Time Metering (SYS_TIMES)** — high-resolution per-task CPU accounting (extends the TCB `executed_ticks` counter); `SYS_TIMES` syscall exposing per-task/per-period CPU time; feeds admission, WCET validation, and user-space RT profiling.
+- [ ] **Aperiodic & Deferrable Servers** — deferrable-server and background-server modes beside the sporadic server (reuse the SS budget/replenish state machine); configurable per task; admission accounting includes server budgets.
+- [ ] **SMP Admission Extension** — per-CPU utilization bounds for the 0.4.5 load balancer (partitioned EDF), so migration never violates schedulability.
+- [ ] **Kernel Self-Test of Admission Bounds** — boot-time + test-class verification of Liu-Leyland rejection, budget exhaustion, and deadline-miss actions (incl. the `memory_determinism` class, `docs/specs/oom-rt.md` §5).
+
 ### Phase 5: SMP + Multicore (0.4.x)
 #### 0.4.4 — APIC & SMP Boot
 - [ ] Local/IO APIC, X2APIC, per-CPU GDT/TSS, INIT-SIPI AP startup
@@ -99,25 +119,7 @@ IPC and driver work built on top of them.
 #### 0.4.6 — TLB Shootdown & IPI Reduction
 - [ ] PCID, selective INVPCID, lazy shootdowns, IPI batching, latency profiling
 
-### Phase 4.7: Time, Deterministic Scheduling & Bounded I/O (0.4.x)
-
-**Ordering note:** the historical SMP items (0.4.4–0.4.6) are retained in
-place; this phase may run in parallel with or be pulled ahead of SMP if the
-0.4.5 WCET re-audit or 0.4.6 latency profiling require the high-resolution
-clock first.
-
-#### 0.4.7 — High-Resolution Time & Event Timers
-- [ ] **High-Resolution Monotonic Clock** — TSC-based monotonic clock with calibration; optional HPET source (`CONFIG_HAS_HPET`); unified tick-source abstraction over APIC TSC-deadline / HPET / PIT fallback with sub-tick resolution for deadlines and metering.
-- [ ] **Event-Timer Wheel** — per-CPU O(1) arm/cancel timer queue powering bounded sleeps, driver timeouts, deadline release queues, and watchdog pre-timeouts.
-- [ ] **Bounded-Wait Primitive** — blocking paths use the timer wheel for bounded waits; verify and close the unconfirmed `sys_receive` arg3 timeout (VULN-W3, `docs/specs/boundary.md`).
-
-#### 0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control
-- [ ] **Deadline-Aware Preemptive Scheduling** — land deadline-monotonic fixed-priority assignment first (bitmap-compatible), then EDF with a deadline-ordered run queue; **`deadline_rush` is NOT implemented per `docs/specs/deadline.md` §7** — this item tracks its implementation from scratch.
-- [ ] **Enforced Admission Control** — Liu-Leyland utilization bound **checked** at task create/activate (reject or defer on violation; **spec I-8 currently states advisory-only — this item tracks upgrading to enforced**); per-task WCET/budget admission; memory-budget admission with `CONFIG_MEMORY_BUDGET` enabled by default (`docs/specs/oom-rt.md` §2).
-- [ ] **Per-Task Execution-Time Metering (SYS_TIMES)** — high-resolution per-task CPU accounting (extends the TCB `executed_ticks` counter); `SYS_TIMES` syscall exposing per-task/per-period CPU time; feeds admission, WCET validation, and user-space RT profiling.
-- [ ] **Aperiodic & Deferrable Servers** — deferrable-server and background-server modes beside the sporadic server (reuse the SS budget/replenish state machine); configurable per task; admission accounting includes server budgets.
-- [ ] **SMP Admission Extension** — per-CPU utilization bounds for the 0.4.5 load balancer (partitioned EDF), so migration never violates schedulability.
-- [ ] **Kernel Self-Test of Admission Bounds** — boot-time + test-class verification of Liu-Leyland rejection, budget exhaustion, and deadline-miss actions (incl. the `memory_determinism` class, `docs/specs/oom-rt.md` §5).
+### Phase 4.7 (cont.): Interrupt-Driven I/O & Bounded Blocking
 
 #### 0.4.9 — Interrupt-Driven I/O & Bounded Blocking
 - [ ] **AHCI Completion ISR** — wire a real ISR with per-slot completion records and scheduler wake; `wait_cmd` becomes a blocked wait with a bounded timeout (closes FLAW-05); teardown clears GHC_IE/PORT_IE and takes port locks before freeing CL/RFIS/CT/data (closes FLAW-04 UAF).
