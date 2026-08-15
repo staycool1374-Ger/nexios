@@ -3,7 +3,7 @@ name: planner
 description: Architectural & execution planning agent for NexIOS kernel changes
 mode: subagent
 model: opencode-go/kimi-k3
-reasoning_effort: kimi-k3
+reasoning_effort: high
 temperature: 0.2
 permission:
   edit: deny
