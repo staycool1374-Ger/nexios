@@ -121,9 +121,17 @@ LoadResult ElfLoader::request_load(const char *path) {
     start_ticks_ = arch::Timer::ticks();
     ++load_generation_;
     state_ = LoadState::VALIDATING;
-    // Wake the blocked loader (it sets itself BLOCKED when idle).
-    if (loader_tcb_ &&
-        loader_tcb_->state == TaskState::BLOCKED) {
+    // Wake the idle loader.  The wake is keyed on READY-QUEUE membership, not
+    // `state == BLOCKED`: after a test-boundary snapshot_restore the loader
+    // TCB's restored state field can be a snapshot-time non-BLOCKED value while
+    // it is NOT in the ready queue (H2-family stranding — `[RS] cur=1 next=0
+    // hi=0`; test-2 `wait_loader_idle` ENSURE panic at elf_loader.cpp:245).  A
+    // state-only check skips the wake and leaves the loader not-queued forever.
+    // `set_task_ready` refuses double-enqueues, so re-waking an already-queued
+    // loader is safe.  A RUNNING loader is excluded: it is mid-dispatch
+    // (context.rsp is live, no valid iret frame) and must not be re-enqueued.
+    if (loader_tcb_ && !loader_tcb_->in_ready_queue_ &&
+        loader_tcb_->state != TaskState::RUNNING) {
         Scheduler::set_task_ready(*loader_tcb_);
     }
     return LoadResult::OK;
