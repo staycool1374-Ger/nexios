@@ -53,7 +53,7 @@ static void overrun_then_block_body() {
     // switch).  Spin on BLOCKED so the harness observes it before we would
     // self-terminate; the harness's gate.post() wakes us and we return.
     while (Scheduler::current_task()->state == TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 }
 
 /// @brief  Create the overrun-then-block task and dispatch it for real.
@@ -69,7 +69,7 @@ static TaskControlBlock *spawn_overrun_blocked(sync::Semaphore &gate) {
     // on the semaphore — at which point the harness resumes.
     Scheduler::reschedule();
     while (t->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     return t;
 }
 

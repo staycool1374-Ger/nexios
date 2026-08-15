@@ -73,7 +73,7 @@ TaskControlBlock *spawn_holder(sync::Mutex &mutex, sync::Semaphore &gate,
             // the harness can observe it; gate.post() wakes us, we unlock and
             // return + terminate.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         prio, 10);
@@ -83,7 +83,7 @@ TaskControlBlock *spawn_holder(sync::Mutex &mutex, sync::Semaphore &gate,
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     while (t->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     return t;
 }
 
@@ -111,7 +111,7 @@ TaskControlBlock *spawn_contender(sync::Mutex &mutex, uint64_t prio,
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     while (t->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     return t;
 }
 
@@ -209,7 +209,7 @@ TEST_CLASS(MutexChainPropagates) {
     Scheduler::add_task(*b);
     Scheduler::reschedule();
     while (b->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(m2.owner() == b);
     CT_ASSERT(b->state == TaskState::BLOCKED);
     CT_ASSERT(b->waiting_on_mutex == &m1);
@@ -235,7 +235,7 @@ TEST_CLASS(MutexChainPropagates) {
     Scheduler::add_task(*c);
     Scheduler::reschedule();
     while (c->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     CT_ASSERT(c->state == TaskState::BLOCKED);
     // B boosted to C's priority.
@@ -303,7 +303,7 @@ TEST_CLASS(MutexPriStepDown) {
     kernel::test::wait_for_termination_safe(holder);
 kernel::test::wait_for_termination_safe(w20);
 kernel::test::wait_for_termination_safe(w17);
-kernel::test::wait_for_termination_safe(w14);        asm volatile("pause");
+kernel::test::wait_for_termination_safe(w14);        arch::pause();
 
     // All waiters acquired and completed in the release chain.
     CT_ASSERT(w20_acquired == 1);
@@ -353,7 +353,7 @@ TEST_CLASS(MutexNestedDrop) {
             // spin on our own BLOCKED state so the harness observes it before
             // we would self-terminate.  gate.post() wakes us and we unlock.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm2->unlock();
             mm1->unlock();
         },
@@ -363,7 +363,7 @@ TEST_CLASS(MutexNestedDrop) {
     Scheduler::add_task(*a);
     Scheduler::reschedule();
     while (a->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(m1.owner() == a);
     CT_ASSERT(m2.owner() == a);
 
@@ -431,7 +431,7 @@ TEST_CLASS(SemaphoreInherits) {
             // spin on our own BLOCKED state so the harness observes it before
             // we would self-terminate.  gate.post() wakes us and we release.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             s->post();
         },
         11, 10);
@@ -440,7 +440,7 @@ TEST_CLASS(SemaphoreInherits) {
     Scheduler::add_task(*low);
     Scheduler::reschedule();
     while (low->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(sem.value() == 0); // LOW holds the binary semaphore
     CT_ASSERT(low->priority == 11);
 
@@ -463,7 +463,7 @@ TEST_CLASS(SemaphoreInherits) {
             // spin on our own BLOCKED state so the harness observes it before
             // we would self-terminate.  LOW's post wakes us and we acquire.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             __atomic_store_n(o, 1, __ATOMIC_RELEASE);
             s->post();
         },
@@ -473,7 +473,7 @@ TEST_CLASS(SemaphoreInherits) {
     Scheduler::add_task(*high);
     Scheduler::reschedule();
     while (high->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     CT_ASSERT(high->state == TaskState::BLOCKED);
     CT_ASSERT(low->priority >= high->priority);

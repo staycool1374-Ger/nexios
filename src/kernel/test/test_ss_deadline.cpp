@@ -67,7 +67,7 @@ TaskControlBlock *spawn_ss_exhausted(sync::Semaphore &gate) {
             // harness can observe it before we would self-terminate; the
             // harness's gate.post() wakes us (state != BLOCKED) and we return.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     if (helper == nullptr)

@@ -222,7 +222,7 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
     Scheduler::add_task(*high);
     Scheduler::reschedule();
     while (high->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(high->state == TaskState::BLOCKED);
 
     // The receiver (queue owner) is boosted to the sender's priority.
@@ -441,7 +441,7 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
     Scheduler::add_task(*high);
     Scheduler::reschedule();
     while (high->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(high->state == TaskState::BLOCKED);
 
     // The low-priority receiver is boosted while the high-priority sender is

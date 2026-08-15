@@ -169,7 +169,7 @@ JARVIS_TEST(idle_task_restartable_on_crash, "PRE: none | POST: none") {
     // Let real timer ticks elapse; the idle task must stay live and valid.
     uint64_t start = arch::Timer::ticks();
     while (arch::Timer::ticks() - start < 20)
-        asm volatile("pause");
+        arch::pause();
 
     auto *still = Scheduler::get_idle_task();
     JARVIS_ASSERT(still != nullptr);

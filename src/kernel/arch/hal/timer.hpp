@@ -103,6 +103,8 @@ class Timer {
     static void periodic(uint64_t period_ticks);
     /// @brief Get the remaining ticks on the current timer.
     static uint64_t remaining();
+    /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+    static uint64_t tsc_freq_hz();
 
   private:
     static constinit uint64_t ticks_;
@@ -135,6 +137,8 @@ class Timer {
     static void periodic(uint64_t period_ticks);
     /// @brief Get the remaining ticks on the current timer.
     static uint64_t remaining();
+    /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+    static uint64_t tsc_freq_hz();
 
   private:
     static constinit uint64_t ticks_;

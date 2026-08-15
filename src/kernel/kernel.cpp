@@ -485,7 +485,8 @@ static void init_pic() {
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::gs::boot_info() = BootInfo();
-    kernel::gs::WriteContext ctx{kernel::gs::StatePhase::BOOT, 0};
+    [[maybe_unused]] kernel::gs::WriteContext ctx{
+        kernel::gs::StatePhase::BOOT, 0};
 
 #if defined(CONFIG_ARCH_X86_64)
     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
@@ -1318,7 +1319,7 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
 extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
                                    uint64_t rip, uint64_t *regs,
                                    uint64_t entry_tsc) {
-#if !CONFIG_IRQ_LATENCY_HISTOGRAM
+#if !CONFIG_IRQ_LATENCY_HISTOGRAM || !defined(CONFIG_ARCH_X86_64)
     (void)entry_tsc;
 #endif
 #if defined(CONFIG_ARCH_X86_64)

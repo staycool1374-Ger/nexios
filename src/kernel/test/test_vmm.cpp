@@ -356,8 +356,10 @@ void register_vmm_tests() {
     JARVIS_REGISTER_TEST(vmm_clone_failure_rollback);
     JARVIS_REGISTER_TEST(vmm_free_user_pages_shared);
     JARVIS_REGISTER_TEST(vmm_huge_page_split_corner);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(vmm_huge_page_split_regression);
     JARVIS_REGISTER_TEST(vmm_hhdm_access_consistency);
+#endif
     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
 }

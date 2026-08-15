@@ -81,6 +81,11 @@ void Timer::handle_irq() {
     isb();
 }
 
+/// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+uint64_t Timer::tsc_freq_hz() {
+    return counter_freq_hz_;
+}
+
 /// @brief Override the tick counter (used in test isolation).
 /// @param[in] value Value to set ticks_ to.
 void Timer::set_ticks_for_test(uint64_t value) {

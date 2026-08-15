@@ -51,7 +51,7 @@ void release_task(TaskControlBlock *t) {
 /// @brief Wait until a task reaches a state, yielding via pause().
 inline void wait_state(TaskControlBlock &t, TaskState s) {
     while (t.state != s)
-        asm volatile("pause");
+        arch::pause();
 }
 } // namespace
 
@@ -88,7 +88,7 @@ JARVIS_TEST(mutex_stress_high_contention, "PRE: none | POST: none") {
     // All tasks run to completion through real dispatch.
     uint64_t start = arch::Timer::ticks();
     while (g_done < NUM_TASKS && arch::Timer::ticks() - start < 3000)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(NUM_TASKS), g_done);
 
     // Mutex should be unlocked.
@@ -152,7 +152,7 @@ JARVIS_TEST(semaphore_producer_consumer, "PRE: none | POST: none") {
             all_done = false;
         if (all_done)
             break;
-        asm volatile("pause");
+        arch::pause();
     }
 
     // All consumers consumed (producer's 20 posts woke at least 4; remaining
@@ -223,7 +223,7 @@ JARVIS_TEST(queue_multi_producer_multi_consumer, "PRE: none | POST: none") {
             all_done = false;
         if (all_done)
             break;
-        asm volatile("pause");
+        arch::pause();
     }
 
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(NUM_CONSUMERS), g_consumed);
@@ -264,7 +264,7 @@ JARVIS_TEST(priority_inversion_under_contention, "PRE: none | POST: none") {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -289,7 +289,7 @@ JARVIS_TEST(priority_inversion_under_contention, "PRE: none | POST: none") {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();

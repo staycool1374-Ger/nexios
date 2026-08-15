@@ -20,6 +20,7 @@
 #include <services/terminal/framebuffer.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/keyboard.hpp>
+#include <kernel/arch/io.hpp>
 
 namespace programs {
 
@@ -126,7 +127,7 @@ void demo_main() {
 
     char c;
     while (!arch::Keyboard::getchar(c)) {
-        for (int _pd = 0; _pd < 1000; ++_pd) { asm volatile("pause"); }
+        for (int _pd = 0; _pd < 1000; ++_pd) { arch::pause(); }
     }
 
     draw_spinning_rect();

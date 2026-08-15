@@ -224,7 +224,7 @@ TEST_CLASS(IpcConcurrentSenders) {
     for (int i = 0; i < NUM_SENDERS; ++i) {
         while (TaskControlBlock::is_valid(senders[i]) &&
                senders[i]->state != TaskState::TERMINATED)
-            asm volatile("pause");
+            arch::pause();
     }
     JARVIS_ASSERT(receiver->msg_queue.count <= IPC_MAX_QUEUE_MSG);
 
@@ -462,7 +462,7 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
         Scheduler::add_task(*sender);
     }
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Dispatch the receiver → real terminate → drain runs its cleanup, whose

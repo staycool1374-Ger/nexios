@@ -210,7 +210,7 @@ JARVIS_TEST(signal_kill_delivers, "PRE: none | POST: none") {
             // (INV-4); it returns immediately.  Spin until the timer ISR
             // actually suspends this task, then exit when post() wakes it.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
@@ -218,7 +218,7 @@ JARVIS_TEST(signal_kill_delivers, "PRE: none | POST: none") {
     Scheduler::add_task(*receiver);
     Scheduler::reschedule();
     while (receiver->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT_EQ(1ULL, g_registered);
     g_receiver_id = receiver->id;
 

@@ -186,10 +186,10 @@ JARVIS_TEST(dmesg_head_tail_indices, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ((h0 + 2) & (log::DMESG_CAPACITY - 1), db.head_index());
 
     log::LogEntry e;
-    db.pop(e);
+    JARVIS_ASSERT(db.pop(e));
     JARVIS_ASSERT_EQ(t0 + 1, db.tail_index());
 
-    db.pop(e);
+    JARVIS_ASSERT(db.pop(e));
     JARVIS_ASSERT_EQ(t0 + 2, db.tail_index());
     JARVIS_TEST_PASS();
 }
@@ -217,7 +217,7 @@ JARVIS_TEST(dmesg_overflow, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(max_fill, db.size());
 
     log::LogEntry e;
-    db.pop(e);
+    JARVIS_ASSERT(db.pop(e));
     JARVIS_ASSERT_EQ((uint64_t)1, e.error_code);
     JARVIS_TEST_PASS();
 }

@@ -30,7 +30,7 @@ JARVIS_TEST(apic_timer_ticks_increment, "PRE: isolate | POST: none") {
     uint64_t target = arch::rdtsc() + tsc_freq / 5;  // ~200 ms
 
     while (arch::rdtsc() < target) {
-        asm volatile("pause");
+        arch::pause();
     }
 
     uint64_t elapsed = arch::Timer::ticks() - t0;
@@ -63,7 +63,7 @@ JARVIS_TEST(apic_timer_oneshot, "PRE: isolate | POST: none") {
     // Wait a short while (interrupts fire normally)
     uint64_t deadline = arch::rdtsc() + tsc_freq / 500;  // ~2 ms
     while (arch::rdtsc() < deadline) {
-        asm volatile("pause");
+        arch::pause();
     }
 
     // Restore the periodic system tick.  set_timer_oneshot() zeroes
@@ -104,7 +104,7 @@ JARVIS_TEST(apic_timer_stop_restart, "PRE: isolate | POST: none") {
     uint64_t tsc_freq = arch::Timer::tsc_freq_hz();
     uint64_t deadline = arch::rdtsc() + tsc_freq / 20;  // ~50 ms
     while (arch::rdtsc() < deadline) {
-        asm volatile("pause");
+        arch::pause();
     }
 
     uint64_t after = arch::Timer::ticks();

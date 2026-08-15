@@ -318,7 +318,7 @@ JARVIS_TEST(timer_deadline_miss_detection_fires, "PRE: none | POST: none") {
             // harness can observe it before we would self-terminate; the
             // harness's gate.post() wakes us (state != BLOCKED) and we return.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 2);
     JARVIS_ASSERT(helper != nullptr);
@@ -326,7 +326,7 @@ JARVIS_TEST(timer_deadline_miss_detection_fires, "PRE: none | POST: none") {
     Scheduler::add_task(*helper);
     Scheduler::reschedule();
     while (helper->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // Genuine overrun: the real deadline (now+2 at create) is long past.
     JARVIS_ASSERT(helper->deadline_ticks < arch::Timer::ticks());
@@ -368,7 +368,7 @@ JARVIS_TEST(timer_deadline_miss_skips_future, "PRE: none | POST: none") {
             // (deferred switch).  Spin on BLOCKED so the harness observes it
             // before we self-terminate; gate.post() wakes us and we return.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10000);
     JARVIS_ASSERT(helper != nullptr);
@@ -376,7 +376,7 @@ JARVIS_TEST(timer_deadline_miss_skips_future, "PRE: none | POST: none") {
     Scheduler::add_task(*helper);
     Scheduler::reschedule();
     while (helper->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // Real future deadline: 10000 ticks from creation — not yet passed.
     JARVIS_ASSERT(helper->deadline_ticks > arch::Timer::ticks());
@@ -419,7 +419,7 @@ JARVIS_TEST(timer_deadline_miss_only_once, "PRE: none | POST: none") {
             // (deferred switch).  Spin on BLOCKED so the harness observes it
             // before we self-terminate; gate.post() wakes us and we return.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 100);
     JARVIS_ASSERT(helper != nullptr);
@@ -427,11 +427,11 @@ JARVIS_TEST(timer_deadline_miss_only_once, "PRE: none | POST: none") {
     Scheduler::add_task(*helper);
     Scheduler::reschedule();
     while (helper->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // Genuinely wait until the real deadline (create+100) has passed.
     while (helper->deadline_ticks >= arch::Timer::ticks())
-        asm volatile("pause");
+        arch::pause();
 
     kernel::test::trigger_deadline_monitor_scan();
     JARVIS_ASSERT(helper->deadline_miss_count == 1);
@@ -476,7 +476,7 @@ JARVIS_TEST(timer_deadline_miss_skips_zero, "PRE: none | POST: none") {
             // (deferred switch).  Spin on BLOCKED so the harness observes it
             // before we self-terminate; gate.post() wakes us and we return.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 0);
     JARVIS_ASSERT(helper != nullptr);
@@ -484,7 +484,7 @@ JARVIS_TEST(timer_deadline_miss_skips_zero, "PRE: none | POST: none") {
     Scheduler::add_task(*helper);
     Scheduler::reschedule();
     while (helper->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     kernel::test::trigger_deadline_monitor_scan();
 
