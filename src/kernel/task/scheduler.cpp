@@ -2063,6 +2063,24 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             current = owner;
             Scheduler::set_current(*owner);
         }
+        // H2 root fix (ROADMAP §v0.4.0): the owner-resolution above can
+        // correct `current` to the PHYSICAL runner while `next` is that same
+        // task — a condition that was already checked at entry (see above) but
+        // can become true HERE, after the check.  Publishing a deferred switch
+        // in this state is a SELF-switch: the ISR would save a fresh RSP into
+        // the runner's context.rsp (save_target == &TASK_STACK_PTR(next)) and
+        // then iretq the PRE-SAVE (stale) load_rsp_from value, displacing the
+        // runner onto a stale/fossil iret frame (docs/specs/ipc.md §4 H2).  No-op
+        // instead: the runner keeps executing.  Mirror the bad-frame no-op's
+        // queue-membership cleanup (state=RUNNING, out of the runq) so an
+        // INV-4 leftover cannot strand it.
+        if (current == &next) {
+            next.state = TaskState::RUNNING;
+            next.in_ready_queue_ = false;
+            next.rq_priority_ = 0;
+            release_lock();
+            return;
+        }
         // H2: keep the resolved owner's context.rsp LIVE.  The original
         // scratch-save (layer 2) sent the harness's RSP to
         // s_foreign_rsp_scratch whenever it was not detected on the linker
@@ -2884,6 +2902,13 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->exit_code = saved[j].exit_code;
             t->context = saved[j].context;
             // Direction 1: keep the harness's ACTIVE context.rsp (see above).
+            // Per audits/deep-analysis-h2-ssdeadline-v0.3.9.md §4.6/§5: the
+            // harness IS a legitimate deferred-switch resume target (it is
+            // switched away to dispatch test tasks and must be switched back),
+            // and its context.rsp must stay a proper ISR-style frame — attempts
+            // to re-point or invalidate it (live-RSP binding, zeroing) were
+            // TESTED AND REVERTED as they regressed the race.  The live-RSP
+            // re-apply below is the only kept hardening.
             if (t == harness && harness_live_rsp != 0) {
                 TASK_STACK_PTR(t) = harness_live_rsp;
             }
