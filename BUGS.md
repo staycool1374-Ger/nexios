@@ -12,8 +12,8 @@
   - Attempted fix (REVERTED): save/restore the identity PD (0x3000) in snapshot_create/restore, mirroring the HHDM PD block. The memcpy-only variant (PT pages reclaimed by the PtPoolSnapshot restore) removed the Double Fault but the standalone `memory_vmm` class still fails from a PRE-EXISTING +1 PMM leak per test (`vmm_map_already_mapped`, `vmm_map_page_null_phys`, `vmm_unmap_already_unmapped`, `vmm_huge_page_split_corner`) + crash — reproducible on baseline WITHOUT the fix. The leak is `alloc_page_table` pool pages tracked via `track_pmm_alloc(1)` (pmm.cpp:441) that `restore_pool_snapshot` (pmm.cpp:841-862) rewinds in the bitmap but does NOT reconcile in ResourceTracker's `pmm_pages_used` counter — likely a false-positive accounting gap. Validation of the identity-PD fix is also blocked by the elf_loader trace-OFF flake (`all` hangs at test 191).
   - Next: (1) reconcile pool-snapshot restore with ResourceTracker pmm counter (fix the +1 leak first, restoring `memory_vmm` to 10/10), (2) re-apply the identity-PD save/restore, (3) validate via `all` once the elf_loader flake is resolved.
 
-## Kernel — Scheduler / IPC (H2 deferred-switch race, RE-OPENED)
-- [ ] **`ipc_send_sync_roundtrip` hang — H2 deferred-switch race NOT resolved** (was marked resolved in ROADMAP_done 2026-08-08 / AGENTS.md; re-verified broken 2026-08-12 on branch `testbed` @ `a2750bd2`).
+## Kernel — Scheduler / IPC (H2 deferred-switch race)
+- [x] **`ipc_send_sync_roundtrip` hang — RESOLVED (commits `4bf751b4` + `b85ba27d`)**. Two independent root causes fixed 2026-08-15: (1) `switch_to_task` owner-resolution self-switch no-op (`4bf751b4`): owner-resolution could correct `current` to the physical runner after the entry `current==&next` check, publishing a SELF-switch that iretq'd the runner onto its own stale frame; (2) elf_loader `task_main` lock_ held across a timer-ISR preemption (`b85ba27d`), deadlocking the harness. Validated (trace OFF): ipc_core 20/20 + 5/5 clean; full debug `all` gate 873/873 ×2.
 
   **Reproduce:**
   1. `git checkout testbed` (HEAD `a2750bd2`, v0.4.0 merged)
