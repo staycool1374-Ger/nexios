@@ -418,10 +418,6 @@ bool snapshot_create() {
     BufferPool::capture_state(g_snapshot + off_bufpool(),
                               BufferPool::state_bytes());
 
-    // ---- Resource Counters ----
-    ResourceTracker::instance().capture(
-        *reinterpret_cast<ResourceCounters *>(g_snapshot + off_rsrc_counts()));
-
     // ---- User page content + canary guards ----
     {
         // Set canaries before and after nu to detect stray writes
@@ -491,13 +487,6 @@ bool snapshot_create() {
         }
     }
 
-    // ---- Page-table pool snapshot ----
-    {
-        auto *pool = reinterpret_cast<PtPoolSnapshot *>(
-            g_snapshot + off_pt_pool(user_page_count, task_count));
-        PMM::capture_pool_snapshot(*pool);
-    }
-
     // ---- Kernel-stack window snapshot (v0.4.0 MP-6.3) ----
     kernel::kslot_snapshot_capture(
         g_snapshot + off_kslot_snapshot(user_page_count, task_count));
@@ -565,6 +554,24 @@ bool snapshot_create() {
             VMM::map_page(ga_va, guard_after_phys, false);
             VMM::unmap_page(ga_va);
         }
+    }
+
+    // ---- Resource Counters + page-table pool snapshot ----
+    // Captured AFTER the guard-page map/unmap block above.  The guard block
+    // splits a PD_HIGHER huge entry (allocating a pool PT page) when the
+    // snapshot buffer tail crosses a 2 MiB boundary — capturing the counters
+    // and pool bitmap BEFORE that block would (a) attribute the guard PT page
+    // as a +1 leak to the first test, and (b) leave PD_HIGHER dangling to a
+    // pool page the restore marks free (the pml4_clone CR3-corruption cascade,
+    // BUGS.md).  Capturing after makes the guard PT part of the baseline AND
+    // of the pool snapshot, so the restore keeps it allocated.
+    {
+        ResourceTracker::instance().capture(
+            *reinterpret_cast<ResourceCounters *>(g_snapshot +
+                                                  off_rsrc_counts()));
+        auto *pool = reinterpret_cast<PtPoolSnapshot *>(
+            g_snapshot + off_pt_pool(user_page_count, task_count));
+        PMM::capture_pool_snapshot(*pool);
     }
 
     return true;
