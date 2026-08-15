@@ -49,7 +49,7 @@ void Serial::init() {
 /// @param c Character to transmit.
 void Serial::putchar(char c) {
     if (c == '\n') {
-        int i;
+        int i = 0;
         for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
             if ((inb(arch::COM1 + 5) & 0x20) != 0)
                 break;
@@ -58,7 +58,7 @@ void Serial::putchar(char c) {
         if (i < SERIAL_TX_WAIT_ITERS)
             outb(arch::COM1, '\r');
     }
-    int i;
+    int i = 0;
     for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
         if ((inb(arch::COM1 + 5) & 0x20) != 0)
             break;
@@ -72,7 +72,7 @@ void Serial::putchar(char c) {
 /// @return The received character, or '\\0' when no data arrives within the
 ///         bounded wait (FLAW-08 — never hangs).
 char Serial::getchar() {
-    int i;
+    int i = 0;
     for (i = 0; i < SERIAL_RX_WAIT_ITERS; ++i) {
         if ((inb(arch::COM1 + 5) & 0x01) != 0)
             break;

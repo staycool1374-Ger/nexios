@@ -266,7 +266,7 @@ static bool virtio_net_send_frame(const uint8_t *data, size_t len) {
     // the used-ring snapshot BEFORE the notify: if the device completes the
     // descriptor before our post-notify read, the snapshot already reflects
     // completion and the poll would spin forever.
-    uint16_t used_snapshot;
+    uint16_t used_snapshot = 0;
     {
         IrqSpinLockGuard guard(dev.lock_);
         if (dev.tx_inflight_)

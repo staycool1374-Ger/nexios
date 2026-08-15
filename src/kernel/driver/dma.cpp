@@ -251,9 +251,9 @@ bool DmaEngine::is_busy() {
 }
 
 bool DmaEngine::handle_irq() {
-    DmaCallback cb;
-    uint64_t ctx;
-    bool success;
+    DmaCallback cb = nullptr;
+    uint64_t ctx = 0;
+    bool success = false;
     {
         sync::IrqSpinLockGuard guard(lock_);
         if (!active_)
@@ -373,9 +373,9 @@ bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
 }
 
 void PingPongDma::on_completion(uint64_t, bool success) {
-    ChainCallback cb;
-    uint64_t ctx;
-    DmaBuffer *buf;
+    ChainCallback cb = nullptr;
+    uint64_t ctx = 0;
+    DmaBuffer *buf = nullptr;
     {
         sync::IrqSpinLockGuard guard(lock_);
         active_ = false;
