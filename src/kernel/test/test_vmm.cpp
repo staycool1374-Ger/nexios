@@ -45,18 +45,26 @@ JARVIS_TEST(vmm_unmap_already_unmapped, "PRE: none | POST: none") {
 // Input: Map page at VA, map again at same VA
 // Expect: Fails or unmaps first
 // Depends: kernel::memory::VMM
+// Uses a scratch private PML4 (clone_kernel_pml4 + map_page_in_pml4) so the
+// test never splits the kernel identity PD (0x400000 walks PML4[0]→PD_IDENTITY
+// in the live kernel PML4, corrupting it permanently; snapshot_restore only
+// restores PD_HIGHER, not PD_IDENTITY — BUGS.md pml4_clone CR3 corruption).
 JARVIS_TEST(vmm_map_already_mapped, "PRE: none | POST: none") {
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
     uint64_t va = 0x400000ULL;  // user-space address (PML4 entry 0)
     uint64_t phys1 = PMM::alloc_page();
     JARVIS_ASSERT(phys1 != 0);
-    VMM::map_page(va, phys1, false);
-    JARVIS_ASSERT(VMM::virt_to_phys(va) == phys1);
+    VMM::map_page_in_pml4(va, phys1, false, pml4);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys1);
 
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page(va, phys2, false);
-    JARVIS_ASSERT(VMM::virt_to_phys(va) == phys2);
+    VMM::map_page_in_pml4(va, phys2, false, pml4);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys2);
 
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
     PMM::free_page(phys1);
     PMM::free_page(phys2);
 }
@@ -66,10 +74,15 @@ JARVIS_TEST(vmm_map_already_mapped, "PRE: none | POST: none") {
 // Input: Call map_page with physical address 0
 // Expect: Returns error
 // Depends: kernel::memory::VMM
+// Uses a scratch private PML4 (see vmm_map_already_mapped note).
 JARVIS_TEST(vmm_map_page_null_phys, "PRE: none | POST: none") {
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
     uint64_t va = 0x401000ULL;  // user-space address (PML4 entry 0)
-    VMM::map_page(va, 0, false);
-    JARVIS_ASSERT(VMM::virt_to_phys(va) == 0);
+    VMM::map_page_in_pml4(va, 0, false, pml4);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == 0);
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
 }
 
 // Runmode: kernel
@@ -107,6 +120,11 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent_pml4 != 0);
     auto *parent_virt =
         reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + parent_pml4);
+    // Zero all entries first: alloc_page returns an uninitialized page whose
+    // stale PRESENT+USER entries would make free_user_pages walk/free foreign
+    // pages (BUGS.md pml4_clone corruption family).
+    for (size_t i = 0; i < 512; ++i)
+        parent_virt[i] = 0;
 
     uint64_t pdpt_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(pdpt_phys != 0);
@@ -147,6 +165,8 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     JARVIS_ASSERT(child_pml4 != 0);
     auto *child_virt =
         reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + child_pml4);
+    for (size_t i = 0; i < 512; ++i)
+        child_virt[i] = 0;
 
     // Copy parent's user entries (shares PDPT/PD/PT pages)
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
@@ -182,17 +202,21 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
 // DISABLED for v0.3.5 — splits a kernel huge page at VA 0x200000 (kernel
 // identity region), permanently modifying the kernel page table in a way
 // the snapshot cannot restore.  This causes a GPF crash in the next test.
-// Safe: uses user-space VA 0x200000 (PML4[0]), cleared by snapshot_restore.
+// Safe: uses a scratch private PML4 so the kernel identity PD is untouched.
 JARVIS_TEST(vmm_huge_page_split_corner, "PRE: none | POST: none") {
+    uint64_t pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(pml4 != 0);
     uint64_t va = 0x200000;
     uint64_t phys = PMM::alloc_page();
     JARVIS_ASSERT(phys != 0);
-    VMM::map_page(va, phys, false);
-    JARVIS_ASSERT(VMM::virt_to_phys(va) == phys);
+    VMM::map_page_in_pml4(va, phys, false, pml4);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, pml4) == phys);
     uint64_t phys2 = PMM::alloc_page();
     JARVIS_ASSERT(phys2 != 0);
-    VMM::map_page(va + 0x1000, phys2, false);
-    JARVIS_ASSERT(VMM::virt_to_phys(va + 0x1000) == phys2);
+    VMM::map_page_in_pml4(va + 0x1000, phys2, false, pml4);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va + 0x1000, pml4) == phys2);
+    VMM::free_user_pages(pml4);
+    PMM::free_page(pml4);
     PMM::free_page(phys);
     PMM::free_page(phys2);
 }

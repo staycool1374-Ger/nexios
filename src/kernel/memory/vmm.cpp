@@ -30,6 +30,7 @@ namespace kernel {
 
 constinit uint64_t VMM::kernel_pml4_ = 0;
 bool VMM::hhdm_modified_ = false;
+bool VMM::identity_modified_ = false;
 
 /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
 /// entries.
@@ -271,6 +272,13 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
                      virt_addr, pml4_idx);
         hhdm_modified_ = true;
     }
+    // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
+    // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
+    // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
+    // pml4_idx >= PML4_USER_COUNT).
+    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+        identity_modified_ = true;
+    }
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
@@ -362,6 +370,10 @@ void VMM::unmap_page(uint64_t virt_addr) {
     if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
         Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
                      "(pml4_idx=%zu)", virt_addr, pml4_idx);
+    }
+    // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
+    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+        identity_modified_ = true;
     }
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);

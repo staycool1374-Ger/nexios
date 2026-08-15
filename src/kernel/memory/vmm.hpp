@@ -261,11 +261,22 @@ class VMM {
     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
     static bool hhdm_modified_;
 
+    /// @brief Set to true when a test modifies the LOW identity map
+    ///        (PD_IDENTITY, phys 0x3000 — VAs in PML4[0] below
+    ///        PML4_USER_COUNT).  Reset after PD restore in snapshot_restore.
+    static bool identity_modified_;
+
     /// @brief Returns true if any test has modified the HHDM page tables
     ///        since the last clear_hhdm_modified() call.
     static bool hhdm_was_modified() { return hhdm_modified_; }
     /// @brief Reset the HHDM modification flag (called after PD restore).
     static void clear_hhdm_modified() { hhdm_modified_ = false; }
+
+    /// @brief Returns true if any test has modified the low identity page
+    ///        tables since the last clear_identity_modified() call.
+    static bool identity_was_modified() { return identity_modified_; }
+    /// @brief Reset the identity modification flag (called after PD restore).
+    static void clear_identity_modified() { identity_modified_ = false; }
 
   private:
 

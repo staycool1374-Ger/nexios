@@ -189,6 +189,7 @@ static size_t off_user_page_data() {
 
 static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
 static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
 
 static size_t off_kstack_header(size_t user_page_count) {
     return off_user_page_data() +
@@ -201,8 +202,12 @@ static size_t off_hhdm_pd(size_t user_page_count, uint64_t num_kstacks) {
     return off_kstack_header(user_page_count) + kstack_area;
 }
 
-static size_t off_pt_pool(size_t user_page_count, uint64_t num_kstacks) {
+static size_t off_ident_pd(size_t user_page_count, uint64_t num_kstacks) {
     return off_hhdm_pd(user_page_count, num_kstacks) + HHDM_PD_BYTES;
+}
+
+static size_t off_pt_pool(size_t user_page_count, uint64_t num_kstacks) {
+    return off_ident_pd(user_page_count, num_kstacks) + IDENTITY_PD_BYTES;
 }
 
 // v0.4.0 MP-6.3: kernel-stack window snapshot (8 PT page contents + slot
@@ -519,6 +524,30 @@ bool snapshot_create() {
         }
     }
 
+    // ---- Identity PD save ----
+    // Save PML4[0]→PDPT[0]→PD (PD_IDENTITY phys 0x3000, 512 entries) so
+    // snapshot_restore can undo huge-page splits in the LOW identity map.
+    // Always captured (pristine boot state at class start); the restore is
+    // gated on identity_was_modified().
+    {
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            auto *pml4 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if (pml4[0] & 1) {
+                auto *pdpt = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
+                if (pdpt[0] & 1) {
+                    auto *pd = reinterpret_cast<uint64_t *>(
+                        arch::HHDM_OFFSET + (pdpt[0] & ~0xFFFULL));
+                    __builtin_memcpy(
+                        g_snapshot + off_ident_pd(user_page_count, task_count),
+                        pd, IDENTITY_PD_BYTES);
+                }
+            }
+        }
+    }
+
     // ---- Map-then-unmap guard pages (after PD save, so saved PD is clean) ----
     // Guard pages must be within HHDM window (phys < 128MB) and above reserved
     // kernel area (phys > 11MB).  If they're at the window edge, skip them.
@@ -721,6 +750,44 @@ void snapshot_restore(const char *test_name) {
             }
         }
         VMM::clear_hhdm_modified();
+    }
+
+    // ---- Identity PD restore (before PMM restore) ----
+    // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
+    // PD_IDENTITY phys 0x3000).  Gated on identity_was_modified(): low-VA
+    // map_page/unmap_page (pml4_idx < PML4_USER_COUNT) never sets
+    // hhdm_modified_, so the HHDM-PD gate above cannot cover these splits.
+    // Split PT pages are reclaimed by the page-table pool restore that runs
+    // later (off_pt_pool), so this block only restores the PD entries.
+    if (VMM::identity_was_modified()) {
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            uint64_t nu_ident = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_user_page_count());
+            uint64_t nk_ident = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_kstack_header(nu_ident));
+            auto *saved_pd = reinterpret_cast<const uint64_t *>(
+                g_snapshot + off_ident_pd(nu_ident, nk_ident));
+            auto *pml4 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if (pml4[0] & 1) {
+                auto *pdpt = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
+                if (pdpt[0] & 1) {
+                    uint64_t pd_phys = pdpt[0] & ~0xFFFULL;
+                    // Sanity check: PDPT[0] must point to the boot identity
+                    // PD (phys 0x3000).  Any other address means corruption —
+                    // skip the restore rather than write to kernel data.
+                    if (pd_phys == 0x3000ULL) {
+                        auto *pd = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + pd_phys);
+                        __builtin_memcpy(pd, saved_pd,
+                                         512 * sizeof(uint64_t));
+                    }
+                }
+            }
+        }
+        VMM::clear_identity_modified();
     }
 
     // ---- PMM ----
