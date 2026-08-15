@@ -23,6 +23,7 @@
 #include <logger.hpp>
 #include <kernel/driver/dma.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -357,6 +358,219 @@ JARVIS_TEST(dma_double_buffered_transfer, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: FLAW-01 — a busy DmaEngine rejects a second start_transfer.
+// Input: start once (OK), start again
+// Expect: first true, second false; abort clears; restart OK
+// Depends: dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(dma_engine_reject_when_busy, "PRE: iocd | POST: none") {
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+
+    auto buf = dma::alloc_buffer(512);
+    JARVIS_ASSERT(buf.phys_addr != 0);
+    dma::SgList sg;
+    dma::sg_reset(sg);
+    JARVIS_ASSERT(dma::sg_from_buffer(sg, buf));
+    dma::PrdTable prd;
+    JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
+
+    JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
+    JARVIS_ASSERT(!engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
+    engine.abort();
+    JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
+
+    engine.abort();
+    dma::free_buffer(buf);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-01 — handle_irq fires the callback exactly once; a second
+//           handle_irq (no active transfer) is a no-op.
+// Input: start with cb; handle_irq; handle_irq again
+// Expect: count == 1; second handle_irq returns false
+// Depends: dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(dma_engine_no_double_callback, "PRE: iocd | POST: none") {
+    static uint64_t g_cb_count = 0;
+    g_cb_count = 0;
+
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+
+    auto buf = dma::alloc_buffer(512);
+    JARVIS_ASSERT(buf.phys_addr != 0);
+    dma::SgList sg;
+    dma::sg_reset(sg);
+    JARVIS_ASSERT(dma::sg_from_buffer(sg, buf));
+    dma::PrdTable prd;
+    JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
+
+    struct Local {
+        static void fired(uint64_t, bool) { ++g_cb_count; }
+    };
+    JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ,
+                                        Local::fired, 0x99));
+    JARVIS_ASSERT(engine.handle_irq());
+    JARVIS_ASSERT_EQ((uint64_t)1, g_cb_count);
+    JARVIS_ASSERT(!engine.handle_irq()); // no active transfer -> no-op
+    JARVIS_ASSERT_EQ((uint64_t)1, g_cb_count);
+
+    engine.abort();
+    dma::free_buffer(buf);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-01 — abort() before completion suppresses the callback.
+// Input: start with cb; abort; handle_irq
+// Expect: callback never fires; handle_irq returns false
+// Depends: dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(dma_engine_abort_suppresses_callback, "PRE: iocd | POST: none") {
+    g_dma_cb_fired = false;
+    g_dma_cb_ctx = 0;
+
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+
+    auto buf = dma::alloc_buffer(512);
+    JARVIS_ASSERT(buf.phys_addr != 0);
+    dma::SgList sg;
+    dma::sg_reset(sg);
+    JARVIS_ASSERT(dma::sg_from_buffer(sg, buf));
+    dma::PrdTable prd;
+    JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
+
+    JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ,
+                                        dma_completion_cb, 0x42));
+    engine.abort();
+    JARVIS_ASSERT(!engine.handle_irq());
+    JARVIS_ASSERT(!g_dma_cb_fired);
+    JARVIS_ASSERT(!engine.is_busy());
+
+    engine.abort();
+    dma::free_buffer(buf);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-01 — start_transfer inside an IrqGuard (IF=0) then
+//           handle_irq outside restores IRQ state and fires the callback.
+// Input: start under arch::IrqGuard; exit; handle_irq
+// Expect: start OK; callback fires once; IRQ state restored (enabled)
+// Depends: dma::DmaEngine, dma::BmDmaChannel, arch::IrqGuard
+JARVIS_TEST(dma_engine_irqguard_roundtrip, "PRE: iocd | POST: none") {
+    g_dma_cb_fired = false;
+    g_dma_cb_ctx = 0;
+
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+
+    auto buf = dma::alloc_buffer(512);
+    JARVIS_ASSERT(buf.phys_addr != 0);
+    dma::SgList sg;
+    dma::sg_reset(sg);
+    JARVIS_ASSERT(dma::sg_from_buffer(sg, buf));
+    dma::PrdTable prd;
+    JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
+
+    {
+        arch::IrqGuard outer;
+        JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ,
+                                            dma_completion_cb, 0x77));
+        JARVIS_ASSERT(!arch::interrupts_enabled());
+    }
+    JARVIS_ASSERT(arch::interrupts_enabled()); // IrqGuard restored IF
+
+    JARVIS_ASSERT(engine.handle_irq());
+    JARVIS_ASSERT(g_dma_cb_fired);
+    JARVIS_ASSERT_EQ((uint64_t)0x77, g_dma_cb_ctx);
+
+    engine.abort();
+    dma::free_buffer(buf);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-02 — while a transfer is active, xfer_buf() is the DMA
+//           target and prepare_buf() is the other buffer; after completion
+//           the indices swap.
+// Input: init pingpong, start_next, inspect buffers, complete, inspect again
+// Expect: while busy xfer != prepare; after completion they swap
+// Depends: dma::PingPongDma, dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(pingpong_xfer_buf_while_busy, "PRE: iocd | POST: none") {
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+    dma::PingPongDma pp(engine, 512);
+    JARVIS_ASSERT(pp.init());
+
+    dma::DmaBuffer *buf_a = pp.prepare_buf();
+    JARVIS_ASSERT(buf_a != nullptr);
+    JARVIS_ASSERT(pp.start_next(dma::Direction::READ, nullptr, 0));
+    JARVIS_ASSERT(pp.busy());
+
+    dma::DmaBuffer *xfer = pp.xfer_buf();
+    dma::DmaBuffer *prep = pp.prepare_buf();
+    JARVIS_ASSERT(xfer == buf_a);       // buf_a is now the DMA target
+    JARVIS_ASSERT(prep != buf_a);       // other buffer is being prepared
+
+    JARVIS_ASSERT(engine.handle_irq()); // complete transfer A
+    JARVIS_ASSERT(!pp.busy());
+    dma::DmaBuffer *xfer2 = pp.xfer_buf();
+    JARVIS_ASSERT(xfer2 != buf_a);      // indices swapped after completion
+
+    pp.shutdown();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-02 — a busy PingPongDma rejects a second start_next.
+// Input: start_next OK; start_next again while busy
+// Expect: second returns false
+// Depends: dma::PingPongDma, dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(pingpong_reject_when_busy, "PRE: iocd | POST: none") {
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+    dma::PingPongDma pp(engine, 512);
+    JARVIS_ASSERT(pp.init());
+
+    JARVIS_ASSERT(pp.start_next(dma::Direction::READ, nullptr, 0));
+    JARVIS_ASSERT(pp.busy());
+    JARVIS_ASSERT(!pp.start_next(dma::Direction::READ, nullptr, 0));
+
+    JARVIS_ASSERT(engine.handle_irq());
+    JARVIS_ASSERT(!pp.busy());
+    pp.shutdown();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-02 — shutdown clears state and frees both buffers.
+// Input: init, start, shutdown
+// Expect: !busy, completed_count == 0, prepare_buf returns bufs_[0]
+// Depends: dma::PingPongDma, dma::DmaEngine, dma::BmDmaChannel
+JARVIS_TEST(pingpong_shutdown_clears_state, "PRE: iocd | POST: none") {
+    dma::BmDmaChannel channel(0xFF00);
+    JARVIS_ASSERT(channel.init());
+    dma::DmaEngine engine(channel);
+    dma::PingPongDma pp(engine, 512);
+    JARVIS_ASSERT(pp.init());
+
+    JARVIS_ASSERT(pp.start_next(dma::Direction::READ, nullptr, 0));
+    pp.shutdown();
+    JARVIS_ASSERT(!pp.busy());
+    JARVIS_ASSERT_EQ((uint64_t)0, pp.completed_count());
+    dma::DmaBuffer *prep = pp.prepare_buf();
+    JARVIS_ASSERT(prep != nullptr);
+    JARVIS_TEST_PASS();
+}
+
 void register_dma_tests() {
     Logger::info("Registering DMA tests");
     JARVIS_REGISTER_TEST(dma_alloc_buffer);
@@ -371,4 +585,11 @@ void register_dma_tests() {
     JARVIS_REGISTER_TEST(dma_sg_non_contiguous_prd);
     JARVIS_REGISTER_TEST(dma_completion_interrupt);
     JARVIS_REGISTER_TEST(dma_double_buffered_transfer);
+    JARVIS_REGISTER_TEST(dma_engine_reject_when_busy);
+    JARVIS_REGISTER_TEST(dma_engine_no_double_callback);
+    JARVIS_REGISTER_TEST(dma_engine_abort_suppresses_callback);
+    JARVIS_REGISTER_TEST(dma_engine_irqguard_roundtrip);
+    JARVIS_REGISTER_TEST(pingpong_xfer_buf_while_busy);
+    JARVIS_REGISTER_TEST(pingpong_reject_when_busy);
+    JARVIS_REGISTER_TEST(pingpong_shutdown_clears_state);
 }

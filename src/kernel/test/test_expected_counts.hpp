@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 920,    0,       0      },  // 888 + cap_core(+10) + cap_lifecycle(+8) + cap_syscall(+8) + cap_ipc(+6); dump_class_counts verified
+    {"all",                 927,    0,       0      },  // 920 + drivers_dma(+7); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -156,7 +156,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_block",        11,    0,       0      },  // block device, ATA_PIO, AHCI
     {"drivers_pci",          16,    0,       0      },  // PCI enumeration/MSI/BARs (bounded-time test commented out)
     {"drivers_virtio",        9,    0,       0      },  // VirtIO probe/feature/queue
-    {"drivers_dma",          12,    0,       0      },  // DMA buffer/SG/PRD
+    {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
     {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
