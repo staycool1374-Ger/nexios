@@ -181,14 +181,14 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 
 | Flaw | Location | Status |
 |---|---|---|
-| FLAW-01 DmaEngine ISR/task race | dma.cpp | OPEN — spec required (§2.2) |
-| FLAW-02 PingPongDma index race | dma.cpp | OPEN (§2.2) |
-| FLAW-03 virtio-net ring races | virtio_net.cpp | OPEN (same class) |
+| FLAW-01 DmaEngine ISR/task race | dma.cpp | **RESOLVED (2026-08-16, `bf40f351`)** — IrqSpinLockGuard; callback-after-unlock from stack locals |
+| FLAW-02 PingPongDma index race | dma.cpp | **RESOLVED (2026-08-16, `bf40f351`)** — lock; start_next resolves directly; shutdown clears chain cb under lock |
+| FLAW-03 virtio-net ring races | virtio_net.cpp | **RESOLVED (2026-08-16, `a8fe7bd9`)** — lock + tx_inflight_; poll consume/recycle/advance atomic; used-snapshot-before-notify |
 | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | OPEN (§3) |
 | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | OPEN (§3) |
 | FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | OPEN (§5) |
-| FLAW-08 serial unbounded polling | serial.cpp | OPEN (§7.2) |
-| FLAW-10 keyboard unbounded drain | keyboard.cpp | OPEN (§6.4) |
+| FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
+| FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
 
 # §9 FLAW Fix Plan (v0.4.1)
 

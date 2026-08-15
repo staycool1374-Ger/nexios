@@ -57,8 +57,8 @@ See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.12 (boundary audit, P
 - [x] **BUGS.md — H2 deferred-switch race family** — RESOLVED (commits `4bf751b4` + `b85ba27d`, 2026-08-15); validated trace OFF: ipc_core 20/20 + 5/5, debug `all` 873/873 ×2, release `all` 84/84.
 - [x] **BUGS.md — `pml4_clone` CR3-corruption crash** — RESOLVED (commits `d535a853` + `60d02e49`, 2026-08-15); identity-PD save/restore + snapshot capture reorder; memory_vmm 10/10 ×4, debug `all` 873/873.
 - [x] **BUGS.md — `elf_loader` `wait_loader_idle` flake** — RESOLVED (commit `b85ba27d`, 2026-08-15); IrqGuard around the loader idle-block critical section; elf_loader 10/10 clean.
-- [ ] **docs/specs/drivers.md §8 — FLAW-01/02/03 (DmaEngine, PingPongDma, virtio-net ring data races)** — add `IrqSpinLockGuard` mutual exclusion; callbacks invoked from stack-captured locals **after** releasing the lock.
-- [ ] **FLAW-08 / FLAW-10 (serial unbounded polling, keyboard unbounded drain)** — cap to the bounded-wait discipline.
+- [x] **docs/specs/drivers.md §8 — FLAW-01/02/03 (DmaEngine, PingPongDma, virtio-net ring data races)** — RESOLVED (2026-08-16, `bf40f351` + `a8fe7bd9`); IrqSpinLockGuard mutual exclusion; callbacks invoked from stack-captured locals after releasing the lock; virtio-net TX used-snapshot-before-notify.
+- [x] **FLAW-08 / FLAW-10 (serial unbounded polling, keyboard unbounded drain)** — RESOLVED (2026-08-16, `357c62a1`); bounded to 1M iters / 16 reads with pause and drop semantics.
 
 Rationale: per AGENTS.md, no feature work is stacked on open failures; the
 remaining DMA races and unbounded polls are correctness bugs that would
