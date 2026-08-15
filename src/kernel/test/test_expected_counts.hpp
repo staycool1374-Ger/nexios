@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 896,    0,       0      },  // 886 + cap_core(+10); dump_class_counts verified
+    {"all",                 904,    0,       0      },  // 896 + cap_lifecycle(+8); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -80,6 +80,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // cap — capability-based access control (CSpace)
     {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, handle decode, revoke
+    {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip

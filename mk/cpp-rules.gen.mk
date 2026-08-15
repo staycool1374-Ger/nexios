@@ -298,6 +298,10 @@ build/kernel/test/test_ipc.o: src/kernel/test/test_ipc.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_cap_lifecycle.o: src/kernel/test/test_cap_lifecycle.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_shell_redirect.o: src/kernel/test/test_shell_redirect.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -715,6 +719,14 @@ build/kernel/driver/iocd.o: src/kernel/driver/iocd.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/random.o: src/kernel/random.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/cap/frame.o: src/kernel/cap/frame.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/cap/endpoint.o: src/kernel/cap/endpoint.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

@@ -106,4 +106,23 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept;
 /// @brief Number of occupied slots (debug/leak audit helper).
 size_t occupied_count(const CNode *cspace) noexcept;
 
+/// @brief Capability lifecycle primitives (task context only).
+///        All return -1 on failure (invalid handle, wrong type, missing
+///        rights, revoked target, full destination).  On success they install
+///        exactly one new slot and return its index.
+
+/// @brief Copies the capability at @p src_handle of @p src into @p dst.
+///        The destination slot inherits the source rights (COPY-capped).
+int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
+
+/// @brief Grants the capability at @p src_handle of @p src into @p dst.
+///        Requires CAP_RIGHT_GRANT on the source slot; clears the source
+///        GRANT right after use (mint-once semantics).
+int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
+
+/// @brief Copies the capability with a reduced rights mask and, for
+///        endpoints, a new badge.
+int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
+         uint32_t badge) noexcept;
+
 } // namespace kernel::cap

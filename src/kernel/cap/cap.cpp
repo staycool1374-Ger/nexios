@@ -170,7 +170,7 @@ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
             return nullptr;
         if (handle_gen(handle) != slot.gen)
             return nullptr; // stale handle
-        if (slot.type != want)
+        if (want != CapType::Null && slot.type != want)
             return nullptr;
         if ((slot.rights & need_rights) != need_rights)
             return nullptr;
@@ -228,6 +228,91 @@ size_t occupied_count(const CNode *cspace) noexcept {
         if (cspace->slots[i].occupied)
             ++n;
     return n;
+}
+
+/// @brief Core of copy/grant: pins the source slot target, then installs it
+///        into @p dst with @p rights.  The install takes its own acquire();
+///        the pin taken here is released on both success and failure.
+int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+                   uint32_t rights) noexcept {
+    if (!src || !dst || src == dst)
+        return -1;
+    // lookup() returns the target with acquire() already taken.
+    KernelObject *target =
+        lookup(src, src_handle, CapType::Null, 0);
+    if (!target)
+        return -1;
+    CapType type = CapType::Null;
+    uint32_t src_rights = 0;
+    uint32_t src_gen = 0;
+    {
+        SpinLockGuard<sync::SpinLock> guard(src->lock_);
+        const uint32_t idx = handle_slot(src_handle);
+        if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
+            !src->slots[idx].occupied) {
+            target->release();
+            return -1;
+        }
+        type = src->slots[idx].type;
+        src_rights = src->slots[idx].rights;
+        src_gen = src->slots[idx].gen;
+    }
+    if (src_gen != handle_gen(src_handle)) {
+        target->release();
+        return -1;
+    }
+    // Reduce the granted rights by the requested mask AND the source rights
+    // (a copy can never widen rights).
+    const uint32_t effective = rights & src_rights;
+    int installed = dst->install(target, type, effective);
+    target->release();
+    return installed;
+}
+
+int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
+    return do_copy_pinned(src, src_handle, dst, CAP_RIGHT_READ |
+                                                      CAP_RIGHT_WRITE |
+                                                      CAP_RIGHT_COPY |
+                                                      CAP_RIGHT_GRANT);
+}
+
+int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
+    // Requires CAP_RIGHT_GRANT on the source slot.
+    KernelObject *target = lookup(src, src_handle, CapType::Null,
+                                  CAP_RIGHT_GRANT);
+    if (!target)
+        return -1;
+    // Capture the type/rights under the lock, then clear GRANT (mint-once).
+    CapType type = CapType::Null;
+    uint32_t rights = 0;
+    uint32_t src_gen = 0;
+    {
+        SpinLockGuard<sync::SpinLock> guard(src->lock_);
+        const uint32_t idx = handle_slot(src_handle);
+        if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
+            !src->slots[idx].occupied) {
+            target->release();
+            return -1;
+        }
+        type = src->slots[idx].type;
+        rights = src->slots[idx].rights;
+        src_gen = src->slots[idx].gen;
+    }
+    if (src_gen != handle_gen(src_handle)) {
+        target->release();
+        return -1;
+    }
+    int installed = dst->install(target, type, rights);
+    if (installed >= 0)
+        src->clear_grant(handle_slot(src_handle));
+    target->release();
+    return installed;
+}
+
+int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
+         uint32_t badge) noexcept {
+    (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
+    return do_copy_pinned(src, src_handle, dst, rights_mask);
 }
 
 } // namespace kernel::cap
