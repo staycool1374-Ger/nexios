@@ -258,3 +258,8 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 22:43:27 selftest PASSED: 132 FAILED: 0 TIME: 31576ms
 2026-08-14 22:52:35 logging_dmesg PASSED: 15 FAILED: 0 TIME: 462ms (checker tooling only)
 2026-08-15 13:22:49 logging_dmesg PASSED: 15 FAILED: 0 TIME: 382ms
+2026-08-15 15:47:49 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 1688ms (MP-7 3 named tests; fixed child-only-entry walk)
+2026-08-15 15:50:01 process_lifecycle PASSED: 16 FAILED: 0 TIME: 617ms
+2026-08-15 15:50:31 memory_page_tables PASSED: 9 FAILED: 0 TIME: 357ms
+2026-08-15 15:49:55 task_core PASSED: 6 FAILED: 0 TIME: 376ms
+2026-08-15 15:53:12 selftest PASSED: 132 FAILED: 0 TIME: 8426ms
