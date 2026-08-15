@@ -65,7 +65,13 @@ JARVIS_TEST(stack_profiler_context_rsp_in_range, "PRE: none | POST: none") {
         delete t;
     });
     uint64_t stack_base = reinterpret_cast<uint64_t>(t->kernel_stack);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_ASSERT(t->context.rsp >= stack_base && t->context.rsp < t->kernel_stack_top);
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    JARVIS_ASSERT(t->context.sp_el0 >= stack_base && t->context.sp_el0 < t->kernel_stack_top);
+#else
+    JARVIS_ASSERT(false && "unhandled arch in stack_profiler_context_rsp_in_range");
+#endif
     JARVIS_TEST_PASS();
 }
 
@@ -88,7 +94,13 @@ JARVIS_TEST(stack_profiler_current_task_stack_valid,
     JARVIS_ASSERT(cur->kernel_stack_top > 0);
     uint64_t stack_base = reinterpret_cast<uint64_t>(cur->kernel_stack);
     uint64_t rsp;
+#if defined(CONFIG_ARCH_X86_64)
     asm volatile("mov %%rsp, %0" : "=r"(rsp));
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    asm volatile("mov %0, sp" : "=r"(rsp));
+#else
+    rsp = 0;
+#endif
     JARVIS_ASSERT(rsp >= stack_base);
     JARVIS_ASSERT(rsp < cur->kernel_stack_top);
     uint64_t cur_stack_size = cur->kernel_stack_top - stack_base;

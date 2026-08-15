@@ -57,7 +57,7 @@ namespace {
 /// @brief Wait until a task reaches a state, yielding via pause().
 inline void wait_state(TaskControlBlock &t, TaskState s) {
     while (t.state != s)
-        asm volatile("pause");
+        arch::pause();
 }
 } // namespace
 
@@ -123,7 +123,7 @@ JARVIS_TEST(mutex_try_lock_failure, "PRE: none | POST: none") {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -222,7 +222,7 @@ JARVIS_TEST(mutex_priority_inheritance_indirect, "PRE: none | POST: none") {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -248,7 +248,7 @@ JARVIS_TEST(mutex_priority_inheritance_indirect, "PRE: none | POST: none") {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -307,7 +307,7 @@ JARVIS_TEST(mutex_priority_chain, "PRE: none | POST: none") {
             mm1->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm1->unlock();
         },
         11, 10);
@@ -333,7 +333,7 @@ JARVIS_TEST(mutex_priority_chain, "PRE: none | POST: none") {
             mm2->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm2->unlock();
         },
         15, 10);
@@ -355,7 +355,7 @@ JARVIS_TEST(mutex_priority_chain, "PRE: none | POST: none") {
             auto *g = reinterpret_cast<sync::Semaphore *>(ctx->gate_);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         20, 10);
     JARVIS_ASSERT(c != nullptr);
@@ -411,7 +411,7 @@ JARVIS_TEST(mutex_waiter_priority_order, "PRE: none | POST: none") {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -436,7 +436,7 @@ JARVIS_TEST(mutex_waiter_priority_order, "PRE: none | POST: none") {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -462,7 +462,7 @@ JARVIS_TEST(mutex_waiter_priority_order, "PRE: none | POST: none") {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -577,7 +577,7 @@ JARVIS_TEST(semaphore_wait_priority_order, "PRE: none | POST: none") {
             auto *s = reinterpret_cast<sync::Semaphore *>(self->user_data);
             s->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     JARVIS_ASSERT(task_low != nullptr);
@@ -592,7 +592,7 @@ JARVIS_TEST(semaphore_wait_priority_order, "PRE: none | POST: none") {
             auto *s = reinterpret_cast<sync::Semaphore *>(self->user_data);
             s->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         14, 10);
     JARVIS_ASSERT(task_mid != nullptr);
@@ -607,7 +607,7 @@ JARVIS_TEST(semaphore_wait_priority_order, "PRE: none | POST: none") {
             auto *s = reinterpret_cast<sync::Semaphore *>(self->user_data);
             s->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             g_high_woken = 1;
         },
         20, 10);
@@ -654,7 +654,7 @@ JARVIS_TEST(semaphore_multi_waiter_partial_wake, "PRE: none | POST: none") {
                 auto *s = reinterpret_cast<sync::Semaphore *>(self->user_data);
                 s->wait();
                 while (self->state == TaskState::BLOCKED)
-                    asm volatile("pause");
+                    arch::pause();
             },
             11 + static_cast<uint64_t>(i), 10);
         JARVIS_ASSERT(tasks[i] != nullptr);
@@ -677,7 +677,7 @@ JARVIS_TEST(semaphore_multi_waiter_partial_wake, "PRE: none | POST: none") {
                 ++terminated;
         if (terminated == 3)
             break;
-        asm volatile("pause");
+        arch::pause();
     }
 
     int ready_count = 0;
@@ -718,7 +718,7 @@ JARVIS_TEST(semaphore_initial_count_zero, "PRE: none | POST: none") {
             auto *s = reinterpret_cast<sync::Semaphore *>(self->user_data);
             s->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             g_woken = 1;
         },
         11, 10);

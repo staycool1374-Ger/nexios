@@ -64,7 +64,7 @@ JARVIS_TEST(semaphore_wait_post, "PRE: none | POST: none") {
             // (INV-4); it returns immediately.  Spin until the timer ISR
             // actually suspends this task, then exit when post() wakes it.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             __atomic_store_n(&g_woken, 1, __ATOMIC_RELEASE);
         },
         11, 10);
@@ -75,7 +75,7 @@ JARVIS_TEST(semaphore_wait_post, "PRE: none | POST: none") {
 
     // The worker genuinely blocks inside sem.wait().
     while (worker->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
 
     // Wake it (real post).
@@ -115,7 +115,7 @@ JARVIS_TEST(semaphore_waiter_teardown_on_terminate,
             // (INV-4); it returns immediately.  Spin until the timer ISR
             // actually suspends this task, then exit when post() wakes it.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     JARVIS_ASSERT(worker != nullptr);
@@ -125,7 +125,7 @@ JARVIS_TEST(semaphore_waiter_teardown_on_terminate,
 
     // The worker genuinely blocks inside sem.wait() and is linked as a waiter.
     while (worker->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
     JARVIS_ASSERT(sem.waiter_count() == 1);
     JARVIS_ASSERT(worker->waiting_on_semaphore == &sem);
@@ -171,7 +171,7 @@ JARVIS_TEST(eventgroup_waiter_teardown_on_terminate,
             // immediately.  Spin until the timer ISR actually suspends this
             // task, then exit when set_bits() wakes it.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     JARVIS_ASSERT(worker != nullptr);
@@ -181,7 +181,7 @@ JARVIS_TEST(eventgroup_waiter_teardown_on_terminate,
 
     // The worker genuinely blocks inside eg.wait_bits() and is linked.
     while (worker->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
     JARVIS_ASSERT(eg.waiter_count() == 1);
     JARVIS_ASSERT(worker->waiting_on_eventgroup == &eg);
@@ -229,7 +229,7 @@ JARVIS_TEST(queue_waiter_teardown_on_terminate, "PRE: none | POST: none") {
             // INV-4: send sets BLOCKED and defers the switch; spin until the
             // timer ISR actually suspends this task.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 10);
     JARVIS_ASSERT(worker != nullptr);
@@ -240,7 +240,7 @@ JARVIS_TEST(queue_waiter_teardown_on_terminate, "PRE: none | POST: none") {
     // The worker genuinely blocks inside queue.send() and is linked as a
     // send waiter.
     while (worker->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
     JARVIS_ASSERT(queue.waiter_count() == 1);
     JARVIS_ASSERT(worker->waiting_on_queue == &queue);
@@ -298,7 +298,7 @@ JARVIS_TEST(mutex_lock_unlock, "PRE: none | POST: none") {
             // (INV-4); it returns immediately.  Spin until the timer ISR
             // actually suspends this task, then exit when post() wakes it.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -307,7 +307,7 @@ JARVIS_TEST(mutex_lock_unlock, "PRE: none | POST: none") {
     Scheduler::add_task(*owner);
     Scheduler::reschedule();
     while (owner->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     JARVIS_ASSERT(mutex.owner() == owner);
     JARVIS_ASSERT(mutex.is_locked());
@@ -333,7 +333,7 @@ JARVIS_TEST(mutex_lock_unlock, "PRE: none | POST: none") {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -344,7 +344,7 @@ JARVIS_TEST(mutex_lock_unlock, "PRE: none | POST: none") {
     Scheduler::add_task(*waiter);
     Scheduler::reschedule();
     while (waiter->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(mutex.owner() == owner);
 
     // Release: owner wakes, unlocks (direct ownership transfer to waiter).
@@ -485,7 +485,7 @@ JARVIS_TEST(sync_queue_send_blocks_when_full, "PRE: none | POST: none") {
     // can acquire the scheduler lock without contention.
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED) {
-        asm volatile("pause");
+        arch::pause();
     }
 
     // The sender genuinely blocked on the full queue (its lambda ran).
@@ -540,7 +540,7 @@ JARVIS_TEST(sync_queue_receive_blocks_when_empty, "PRE: none | POST: none") {
     // ISR can acquire the scheduler lock without contention.
     Scheduler::reschedule();
     while (receiver->state != TaskState::BLOCKED) {
-        asm volatile("pause");
+        arch::pause();
     }
 
     // The receiver genuinely blocked on the empty queue (its lambda ran).
@@ -595,7 +595,7 @@ JARVIS_TEST(sync_queue_wake_sender_on_receive, "PRE: none | POST: none") {
     // can acquire the scheduler lock without contention.
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED) {
-        asm volatile("pause");
+        arch::pause();
     }
     JARVIS_ASSERT(sender->state == TaskState::BLOCKED);
 

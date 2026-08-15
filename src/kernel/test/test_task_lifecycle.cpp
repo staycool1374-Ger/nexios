@@ -86,7 +86,7 @@ JARVIS_TEST(task_exit_cleans_all_ipc_objects, "PRE: none | POST: none") {
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     while (t->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
 
     // terminate() only marks the task as a zombie; the real drain runs
     // cleanup() + MemPool::free().  The reclaimed TCB must not be
@@ -155,17 +155,17 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
 
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Dispatch the receiver → real terminate → the drain runs cleanup, whose
     // MessageQueue destructor wakes the blocked sender.
     Scheduler::reschedule();
     while (receiver->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     Scheduler::drain_zombie_list();
     while (sender->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     Scheduler::drain_zombie_list();
 
     // The woken sender completed its send against the dead receiver.
@@ -224,7 +224,7 @@ JARVIS_TEST(task_reparent_preserves_resources, "PRE: none | POST: none") {
     }
     Scheduler::reschedule();
     while (parent->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
 
     // The self-terminated parent is a zombie; reclaim it with the real drain.
     Scheduler::drain_zombie_list();
@@ -252,7 +252,7 @@ JARVIS_TEST(task_zombie_state_cleanup, "PRE: none | POST: none") {
 
     Scheduler::reschedule();
     while (t->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
 
     uint64_t tcb_id = t->id;
     // terminate() → release_zombie() already removed the TCB from the id
@@ -293,9 +293,9 @@ JARVIS_TEST(scheduler_reap_respects_parent_wait, "PRE: none | POST: none") {
     Scheduler::reschedule();
     while (parent->state != TaskState::BLOCKED &&
            parent->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     while (parent->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
 
     bool child_removed = Scheduler::find_task(ctx.child_id_) == nullptr;
     if (!child_removed) {
@@ -356,7 +356,7 @@ JARVIS_TEST(lifecycle_zombie_no_waker, "PRE: none | POST: none") {
     uint64_t tid = tcb->id;
     Scheduler::reschedule();
     while (tcb->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
 
     // terminate() → release_zombie() already removed the TCB from the live
     // table; the zombie drain reclaims it.
@@ -421,17 +421,17 @@ JARVIS_TEST(task_cleanup_frees_msg_queue_with_blocked_senders,
 
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Dispatch the receiver → real terminate → the drain runs cleanup, whose
     // MessageQueue destructor frees the queue and wakes the blocked sender.
     Scheduler::reschedule();
     while (receiver->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     Scheduler::drain_zombie_list();
     while (sender->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     Scheduler::drain_zombie_list();
 
     JARVIS_ASSERT_EQ(0ULL, send_result);

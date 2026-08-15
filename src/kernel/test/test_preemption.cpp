@@ -135,7 +135,7 @@ JARVIS_TEST(preemption_needs_switch_blocked_higher, "PRE: none | POST: none") {
     Scheduler::reschedule();
     while (parent->state != TaskState::BLOCKED &&
            parent->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(parent->state == TaskState::BLOCKED);
 
     bool result = Scheduler::needs_switch();

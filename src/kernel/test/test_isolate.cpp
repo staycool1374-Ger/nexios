@@ -52,6 +52,22 @@ extern char _stack_end[];
 
 namespace kernel::test {
 
+/// @brief Read the current stack pointer (portable across arches).
+/// @return Current SP (kernel stack pointer for the running context).
+static inline uint64_t current_sp() {
+#if defined(__x86_64__)
+    uint64_t sp{};
+    asm volatile("mov %%rsp, %0" : "=r"(sp));
+    return sp;
+#elif defined(__aarch64__) || defined(__riscv)
+    uint64_t sp{};
+    asm volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#else
+    return 0;
+#endif
+}
+
 #ifdef __x86_64__
 #define TASK_STACK_PTR(t) ((t)->context.rsp)
 #elif defined(__aarch64__)
@@ -943,7 +959,7 @@ void snapshot_restore(const char *test_name) {
     {
         uint64_t cur_rsp;
         bool found = false;
-        asm volatile("mov %%rsp, %0" : "=r"(cur_rsp));
+        cur_rsp = current_sp();
         for (uint64_t i = 0; i < Scheduler::task_count(); ++i) {
             auto *t = Scheduler::task_at(i);
             if (t && t->magic == TaskControlBlock::TCB_MAGIC &&
@@ -982,8 +998,7 @@ void snapshot_restore(const char *test_name) {
             *reinterpret_cast<uint64_t *>(g_snapshot + kstack_hdr_off);
         uint8_t *in = g_snapshot + kstack_hdr_off + sizeof(uint64_t);
         auto *current = Scheduler::current_task();
-        uint64_t cur_rsp;
-        asm volatile("mov %%rsp, %0" : "=r"(cur_rsp));
+        uint64_t cur_rsp = current_sp();
         for (uint64_t i = 0; i < num_kstacks; ++i) {
             uint64_t saved_kstack = *reinterpret_cast<uint64_t *>(in);
             uint64_t saved_size =
@@ -1069,8 +1084,7 @@ void snapshot_restore(const char *test_name) {
     // stack slot, not a real interrupt frame) -> #GP.  Correct it to the live
     // RSP and make current_task_ptr_ track the real running task.
     {
-        uint64_t live_rsp;
-        asm volatile("mov %%rsp, %0" : "=r"(live_rsp));
+        uint64_t live_rsp = current_sp();
         for (uint64_t i = 0; i < Scheduler::task_count(); ++i) {
             auto *t = Scheduler::task_at(i);
             if (!t || t->magic != TaskControlBlock::TCB_MAGIC)

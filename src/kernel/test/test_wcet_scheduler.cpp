@@ -84,7 +84,7 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
                 // BLOCKED.  Spin on our own BLOCKED state so the harness can
                 // observe it; gate.post() wakes us and we return + terminate.
                 while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                    asm volatile("pause");
+                    arch::pause();
             },
             11, 2);
         if (t == nullptr)
@@ -108,7 +108,7 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
     Scheduler::reschedule();
     for (uint64_t k = 0; k < made; ++k) {
         while (tasks[k]->state != TaskState::BLOCKED)
-            asm volatile("pause");
+            arch::pause();
     }
 
     // --- Measure worst-case scan cycles over the real overrun population.
@@ -137,7 +137,7 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
     for (uint64_t k = 0; k < made; ++k) {
         while (TaskControlBlock::is_valid(tasks[k]) &&
                tasks[k]->state != TaskState::TERMINATED)
-            asm volatile("pause");
+            arch::pause();
     }
 
     JARVIS_TEST_PASS();

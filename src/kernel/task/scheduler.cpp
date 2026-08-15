@@ -52,6 +52,22 @@ extern "C" void debug_write_dec(uint64_t value);
 #elif defined(CONFIG_ARCH_RISCV64)
 #define TASK_STACK_PTR(t) ((t)->context.sp)
 #endif
+
+/// @brief Read the current stack pointer (portable across arches).
+/// @return Current SP (kernel stack pointer for the running context).
+static inline uint64_t current_sp() noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t sp{};
+    asm volatile("mov %%rsp, %0" : "=r"(sp));
+    return sp;
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    uint64_t sp{};
+    asm volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#else
+    return 0;
+#endif
+}
 #include <kernel/task/sporadic_server.hpp>
 #include <signal.hpp>
 #include <logger.hpp>
@@ -1192,7 +1208,7 @@ void Scheduler::on_tick() noexcept {
         // freezes QEMU with the full serial evidence (no brute-forcing).
         {
             uint64_t phys_rsp{};
-            asm volatile("mov %%rsp, %0" : "=r"(phys_rsp));
+            phys_rsp = current_sp();
             const uint64_t save_to = reinterpret_cast<uint64_t>(
                 __atomic_load_n(&scheduler_save_rsp_to, __ATOMIC_ACQUIRE));
 
@@ -1547,7 +1563,7 @@ void Scheduler::on_tick() noexcept {
                         }
 #endif
                         uint64_t rsp{};
-                        asm volatile("mov %%rsp, %0" : "=r"(rsp));
+                        rsp = current_sp();
                         uint64_t base =
                             reinterpret_cast<uint64_t>(cur->kernel_stack);
                         if (cur->kernel_stack && cur->kernel_stack_top &&
@@ -1996,7 +2012,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     bool cur_is_boot_stack = false;
     {
         uint64_t cur_rsp{};
-        asm volatile("mov %%rsp, %0" : "=r"(cur_rsp));
+        cur_rsp = current_sp();
         TaskControlBlock *owner = nullptr;
         const uint64_t cbase = reinterpret_cast<uint64_t>(current->kernel_stack);
         const bool cur_in_own_stack =
@@ -2246,7 +2262,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             // current task continue (the bad task stays queued and is retried
             // once it has a real iret frame).
             uint64_t phys_rsp{};
-            asm volatile("mov %%rsp, %0" : "=r"(phys_rsp));
+            phys_rsp = current_sp();
             uint64_t nb = reinterpret_cast<uint64_t>(next.kernel_stack);
             bool next_is_runner =
                 (&next == current) ||
@@ -2836,7 +2852,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
     uint64_t harness_live_rsp = 0;
     if (harness && harness->magic == TaskControlBlock::TCB_MAGIC &&
         harness == Scheduler::current_task()) {
-        asm volatile("mov %%rsp, %0" : "=r"(harness_live_rsp));
+        harness_live_rsp = current_sp();
     }
 
     uint64_t t_idx = 0;
@@ -3138,7 +3154,7 @@ wcet_overrun_handler(TaskControlBlock *task,
 extern "C" void scheduler_diag_pre_save() {
 #ifdef CONFIG_DEBUG
     uint64_t rsp{};
-    asm volatile("mov %%rsp, %0" : "=r"(rsp));
+    rsp = current_sp();
     auto *cur = kernel::Scheduler::current_task();
     auto cidx = kernel::Scheduler::current_index();
     if (cur && cur->magic == kernel::TaskControlBlock::TCB_MAGIC) {
@@ -3152,7 +3168,7 @@ extern "C" void scheduler_diag_pre_save() {
             kernel::Logger::raw_write(" cur_rsp=0x");
             kernel::Logger::print_hex(rsp);
             kernel::Logger::raw_write(" ctx_rsp=0x");
-            kernel::Logger::print_hex(cur->context.rsp);
+            kernel::Logger::print_hex(TASK_STACK_PTR(cur));
             kernel::Logger::raw_write(" state=");
             kernel::Logger::print_dec(static_cast<uint64_t>(cur->state));
             kernel::Logger::raw_write(" kstack=[0x");

@@ -129,7 +129,7 @@ TEST_CLASS(DeadlineMissWithinWcet) {
             // INV-4: wait() sets BLOCKED then returns (deferred switch).  Spin
             // on BLOCKED so the harness observes it before self-termination.
             while (Scheduler::current_task()->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         11, 2);
     CT_ASSERT(helper != nullptr);
@@ -138,7 +138,7 @@ TEST_CLASS(DeadlineMissWithinWcet) {
     Scheduler::add_task(*helper);
     Scheduler::reschedule();
     while (helper->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // Deadline genuinely passed while the task was running/blocked.
     kernel::test::trigger_deadline_monitor_scan();

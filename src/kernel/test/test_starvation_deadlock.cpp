@@ -82,7 +82,7 @@ TEST_CLASS(SchedulerStarvation) {
             (TaskControlBlock::is_valid(high) &&
              high->state != TaskState::TERMINATED)) &&
            arch::Timer::ticks() - start < 2000)
-        asm volatile("pause");
+        arch::pause();
 
     // NOTE: In a strict RM scheduler without aging, low may starve — this
     // documents current behaviour.  If g_starvation_counter == 0, starvation
@@ -156,7 +156,7 @@ TEST_CLASS(PriorityInversionChain5) {
             // actually suspends this task, then exit when post() wakes it
             // (state no longer BLOCKED).  Mirrors ipc.cpp blocking idiom.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm1->unlock();
         },
         11, 10);
@@ -165,7 +165,7 @@ TEST_CLASS(PriorityInversionChain5) {
     Scheduler::add_task(*a);
     Scheduler::reschedule();
     while (a->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(m1.owner() == a);
 
     // B: holds M2, blocks on gate_b.
@@ -184,7 +184,7 @@ TEST_CLASS(PriorityInversionChain5) {
             mm2->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm2->unlock();
         },
         15, 10);
@@ -193,7 +193,7 @@ TEST_CLASS(PriorityInversionChain5) {
     Scheduler::add_task(*b);
     Scheduler::reschedule();
     while (b->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(m2.owner() == b);
     CT_ASSERT(b->state == TaskState::BLOCKED);
 
@@ -209,7 +209,7 @@ TEST_CLASS(PriorityInversionChain5) {
             auto *g = reinterpret_cast<sync::Semaphore *>(ctx->gate_);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
         },
         20, 10);
     CT_ASSERT(c != nullptr);
@@ -217,7 +217,7 @@ TEST_CLASS(PriorityInversionChain5) {
     Scheduler::add_task(*c);
     Scheduler::reschedule();
     while (c->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // All three genuinely blocked — the chain is live.
     CT_ASSERT(a->state == TaskState::BLOCKED);
@@ -289,7 +289,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
             // actually suspends this task, then exit when post() wakes it
             // (state no longer BLOCKED).  Mirrors ipc.cpp blocking idiom.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m2->unlock();
             m1->unlock();
             m0->unlock();
@@ -300,7 +300,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
     Scheduler::add_task(*holder);
     Scheduler::reschedule();
     while (holder->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(mtx[0].owner() == holder);
     CT_ASSERT(mtx[1].owner() == holder);
     CT_ASSERT(mtx[2].owner() == holder);
@@ -321,7 +321,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -332,7 +332,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
     Scheduler::add_task(*c1);
     Scheduler::reschedule();
     while (c1->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(c1->state == TaskState::BLOCKED);
 
     // Contender2 blocks on gate_c2, then acquires M0 after the holder
@@ -351,7 +351,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -362,7 +362,7 @@ TEST_CLASS(DeadlockNestedMutexLoad) {
     Scheduler::add_task(*c2);
     Scheduler::reschedule();
     while (c2->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(c2->state == TaskState::BLOCKED);
 
     // All genuinely blocked — the contention is live.

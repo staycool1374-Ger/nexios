@@ -257,3 +257,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-14 22:43:27 logging_klog PASSED: 8 FAILED: 0 TIME: 330ms
 2026-08-14 22:43:27 selftest PASSED: 132 FAILED: 0 TIME: 31576ms
 2026-08-14 22:52:35 logging_dmesg PASSED: 15 FAILED: 0 TIME: 462ms (checker tooling only)
+2026-08-15 13:22:49 logging_dmesg PASSED: 15 FAILED: 0 TIME: 382ms

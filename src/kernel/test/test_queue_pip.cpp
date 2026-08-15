@@ -66,7 +66,7 @@ TaskControlBlock *spawn_queue_task(sync::Queue &queue, uint64_t prio,
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     while (t->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     return t;
 }
 

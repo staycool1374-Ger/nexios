@@ -552,7 +552,7 @@ JARVIS_TEST(ipc_block_sender_adds_to_list, "PRE: none | POST: none") {
 
     // Wait for the real block inside IPC::send().
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == sender);
@@ -615,7 +615,7 @@ JARVIS_TEST(ipc_wake_sender_removes_from_list, "PRE: none | POST: none") {
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Release the receiver: its IPC::recv pops one → wake_sender removes the
@@ -680,7 +680,7 @@ JARVIS_TEST(ipc_wake_sender_terminated, "PRE: none | POST: none") {
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Release the receiver: empty lambda → trampoline terminates it → drain
@@ -745,7 +745,7 @@ JARVIS_TEST(ipc_wake_sender_restores_priority, "PRE: none | POST: none") {
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     // The receiver is boosted while a higher-priority sender is blocked.
     JARVIS_ASSERT(receiver->priority >= sender->priority);
@@ -808,7 +808,7 @@ JARVIS_TEST(ipc_send_block_full, "PRE: none | POST: none") {
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(sender->state == TaskState::BLOCKED);
 
     // Release the receiver: its IPC::recv drains one message → the blocked
@@ -954,7 +954,7 @@ JARVIS_TEST(ipc_sender_unblocked_on_receiver_exit, "PRE: none | POST: none") {
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == sender);
 
     // Release the receiver → real termination + cleanup.
@@ -1011,7 +1011,7 @@ JARVIS_TEST(ipc_send_wakes_blocked_destination, "PRE: none | POST: none") {
 
     // Wait until the receiver genuinely blocks in send_sync (reply_wait).
     while (receiver->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     JARVIS_ASSERT(receiver->reply_wait);
 
     // The harness is the request peer: deliver the reply to the blocked

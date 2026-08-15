@@ -83,6 +83,31 @@ class ArchPageTable {
     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
     static constexpr uint64_t ENTRIES = 512;
 
+    /// @brief L0 (PML4-equivalent) index for a virtual address.
+    /// @param[in] vaddr Virtual address.
+    /// @return Index into the L0 table (bits 47:39).
+    static inline size_t pml4_index(uint64_t vaddr) {
+        return (vaddr >> L0_SHIFT) & TABLE_MASK;
+    }
+    /// @brief L1 (PDPT-equivalent) index for a virtual address.
+    /// @param[in] vaddr Virtual address.
+    /// @return Index into the L1 table (bits 38:30).
+    static inline size_t pdpt_index(uint64_t vaddr) {
+        return (vaddr >> L1_SHIFT) & TABLE_MASK;
+    }
+    /// @brief L2 (PD-equivalent) index for a virtual address.
+    /// @param[in] vaddr Virtual address.
+    /// @return Index into the L2 table (bits 29:21).
+    static inline size_t pd_index(uint64_t vaddr) {
+        return (vaddr >> L2_SHIFT) & TABLE_MASK;
+    }
+    /// @brief L3 (PT-equivalent) index for a virtual address.
+    /// @param[in] vaddr Virtual address.
+    /// @return Index into the L3 table (bits 20:12).
+    static inline size_t pt_index(uint64_t vaddr) {
+        return (vaddr >> L3_SHIFT) & TABLE_MASK;
+    }
+
     /// @brief Map a 4 KiB page or 2 MiB block at a given virtual address.
     /// @param[in] virt Virtual address.
     /// @param[in] phys Physical address.

@@ -266,7 +266,7 @@ JARVIS_TEST(scheduler_waitpid_wakes_parent,
     Scheduler::reschedule();
     while (parent->state != TaskState::BLOCKED &&
            parent->state != TaskState::TERMINATED)
-        asm volatile("pause");
+        arch::pause();
     kernel::test::wait_for_termination_safe(parent);
     bool child_removed = Scheduler::find_task(context.child_id_) == nullptr;
     if (!child_removed) {

@@ -69,7 +69,7 @@ TaskControlBlock *spawn_ceiling_holder(sync::Mutex &m1, sync::Mutex &m2,
             // actually suspends this task, then exit when post() wakes it
             // (state no longer BLOCKED).  Mirrors ipc.cpp blocking idiom.
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             mm2->unlock();
             mm1->unlock();
         },
@@ -80,7 +80,7 @@ TaskControlBlock *spawn_ceiling_holder(sync::Mutex &m1, sync::Mutex &m2,
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     while (t->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     return t;
 }
 
@@ -161,7 +161,7 @@ TEST_CLASS(PcpCeilingDisabled) {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -170,7 +170,7 @@ TEST_CLASS(PcpCeilingDisabled) {
     Scheduler::add_task(*low);
     Scheduler::reschedule();
     while (low->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(mutex.owner() == low);
 
     // HIGH (prio 20) blocks on its gate; it acquires the mutex only after
@@ -189,7 +189,7 @@ TEST_CLASS(PcpCeilingDisabled) {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -200,7 +200,7 @@ TEST_CLASS(PcpCeilingDisabled) {
     Scheduler::add_task(*high);
     Scheduler::reschedule();
     while (high->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     CT_ASSERT(high->state == TaskState::BLOCKED);
 
@@ -248,7 +248,7 @@ TEST_CLASS(PcpPipFallback) {
             m->lock();
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->unlock();
         },
         11, 10);
@@ -257,7 +257,7 @@ TEST_CLASS(PcpPipFallback) {
     Scheduler::add_task(*low);
     Scheduler::reschedule();
     while (low->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
     CT_ASSERT(mutex.owner() == low);
 
     // HIGH (prio 20) blocks on its gate, then acquires the freed mutex.
@@ -275,7 +275,7 @@ TEST_CLASS(PcpPipFallback) {
             auto *acq = reinterpret_cast<uint64_t *>(s[2]);
             g->wait();
             while (self->state == TaskState::BLOCKED)
-                asm volatile("pause");
+                arch::pause();
             m->lock();
             __atomic_store_n(acq, 1, __ATOMIC_RELEASE);
             m->unlock();
@@ -286,7 +286,7 @@ TEST_CLASS(PcpPipFallback) {
     Scheduler::add_task(*high);
     Scheduler::reschedule();
     while (high->state != TaskState::BLOCKED)
-        asm volatile("pause");
+        arch::pause();
 
     CT_ASSERT(high->state == TaskState::BLOCKED);
 
