@@ -119,6 +119,12 @@ feeds must be re-validated** (check-config cross-check).
 3 KILL (defer_kill)    4 NOTIFY_MONITOR (SIGUSR1)
 ```
 
+### 1.11 Capabilities (CSpace) — v0.4.1
+| Tuner | Default | Meaning |
+|---|---|---|
+| `CONFIG_CSLOT_COUNT` | 64 | slots per CNode (the task's root CNode is its CSpace); power of two preferred — slot-index bits are carved from the capability handle |
+| `CONFIG_CAP_MAX_DEPTH` | 8 | cascade-revoke depth bound; the revoke walk is iterative (explicit work list), never unbounded recursion |
+
 ## 2. The Matrix Runners
 
 ### 2.1 `run_config_matrix.sh` — 48 meaningful deadline/WCET combos

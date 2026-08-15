@@ -1,6 +1,8 @@
 # CSpace — Capability-Based Access Control Architecture (v0.4.1)
 
-**Status:** DRAFT (planning phase, no code)
+**Status:** IMPLEMENTED (2026-08-15) — iteration-1 CSpace core, lifecycle
+primitives, SYS_CAP_* syscalls and capability-gated IPC/frame mapping are
+landed and green.  Untyped/IRQ/MMIO caps deferred to v0.4.2+ (see §2.6).
 **Build:** v0.4.1-dev (post v0.4.0 release)
 **Owner:** kernel core (scheduler/IPC/memory/syscall)
 **ROADMAP source:** §"Active Development — v0.4.1" + §Phase 4.6 (0.4.1 items 1–3)
@@ -275,3 +277,47 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 - [ ] ROADMAP §"Version guide" note: capability-complete security at v1.0.0 still requires IRQ/MMIO/Untyped caps (0.4.2+) — this milestone is the foundation, not the completion, of ambient-authority elimination.
 
 **Counts summary:** +32 tests (10+8+8+6) → `all` 886 → **918**. Release/safe counts unchanged (84/132) unless release-marked cap smoke tests are deliberately added in Phase 5.
+
+---
+
+## 6. Implementation Log (v0.4.1)
+
+All five phases landed 2026-08-15. Final gates: debug `all` 905/905 executed
+(920 registered), release `all` 84/84, selftest 132/132, `make check-style`
+0 errors.
+
+- **Phase 1** (`f58be694`) — `src/kernel/cap/cap_types.{hpp}`, `cap.{hpp,cpp}`:
+  `CNode` (shared-heap KernelObject), `install`/`remove`/`peek`/`slot_gen`/
+  `clear_grant`, handle encode/decode, `lookup()` (pins via acquire, treats
+  `CapType::Null` as a type wildcard), `revoke()` (iterative cascade,
+  depth-bounded by `CONFIG_CAP_MAX_DEPTH`), `occupied_count`.  TCB gains
+  `cspace_` root-CNode read cache + `ensure_cspace()` (lazy, attached to the
+  intrusive object list).  `nexios_config.h`: `CONFIG_CSLOT_COUNT`=64,
+  `CONFIG_CAP_MAX_DEPTH`=8.  ResourceTracker: `cap_objects`/`cap_slots`.
+  Class `cap_core` (10 tests).
+- **Phase 2** (`f1270468`) — `endpoint.{hpp,cpp}`, `frame.{hpp,cpp}`:
+  `Endpoint` (heap-resident `MessageQueue` + `bound_receiver` + `badge`),
+  `FrameCap` (owns PMM frames, `dispose()` frees them).  `cap::copy/grant/
+  mint` lifecycle primitives (grant consumes source GRANT mint-once; mint
+  reduces rights; copy never widens).  `CNode::dispose()` guards
+  `MemPool::free` with `is_pool_backed()`.  Class `cap_lifecycle` (8 tests).
+- **Phase 3** (`ec710192`) — `SYS_CAP_GRANT`=51, `SYS_CAP_COPY`=52,
+  `SYS_CAP_REVOKE`=53, `SYS_CAP_MINT`=54, `MAX_SYSCALL`=55;
+  `syscall_handlers_cap.cpp` (destination CNode addressed by a CapCNode
+  handle in the caller's own CSpace; GRANT/COPY rights enforced; no
+  blocking).  Class `cap_syscall` (8 tests).
+- **Phase 4** (`ed6c57a1`) — `IPC::send_via_cap`/`recv_via_cap` (endpoint
+  transport, refuses a revoked endpoint, wakes bound receiver, blocks on
+  full queue), `VMM::map_frame_from_cap`/`unmap_frame_from_cap` (refuses a
+  revoked cap).  Class `cap_ipc` (6 tests).
+- **Phase 5** — registry rows + counts (`all` 920), full gates above.
+
+**Deviations from the plan (all recorded):**
+- `all` registered count is **920**, not the estimated 918 — the pre-CSpace
+  baseline was 888 (the plan's 886 figure predated the last pre-release
+  additions); executed count under the harness filter is 905.
+- `CapType::Null` doubles as a lookup wildcard so grant/copy/mint can
+  duplicate any capability type.
+- The dest CNode for grant/copy/mint is addressed by a CapCNode handle in
+  the caller's own CSpace (requires holding a CNode cap), not an ambient
+  cspace id.

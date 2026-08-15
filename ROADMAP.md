@@ -15,9 +15,17 @@ all RESOLVED (debug `all` 873/873, release `all` 84/84, selftest 132/132).
 Details in `ROADMAP_done.md` §"Active Development — v0.4.0".
 
 v0.4.1 work:
-- **KernelObject Shared-Reference-Count Foundation** — 0.4.1 CSpace
-  prerequisite.
-- **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
+- [x] **KernelObject Shared-Reference-Count Foundation** — already landed
+  (`kernel_object.hpp`, pre-v0.4.1).
+- [x] **CSpace Capability-Based Access Control** — iteration-1 IMPLEMENTED
+  (2026-08-15): `CNode`/`CSlot`/handle decode, `cap::copy/grant/mint/revoke`,
+  `SYS_CAP_GRANT/COPY/REVOKE/MINT` (51–54), `Endpoint`/`FrameCap` objects,
+  capability-gated IPC + frame mapping.  See `docs/specs/cspace.md`.
+  Gates: debug `all` 905/905, release `all` 84/84, selftest 132/132.
+- [ ] **Untyped memory allocator (seL4-style retype)** — 0.4.1 item 3,
+  DEFERRED to v0.4.2+ (design sketch in `docs/specs/cspace.md` §2.6; requires
+  `CONFIG_CAP_MAX_UNTYPED` + RegionAllocator).
+- [ ] **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
   requires an aarch64 boot path + test class before it can be enabled.
 
 
@@ -59,9 +67,9 @@ corrupt capability, IPC and driver work built on top of them.
 ### Phase 4.6: Microkernel Primitives & Capability Foundation (0.4.x) — prerequisite for 0.7.x Microkernel Transition
 
 #### 0.4.1 — Capability-Based Access Control Architecture (CSpace)
-- [ ] **Capability System Specification** — Design object capability structures (CNode, CSlot, CSpace) for tasks, IPC endpoints, physical memory frames, Untyped memory, IRQ controls, and MMIO ranges (eliminating ambient authority).
-- [ ] **Capability Lifecycle Primitives** — Implement `SYS_CAP_GRANT`, `SYS_CAP_REVOKE`, `SYS_CAP_MINT`, and `SYS_CAP_COPY` system calls with deterministic reference-counted cleanup.
-- [ ] **Untyped Memory Allocator (seL4-style)** — Transition physical allocation away from direct PMM calls to explicit Untyped memory retyping (`Untyped.Retype` into Frame, PageTable, CNode, or Endpoint capabilities).
+- [x] **Capability System Specification** — CNode/CSlot/CSpace structures for tasks, IPC endpoints, physical memory frames (iteration-1 scope); Untyped/IRQ/MMIO caps designed in `docs/specs/cspace.md` §2.6 and deferred to 0.4.2+.
+- [x] **Capability Lifecycle Primitives** — `SYS_CAP_GRANT`, `SYS_CAP_COPY`, `SYS_CAP_REVOKE`, `SYS_CAP_MINT` (51–54) with deterministic reference-counted cleanup (ResourceTracker-gated).
+- [ ] **Untyped Memory Allocator (seL4-style)** — Transition physical allocation away from direct PMM calls to explicit Untyped memory retyping (`Untyped.Retype` into Frame, PageTable, CNode, or Endpoint capabilities). DEFERRED to 0.4.2+.
 
 #### 0.4.2 — User-Space Driver Infrastructure & Hardware Isolation
 - [ ] **User-Space IRQ Delivery System** — Hardware IRQ dispatcher that transforms incoming interrupts into Capability-backed IPC Notifications (`sys_irq_register` / `sys_irq_wait`) to eliminate Ring 0 driver execution.

@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 918,    0,       0      },  // 912 + cap_ipc(+6); dump_class_counts verified
+    {"all",                 920,    0,       0      },  // 888 + cap_core(+10) + cap_lifecycle(+8) + cap_syscall(+8) + cap_ipc(+6); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
