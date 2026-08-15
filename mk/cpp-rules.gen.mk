@@ -430,6 +430,10 @@ build/kernel/test/test_vfsd_auth.o: src/kernel/test/test_vfsd_auth.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_cap_ipc.o: src/kernel/test/test_cap_ipc.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_iocd.o: src/kernel/test/test_iocd.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@

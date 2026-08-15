@@ -31,6 +31,10 @@
 
 namespace kernel {
 
+namespace cap {
+class FrameCap;
+}
+
 /// @brief Virtual memory manager — maps virtual to physical pages.
 /// @note Page-walk depth is fixed per architecture (4 levels for
 /// x86_64/aarch64,
@@ -149,6 +153,23 @@ class VMM {
     /// @param pml4_phys Physical address of the user PML4.
     /// @return VmmError code.
     static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
+
+    /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.
+    ///        Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping
+    ///        capability-gated memory requires a live, non-revoked cap.
+    /// @param fc        The FrameCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address (page-aligned).
+    /// @param user      If true, sets user-accessible flag.
+    /// @param pml4_phys Physical address of the target PML4.
+    /// @return true when every frame was mapped, false on a revoked cap or
+    ///         a zero frame.
+    static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
+                                   bool user, uint64_t pml4_phys);
+
+    /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+    /// @param virt_addr Virtual address to unmap.
+    /// @param pml4_phys Physical address of the target PML4.
+    static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
 
     /// @brief Translates a virtual address to a physical address
     /// using a specific PML4.

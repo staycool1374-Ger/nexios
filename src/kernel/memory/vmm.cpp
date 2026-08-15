@@ -18,6 +18,7 @@
 
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/cap/frame.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/io.hpp>
 #include <constants.hpp>
@@ -1194,6 +1195,28 @@ VmmError VMM::virt_to_phys_in_pml4_err(uint64_t virt_addr, uint64_t pml4_phys,
     }
     out_phys_addr = virt_to_phys_in_pml4(virt_addr, pml4_phys);
     return out_phys_addr != 0 ? VMM_ERR_OK : VMM_ERR_NOT_MAPPED;
+}
+
+/// @brief Maps every frame owned by a FrameCap into @p pml4_phys.
+///        Refuses a revoked cap — capability-gated memory must not map after
+///        revocation (ROADMAP 0.4.1 CSpace).  The caller must hold a pin
+///        (ScopedRef / live capability slot) on @p fc.
+bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
+                             uint64_t pml4_phys) {
+    if (!fc || fc->revoked())
+        return false;
+    if (fc->phys == 0 || fc->count == 0)
+        return false;
+    for (size_t i = 0; i < fc->count; ++i) {
+        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
+                         fc->phys + i * arch::PAGE_SIZE, user, pml4_phys);
+    }
+    return true;
+}
+
+/// @brief Unmaps one page previously mapped via map_frame_from_cap().
+void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
+    map_page_in_pml4(virt_addr, 0, false, pml4_phys);
 }
 
 } // namespace kernel

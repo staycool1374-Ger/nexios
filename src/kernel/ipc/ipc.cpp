@@ -22,6 +22,7 @@
 
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/cap/endpoint.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/debug/ipc_sched_trace.hpp>
 #include <kernel/arch/io.hpp>
@@ -267,6 +268,69 @@ bool IPC::recv(Message &msg) {
         wake_sender(cur->msg_queue, *cur);
     }
     return ok;
+}
+
+/// @brief Send through a capability-gated endpoint.  The endpoint's message
+///        queue is the transport (no task-ID ambient authority).  Blocks on a
+///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
+bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
+    if (!ep)
+        return false;
+    if (ep->revoked())
+        return false; // revoked endpoint refuses sends (CSpace revocation)
+
+    if (ep->q.is_full_locked()) {
+        if (flags & IPC_NONBLOCK)
+            return false;
+        auto *cur = Scheduler::current_task();
+        if (!cur)
+            return false;
+        block_sender(ep->q, *cur);
+        Scheduler::reschedule();
+        if (arch::interrupts_enabled()) {
+            while (cur->state == TaskState::BLOCKED) {
+                arch::pause();
+            }
+        } else {
+            unblock_sender_rollback(ep->q, *cur);
+            return false;
+        }
+        if (ep->q.is_full())
+            return false;
+    }
+
+    Message m = msg;
+    m.sender_id = Scheduler::current_task()
+                      ? Scheduler::current_task()->id
+                      : 0;
+    if (!ep->q.push(m))
+        return false;
+
+    TaskControlBlock *receiver = nullptr;
+    {
+        SpinLockGuard<sync::SpinLock> guard(ep->lock_);
+        receiver = ep->bound_receiver;
+    }
+    if (receiver && receiver->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*receiver);
+        receiver->remaining_ticks = receiver->period_ticks;
+    }
+    return true;
+}
+
+/// @brief Receive from a capability-gated endpoint into the calling task's
+///        own queue.  Non-blocking: returns false on an empty endpoint queue.
+bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
+    if (!ep)
+        return false;
+    if (!ep->q.pop(msg))
+        return false;
+    if (ep->q.blocked_senders_head) {
+        auto *cur = Scheduler::current_task();
+        if (cur)
+            wake_sender(ep->q, *cur);
+    }
+    return true;
 }
 
 /// @brief Send and block until a reply arrives (client-side synchronous IPC).
