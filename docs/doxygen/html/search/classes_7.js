@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['logger_0',['Logger',['../classkernel_1_1_logger.html',1,'kernel']]]
+  ['kernelobject_0',['KernelObject',['../classkernel_1_1_kernel_object.html',1,'kernel']]]
 ];

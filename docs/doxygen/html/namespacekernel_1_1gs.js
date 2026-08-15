@@ -1,0 +1,46 @@
+var namespacekernel_1_1gs =
+[
+    [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ],
+    [ "StatePhase", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaa", [
+      [ "PRE_BOOT", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaab72a24f2df728fea75ea045bd9bafb0f", null ],
+      [ "BOOT", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaadf9a77cdc2fe29972274b189cf7bac7c", null ],
+      [ "RUNNING", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaa43491564ebcfd38568918efbd6e840fd", null ],
+      [ "TEST", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaa033bd94b1168d7e4f0d644c3c95e35bf", null ]
+    ] ],
+    [ "WriteClass", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d", [
+      [ "BOOT_ONLY", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da39011adc09da886676a1e7e4627c8be6", null ],
+      [ "IDEMPOTENT", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da8ef015b84e48ca7113b3c542964d2fdd", null ],
+      [ "OWNER_ONLY", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495dac0ffba7d4da134eadd8cd0f85500b94e", null ],
+      [ "RANGE_CHECKED", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da108d6eb191befa63180ccd429598b333", null ],
+      [ "NEVER_WRITE", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495da02c1dcf9d4370b9359a2152eb3c55b79", null ],
+      [ "PLAIN", "namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495daf62eb0bf5e5c72e80983fbbac1cb70e5", null ]
+    ] ],
+    [ "audit_write", "namespacekernel_1_1gs.html#ab51828f4c0e2fb5d5432283ea644eec7", null ],
+    [ "boot_info", "namespacekernel_1_1gs.html#a99803c705efa5830cf47e3773c2a7fa1", null ],
+    [ "canary_trip", "namespacekernel_1_1gs.html#a4152e958cb714dc370bc870027fefdc9", null ],
+    [ "get_boot_epoch", "namespacekernel_1_1gs.html#a9cf2ee789ef1c2659145df7cb409105a", null ],
+    [ "get_class_auto_shutdown", "namespacekernel_1_1gs.html#a94ae0eefdcd767e0100391f688991c31", null ],
+    [ "get_current_class", "namespacekernel_1_1gs.html#a18b87a385614716ecaa6117cc75c8baa", null ],
+    [ "get_fat32_partition", "namespacekernel_1_1gs.html#aaddae13cb0e072b6574b9aca8667b99a", null ],
+    [ "get_filter_bench", "namespacekernel_1_1gs.html#a9d1f2635def5974163cf9426a967c96f", null ],
+    [ "get_kernel_entry_ns", "namespacekernel_1_1gs.html#ae51d0edbf826f7a94642d39f0be0565f", null ],
+    [ "get_multiboot_info_ptr", "namespacekernel_1_1gs.html#a777f8db451645ac8f03a2602f3672b01", null ],
+    [ "get_multiboot_magic", "namespacekernel_1_1gs.html#a42f7da97ddc20237b44f78cce27ca4d7", null ],
+    [ "get_nic", "namespacekernel_1_1gs.html#accbc52b084b9b7dcc227841d9229f240", null ],
+    [ "get_vfs_touched", "namespacekernel_1_1gs.html#a26b3222119b54a05a88b1bb89400d361", null ],
+    [ "mark_vfs_touched", "namespacekernel_1_1gs.html#afbd6163e26ae3ece51b4c4196567b218", null ],
+    [ "reset_canary_trip", "namespacekernel_1_1gs.html#ad0afd06497bb9e68ab9e52b1687f079c", null ],
+    [ "set_canary_trip", "namespacekernel_1_1gs.html#a4a8fe12d27aa5831712becc1f446e600", null ],
+    [ "set_class_auto_shutdown", "namespacekernel_1_1gs.html#a38634c00471ef5b7ec391e2bdfabde54", null ],
+    [ "set_current_class", "namespacekernel_1_1gs.html#ab2ff7045674fc89c0609d4d296f58930", null ],
+    [ "set_filter_bench", "namespacekernel_1_1gs.html#ac04fa241c589945304e91fed8efc27c8", null ],
+    [ "set_kernel_entry_ns", "namespacekernel_1_1gs.html#af8021e91930153a8aea52bf28c516ee1", null ],
+    [ "try_set_boot_epoch", "namespacekernel_1_1gs.html#a082fe817e23eb1e7d79c41af031da04e", null ],
+    [ "try_set_fat32_partition", "namespacekernel_1_1gs.html#a5323c145779af0abf16bd29a28939306", null ],
+    [ "try_set_multiboot", "namespacekernel_1_1gs.html#ad022293607976a01f2705ab26d5f1e69", null ],
+    [ "try_set_nic", "namespacekernel_1_1gs.html#af7d35e270dec4bdcec35118534857dac", null ],
+    [ "user_access_recover_ip", "namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693", null ],
+    [ "verify_and_write", "namespacekernel_1_1gs.html#aa31f97c76439bba6660bced29b435c61", null ],
+    [ "g_fat32_partition", "namespacekernel_1_1gs.html#a0669429229afe644a00199171051a45a", null ],
+    [ "g_nic", "namespacekernel_1_1gs.html#a2c3eac44f3d01da3e1ecabe828ac68e5", null ]
+];

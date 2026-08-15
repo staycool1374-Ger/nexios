@@ -1,20 +1,4 @@
 var searchData=
 [
-  ['version_0',['Version',['../structkernel_1_1_version.html',1,'kernel']]],
-  ['vfsstat_1',['VfsStat',['../structkernel_1_1vfs_1_1_vfs_stat.html',1,'kernel::vfs']]],
-  ['virtioblkdriver_2',['VirtioBlkDriver',['../classkernel_1_1block_1_1_virtio_blk_driver.html',1,'kernel::block']]],
-  ['virtioblkreqhdr_3',['VirtioBlkReqHdr',['../structkernel_1_1block_1_1_virtio_blk_req_hdr.html',1,'kernel::block']]],
-  ['virtiommio_4',['VirtioMmio',['../structarch_1_1_virtio_mmio.html',1,'arch']]],
-  ['virtionetdevice_5',['VirtioNetDevice',['../structkernel_1_1net_1_1_virtio_net_device.html',1,'kernel::net']]],
-  ['virtionethdr_6',['VirtioNetHdr',['../structkernel_1_1net_1_1_virtio_net_hdr.html',1,'kernel::net']]],
-  ['virtiopcicap_7',['VirtioPciCap',['../structarch_1_1_virtio_pci_cap.html',1,'arch']]],
-  ['virtiotransport_8',['VirtioTransport',['../structarch_1_1_virtio_transport.html',1,'arch']]],
-  ['virtqavail_9',['VirtqAvail',['../structarch_1_1_virtq_avail.html',1,'arch']]],
-  ['virtqdesc_10',['VirtqDesc',['../structarch_1_1_virtq_desc.html',1,'arch']]],
-  ['virtqused_11',['VirtqUsed',['../structarch_1_1_virtq_used.html',1,'arch']]],
-  ['virtqusedelem_12',['VirtqUsedElem',['../structarch_1_1_virtq_used_elem.html',1,'arch']]],
-  ['virtualaddress_13',['VirtualAddress',['../classarch_1_1kernel_1_1_virtual_address.html',1,'arch::kernel::VirtualAddress'],['../classkernel_1_1_virtual_address.html',1,'kernel::VirtualAddress']]],
-  ['vmm_14',['VMM',['../classkernel_1_1_v_m_m.html',1,'kernel']]],
-  ['vnode_15',['Vnode',['../structkernel_1_1vfs_1_1_vnode.html',1,'kernel::vfs']]],
-  ['vnodeops_16',['VnodeOps',['../structkernel_1_1vfs_1_1_vnode_ops.html',1,'kernel::vfs']]]
+  ['version_0',['Version',['../structkernel_1_1_version.html',1,'kernel']]]
 ];

@@ -38,11 +38,7 @@ var namespacekernel =
       [ "sg_from_virt", "namespacekernel_1_1dma.html#a6d426c4def3e0e077f11e5f5617ea809", null ],
       [ "sg_reset", "namespacekernel_1_1dma.html#a3694e0ff7a283647c1638774454314f2", null ]
     ] ],
-    [ "elf", "namespacekernel_1_1elf.html", [
-      [ "exec_into_current", "namespacekernel_1_1elf.html#a8587c966825c28717e2e90c6c754b87c", null ],
-      [ "load", "namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4", null ],
-      [ "validate_header", "namespacekernel_1_1elf.html#a53980ddec04e380da13a0325a465a554", null ]
-    ] ],
+    [ "elf", "namespacekernel_1_1elf.html", "namespacekernel_1_1elf" ],
     [ "errors", "namespacekernel_1_1errors.html", [
       [ "error_string", "namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745", null ]
     ] ],
@@ -57,6 +53,7 @@ var namespacekernel =
       [ "read_file", "namespacekernel_1_1fat32.html#ab2b90c3fd678120edc03be6e4d00a917", null ],
       [ "remove_dir_entry", "namespacekernel_1_1fat32.html#ac33004927f3699ee2b024a9bdd066f60", null ]
     ] ],
+    [ "gs", "namespacekernel_1_1gs.html", "namespacekernel_1_1gs" ],
     [ "integrity", "namespacekernel_1_1integrity.html", [
       [ "__attribute__", "namespacekernel_1_1integrity.html#a724916b89c64153438c5a6846413e6bb", null ],
       [ "__attribute__", "namespacekernel_1_1integrity.html#ad4f4daecf4c772e52a8221ff985e39e8", null ],
@@ -87,14 +84,10 @@ var namespacekernel =
         [ "MSG_DAEMON_FAILED", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5", null ]
       ] ]
     ] ],
-    [ "log", "namespacekernel_1_1log.html", [
-      [ "g_dmesg", "namespacekernel_1_1log.html#a6c21bbcc889a65c9d1de21f46be7ae23", null ],
-      [ "g_klog", "namespacekernel_1_1log.html#a5d37b94a40a3fb0722d235be6d2b43d8", null ]
-    ] ],
+    [ "log", "namespacekernel_1_1log.html", "namespacekernel_1_1log" ],
     [ "net", "namespacekernel_1_1net.html", [
       [ "virtio_net_poll", "namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2", null ],
-      [ "virtio_net_probe", "namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406", null ],
-      [ "g_virtio_net_dev", "namespacekernel_1_1net.html#a142edc1532f5ec70f4bbd5014b31f638", null ]
+      [ "virtio_net_probe", "namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406", null ]
     ] ],
     [ "sync", "namespacekernel_1_1sync.html", "namespacekernel_1_1sync" ],
     [ "task", "namespacekernel_1_1task.html", [
@@ -115,12 +108,14 @@ var namespacekernel =
     [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
     [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
     [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+    [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
     [ "Logger", "classkernel_1_1_logger.html", null ],
     [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
     [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
     [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
     [ "Rlimit", "structkernel_1_1_rlimit.html", "structkernel_1_1_rlimit" ],
     [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
+    [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
     [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
     [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
     [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],
@@ -201,9 +196,17 @@ var namespacekernel =
     [ "atomic_release_fence", "namespacekernel.html#a694a81cf88aaa57b10bbb8850672ef0c", null ],
     [ "atomic_store", "namespacekernel.html#a990823fa4f88496f91379344984fe8d5", null ],
     [ "atomic_store", "namespacekernel.html#a6150ab02de411dbe57ab81bb5b9ff39a", null ],
+    [ "canary_install_kernel_stack", "namespacekernel.html#ac6fb6d864696d4527766d2ab81c2e3ce", null ],
+    [ "canary_install_user_segments", "namespacekernel.html#a772626334577fb34746dd85c3e6e3b9c", null ],
+    [ "canary_verify_kernel_stack", "namespacekernel.html#ad3793a2cf2cf423d61fe25cf2ecb8ba4", null ],
+    [ "canary_verify_user_segments", "namespacekernel.html#a53fa9d70d7a01fd1f30b7746a449654d", null ],
+    [ "canary_write_at", "namespacekernel.html#a1d1f72f7161fa8a1f32d2692b7c90d8c", null ],
     [ "current_cpu", "namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749", null ],
     [ "for", "namespacekernel.html#a1dae18e023980d3a17ebc183f9986bd3", null ],
     [ "init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
+    [ "kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],
+    [ "kslot_snapshot_capture", "namespacekernel.html#afa5566867274b1950bc3ed7acc375508", null ],
+    [ "kslot_snapshot_restore", "namespacekernel.html#a74d19182fedd131cc4450ebe5242359e", null ],
     [ "random_fill", "namespacekernel.html#a3a9da091bb2229af08f856b08498fa51", null ],
     [ "random_init", "namespacekernel.html#a03570b332ae94bd1acee2152e83dadd8", null ],
     [ "syscall_is_user_task", "namespacekernel.html#a9bbea2daa70fd81363d98ce7b9c9f943", null ],
@@ -229,6 +232,9 @@ var namespacekernel =
     [ "_is_reference_v< T && >", "namespacekernel.html#a74cc18daff81587aac344bfc7b70f645", null ],
     [ "_stack_end", "namespacekernel.html#a2dc76afa8886a7fe002c3ca8fd481a42", null ],
     [ "_stack_start", "namespacekernel.html#a25351510936e6c130b0678097e493b2a", null ],
+    [ "g_boot_epoch", "namespacekernel.html#a602102cf72c2d245437f6dfb539c71eb", null ],
+    [ "g_boot_info", "namespacekernel.html#a82642ef1de738764f4ab5b0e505b50ac", null ],
+    [ "g_canary_trip", "namespacekernel.html#a9710cee4bf56525b356e96332529a5a7", null ],
     [ "g_user_access_recover_ip", "namespacekernel.html#ac685742eaa07e592bff0bab7216c0253", null ],
     [ "H2_EV_APPLY", "namespacekernel.html#a810111e89e31e78c3e32f99355db7234", null ],
     [ "H2_EV_ARM", "namespacekernel.html#a6d73afdfa1f338f65d85c38585f1e1f2", null ],

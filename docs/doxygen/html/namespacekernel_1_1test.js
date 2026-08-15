@@ -67,9 +67,8 @@ var namespacekernel_1_1test =
     [ "yield_as", "namespacekernel_1_1test.html#a5734651fc6722563ecb7a1893ea19b81", null ],
     [ "yield_to_task", "namespacekernel_1_1test.html#a6cdcc19c8e326942d1c980c8c62894f0", null ],
     [ "g_class_auto_shutdown", "namespacekernel_1_1test.html#ad58197db512c3865261fe3571878f10a", null ],
-    [ "g_current_class", "namespacekernel_1_1test.html#a42f880a33580e5d7b3a0953951fd451b", null ],
+    [ "g_current_class", "namespacekernel_1_1test.html#a3b23d1ae6da9f187185032f5518943bd", null ],
     [ "g_filter_bench", "namespacekernel_1_1test.html#aa1ef760812274a6f89acf0ae8db11e94", null ],
-    [ "g_vfs_touched", "namespacekernel_1_1test.html#a8ae596b8a7161c4f9f54d704059f822e", null ],
-    [ "g_watchdog_deadline_ns", "namespacekernel_1_1test.html#af5d0c2b75741c70c7c103e4dc2f2aac8", null ],
-    [ "g_watchdog_task_id", "namespacekernel_1_1test.html#ac868441e34e35154b50c0ef71dfc793c", null ]
+    [ "g_kernel_entry_ns", "namespacekernel_1_1test.html#ac0148da1732dbc74470b34de594530d8", null ],
+    [ "g_vfs_touched", "namespacekernel_1_1test.html#a8ae596b8a7161c4f9f54d704059f822e", null ]
 ];

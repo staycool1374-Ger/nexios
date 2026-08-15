@@ -4,6 +4,7 @@ var dir_cfddc3e4738eb751c9ecb1dcd81b4d56 =
     [ "checked_ptr.hpp", "checked__ptr_8hpp.html", null ],
     [ "integrity.cpp", "integrity_8cpp.html", "integrity_8cpp" ],
     [ "integrity.hpp", "integrity_8hpp.html", null ],
+    [ "kernel_object.hpp", "kernel__object_8hpp.html", "kernel__object_8hpp" ],
     [ "markers.cpp", "markers_8cpp.html", "markers_8cpp" ],
     [ "mempool.cpp", "mempool_8cpp.html", null ],
     [ "mempool.hpp", "mempool_8hpp.html", null ],

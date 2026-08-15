@@ -20,8 +20,7 @@ var namespaces_dup =
       [ "net_init", "namespacenet.html#a725cddfef06955893790c0d4337dfae3", null ],
       [ "net_poll", "namespacenet.html#a9b8dc944fd21a6ed2bf99a7174205fd7", null ],
       [ "net_send_icmp_echo", "namespacenet.html#adaaadf3f0bb219c1503e146aba00c4c4", null ],
-      [ "net_send_udp", "namespacenet.html#a1a57b9a29bb5404650605e8cf2d52cff", null ],
-      [ "g_nic", "namespacenet.html#a952961bd539959a2e0f7d4f581666e7f", null ]
+      [ "net_send_udp", "namespacenet.html#a1a57b9a29bb5404650605e8cf2d52cff", null ]
     ] ],
     [ "programs", "namespaceprograms.html", [
       [ "bench_cpu", "namespaceprograms.html#a7853d1b851a49c614301a9c00d8cf1c3", null ],

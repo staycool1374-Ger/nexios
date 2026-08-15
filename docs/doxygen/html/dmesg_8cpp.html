@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8cpp.htm
 </div><!--header-->
 <div class="contents">
 
-<p>DmesgBuffer member-function template instantiations.  
+<p>DmesgService singleton — the private DmesgBuffer ring is defined inline in <a class="el" href="dmesg_8hpp.html" title="Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton,...">dmesg.hpp</a> (friend-tested, no explicit instantiation needed).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
@@ -135,13 +135,9 @@ Include dependency graph for dmesg.cpp:</div>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
 <tr class="memitem:kernel_3A_3Alog" id="r_kernel_3A_3Alog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">kernel::log</a></td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:a6c21bbcc889a65c9d1de21f46be7ae23" id="r_a6c21bbcc889a65c9d1de21f46be7ae23"><td class="memItemLeft">DmesgBuffer&lt; DMESG_CAPACITY &gt;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a6c21bbcc889a65c9d1de21f46be7ae23">kernel::log::g_dmesg</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>DmesgBuffer member-function template instantiations. </p>
+<div class="textblock"><p>DmesgService singleton — the private DmesgBuffer ring is defined inline in <a class="el" href="dmesg_8hpp.html" title="Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton,...">dmesg.hpp</a> (friend-tested, no explicit instantiation needed). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

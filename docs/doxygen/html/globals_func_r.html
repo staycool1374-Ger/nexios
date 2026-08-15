@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
    </div>
   </td>
  </tr>
@@ -145,6 +145,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_r
 <li>register_dma_tests()&#160;:&#160;<a class="el" href="test__dma_8cpp.html#a490b6a4d27e09f053c9fe737b5a8d80b">test_dma.cpp</a>, <a class="el" href="test__registry_8cpp.html#a490b6a4d27e09f053c9fe737b5a8d80b">test_registry.cpp</a></li>
 <li>register_dmesg_tests()&#160;:&#160;<a class="el" href="test__dmesg_8cpp.html#abfa960f0ad03fa1e771a8c9a4a5d4868">test_dmesg.cpp</a>, <a class="el" href="test__registry_8cpp.html#abfa960f0ad03fa1e771a8c9a4a5d4868">test_registry.cpp</a></li>
 <li>register_driver_tests()&#160;:&#160;<a class="el" href="test__driver_8cpp.html#af936af2ecbdca9446ddb4b9b4d3e24ea">test_driver.cpp</a>, <a class="el" href="test__registry_8cpp.html#af936af2ecbdca9446ddb4b9b4d3e24ea">test_registry.cpp</a></li>
+<li>register_elf_loader_tests()&#160;:&#160;<a class="el" href="test__elf__loader_8cpp.html#a0338f2914f09b1a403ce2f2f2ef9f97c">test_elf_loader.cpp</a>, <a class="el" href="test__registry_8cpp.html#a0338f2914f09b1a403ce2f2f2ef9f97c">test_registry.cpp</a></li>
 <li>register_elf_tests()&#160;:&#160;<a class="el" href="test__elf_8cpp.html#a42bbc14efc4b99cea2f9a618c9b3ab15">test_elf.cpp</a>, <a class="el" href="test__registry_8cpp.html#a42bbc14efc4b99cea2f9a618c9b3ab15">test_registry.cpp</a></li>
 <li>register_expected_panic_tests()&#160;:&#160;<a class="el" href="test__registry_8cpp.html#a3ed097dbc31b6e554bccae58bc68b8c5">test_registry.cpp</a>, <a class="el" href="test__testrunner_8cpp.html#a3ed097dbc31b6e554bccae58bc68b8c5">test_testrunner.cpp</a></li>
 <li>register_fat32_tests()&#160;:&#160;<a class="el" href="test__fat32_8cpp.html#a483d7be201b2ba8fbebde2c428e763b5">test_fat32.cpp</a>, <a class="el" href="test__registry_8cpp.html#a483d7be201b2ba8fbebde2c428e763b5">test_registry.cpp</a></li>
@@ -176,6 +177,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_r
 <li>register_irq_guard_tests()&#160;:&#160;<a class="el" href="test__irq__guard_8cpp.html#a8a67428271a63c18c997c69a5e1c27ba">test_irq_guard.cpp</a>, <a class="el" href="test__registry_8cpp.html#a8a67428271a63c18c997c69a5e1c27ba">test_registry.cpp</a></li>
 <li>register_irqguard_audit_tests()&#160;:&#160;<a class="el" href="test__irqguard__audit_8cpp.html#a63074404865535ef01a8f787766f56d1">test_irqguard_audit.cpp</a>, <a class="el" href="test__registry_8cpp.html#a63074404865535ef01a8f787766f56d1">test_registry.cpp</a></li>
 <li>register_jitter_tests()&#160;:&#160;<a class="el" href="test__jitter_8cpp.html#a2407a554b127dc17ebd530e4c6e7202d">test_jitter.cpp</a>, <a class="el" href="test__registry_8cpp.html#a2407a554b127dc17ebd530e4c6e7202d">test_registry.cpp</a></li>
+<li>register_kernel_isolation_tests()&#160;:&#160;<a class="el" href="test__kernel__isolation_8cpp.html#a1569d41ea73aefa938cb67b80af108ff">test_kernel_isolation.cpp</a>, <a class="el" href="test__registry_8cpp.html#a1569d41ea73aefa938cb67b80af108ff">test_registry.cpp</a></li>
 <li>register_klog_tests()&#160;:&#160;<a class="el" href="test__klog_8cpp.html#a0aa04608f5608ad916b21f1d7639fce8">test_klog.cpp</a>, <a class="el" href="test__registry_8cpp.html#a0aa04608f5608ad916b21f1d7639fce8">test_registry.cpp</a></li>
 <li>register_lib_tests()&#160;:&#160;<a class="el" href="test__lib_8cpp.html#a2fa7dc32a9171f5a88916fc03bc5b0f2">test_lib.cpp</a>, <a class="el" href="test__registry_8cpp.html#a2fa7dc32a9171f5a88916fc03bc5b0f2">test_registry.cpp</a></li>
 <li>register_lock_order_tests()&#160;:&#160;<a class="el" href="test__lock__order_8cpp.html#a4a43589b3fd0ab8e11bbbfa2b1bc4d23">test_lock_order.cpp</a>, <a class="el" href="test__registry_8cpp.html#a4a43589b3fd0ab8e11bbbfa2b1bc4d23">test_registry.cpp</a></li>
@@ -183,6 +185,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_r
 <li>register_locking_stress_tests()&#160;:&#160;<a class="el" href="test__locking__stress_8cpp.html#aa1ee33b231f0a8f36f0d702c8c6a2964">test_locking_stress.cpp</a>, <a class="el" href="test__registry_8cpp.html#aa1ee33b231f0a8f36f0d702c8c6a2964">test_registry.cpp</a></li>
 <li>register_locking_tests()&#160;:&#160;<a class="el" href="test__locking_8cpp.html#a6e6a23384e544b30cc89801cda93004e">test_locking.cpp</a>, <a class="el" href="test__registry_8cpp.html#a6e6a23384e544b30cc89801cda93004e">test_registry.cpp</a></li>
 <li>register_memory_determinism_tests()&#160;:&#160;<a class="el" href="test__memory__determinism_8cpp.html#a9858aae624aec016a3e8e624e4520d11">test_memory_determinism.cpp</a>, <a class="el" href="test__registry_8cpp.html#a9858aae624aec016a3e8e624e4520d11">test_registry.cpp</a></li>
+<li>register_memory_isolation_tests()&#160;:&#160;<a class="el" href="test__memory__isolation_8cpp.html#a545123380f2839abc2fe9d4cca5d15c9">test_memory_isolation.cpp</a>, <a class="el" href="test__registry_8cpp.html#a545123380f2839abc2fe9d4cca5d15c9">test_registry.cpp</a></li>
 <li>register_memory_safety_tests()&#160;:&#160;<a class="el" href="test__memory__safety_8cpp.html#a97dbf7fa08cded21c5847ca266ee50b8">test_memory_safety.cpp</a>, <a class="el" href="test__registry_8cpp.html#a97dbf7fa08cded21c5847ca266ee50b8">test_registry.cpp</a></li>
 <li>register_memory_tests()&#160;:&#160;<a class="el" href="test__memory_8cpp.html#aaf07f2925f10df31499682002e797ee1">test_memory.cpp</a>, <a class="el" href="test__registry_8cpp.html#aaf07f2925f10df31499682002e797ee1">test_registry.cpp</a></li>
 <li>register_mempool_tests()&#160;:&#160;<a class="el" href="test__mempool_8cpp.html#a608be4a19c7cb1927fad7852bf8aafe4">test_mempool.cpp</a>, <a class="el" href="test__registry_8cpp.html#a608be4a19c7cb1927fad7852bf8aafe4">test_registry.cpp</a></li>

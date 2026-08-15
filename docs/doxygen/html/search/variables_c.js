@@ -6,7 +6,10 @@ var searchData=
   ['mapped_3',['mapped',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#aed93f585a7d628d70693e2a5492727cb',1,'kernel::test::PtPoolSnapshot']]],
   ['max_4',['max',['../struct_bench_result.html#ad2e6fade7f798efb1d339ef33bdc6a9e',1,'BenchResult']]],
   ['mempool_5fused_5',['mempool_used',['../structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d',1,'kernel::test::ResourceCounters']]],
-  ['min_6',['min',['../struct_bench_result.html#aa965cc038522d0a43eaac5fec16bad58',1,'BenchResult']]],
-  ['minor_7',['minor',['../structkernel_1_1_version.html#a651719f6269816e291c01c144e4cb9c4',1,'kernel::Version']]],
-  ['msg_5fqueues_8',['msg_queues',['../structkernel_1_1test_1_1_resource_counters.html#afd4796e9d56e9debf80447b08b6d7c6a',1,'kernel::test::ResourceCounters']]]
+  ['message_6',['message',['../structkernel_1_1log_1_1_log_entry.html#a7de65030a9cc87603b93acc622f4678d',1,'kernel::log::LogEntry']]],
+  ['min_7',['min',['../struct_bench_result.html#aa965cc038522d0a43eaac5fec16bad58',1,'BenchResult']]],
+  ['minor_8',['minor',['../structkernel_1_1_version.html#a651719f6269816e291c01c144e4cb9c4',1,'kernel::Version']]],
+  ['msg_5fqueues_9',['msg_queues',['../structkernel_1_1test_1_1_resource_counters.html#afd4796e9d56e9debf80447b08b6d7c6a',1,'kernel::test::ResourceCounters']]],
+  ['multiboot_5finfo_5fptr_10',['multiboot_info_ptr',['../global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9',1,'global_state.cpp']]],
+  ['multiboot_5fmagic_11',['multiboot_magic',['../global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a',1,'global_state.cpp']]]
 ];

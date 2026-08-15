@@ -13,8 +13,5 @@ var test_8cpp =
     [ "kernel::test::run_suite", "namespacekernel_1_1test.html#ac69baaa93109936ecff8ff06f6fb827a", null ],
     [ "kernel::test::set_class_auto_shutdown", "namespacekernel_1_1test.html#ac6959c848d7b1df0ba4eea129c708171", null ],
     [ "kernel::test::set_kernel_entry_ns", "namespacekernel_1_1test.html#a2be813db3ba66a8c409d2c8c8e2d69da", null ],
-    [ "kernel::test::shutdown_kernel", "namespacekernel_1_1test.html#a1becd6394583e37ae0142fa07904cb67", null ],
-    [ "kernel::test::g_class_auto_shutdown", "namespacekernel_1_1test.html#ad58197db512c3865261fe3571878f10a", null ],
-    [ "kernel::test::g_current_class", "namespacekernel_1_1test.html#a42f880a33580e5d7b3a0953951fd451b", null ],
-    [ "kernel::test::g_filter_bench", "namespacekernel_1_1test.html#aa1ef760812274a6f89acf0ae8db11e94", null ]
+    [ "kernel::test::shutdown_kernel", "namespacekernel_1_1test.html#a1becd6394583e37ae0142fa07904cb67", null ]
 ];

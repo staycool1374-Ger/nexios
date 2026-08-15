@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
    </div>
   </td>
  </tr>
@@ -122,12 +122,39 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 <p>Ring buffer shared between the read and write ends of a pipe.  
  <a href="#details">More...</a></p>
 <div class="dynheader">
+Inheritance diagram for kernel::vfs::PipeBuffer:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1vfs_1_1_pipe_buffer__inherit__graph.png" border="0" usemap="#akernel_1_1vfs_1_1_pipe_buffer_inherit__map" loading="lazy" alt="Inheritance graph"/></div>
+<!-- MAP 0 -->
+</div>
+<div class="dynheader">
 Collaboration diagram for kernel::vfs::PipeBuffer:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1vfs_1_1_pipe_buffer__coll__graph.png" border="0" usemap="#akernel_1_1vfs_1_1_pipe_buffer_coll__map" loading="lazy" alt="Collaboration graph"/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:adf97351ae9fcff3736bec0a0ac708c8f" id="r_adf97351ae9fcff3736bec0a0ac708c8f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#adf97351ae9fcff3736bec0a0ac708c8f">dispose</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> override</td></tr>
+<tr class="memdesc:adf97351ae9fcff3736bec0a0ac708c8f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Final teardown on the last release: releases the pipe-buffer ResourceTracker slot and returns the block to the MemPool. Semaphore has no user-defined destructor (its members are trivial), so freeing without invoking it is safe; waiters are drained by the close paths (post() + closed flags) before the last release. On SMP, drain must be synchronized with dispose.  <br /></td></tr>
+<tr class="memitem:a128d723b9ae8acf348e6207ba30d3a28" id="r_a128d723b9ae8acf348e6207ba30d3a28"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a128d723b9ae8acf348e6207ba30d3a28">is_shared</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> override</td></tr>
+<tr class="memdesc:a128d723b9ae8acf348e6207ba30d3a28"><td class="mdescLeft">&#160;</td><td class="mdescRight">Genuinely shared across the two pipe endpoints.  <br /></td></tr>
+<tr class="inherit_header pub_methods_classkernel_1_1_kernel_object"><td colspan="2">Public Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object" id="r_a0e3bd02dbe3ab0e1a9ae52ffa5485751"><td class="memItemLeft">virtual void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751">revoke</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a0e3bd02dbe3ab0e1a9ae52ffa5485751 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op. A derived object overrides this to mark itself revoked; after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a>, <a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464" title="Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard,...">acquire()</a> refuses and the object's capability references are invalidated. Called under the object's own serialization.  <br /></td></tr>
+<tr class="memitem:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object" id="r_a9b05ebf7eeb2acebab467626da5ef464"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464">acquire</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9b05ebf7eeb2acebab467626da5ef464 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Takes a new reference. Relaxed ordering is sufficient for the reference count (a lifetime guard, not a payload ordering barrier). Acquire ordering on the revoked check makes the <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> publication visible on SMP (ROADMAP 0.4.x).  <br /></td></tr>
+<tr class="memitem:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object" id="r_a606920ca39bdbf2e49ddb42b76cc3370"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a606920ca39bdbf2e49ddb42b76cc3370">release</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a606920ca39bdbf2e49ddb42b76cc3370 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drops one reference. The last releaser (the one that observes the 1→0 transition) invokes <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
+<tr class="memitem:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object" id="r_ae82a40fc7bdcb9ba1abbb18b0ea6e6d9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae82a40fc7bdcb9ba1abbb18b0ea6e6d9">refcount</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae82a40fc7bdcb9ba1abbb18b0ea6e6d9 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current reference count (debug invariant check).  <br /></td></tr>
+<tr class="memitem:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object" id="r_af9584fa567b4308e86096a788fe562c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#af9584fa567b4308e86096a788fe562c4">revoked</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:af9584fa567b4308e86096a788fe562c4 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">True after <a class="el" href="classkernel_1_1_kernel_object.html#a0e3bd02dbe3ab0e1a9ae52ffa5485751" title="Revocation hook for capability-backed objects (ROADMAP 0.4.1 CSpace). Default no-op....">revoke()</a> was called (capability revocation).  <br /></td></tr>
+<tr class="memitem:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object" id="r_afbcf31356498702aeda5288e2c598068"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#afbcf31356498702aeda5288e2c598068">mark_pool_backed</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:afbcf31356498702aeda5288e2c598068 pub_methods_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks the object as pool-backed (factory protocol). Stack- allocated test instances stay unmarked and are never freed by <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328" title="Final teardown, invoked exactly once on the last release. Each derived object implements its own disp...">dispose()</a>.  <br /></td></tr>
+<tr class="memitem:a510dcbc8492ee1adf161f749985ba1e5 pub_methods_classkernel_1_1_kernel_object" id="r_a510dcbc8492ee1adf161f749985ba1e5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">is_pool_backed</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a569469f533b16d8998b1ec508841fad3" id="r_a569469f533b16d8998b1ec508841fad3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a569469f533b16d8998b1ec508841fad3">data</a> [PIPE_BUF_SIZE]</td></tr>
@@ -138,18 +165,92 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:af552d711224e3c2fd4dcaef1a489eda7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write cursor position.  <br /></td></tr>
 <tr class="memitem:a66a9e380ae7d9214ef5e8769ca41e0cf" id="r_a66a9e380ae7d9214ef5e8769ca41e0cf"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a66a9e380ae7d9214ef5e8769ca41e0cf">count</a> = 0</td></tr>
 <tr class="memdesc:a66a9e380ae7d9214ef5e8769ca41e0cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of bytes currently in the buffer.  <br /></td></tr>
-<tr class="memitem:ae274141154b74ff3ee14c09b28cad776" id="r_ae274141154b74ff3ee14c09b28cad776"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ae274141154b74ff3ee14c09b28cad776">refcount</a> = 2</td></tr>
-<tr class="memdesc:ae274141154b74ff3ee14c09b28cad776"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of open references (read + write).  <br /></td></tr>
 <tr class="memitem:ae09b1219a56bc5e61dc0898f018ce8df" id="r_ae09b1219a56bc5e61dc0898f018ce8df"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae09b1219a56bc5e61dc0898f018ce8df">read_closed</a> = false</td></tr>
 <tr class="memdesc:ae09b1219a56bc5e61dc0898f018ce8df"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when the read end is closed.  <br /></td></tr>
 <tr class="memitem:a6d680699587040ef5d23eff5093940e4" id="r_a6d680699587040ef5d23eff5093940e4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6d680699587040ef5d23eff5093940e4">write_closed</a> = false</td></tr>
 <tr class="memdesc:a6d680699587040ef5d23eff5093940e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when the write end is closed.  <br /></td></tr>
 <tr class="memitem:a7c9e4fbf324f1564b6e1fa021acbf0b2" id="r_a7c9e4fbf324f1564b6e1fa021acbf0b2"><td class="memItemLeft">sync::Semaphore&#160;</td><td class="memItemRight"><a class="el" href="#a7c9e4fbf324f1564b6e1fa021acbf0b2">data_avail</a></td></tr>
 <tr class="memdesc:a7c9e4fbf324f1564b6e1fa021acbf0b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Semaphore signalled when data is written.  <br /></td></tr>
+<tr class="inherit_header pub_attribs_classkernel_1_1_kernel_object"><td colspan="2">Data Fields inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object" id="r_ae1b6efc57e4770d3a325c69db75ffcab"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae1b6efc57e4770d3a325c69db75ffcab">task_obj_next_</a> = nullptr</td></tr>
+<tr class="memdesc:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive per-task object-list links. The list is owned by the TaskControlBlock and is only ever mutated outside IRQ context.  <br /></td></tr>
+<tr class="memitem:a18affd7a7315bac0d48df5136ceed782 pub_attribs_classkernel_1_1_kernel_object" id="r_a18affd7a7315bac0d48df5136ceed782"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a18affd7a7315bac0d48df5136ceed782">task_obj_prev_</a> = nullptr</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-inherited" class="groupheader"><a id="inherited" name="inherited"></a>
+Additional Inherited Members</h2></td></tr>
+<tr class="inherit_header pro_methods_classkernel_1_1_kernel_object"><td colspan="2">Protected Member Functions inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
+<tr class="memitem:a8879b9a6fc77e39157e3458252aab0d8 pro_methods_classkernel_1_1_kernel_object" id="r_a8879b9a6fc77e39157e3458252aab0d8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>=default</td></tr>
+<tr class="memitem:a16ae40c2f1dad94b47ffb0b6868f0fc1 pro_methods_classkernel_1_1_kernel_object" id="r_a16ae40c2f1dad94b47ffb0b6868f0fc1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#a16ae40c2f1dad94b47ffb0b6868f0fc1">~KernelObject</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a>=default</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Ring buffer shared between the read and write ends of a pipe. </p>
-</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<p>Shared-ownership class (Class C): the two vnode endpoints each hold one reference; the creator holds a transient reference during <a class="el" href="namespacekernel_1_1vfs.html#a63004773b8b1cae833b25ae477c4b956" title="Create a pair of connected pipe file descriptors.">create_pipe()</a>. The last reference invokes <a class="el" href="#adf97351ae9fcff3736bec0a0ac708c8f" title="Final teardown on the last release: releases the pipe-buffer ResourceTracker slot and returns the blo...">dispose()</a> (<a class="el" href="classkernel_1_1_kernel_object.html" title="Intrusive shared-reference-counted base for kernel objects.">KernelObject</a>), which returns the block to the MemPool. Refcount is atomic (SMP-safe) — the previous plain <span class="tt">int <a class="el" href="classkernel_1_1_kernel_object.html#ae82a40fc7bdcb9ba1abbb18b0ea6e6d9" title="Returns the current reference count (debug invariant check).">refcount</a></span> decrement raced on a multi-CPU target. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="adf97351ae9fcff3736bec0a0ac708c8f" name="adf97351ae9fcff3736bec0a0ac708c8f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf97351ae9fcff3736bec0a0ac708c8f">&#9670;&#160;</a></span>dispose()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::vfs::PipeBuffer::dispose </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel override">override</span><span class="mlabel virtual">virtual</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Final teardown on the last release: releases the pipe-buffer ResourceTracker slot and returns the block to the MemPool. Semaphore has no user-defined destructor (its members are trivial), so freeing without invoking it is safe; waiters are drained by the close paths (post() + closed flags) before the last release. On SMP, drain must be synchronized with dispose. </p>
+
+<p>Implements <a class="el" href="classkernel_1_1_kernel_object.html#aefe0afb444551ae4d40953324b996328">kernel::KernelObject</a>.</p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1vfs_1_1_pipe_buffer_adf97351ae9fcff3736bec0a0ac708c8f_cgraph.png" border="0" usemap="#astructkernel_1_1vfs_1_1_pipe_buffer_adf97351ae9fcff3736bec0a0ac708c8f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a128d723b9ae8acf348e6207ba30d3a28" name="a128d723b9ae8acf348e6207ba30d3a28"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a128d723b9ae8acf348e6207ba30d3a28">&#9670;&#160;</a></span>is_shared()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::vfs::PipeBuffer::is_shared </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel override">override</span><span class="mlabel virtual">virtual</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Genuinely shared across the two pipe endpoints. </p>
+
+<p>Reimplemented from <a class="el" href="classkernel_1_1_kernel_object.html#ae799dc1281a302b5baeca90a159e386a">kernel::KernelObject</a>.</p>
+
+</div>
+</div>
+<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a66a9e380ae7d9214ef5e8769ca41e0cf" name="a66a9e380ae7d9214ef5e8769ca41e0cf"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a66a9e380ae7d9214ef5e8769ca41e0cf">&#9670;&#160;</a></span>count</h2>
 
@@ -227,22 +328,6 @@ Data Fields</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Read cursor position. </p>
-
-</div>
-</div>
-<a id="ae274141154b74ff3ee14c09b28cad776" name="ae274141154b74ff3ee14c09b28cad776"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae274141154b74ff3ee14c09b28cad776">&#9670;&#160;</a></span>refcount</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">int kernel::vfs::PipeBuffer::refcount = 2</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Number of open references (read + write). </p>
 
 </div>
 </div>

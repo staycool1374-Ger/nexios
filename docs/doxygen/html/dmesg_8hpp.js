@@ -1,9 +1,7 @@
 var dmesg_8hpp =
 [
     [ "kernel::log::LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
-    [ "kernel::log::DmesgBuffer&lt; Capacity &gt;", "classkernel_1_1log_1_1_dmesg_buffer.html", "classkernel_1_1log_1_1_dmesg_buffer" ],
-    [ "dmesg_push", "dmesg_8hpp.html#aec083c1d4c147751520c17f8d86e15e4", null ],
-    [ "dmesg_push_base", "dmesg_8hpp.html#a3eecc26744b43034cc4cabc3306e3e36", null ],
+    [ "kernel::log::DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ],
     [ "kernel::log::ErrorSubsystem", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a", [
       [ "kernel::log::ErrorSubsystem::BASE", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aae7b1a5c82772e0e055096008cb9883ef", null ],
       [ "kernel::log::ErrorSubsystem::SYNC", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3", null ],
@@ -13,8 +11,25 @@ var dmesg_8hpp =
       [ "kernel::log::ErrorSubsystem::IPC", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df", null ],
       [ "kernel::log::ErrorSubsystem::SYSCALL", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b", null ]
     ] ],
-    [ "kernel::log::base_error_string", "namespacekernel_1_1log.html#ac43913f72a3a5fe3c6a6cc0ccc754165", null ],
+    [ "kernel::log::base_error_string", "namespacekernel_1_1log.html#a509eca06210bff9bda33ad707d235262", null ],
+    [ "kernel::log::dmesg_push", "namespacekernel_1_1log.html#a8c0fd69e4ea93d857e2b6176911b7e5e", null ],
+    [ "kernel::log::dmesg_push_base", "namespacekernel_1_1log.html#a93f6fccfccf70fcdc90f93e630521488", null ],
     [ "kernel::log::error_string", "namespacekernel_1_1log.html#a3d54be80d65b536f19f6aabdb6878bd5", null ],
     [ "kernel::log::subsystem_name", "namespacekernel_1_1log.html#ad82063e29ea0c8f5de69a0748c72621f", null ],
+    [ "test_dmesg_base_error_strings", "dmesg_8hpp.html#a3b0a7969e4e380f2e94993ad5ddfca1f", null ],
+    [ "test_dmesg_clear", "dmesg_8hpp.html#a73ed911051079d8759073e8250c394d8", null ],
+    [ "test_dmesg_error_string_dispatch", "dmesg_8hpp.html#a2e98c23d0cd1336b65478007f38cee40", null ],
+    [ "test_dmesg_for_each", "dmesg_8hpp.html#a27a1dd0b2068543ef3379de9a91ec4f5", null ],
+    [ "test_dmesg_for_each_empty", "dmesg_8hpp.html#a457ba9108e33a64a554496ca24979a4f", null ],
+    [ "test_dmesg_head_tail_indices", "dmesg_8hpp.html#aefaf39b2a7ba218044f030a5904046aa", null ],
+    [ "test_dmesg_initially_empty", "dmesg_8hpp.html#a341b4bf8cc7098fbf5f762915cf152a3", null ],
+    [ "test_dmesg_overflow", "dmesg_8hpp.html#a9a6feaa81e79d995e2131028c3eb8d22", null ],
+    [ "test_dmesg_pop_empty", "dmesg_8hpp.html#a5d37920042d5f918f3bc60e712281638", null ],
+    [ "test_dmesg_push_and_pop", "dmesg_8hpp.html#a4ef544db8ad3e61ad02e04719ceb534b", null ],
+    [ "test_dmesg_push_multiple_fifo", "dmesg_8hpp.html#a8afc3b3e214d5f6c06c2cba66613d9e4", null ],
+    [ "test_dmesg_push_once", "dmesg_8hpp.html#a5c633b36c5b65175919e4164307d1c9c", null ],
+    [ "test_dmesg_subsystem_names", "dmesg_8hpp.html#ae2e303f10e65947337d142eb2b2dd0b9", null ],
+    [ "test_dmesg_suppression_toggle", "dmesg_8hpp.html#af607959553d62fd21bd8eb6ca194f744", null ],
+    [ "test_dmesg_timestamp_and_task_id", "dmesg_8hpp.html#afb19dc2d9af33a7ea0d1b04c8488c06f", null ],
     [ "kernel::log::DMESG_CAPACITY", "namespacekernel_1_1log.html#a7873f3246fdc21af9b32fe43eb3e6435", null ]
 ];

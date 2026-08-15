@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('net_8cpp.html'
 <p>Network stack core implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="net_8hpp_source.html">kernel/net/net.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
@@ -159,10 +160,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9b8dc944fd21a6ed2bf99a7174205fd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Poll the NIC for an incoming frame and dispatch it (non-blocking).  <br /></td></tr>
 <tr class="memitem:adaaadf3f0bb219c1503e146aba00c4c4" id="r_adaaadf3f0bb219c1503e146aba00c4c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#adaaadf3f0bb219c1503e146aba00c4c4">net::net_send_icmp_echo</a> (Nic &amp;nic, Ipv4Addr dst_ip, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> id, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> seq, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> data_len)</td></tr>
 <tr class="memdesc:adaaadf3f0bb219c1503e146aba00c4c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build and send an ICMP Echo Request (with self-ping loopback).  <br /></td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:a952961bd539959a2e0f7d4f581666e7f" id="r_a952961bd539959a2e0f7d4f581666e7f"><td class="memItemLeft">constinit Nic *&#160;</td><td class="memItemRight"><a class="el" href="namespacenet.html#a952961bd539959a2e0f7d4f581666e7f">net::g_nic</a> = nullptr</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Network stack core implementation. </p>

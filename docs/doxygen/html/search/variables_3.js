@@ -23,7 +23,8 @@ var searchData=
   ['cluster_20',['cluster',['../structkernel_1_1vfs_1_1_fat32_vnode_data.html#a460c18510e510862c9ac81276a5bdc6c',1,'kernel::vfs::Fat32VnodeData']]],
   ['content_21',['content',['../structkernel_1_1vfs_1_1_mem_info_vnode.html#a411a3d7899d767c92aff38ff28b20ed4',1,'kernel::vfs::MemInfoVnode::content'],['../structkernel_1_1vfs_1_1_pci_vnode.html#aea575a2c77b9377f2be9c8cad5bf1c02',1,'kernel::vfs::PciVnode::content']]],
   ['content_5flen_22',['content_len',['../structkernel_1_1vfs_1_1_mem_info_vnode.html#aaf25d42e245a32389ddd0332bbe347be',1,'kernel::vfs::MemInfoVnode::content_len'],['../structkernel_1_1vfs_1_1_pci_vnode.html#a497fe004dc2a0c522b1b2187541797ef',1,'kernel::vfs::PciVnode::content_len']]],
-  ['count_23',['count',['../struct_bench_result.html#a1f1c0f9c1e6cdc73ddc3c51e93d86814',1,'BenchResult::count'],['../structkernel_1_1vfs_1_1_pipe_buffer.html#a66a9e380ae7d9214ef5e8769ca41e0cf',1,'kernel::vfs::PipeBuffer::count'],['../structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4',1,'kernel::test::ClassSection::count']]],
-  ['crc32_24',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot']]],
-  ['current_25',['current',['../structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109',1,'kernel::CpuContext']]]
+  ['context_23',['context',['../structkernel_1_1log_1_1_log_entry.html#aa40f5ec9579dd01cb69a34400b52bf5f',1,'kernel::log::LogEntry']]],
+  ['count_24',['count',['../struct_bench_result.html#a1f1c0f9c1e6cdc73ddc3c51e93d86814',1,'BenchResult::count'],['../structkernel_1_1vfs_1_1_pipe_buffer.html#a66a9e380ae7d9214ef5e8769ca41e0cf',1,'kernel::vfs::PipeBuffer::count'],['../structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4',1,'kernel::test::ClassSection::count']]],
+  ['crc32_25',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot']]],
+  ['current_26',['current',['../structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109',1,'kernel::CpuContext']]]
 ];

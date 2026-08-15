@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__isolate_
 <p>Test isolation snapshot/restore implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="test__isolate_8hpp_source.html">kernel/test/test_isolate.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
@@ -161,7 +162,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a80e920b60042b6c2750fd88974610e99" id="r_a80e920b60042b6c2750fd88974610e99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80e920b60042b6c2750fd88974610e99">debug_write</a> (const char *s)</td></tr>
 <tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
 <tr class="memitem:ac3dcbb860f4f6469142dd4dd33b78398" id="r_ac3dcbb860f4f6469142dd4dd33b78398"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ac3dcbb860f4f6469142dd4dd33b78398">kernel::test::mark_vfs_touched</a> ()</td></tr>
-<tr class="memdesc:ac3dcbb860f4f6469142dd4dd33b78398"><td class="mdescLeft">&#160;</td><td class="mdescRight">Called by VFS syscall handlers to mark that VFS state was touched.  <br /></td></tr>
+<tr class="memdesc:ac3dcbb860f4f6469142dd4dd33b78398"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks whether any VFS syscall was invoked during the current test. <a class="el" href="namespacekernel_1_1test.html#aa2a58a012f3f56d28d6e0df037fd66a6">snapshot_restore()</a> checks this flag to decide whether daemon tasks need a full reload (VFS touched) or can be left running (VFS not touched). Read/write via <a class="el" href="namespacekernel_1_1gs.html#a26b3222119b54a05a88b1bb89400d361" title="True when the VFS was touched (test_isolate marker).">kernel::gs::get_vfs_touched()</a> / <a class="el" href="namespacekernel_1_1test.html#ac3dcbb860f4f6469142dd4dd33b78398" title="Tracks whether any VFS syscall was invoked during the current test. snapshot_restore() checks this fl...">mark_vfs_touched()</a>.  <br /></td></tr>
 <tr class="memitem:abec3b271acc661cda69074923732b6d4" id="r_abec3b271acc661cda69074923732b6d4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#abec3b271acc661cda69074923732b6d4">kernel::test::snapshot_is_active</a> ()</td></tr>
 <tr class="memdesc:abec3b271acc661cda69074923732b6d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">True while a test-isolation snapshot exists (<a class="el" href="namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31">snapshot_create()</a> succeeded and <a class="el" href="namespacekernel_1_1test.html#ae4288686f519dcd0faacfe54ae2f1bff">snapshot_destroy()</a> has not yet run). Lets a test distinguish "running under the isolation harness" from a bare invocation where snapshot/restore is disabled.  <br /></td></tr>
 <tr class="memitem:a5b61544ff1676d3f6d4a777c3211be31" id="r_a5b61544ff1676d3f6d4a777c3211be31"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31">kernel::test::snapshot_create</a> ()</td></tr>
@@ -173,11 +174,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:abbd641156133e294c60aa475e73dd520"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate old daemon tasks and reload them from initrd. Call AFTER snapshot_restore + snapshot_destroy to replace corrupted page tables with fresh ones from initrd.  <br /></td></tr>
 <tr class="memitem:ad8af3e26f5e10cffe7d3eecf79016c1d" id="r_ad8af3e26f5e10cffe7d3eecf79016c1d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ad8af3e26f5e10cffe7d3eecf79016c1d">kernel::test::run_all_isolated_tests</a> ()</td></tr>
 <tr class="memdesc:ad8af3e26f5e10cffe7d3eecf79016c1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run all tests from the generated registry, calling setup/test/teardown in sequence with snapshot isolation between each test.  <br /></td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:a8ae596b8a7161c4f9f54d704059f822e" id="r_a8ae596b8a7161c4f9f54d704059f822e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a8ae596b8a7161c4f9f54d704059f822e">kernel::test::g_vfs_touched</a> = false</td></tr>
-<tr class="memdesc:a8ae596b8a7161c4f9f54d704059f822e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks whether any VFS syscall was invoked during the current test. <a class="el" href="namespacekernel_1_1test.html#aa2a58a012f3f56d28d6e0df037fd66a6">snapshot_restore()</a> checks this flag to decide whether daemon tasks need a full reload (VFS touched) or can be left running (VFS not touched).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Test isolation snapshot/restore implementation. </p>

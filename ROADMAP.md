@@ -1,33 +1,24 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.0-dev | **Last Release:** v0.3.12 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.3.12)
+**Build:** v0.4.1-dev | **Last Release:** v0.4.0 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.0)
 
 ## Safety & Concurrency Guardrails (Strict)
 - **Transition to Fine-Grained Locks:** All new synchronization code must use `SpinLock` + `SpinLockGuard` for short critical sections and `sync::Mutex` (without IrqGuard) for blocking paths. The global `IrqGuard` is deprecated for all uses except boot, panic, and test isolation.
 - **Reference-Enforced Tasks:** When manipulating task blocks or IPC endpoints within the new init system or system calls, strictly enforce reference passing over raw pointers to prevent dangling lookups.
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
-## Active Development — v0.4.0
+## Active Development — v0.4.1
 
-v0.4.0 milestone work IN PROGRESS (details in `ROADMAP_done.md`
-§"Active Development — v0.4.0" for v0.2.x–v0.3.12):
-- **Memory Protection Phase 4.5 (MP-1..MP-8)** — private kernel-half page
-  tables, deep-copy fork, MMU red-zones, software canaries, SMEP/SMAP,
-  verification suite (MP-1..MP-6, MP-8 DONE 2026-08-13/14; MP-7 deep-copy fork
-  and MP-4.4 aarch64 PAN/PXN OPEN — see BUGS.md pml4_clone crash).
-- **Background ELF Loader** — deadline-safe chunked loader (elf_loader 8/8,
-  SIL 3 APPROVED; **elf_loader `wait_loader_idle` flake OPEN** (BUGS.md)).
-- **H2 Deferred-Switch Race** — **RE-OPENED** (BUGS.md; ~50% hang at
-   `ipc_send_sync_roundtrip`; commit `71b3a088` fixed orphan-enqueue but not
-   stale-iret-frame root cause).
+v0.4.0 RELEASED (2026-08-15) — Memory Protection MP-1..MP-8, background ELF
+loader, H2 deferred-switch race + elf_loader flake + pml4_clone CR3 corruption
+all RESOLVED (debug `all` 873/873, release `all` 84/84, selftest 132/132).
+Details in `ROADMAP_done.md` §"Active Development — v0.4.0".
+
+v0.4.1 work:
 - **KernelObject Shared-Reference-Count Foundation** — 0.4.1 CSpace
   prerequisite.
-
-Blockers for v0.4.0 completion:
-- **MP-4.4 — aarch64 PAN/PXN (DEFERRED)** — no-op stubs in place; requires an
-  aarch64 boot path + test class before it can be enabled.
-- **Open bug fixes per `BUGS.md`** — `elf_loader` `wait_loader_idle` flake,
-  `pml4_clone` CR3-corruption crash, H2 deferred-switch race RE-OPENED.
+- **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
+  requires an aarch64 boot path + test class before it can be enabled.
 
 
 ## Past Releases

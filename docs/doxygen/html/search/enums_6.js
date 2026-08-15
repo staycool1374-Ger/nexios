@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['mempoolerror_0',['MemPoolError',['../namespacekernel_1_1errors.html#aeb48fedc2d846227f58f7b1207bd4e9f',1,'kernel::errors']]]
+  ['writeclass_0',['WriteClass',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d',1,'kernel::gs']]]
 ];

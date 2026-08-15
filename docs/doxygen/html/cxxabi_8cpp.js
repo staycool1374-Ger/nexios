@@ -15,6 +15,5 @@ var cxxabi_8cpp =
     [ "_Unwind_Resume", "cxxabi_8cpp.html#a5f67d1acf0b3b73d101a562d2e9f659b", null ],
     [ "memcpy", "cxxabi_8cpp.html#aba088e716bccbc96d42da97e96316df1", null ],
     [ "memmove", "cxxabi_8cpp.html#a340d11725e5c81a874f508fbcdf1c5ef", null ],
-    [ "memset", "cxxabi_8cpp.html#a313175102214d45434bf045db18dddf0", null ],
-    [ "g_user_access_recover_ip", "cxxabi_8cpp.html#a1b5fda023c78bb33539b3e9ace918dc8", null ]
+    [ "memset", "cxxabi_8cpp.html#a313175102214d45434bf045db18dddf0", null ]
 ];
