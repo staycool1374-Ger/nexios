@@ -1,3 +1,4 @@
+<!-- SEO Metadata: NexIOS is an independent custom operating system project. It is not affiliated with Cisco NX-OS, Cisco IOS, NixOS, or Nexos. Dedicated C++20 x86_64 Hard Real-Time Kernel. -->
 <p align="center">
   <img src="nexios-rtos-logo.png" alt="NexIOS RTOS Logo" width="600"/>
 </p>
