@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 883,    0,       0      },  // 869 + process(+3) + MP-4 SMAP(+3) + elf_loader(+7); dump_class_counts verified
+    {"all",                 886,    0,       0      },  // 869 + process(+3) + MP-4 SMAP(+3) + elf_loader(+7) + MP-7 named(+3); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -69,13 +69,13 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
 
     // process
-    {"process_lifecycle",    15,    0,       0      },  // process lifecycle, child table
+    {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
     {"elf_loader",            8,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield)
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
-    {"process_pml4_clone",    7,    0,       0      },  // fork deep-copy page tables
+    {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
     // ipc
