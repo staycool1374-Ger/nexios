@@ -57,8 +57,10 @@ void CNode::dispose() noexcept {
             target->release();
         }
     }
-    kernel::test::ResourceTracker::instance().track_cap_object_remove();
-    MemPool::free(this);
+    if (is_pool_backed()) {
+        kernel::test::ResourceTracker::instance().track_cap_object_remove();
+        MemPool::free(this);
+    }
 }
 
 void CNode::revoke() noexcept {

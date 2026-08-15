@@ -80,7 +80,11 @@ enum class SyscallNumber : uint8_t {
     KLOG = 48,
     REBOOT = 49,
     HALT = 50,
-    MAX_SYSCALL = 51,
+    CAP_GRANT = 51,
+    CAP_COPY = 52,
+    CAP_REVOKE = 53,
+    CAP_MINT = 54,
+    MAX_SYSCALL = 55,
 };
 
 /// @brief System call handler function signature.
@@ -212,6 +216,14 @@ class Syscall {
                                uint64_t *);
     static uint64_t sys_halt(uint64_t, uint64_t, uint64_t, uint64_t,
                              uint64_t *);
+    static uint64_t sys_cap_grant(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_cap_copy(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_cap_revoke(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
+    static uint64_t sys_cap_mint(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -266,6 +278,10 @@ class Syscall {
             &Syscall::sys_klog,
             &Syscall::sys_reboot,
             &Syscall::sys_halt,
+            &Syscall::sys_cap_grant,
+            &Syscall::sys_cap_copy,
+            &Syscall::sys_cap_revoke,
+            &Syscall::sys_cap_mint,
     };
 };
 

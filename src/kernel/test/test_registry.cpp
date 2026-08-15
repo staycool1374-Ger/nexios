@@ -91,6 +91,7 @@ void register_framebuffer_tests();
 void register_pml4_clone_tests();
 void register_cap_core_tests();
 void register_cap_lifecycle_tests();
+void register_cap_syscall_tests();
 void register_waitpid_tests();
 void register_buffer_pool_tests();
 void register_block_device_tests();
@@ -302,6 +303,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- cap: capability-based access control (CSpace core engine) --
     {"cap_core", []() { register_cap_core_tests(); }},
     {"cap_lifecycle", []() { register_cap_lifecycle_tests(); }},
+    {"cap_syscall", []() { register_cap_syscall_tests(); }},
 
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
@@ -517,6 +519,7 @@ static void register_all_tests() {
     register_mutex_pcp_tests();
     register_pml4_clone_tests();
     register_cap_core_tests();
+    register_cap_syscall_tests();
     register_cap_lifecycle_tests();
     register_waitpid_tests();
     register_resource_exhaustion_tests();
@@ -659,6 +662,7 @@ static void register_all_tests_first_half() {
     register_pml4_clone_tests();
     register_cap_core_tests();
     register_cap_lifecycle_tests();
+    register_cap_syscall_tests();
     register_waitpid_tests();
     register_resource_exhaustion_tests();
     register_block_device_tests();

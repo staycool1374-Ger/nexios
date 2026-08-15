@@ -374,6 +374,10 @@ build/kernel/test/test_tmpfs_invalid_mount.o: src/kernel/test/test_tmpfs_invalid
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_cap_syscall.o: src/kernel/test/test_cap_syscall.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_resource_exhaustion.o: src/kernel/test/test_resource_exhaustion.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -835,6 +839,10 @@ build/kernel/syscall/syscall_handlers_sync.o: src/kernel/syscall/syscall_handler
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/syscall/syscall_handlers_ipc.o: src/kernel/syscall/syscall_handlers_ipc.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/syscall/syscall_handlers_cap.o: src/kernel/syscall/syscall_handlers_cap.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
