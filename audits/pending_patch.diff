@@ -1,0 +1,1384 @@
+diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
+new file mode 100644
+index 00000000..04049350
+--- /dev/null
++++ b/src/kernel/cap/cap.cpp
+@@ -0,0 +1,320 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cap.cpp
++/// @brief CSpace core engine implementation: CNode lifecycle, slot install/
++///        remove, handle lookup, cascade revoke.
++
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/cap_types.hpp>
++#include <kernel/memory/kernel_object.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/test/resource_tracker.hpp>
++
++// Placement new (defined in lib/new.cpp, no <new> header in freestanding)
++inline void *operator new(unsigned long, void *p) noexcept {
++    return p;
++}
++
++namespace kernel::cap {
++
++CNode *CNode::create(uint32_t cspace_id) {
++    auto *node = static_cast<CNode *>(MemPool::alloc(sizeof(CNode)));
++    if (!node)
++        return nullptr;
++    new (node) CNode;
++    node->mark_pool_backed();
++    node->cspace_id = cspace_id;
++    kernel::test::ResourceTracker::instance().track_cap_object_add();
++    return node;
++}
++
++void CNode::dispose() noexcept {
++    // Drop every slot reference.  Runs outside any cap spinlock: it may
++    // MemPool::free() targets whose last slot reference this is.
++    for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
++        KernelObject *target = slots[i].obj;
++        if (slots[i].occupied && target) {
++            slots[i].occupied = false;
++            slots[i].obj = nullptr;
++            kernel::test::ResourceTracker::instance().track_cap_slot_remove();
++            target->release();
++        }
++    }
++    if (is_pool_backed()) {
++        kernel::test::ResourceTracker::instance().track_cap_object_remove();
++        MemPool::free(this);
++    }
++}
++
++void CNode::revoke() noexcept {
++    KernelObject::revoke();
++    // Iterative cascade with an explicit work list (never unbounded
++    // recursion).  Bound the walk by CONFIG_CAP_MAX_DEPTH and the slot
++    // count.  Children are marked revoked; their refcounts are dropped by
++    // the caller of revoke() (remove()) or by dispose() at teardown.
++    CNode *todo[CONFIG_CAP_MAX_DEPTH];
++    size_t todo_count = 0;
++    todo[todo_count++] = this;
++    while (todo_count > 0) {
++        CNode *node = todo[--todo_count];
++        for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
++            CSlot &slot = node->slots[i];
++            if (!slot.occupied || !slot.obj)
++                continue;
++            slot.obj->revoke();
++            if (slot.type == CapType::CNode &&
++                node->depth_ < CONFIG_CAP_MAX_DEPTH &&
++                todo_count < CONFIG_CAP_MAX_DEPTH) {
++                auto *child = static_cast<CNode *>(slot.obj);
++                child->depth_ = node->depth_ + 1;
++                todo[todo_count++] = child;
++            }
++        }
++    }
++}
++
++int CNode::install(KernelObject *obj, CapType type, uint32_t rights) noexcept {
++    if (!obj || type == CapType::Null)
++        return -1;
++    if (!obj->acquire())
++        return -1; // revoked target: refuse to install
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
++        if (!slots[i].occupied) {
++            slots[i].obj = obj;
++            slots[i].type = type;
++            slots[i].rights = rights;
++            slots[i].occupied = true;
++            kernel::test::ResourceTracker::instance().track_cap_slot_add();
++            return static_cast<int>(i);
++        }
++    }
++    // Table full: roll back the acquire taken above.
++    obj->release();
++    return -1;
++}
++
++void CNode::remove(uint32_t idx) noexcept {
++    KernelObject *target = nullptr;
++    {
++        SpinLockGuard<sync::SpinLock> guard(lock_);
++        if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
++            !slots[idx].occupied)
++            return;
++        target = slots[idx].obj;
++        slots[idx].obj = nullptr;
++        slots[idx].type = CapType::Null;
++        slots[idx].rights = 0;
++        ++slots[idx].gen; // invalidate stale handles for a recycled slot
++        slots[idx].occupied = false;
++        kernel::test::ResourceTracker::instance().track_cap_slot_remove();
++    }
++    // Release the slot's reference OUTSIDE the lock: the last release may
++    // run dispose() -> MemPool::free, which must never run under a cap
++    // spinlock (lock ordering).
++    if (target)
++        target->release();
++}
++
++KernelObject *CNode::peek(uint32_t idx, CapType want) const noexcept {
++    if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT))
++        return nullptr;
++    const CSlot &slot = slots[idx];
++    if (!slot.occupied || slot.type != want)
++        return nullptr;
++    return slot.obj;
++}
++
++uint32_t CNode::slot_gen(uint32_t idx) const noexcept {
++    if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT))
++        return 0;
++    return slots[idx].gen;
++}
++
++void CNode::clear_grant(uint32_t idx) noexcept {
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) || !slots[idx].occupied)
++        return;
++    slots[idx].rights &= ~CAP_RIGHT_GRANT;
++}
++
++KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
++                     uint32_t need_rights) noexcept {
++    if (!cspace)
++        return nullptr;
++    const uint32_t idx = handle_slot(handle);
++    if (!slot_index_valid(idx))
++        return nullptr;
++    KernelObject *target = nullptr;
++    {
++        SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
++        if (handle_cspace(handle) != cspace->cspace_id)
++            return nullptr;
++        const CSlot &slot = cspace->slots[idx];
++        if (!slot.occupied)
++            return nullptr;
++        if (handle_gen(handle) != slot.gen)
++            return nullptr; // stale handle
++        if (want != CapType::Null && slot.type != want)
++            return nullptr;
++        if ((slot.rights & need_rights) != need_rights)
++            return nullptr;
++        if (!slot.obj->acquire())
++            return nullptr; // revoked meanwhile
++        target = slot.obj;
++    }
++    return target;
++}
++
++bool revoke(CNode *cspace, uint64_t handle) noexcept {
++    if (!cspace)
++        return false;
++    const uint32_t idx = handle_slot(handle);
++    if (!slot_index_valid(idx))
++        return false;
++    if (handle_cspace(handle) != cspace->cspace_id)
++        return false;
++    // Occupy-claim the slot under the lock; collect the target for deferred
++    // release (the last release may MemPool::free the target).
++    KernelObject *target = nullptr;
++    bool found = false;
++    {
++        SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
++        CSlot &slot = cspace->slots[idx];
++        if (!slot.occupied)
++            return false; // idempotent: already revoked/free
++        if (handle_gen(handle) != slot.gen)
++            return false;
++        target = slot.obj;
++        slot.obj = nullptr;
++        slot.type = CapType::Null;
++        slot.rights = 0;
++        ++slot.gen;
++        slot.occupied = false;
++        kernel::test::ResourceTracker::instance().track_cap_slot_remove();
++        found = true;
++    }
++    if (!found)
++        return false;
++    // Outside the lock: mark the target revoked (future acquire() refused),
++    // cascading if it is a CNode, then drop the slot reference.
++    if (target)
++        target->revoke();
++    if (target)
++        target->release();
++    return true;
++}
++
++size_t occupied_count(const CNode *cspace) noexcept {
++    if (!cspace)
++        return 0;
++    size_t n = 0;
++    for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i)
++        if (cspace->slots[i].occupied)
++            ++n;
++    return n;
++}
++
++/// @brief Core of copy/grant: pins the source slot target, then installs it
++///        into @p dst with @p rights.  The install takes its own acquire();
++///        the pin taken here is released on both success and failure.
++int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
++                   uint32_t rights) noexcept {
++    if (!src || !dst || src == dst)
++        return -1;
++    // lookup() returns the target with acquire() already taken.
++    KernelObject *target =
++        lookup(src, src_handle, CapType::Null, 0);
++    if (!target)
++        return -1;
++    CapType type = CapType::Null;
++    uint32_t src_rights = 0;
++    uint32_t src_gen = 0;
++    {
++        SpinLockGuard<sync::SpinLock> guard(src->lock_);
++        const uint32_t idx = handle_slot(src_handle);
++        if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
++            !src->slots[idx].occupied) {
++            target->release();
++            return -1;
++        }
++        type = src->slots[idx].type;
++        src_rights = src->slots[idx].rights;
++        src_gen = src->slots[idx].gen;
++    }
++    if (src_gen != handle_gen(src_handle)) {
++        target->release();
++        return -1;
++    }
++    // Reduce the granted rights by the requested mask AND the source rights
++    // (a copy can never widen rights).
++    const uint32_t effective = rights & src_rights;
++    int installed = dst->install(target, type, effective);
++    target->release();
++    return installed;
++}
++
++int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
++    return do_copy_pinned(src, src_handle, dst, CAP_RIGHT_READ |
++                                                      CAP_RIGHT_WRITE |
++                                                      CAP_RIGHT_COPY |
++                                                      CAP_RIGHT_GRANT);
++}
++
++int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
++    // Requires CAP_RIGHT_GRANT on the source slot.
++    KernelObject *target = lookup(src, src_handle, CapType::Null,
++                                  CAP_RIGHT_GRANT);
++    if (!target)
++        return -1;
++    // Capture the type/rights under the lock, then clear GRANT (mint-once).
++    CapType type = CapType::Null;
++    uint32_t rights = 0;
++    uint32_t src_gen = 0;
++    {
++        SpinLockGuard<sync::SpinLock> guard(src->lock_);
++        const uint32_t idx = handle_slot(src_handle);
++        if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
++            !src->slots[idx].occupied) {
++            target->release();
++            return -1;
++        }
++        type = src->slots[idx].type;
++        rights = src->slots[idx].rights;
++        src_gen = src->slots[idx].gen;
++    }
++    if (src_gen != handle_gen(src_handle)) {
++        target->release();
++        return -1;
++    }
++    int installed = dst->install(target, type, rights);
++    if (installed >= 0)
++        src->clear_grant(handle_slot(src_handle));
++    target->release();
++    return installed;
++}
++
++int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
++         uint32_t badge) noexcept {
++    (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
++    return do_copy_pinned(src, src_handle, dst, rights_mask);
++}
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
+new file mode 100644
+index 00000000..077888cd
+--- /dev/null
++++ b/src/kernel/cap/cap.hpp
+@@ -0,0 +1,128 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cap.hpp
++/// @brief CSpace core engine: CNode, slot operations, handle lookup, revoke.
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/cap/cap_types.hpp>
++#include <kernel/memory/kernel_object.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
++
++namespace kernel {
++struct TaskControlBlock;
++}
++
++namespace kernel::cap {
++
++/// @brief A capability node: a bounded table of slots.  Itself a KernelObject
++///        (shared-heap class, PipeBuffer pattern).  A task's root CNode is its
++///        CSpace and is attached to the TCB intrusive object list so teardown
++///        releases it deterministically.
++///
++/// @note dispose() must never run while holding a cap spinlock (it calls
++///       MemPool::free + ResourceTracker which take their own locks), so the
++///       revoke path collects targets under the lock and releases them after
++///       unlocking.
++class CNode : public KernelObject {
++  public:
++    CSlot slots[CONFIG_CSLOT_COUNT];
++    uint32_t cspace_id = 0;
++    CNode *parent_ = nullptr;
++    uint32_t depth_ = 0;
++    sync::SpinLock lock_;
++
++    /// @brief Allocates a CNode from the MemPool and marks it pool-backed.
++    ///        Returns nullptr on allocation failure.
++    static CNode *create(uint32_t cspace_id);
++
++    /// @brief Final teardown on the last release: releases every slot target
++    ///        exactly once, drops the ResourceTracker counter and returns the
++    ///        block to the MemPool.
++    void dispose() noexcept override;
++
++    /// @brief Genuinely shared (may be referenced by multiple tasks/pins).
++    bool is_shared() const noexcept override { return true; }
++
++    /// @brief Cascade revoke: marks this node revoked and invalidates every
++    ///        capability reachable through it (iterative, depth-bounded).
++    void revoke() noexcept override;
++
++    /// @brief Installs @p obj into the first free slot with the given type
++    ///        and rights.  Takes a strong reference (acquire()) on success.
++    /// @return slot index on success, -1 when full or the target is revoked.
++    int install(KernelObject *obj, CapType type, uint32_t rights) noexcept;
++
++    /// @brief Removes the slot at @p idx (clears and releases the target).
++    ///        Idempotent: an already-free slot is a no-op.  The target is
++    ///        released OUTSIDE the slot-table lock (deferred release list).
++    void remove(uint32_t idx) noexcept;
++
++    /// @brief Returns the slot at @p idx if it is occupied and matches the
++    ///        requested type; nullptr otherwise.  Does NOT take a reference.
++    KernelObject *peek(uint32_t idx, CapType want) const noexcept;
++
++    /// @brief Returns the current generation of the slot at @p idx.
++    uint32_t slot_gen(uint32_t idx) const noexcept;
++
++    /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
++    ///        a grant).  No-op on an unoccupied slot.
++    void clear_grant(uint32_t idx) noexcept;
++};
++
++/// @brief Looks up @p handle in @p cspace and returns a PREFIX-reference
++///        (target->acquire() already taken) if the slot is occupied, matches
++///        @p want, carries @p need_rights and the generation matches.
++/// @return The pinned target (caller must release() it) or nullptr on any
++///         validation failure.  Never returns a target without acquire().
++KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
++                     uint32_t need_rights) noexcept;
++
++/// @brief Revokes the capability at @p handle in @p cspace.  Idempotent.
++/// @return true when a live capability was revoked, false when the slot was
++///         already free (or the handle was invalid).
++bool revoke(CNode *cspace, uint64_t handle) noexcept;
++
++/// @brief Number of occupied slots (debug/leak audit helper).
++size_t occupied_count(const CNode *cspace) noexcept;
++
++/// @brief Capability lifecycle primitives (task context only).
++///        All return -1 on failure (invalid handle, wrong type, missing
++///        rights, revoked target, full destination).  On success they install
++///        exactly one new slot and return its index.
++
++/// @brief Copies the capability at @p src_handle of @p src into @p dst.
++///        The destination slot inherits the source rights (COPY-capped).
++int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
++
++/// @brief Grants the capability at @p src_handle of @p src into @p dst.
++///        Requires CAP_RIGHT_GRANT on the source slot; clears the source
++///        GRANT right after use (mint-once semantics).
++int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
++
++/// @brief Copies the capability with a reduced rights mask and, for
++///        endpoints, a new badge.
++int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
++         uint32_t badge) noexcept;
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
+new file mode 100644
+index 00000000..dd12b7a8
+--- /dev/null
++++ b/src/kernel/cap/cap_types.hpp
+@@ -0,0 +1,105 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cap_types.hpp
++/// @brief CSpace capability type, rights and slot definitions (ROADMAP 0.4.1).
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/memory/kernel_object.hpp>
++
++namespace kernel::cap {
++
++/// @brief Capability target types (iteration-1 slice).
++///        Null = empty slot; Task/Endpoint/Frame/CNode are live targets.
++enum class CapType : uint8_t {
++    Null = 0,
++    Task = 1,
++    Endpoint = 2,
++    Frame = 3,
++    CNode = 4,
++};
++
++/// @brief Rights bitmap, checked by the operation that consumes the cap.
++enum CapRights : uint32_t {
++    CAP_RIGHT_READ  = 1u << 0, ///< endpoint recv / frame read-mapping
++    CAP_RIGHT_WRITE = 1u << 1, ///< endpoint send / frame write-mapping
++    CAP_RIGHT_GRANT = 1u << 2, ///< may grant (copy into another CSpace)
++    CAP_RIGHT_COPY  = 1u << 3, ///< may copy (duplicate into own CSpace)
++};
++
++/// @brief Bits allocated to the cspace id in a capability handle.
++constexpr uint32_t CAP_HANDLE_IDBITS = 8;
++
++/// @brief Bits allocated to the slot index in a capability handle.
++///        Derived from CONFIG_CSLOT_COUNT (power of two preferred).
++constexpr uint32_t cap_slot_bits() noexcept {
++    uint32_t bits = 0;
++    uint32_t slots = static_cast<uint32_t>(CONFIG_CSLOT_COUNT);
++    while ((1u << bits) < slots)
++        ++bits;
++    return bits;
++}
++
++constexpr uint32_t CAP_SLOT_BITS = cap_slot_bits();
++constexpr uint32_t CAP_SLOT_MASK = (1u << CAP_SLOT_BITS) - 1u;
++
++/// @brief One slot in a CNode: a strong reference (acquire()) to the target.
++struct CSlot {
++    KernelObject *obj = nullptr; ///< target; null when unoccupied
++    CapType type = CapType::Null;
++    uint32_t rights = 0;
++    uint32_t gen = 0; ///< slot generation; stale-handle detection
++    bool occupied = false;
++};
++
++/// @brief Encodes a capability handle from its fields.
++///        Layout: [gen : (IDBITS+SLOTBITS)] [cspace_id : IDBITS]
++///                [slot_index : SLOTBITS]
++constexpr uint64_t encode_handle(uint32_t cspace_id, uint32_t slot_index,
++                                 uint32_t gen) noexcept {
++    constexpr uint32_t shift = CAP_HANDLE_IDBITS + CAP_SLOT_BITS;
++    return (static_cast<uint64_t>(gen) << shift) |
++           (static_cast<uint64_t>(cspace_id & 0xFFu) << CAP_SLOT_BITS) |
++           (static_cast<uint64_t>(slot_index) & CAP_SLOT_MASK);
++}
++
++/// @brief Extracts the slot index from a capability handle.
++constexpr uint32_t handle_slot(uint64_t handle) noexcept {
++    return static_cast<uint32_t>(handle & CAP_SLOT_MASK);
++}
++
++/// @brief Extracts the cspace id from a capability handle.
++constexpr uint32_t handle_cspace(uint64_t handle) noexcept {
++    return static_cast<uint32_t>((handle >> CAP_SLOT_BITS) & 0xFFu);
++}
++
++/// @brief Extracts the generation from a capability handle.
++constexpr uint32_t handle_gen(uint64_t handle) noexcept {
++    return static_cast<uint32_t>(handle >>
++                                 (CAP_HANDLE_IDBITS + CAP_SLOT_BITS));
++}
++
++/// @brief True if the slot index fits this CNode's table.
++constexpr bool slot_index_valid(uint32_t idx) noexcept {
++    return idx < static_cast<uint32_t>(CONFIG_CSLOT_COUNT);
++}
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/endpoint.cpp b/src/kernel/cap/endpoint.cpp
+new file mode 100644
+index 00000000..7c7cae97
+--- /dev/null
++++ b/src/kernel/cap/endpoint.cpp
+@@ -0,0 +1,52 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file endpoint.cpp
++/// @brief Capability-backed IPC endpoint object implementation.
++
++#include <kernel/cap/endpoint.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/test/resource_tracker.hpp>
++
++// Placement new (defined in lib/new.cpp, no <new> header in freestanding)
++inline void *operator new(unsigned long, void *p) noexcept {
++    return p;
++}
++
++namespace kernel::cap {
++
++Endpoint *Endpoint::create(uint32_t badge) {
++    auto *ep = static_cast<Endpoint *>(MemPool::alloc(sizeof(Endpoint)));
++    if (!ep)
++        return nullptr;
++    new (ep) Endpoint;
++    ep->mark_pool_backed();
++    ep->badge = badge;
++    ep->q.init();
++    ep->q.owner = nullptr;
++    kernel::test::ResourceTracker::instance().track_cap_object_add();
++    return ep;
++}
++
++void Endpoint::dispose() noexcept {
++    bound_receiver = nullptr;
++    kernel::test::ResourceTracker::instance().track_cap_object_remove();
++    MemPool::free(this);
++}
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/endpoint.hpp b/src/kernel/cap/endpoint.hpp
+new file mode 100644
+index 00000000..fe577556
+--- /dev/null
++++ b/src/kernel/cap/endpoint.hpp
+@@ -0,0 +1,59 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file endpoint.hpp
++/// @brief Capability-backed IPC endpoint object (shared-heap KernelObject).
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/memory/kernel_object.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/sync/spinlock.hpp>
++
++namespace kernel::cap {
++
++/// @brief A capability-gated IPC endpoint: a heap-resident message queue plus
++///        a receiver binding and badge.  Shared-heap class (PipeBuffer
++///        pattern): lifetime is pinned by capability slots; dispose() runs on
++///        the last reference.
++///
++/// @note The embedded MessageQueue is heap-resident and explicitly init()'d
++///       (never deleted — Endpoint is freed via MemPool::free in dispose(),
++///       so MessageQueue's destructor is not invoked; blocked senders must be
++///       drained before the last release).
++class Endpoint : public KernelObject {
++  public:
++    MessageQueue q;
++    TaskControlBlock *bound_receiver = nullptr;
++    uint32_t badge = 0;
++    sync::SpinLock lock_;
++
++    /// @brief Allocates an Endpoint from the MemPool, pool-marks it and
++    ///        initialises the embedded queue.  Returns nullptr on failure.
++    static Endpoint *create(uint32_t badge);
++
++    /// @brief Final teardown: detaches the receiver binding and returns the
++    ///        block to the MemPool.
++    void dispose() noexcept override;
++
++    /// @brief Genuinely shared (referenced by capability slots).
++    bool is_shared() const noexcept override { return true; }
++};
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/frame.cpp b/src/kernel/cap/frame.cpp
+new file mode 100644
+index 00000000..d1889568
+--- /dev/null
++++ b/src/kernel/cap/frame.cpp
+@@ -0,0 +1,54 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file frame.cpp
++/// @brief Capability-wrapped physical memory frame implementation.
++
++#include <kernel/cap/frame.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/test/resource_tracker.hpp>
++
++// Placement new (defined in lib/new.cpp, no <new> header in freestanding)
++inline void *operator new(unsigned long, void *p) noexcept {
++    return p;
++}
++
++namespace kernel::cap {
++
++FrameCap *FrameCap::create(uint64_t phys, size_t count, bool is_user) {
++    auto *fc = static_cast<FrameCap *>(MemPool::alloc(sizeof(FrameCap)));
++    if (!fc)
++        return nullptr;
++    new (fc) FrameCap;
++    fc->mark_pool_backed();
++    fc->phys = phys;
++    fc->count = count;
++    fc->is_user = is_user;
++    kernel::test::ResourceTracker::instance().track_cap_object_add();
++    return fc;
++}
++
++void FrameCap::dispose() noexcept {
++    for (size_t i = 0; i < count; ++i)
++        PMM::free_page(phys + i * arch::PAGE_SIZE);
++    kernel::test::ResourceTracker::instance().track_cap_object_remove();
++    MemPool::free(this);
++}
++
++} // namespace kernel::cap
+diff --git a/src/kernel/cap/frame.hpp b/src/kernel/cap/frame.hpp
+new file mode 100644
+index 00000000..45046399
+--- /dev/null
++++ b/src/kernel/cap/frame.hpp
+@@ -0,0 +1,50 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file frame.hpp
++/// @brief Capability-wrapped physical memory frame (shared-heap KernelObject).
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/memory/kernel_object.hpp>
++
++namespace kernel::cap {
++
++/// @brief A capability-gated physical frame (or contiguous range).  Owns the
++///        PMM pages it wraps: the last reference frees them via dispose().
++///        Shared-heap class (PipeBuffer pattern).
++class FrameCap : public KernelObject {
++  public:
++    uint64_t phys = 0;
++    size_t count = 0;
++    bool is_user = false;
++
++    /// @brief Allocates a FrameCap from the MemPool and pool-marks it.
++    ///        Returns nullptr on failure.
++    static FrameCap *create(uint64_t phys, size_t count, bool is_user);
++
++    /// @brief Final teardown: returns every wrapped frame to the PMM and the
++    ///        block to the MemPool.
++    void dispose() noexcept override;
++
++    /// @brief Genuinely shared (referenced by capability slots).
++    bool is_shared() const noexcept override { return true; }
++};
++
++} // namespace kernel::cap
+diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
+index 5e8f74b6..4b6dadc0 100644
+--- a/src/kernel/ipc/ipc.cpp
++++ b/src/kernel/ipc/ipc.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
++#include <kernel/cap/endpoint.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/debug/ipc_sched_trace.hpp>
+ #include <kernel/arch/io.hpp>
+@@ -269,6 +270,69 @@ bool IPC::recv(Message &msg) {
+     return ok;
+ }
+ 
++/// @brief Send through a capability-gated endpoint.  The endpoint's message
++///        queue is the transport (no task-ID ambient authority).  Blocks on a
++///        full queue unless IPC_NONBLOCK; wakes the bound receiver.
++bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
++    if (!ep)
++        return false;
++    if (ep->revoked())
++        return false; // revoked endpoint refuses sends (CSpace revocation)
++
++    if (ep->q.is_full_locked()) {
++        if (flags & IPC_NONBLOCK)
++            return false;
++        auto *cur = Scheduler::current_task();
++        if (!cur)
++            return false;
++        block_sender(ep->q, *cur);
++        Scheduler::reschedule();
++        if (arch::interrupts_enabled()) {
++            while (cur->state == TaskState::BLOCKED) {
++                arch::pause();
++            }
++        } else {
++            unblock_sender_rollback(ep->q, *cur);
++            return false;
++        }
++        if (ep->q.is_full())
++            return false;
++    }
++
++    Message m = msg;
++    m.sender_id = Scheduler::current_task()
++                      ? Scheduler::current_task()->id
++                      : 0;
++    if (!ep->q.push(m))
++        return false;
++
++    TaskControlBlock *receiver = nullptr;
++    {
++        SpinLockGuard<sync::SpinLock> guard(ep->lock_);
++        receiver = ep->bound_receiver;
++    }
++    if (receiver && receiver->state == TaskState::BLOCKED) {
++        Scheduler::set_task_ready(*receiver);
++        receiver->remaining_ticks = receiver->period_ticks;
++    }
++    return true;
++}
++
++/// @brief Receive from a capability-gated endpoint into the calling task's
++///        own queue.  Non-blocking: returns false on an empty endpoint queue.
++bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
++    if (!ep)
++        return false;
++    if (!ep->q.pop(msg))
++        return false;
++    if (ep->q.blocked_senders_head) {
++        auto *cur = Scheduler::current_task();
++        if (cur)
++            wake_sender(ep->q, *cur);
++    }
++    return true;
++}
++
+ /// @brief Send and block until a reply arrives (client-side synchronous IPC).
+ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
+     // Send the request message
+diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
+index 3b3b4a84..cb758bbb 100644
+--- a/src/kernel/ipc/ipc.hpp
++++ b/src/kernel/ipc/ipc.hpp
+@@ -29,6 +29,9 @@
+ #include <kernel/sync/spinlock_guard.hpp>
+ 
+ namespace kernel {
++namespace cap {
++class Endpoint;
++}
+ 
+ /// @brief Flags for IPC::send().
+ // NOLINTNEXTLINE(performance-enum-size)
+@@ -57,6 +60,19 @@ class IPC {
+     /// @brief Returns the message queue for a given task ID.
+     static MessageQueue &queue(uint64_t task_id);
+ 
++    /// @brief Sends a message through a capability-gated endpoint (ROADMAP
++    ///        0.4.1 CSpace).  The endpoint holds the receiver binding; no
++    ///        task-ID ambient authority is used.  Blocks on a full endpoint
++    ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
++    ///        capability lookup result).
++    static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
++                             uint64_t flags = 0);
++
++    /// @brief Receives a message from a capability-gated endpoint into the
++    ///        calling task's own queue.  Returns false if the endpoint queue
++    ///        is empty.
++    static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
++
+     /// @brief Blocks the current task on a full queue
+     ///        (may boost owner priority).
+     ///
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 5d182ab7..29dee045 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -18,6 +18,7 @@
+ 
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/cap/frame.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <constants.hpp>
+@@ -1196,4 +1197,26 @@ VmmError VMM::virt_to_phys_in_pml4_err(uint64_t virt_addr, uint64_t pml4_phys,
+     return out_phys_addr != 0 ? VMM_ERR_OK : VMM_ERR_NOT_MAPPED;
+ }
+ 
++/// @brief Maps every frame owned by a FrameCap into @p pml4_phys.
++///        Refuses a revoked cap — capability-gated memory must not map after
++///        revocation (ROADMAP 0.4.1 CSpace).  The caller must hold a pin
++///        (ScopedRef / live capability slot) on @p fc.
++bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
++                             uint64_t pml4_phys) {
++    if (!fc || fc->revoked())
++        return false;
++    if (fc->phys == 0 || fc->count == 0)
++        return false;
++    for (size_t i = 0; i < fc->count; ++i) {
++        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
++                         fc->phys + i * arch::PAGE_SIZE, user, pml4_phys);
++    }
++    return true;
++}
++
++/// @brief Unmaps one page previously mapped via map_frame_from_cap().
++void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
++    map_page_in_pml4(virt_addr, 0, false, pml4_phys);
++}
++
+ } // namespace kernel
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 8e188e8b..d1c43ee7 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -31,6 +31,10 @@
+ 
+ namespace kernel {
+ 
++namespace cap {
++class FrameCap;
++}
++
+ /// @brief Virtual memory manager — maps virtual to physical pages.
+ /// @note Page-walk depth is fixed per architecture (4 levels for
+ /// x86_64/aarch64,
+@@ -150,6 +154,23 @@ class VMM {
+     /// @return VmmError code.
+     static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
+ 
++    /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.
++    ///        Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping
++    ///        capability-gated memory requires a live, non-revoked cap.
++    /// @param fc        The FrameCap (must be pinned by the caller).
++    /// @param virt_addr Base virtual address (page-aligned).
++    /// @param user      If true, sets user-accessible flag.
++    /// @param pml4_phys Physical address of the target PML4.
++    /// @return true when every frame was mapped, false on a revoked cap or
++    ///         a zero frame.
++    static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
++                                   bool user, uint64_t pml4_phys);
++
++    /// @brief Unmaps one page previously mapped via map_frame_from_cap().
++    /// @param virt_addr Virtual address to unmap.
++    /// @param pml4_phys Physical address of the target PML4.
++    static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
++
+     /// @brief Translates a virtual address to a physical address
+     /// using a specific PML4.
+     /// @param virt_addr Virtual address to translate.
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 41a5d722..da598c12 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -491,6 +491,23 @@
+ #define CONFIG_MAX_PER_TASK_OBJECTS 32
+ #endif
+ 
++// ---------------------------------------------------------------------------
++// Capability (CSpace) Configuration
++// ---------------------------------------------------------------------------
++/// Number of slots in each capability node (CNode).  The task's root CNode is
++/// its CSpace.  Slot index bits are carved from the capability handle, so a
++/// power of two is preferred.
++#ifndef CONFIG_CSLOT_COUNT
++#define CONFIG_CSLOT_COUNT 64
++#endif
++
++/// Maximum cascade-revoke depth.  Revoking a CNode recursively revokes every
++/// capability reachable through it; the walk is iterative (explicit work
++/// list), bounded by this depth.
++#ifndef CONFIG_CAP_MAX_DEPTH
++#define CONFIG_CAP_MAX_DEPTH 8
++#endif
++
+ // ---------------------------------------------------------------------------
+ // Priority Inheritance Protocol Configuration
+ // ---------------------------------------------------------------------------
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index 105769fb..a57a47b6 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -80,7 +80,11 @@ enum class SyscallNumber : uint8_t {
+     KLOG = 48,
+     REBOOT = 49,
+     HALT = 50,
+-    MAX_SYSCALL = 51,
++    CAP_GRANT = 51,
++    CAP_COPY = 52,
++    CAP_REVOKE = 53,
++    CAP_MINT = 54,
++    MAX_SYSCALL = 55,
+ };
+ 
+ /// @brief System call handler function signature.
+@@ -212,6 +216,14 @@ class Syscall {
+                                uint64_t *);
+     static uint64_t sys_halt(uint64_t, uint64_t, uint64_t, uint64_t,
+                              uint64_t *);
++    static uint64_t sys_cap_grant(uint64_t, uint64_t, uint64_t, uint64_t,
++                                  uint64_t *);
++    static uint64_t sys_cap_copy(uint64_t, uint64_t, uint64_t, uint64_t,
++                                 uint64_t *);
++    static uint64_t sys_cap_revoke(uint64_t, uint64_t, uint64_t, uint64_t,
++                                   uint64_t *);
++    static uint64_t sys_cap_mint(uint64_t, uint64_t, uint64_t, uint64_t,
++                                 uint64_t *);
+ 
+     static constexpr SyscallHandler
+         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
+@@ -266,6 +278,10 @@ class Syscall {
+             &Syscall::sys_klog,
+             &Syscall::sys_reboot,
+             &Syscall::sys_halt,
++            &Syscall::sys_cap_grant,
++            &Syscall::sys_cap_copy,
++            &Syscall::sys_cap_revoke,
++            &Syscall::sys_cap_mint,
+     };
+ };
+ 
+diff --git a/src/kernel/syscall/syscall_handlers_cap.cpp b/src/kernel/syscall/syscall_handlers_cap.cpp
+new file mode 100644
+index 00000000..d274c0e7
+--- /dev/null
++++ b/src/kernel/syscall/syscall_handlers_cap.cpp
+@@ -0,0 +1,109 @@
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file syscall_handlers_cap.cpp
++/// @brief SYS_CAP_* syscall handlers: grant/copy/revoke/mint against the
++///        current task's root CNode (CSpace).  No blocking; all dereferences
++///        through capability slots validated by cap::lookup.
++
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/cap_types.hpp>
++
++namespace kernel {
++
++/// @brief Resolves the current task's root CNode, creating it lazily on the
++///        first capability syscall.  Returns nullptr if the CSpace cannot be
++///        allocated (MemPool exhaustion).
++cap::CNode *current_cspace() {
++    auto *t = Scheduler::current_task();
++    if (!t)
++        return nullptr;
++    t->ensure_cspace();
++    return t->get_cspace();
++}
++
++uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
++                                uint64_t, uint64_t, uint64_t *) {
++    cap::CNode *src = current_cspace();
++    if (!src)
++        return static_cast<uint64_t>(-1);
++    // Destination CNode is addressed by a CapCNode handle in the caller's
++    // own CSpace.  The dest CNode must itself be a capability we hold.
++    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
++                                        cap::CAP_RIGHT_GRANT);
++    if (!dst_obj)
++        return static_cast<uint64_t>(-1);
++    auto *dst = static_cast<cap::CNode *>(dst_obj);
++    int idx = cap::grant(src, src_handle, dst);
++    dst_obj->release();
++    if (idx < 0)
++        return static_cast<uint64_t>(-1);
++    return static_cast<uint64_t>(idx);
++}
++
++uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
++                               uint64_t, uint64_t, uint64_t *) {
++    cap::CNode *src = current_cspace();
++    if (!src)
++        return static_cast<uint64_t>(-1);
++    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
++                                        cap::CAP_RIGHT_COPY);
++    if (!dst_obj)
++        return static_cast<uint64_t>(-1);
++    auto *dst = static_cast<cap::CNode *>(dst_obj);
++    int idx = cap::copy(src, src_handle, dst);
++    dst_obj->release();
++    if (idx < 0)
++        return static_cast<uint64_t>(-1);
++    return static_cast<uint64_t>(idx);
++}
++
++uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
++                                 uint64_t, uint64_t *) {
++    cap::CNode *src = current_cspace();
++    if (!src)
++        return static_cast<uint64_t>(-1);
++    if (!cap::revoke(src, src_handle))
++        return static_cast<uint64_t>(-1);
++    return 0;
++}
++
++uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
++                               uint64_t rights_mask, uint64_t badge,
++                               uint64_t *) {
++    cap::CNode *src = current_cspace();
++    if (!src)
++        return static_cast<uint64_t>(-1);
++    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
++                                        cap::CAP_RIGHT_COPY);
++    if (!dst_obj)
++        return static_cast<uint64_t>(-1);
++    auto *dst = static_cast<cap::CNode *>(dst_obj);
++    int idx =
++        cap::mint(src, src_handle, dst, static_cast<uint32_t>(rights_mask),
++                  static_cast<uint32_t>(badge));
++    dst_obj->release();
++    if (idx < 0)
++        return static_cast<uint64_t>(-1);
++    return static_cast<uint64_t>(idx);
++}
++
++} // namespace kernel
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index e47ab4b3..fdf59b42 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -33,6 +33,7 @@
+ #include <kernel/arch/page_table.hpp>
+ #include <kernel/memory/kernel_object.hpp>
+ #include <kernel/memory/mempool.hpp>
++#include <kernel/cap/cap.hpp>
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
+ #include <kernel/daemon/daemon_mgr.hpp>
+@@ -131,6 +132,23 @@ void TaskControlBlock::init_sporadic_server(
+     Scheduler::inc_sporadic_count();
+ }
+ 
++/// @brief Lazily creates this task's root CNode (CSpace) from the MemPool.
++///        Idempotent: returns early if the CSpace already exists.  The node
++///        is pool-backed and attached to this task's intrusive object list so
++///        teardown (release_all_objects) reclaims it deterministically.
++///        The task's own id serves as the cspace_id decoded from handles
++///        (no global registry in iteration-1 CSpace; handles are validated
++///        against the current task's root CNode only).
++void TaskControlBlock::ensure_cspace() noexcept {
++    if (cspace_)
++        return;
++    auto *node = cap::CNode::create(static_cast<uint32_t>(id & 0xFFu));
++    if (!node)
++        return;
++    attach_object(node);
++    cspace_ = node;
++}
++
+ /// @brief Attaches @p obj to this task's intrusive object list.
+ ///        Only called while the task is not visible to the scheduler
+ ///        (pre-add_task or inside cleanup under IrqGuard), so the list
+@@ -163,6 +181,8 @@ void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
+     obj->task_obj_next_ = nullptr;
+     if (sporadic_server == obj)
+         sporadic_server = nullptr;
++    if (cspace_ == obj)
++        cspace_ = nullptr;
+ }
+ 
+ /// @brief Unlinks every node from this task's object list WITHOUT releasing
+@@ -196,6 +216,7 @@ void TaskControlBlock::detach_all_objects() noexcept {
+     task_obj_head_ = nullptr;
+     task_obj_tail_ = nullptr;
+     sporadic_server = nullptr;
++    cspace_ = nullptr;
+ }
+ 
+ /// @brief Releases every node on this task's object list (teardown).
+@@ -233,6 +254,7 @@ void TaskControlBlock::release_all_objects() noexcept {
+     task_obj_head_ = nullptr;
+     task_obj_tail_ = nullptr;
+     sporadic_server = nullptr;
++    cspace_ = nullptr;
+ }
+ 
+ /// @brief Initialises common fields of a newly allocated TaskControlBlock.
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 52aa04c5..1dfaffb3 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -112,6 +112,10 @@ class SporadicServer;
+ void dmesg_task_main();
+ } // namespace task
+ 
++namespace cap {
++class CNode;
++} // namespace cap
++
+ /// @brief States a task can be in during its lifecycle.
+ enum class TaskState : uint8_t {
+     READY,
+@@ -221,7 +225,8 @@ struct TaskControlBlock {
+            in_ready_queue_(false), rq_priority_(0), all_bucket_(0), zombie_next_(nullptr),
+           waiting_child_pid(0),
+           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
+-          alarm_armed(false), sporadic_server(nullptr), buf_list_head(0),
++          alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
++          buf_list_head(0),
+           task_obj_head_(nullptr), task_obj_tail_(nullptr),
+           blocked_next(nullptr), blocked_prev(nullptr),
+           blocked_on_queue(nullptr), reply_wait(false),
+@@ -383,6 +388,15 @@ struct TaskControlBlock {
+     /// attach_object()/detach_object(); ownership lives in the list.
+     task::SporadicServer *sporadic_server;
+ 
++    /// @brief This task's root CNode (its CSpace), lazily created on first
++    ///        capability use (cap::ensure_cspace).  nullptr for tasks that
++    ///        never touch capabilities.  Allocated from MemPool, pool-backed,
++    ///        and attached to the intrusive object list (task_obj_head_/
++    ///        task_obj_tail_); this pointer is an O(1) read cache kept in
++    ///        sync with the list by attach_object()/detach_object() — the
++    ///        same ownership model as sporadic_server.
++    cap::CNode *cspace_;
++
+     /// @brief Head of doubly-linked list of buffer handles owned by
+     /// this task. -1 means the list is empty. Used by the BufferPool
+     /// for zero-copy IPC.
+@@ -589,6 +603,18 @@ struct TaskControlBlock {
+         return sporadic_server;
+     }
+ 
++    /// @brief Returns this task's root CNode (CSpace), or nullptr if it has
++    ///        never touched capabilities.  O(1) read cache kept in sync with
++    ///        the intrusive object list; safe to call from ISR context.
++    cap::CNode *get_cspace() const noexcept {
++        return cspace_;
++    }
++
++    /// @brief Lazily creates and attaches this task's root CNode (CSpace).
++    ///        Idempotent: a second call with an existing CSpace is a no-op.
++    ///        Called from task context on first capability use.
++    void ensure_cspace() noexcept;
++
+     /// @brief Adds a child to this task's process hierarchy.
+     void add_child(TaskControlBlock *child) noexcept;
+ 
+diff --git a/src/kernel/test/resource_tracker.cpp b/src/kernel/test/resource_tracker.cpp
+index c52914e1..d657bfaa 100644
+--- a/src/kernel/test/resource_tracker.cpp
++++ b/src/kernel/test/resource_tracker.cpp
+@@ -100,6 +100,10 @@ static bool any_leak(const ResourceCounters &baseline,
+         return true;
+     if (current.open_fds > baseline.open_fds)
+         return true;
++    if (current.cap_objects > baseline.cap_objects)
++        return true;
++    if (current.cap_slots > baseline.cap_slots)
++        return true;
+     return false;
+ }
+ 
+@@ -218,6 +222,8 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
+     print_row("PipeBuffers", baseline.pipe_buffers, counters_.pipe_buffers);
+     print_row("Vnodes", baseline.vnodes, counters_.vnodes);
+     print_row("Open FDs", baseline.open_fds, counters_.open_fds);
++    print_row("Cap objects", baseline.cap_objects, counters_.cap_objects);
++    print_row("Cap slots", baseline.cap_slots, counters_.cap_slots);
+ 
+     print_backtrace();
+     return false;
+diff --git a/src/kernel/test/resource_tracker.hpp b/src/kernel/test/resource_tracker.hpp
+index e88b33ea..bfc843c7 100644
+--- a/src/kernel/test/resource_tracker.hpp
++++ b/src/kernel/test/resource_tracker.hpp
+@@ -38,6 +38,8 @@ struct ResourceCounters {
+     size_t pipe_buffers;
+     size_t vnodes;
+     size_t open_fds;
++    size_t cap_objects;
++    size_t cap_slots;
+ };
+ 
+ #ifdef CONFIG_DEBUG
+@@ -129,6 +131,20 @@ class ResourceTracker {
+         if (counters_.open_fds > 0)
+             --counters_.open_fds;
+     }
++    void track_cap_object_add() {
++        ++counters_.cap_objects;
++    }
++    void track_cap_object_remove() {
++        if (counters_.cap_objects > 0)
++            --counters_.cap_objects;
++    }
++    void track_cap_slot_add() {
++        ++counters_.cap_slots;
++    }
++    void track_cap_slot_remove() {
++        if (counters_.cap_slots > 0)
++            --counters_.cap_slots;
++    }
+ 
+     void capture(ResourceCounters &out) const {
+         out = counters_;
+@@ -196,6 +212,14 @@ class ResourceTracker {
+     }
+     void track_fd_remove() {
+     }
++    void track_cap_object_add() {
++    }
++    void track_cap_object_remove() {
++    }
++    void track_cap_slot_add() {
++    }
++    void track_cap_slot_remove() {
++    }
+     void capture(ResourceCounters &) const {
+     }
+     void restore(const ResourceCounters &) {
