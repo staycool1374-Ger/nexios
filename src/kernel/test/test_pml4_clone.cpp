@@ -23,9 +23,19 @@
 #include <logger.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/task/scheduler.hpp>
 #include <constants.hpp>
+#include "test_sched_helpers.hpp"
 
 using namespace kernel;
+
+// v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
+template <typename T>
+constexpr bool has_page_table_shared_v = requires(T *t) { t->page_table_shared_; };
+static_assert(!has_page_table_shared_v<TaskControlBlock>,
+              "MP-7: TaskControlBlock::page_table_shared_ must be removed "
+              "(deep-copy fork never shares table pages)");
 
 enum : uint64_t {
     PML4_SHIFT = 39,
@@ -454,6 +464,331 @@ JARVIS_TEST(pml4_dump_no_user_entries, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: v0.4.0 MP-7 — after a REAL fork (clone() from a dispatched
+// parent), the child's user page tables are fresh physical copies: for
+// every present user PML4 entry, the child's PDPT phys differs from the
+// parent's, and the same holds at PD and PT levels; the data page is a
+// private copy (distinct phys, distinct tables).  Kernel entries mirror the
+// kernel PML4.
+// Input: parent kernel task (prio 11, is_user_ set) with a USER-owned data
+// page mapped at PROBE_VA; the dispatched lambda calls TaskControlBlock::
+// clone() (real fork path), then walks every present user entry of both
+// address spaces at all four levels.
+// Expect: every user table phys differs at PML4/PDPT/PD/PT; the child data
+// leaf is a fresh copy (child_leaf != parent_leaf); kernel entries mirror
+// the kernel PML4; the parent mapping survives the child's teardown.
+// Depends: kernel::TaskControlBlock, kernel::Scheduler, kernel::memory::VMM
+JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
+    static uint64_t g_ran = 0;
+    static uint64_t g_all_indep = 0;
+    static uint64_t g_leaf_diff = 0;
+    static uint64_t g_parent_ok = 0;
+    constexpr uint64_t PROBE_VA = 0x20000000;
+
+    auto *parent = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            uint64_t regs[22] = {};
+            regs[17] = 0x1000;
+            regs[18] = arch::SEG_USER_CODE;
+            regs[19] = arch::RFLAGS_DEFAULT;
+            regs[20] = 0x80000000;
+            regs[21] = arch::SEG_USER_DATA;
+
+            auto *child = TaskControlBlock::clone(regs);
+            if (child == nullptr)
+                return;
+            g_all_indep = 1;
+            g_leaf_diff = 0;
+
+            auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    (self->page_table_ & ~0xFFFULL));
+            auto *cv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    (child->page_table_ & ~0xFFFULL));
+            auto *kv = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+
+            for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
+                uint64_t p_ent = pv[i];
+                uint64_t c_ent = cv[i];
+                if (!(p_ent & PAGE_PRESENT)) {
+                    if (c_ent & PAGE_PRESENT)
+                        g_all_indep = 0;
+                    continue;
+                }
+                if (!(c_ent & PAGE_PRESENT) ||
+                    (c_ent & ~0xFFFULL) == (p_ent & ~0xFFFULL)) {
+                    g_all_indep = 0;
+                    continue;
+                }
+                auto *ppdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                           (p_ent & ~0xFFFULL));
+                auto *cpdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                           (c_ent & ~0xFFFULL));
+                for (size_t j = 0; j < 512; ++j) {
+                    uint64_t p_pd = ppdpt[j];
+                    uint64_t c_pd = cpdpt[j];
+                    if (!(p_pd & PAGE_PRESENT)) {
+                        if (c_pd & PAGE_PRESENT)
+                            g_all_indep = 0;
+                        continue;
+                    }
+                    if ((p_pd & PAGE_HUGE) || (c_pd & PAGE_HUGE)) {
+                        if (!(c_pd & PAGE_PRESENT) ||
+                            (c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
+                            g_all_indep = 0;
+                        }
+                        continue;
+                    }
+                    if ((c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
+                        g_all_indep = 0;
+                        continue;
+                    }
+                    auto *ppd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                             (p_pd & ~0xFFFULL));
+                    auto *cpd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                             (c_pd & ~0xFFFULL));
+                    for (size_t k = 0; k < 512; ++k) {
+                        uint64_t p_pt = ppd[k];
+                        uint64_t c_pt = cpd[k];
+                        if (!(p_pt & PAGE_PRESENT)) {
+                            if (c_pt & PAGE_PRESENT)
+                                g_all_indep = 0;
+                            continue;
+                        }
+                        if ((p_pt & PAGE_HUGE) || (c_pt & PAGE_HUGE)) {
+                            if (!(c_pt & PAGE_PRESENT) ||
+                                (c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
+                                g_all_indep = 0;
+                            }
+                            continue;
+                        }
+                        if ((c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
+                            g_all_indep = 0;
+                            continue;
+                        }
+                        auto *ppt = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + (p_pt & ~0xFFFULL));
+                        auto *cpt = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + (c_pt & ~0xFFFULL));
+                        for (size_t l = 0; l < 512; ++l) {
+                            uint64_t p_leaf = ppt[l];
+                            uint64_t c_leaf = cpt[l];
+                            if (!(p_leaf & PAGE_PRESENT)) {
+                                if (c_leaf & PAGE_PRESENT)
+                                    g_all_indep = 0;
+                                continue;
+                            }
+                            if (!(c_leaf & PAGE_PRESENT) ||
+                                (c_leaf & ~0xFFFULL) == (p_leaf & ~0xFFFULL)) {
+                                g_all_indep = 0;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Kernel entries mirror the kernel PML4 in the child.
+            for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
+                if (cv[i] != kv[i])
+                    g_all_indep = 0;
+            }
+
+            uint64_t p_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_);
+            uint64_t c_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, child->page_table_);
+            if (c_leaf == 0 || c_leaf == p_leaf) {
+                g_leaf_diff = 0;
+            } else {
+                g_leaf_diff = 1;
+            }
+
+            child->cleanup();
+            delete child;
+
+            // Parent mapping survives the child's teardown.
+            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_) ==
+                p_leaf) {
+                g_parent_ok = 1;
+            } else {
+                g_parent_ok = 0;
+            }
+            g_ran = 1;
+        },
+        11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->is_user_ = true;           // simulate a user parent for clone()
+    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
+    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
+    uint64_t phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(phys != 0);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+
+    Scheduler::add_task(*parent);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(parent);
+    // The parent self-terminated and is owned by the zombie list.  Reclaim it
+    // BEFORE asserting so a failure cannot leak the parent TCB.
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_EQ(1ULL, g_ran);
+    JARVIS_ASSERT_EQ(1ULL, g_all_indep);
+    JARVIS_ASSERT_EQ(1ULL, g_leaf_diff);
+    JARVIS_ASSERT_EQ(1ULL, g_parent_ok);
+    // The parent's cleanup reclaimed the USER-owned leaf via free_user_pages.
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-7 — free_user_pages on the CHILD's deep-copied address
+// space (via the real child->cleanup() after a real clone()) reclaims every
+// copied user table page AND the data page; the parent's mappings survive
+// untouched (phys entries unchanged); the whole fork+teardown cycle restores
+// the PMM baseline (no leak, no double-free).
+// Input: parent kernel task (prio 11, is_user_ set) with a USER-owned page
+// at PROBE_VA; the dispatched lambda clones, captures the parent's
+// PML4->PDPT entry + leaf and the child's leaf, then cleans the child up and
+// re-walks the parent.
+// Expect: child leaf differs from parent leaf before teardown; after
+// teardown the parent PML4->PDPT entry is unchanged and the parent VA still
+// resolves to its own leaf; PMM::free_pages_ref() returns to the baseline.
+// Depends: kernel::TaskControlBlock, kernel::Scheduler, kernel::memory::VMM
+JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
+    static uint64_t g_ran = 0;
+    static uint64_t g_leaf_diff = 0;
+    static uint64_t g_parent_entry_ok = 0;
+    static uint64_t g_parent_leaf_ok = 0;
+    constexpr uint64_t PROBE_VA = 0x20001000;
+
+    uint64_t free_before = PMM::free_pages_ref();
+
+    auto *parent = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            uint64_t regs[22] = {};
+            regs[17] = 0x1000;
+            regs[18] = arch::SEG_USER_CODE;
+            regs[19] = arch::RFLAGS_DEFAULT;
+            regs[20] = 0x80000000;
+            regs[21] = arch::SEG_USER_DATA;
+
+            auto *child = TaskControlBlock::clone(regs);
+            if (child == nullptr)
+                return;
+            size_t pml4_idx = (PROBE_VA >> PML4_SHIFT) & 0x1FF;
+            auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    (self->page_table_ & ~0xFFFULL));
+            uint64_t parent_pdpt = pv[pml4_idx] & ~0xFFFULL;
+            uint64_t parent_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_);
+            uint64_t child_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, child->page_table_);
+            if (child_leaf == 0 || child_leaf == parent_leaf) {
+                g_leaf_diff = 0;
+            } else {
+                g_leaf_diff = 1;
+            }
+
+            // Tear down the child: cleanup() frees its deep-copied tables
+            // AND the copied data page (free_user_pages semantics).
+            child->cleanup();
+            delete child;
+
+            // Parent survives: PML4->PDPT entry unchanged, VA still resolves.
+            if ((pv[pml4_idx] & ~0xFFFULL) == parent_pdpt) {
+                g_parent_entry_ok = 1;
+            } else {
+                g_parent_entry_ok = 0;
+            }
+            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->page_table_) ==
+                parent_leaf) {
+                g_parent_leaf_ok = 1;
+            } else {
+                g_parent_leaf_ok = 0;
+            }
+            g_ran = 1;
+        },
+        11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->is_user_ = true;           // simulate a user parent for clone()
+    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
+    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
+    uint64_t phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(phys != 0);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, parent->page_table_);
+
+    Scheduler::add_task(*parent);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(parent);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_EQ(1ULL, g_ran);
+    JARVIS_ASSERT_EQ(1ULL, g_leaf_diff);
+    JARVIS_ASSERT_EQ(1ULL, g_parent_entry_ok);
+    JARVIS_ASSERT_EQ(1ULL, g_parent_leaf_ok);
+    // Full cycle returns to the PMM baseline: no leak, no double-free.
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after fork deep-copy teardown",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-7 — TaskControlBlock::page_table_shared_ no longer
+// exists (compile-time static_assert) and a real clone() produces a child
+// whose page_table_ is a fresh deep copy (never equal to the parent's PML4).
+// Input: a REAL dispatched kernel task (prio 11) with a user-like TCB calls
+// clone(); capture the child's page_table_.
+// Expect: build succeeds with the field removed (static_assert passes);
+// child->page_table_ != 0 and != parent->page_table_; the child stack
+// exists; teardown leaves zero task delta.
+// Depends: kernel::TaskControlBlock, kernel::Scheduler
+JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
+    static uint64_t g_child_pt = 0;
+    static uint64_t g_child_stack = 0;
+    static uint64_t g_child_ok = 0;
+    static uint64_t g_parent_pt = 0;
+
+    auto *parent = TaskControlBlock::create(
+        []() {
+            uint64_t regs[22] = {};
+            regs[17] = 0x1000;
+            regs[18] = arch::SEG_USER_CODE;
+            regs[19] = arch::RFLAGS_DEFAULT;
+            regs[20] = 0x80000000;
+            regs[21] = arch::SEG_USER_DATA;
+
+            auto *child = TaskControlBlock::clone(regs);
+            if (child == nullptr)
+                return;
+            g_child_pt = child->page_table_;
+            g_child_stack = child->user_stack_;
+            g_child_ok = (g_child_pt != 0 && g_child_stack != 0) ? 1 : 0;
+            child->cleanup();
+            delete child;
+        },
+        11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    g_parent_pt = parent->page_table_;
+    parent->is_user_ = true;           // simulate a user parent for clone()
+    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
+    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
+    Scheduler::add_task(*parent);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(parent);
+    // The parent self-terminated and is owned by the zombie list.  Reclaim it
+    // BEFORE asserting so a failure cannot leak the parent TCB.
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_EQ(1ULL, g_child_ok);
+    JARVIS_ASSERT(g_child_pt != 0);
+    JARVIS_ASSERT(g_child_pt != g_parent_pt);
+    JARVIS_ASSERT(g_child_stack != 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all PML4 clone / fork page table tests.
 // Input: None
 // Expect: All tests registered
@@ -467,4 +802,7 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(pml4_deep_copy_no_alias);
     JARVIS_REGISTER_TEST(pml4_free_user_pages_shared_safe);
     JARVIS_REGISTER_TEST(pml4_dump_no_user_entries);
+    JARVIS_REGISTER_TEST(fork_deep_copy_child_tables_independent);
+    JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
+    JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
 }
