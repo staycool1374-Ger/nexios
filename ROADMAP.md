@@ -33,8 +33,8 @@ See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.12 (boundary audit, P
 > (0.5.x), safety (0.6.x), the microkernel transition (0.7.x–0.8.x) and the
 > driver/protocol phase (0.9.x). v1.0.0 is defined at the bottom of this
 > section as the "full blown hard real-time microkernel" release gate.
-> **NOTE:** v0.4.0 is NOT yet complete; the prerequisite gate below must clear
-> before 0.4.x feature work proceeds.
+> **NOTE:** v0.4.0 RELEASED (2026-08-15). Remaining gate items below are the
+> only correctness bugs that must clear before 0.4.x feature work proceeds.
 
 | Version | Theme | Key deliverables |
 |---|---|---|
@@ -45,16 +45,16 @@ See `ROADMAP_done.md` for completed items: v0.2.x — v0.3.12 (boundary audit, P
 | 0.9.x | Drivers & protocols | TCP/IP, USB, zero-copy NIC rings, certification-readiness artifacts |
 | 1.0.0 | Release gate | Acceptance criteria at bottom |
 
-**Prerequisite gate (must be 100% resolved before any 0.4.x feature work):**
-- [ ] **BUGS.md — H2 deferred-switch race family (RE-OPENED)** — `ipc_send_sync_roundtrip` hang (~50%): reconcile the ROADMAP "RESOLVED" claim with the RE-OPENED BUGS.md entry; pin the stale harness iret-frame writer; green across 16+ repeated `ipc_core` / `all` runs with `CONFIG_DEBUG_IPC_SCHED` **OFF** (release-gate discipline).
-- [ ] **BUGS.md — `pml4_clone` CR3-corruption crash** (tests 485–486) — freed page-table CR3=0x1000 under snapshot_restore; resolve the HHDM snapshot-restore ordering blocker.
-- [ ] **BUGS.md — `elf_loader` `wait_loader_idle` flake** — loader task stuck BLOCKED non-IDLE after snapshot_restore (same H2 family).
+**Prerequisite gate (must be 100% resolved before 0.4.x feature work):**
+- [x] **BUGS.md — H2 deferred-switch race family** — RESOLVED (commits `4bf751b4` + `b85ba27d`, 2026-08-15); validated trace OFF: ipc_core 20/20 + 5/5, debug `all` 873/873 ×2, release `all` 84/84.
+- [x] **BUGS.md — `pml4_clone` CR3-corruption crash** — RESOLVED (commits `d535a853` + `60d02e49`, 2026-08-15); identity-PD save/restore + snapshot capture reorder; memory_vmm 10/10 ×4, debug `all` 873/873.
+- [x] **BUGS.md — `elf_loader` `wait_loader_idle` flake** — RESOLVED (commit `b85ba27d`, 2026-08-15); IrqGuard around the loader idle-block critical section; elf_loader 10/10 clean.
 - [ ] **docs/specs/drivers.md §8 — FLAW-01/02/03 (DmaEngine, PingPongDma, virtio-net ring data races)** — add `IrqSpinLockGuard` mutual exclusion; callbacks invoked from stack-captured locals **after** releasing the lock.
 - [ ] **FLAW-08 / FLAW-10 (serial unbounded polling, keyboard unbounded drain)** — cap to the bounded-wait discipline.
 
-Rationale: per AGENTS.md, no feature work is stacked on open failures; the H2
-family and the DMA races are correctness bugs that would corrupt capability,
-IPC and driver work built on top of them.
+Rationale: per AGENTS.md, no feature work is stacked on open failures; the
+remaining DMA races and unbounded polls are correctness bugs that would
+corrupt capability, IPC and driver work built on top of them.
 
 ### Phase 4.6: Microkernel Primitives & Capability Foundation (0.4.x) — prerequisite for 0.7.x Microkernel Transition
 
