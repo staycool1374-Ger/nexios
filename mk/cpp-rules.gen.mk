@@ -318,6 +318,10 @@ build/kernel/test/test_pmm.o: src/kernel/test/test_pmm.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_cap_core.o: src/kernel/test/test_cap_core.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_infra.o: src/kernel/test/test_infra.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -711,6 +715,10 @@ build/kernel/driver/iocd.o: src/kernel/driver/iocd.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/random.o: src/kernel/random.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/cap/cap.o: src/kernel/cap/cap.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

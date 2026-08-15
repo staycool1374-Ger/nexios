@@ -271,3 +271,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-15 21:56:00 all PASSED: 873 FAILED: 0 TIME: 51828ms (identity-PD restore + guard capture)
 2026-08-15 21:57:00 release all PASSED: 84 FAILED: 0 TIME: 17288ms (release gate, trace OFF)
 2026-08-15 21:58:00 selftest PASSED: 132 FAILED: 0 TIME: 29088ms
+2026-08-15 22:49:09 cap_core PASSED: 10 FAILED: 0 TIME: 361ms
+2026-08-15 22:51:00 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 1522ms

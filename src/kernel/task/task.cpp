@@ -33,6 +33,7 @@
 #include <kernel/arch/page_table.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/cap/cap.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
@@ -131,6 +132,23 @@ void TaskControlBlock::init_sporadic_server(
     Scheduler::inc_sporadic_count();
 }
 
+/// @brief Lazily creates this task's root CNode (CSpace) from the MemPool.
+///        Idempotent: returns early if the CSpace already exists.  The node
+///        is pool-backed and attached to this task's intrusive object list so
+///        teardown (release_all_objects) reclaims it deterministically.
+///        The task's own id serves as the cspace_id decoded from handles
+///        (no global registry in iteration-1 CSpace; handles are validated
+///        against the current task's root CNode only).
+void TaskControlBlock::ensure_cspace() noexcept {
+    if (cspace_)
+        return;
+    auto *node = cap::CNode::create(static_cast<uint32_t>(id & 0xFFu));
+    if (!node)
+        return;
+    attach_object(node);
+    cspace_ = node;
+}
+
 /// @brief Attaches @p obj to this task's intrusive object list.
 ///        Only called while the task is not visible to the scheduler
 ///        (pre-add_task or inside cleanup under IrqGuard), so the list
@@ -163,6 +181,8 @@ void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
     obj->task_obj_next_ = nullptr;
     if (sporadic_server == obj)
         sporadic_server = nullptr;
+    if (cspace_ == obj)
+        cspace_ = nullptr;
 }
 
 /// @brief Unlinks every node from this task's object list WITHOUT releasing
@@ -196,6 +216,7 @@ void TaskControlBlock::detach_all_objects() noexcept {
     task_obj_head_ = nullptr;
     task_obj_tail_ = nullptr;
     sporadic_server = nullptr;
+    cspace_ = nullptr;
 }
 
 /// @brief Releases every node on this task's object list (teardown).
@@ -233,6 +254,7 @@ void TaskControlBlock::release_all_objects() noexcept {
     task_obj_head_ = nullptr;
     task_obj_tail_ = nullptr;
     sporadic_server = nullptr;
+    cspace_ = nullptr;
 }
 
 /// @brief Initialises common fields of a newly allocated TaskControlBlock.

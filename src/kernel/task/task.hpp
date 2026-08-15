@@ -112,6 +112,10 @@ class SporadicServer;
 void dmesg_task_main();
 } // namespace task
 
+namespace cap {
+class CNode;
+} // namespace cap
+
 /// @brief States a task can be in during its lifecycle.
 enum class TaskState : uint8_t {
     READY,
@@ -221,7 +225,8 @@ struct TaskControlBlock {
            in_ready_queue_(false), rq_priority_(0), all_bucket_(0), zombie_next_(nullptr),
           waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
-          alarm_armed(false), sporadic_server(nullptr), buf_list_head(0),
+          alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
+          buf_list_head(0),
           task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
@@ -382,6 +387,15 @@ struct TaskControlBlock {
     /// pointer is an O(1) read cache kept in sync with the list by
     /// attach_object()/detach_object(); ownership lives in the list.
     task::SporadicServer *sporadic_server;
+
+    /// @brief This task's root CNode (its CSpace), lazily created on first
+    ///        capability use (cap::ensure_cspace).  nullptr for tasks that
+    ///        never touch capabilities.  Allocated from MemPool, pool-backed,
+    ///        and attached to the intrusive object list (task_obj_head_/
+    ///        task_obj_tail_); this pointer is an O(1) read cache kept in
+    ///        sync with the list by attach_object()/detach_object() — the
+    ///        same ownership model as sporadic_server.
+    cap::CNode *cspace_;
 
     /// @brief Head of doubly-linked list of buffer handles owned by
     /// this task. -1 means the list is empty. Used by the BufferPool
@@ -588,6 +602,18 @@ struct TaskControlBlock {
     task::SporadicServer *get_sporadic_server() const noexcept {
         return sporadic_server;
     }
+
+    /// @brief Returns this task's root CNode (CSpace), or nullptr if it has
+    ///        never touched capabilities.  O(1) read cache kept in sync with
+    ///        the intrusive object list; safe to call from ISR context.
+    cap::CNode *get_cspace() const noexcept {
+        return cspace_;
+    }
+
+    /// @brief Lazily creates and attaches this task's root CNode (CSpace).
+    ///        Idempotent: a second call with an existing CSpace is a no-op.
+    ///        Called from task context on first capability use.
+    void ensure_cspace() noexcept;
 
     /// @brief Adds a child to this task's process hierarchy.
     void add_child(TaskControlBlock *child) noexcept;

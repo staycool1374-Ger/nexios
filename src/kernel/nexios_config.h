@@ -492,6 +492,23 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// Capability (CSpace) Configuration
+// ---------------------------------------------------------------------------
+/// Number of slots in each capability node (CNode).  The task's root CNode is
+/// its CSpace.  Slot index bits are carved from the capability handle, so a
+/// power of two is preferred.
+#ifndef CONFIG_CSLOT_COUNT
+#define CONFIG_CSLOT_COUNT 64
+#endif
+
+/// Maximum cascade-revoke depth.  Revoking a CNode recursively revokes every
+/// capability reachable through it; the walk is iterative (explicit work
+/// list), bounded by this depth.
+#ifndef CONFIG_CAP_MAX_DEPTH
+#define CONFIG_CAP_MAX_DEPTH 8
+#endif
+
+// ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------
 /// Enable Priority Inheritance Protocol for Mutex.

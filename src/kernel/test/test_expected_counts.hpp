@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 886,    0,       0      },  // 869 + process(+3) + MP-4 SMAP(+3) + elf_loader(+7) + MP-7 named(+3); dump_class_counts verified
+    {"all",                 896,    0,       0      },  // 886 + cap_core(+10); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -77,6 +77,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
     {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
+
+    // cap — capability-based access control (CSpace)
+    {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, handle decode, revoke
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
