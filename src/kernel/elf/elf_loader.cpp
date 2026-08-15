@@ -28,6 +28,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/arch/timer.hpp>
@@ -269,7 +270,15 @@ void ElfLoader::task_main() {
         // and the loader would block forever with state=VALIDATING (lost wakeup).
         if (state_ == LoadState::IDLE) {
             bool should_block = false;
+            // IrqGuard: the critical section below (lock_ acquire -> set self
+            // BLOCKED -> dequeue_ready -> release) MUST be atomic w.r.t. the
+            // timer ISR.  Without it the loader can be PREEMPTED while holding
+            // lock_ (dequeue_ready takes no IrqGuard), leave itself BLOCKED and
+            // lock_ held, and the harness's reset()/request_load then spins on
+            // lock_ forever (deadlock: loader BLOCKED-holding-lock, harness
+            // spinning, timer never re-dispatches the BLOCKED loader).
             {
+                arch::IrqGuard irq_guard{};
                 SpinLockGuard<sync::SpinLock> guard(lock_);
                 if (state_ == LoadState::IDLE) {
                     auto *self = Scheduler::current_task();

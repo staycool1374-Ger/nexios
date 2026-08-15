@@ -263,3 +263,7 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-15 15:50:31 memory_page_tables PASSED: 9 FAILED: 0 TIME: 357ms
 2026-08-15 15:49:55 task_core PASSED: 6 FAILED: 0 TIME: 376ms
 2026-08-15 15:53:12 selftest PASSED: 132 FAILED: 0 TIME: 8426ms
+2026-08-15 20:31:13 release all PASSED: 84 FAILED: 0 TIME: 17918ms (release gate, trace OFF)
+2026-08-15 21:20:41 all PASSED: 873 FAILED: 0 TIME: 229956ms
+2026-08-15 21:15:00 elf_loader PASSED: 8 FAILED: 0 TIME: 430ms (IrqGuard fix: loader lock_ held across preemption)
+2026-08-15 21:28:00 all PASSED: 873 FAILED: 0 TIME: 227910ms
