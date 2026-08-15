@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 929,    0,       0      },  // 927 + drivers_virtio(+2); dump_class_counts verified
+    {"all",                 931,    0,       0      },  // 929 + drivers_core(+2); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -152,7 +152,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
 
     // drivers
-    {"drivers_core",          6,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps
+    {"drivers_core",          8,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps + FLAW-08/10 bounded waits
     {"drivers_block",        11,    0,       0      },  // block device, ATA_PIO, AHCI
     {"drivers_pci",          16,    0,       0      },  // PCI enumeration/MSI/BARs (bounded-time test commented out)
     {"drivers_virtio",       11,    0,       0      },  // VirtIO probe/feature/queue + FLAW-03 net lock

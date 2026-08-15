@@ -70,9 +70,15 @@ void Keyboard::init() {
     outb(0x64, 0xAE);
     io_wait();
     // Drain any pending output (e.g. an ACK to a prior command) so the first
-    // keyboard IRQ does not read a stale byte as a scancode.
-    while ((inb(STATUS_PORT) & 0x01) != 0)
+    // keyboard IRQ does not read a stale byte as a scancode.  Bounded
+    // (FLAW-10): cap at the i8042 output-buffer depth so a stuck controller
+    // cannot hang boot.
+    for (int i = 0; i < 16; ++i) {
+        if ((inb(STATUS_PORT) & 0x01) == 0)
+            break;
         inb(DATA_PORT);
+        arch::pause();
+    }
     outb(0x60, 0xF4);
     io_wait();
     // The 0xF4 enable command is ACKed with 0xFA; drain it so it is not
@@ -81,6 +87,7 @@ void Keyboard::init() {
         if ((inb(STATUS_PORT) & 0x01) == 0)
             break;
         inb(DATA_PORT);
+        arch::pause();
     }
 }
 

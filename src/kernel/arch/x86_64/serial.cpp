@@ -24,6 +24,12 @@
 #include <kernel/arch/hal/io.hpp>
 #include <constants.hpp>
 
+// Bounded-wait bounds (FLAW-08): a dead/hung COM1 must never hang the core.
+// A working 16550 sets THRE/LSR within microseconds, so these are bounds,
+// not spin targets.
+static constexpr int SERIAL_TX_WAIT_ITERS = 1000000;
+static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
+
 namespace arch {
 
 /// @brief Initialise the serial port (COM1) at 115200 baud, 8N1.
@@ -43,20 +49,37 @@ void Serial::init() {
 /// @param c Character to transmit.
 void Serial::putchar(char c) {
     if (c == '\n') {
-        while ((inb(arch::COM1 + 5) & 0x20) == 0)
-            ;
-        outb(arch::COM1, '\r');
+        int i;
+        for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
+            if ((inb(arch::COM1 + 5) & 0x20) != 0)
+                break;
+            arch::pause();
+        }
+        if (i < SERIAL_TX_WAIT_ITERS)
+            outb(arch::COM1, '\r');
     }
-    while ((inb(arch::COM1 + 5) & 0x20) == 0)
-        ;
-    outb(arch::COM1, c);
+    int i;
+    for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
+        if ((inb(arch::COM1 + 5) & 0x20) != 0)
+            break;
+        arch::pause();
+    }
+    if (i < SERIAL_TX_WAIT_ITERS)
+        outb(arch::COM1, c);
 }
 
-/// @brief Read a single character from the serial port (blocking).
-/// @return The received character.
+/// @brief Read a single character from the serial port.
+/// @return The received character, or '\\0' when no data arrives within the
+///         bounded wait (FLAW-08 — never hangs).
 char Serial::getchar() {
-    while ((inb(arch::COM1 + 5) & 0x01) == 0)
-        ;
+    int i;
+    for (i = 0; i < SERIAL_RX_WAIT_ITERS; ++i) {
+        if ((inb(arch::COM1 + 5) & 0x01) != 0)
+            break;
+        arch::pause();
+    }
+    if (i >= SERIAL_RX_WAIT_ITERS)
+        return '\0'; // no data (not a valid console character)
     return static_cast<char>(inb(arch::COM1));
 }
 
