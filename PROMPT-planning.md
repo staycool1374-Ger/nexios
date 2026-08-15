@@ -2,7 +2,7 @@
 name: planner
 description: Architectural & execution planning agent for NexIOS kernel changes
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/kimi-k3
 reasoning_effort: kimi-k3
 temperature: 0.2
 permission:
