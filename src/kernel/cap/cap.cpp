@@ -28,8 +28,8 @@
 #include <kernel/test/resource_tracker.hpp>
 
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
-inline void *operator new(unsigned long, void *p) noexcept {
-    return p;
+inline void *operator new(unsigned long, void *placement) noexcept {
+    return placement;
 }
 
 namespace kernel::cap {
@@ -74,7 +74,8 @@ void CNode::revoke() noexcept {
     todo[todo_count++] = this;
     while (todo_count > 0) {
         CNode *node = todo[--todo_count];
-        for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
+        for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT);
+             ++i) {
             CSlot &slot = node->slots[i];
             if (!slot.occupied || !slot.obj)
                 continue;
@@ -150,7 +151,8 @@ uint32_t CNode::slot_gen(uint32_t idx) const noexcept {
 
 void CNode::clear_grant(uint32_t idx) noexcept {
     SpinLockGuard<sync::SpinLock> guard(lock_);
-    if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) || !slots[idx].occupied)
+    if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
+        !slots[idx].occupied)
         return;
     slots[idx].rights &= ~CAP_RIGHT_GRANT;
 }
@@ -240,8 +242,7 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
     if (!src || !dst || src == dst)
         return -1;
     // lookup() returns the target with acquire() already taken.
-    KernelObject *target =
-        lookup(src, src_handle, CapType::Null, 0);
+    KernelObject *target = lookup(src, src_handle, CapType::Null, 0);
     if (!target)
         return -1;
     CapType type = CapType::Null;
@@ -272,16 +273,15 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
 }
 
 int copy(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
-    return do_copy_pinned(src, src_handle, dst, CAP_RIGHT_READ |
-                                                      CAP_RIGHT_WRITE |
-                                                      CAP_RIGHT_COPY |
-                                                      CAP_RIGHT_GRANT);
+    return do_copy_pinned(src, src_handle, dst,
+                          CAP_RIGHT_READ | CAP_RIGHT_WRITE | CAP_RIGHT_COPY |
+                              CAP_RIGHT_GRANT);
 }
 
 int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept {
     // Requires CAP_RIGHT_GRANT on the source slot.
-    KernelObject *target = lookup(src, src_handle, CapType::Null,
-                                  CAP_RIGHT_GRANT);
+    KernelObject *target =
+        lookup(src, src_handle, CapType::Null, CAP_RIGHT_GRANT);
     if (!target)
         return -1;
     // Capture the type/rights under the lock, then clear GRANT (mint-once).

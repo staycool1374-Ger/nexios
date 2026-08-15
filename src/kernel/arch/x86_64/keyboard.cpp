@@ -194,8 +194,7 @@ void Keyboard::update_modifiers(uint8_t scancode, bool pressed) {
     case 0x3A:
         if (pressed) {
             uint8_t old = atomic_mods();
-            __atomic_store_n(
-                &mods_, old ^ MOD_CAPS, __ATOMIC_RELEASE);
+            __atomic_store_n(&mods_, old ^ MOD_CAPS, __ATOMIC_RELEASE);
         }
         break;
     default:

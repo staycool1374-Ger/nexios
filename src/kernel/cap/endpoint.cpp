@@ -24,23 +24,23 @@
 #include <kernel/test/resource_tracker.hpp>
 
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
-inline void *operator new(unsigned long, void *p) noexcept {
-    return p;
+inline void *operator new(unsigned long, void *placement) noexcept {
+    return placement;
 }
 
 namespace kernel::cap {
 
 Endpoint *Endpoint::create(uint32_t badge) {
-    auto *ep = static_cast<Endpoint *>(MemPool::alloc(sizeof(Endpoint)));
-    if (!ep)
+    auto *endpoint = static_cast<Endpoint *>(MemPool::alloc(sizeof(Endpoint)));
+    if (!endpoint)
         return nullptr;
-    new (ep) Endpoint;
-    ep->mark_pool_backed();
-    ep->badge = badge;
-    ep->q.init();
-    ep->q.owner = nullptr;
+    new (endpoint) Endpoint;
+    endpoint->mark_pool_backed();
+    endpoint->badge = badge;
+    endpoint->q.init();
+    endpoint->q.owner = nullptr;
     kernel::test::ResourceTracker::instance().track_cap_object_add();
-    return ep;
+    return endpoint;
 }
 
 void Endpoint::dispose() noexcept {

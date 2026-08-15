@@ -75,7 +75,8 @@ void record_task_entry(uint64_t entry, uint64_t tcb) {
 uint64_t find_entry_owner(uint64_t value) {
     for (size_t i = 0; i < kRecentTasks; ++i) {
         const auto &r = g_recent_tasks[i];
-        if (r.entry == value || (r.entry & 0xFFFFFFFFULL) == (value & 0xFFFFFFFFULL))
+        if (r.entry == value ||
+            (r.entry & 0xFFFFFFFFULL) == (value & 0xFFFFFFFFULL))
             return r.tcb;
     }
     return 0;
@@ -201,8 +202,7 @@ void TaskControlBlock::detach_all_objects() noexcept {
         // ≥ 0xFFFF800000000000 address), which passes the low-address check.
         // Stop the walk rather than following garbage links.
         if (reinterpret_cast<uintptr_t>(obj) < 0xFFFF800000000000ULL ||
-            *reinterpret_cast<const uint64_t *>(obj) ==
-                0xDDDDDDDDDDDDDDDDULL) {
+            *reinterpret_cast<const uint64_t *>(obj) == 0xDDDDDDDDDDDDDDDDULL) {
             break;
         }
         task_obj_head_ = obj->task_obj_next_;
@@ -263,7 +263,8 @@ void TaskControlBlock::release_all_objects() noexcept {
 static uint32_t s_next_generation = 1;
 
 void init_task_common(TaskControlBlock &tcb) {
-    tcb.generation = __atomic_fetch_add(&s_next_generation, 1, __ATOMIC_RELAXED);
+    tcb.generation =
+        __atomic_fetch_add(&s_next_generation, 1, __ATOMIC_RELAXED);
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         tcb.fd_table.fds[i].used = false;
         tcb.fd_table.fds[i].vnode = nullptr;
@@ -313,9 +314,9 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.pending_signals = 0;
 }
 
-// BUGS.md#019/#020: after MemPool::alloc() returns a TCB block (but BEFORE it is
-// zeroed/reused), verify it is not still aliased by a live reference.  If the
-// block we just got is pointed to by current_task_ptr_, any live task's
+// BUGS.md#019/#020: after MemPool::alloc() returns a TCB block (but BEFORE it
+// is zeroed/reused), verify it is not still aliased by a live reference.  If
+// the block we just got is pointed to by current_task_ptr_, any live task's
 // child/sibling/sporadic_server/parent_id linkage, or the scheduler id_table_,
 // then the previous owner was freed while still referenced — the use-after-free
 // that later manifests as a 0xDD poison GPF / mass ctx.rip=0 corruption.  This
@@ -328,13 +329,15 @@ static void debug_check_tcb_reuse(TaskControlBlock *tcb) {
     auto *cur = Scheduler::current_task();
     if (cur == tcb) {
         kernel::Logger::fatal("BUGS.md#019/#020: create reused the CURRENT "
-                              "task's TCB block %p", tcb);
+                              "task's TCB block %p",
+                              tcb);
         kernel::debug::dump_scheduler_info();
         panic("TCB reuse of current task (UAF)");
     }
     if (Scheduler::debug_id_table_references(tcb)) {
         kernel::Logger::fatal("BUGS.md#019/#020: create reused TCB block %p "
-                              "still aliased by scheduler id_table_", tcb);
+                              "still aliased by scheduler id_table_",
+                              tcb);
         kernel::debug::dump_scheduler_info();
         panic("TCB reuse of id_table_-aliased block (UAF)");
     }
@@ -348,14 +351,13 @@ static void debug_check_tcb_reuse(TaskControlBlock *tcb) {
                 reinterpret_cast<void *>(tcb) ||
             t->runq_next_ == tcb || t->blocked_next == tcb ||
             t->dl_next_ == tcb ||
-            (tcb->id != 0 &&
-             static_cast<uint64_t>(t->parent_id) == tcb->id)) {
-            kernel::Logger::fatal("BUGS.md#019/#020: create reused TCB block %p "
-                                  "still referenced by task %u (child=%p sib=%p "
-                                  "spor=%p par=%lu)",
-                                  tcb, t->id, t->first_child, t->next_sibling,
-                                  t->get_sporadic_server(),
-                                  static_cast<uint64_t>(t->parent_id));
+            (tcb->id != 0 && static_cast<uint64_t>(t->parent_id) == tcb->id)) {
+            kernel::Logger::fatal(
+                "BUGS.md#019/#020: create reused TCB block %p "
+                "still referenced by task %u (child=%p sib=%p "
+                "spor=%p par=%lu)",
+                tcb, t->id, t->first_child, t->next_sibling,
+                t->get_sporadic_server(), static_cast<uint64_t>(t->parent_id));
             kernel::debug::dump_scheduler_info();
             panic("TCB reuse of live-referenced block (UAF)");
         }
@@ -372,7 +374,7 @@ namespace {
 struct KSlotEntry {
     uint64_t va;
     uint64_t size;
-    int32_t  next;
+    int32_t next;
 };
 
 static constexpr int32_t KSLOT_POOL_SIZE = 64;
@@ -380,9 +382,9 @@ static_assert(KSLOT_POOL_SIZE >= CONFIG_MAX_TASKS,
               "KSLOT_POOL_SIZE must be >= CONFIG_MAX_TASKS to provide a "
               "guarded kernel-stack slot for every possible task");
 static KSlotEntry s_kslot_pool[KSLOT_POOL_SIZE];
-static int32_t    s_kslot_free_head = -1;
-static int32_t    s_kslot_list      = -1;
-static uint64_t   s_kslot_bump      = CONFIG_KSTACK_WINDOW_BASE;
+static int32_t s_kslot_free_head = -1;
+static int32_t s_kslot_list = -1;
+static uint64_t s_kslot_bump = CONFIG_KSTACK_WINDOW_BASE;
 // kslot state is ISR-reachable: the timer ISR (on_tick -> reap_orphans ->
 // idle TaskControlBlock::create) calls alloc_kslot() every 100 ticks, and
 // free_kslot() runs at task exit.  A plain SpinLock would deadlock (task
@@ -433,23 +435,23 @@ constexpr uint64_t kUserYieldStubVa = 0x40000000;
 //   int $0x80        CD 80    ; trap gate vector 0x80 (isr_128) — GS-free path.
 //                             ; NOT `syscall` (0F 05): MSR_KERNEL_GS_BASE is
 //                             ; never written, so syscall_entry's swapgs would
-//                             ; #PF to phys 0 (see audits/gs-base-swapgs-audit-v0.3.9.md F-1).
+//                             ; #PF to phys 0 (see
+//                             audits/gs-base-swapgs-audit-v0.3.9.md F-1).
 //   jmp -6          EB FA
-static constexpr uint8_t kUserYieldStub[] = {0x31, 0xC0, 0xCD, 0x80, 0xEB, 0xFA};
+static constexpr uint8_t kUserYieldStub[] = {0x31, 0xC0, 0xCD,
+                                             0x80, 0xEB, 0xFA};
 #elif defined(CONFIG_ARCH_AARCH64)
 //   mov x8, #0      d2 00 00 00  ; x8 = SyscallNumber::YIELD (0)
 //   svc #0          01 00 00 d4
 //   b -12           18 00 00 14
-static constexpr uint8_t kUserYieldStub[] = {0x00, 0x00, 0x80, 0xD2, 0x01,
-                                             0x00, 0x00, 0xD4, 0x18, 0x00,
-                                             0x00, 0x14};
+static constexpr uint8_t kUserYieldStub[] = {
+    0x00, 0x00, 0x80, 0xD2, 0x01, 0x00, 0x00, 0xD4, 0x18, 0x00, 0x00, 0x14};
 #elif defined(CONFIG_ARCH_RISCV64)
 //   li a7, 0        13 00 80 00  ; a7 = SyscallNumber::YIELD (0)
 //   ecall           73 00 00 00
 //   j -12           6f 00 00 00  ; (jump relative 0 — tighten below)
-static constexpr uint8_t kUserYieldStub[] = {0x13, 0x00, 0x80, 0x00, 0x73,
-                                             0x00, 0x00, 0x00, 0x6f, 0x00,
-                                             0x00, 0x00};
+static constexpr uint8_t kUserYieldStub[] = {
+    0x13, 0x00, 0x80, 0x00, 0x73, 0x00, 0x00, 0x00, 0x6f, 0x00, 0x00, 0x00};
 #endif
 
 /// @brief Map the user-mode yield stub into @p tcb's user PML4 and rewrite the
@@ -481,8 +483,7 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
     constexpr uint64_t kKernelHigherHalf = 0xFFFF800000000000ULL;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
-    size_t slots =
-        (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
+    size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
 
     uint64_t original_entry = 0;
     for (size_t i = 0; i < slots; ++i) {
@@ -533,7 +534,8 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
             if (e.size >= slot_size) {
                 uint64_t va = e.va;
                 if (va < CONFIG_KSTACK_WINDOW_BASE ||
-                    va + e.size > CONFIG_KSTACK_WINDOW_BASE + CONFIG_KSTACK_WINDOW_SIZE)
+                    va + e.size >
+                        CONFIG_KSTACK_WINDOW_BASE + CONFIG_KSTACK_WINDOW_SIZE)
                     panic("kslot free list corrupt");
                 int32_t next = e.next;
                 e.next = s_kslot_free_head;
@@ -548,7 +550,8 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
     { // Bump allocate, IRQ-safe.
         arch::IrqGuard _g{};
         uint64_t va = s_kslot_bump;
-        if (va + slot_size > CONFIG_KSTACK_WINDOW_BASE + CONFIG_KSTACK_WINDOW_SIZE)
+        if (va + slot_size >
+            CONFIG_KSTACK_WINDOW_BASE + CONFIG_KSTACK_WINDOW_SIZE)
             return 0;
         s_kslot_bump = va + slot_size;
         return va;
@@ -561,7 +564,7 @@ static void free_kslot(uint64_t va, uint64_t size) {
         return;
     int32_t idx = s_kslot_free_head;
     s_kslot_free_head = s_kslot_pool[idx].next;
-    s_kslot_pool[idx].va   = va;
+    s_kslot_pool[idx].va = va;
     s_kslot_pool[idx].size = size;
     s_kslot_pool[idx].next = s_kslot_list;
     s_kslot_list = idx;
@@ -579,18 +582,20 @@ void init_kstack_window() {
     uint64_t base_48 = CONFIG_KSTACK_WINDOW_BASE & addr_mask;
     unsigned pml4_idx = (base_48 >> 39) & 0x1FF;
     unsigned pdpt_idx = (base_48 >> 30) & 0x1FF;
-    unsigned pd_idx   = (base_48 >> 21) & 0x1FF;
+    unsigned pd_idx = (base_48 >> 21) & 0x1FF;
 
     auto *pml4 = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
-    constexpr uint64_t P = 1ULL << 0;   // PAGE_PRESENT
-    constexpr uint64_t W = 1ULL << 1;   // PAGE_WRITE
+    constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
+    constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
 
     uint64_t pdpt_phys = 0;
     if (!(pml4[pml4_idx] & P)) {
         pdpt_phys = PMM::alloc_page_table();
-        if (!pdpt_phys) panic("init_kstack_window: pdpt_phys OOM");
-        auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
+        if (!pdpt_phys)
+            panic("init_kstack_window: pdpt_phys OOM");
+        auto *pdpt =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
         __builtin_memset(pdpt, 0, 4096);
         pml4[pml4_idx] = pdpt_phys | P | W;
     } else {
@@ -601,7 +606,8 @@ void init_kstack_window() {
     uint64_t pd_phys = 0;
     if (!(pdpt[pdpt_idx] & P)) {
         pd_phys = PMM::alloc_page_table();
-        if (!pd_phys) panic("init_kstack_window: pd_phys OOM");
+        if (!pd_phys)
+            panic("init_kstack_window: pd_phys OOM");
         auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
         __builtin_memset(pd, 0, 4096);
         pdpt[pdpt_idx] = pd_phys | P | W;
@@ -613,9 +619,10 @@ void init_kstack_window() {
     for (unsigned i = 0; i < 8; ++i) {
         if (!(pd[pd_idx + i] & P)) {
             s_kstack_pt_pages[i] = PMM::alloc_page_table();
-            if (!s_kstack_pt_pages[i]) panic("init_kstack_window: pt page OOM");
-            auto *pt = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + s_kstack_pt_pages[i]);
+            if (!s_kstack_pt_pages[i])
+                panic("init_kstack_window: pt page OOM");
+            auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    s_kstack_pt_pages[i]);
             __builtin_memset(pt, 0, 4096);
             pd[pd_idx + i] = s_kstack_pt_pages[i] | P | W;
         } else {
@@ -632,12 +639,13 @@ void init_kstack_window() {
 static void map_kstack_page(uint64_t virt, uint64_t phys) {
     uint64_t offset = virt - CONFIG_KSTACK_WINDOW_BASE;
     unsigned pt_idx = offset / (512 * 4096);
-    unsigned entry  = (offset / 4096) & 0x1FF;
-    if (pt_idx >= 8) return;
-    constexpr uint64_t P = 1ULL << 0;  // PAGE_PRESENT
-    constexpr uint64_t W = 1ULL << 1;  // PAGE_WRITE
-    auto *pt = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + s_kstack_pt_pages[pt_idx]);
+    unsigned entry = (offset / 4096) & 0x1FF;
+    if (pt_idx >= 8)
+        return;
+    constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
+    constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
+    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            s_kstack_pt_pages[pt_idx]);
     pt[entry] = phys | P | W;
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
@@ -646,10 +654,11 @@ static void map_kstack_page(uint64_t virt, uint64_t phys) {
 static void unmap_kstack_page(uint64_t virt) {
     uint64_t offset = virt - CONFIG_KSTACK_WINDOW_BASE;
     unsigned pt_idx = offset / (512 * 4096);
-    unsigned entry  = (offset / 4096) & 0x1FF;
-    if (pt_idx >= 8) return;
-    auto *pt = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + s_kstack_pt_pages[pt_idx]);
+    unsigned entry = (offset / 4096) & 0x1FF;
+    if (pt_idx >= 8)
+        return;
+    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            s_kstack_pt_pages[pt_idx]);
     pt[entry] = 0;
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
@@ -701,9 +710,9 @@ void kslot_snapshot_restore(const uint8_t *src) {
         if (!s_kstack_pt_pages[i])
             continue;
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET +
-                                                  s_kstack_pt_pages[i]),
-                         src + off, arch::PAGE_SIZE);
+        __builtin_memcpy(
+            reinterpret_cast<void *>(arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
+            src + off, arch::PAGE_SIZE);
         // Flush the TLB for every window VA backed by this PT page.  invlpg
         // on an unmapped VA is a documented no-op (no exception).
         uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
@@ -750,8 +759,8 @@ void canary_write_at(uint64_t va, uint64_t value, uint64_t pml4) {
     if (!phys)
         return;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
-                     &value, 8);
+    __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), &value,
+                     8);
 }
 
 /// @brief Install the user-stack and initial-heap canaries for @p t
@@ -773,10 +782,9 @@ void canary_install_user_segments(TaskControlBlock *t) {
     const uint64_t heap = TaskControlBlock::SEG_HEAP;
     if (t->program_break >= mem::HEAP_VADDR + arch::PAGE_SIZE) {
         t->canary_before[heap] = mem::HEAP_VADDR;
-        t->canary_after[heap] =
-            ((t->program_break + arch::PAGE_SIZE - 1) &
-             ~(arch::PAGE_SIZE - 1)) -
-            8;
+        t->canary_after[heap] = ((t->program_break + arch::PAGE_SIZE - 1) &
+                                 ~(arch::PAGE_SIZE - 1)) -
+                                8;
         canary_write_at(t->canary_before[heap], canary_expected(heap),
                         t->page_table_);
         canary_write_at(t->canary_after[heap], canary_expected(heap),
@@ -795,8 +803,8 @@ void canary_install_kernel_stack(TaskControlBlock *t) {
 
 /// @brief Verify all installed user-segment canaries of @p t (pure reads).
 /// @return true when intact; on mismatch sets @p bad_segment / @p bad_va.
-bool canary_verify_user_segments(const TaskControlBlock *t, uint8_t &bad_segment,
-                                 uint64_t &bad_va) {
+bool canary_verify_user_segments(const TaskControlBlock *t,
+                                 uint8_t &bad_segment, uint64_t &bad_va) {
     for (unsigned i = 0; i < TaskControlBlock::CANARY_SEGMENTS; ++i) {
         if (!(t->canary_installed & (1u << i)))
             continue;
@@ -813,10 +821,9 @@ bool canary_verify_user_segments(const TaskControlBlock *t, uint8_t &bad_segment
             }
             uint64_t live = 0;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            __builtin_memcpy(&live,
-                             reinterpret_cast<const void *>(arch::HHDM_OFFSET +
-                                                           phys),
-                             8);
+            __builtin_memcpy(
+                &live, reinterpret_cast<const void *>(arch::HHDM_OFFSET + phys),
+                8);
             if (live != expected) {
                 bad_segment = static_cast<uint8_t>(i);
                 bad_va = vas[k];
@@ -909,7 +916,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->memory_used_pages_ = 0;
     init_task_common(*tcb);
 
-uint64_t stack_size = stack_size_for_priority(priority);
+    uint64_t stack_size = stack_size_for_priority(priority);
     size_t stack_pages = (stack_size + 4095) / arch::PAGE_SIZE;
 #if CONFIG_MEMORY_BUDGET
     if (!Scheduler::reserve_memory_pages(stack_pages)) {
@@ -969,7 +976,8 @@ uint64_t stack_size = stack_size_for_priority(priority);
                 map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
                                 stack_phys + i * arch::PAGE_SIZE);
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(kstack_va));
+            TCB_WRITE(tcb, kernel_stack,
+                      reinterpret_cast<uint8_t *>(kstack_va));
             tcb->kernel_stack_top = kstack_va + stack_size;
             goto done_stack;
         }
@@ -1087,7 +1095,8 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
         return nullptr;
 #ifdef CONFIG_DEBUG
     // BUGS.md#019/#020 detector: create_user previously lacked this check
-    // (create() had it); the buffer_pool_* tests reproduce the UAF via this path.
+    // (create() had it); the buffer_pool_* tests reproduce the UAF via this
+    // path.
     debug_check_tcb_reuse(tcb);
 #endif
     memset(tcb, 0, sizeof(TaskControlBlock));
@@ -1310,7 +1319,6 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->event_group.init();
     kernel::test::ResourceTracker::instance().track_event_group_add();
 
-
     // Copy fd_table.  Each copied used vnode gets a vnode_ref_inc (mirrors the
     // dup2/open/dup discipline): the child owns an independent reference and
     // must decrement it at cleanup.  Without the bump a forked child
@@ -1385,7 +1393,8 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
             tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
         } else {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(kstack_phys));
+            TCB_WRITE(tcb, kernel_stack,
+                      reinterpret_cast<uint8_t *>(kstack_phys));
             tcb->kernel_stack_top = kstack_phys + STACK_SIZE;
         }
     }
@@ -1454,7 +1463,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
         // Copy kernel entries from the kernel PML4.
         auto *new_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                       (new_pml4 & ~0xFFFULL));
+                                                      (new_pml4 & ~0xFFFULL));
         auto *kernel_virt = reinterpret_cast<uint64_t *>(
             arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
         __builtin_memset(new_virt, 0, arch::PAGE_SIZE);
@@ -1662,8 +1671,8 @@ void TaskControlBlock::cleanup() noexcept {
     // (blocked_on_queue != nullptr) we must detach now — otherwise the
     // queue owner's cleanup() will walk a dangling pointer after we are
     // freed and poisoned.
-    if (blocked_on_queue &&
-        reinterpret_cast<uintptr_t>(blocked_on_queue) >= 0xFFFF800000000000ULL) {
+    if (blocked_on_queue && reinterpret_cast<uintptr_t>(blocked_on_queue) >=
+                                0xFFFF800000000000ULL) {
         auto &q = *blocked_on_queue;
         if (TaskControlBlock::is_valid(q.blocked_senders_head) &&
             q.blocked_senders_head == this) {
@@ -1696,23 +1705,25 @@ void TaskControlBlock::cleanup() noexcept {
     // drain_zombie_list/cleanup_step), preserving the lock ordering of the
     // wake paths.  The higher-half range check mirrors the blocked_on_queue
     // validation above (objects live in kernel/HHDM space, never low VA).
-    if (waiting_on_mutex &&
-        reinterpret_cast<uintptr_t>(waiting_on_mutex) >= 0xFFFF800000000000ULL) {
+    if (waiting_on_mutex && reinterpret_cast<uintptr_t>(waiting_on_mutex) >=
+                                0xFFFF800000000000ULL) {
         waiting_on_mutex->remove_waiter(*this);
         waiting_on_mutex = nullptr;
     }
     if (waiting_on_semaphore &&
-        reinterpret_cast<uintptr_t>(waiting_on_semaphore) >= 0xFFFF800000000000ULL) {
+        reinterpret_cast<uintptr_t>(waiting_on_semaphore) >=
+            0xFFFF800000000000ULL) {
         waiting_on_semaphore->remove_waiter(*this);
         waiting_on_semaphore = nullptr;
     }
     if (waiting_on_eventgroup &&
-        reinterpret_cast<uintptr_t>(waiting_on_eventgroup) >= 0xFFFF800000000000ULL) {
+        reinterpret_cast<uintptr_t>(waiting_on_eventgroup) >=
+            0xFFFF800000000000ULL) {
         waiting_on_eventgroup->remove_waiter(*this);
         waiting_on_eventgroup = nullptr;
     }
-    if (waiting_on_queue &&
-        reinterpret_cast<uintptr_t>(waiting_on_queue) >= 0xFFFF800000000000ULL) {
+    if (waiting_on_queue && reinterpret_cast<uintptr_t>(waiting_on_queue) >=
+                                0xFFFF800000000000ULL) {
         waiting_on_queue->remove_waiter(*this);
         waiting_on_queue = nullptr;
     }
@@ -1861,7 +1872,8 @@ void TaskControlBlock::operator delete(void *ptr) noexcept {
             tcb->cleanup();
             Scheduler::remove_task(*tcb);
         }
-        tcb->magic = 0;  // Prevent double-free if caller re-enters operator delete
+        tcb->magic =
+            0; // Prevent double-free if caller re-enters operator delete
         MemPool::free(ptr);
         return;
     }

@@ -216,7 +216,7 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
         if (cur) {
             transferred = BufferPool::transfer(msg.buf_handle, *cur, *tcb);
             if (!transferred)
-                m.buf_handle = 0;   // drop buffer association; keep message
+                m.buf_handle = 0; // drop buffer association; keep message
         }
     }
 
@@ -225,14 +225,15 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
         if (transferred) {
             auto *cur = Scheduler::current_task();
             if (cur)
-                BufferPool::transfer(msg.buf_handle, *tcb, *cur);  // rollback
+                BufferPool::transfer(msg.buf_handle, *tcb, *cur); // rollback
         }
         return false;
     }
 
-    IPC_SCHED_TRACE("[SEND]", "to=", dest_id, "from=",
-                    (Scheduler::current_task() ? Scheduler::current_task()->id : 0),
-                    "ty=", m.type, "q=", tcb->msg_queue.count);
+    IPC_SCHED_TRACE(
+        "[SEND]", "to=", dest_id, "from=",
+        (Scheduler::current_task() ? Scheduler::current_task()->id : 0),
+        "ty=", m.type, "q=", tcb->msg_queue.count);
 
     // Wake a task blocked in send_sync() waiting for a reply on its own queue.
     // send_sync sets reply_wait and blocks; without this, the reply would sit
@@ -241,10 +242,10 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
     if (tcb->reply_wait) {
         tcb->reply_wait = false;
         if (tcb->state == TaskState::BLOCKED) {
-            IPC_SCHED_TRACE("[WAKE]", "dest=", dest_id, "st=",
-                            static_cast<uint64_t>(tcb->state), "inrq=",
-                            tcb->in_ready_queue_ ? 1u : 0u, "q=",
-                            tcb->msg_queue.count);
+            IPC_SCHED_TRACE("[WAKE]", "dest=", dest_id,
+                            "st=", static_cast<uint64_t>(tcb->state),
+                            "inrq=", tcb->in_ready_queue_ ? 1u : 0u,
+                            "q=", tcb->msg_queue.count);
             Scheduler::set_task_ready(*tcb);
             tcb->remaining_ticks = tcb->period_ticks;
         }
@@ -300,9 +301,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
     }
 
     Message m = msg;
-    m.sender_id = Scheduler::current_task()
-                      ? Scheduler::current_task()->id
-                      : 0;
+    m.sender_id = Scheduler::current_task() ? Scheduler::current_task()->id : 0;
     if (!ep->q.push(m))
         return false;
 
@@ -345,8 +344,8 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
         return false;
 
     bool was_blocked = false;
-    IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id, "ty=",
-                    msg.type, "q=", cur->msg_queue.count);
+    IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
+                    "ty=", msg.type, "q=", cur->msg_queue.count);
     while (cur->msg_queue.is_empty()) {
         // If destination died while we were waiting for a reply, bail out.
         // BUT: a reply may already be queued (the peer delivered its reply and
@@ -393,7 +392,7 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
 /// @brief Return a reference to a task's message queue (asserts existence).
 MessageQueue &IPC::queue(uint64_t task_id) {
     auto *tcb = Scheduler::find_task(task_id);
-    ENSURE(tcb != nullptr );
+    ENSURE(tcb != nullptr);
     return tcb->msg_queue;
 }
 
@@ -480,11 +479,11 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
         if (!task.blocked_next)
             q.blocked_senders_tail = &task;
 
-        // Priority inheritance — boost owner when higher-priority sender blocks.
-        // FIX(sched-race): the read-modify-write of q.owner->priority and the
-        // move_priority() re-index must be atomic against the timer ISR's
-        // deadline demote / sporadic priority changes.  q.lock_ is a plain
-        // spinlock (does not mask IRQs); IrqGuard excludes the ISR so
+        // Priority inheritance — boost owner when higher-priority sender
+        // blocks. FIX(sched-race): the read-modify-write of q.owner->priority
+        // and the move_priority() re-index must be atomic against the timer
+        // ISR's deadline demote / sporadic priority changes.  q.lock_ is a
+        // plain spinlock (does not mask IRQs); IrqGuard excludes the ISR so
         // old/new effective_priority snapshots stay consistent.
         if (q.owner && task.priority > q.owner->priority) {
             arch::IrqGuard irq_guard{};

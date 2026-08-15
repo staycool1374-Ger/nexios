@@ -214,29 +214,25 @@ struct TaskControlBlock {
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0),
-          stack_pdpt_phys_(0), user_stack_(0), user_stack_size_(0),
-          user_data(nullptr), is_user_(false),
+          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
+          user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
           program_break_start(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
-           in_ready_queue_(false), rq_priority_(0), all_bucket_(0), zombie_next_(nullptr),
-          waiting_child_pid(0),
+          in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
+          zombie_next_(nullptr), waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
           alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
-          buf_list_head(0),
-          task_obj_head_(nullptr), task_obj_tail_(nullptr),
+          buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
-          waiting_on_mutex(nullptr),
-          waiting_on_semaphore(nullptr),
-          waiting_on_eventgroup(nullptr),
-          waiting_on_queue(nullptr),
-          held_ceiling_depth_(0), system_ceiling_(0),
-          first_child(nullptr), next_sibling(nullptr), prev_sibling(nullptr),
-          num_children(0), generation(0) {
+          waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+          waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+          held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
+          next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
+          generation(0) {
     }
 
     uint64_t magic;
@@ -347,7 +343,8 @@ struct TaskControlBlock {
     bool in_ready_queue_;
     /// @brief Priority at which this task was enqueued in the ready queue.
     uint64_t rq_priority_;
-    /// @brief Priority bucket in AllTasksRegistry (set at append, never changes).
+    /// @brief Priority bucket in AllTasksRegistry (set at append, never
+    /// changes).
     uint64_t all_bucket_;
 
     /// @brief Singly-linked list pointer for the zombie list.

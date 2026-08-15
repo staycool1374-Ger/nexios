@@ -43,8 +43,12 @@ struct TestTarget : public KernelObject {
     static uint32_t g_dispose_count;
     static uint32_t g_revoke_count;
 
-    void dispose() noexcept override { ++g_dispose_count; }
-    bool is_shared() const noexcept override { return true; }
+    void dispose() noexcept override {
+        ++g_dispose_count;
+    }
+    bool is_shared() const noexcept override {
+        return true;
+    }
     void revoke() noexcept override {
         ++g_revoke_count;
         KernelObject::revoke();
@@ -220,11 +224,11 @@ JARVIS_TEST(handle_decode_out_of_range_fails, "PRE: none | POST: none") {
     // Slot index is masked to CAP_SLOT_BITS (power-of-two table), so a
     // decodable slot is always in-range; the authority boundary is the
     // cspace_id, which here addresses a different CSpace.
-    uint64_t foreign = cap::encode_handle(
-        static_cast<uint32_t>(node.cspace_id + 1u), static_cast<uint32_t>(idx),
-        0);
-    KernelObject *got = cap::lookup(&node, foreign, cap::CapType::Task,
-                                    cap::CAP_RIGHT_READ);
+    uint64_t foreign =
+        cap::encode_handle(static_cast<uint32_t>(node.cspace_id + 1u),
+                           static_cast<uint32_t>(idx), 0);
+    KernelObject *got =
+        cap::lookup(&node, foreign, cap::CapType::Task, cap::CAP_RIGHT_READ);
     JARVIS_ASSERT(got == nullptr);
     node.remove(static_cast<uint32_t>(idx));
     JARVIS_TEST_PASS();
@@ -252,8 +256,8 @@ JARVIS_TEST(handle_decode_stale_gen_fails, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(idx, idx2);
     JARVIS_ASSERT(node.slot_gen(static_cast<uint32_t>(idx2)) != old_gen);
 
-    KernelObject *got = cap::lookup(&node, old_handle, cap::CapType::Task,
-                                    cap::CAP_RIGHT_READ);
+    KernelObject *got =
+        cap::lookup(&node, old_handle, cap::CapType::Task, cap::CAP_RIGHT_READ);
     JARVIS_ASSERT(got == nullptr);
     node.remove(static_cast<uint32_t>(idx2));
     JARVIS_TEST_PASS();

@@ -62,7 +62,9 @@ class CNode : public KernelObject {
     void dispose() noexcept override;
 
     /// @brief Genuinely shared (may be referenced by multiple tasks/pins).
-    bool is_shared() const noexcept override { return true; }
+    bool is_shared() const noexcept override {
+        return true;
+    }
 
     /// @brief Cascade revoke: marks this node revoked and invalidates every
     ///        capability reachable through it (iterative, depth-bounded).

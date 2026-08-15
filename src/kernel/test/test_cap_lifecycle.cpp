@@ -38,8 +38,12 @@ namespace {
 /// @brief Minimal shared-heap KernelObject used as a capability target.
 struct TestTarget : public KernelObject {
     static uint32_t g_dispose_count;
-    void dispose() noexcept override { ++g_dispose_count; }
-    bool is_shared() const noexcept override { return true; }
+    void dispose() noexcept override {
+        ++g_dispose_count;
+    }
+    bool is_shared() const noexcept override {
+        return true;
+    }
 };
 
 uint32_t TestTarget::g_dispose_count = 0;
@@ -91,8 +95,8 @@ JARVIS_TEST(copy_shares_refcount, "PRE: none | POST: none") {
     JARVIS_ASSERT(d >= 0);
     JARVIS_ASSERT_EQ(3U, tgt.refcount());
     // copy() must NOT clear the source COPY right (only grant() is mint-once).
-    KernelObject *pinned = cap::lookup(&src, sh, cap::CapType::Null,
-                                       cap::CAP_RIGHT_COPY);
+    KernelObject *pinned =
+        cap::lookup(&src, sh, cap::CapType::Null, cap::CAP_RIGHT_COPY);
     JARVIS_ASSERT(pinned != nullptr);
     if (pinned)
         pinned->release();
@@ -158,11 +162,11 @@ JARVIS_TEST(mint_reduces_rights, "PRE: none | POST: none") {
     JARVIS_ASSERT(d >= 0);
     uint64_t dh = cap::encode_handle(dst.cspace_id, static_cast<uint32_t>(d),
                                      dst.slot_gen(static_cast<uint32_t>(d)));
-    KernelObject *rw = cap::lookup(&dst, dh, cap::CapType::Null,
-                                   cap::CAP_RIGHT_WRITE);
+    KernelObject *rw =
+        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_WRITE);
     JARVIS_ASSERT(rw == nullptr);
-    KernelObject *ro = cap::lookup(&dst, dh, cap::CapType::Null,
-                                   cap::CAP_RIGHT_READ);
+    KernelObject *ro =
+        cap::lookup(&dst, dh, cap::CapType::Null, cap::CAP_RIGHT_READ);
     JARVIS_ASSERT(ro != nullptr);
     if (ro)
         ro->release();
@@ -217,7 +221,7 @@ JARVIS_TEST(frame_cap_release_frees_pmm, "PRE: none | POST: none") {
     JARVIS_ASSERT(s >= 0);
     node.remove(static_cast<uint32_t>(s)); // slot ref dropped
     JARVIS_ASSERT_EQ(1U, fc->refcount());  // creator ref only
-    fc->release();                          // creator ref -> dispose frees page
+    fc->release();                         // creator ref -> dispose frees page
 
     kernel::test::ResourceCounters after{};
     rt.capture(after);
@@ -249,7 +253,7 @@ JARVIS_TEST(endpoint_cap_release_disposes, "PRE: none | POST: none") {
     JARVIS_ASSERT(s >= 0);
     node.remove(static_cast<uint32_t>(s));
     JARVIS_ASSERT_EQ(1U, ep->refcount()); // creator ref only
-    ep->release();                          // creator ref -> dispose
+    ep->release();                        // creator ref -> dispose
 
     kernel::test::ResourceCounters after{};
     rt.capture(after);

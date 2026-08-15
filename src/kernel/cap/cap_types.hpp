@@ -39,10 +39,10 @@ enum class CapType : uint8_t {
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.
 enum CapRights : uint32_t {
-    CAP_RIGHT_READ  = 1u << 0, ///< endpoint recv / frame read-mapping
+    CAP_RIGHT_READ = 1u << 0,  ///< endpoint recv / frame read-mapping
     CAP_RIGHT_WRITE = 1u << 1, ///< endpoint send / frame write-mapping
     CAP_RIGHT_GRANT = 1u << 2, ///< may grant (copy into another CSpace)
-    CAP_RIGHT_COPY  = 1u << 3, ///< may copy (duplicate into own CSpace)
+    CAP_RIGHT_COPY = 1u << 3,  ///< may copy (duplicate into own CSpace)
 };
 
 /// @brief Bits allocated to the cspace id in a capability handle.
@@ -93,8 +93,7 @@ constexpr uint32_t handle_cspace(uint64_t handle) noexcept {
 
 /// @brief Extracts the generation from a capability handle.
 constexpr uint32_t handle_gen(uint64_t handle) noexcept {
-    return static_cast<uint32_t>(handle >>
-                                 (CAP_HANDLE_IDBITS + CAP_SLOT_BITS));
+    return static_cast<uint32_t>(handle >> (CAP_HANDLE_IDBITS + CAP_SLOT_BITS));
 }
 
 /// @brief True if the slot index fits this CNode's table.

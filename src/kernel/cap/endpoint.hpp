@@ -53,7 +53,9 @@ class Endpoint : public KernelObject {
     void dispose() noexcept override;
 
     /// @brief Genuinely shared (referenced by capability slots).
-    bool is_shared() const noexcept override { return true; }
+    bool is_shared() const noexcept override {
+        return true;
+    }
 };
 
 } // namespace kernel::cap

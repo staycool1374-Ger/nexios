@@ -44,14 +44,14 @@ VirtioNetDevice::~VirtioNetDevice() {
     auto pages_for = [](size_t bytes) {
         return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     };
-    size_t desc_pages =
-        pages_for(queue_size * sizeof(arch::VirtqDesc));
+    size_t desc_pages = pages_for(queue_size * sizeof(arch::VirtqDesc));
     size_t avail_pages =
         pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(uint16_t));
-    size_t used_pages =
-        pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(arch::VirtqUsedElem));
+    size_t used_pages = pages_for(2 * sizeof(uint16_t) +
+                                  queue_size * sizeof(arch::VirtqUsedElem));
     auto free_pages = [](uint64_t base, size_t n) {
-        if (!base) return;
+        if (!base)
+            return;
         for (size_t i = 0; i < n; ++i)
             PMM::free_page(base + i * PAGE_SIZE);
     };
@@ -62,7 +62,8 @@ VirtioNetDevice::~VirtioNetDevice() {
     free_pages(tx_avail_phys, avail_pages);
     free_pages(tx_used_phys, used_pages);
     for (uint64_t phys : rx_bufs_phys)
-        if (phys) PMM::free_page(phys);
+        if (phys)
+            PMM::free_page(phys);
     if (tx_buf_phys)
         PMM::free_page(tx_buf_phys);
 }
@@ -158,7 +159,8 @@ bool virtio_net_probe(Nic &nic) {
 #pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
 #endif
     auto *dev_mem = kernel::MemPool::alloc(sizeof(VirtioNetDevice));
-    if (dev_mem == nullptr) return false;
+    if (dev_mem == nullptr)
+        return false;
     auto *dev = new (dev_mem) VirtioNetDevice();
 #ifndef __clang__
 #pragma GCC diagnostic pop
@@ -177,7 +179,8 @@ bool virtio_net_probe(Nic &nic) {
         !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
                            dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
                            dev->tx_used, dev->queue_size)) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
 
@@ -188,7 +191,8 @@ bool virtio_net_probe(Nic &nic) {
         !arch::virtio_setup_queue(transport, VIRTIO_NET_QUEUE_TX,
                                   dev->queue_size, dev->tx_desc_phys,
                                   dev->tx_avail_phys, dev->tx_used_phys)) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
 
@@ -197,7 +201,8 @@ bool virtio_net_probe(Nic &nic) {
         uint64_t phys = PMM::alloc_page();
         if (!phys) {
             Logger::error("virtio-net: OOM for RX buffer %d", i);
-            dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+            dev->~VirtioNetDevice();
+            kernel::MemPool::free(dev);
             return false;
         }
         dev->rx_bufs_phys[i] = phys;
@@ -212,7 +217,8 @@ bool virtio_net_probe(Nic &nic) {
     // Allocate TX DMA buffer
     dev->tx_buf_phys = PMM::alloc_page();
     if (!dev->tx_buf_phys) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)

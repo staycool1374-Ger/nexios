@@ -377,7 +377,8 @@ JARVIS_TEST(dma_engine_reject_when_busy, "PRE: iocd | POST: none") {
     JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
 
     JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
-    JARVIS_ASSERT(!engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
+    JARVIS_ASSERT(
+        !engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
     engine.abort();
     JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ, nullptr, 0));
 
@@ -409,10 +410,12 @@ JARVIS_TEST(dma_engine_no_double_callback, "PRE: iocd | POST: none") {
     JARVIS_ASSERT_EQ((size_t)1, dma::prd_from_sg(prd, sg, true));
 
     struct Local {
-        static void fired(uint64_t, bool) { ++g_cb_count; }
+        static void fired(uint64_t, bool) {
+            ++g_cb_count;
+        }
     };
-    JARVIS_ASSERT(engine.start_transfer(prd, dma::Direction::READ,
-                                        Local::fired, 0x99));
+    JARVIS_ASSERT(
+        engine.start_transfer(prd, dma::Direction::READ, Local::fired, 0x99));
     JARVIS_ASSERT(engine.handle_irq());
     JARVIS_ASSERT_EQ((uint64_t)1, g_cb_count);
     JARVIS_ASSERT(!engine.handle_irq()); // no active transfer -> no-op
@@ -516,13 +519,13 @@ JARVIS_TEST(pingpong_xfer_buf_while_busy, "PRE: iocd | POST: none") {
 
     dma::DmaBuffer *xfer = pp.xfer_buf();
     dma::DmaBuffer *prep = pp.prepare_buf();
-    JARVIS_ASSERT(xfer == buf_a);       // buf_a is now the DMA target
-    JARVIS_ASSERT(prep != buf_a);       // other buffer is being prepared
+    JARVIS_ASSERT(xfer == buf_a); // buf_a is now the DMA target
+    JARVIS_ASSERT(prep != buf_a); // other buffer is being prepared
 
     JARVIS_ASSERT(engine.handle_irq()); // complete transfer A
     JARVIS_ASSERT(!pp.busy());
     dma::DmaBuffer *xfer2 = pp.xfer_buf();
-    JARVIS_ASSERT(xfer2 != buf_a);      // indices swapped after completion
+    JARVIS_ASSERT(xfer2 != buf_a); // indices swapped after completion
 
     pp.shutdown();
     JARVIS_TEST_PASS();

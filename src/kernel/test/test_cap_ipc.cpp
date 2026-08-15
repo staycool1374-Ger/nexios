@@ -85,10 +85,10 @@ void frame_map_entry() {
                    ? 1
                    : 0;
     if (g_map_ok == 1) {
-        g_unmap_ok =
-            (VMM::virt_to_phys_in_pml4(0x400000ULL, pml4) == g_frame_global->phys)
-                ? 1
-                : 0;
+        g_unmap_ok = (VMM::virt_to_phys_in_pml4(0x400000ULL, pml4) ==
+                      g_frame_global->phys)
+                         ? 1
+                         : 0;
         VMM::unmap_frame_from_cap(0x400000ULL, pml4);
     }
     VMM::free_user_pages(pml4);
@@ -106,7 +106,7 @@ void revoked_frame_map_entry() {
     }
     g_revoke_denied_map_ok =
         VMM::map_frame_from_cap(g_frame_global, 0x400000ULL, false, pml4) ? 1
-                                                                         : 0;
+                                                                          : 0;
     VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     Scheduler::terminate(*Scheduler::current_task(), 0);

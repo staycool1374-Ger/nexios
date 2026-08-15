@@ -47,8 +47,8 @@ uint64_t Syscall::sys_cap_grant(uint64_t src_handle, uint64_t dst_handle,
         return static_cast<uint64_t>(-1);
     // Destination CNode is addressed by a CapCNode handle in the caller's
     // own CSpace.  The dest CNode must itself be a capability we hold.
-    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
-                                        cap::CAP_RIGHT_GRANT);
+    KernelObject *dst_obj =
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_GRANT);
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
@@ -64,8 +64,8 @@ uint64_t Syscall::sys_cap_copy(uint64_t src_handle, uint64_t dst_handle,
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(-1);
-    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
-                                        cap::CAP_RIGHT_COPY);
+    KernelObject *dst_obj =
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);
@@ -92,8 +92,8 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(-1);
-    KernelObject *dst_obj = cap::lookup(src, dst_handle, cap::CapType::CNode,
-                                        cap::CAP_RIGHT_COPY);
+    KernelObject *dst_obj =
+        cap::lookup(src, dst_handle, cap::CapType::CNode, cap::CAP_RIGHT_COPY);
     if (!dst_obj)
         return static_cast<uint64_t>(-1);
     auto *dst = static_cast<cap::CNode *>(dst_obj);

@@ -19,9 +19,9 @@
 #define CONFIG_VERSION_MAJOR 0
 #define CONFIG_VERSION_MINOR 3
 #define CONFIG_VERSION_PATCH 10
-#define CONFIG_VERSION_NUM ((CONFIG_VERSION_MAJOR << 16) | \
-                            (CONFIG_VERSION_MINOR << 8) |  \
-                            CONFIG_VERSION_PATCH)
+#define CONFIG_VERSION_NUM                                                     \
+    ((CONFIG_VERSION_MAJOR << 16) | (CONFIG_VERSION_MINOR << 8) |              \
+     CONFIG_VERSION_PATCH)
 
 // ---------------------------------------------------------------------------
 // Architecture Detection (set by Makefile ARCH variable)
@@ -553,7 +553,7 @@
 
 /// Total VA space reserved for kernel stacks.
 #ifndef CONFIG_KSTACK_WINDOW_SIZE
-#define CONFIG_KSTACK_WINDOW_SIZE 0x1000000ULL  // 16 MiB
+#define CONFIG_KSTACK_WINDOW_SIZE 0x1000000ULL // 16 MiB
 #endif
 
 /// Base virtual address of the per-kernel-task private-data window
@@ -566,8 +566,8 @@
 
 /// Kernel stack sizes per priority tier (bytes).  Indexed by priority.
 #ifndef CONFIG_STACK_SIZE_TABLE
-#define CONFIG_STACK_SIZE_TABLE \
-    { 65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536 }
+#define CONFIG_STACK_SIZE_TABLE                                                \
+    {65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}
 #endif
 
 /// Maximum number of zombies in the zombie list before the on_tick watchdog
@@ -587,7 +587,8 @@
 
 /// Maximum allowed IRQ latency in nanoseconds (debug assert).
 /// When > 0 and CONFIG_IRQ_LATENCY_HISTOGRAM is enabled, the interrupt
-/// handler panics if any single IRQ exceeds this threshold. Set to 0 to disable.
+/// handler panics if any single IRQ exceeds this threshold. Set to 0 to
+/// disable.
 #ifndef CONFIG_IRQ_LATENCY_MAX_NS
 #define CONFIG_IRQ_LATENCY_MAX_NS 0
 #endif

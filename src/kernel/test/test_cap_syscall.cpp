@@ -48,7 +48,9 @@ struct TestTarget : public KernelObject {
             MemPool::free(this);
         }
     }
-    bool is_shared() const noexcept override { return true; }
+    bool is_shared() const noexcept override {
+        return true;
+    }
 };
 
 uint32_t TestTarget::g_dispose_count = 0;
@@ -92,8 +94,7 @@ void install_dest_cspace(TaskControlBlock *t, cap::CNode **dst_out,
 }
 
 /// @brief Destroys the dest CNode and its slot in @p t's CSpace.
-void teardown_dest_cspace(TaskControlBlock *t, cap::CNode *dst,
-                          int slot) {
+void teardown_dest_cspace(TaskControlBlock *t, cap::CNode *dst, int slot) {
     cap::CNode *cspace = t->get_cspace();
     if (cspace && slot >= 0)
         cspace->remove(static_cast<uint32_t>(slot));
@@ -121,8 +122,8 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -138,12 +139,12 @@ JARVIS_TEST(sys_cap_grant_dispatch, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
-        uint64_t dh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ds),
-            cspace->slot_gen(static_cast<uint32_t>(ds)));
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
         g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_GRANT),
                                 sh, dh, 0, 0, nullptr);
         g_dst_occ = cap::occupied_count(dst);
@@ -174,8 +175,8 @@ JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -191,12 +192,12 @@ JARVIS_TEST(sys_cap_copy_dispatch, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
-        uint64_t dh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ds),
-            cspace->slot_gen(static_cast<uint32_t>(ds)));
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
         g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_COPY),
                                 sh, dh, 0, 0, nullptr);
         g_dst_occ = cap::occupied_count(dst);
@@ -228,8 +229,8 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -241,12 +242,12 @@ JARVIS_TEST(sys_cap_revoke_dispatch, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
-        g_ret = Syscall::handle(
-            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), sh, 0, 0, 0,
-            nullptr);
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        g_ret =
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_REVOKE),
+                            sh, 0, 0, 0, nullptr);
         g_occ = cap::occupied_count(cspace);
         g_revoked = tgt->revoked() ? 1 : 0;
         tgt->release();
@@ -275,8 +276,8 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -293,15 +294,15 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
-        uint64_t dh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ds),
-            cspace->slot_gen(static_cast<uint32_t>(ds)));
-        g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_MINT),
-                                sh, dh, static_cast<uint64_t>(cap::CAP_RIGHT_WRITE),
-                                0, nullptr);
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
+        g_ret = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_MINT), sh, dh,
+            static_cast<uint64_t>(cap::CAP_RIGHT_WRITE), 0, nullptr);
         g_dst_occ = cap::occupied_count(dst);
         teardown_dest_cspace(cur, dst, ds);
         cspace->remove(static_cast<uint32_t>(ss));
@@ -328,9 +329,9 @@ JARVIS_TEST(sys_cap_bad_handle_returns_minus1, "PRE: none | POST: none") {
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
         uint64_t bad = cap::encode_handle(cspace->cspace_id, 0, 0);
-        g_ret = Syscall::handle(
-            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), bad, 0, 0, 0,
-            nullptr);
+        g_ret =
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_REVOKE),
+                            bad, 0, 0, 0, nullptr);
     });
     JARVIS_ASSERT(t != nullptr);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret);
@@ -352,8 +353,8 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -365,9 +366,9 @@ JARVIS_TEST(sys_cap_wrong_type_returns_minus1, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
         // dst_handle aliases the same Task cap -> destination type mismatch.
         g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_GRANT),
                                 sh, sh, 0, 0, nullptr);
@@ -393,8 +394,8 @@ JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -406,9 +407,9 @@ JARVIS_TEST(sys_cap_rights_denied_returns_minus1, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
         // dst_handle aliases the Task cap (lacks COPY right).
         g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_COPY),
                                 sh, sh, 0, 0, nullptr);
@@ -434,8 +435,8 @@ JARVIS_TEST(sys_cap_revoke_cleanup_zero_delta, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cspace = cur->get_cspace();
-        auto *tgt = static_cast<TestTarget *>(
-            MemPool::alloc(sizeof(TestTarget)));
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
         if (!tgt)
             return;
         new (tgt) TestTarget;
@@ -447,9 +448,9 @@ JARVIS_TEST(sys_cap_revoke_cleanup_zero_delta, "PRE: none | POST: none") {
             tgt->release();
             return;
         }
-        uint64_t sh = cap::encode_handle(
-            cspace->cspace_id, static_cast<uint32_t>(ss),
-            cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
         Syscall::handle(static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), sh, 0,
                         0, 0, nullptr);
         tgt->release();

@@ -140,7 +140,8 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             if (!create)
                 return nullptr;
             uint64_t new_page = PMM::alloc_page_table();
-            if (!new_page) return nullptr;
+            if (!new_page)
+                return nullptr;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *new_table =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
@@ -223,13 +224,15 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     auto *l1 = get_table(l0, l0_idx, true);
-    if (!l1) return;
+    if (!l1)
+        return;
 
     // If L1 entry is a 2MB block, split it into 512 4KB entries
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
-        if (!new_l2_phys) return;
+        if (!new_l2_phys)
+            return;
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
         uint64_t block_base = l1[l1_idx] & ~0x1FFFFFULL;
@@ -244,7 +247,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *l2 = get_table(l1, l1_idx, true);
-    if (!l2) return;
+    if (!l2)
+        return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -286,9 +290,11 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, true);
-    if (!pdpt) return;
+    if (!pdpt)
+        return;
     auto *pd = get_table(pdpt, pdpt_idx, true);
-    if (!pd) return;
+    if (!pd)
+        return;
 
     // If the PD entry is a 2MB huge page, split it into 512 4KB entries
     // so we can map an individual 4KB page within it.
@@ -299,7 +305,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_page_table();
-        if (!new_pt_phys) return;
+        if (!new_pt_phys)
+            return;
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
@@ -321,7 +328,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     }
 
     auto *pt = get_table(pd, pd_idx, true);
-    if (!pt) return;
+    if (!pt)
+        return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -370,7 +378,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
     if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
         Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
-                     "(pml4_idx=%zu)", virt_addr, pml4_idx);
+                     "(pml4_idx=%zu)",
+                     virt_addr, pml4_idx);
     }
     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
@@ -432,7 +441,8 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
     size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
     if (Scheduler::is_test_active() && pml4_idx >= arch::PML4_USER_COUNT) {
         Logger::warn("virt_to_phys: test accessing kernel-space VA 0x%lx "
-                     "(pml4_idx=%zu)", virt_addr, pml4_idx);
+                     "(pml4_idx=%zu)",
+                     virt_addr, pml4_idx);
     }
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
@@ -493,9 +503,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
     auto *l1 = get_table(l0, l0_idx, true, true);
-    if (!l1) return;
+    if (!l1)
+        return;
     auto *l2 = get_table(l1, l1_idx, true, true);
-    if (!l2) return;
+    if (!l2)
+        return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -520,9 +532,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
     auto *pdpt = get_table(pml4, pml4_idx, true, true);
-    if (!pdpt) return;
+    if (!pdpt)
+        return;
     auto *pd = get_table(pdpt, pdpt_idx, true, true);
-    if (!pd) return;
+    if (!pd)
+        return;
 
 #if defined(CONFIG_ARCH_AARCH64)
     if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
@@ -531,7 +545,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
 #endif
     {
         uint64_t new_pt_phys = PMM::alloc_user_page();
-        if (!new_pt_phys) return;
+        if (!new_pt_phys)
+            return;
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *new_pt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
@@ -553,7 +568,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     }
 
     auto *pt = get_table(pd, pd_idx, true, true);
-    if (!pt) return;
+    if (!pt)
+        return;
 
     if (user)
         ENSURE(PMM::is_user_page(phys_addr) &&
@@ -835,21 +851,23 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
         uint64_t src_pdpt_phys = src[pml4_idx] & ~0xFFFULL;
         uint64_t dst_pdpt_phys = PMM::alloc_user_page();
-        if (!dst_pdpt_phys) return false;
-        auto *dst_pdpt = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + dst_pdpt_phys);
+        if (!dst_pdpt_phys)
+            return false;
+        auto *dst_pdpt =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pdpt_phys);
         __builtin_memset(dst_pdpt, 0, 4096);
         dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_WRITE |
                         VMM::PAGE_USER;
 
-        auto *src_pdpt = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + src_pdpt_phys);
+        auto *src_pdpt =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pdpt_phys);
         for (int pdpt_idx = 0; pdpt_idx < 512; ++pdpt_idx) {
             if (!(src_pdpt[pdpt_idx] & PAGE_PRESENT))
                 continue;
 
 #if defined(CONFIG_ARCH_AARCH64)
-            if ((src_pdpt[pdpt_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
+            if ((src_pdpt[pdpt_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
+                PAGE_PRESENT)
 #else
             if (src_pdpt[pdpt_idx] & VMM::PAGE_HUGE)
 #endif
@@ -861,21 +879,23 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
             uint64_t src_pd_phys = src_pdpt[pdpt_idx] & ~0xFFFULL;
             uint64_t dst_pd_phys = PMM::alloc_user_page();
-            if (!dst_pd_phys) return false;
-            auto *dst_pd = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + dst_pd_phys);
+            if (!dst_pd_phys)
+                return false;
+            auto *dst_pd =
+                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pd_phys);
             __builtin_memset(dst_pd, 0, 4096);
             dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
 
-            auto *src_pd = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + src_pd_phys);
+            auto *src_pd =
+                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pd_phys);
             for (int pd_idx = 0; pd_idx < 512; ++pd_idx) {
                 if (!(src_pd[pd_idx] & PAGE_PRESENT))
                     continue;
 
 #if defined(CONFIG_ARCH_AARCH64)
-                if ((src_pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT)
+                if ((src_pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) ==
+                    PAGE_PRESENT)
 #else
                 if (src_pd[pd_idx] & VMM::PAGE_HUGE)
 #endif
@@ -887,15 +907,16 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
                 uint64_t src_pt_phys = src_pd[pd_idx] & ~0xFFFULL;
                 uint64_t dst_pt_phys = PMM::alloc_user_page();
-                if (!dst_pt_phys) return false;
-                auto *dst_pt = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + dst_pt_phys);
+                if (!dst_pt_phys)
+                    return false;
+                auto *dst_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                            dst_pt_phys);
                 __builtin_memset(dst_pt, 0, 4096);
                 dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
 
-                auto *src_pt = reinterpret_cast<uint64_t *>(
-                    arch::HHDM_OFFSET + src_pt_phys);
+                auto *src_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                            src_pt_phys);
                 for (int pt_idx = 0; pt_idx < 512; ++pt_idx) {
                     if (!(src_pt[pt_idx] & PAGE_PRESENT))
                         continue;
@@ -904,7 +925,8 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     uint64_t flags = src_pt[pt_idx] & ~PAGE_FRAME_MASK;
 
                     uint64_t dst_data = PMM::alloc_user_page();
-                    if (!dst_data) return false;
+                    if (!dst_data)
+                        return false;
                     __builtin_memcpy(
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
@@ -938,14 +960,15 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
         uint64_t src_l1_phys = src[l0_idx] & ~0xFFFULL;
         uint64_t dst_l1_phys = PMM::alloc_user_page();
-        if (!dst_l1_phys) return false;
-        auto *dst_l1 = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + dst_l1_phys);
+        if (!dst_l1_phys)
+            return false;
+        auto *dst_l1 =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l1_phys);
         __builtin_memset(dst_l1, 0, 4096);
         dst[l0_idx] = dst_l1_phys | VMM::PAGE_PRESENT;
 
-        auto *src_l1 = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + src_l1_phys);
+        auto *src_l1 =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l1_phys);
         for (int l1_idx = 0; l1_idx < 512; ++l1_idx) {
             if (!(src_l1[l1_idx] & PAGE_PRESENT))
                 continue;
@@ -958,14 +981,15 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
 
             uint64_t src_l2_phys = src_l1[l1_idx] & ~0xFFFULL;
             uint64_t dst_l2_phys = PMM::alloc_user_page();
-            if (!dst_l2_phys) return false;
-            auto *dst_l2 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + dst_l2_phys);
+            if (!dst_l2_phys)
+                return false;
+            auto *dst_l2 =
+                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l2_phys);
             __builtin_memset(dst_l2, 0, 4096);
             dst_l1[l1_idx] = dst_l2_phys | VMM::PAGE_PRESENT;
 
-            auto *src_l2 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + src_l2_phys);
+            auto *src_l2 =
+                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l2_phys);
             for (int l2_idx = 0; l2_idx < 512; ++l2_idx) {
                 if (!(src_l2[l2_idx] & PAGE_PRESENT))
                     continue;
@@ -975,7 +999,8 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     uint64_t src_data = src_l2[l2_idx] & ~0xFFFULL;
                     uint64_t flags = src_l2[l2_idx] & 0xFFFULL;
                     uint64_t dst_data = PMM::alloc_user_page();
-                    if (!dst_data) return false;
+                    if (!dst_data)
+                        return false;
                     __builtin_memcpy(
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
@@ -985,7 +1010,8 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     // Table entry: 4-level format with L3 beneath
                     uint64_t src_l3_phys = src_l2[l2_idx] & ~0xFFFULL;
                     uint64_t dst_l3_phys = PMM::alloc_user_page();
-                    if (!dst_l3_phys) return false;
+                    if (!dst_l3_phys)
+                        return false;
                     auto *dst_l3 = reinterpret_cast<uint64_t *>(
                         arch::HHDM_OFFSET + dst_l3_phys);
                     __builtin_memset(dst_l3, 0, 4096);
@@ -999,11 +1025,13 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                         uint64_t src_data = src_l3[l3_idx] & ~0xFFFULL;
                         uint64_t flags = src_l3[l3_idx] & 0xFFFULL;
                         uint64_t dst_data = PMM::alloc_user_page();
-                        if (!dst_data) return false;
-                        __builtin_memcpy(
-                            reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
-                            reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
-                            4096);
+                        if (!dst_data)
+                            return false;
+                        __builtin_memcpy(reinterpret_cast<void *>(
+                                             arch::HHDM_OFFSET + dst_data),
+                                         reinterpret_cast<void *>(
+                                             arch::HHDM_OFFSET + src_data),
+                                         4096);
                         dst_l3[l3_idx] = dst_data | flags;
                     }
                 }

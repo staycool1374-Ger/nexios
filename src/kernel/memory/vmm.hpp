@@ -114,7 +114,8 @@ class VMM {
     /// @param virt_addr Virtual address (page-aligned).
     /// @param phys_addr Physical address (page-aligned).
     /// @param user      If true, sets user-accessible flag.
-    /// @param executable If true, page is executable (NX clear); if false, NX set.
+    /// @param executable If true, page is executable (NX clear); if false, NX
+    /// set.
     /// @param pml4_phys Physical address of the target PML4.
     static void map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
                                  bool user, bool executable,
@@ -289,18 +290,25 @@ class VMM {
 
     /// @brief Returns true if any test has modified the HHDM page tables
     ///        since the last clear_hhdm_modified() call.
-    static bool hhdm_was_modified() { return hhdm_modified_; }
+    static bool hhdm_was_modified() {
+        return hhdm_modified_;
+    }
     /// @brief Reset the HHDM modification flag (called after PD restore).
-    static void clear_hhdm_modified() { hhdm_modified_ = false; }
+    static void clear_hhdm_modified() {
+        hhdm_modified_ = false;
+    }
 
     /// @brief Returns true if any test has modified the low identity page
     ///        tables since the last clear_identity_modified() call.
-    static bool identity_was_modified() { return identity_modified_; }
+    static bool identity_was_modified() {
+        return identity_modified_;
+    }
     /// @brief Reset the identity modification flag (called after PD restore).
-    static void clear_identity_modified() { identity_modified_ = false; }
+    static void clear_identity_modified() {
+        identity_modified_ = false;
+    }
 
   private:
-
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
     /// @param index Index into the table.

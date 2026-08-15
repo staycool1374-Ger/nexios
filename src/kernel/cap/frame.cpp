@@ -25,23 +25,23 @@
 #include <kernel/test/resource_tracker.hpp>
 
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
-inline void *operator new(unsigned long, void *p) noexcept {
-    return p;
+inline void *operator new(unsigned long, void *placement) noexcept {
+    return placement;
 }
 
 namespace kernel::cap {
 
 FrameCap *FrameCap::create(uint64_t phys, size_t count, bool is_user) {
-    auto *fc = static_cast<FrameCap *>(MemPool::alloc(sizeof(FrameCap)));
-    if (!fc)
+    auto *frame = static_cast<FrameCap *>(MemPool::alloc(sizeof(FrameCap)));
+    if (!frame)
         return nullptr;
-    new (fc) FrameCap;
-    fc->mark_pool_backed();
-    fc->phys = phys;
-    fc->count = count;
-    fc->is_user = is_user;
+    new (frame) FrameCap;
+    frame->mark_pool_backed();
+    frame->phys = phys;
+    frame->count = count;
+    frame->is_user = is_user;
     kernel::test::ResourceTracker::instance().track_cap_object_add();
-    return fc;
+    return frame;
 }
 
 void FrameCap::dispose() noexcept {
