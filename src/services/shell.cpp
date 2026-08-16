@@ -668,8 +668,8 @@ static const char *state_name(kernel::TaskState s) {
 }
 
 void Shell::cmd_tasks(int, const char**) {
-    Terminal::write("ID  NAME             STATE      PRIO  PERIOD   MEM_PG STACK_KiB CPU_TIME  CURRENT\n");
-    Terminal::write("--- ---------------- ---------- ----- ------- ------- --------- --------- -------\n");
+    Terminal::write("ID  NAME             STATE      PRIO   PERIOD   MEM_PG STACK_KiB STACK_USED STACK_FREE  TEXT_KiB  DATA_KiB   BSS_KiB HEAP_KiB CPU_TIME  CURRENT\n");
+    Terminal::write("--- ---------------- ---------- ----- ------- ------- --------- ---------- ---------- -------- -------- -------- -------- --------- -------\n");
 
     auto *cur = kernel::Scheduler::current_task();
     auto count = kernel::Scheduler::task_count();
@@ -739,11 +739,61 @@ void Shell::cmd_tasks(int, const char**) {
         print_uint(t->memory_used_pages_);
         Terminal::putchar(' ');
 
-        // Stack size in KiB (right-aligned, 9 chars)
+        // Stack total size in KiB (right-aligned, 9 chars)
         uint64_t stack_kib = kernel::TaskControlBlock::STACK_SIZE / 1024;
         for (uint64_t p = 1; p <= right_pad(9, stack_kib); ++p)
             Terminal::putchar(' ');
         print_uint(stack_kib);
+        Terminal::putchar(' ');
+
+        // Stack high-water: bytes actually consumed (top - low-water mark),
+        // reported in KiB.  kstack_low_water_==0 means the task has never
+        // been switched out yet -> 0 used.
+        uint64_t kbase = reinterpret_cast<uint64_t>(t->kernel_stack);
+        uint64_t ktop = t->kernel_stack_top;
+        uint64_t stack_used = 0;
+        uint64_t stack_free = 0;
+        if (t->kstack_low_water_ != 0 && kbase != 0 && ktop > kbase &&
+            t->kstack_low_water_ >= kbase && t->kstack_low_water_ <= ktop) {
+            stack_used = (ktop - t->kstack_low_water_) / 1024;
+            stack_free = (t->kstack_low_water_ - kbase) / 1024;
+        }
+        for (uint64_t p = 1; p <= right_pad(10, stack_used); ++p)
+            Terminal::putchar(' ');
+        print_uint(stack_used);
+        Terminal::putchar(' ');
+        for (uint64_t p = 1; p <= right_pad(10, stack_free); ++p)
+            Terminal::putchar(' ');
+        print_uint(stack_free);
+        Terminal::putchar(' ');
+
+        // Loaded image segments (text/data/bss) in KiB.
+        auto seg_kib = [](uint64_t bytes) {
+            return (bytes + 1023) / 1024;
+        };
+        uint64_t text_kib = seg_kib(t->text_size_);
+        uint64_t data_kib = seg_kib(t->data_size_);
+        uint64_t bss_kib = seg_kib(t->bss_size_);
+        for (uint64_t p = 1; p <= right_pad(9, text_kib); ++p)
+            Terminal::putchar(' ');
+        print_uint(text_kib);
+        Terminal::putchar(' ');
+        for (uint64_t p = 1; p <= right_pad(9, data_kib); ++p)
+            Terminal::putchar(' ');
+        print_uint(data_kib);
+        Terminal::putchar(' ');
+        for (uint64_t p = 1; p <= right_pad(9, bss_kib); ++p)
+            Terminal::putchar(' ');
+        print_uint(bss_kib);
+        Terminal::putchar(' ');
+
+        // Heap used in KiB (program_break - start), '-' when no heap.
+        uint64_t heap_kib = 0;
+        if (t->program_break > t->program_break_start)
+            heap_kib = (t->program_break - t->program_break_start) / 1024;
+        for (uint64_t p = 1; p <= right_pad(9, heap_kib); ++p)
+            Terminal::putchar(' ');
+        print_uint(heap_kib);
         Terminal::putchar(' ');
 
         // CPU time as hh:mm:ss (ticks at 1000 Hz = 1 ms per tick)

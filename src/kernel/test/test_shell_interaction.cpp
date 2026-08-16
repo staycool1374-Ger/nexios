@@ -282,6 +282,27 @@ JARVIS_TEST(shell_uptime_command, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT(serial_contains(buf1, "Uptime"));
 }
 
+// Runmode: kernel (release)
+// Testidea: The `tasks` command reports per-task memory info: stack
+//           high-water/low-water, stack size, and text/data/bss segments.
+// Input: Shell::execute("tasks") with Terminal capture enabled
+// Expect: Captured output contains the new memory columns
+// Depends: service::Shell, service::Terminal, kernel::TaskControlBlock
+JARVIS_TEST(shell_tasks_memory_columns, "PRE: vfsd, iocd | POST: none") {
+    char cap[2048];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Shell::execute("tasks");
+    service::Terminal::capture_end();
+
+    // New memory columns present in the header.
+    JARVIS_ASSERT(serial_contains(cap, "STACK_USED"));
+    JARVIS_ASSERT(serial_contains(cap, "STACK_FREE"));
+    JARVIS_ASSERT(serial_contains(cap, "TEXT_KiB"));
+    JARVIS_ASSERT(serial_contains(cap, "DATA_KiB"));
+    JARVIS_ASSERT(serial_contains(cap, "BSS_KiB"));
+    JARVIS_ASSERT(serial_contains(cap, "HEAP_KiB"));
+}
+
 JARVIS_TEST(shell_pwd_command, "PRE: vfsd, iocd | POST: none") {
     uint8_t orig_mcr = arch::inb(arch::COM1 + 4);
     arch::outb(arch::COM1 + 4, orig_mcr | 0x10);
@@ -526,5 +547,6 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_RELEASE_TEST(shell_export_command);
     JARVIS_REGISTER_RELEASE_TEST(shell_sleep_zero);
     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
 }
 #endif

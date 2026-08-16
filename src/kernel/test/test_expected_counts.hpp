@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 931,    0,       0      },  // 929 + drivers_core(+2); dump_class_counts verified
+    {"all",                 932,    0,       0      },  // 931 + shell_interaction(+1); dump_class_counts verified
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -162,7 +162,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
 
     // shell / ui
-    {"shell_interaction",    18,    0,       0      },  // shell commands
+    {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll

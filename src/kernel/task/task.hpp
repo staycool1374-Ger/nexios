@@ -218,7 +218,8 @@ struct TaskControlBlock {
           user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
-          program_break_start(0), fd_table({}), cwd_vnode(nullptr),
+          program_break_start(0), kstack_low_water_(0), text_size_(0),
+          data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
           in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
@@ -313,6 +314,23 @@ struct TaskControlBlock {
 
     uint64_t program_break;
     uint64_t program_break_start;
+
+    /// @brief Lowest kernel-stack RSP observed for this task (stack low-water
+    ///        mark, grows downward from kernel_stack_top).  Sampled in the
+    ///        context-switch path.  0 until the task has been switched out at
+    ///        least once.  Used by the `tasks` command to report stack
+    ///        high-water (bytes consumed) / low-water (bytes remaining).
+    uint64_t kstack_low_water_;
+
+    /// @brief Loaded user-image segment sizes (bytes), captured at ELF load
+    ///        from the program-header table (PT_LOAD, memsz):
+    ///          text_size_  — executable (PF_X) segments
+    ///          data_size_  — writable (PF_W) segments
+    ///          bss_size_   — zero-filled tail (memsz - filesz), summed
+    ///        0 for kernel-only tasks (never elf::load'd).
+    uint64_t text_size_;
+    uint64_t data_size_;
+    uint64_t bss_size_;
 
     /// @brief Maximum pages this task may allocate from PMM.  0 = unlimited.
     uint64_t memory_budget_pages_;

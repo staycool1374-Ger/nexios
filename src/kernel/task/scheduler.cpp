@@ -2018,6 +2018,14 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         const bool cur_in_own_stack =
             current->kernel_stack && current->kernel_stack_top &&
             cur_rsp >= cbase && cur_rsp < current->kernel_stack_top;
+        // Stack low-water mark: track the deepest RSP ever observed on this
+        // task's kernel stack (grows down).  Sampled on every switch-out so
+        // the `tasks` command can report high-water (used) / low-water (free).
+        if (cur_in_own_stack &&
+            (current->kstack_low_water_ == 0 ||
+             cur_rsp < current->kstack_low_water_)) {
+            current->kstack_low_water_ = cur_rsp;
+        }
         if (is_boot_stack_rsp(cur_rsp)) {
             // H2 (docs/specs/ipc.md §4): the live RSP is on the kernel
             // boot stack — the harness (init/PID 1) runs there in test mode and

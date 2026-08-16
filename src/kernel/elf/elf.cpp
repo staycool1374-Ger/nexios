@@ -586,6 +586,32 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     // kernel-stack) after the address space is fully mapped.
     install_segment_canaries(tcb, hdr, phdr_image, file_size);
 
+    // Capture user-image segment sizes (text/data/bss) for the `tasks`
+    // memory report.  Summed from the PT_LOAD program headers.
+    {
+        uint64_t text = 0, data = 0, bss = 0;
+        for (uint16_t i = 0; i < hdr->phnum; ++i) {
+            auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+                phdr_image + hdr->phoff +
+                static_cast<uint64_t>(i) * hdr->phentsize);
+            if (!phdr || phdr->type != PT_LOAD)
+                continue;
+            if (!validate_segment(phdr, file_size))
+                continue;
+            const uint64_t memsz = phdr->memsz;
+            const uint64_t filesz = phdr->filesz;
+            if (phdr->flags & PF_X)
+                text += memsz;
+            else if (phdr->flags & PF_W)
+                data += memsz;
+            if (memsz > filesz)
+                bss += memsz - filesz;
+        }
+        tcb->text_size_ = text;
+        tcb->data_size_ = data;
+        tcb->bss_size_ = bss;
+    }
+
     return tcb;
 }
 
