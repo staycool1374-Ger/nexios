@@ -92,8 +92,15 @@ InitrdFile find(const char* path) {
         uint32_t data_offset = align4(hdr_size + namesize);
         const uint8_t* fname = ptr + name_offset;
 
+        // The cpio archive is produced by `find . -print0`, so every entry
+        // name is prefixed with "./" (e.g. "./prime.c.elf").  Normalize on
+        // BOTH sides so a lookup of "prime.c.elf" or "./prime.c.elf" matches
+        // "./prime.c.elf" (and the boot-time "./etc/fstab" lookups keep
+        // working).
         const char* p = path;
         const uint8_t* n = fname;
+        if (p[0] == '.' && p[1] == '/') p += 2;
+        if (n[0] == '.' && n[1] == '/') n += 2;
         bool match = true;
         while (*p && *n && *p == static_cast<char>(*n)) { ++p; ++n; }
         if (*p == '\0' && *n == '\0') match = true;
