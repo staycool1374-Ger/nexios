@@ -170,6 +170,150 @@ Add a row in `docs/specs/configuration.md` §1 (new §1.8 "Capabilities") docume
 
 ---
 
+## 2.8 Untyped Memory Allocator (v0.4.1)
+
+**Status:** PLANNED — ROADMAP v0.4.1 item 3, iteration-1 foundation (supersedes the §2.6 deferred sketch for the Untyped slice; IRQ/MMIO caps remain 0.4.2+).
+
+### 2.8.1 Current state assessment
+
+Already in place (integration points for Untyped):
+
+| Piece | Location | Notes |
+|---|---|---|
+| KernelObject base | `src/kernel/memory/kernel_object.hpp` | refcount/revoke/dispose/`ScopedRef`; UntypedMem derives from this |
+| CNode + CSlot | `src/kernel/cap/cap.{hpp,cpp}` | install/remove/peek/revoke/lookup/occupied_count; handle encode/decode; per-CNode SpinLock |
+| FrameCap | `src/kernel/cap/frame.{hpp,cpp}` | owns PMM frames; dispose() → `PMM::free_page` × count → MemPool::free. Natural retype target |
+| Endpoint | `src/kernel/cap/endpoint.{hpp,cpp}` | shared-heap object (NOT a retype target in iteration 1) |
+| Lifecycle primitives | `src/kernel/cap/cap.cpp` | copy/grant/mint are type-agnostic (`CapType::Null` wildcard in lookup/do_copy_pinned); revoke cascades via `CNode::revoke` |
+| SYS_CAP_* | `src/kernel/syscall/syscall.{hpp,syscall_handlers_cap.cpp}` | 51–54 (GRANT/COPY/REVOKE/MINT); NO retype syscall in iteration 1 |
+| PMM | `src/kernel/memory/pmm.{hpp,cpp}` | `alloc_contiguous`/`alloc_user_contiguous`/`free_page`; every path calls `track_pmm_alloc/free` |
+| ResourceTracker | `src/kernel/test/resource_tracker.{hpp,cpp}` | `cap_objects`/`cap_slots` counters; UntypedMem folds into `cap_objects` — no new counter |
+| Config | `src/kernel/nexios_config.h:494-509` | `CONFIG_CSLOT_COUNT`=64, `CONFIG_CAP_MAX_DEPTH`=8; `CONFIG_CAP_MAX_UNTYPED` missing (`CONFIG_CAP_MAX_CNODES` from §2.7 never landed — do not add in this item) |
+
+Genuinely missing for the Untyped slice:
+
+1. **`UntypedMem` KernelObject** — owns a contiguous PMM region + retype-once guard.
+2. **`retype()` operation** — carves a capability out of the region with ownership transfer.
+3. **`CONFIG_CAP_MAX_UNTYPED`** — bound on live Untyped objects.
+4. **`CapType::Untyped`** — add to `cap_types.hpp` (impact verified: `CapType` is only ever compared with `==`/`!=` — no exhaustive switch; `CapType::Null` remains the sole lookup wildcard at cap.cpp:177; copy/grant/mint duplicate the slot type verbatim, so Untyped caps become transferable with zero changes to those primitives).
+
+### 2.8.2 Design
+
+**UntypedMem object** — shared-heap KernelObject (PipeBuffer/CNode pattern):
+
+```cpp
+// src/kernel/cap/untyped.hpp
+namespace kernel::cap {
+
+/// Owns a contiguous PMM region and may be retyped at most once.
+class UntypedMem : public KernelObject {
+  public:
+    uint64_t phys = 0;                        // first frame of the owned region
+    size_t   size = 0;                        // region size in bytes (PAGE_SIZE multiple)
+    bool     is_user = false;                 // PMM ownership class (FrameCap parity)
+    CapType  retype_target = CapType::Frame;  // iteration-1: only Frame supported
+
+    static UntypedMem *create(size_t size, bool is_user,
+                              CapType target = CapType::Frame);
+
+    /// CAS false->true; true iff this caller wins the single retype.
+    bool claim_once() noexcept;
+    /// True iff this Untyped still owns its frames (never retyped).
+    bool owns_region() const noexcept;
+
+    void dispose() noexcept override;  // frees frames ONLY if owns_region()
+    bool is_shared() const noexcept override { return true; }
+};
+
+} // namespace kernel::cap
+```
+
+- `create()`: validates `size > 0 && size % arch::PAGE_SIZE == 0`; enforces `CONFIG_CAP_MAX_UNTYPED` via a TU-local live counter; carves the region from PMM (`is_user ? PMM::alloc_user_contiguous(n) : PMM::alloc_contiguous(n)`); allocates the block from MemPool, placement-news, `mark_pool_backed()`, `track_cap_object_add()`. On any failure after the PMM carve, the pages are returned to PMM before returning nullptr.
+- `dispose()`: if `owns_region()` (never retyped) → `PMM::free_page(phys + i * arch::PAGE_SIZE)` for each frame; then `track_cap_object_remove()` + `MemPool::free(this)`. If retyped → frames are owned by the retyped object; dispose MUST NOT free them (double-free guard).
+- The guard flag IS the ownership bit: `retyped_ == false` ⇒ Untyped owns the frames; `retyped_ == true` ⇒ Untyped owns nothing. Single flag, single source of truth.
+
+**retype() operation** — kernel-internal API in iteration 1 (no syscall, mirroring §2.1; `SYS_CAP_RETYPE` is a 0.4.2 item):
+
+```cpp
+/// Retypes the Untyped at @p untyped_handle in @p cspace into a new capability
+/// of @p target_type, installed into @p cspace.
+/// @return the new slot index, or -1 on any failure.
+int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+           size_t size, uint32_t rights) noexcept;
+```
+
+Semantics (task context only; no IRQ context; no blocking):
+
+1. `lookup(cspace, untyped_handle, CapType::Untyped, CAP_RIGHT_WRITE)` pins the Untyped (WRITE = mutation right; a dedicated `CAP_RIGHT_RETYPE` rides in with the 0.4.2 syscall).
+2. Validate `target_type == ut->retype_target` (iteration 1: must be `CapType::Frame`) and `size == ut->size` (exact-size carve). Any failure → release pin, -1. **The Untyped is left intact** on validation failure.
+3. **Claim the guard**: `ut->claim_once()` (CAS on `retyped_` false→true). Loser → release pin, -1. From this instant the Untyped owns nothing and no other retype can win.
+4. `FrameCap *fc = FrameCap::create(ut->phys, ut->size / arch::PAGE_SIZE, ut->is_user)`. On nullptr (MemPool exhaustion) → roll back the claim, release pin, -1. Region stays with the Untyped.
+5. `int idx = cspace->install(fc, CapType::Frame, rights)`:
+   - Success → `fc->release()` (drop the creator ref; the slot holds one), release pin, return idx. Ownership transferred.
+   - Failure (table full) → `fc->release()` → `FrameCap::dispose` returns the region to PMM; guard stays set (fail-closed: a retype whose install fails consumes the Untyped); release pin, -1.
+
+**Ownership/transfer invariant:** every frame in a region has exactly one owner at every instant — Untyped (before claim) → in-flight (claim set) → FrameCap (after install) or PMM free-list (install failure). PMM bitmap stays consistent: the region is allocated exactly once (at `UntypedMem::create`) and freed exactly once (by whichever owner disposes).
+
+**RegionAllocator — NOT needed in iteration 1.** Exact-size carve means the whole region transfers in one step; the "allocation" of the region is PMM at create time. PMM is already a bitmap allocator; a second bump/bitmap is redundant. `UntypedMem::phys`/`size` are exactly the range a future RegionAllocator would manage.
+
+**Child Untyped for leftover — NOT in iteration 1 (exact-size carve only).** The §2.6 sketch mandates "only the region's exact size may be carved" and "retype at most once (guard flag)". A child-Untyped splitter contradicts the guard and needs sub-range bookkeeping. Natural 0.4.2 extension: add `CapType::Untyped` as a retype target with a sub-range carve, creating a child Untyped for the remainder.
+
+**Retype targets — Frame only in iteration 1.** CNode and Endpoint are MemPool-allocated shared-heap structs, not physical-memory-resident objects; retyping a region "into" them requires object-storage-in-region support (deferred to 0.4.2). `retype_target` is the documented extension point.
+
+**Revoke/dispose interplay:**
+- Revoking a CNode cascades to its Untyped slot: `slot.obj->revoke()` marks the Untyped revoked; future `acquire()` fails. The Untyped still owns its region until the last reference drops → dispose frees it. Revoke invalidates the cap, not the memory.
+- Retyped Untyped revoked later: dispose (guard set) frees only the MemPool block — no double-free.
+- The retype-once guard is the only place the "who frees the region" decision is made; there is no path where both the Untyped and the FrameCap free the same frames.
+
+**Config:** `CONFIG_CAP_MAX_UNTYPED` (default 16) in `nexios_config.h` cap section (~line 509). Enforced in `UntypedMem::create()` via the TU-local live counter.
+
+### 2.8.3 Phased execution plan
+
+Per AGENTS.md: `make build` clean between phases; one class at a time; `test-history.txt` row after every run.
+
+**Phase 1 — UntypedMem object + CapType + config + object tests (3 tests)**
+- MODIFY `src/kernel/cap/cap_types.hpp` — append `Untyped = 5` to `CapType`.
+- MODIFY `src/kernel/nexios_config.h` — add `CONFIG_CAP_MAX_UNTYPED` (default 16).
+- NEW `src/kernel/cap/untyped.hpp` / `untyped.cpp` — `UntypedMem` per §2.8.2.
+- MODIFY `src/kernel/test/test_registry.cpp` — register `cap_untyped` class (both halves).
+- MODIFY `src/kernel/test/test_expected_counts.hpp` — `{"cap_untyped", 3, 0, 0}`; `all` 932 → **935**.
+- NEW `src/kernel/test/test_cap_untyped.cpp` — tests 1–3.
+- Verify: `make execute-test x86_64 debug cap_untyped` → 3/3.
+
+**Phase 2 — retype() operation + end-to-end tests (3 tests)**
+- MODIFY `src/kernel/cap/cap.hpp` — declare `int retype(...)`.
+- MODIFY `src/kernel/cap/untyped.cpp` — implement `cap::retype` (Frame-only, exact-size, CAS-guard transfer).
+- Tests 4–6; `cap_untyped` 3→6; `all` 935→**938**.
+- Verify: 6/6.
+
+**Phase 3 — hardening tests + full gates (3 tests)**
+- Tests 7–9; `cap_untyped` 6→9; `all` 938→**941**.
+- Verify: 9/9 + regressions (cap_core 10, cap_lifecycle 8, cap_syscall 8, cap_ipc 6, memory_pmm 5) + debug `all` **941/941** (trace ON) + release `all` 84/84 (trace OFF) + selftest 132/132.
+- Follow-up docs: ROADMAP.md item-3 checkbox; cspace.md status header amended.
+
+### 2.8.4 SIL 3 considerations
+
+1. **Double-free (primary risk).** The retype-once guard `retyped_` is the single ownership bit: `dispose()` frees the region iff `owns_region()`; after a successful retype the Untyped frees nothing and the FrameCap frees the same region once. No path frees twice: claim is CAS-single-winner; install failure frees via FrameCap::dispose with the guard left set (fail-closed); validation failure never touches ownership. The transient in-flight state (claim set, no FrameCap yet) is invisible to dispose because retype holds a pin (`lookup` acquire) — `dispose()` runs only on the 1→0 transition and cannot run while a pin exists.
+2. **Concurrency boundaries.** retype is task-context only; no `IrqGuard`; no SpinLock added to UntypedMem — the lookup pin serializes lifetime against dispose; the CAS serializes retype-vs-retype. `retyped_` uses `__atomic_*` ACQ_REL / ACQUIRE. `FrameCap::dispose`/`UntypedMem::dispose` may `MemPool::free` — never under a cap spinlock.
+3. **Refcount/revoke interaction.** Retyped or not, the Untyped is an ordinary shared KernelObject: revoke marks it revoked (future acquire refused) but memory reclaim happens on the last release; a pin taken before revoke completes its operation safely. The pre-existing `acquire()` overflow-guard gap (spec §4.2; kernel_object.hpp:84-88 lacks the UINT32_MAX check) is out of scope here.
+4. **Bounded structures.** `CONFIG_CAP_MAX_UNTYPED` (16) enforced by the TU-local live counter; region size bounded by PMM + page-multiple validation; no unbounded recursion (retype is O(1) plus FrameCap::create/install).
+5. **Memory-safety of the carve.** `size % arch::PAGE_SIZE == 0` and `size > 0` validated at create; `phys` is contiguous by construction; retype validates `size == ut->size` so the FrameCap never wraps a different range; both disposes iterate `count = size / arch::PAGE_SIZE` frames from the same base.
+6. **ResourceTracker.** UntypedMem folds into the existing `cap_objects` counter; the region is tracked by the existing `pmm_pages_used` counter. No new counters; snapshot_restore's `check()` fails any test leaking Untyped objects or frames.
+
+### 2.8.5 Gate / Definition of Done
+
+- [ ] `make build` green after every phase.
+- [ ] Phase gates: `cap_untyped` 3/3 → 6/6 → 9/9, zero ResourceTracker delta each.
+- [ ] Regression: `cap_core` 10/10, `cap_lifecycle` 8/8, `cap_syscall` 8/8, `cap_ipc` 6/6, `memory_pmm` 5/5.
+- [ ] Debug `all` **941/941** (trace ON), release `all` **84/84** (trace OFF), `selftest` 132/132.
+- [ ] `test-history.txt` rows appended for every gate run.
+- [ ] ROADMAP.md item-3 checkbox checked; cspace.md status header amended.
+- [ ] SIL 3 audit (auditor subagent) approves every modified file; diff-patch protocol for any REJECT.
+
+**Counts summary:** +9 tests (class `cap_untyped`) → `all` 932 → **941**. Release/safe counts unchanged (84/132) — cap_untyped tests are TF_KERNEL.
+
+---
+
 ## 3. Phased Execution Plan
 
 Each phase ends with a green class gate. Fix classes one at a time; per-class discipline, `make build` clean, `test-history.txt` row after every run (AGENTS.md rules).
