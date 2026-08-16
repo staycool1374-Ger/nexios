@@ -44,18 +44,6 @@ void format_u64(char *&p, char *end, uint64_t v) {
         *p++ = buf[i];
 }
 
-void format_hex(char *&p, char *end, uintptr_t v) {
-    if (p + 2 >= end)
-        return;
-    *p++ = '0';
-    *p++ = 'x';
-    for (int i = (sizeof(uintptr_t) * 2) - 1; i >= 0 && p < end; --i) {
-        uint8_t nibble = (v >> (i * 4)) & 0xF;
-        *p++ =
-            static_cast<char>(nibble < 10 ? '0' + nibble : 'a' + (nibble - 10));
-    }
-}
-
 } // anonymous namespace
 
 void dmesg_task_main() {
@@ -89,12 +77,7 @@ void dmesg_task_main() {
             const char *err_name =
                 log::error_string(entry.subsystem, entry.error_code);
             while (*err_name && p < end)
-                *p++ = *err_name++;
-
-            const char *ctx_str = " CTX=";
-            while (*ctx_str && p < end)
-                *p++ = *ctx_str++;
-            format_hex(p, end, entry.context);
+                 *p++ = *err_name++;
 
             const char *msg_str = ": ";
             while (*msg_str && p < end)

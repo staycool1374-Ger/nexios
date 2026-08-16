@@ -1170,11 +1170,9 @@ void Shell::cmd_load(int argc, const char** argv) {
     auto result = kernel::elf::ElfLoader::request_load(path);
     switch (result) {
     case kernel::elf::LoadResult::OK:
-        // request_load already posted the "started" event (loader prints the
-        // start line + dmesg).  Return immediately.
-        Terminal::write("loading ");
-        Terminal::write(path);
-        Terminal::write(" started\n");
+        // The loader task posts the "loading <path> started at <sec>" line to
+        // console + dmesg when it begins (post_event 0xDB01).  Do NOT print a
+        // second "started" here — it would interleave with the async line.
         return;
     case kernel::elf::LoadResult::ALREADY_LOADING:
         shell_error_path("load", path, "already loading");
@@ -2521,17 +2519,7 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
         *p++ = ':';
         const char* err_name = kernel::log::error_string(e.subsystem, e.error_code);
         while (*err_name && p < end) *p++ = *err_name++;
-        *p++ = ' ';
-
-        const char* ctx_s = "CTX=";
-        while (*ctx_s && p < end) *p++ = *ctx_s++;
-        uintptr_t ctx = e.context;
-        *p++ = '0'; *p++ = 'x';
-        for (int i = (sizeof(uintptr_t)*2)-1; i >= 0 && p < end; --i) {
-            uint8_t nib = (ctx >> (i*4)) & 0xF;
-            *p++ = static_cast<char>(nib < 10 ? '0' + nib : 'a' + (nib - 10));
-        }
-        *p++ = ':'; *p++ = ' ';
+         *p++ = ' ';
 
         const char *msg = e.message; // owned char array, never null
         while (*msg && p < end) *p++ = *msg++;

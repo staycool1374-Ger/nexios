@@ -54,6 +54,13 @@ enum class LoadResult : uint8_t {
     FILE_NOT_FOUND,       ///< Path did not resolve to a file.
 };
 
+/// @brief How a load event message is decorated with timing.
+enum class PostKind : uint8_t {
+    STARTED,   ///< "loading <path> started at <sec>"
+    COMPLETED, ///< "loading <path> completed successfully in <sec.ms>s"
+    OTHER,     ///< "loading <path> canceled" / "loading <path> failed: ..."
+};
+
 /// @brief Background ELF loader singleton.
 ///
 /// Threading model: the shell task only sets request parameters / flags under
@@ -126,9 +133,11 @@ class ElfLoader {
     static void cleanup_and_idle();
     // Open the load file in the loader task's fd table.
     static int open_owned_file(const char *path);
-    // Post a "loading <path> <size> <verb>[ in <ticks>]" event to dmesg + log.
-    static void post_event(uint64_t code, const char *verb, uint64_t size,
-                           uint64_t ticks, bool include_ticks);
+    // Post a "loading <path> <verb>[ at/in <time>]" event to dmesg + log.
+    // @param kind  PostKind::STARTED appends " at <sec>", PostKind::COMPLETED
+    //              appends " in <sec.ms>s", PostKind::OTHER appends nothing.
+    static void post_event(uint64_t code, const char *verb, uint64_t ticks,
+                           PostKind kind);
     // Stable message buffer ring (dmesg stores const char*).
     static char *next_msg_slot();
 

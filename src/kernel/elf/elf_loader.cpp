@@ -32,6 +32,7 @@
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <logger.hpp>
 #include <string.hpp>
@@ -313,15 +314,25 @@ char *ElfLoader::next_msg_slot() {
     return msg_buf_[i % 16];
 }
 
-/// @brief Build "loading <path> <size> <verb>[ in <ticks>]" into the stable
-///        msg ring, then push to dmesg and the log.
-void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t size,
-                           uint64_t ticks, bool include_ticks) {
+/// @brief Build a load event message into the stable msg ring, then push to
+///        dmesg and the log.  Message pattern:
+///          loading <path> started at <sec>            (0xDB01)
+///          loading <path> completed successfully in <sec.ms>  (0xDB02)
+///          loading <path> canceled                    (0xDB03)
+///          loading <path> failed: <reason>            (0xDB04-0xDB07)
+/// @param code   Event code (0xDB01-0xDB07).
+/// @param verb   Tail after "loading <path>": " started", " completed",
+///               " canceled", " failed: ...".
+/// @param ticks  Elapsed ticks for the completion event (1 tick = 1 ms).
+/// @param kind   Event kind (started / completed / other).
+void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
+                           PostKind kind) {
     char *slot = next_msg_slot();
     int n = 0;
-    const char *p = path_;
-    while (*p && n < 159)
-        slot[n++] = *p++;
+    auto append_str = [&slot, &n](const char *s) {
+        while (*s && n < 159)
+            slot[n++] = *s++;
+    };
     auto append_dec = [&slot, &n](uint64_t v) {
         char tmp[24];
         int ti = 0;
@@ -334,17 +345,26 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t size,
         while (ti > 0 && n < 159)
             slot[n++] = tmp[--ti];
     };
-    if (n < 159)
-        slot[n++] = ' ';
-    append_dec(size);
-    p = verb;
-    while (*p && n < 159)
-        slot[n++] = *p++;
-    if (include_ticks) {
-        p = " in ";
-        while (*p && n < 159)
-            slot[n++] = *p++;
-        append_dec(ticks);
+
+    append_str("loading ");
+    append_str(path_);
+    append_str(verb);
+    if (kind == PostKind::STARTED) {
+        // Wall-clock start time in seconds (boot epoch + ticks/1000).
+        append_str(" at ");
+        append_dec(kernel::gs::get_boot_epoch() + arch::Timer::ticks() / 1000);
+    } else if (kind == PostKind::COMPLETED) {
+        // Elapsed wall time as seconds.milliseconds (1 tick = 1 ms).
+        append_str(" in ");
+        append_dec(ticks / 1000);
+        append_str(".");
+        uint64_t ms = ticks % 1000;
+        if (ms < 100)
+            slot[n++] = '0';
+        if (ms < 10)
+            slot[n++] = '0';
+        append_dec(ms);
+        append_str("s");
     }
     slot[n] = '\0';
     log::dmesg_push_base(code, slot, 0);
@@ -378,18 +398,18 @@ void ElfLoader::run_load() {
 
     // Note the load start in dmesg (0xDB01 "ELF load started").  Posted from
     // the loader task so the entry is attributed to it.
-    post_event(0xDB01, " started", file_size_, 0, false);
+    post_event(0xDB01, " started", 0, PostKind::STARTED);
 
     // ---- VALIDATING ----
     fd_ = open_owned_file(path_);
     if (fd_ < 0) {
-        post_event(0xDB06, " failed: file not found", file_size_, 0, false);
+        post_event(0xDB06, " failed: file not found", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
     auto *fd_entry = loader_tcb_->fd_table.get(fd_);
     if (!fd_entry || !fd_entry->vnode || !fd_entry->vnode->ops->read) {
-        post_event(0xDB07, " failed: read error", file_size_, 0, false);
+        post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
@@ -398,18 +418,18 @@ void ElfLoader::run_load() {
     int64_t n = vn->ops->read(*vn, reinterpret_cast<uint8_t *>(&hdr_),
                               sizeof(ELF64Header), 0);
     if (n != static_cast<int64_t>(sizeof(ELF64Header))) {
-        post_event(0xDB07, " failed: read error", file_size_, 0, false);
+        post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
     if (!validate_header(&hdr_)) {
-        post_event(0xDB04, " failed: invalid elf-file", file_size_, 0, false);
+        post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
     uint64_t phnum_sz = static_cast<uint64_t>(hdr_.phnum) * hdr_.phentsize;
     if (phnum_sz > sizeof(phdr_image_) - sizeof(ELF64Header)) {
-        post_event(0xDB04, " failed: invalid elf-file", file_size_, 0, false);
+        post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
@@ -417,7 +437,7 @@ void ElfLoader::run_load() {
     n = vn->ops->read(*vn, phdr_image_ + sizeof(ELF64Header), phnum_sz,
                       hdr_.phoff);
     if (n != static_cast<int64_t>(phnum_sz)) {
-        post_event(0xDB07, " failed: read error", file_size_, 0, false);
+        post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
@@ -427,20 +447,20 @@ void ElfLoader::run_load() {
             phdr_image_ + sizeof(ELF64Header) +
             static_cast<uint64_t>(i) * hdr_.phentsize);
         if (!validate_segment(phdr, file_size_)) {
-            post_event(0xDB04, " failed: invalid elf-file", file_size_, 0, false);
+            post_event(0xDB04, " failed: invalid elf-file", 0, PostKind::OTHER);
             cleanup_and_idle();
             return;
         }
     }
     if (cancel_pending(gen)) {
-        post_event(0xDB03, " canceled", file_size_, 0, false);
+        post_event(0xDB03, " canceled", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
 
     pml4_ = VMM::clone_kernel_pml4();
     if (!pml4_) {
-        post_event(0xDB05, " failed: not enough memory", file_size_, 0, false);
+        post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
@@ -473,7 +493,7 @@ void ElfLoader::run_load() {
             if (in_file > 0) {
                 int64_t r = vn->ops->read(*vn, chunk_buf_, in_file, file_off);
                 if (r != static_cast<int64_t>(in_file)) {
-                    post_event(0xDB07, " failed: read error", file_size_, 0, false);
+                    post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
                     cleanup_and_idle();
                     return;
                 }
@@ -482,8 +502,8 @@ void ElfLoader::run_load() {
             }
             uint64_t phys = PMM::alloc_user_page();
             if (!phys) {
-                post_event(0xDB05, " failed: not enough memory", file_size_, 0,
-                           false);
+                post_event(0xDB05, " failed: not enough memory", 0,
+                           PostKind::OTHER);
                 cleanup_and_idle();
                 return;
             }
@@ -498,7 +518,7 @@ void ElfLoader::run_load() {
 
             ++page_in_seg_;
             if (cancel_pending(gen)) {
-                post_event(0xDB03, " canceled", file_size_, 0, false);
+                post_event(0xDB03, " canceled", 0, PostKind::OTHER);
                 cleanup_and_idle();
                 return;
             }
@@ -513,20 +533,20 @@ void ElfLoader::run_load() {
 
     // ---- MAPPING (bounded: stack + heap + TCB) ----
     if (cancel_pending(gen)) {
-        post_event(0xDB03, " canceled", file_size_, 0, false);
+        post_event(0xDB03, " canceled", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
     uint64_t ustack_phys = 0;
     if (!alloc_user_stack_and_heap(pml4_, &ustack_phys)) {
-        post_event(0xDB05, " failed: not enough memory", file_size_, 0, false);
+        post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
     auto *tcb = finalize_loaded_task(&hdr_, pml4_, ustack_phys, phdr_image_,
                                      file_size_);
     if (!tcb) {
-        post_event(0xDB05, " failed: not enough memory", file_size_, 0, false);
+        post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
         cleanup_and_idle();
         return;
     }
@@ -547,7 +567,7 @@ void ElfLoader::run_load() {
     completed_tcb_ = tcb;
     state_ = LoadState::DONE;
     uint64_t elapsed = arch::Timer::ticks() - start_ticks_;
-    post_event(0xDB02, " completed", file_size_, elapsed, true);
+    post_event(0xDB02, " completed successfully", elapsed, PostKind::COMPLETED);
 
     if (fd_ >= 0 && loader_tcb_) {
         loader_tcb_->fd_table.free(fd_);
