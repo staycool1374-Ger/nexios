@@ -508,6 +508,12 @@
 #define CONFIG_CAP_MAX_DEPTH 8
 #endif
 
+/// Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3).
+/// Enforced by a TU-local live counter in untyped.cpp.
+#ifndef CONFIG_CAP_MAX_UNTYPED
+#define CONFIG_CAP_MAX_UNTYPED 16
+#endif
+
 // ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------

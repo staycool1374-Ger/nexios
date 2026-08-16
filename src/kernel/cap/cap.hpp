@@ -127,4 +127,12 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
 int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
          uint32_t badge) noexcept;
 
+/// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
+///        capability of @p target_type, installed into @p cspace.  Iteration-1
+///        supports Frame targets with an exact-size carve (ROADMAP 0.4.1
+///        item 3).  Kernel-internal API (no syscall yet).
+/// @return the new slot index, or -1 on any failure.
+int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+           size_t size, uint32_t rights) noexcept;
+
 } // namespace kernel::cap

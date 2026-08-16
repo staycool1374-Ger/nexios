@@ -35,6 +35,7 @@ enum class CapType : uint8_t {
     Endpoint = 2,
     Frame = 3,
     CNode = 4,
+    Untyped = 5, ///< retype target (ROADMAP 0.4.1 item 3)
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.
