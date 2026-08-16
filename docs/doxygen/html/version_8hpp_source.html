@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('version_8hpp_s
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &lt;<a class="code" href="types_8hpp.html">types.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="version_8hpp.html#abba67610a81ec56f7d1f834e9bfdbec3">   28</a></span><span class="preprocessor">#define KERNEL_VERSION_STRING &quot;v0.4.0-dev&quot;</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="version_8hpp.html#abba67610a81ec56f7d1f834e9bfdbec3">   28</a></span><span class="preprocessor">#define KERNEL_VERSION_STRING &quot;v0.4.1&quot;</span></div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span></div>
@@ -149,8 +149,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('version_8hpp_s
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html">   34</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1_version.html">Version</a> {</div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a3e2dcc490e3869f520c78346ca18425a">   35</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">unsigned</span> <a class="code hl_variable" href="structkernel_1_1_version.html#a3e2dcc490e3869f520c78346ca18425a">major</a> = 0;</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a651719f6269816e291c01c144e4cb9c4">   36</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">unsigned</span> <a class="code hl_variable" href="structkernel_1_1_version.html#a651719f6269816e291c01c144e4cb9c4">minor</a> = 4;</div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a9bd3f78524e2f139c3bfe397a89efc2f">   37</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">unsigned</span> <a class="code hl_variable" href="structkernel_1_1_version.html#a9bd3f78524e2f139c3bfe397a89efc2f">patch</a> = 0;</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a8547427f278d7deaba58223598f3b074">   38</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="structkernel_1_1_version.html#a8547427f278d7deaba58223598f3b074">stage</a> = <span class="stringliteral">&quot;dev&quot;</span>;</div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a9bd3f78524e2f139c3bfe397a89efc2f">   37</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">unsigned</span> <a class="code hl_variable" href="structkernel_1_1_version.html#a9bd3f78524e2f139c3bfe397a89efc2f">patch</a> = 1;</div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="structkernel_1_1_version.html#a8547427f278d7deaba58223598f3b074">   38</a></span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="structkernel_1_1_version.html#a8547427f278d7deaba58223598f3b074">stage</a> = <span class="stringliteral">&quot;&quot;</span>;</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span> </div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keyword">static</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="structkernel_1_1_version.html#ac8b5bac12d2bfd0b7fcb454b6b610a8d">string</a>();</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <span class="keyword">static</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="structkernel_1_1_version.html#a1b90692348e0b01a55537750a2e25318">build_date</a>();</div>

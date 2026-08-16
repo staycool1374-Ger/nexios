@@ -11,6 +11,7 @@ var namespacekernel_1_1log =
       [ "IPC", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df", null ],
       [ "SYSCALL", "namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b", null ]
     ] ],
+    [ "base_code_is_info", "namespacekernel_1_1log.html#a771448233b6c088624a937e135ed0016", null ],
     [ "base_error_string", "namespacekernel_1_1log.html#a509eca06210bff9bda33ad707d235262", null ],
     [ "dmesg_push", "namespacekernel_1_1log.html#a8c0fd69e4ea93d857e2b6176911b7e5e", null ],
     [ "dmesg_push_base", "namespacekernel_1_1log.html#a93f6fccfccf70fcdc90f93e630521488", null ],

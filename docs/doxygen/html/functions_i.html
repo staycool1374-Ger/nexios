@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_i.ht
 <li>init()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#ab249fe370f75c1368059078e6c88f6d9">arch::APIC</a>, <a class="el" href="classkernel_1_1_c_r_c32.html#a8d636603129700c9ca4ff5f1629cca13">kernel::CRC32</a>, <a class="el" href="classkernel_1_1_logger.html#a18bc8dba0089d67f3e9b784a02a9ee3e">kernel::Logger</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a1604231589d0915821a56f0bbf1525e0">kernel::test::Registry</a>, <a class="el" href="classservice_1_1_framebuffer.html#a0c48217dc149beadf1749e6a351f4d8b">service::Framebuffer</a>, <a class="el" href="classservice_1_1_program_registry.html#acf3afcb001a03c51db8d2f9505ed193a">service::ProgramRegistry</a>, <a class="el" href="classservice_1_1_shell.html#abbdab9c5aa85165ac9c4b2644829e712">service::Shell</a>, <a class="el" href="classservice_1_1_terminal.html#a813c09d6caaa114ef6461727953451d8">service::Terminal</a></li>
 <li>INITIAL&#160;:&#160;<a class="el" href="classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285">kernel::CRC32</a></li>
 <li>insert()&#160;:&#160;<a class="el" href="classkernel_1_1_deadline_list.html#a2f6a12357489a4dfc0689f4bb1f986af">kernel::DeadlineList</a></li>
+<li>install()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#ab6e71b22609a28abf0d8f9f4a1d99433">kernel::cap::CNode</a></li>
 <li>instance()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#ac9a97f01ba5d97af15cb3903e128f79e">kernel::log::DmesgService</a>, <a class="el" href="classkernel_1_1test_1_1_resource_tracker.html#ae6714ff73598e9c50d0f742625c17fdf">kernel::test::ResourceTracker</a>, <a class="el" href="classservice_1_1_terminal.html#a218b0fead5d0e1ee9b29ae73d357d168">service::Terminal</a></li>
 <li>IrqSpinLockGuard()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">kernel::sync::IrqSpinLockGuard</a></li>
 <li>is_apic_supported()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a6cf29bb7b88440859780745585d13e3e">arch::APIC</a></li>
@@ -131,9 +132,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_i.ht
 <li>is_enabled()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a33afc32551a0caa10c64d0bb6d0dd952">arch::APIC</a></li>
 <li>is_pool_backed()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">kernel::KernelObject</a></li>
 <li>is_set()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">kernel::PriorityMap</a></li>
-<li>is_shared()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#ae799dc1281a302b5baeca90a159e386a">kernel::KernelObject</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a128d723b9ae8acf348e6207ba30d3a28">kernel::vfs::PipeBuffer</a></li>
+<li>is_shared()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#aa73bc0e7f514e8cdfeecbca9ff4c67df">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#a7052d2b0234a94380ba1522ba38e5fae">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a0550606e7774b1f6f3d73c5756463798">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a3f3ca89dca306f3179e2e788e44ca38c">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1_kernel_object.html#ae799dc1281a302b5baeca90a159e386a">kernel::KernelObject</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a128d723b9ae8acf348e6207ba30d3a28">kernel::vfs::PipeBuffer</a></li>
 <li>is_suppressed()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a652ff369a2d761f89c91e35ed4db00c9">kernel::log::DmesgService</a></li>
 <li>is_timer_active()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#af4ff34c7949bdf461b8d0c7963c3eb73">arch::APIC</a></li>
+<li>is_user&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a9b8bba20072966fe71fd381c24201b25">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a75d0d58fcc87227e654d2255e72ec231">kernel::cap::UntypedMem</a></li>
 <li>isr_nesting_depth&#160;:&#160;<a class="el" href="structkernel_1_1_cpu_context.html#aa924234f3ea16f826e2cc01b6b84b840">kernel::CpuContext</a></li>
 </ul>
 </div><!-- contents -->

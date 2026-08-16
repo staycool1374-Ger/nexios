@@ -11,6 +11,7 @@ var hierarchy =
     [ "initrd::CpioNewcHeader", "structinitrd_1_1_cpio_newc_header.html", null ],
     [ "kernel::CpuContext", "structkernel_1_1_cpu_context.html", null ],
     [ "kernel::CRC32", "classkernel_1_1_c_r_c32.html", null ],
+    [ "kernel::cap::CSlot", "structkernel_1_1cap_1_1_c_slot.html", null ],
     [ "kernel::DeadlineList", "classkernel_1_1_deadline_list.html", null ],
     [ "DefaultDeleter", "struct_default_deleter.html", null ],
     [ "kernel::vfs::DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", null ],
@@ -48,6 +49,10 @@ var hierarchy =
     ] ],
     [ "kernel::sync::IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", null ],
     [ "kernel::KernelObject", "classkernel_1_1_kernel_object.html", [
+      [ "kernel::cap::CNode", "classkernel_1_1cap_1_1_c_node.html", null ],
+      [ "kernel::cap::Endpoint", "classkernel_1_1cap_1_1_endpoint.html", null ],
+      [ "kernel::cap::FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", null ],
+      [ "kernel::cap::UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", null ],
       [ "kernel::vfs::PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", null ]
     ] ],
     [ "kernel::log::LogEntry", "structkernel_1_1log_1_1_log_entry.html", null ],

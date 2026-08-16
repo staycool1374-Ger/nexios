@@ -27,5 +27,6 @@ var searchData=
   ['tsc_5fdeadline_24',['tsc_deadline',['../structarch_1_1_caps.html#a914bf740687792fcea35c4d3953957a8',1,'arch::Caps']]],
   ['tv_5fnsec_25',['tv_nsec',['../structtimespec.html#ae3c7510dafa8cbcaede866ed13c99683',1,'timespec']]],
   ['tv_5fsec_26',['tv_sec',['../structkernel_1_1_timeval.html#a0d1d39804671c892ef5f52e6c6a90d37',1,'kernel::Timeval::tv_sec'],['../struct_timeval.html#a96e1d06815ac17f4f1fa46ff6b00a4d0',1,'Timeval::tv_sec'],['../structtimeval.html#aef6ddab1064c430758f9f913b7e4a21e',1,'timeval::tv_sec'],['../structtimespec.html#afc3302668d7cb5952f590da69fdd4955',1,'timespec::tv_sec']]],
-  ['tv_5fusec_27',['tv_usec',['../structkernel_1_1_timeval.html#ae5a942f568e2f001ea880702e97570d8',1,'kernel::Timeval::tv_usec'],['../struct_timeval.html#a145ac8da0909412beb80e140522f9625',1,'Timeval::tv_usec'],['../structtimeval.html#a810bf8fcd58e255a5c1896d19538b86a',1,'timeval::tv_usec']]]
+  ['tv_5fusec_27',['tv_usec',['../structkernel_1_1_timeval.html#ae5a942f568e2f001ea880702e97570d8',1,'kernel::Timeval::tv_usec'],['../struct_timeval.html#a145ac8da0909412beb80e140522f9625',1,'Timeval::tv_usec'],['../structtimeval.html#a810bf8fcd58e255a5c1896d19538b86a',1,'timeval::tv_usec']]],
+  ['type_28',['type',['../structkernel_1_1cap_1_1_c_slot.html#aade7f0e66c87a00eda4080bc1b81af4b',1,'kernel::cap::CSlot']]]
 ];

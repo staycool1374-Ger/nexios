@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.1-dev | **Last Release:** v0.4.0 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.0)
+**Build:** v0.4.2-dev | **Last Release:** v0.4.1 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.0)
 
 ## Safety & Concurrency Guardrails (Strict)
 - **Transition to Fine-Grained Locks:** All new synchronization code must use `SpinLock` + `SpinLockGuard` for short critical sections and `sync::Mutex` (without IrqGuard) for blocking paths. The global `IrqGuard` is deprecated for all uses except boot, panic, and test isolation.

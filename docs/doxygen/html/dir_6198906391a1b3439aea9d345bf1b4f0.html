@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -151,6 +151,16 @@ Files</h2></td></tr>
 <tr class="memitem:test_5Fbuffer_5Fpool_5Fdeterministic_2Ecpp" id="r_test_5Fbuffer_5Fpool_5Fdeterministic_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__buffer__pool__deterministic_8cpp.html">test_buffer_pool_deterministic.cpp</a></td></tr>
 <tr class="memitem:test_5Fbuildsystem_2Ecpp" id="r_test_5Fbuildsystem_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__buildsystem_8cpp.html">test_buildsystem.cpp</a></td></tr>
 <tr class="memdesc:test__buildsystem_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build system integration tests. <br /></td></tr>
+<tr class="memitem:test_5Fcap_5Fcore_2Ecpp" id="r_test_5Fcap_5Fcore_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cap__core_8cpp.html">test_cap_core.cpp</a></td></tr>
+<tr class="memdesc:test__cap__core_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">CSpace core engine tests: CNode/CSlot lifecycle, handle decode, revocation, cascade revoke and root-CNode task teardown. <br /></td></tr>
+<tr class="memitem:test_5Fcap_5Fipc_2Ecpp" id="r_test_5Fcap_5Fipc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cap__ipc_8cpp.html">test_cap_ipc.cpp</a></td></tr>
+<tr class="memdesc:test__cap__ipc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability-gated IPC (CapEndpoint send/recv) and frame mapping (CapFrame map/unmap) integration tests. Driven style: real tasks, real blocking, real scheduling. <br /></td></tr>
+<tr class="memitem:test_5Fcap_5Flifecycle_2Ecpp" id="r_test_5Fcap_5Flifecycle_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cap__lifecycle_8cpp.html">test_cap_lifecycle.cpp</a></td></tr>
+<tr class="memdesc:test__cap__lifecycle_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">CSpace lifecycle primitive tests: grant/copy/revoke/mint and the Endpoint/FrameCap shared-heap objects. <br /></td></tr>
+<tr class="memitem:test_5Fcap_5Fsyscall_2Ecpp" id="r_test_5Fcap_5Fsyscall_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cap__syscall_8cpp.html">test_cap_syscall.cpp</a></td></tr>
+<tr class="memdesc:test__cap__syscall_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">SYS_CAP_* syscall dispatch tests. Every syscall is invoked by a REAL kernel task via Syscall::handle() so syscall_task() resolves to the genuinely-running task (v0.3.10 driven-test discipline). <br /></td></tr>
+<tr class="memitem:test_5Fcap_5Funtyped_2Ecpp" id="r_test_5Fcap_5Funtyped_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cap__untyped_8cpp.html">test_cap_untyped.cpp</a></td></tr>
+<tr class="memdesc:test__cap__untyped_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Untyped memory allocator tests (ROADMAP 0.4.1 item 3): UntypedMem lifecycle and cap::retype ownership transfer. <br /></td></tr>
 <tr class="memitem:test_5Fchecked_5Fptr_2Ecpp" id="r_test_5Fchecked_5Fptr_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__checked__ptr_8cpp.html">test_checked_ptr.cpp</a></td></tr>
 <tr class="memdesc:test__checked__ptr_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checked pointer safety tests. <br /></td></tr>
 <tr class="memitem:test_5Fcleanup_2Ecpp" id="r_test_5Fcleanup_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__cleanup_8cpp.html">test_cleanup.cpp</a></td></tr>

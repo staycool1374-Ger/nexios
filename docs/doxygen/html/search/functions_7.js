@@ -30,5 +30,6 @@ var searchData=
   ['gicc_5freg_27',['gicc_reg',['../namespacearch.html#addb0aafa44f85ad234abeacf6a11a2a5',1,'arch']]],
   ['gicd_5freg_28',['gicd_reg',['../namespacearch.html#abb9df6f2809054a385414ac4aa9eff3a',1,'arch']]],
   ['gicr_5frd_5freg_29',['gicr_rd_reg',['../namespacearch.html#a4da73406011eca3290f9e1baebeb720e',1,'arch']]],
-  ['gicr_5fsgi_5freg_30',['gicr_sgi_reg',['../namespacearch.html#a0be0121227150927d9c3e750b7d86455',1,'arch']]]
+  ['gicr_5fsgi_5freg_30',['gicr_sgi_reg',['../namespacearch.html#a0be0121227150927d9c3e750b7d86455',1,'arch']]],
+  ['grant_31',['grant',['../namespacekernel_1_1cap.html#a214794d432db019d5fcb737ad00e0965',1,'kernel::cap']]]
 ];

@@ -1,6 +1,8 @@
 var structkernel_1_1test_1_1_resource_counters =
 [
     [ "bufpool_entries", "structkernel_1_1test_1_1_resource_counters.html#a612adf30a2c4ece738ca7b8b87b7977b", null ],
+    [ "cap_objects", "structkernel_1_1test_1_1_resource_counters.html#ab3c66d56220169f8c9223836f8a45910", null ],
+    [ "cap_slots", "structkernel_1_1test_1_1_resource_counters.html#a56da41b1a09afad3124c1b2d96bd0346", null ],
     [ "drivers", "structkernel_1_1test_1_1_resource_counters.html#aafbe5119ff7a41af94e99206af2a6429", null ],
     [ "event_groups", "structkernel_1_1test_1_1_resource_counters.html#a1131ca1fcc19919cf835bfa90b68f12f", null ],
     [ "mempool_used", "structkernel_1_1test_1_1_resource_counters.html#a73407a7ad1439f2237eea3cb4ad3601d", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -197,6 +197,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push an entry to the kernel dmesg service.  <br /></td></tr>
 <tr class="memitem:a93f6fccfccf70fcdc90f93e630521488" id="r_a93f6fccfccf70fcdc90f93e630521488"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a93f6fccfccf70fcdc90f93e630521488">kernel::log::dmesg_push_base</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> err, const char *msg, <a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a93f6fccfccf70fcdc90f93e630521488"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push a base-subsystem error to the kernel dmesg service.  <br /></td></tr>
+<tr class="memitem:a771448233b6c088624a937e135ed0016" id="r_a771448233b6c088624a937e135ed0016"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a771448233b6c088624a937e135ed0016">kernel::log::base_code_is_info</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
+<tr class="memdesc:a771448233b6c088624a937e135ed0016"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF loader (0xDB00-0xDBFF) ranges. Used by the dmesg renderers to print INFO= instead of ERR=.  <br /></td></tr>
 <tr class="memitem:a509eca06210bff9bda33ad707d235262" id="r_a509eca06210bff9bda33ad707d235262"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a509eca06210bff9bda33ad707d235262">kernel::log::base_error_string</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
 <tr class="memdesc:a509eca06210bff9bda33ad707d235262"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events.  <br /></td></tr>
 <tr class="memitem:ad82063e29ea0c8f5de69a0748c72621f" id="r_ad82063e29ea0c8f5de69a0748c72621f"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#ad82063e29ea0c8f5de69a0748c72621f">kernel::log::subsystem_name</a> (<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> s)</td></tr>

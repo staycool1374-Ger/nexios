@@ -23,7 +23,8 @@ var searchData=
   ['sigtstp_20',['SIGTSTP',['../namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18a72394f94f78436b1c49fb25bb8186934',1,'kernel']]],
   ['sigusr1_21',['SIGUSR1',['../namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18a3fca8d1bd1fd9d7eb4c4ae46c4a555e5',1,'kernel']]],
   ['sigusr2_22',['SIGUSR2',['../namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18aec2c8804a8dac6a866e1a43cfce32fc1',1,'kernel']]],
-  ['stop_23',['STOP',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111',1,'kernel']]],
-  ['sync_24',['SYNC',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3',1,'kernel::log']]],
-  ['syscall_25',['SYSCALL',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b',1,'kernel::log']]]
+  ['started_23',['STARTED',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7',1,'kernel::elf']]],
+  ['stop_24',['STOP',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111',1,'kernel']]],
+  ['sync_25',['SYNC',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3',1,'kernel::log']]],
+  ['syscall_26',['SYSCALL',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b',1,'kernel::log']]]
 ];

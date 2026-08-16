@@ -35,5 +35,6 @@ var searchData=
   ['notify_2ehpp_32',['notify.hpp',['../notify_8hpp.html',1,'']]],
   ['notify_5fdeath_33',['notify_death',['../namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3',1,'kernel::daemon']]],
   ['null_34',['NULL',['../stdlib_8h.html#a070d2ce7b6bb7e5c05602aa8c308d0c4',1,'stdlib.h']]],
-  ['nullptr_5ft_35',['nullptr_t',['../types_8hpp.html#afb2c9350d32e78a0e4c960b9859ccb40',1,'types.hpp']]]
+  ['null_35',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]],
+  ['nullptr_5ft_36',['nullptr_t',['../types_8hpp.html#afb2c9350d32e78a0e4c960b9859ccb40',1,'types.hpp']]]
 ];

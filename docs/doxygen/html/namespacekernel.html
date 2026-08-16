@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:block" id="r_block"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">block</a></td></tr>
+<tr class="memitem:cap" id="r_cap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">cap</a></td></tr>
 <tr class="memitem:daemon" id="r_daemon"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html">daemon</a></td></tr>
 <tr class="memitem:debug" id="r_debug"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html">debug</a></td></tr>
 <tr class="memitem:diag" id="r_diag"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1diag.html">diag</a></td></tr>
@@ -278,6 +279,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:afbcf504abb27c24da8a91380e1f73882"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open a vnode as a file descriptor in the current task's fd table.  <br /></td></tr>
 <tr class="memitem:a9799f9b32ab65aeb956ce8717fe91bc4" id="r_a9799f9b32ab65aeb956ce8717fe91bc4"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a9799f9b32ab65aeb956ce8717fe91bc4">syscall_path_open</a> (const char *path, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
+<tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
+<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
 <tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bucket_of(const TaskControlBlock *t</td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
@@ -1154,6 +1157,25 @@ Here is the call graph for this function:</div>
 
 <p>Returns the current CPU's execution context. </p>
 <p>Single-core today: a single static instance. Phase 8 threads this through the per-CPU GS base (x86_64) / TPIDR (aarch64) / tp (riscv64). </p>
+
+</div>
+</div>
+<a id="a0ecf34d3e30ff218069c96a3645cf261" name="a0ecf34d3e30ff218069c96a3645cf261"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ecf34d3e30ff218069c96a3645cf261">&#9670;&#160;</a></span>current_cspace()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> * kernel::current_cspace </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion). </p>
 
 </div>
 </div>

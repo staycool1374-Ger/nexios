@@ -16,6 +16,11 @@ var namespacekernel_1_1elf =
       [ "FAILED", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419", null ],
       [ "CANCELED", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926", null ]
     ] ],
+    [ "PostKind", "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6f", [
+      [ "STARTED", "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7", null ],
+      [ "COMPLETED", "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e", null ],
+      [ "OTHER", "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb", null ]
+    ] ],
     [ "alloc_user_stack_and_heap", "namespacekernel_1_1elf.html#af0f8dea59eb8cf69559d9199d5b78d10", null ],
     [ "elf_loader_task_main", "namespacekernel_1_1elf.html#a1c90403a3aa9677a921069fbf64f5280", null ],
     [ "exec_into_current", "namespacekernel_1_1elf.html#a8587c966825c28717e2e90c6c754b87c", null ],

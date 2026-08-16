@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['loadresult_0',['LoadResult',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796',1,'kernel::elf']]],
-  ['loadstate_1',['LoadState',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5',1,'kernel::elf']]],
-  ['loglevel_2',['LogLevel',['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2',1,'kernel']]]
+  ['error_0',['Error',['../constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91',1,'Error:&#160;constants.hpp'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106',1,'kernel::Error']]],
+  ['errorsubsystem_1',['ErrorSubsystem',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a',1,'kernel::log']]]
 ];

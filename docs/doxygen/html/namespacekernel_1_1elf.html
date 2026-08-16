@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -144,6 +144,11 @@ Enumerations</h2></td></tr>
 , <a class="el" href="#ab90eb39dade009d486ffe40b02839796acd54d99c8efb3c2db794197045f5b83c">FILE_NOT_FOUND</a>
  }</td></tr>
 <tr class="memdesc:ab90eb39dade009d486ffe40b02839796"><td class="mdescLeft">&#160;</td><td class="mdescRight">Result of a shell-initiated request.  <a href="#ab90eb39dade009d486ffe40b02839796">More...</a><br /></td></tr>
+<tr class="memitem:abce3bf3f65d7f7924bf7925d4bf97f6f" id="r_abce3bf3f65d7f7924bf7925d4bf97f6f"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6f">PostKind</a> : uint8_t { <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7">STARTED</a>
+, <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e">COMPLETED</a>
+, <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb">OTHER</a>
+ }</td></tr>
+<tr class="memdesc:abce3bf3f65d7f7924bf7925d4bf97f6f"><td class="mdescLeft">&#160;</td><td class="mdescRight">How a load event message is decorated with timing.  <a href="#abce3bf3f65d7f7924bf7925d4bf97f6f">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -230,6 +235,38 @@ Functions</h2></td></tr>
 <tr><td class="fieldname"><a id="a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419" name="a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419"></a>FAILED&#160;</td><td class="fielddoc"><p><a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">Error</a>; cleanup already ran, about to be IDLE. </p>
 </td></tr>
 <tr><td class="fieldname"><a id="a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926" name="a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926"></a>CANCELED&#160;</td><td class="fielddoc"><p>Cancel requested (shell) or observed (loader). </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="abce3bf3f65d7f7924bf7925d4bf97f6f" name="abce3bf3f65d7f7924bf7925d4bf97f6f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abce3bf3f65d7f7924bf7925d4bf97f6f">&#9670;&#160;</a></span>PostKind</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#abce3bf3f65d7f7924bf7925d4bf97f6f">kernel::elf::PostKind</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>How a load event message is decorated with timing. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7" name="abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7"></a>STARTED&#160;</td><td class="fielddoc"><p>"loading &lt;path&gt; started at &lt;sec&gt;" </p>
+</td></tr>
+<tr><td class="fieldname"><a id="abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e" name="abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e"></a>COMPLETED&#160;</td><td class="fielddoc"><p>"loading &lt;path&gt; completed successfully in &lt;sec.ms&gt;s" </p>
+</td></tr>
+<tr><td class="fieldname"><a id="abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb" name="abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb"></a>OTHER&#160;</td><td class="fielddoc"><p>"loading &lt;path&gt; canceled" / "loading &lt;path&gt; failed: ..." </p>
 </td></tr>
 </table>
 

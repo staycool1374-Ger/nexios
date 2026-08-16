@@ -12,12 +12,14 @@ var searchData=
   ['loadresult_9',['LoadResult',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796',1,'kernel::elf']]],
   ['loadstate_10',['LoadState',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5',1,'kernel::elf']]],
   ['lock_11',['lock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6',1,'kernel::sync::IrqSpinLockGuard']]],
-  ['lockable_12',['Lockable',['../conceptkernel_1_1_lockable.html',1,'kernel']]],
-  ['logentry_13',['LogEntry',['../structkernel_1_1log_1_1_log_entry.html',1,'kernel::log']]],
-  ['logger_14',['Logger',['../classkernel_1_1_logger.html',1,'kernel']]],
-  ['logger_2ecpp_15',['logger.cpp',['../logger_8cpp.html',1,'']]],
-  ['logger_2ehpp_16',['logger.hpp',['../logger_8hpp.html',1,'']]],
-  ['loglevel_17',['LogLevel',['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2',1,'kernel']]],
-  ['lookup_5fin_5fdir_18',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
-  ['lseek_19',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
+  ['lock_5f_12',['lock_',['../classkernel_1_1cap_1_1_c_node.html#a7760d9783298fa791fa883280b127cca',1,'kernel::cap::CNode::lock_'],['../classkernel_1_1cap_1_1_endpoint.html#a40699f535c935245c038e8d33ae5189c',1,'kernel::cap::Endpoint::lock_']]],
+  ['lockable_13',['Lockable',['../conceptkernel_1_1_lockable.html',1,'kernel']]],
+  ['logentry_14',['LogEntry',['../structkernel_1_1log_1_1_log_entry.html',1,'kernel::log']]],
+  ['logger_15',['Logger',['../classkernel_1_1_logger.html',1,'kernel']]],
+  ['logger_2ecpp_16',['logger.cpp',['../logger_8cpp.html',1,'']]],
+  ['logger_2ehpp_17',['logger.hpp',['../logger_8hpp.html',1,'']]],
+  ['loglevel_18',['LogLevel',['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2',1,'kernel']]],
+  ['lookup_19',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
+  ['lookup_5fin_5fdir_20',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
+  ['lseek_21',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
 ];

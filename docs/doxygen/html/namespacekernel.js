@@ -1,6 +1,7 @@
 var namespacekernel =
 [
     [ "block", "namespacekernel_1_1block.html", null ],
+    [ "cap", "namespacekernel_1_1cap.html", "namespacekernel_1_1cap" ],
     [ "daemon", "namespacekernel_1_1daemon.html", [
       [ "capture_state", "namespacekernel_1_1daemon.html#ae09ac16adefc443c674743c771bf7df9", null ],
       [ "ensure_running", "namespacekernel_1_1daemon.html#a13c5b38a9f9303f1f5fd4f57fb244cfd", null ],
@@ -86,6 +87,7 @@ var namespacekernel =
     ] ],
     [ "log", "namespacekernel_1_1log.html", "namespacekernel_1_1log" ],
     [ "net", "namespacekernel_1_1net.html", [
+      [ "virtio_net_destroy", "namespacekernel_1_1net.html#af8019b1cd8dcf090045eb65e97779e2b", null ],
       [ "virtio_net_poll", "namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2", null ],
       [ "virtio_net_probe", "namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406", null ]
     ] ],
@@ -202,6 +204,7 @@ var namespacekernel =
     [ "canary_verify_user_segments", "namespacekernel.html#a53fa9d70d7a01fd1f30b7746a449654d", null ],
     [ "canary_write_at", "namespacekernel.html#a1d1f72f7161fa8a1f32d2692b7c90d8c", null ],
     [ "current_cpu", "namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749", null ],
+    [ "current_cspace", "namespacekernel.html#a0ecf34d3e30ff218069c96a3645cf261", null ],
     [ "for", "namespacekernel.html#a1dae18e023980d3a17ebc183f9986bd3", null ],
     [ "init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
     [ "kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],

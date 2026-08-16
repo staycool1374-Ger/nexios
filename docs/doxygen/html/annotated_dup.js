@@ -14,6 +14,13 @@ var annotated_dup =
       [ "InitrdFile", "structinitrd_1_1_initrd_file.html", "structinitrd_1_1_initrd_file" ]
     ] ],
     [ "kernel", "namespacekernel.html", [
+      [ "cap", "namespacekernel_1_1cap.html", [
+        [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
+        [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
+        [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
+        [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+        [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ]
+      ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
         [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ]
       ] ],

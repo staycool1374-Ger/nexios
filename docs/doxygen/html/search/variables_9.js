@@ -19,5 +19,6 @@ var searchData=
   ['irq_5fvirtio3_16',['IRQ_VIRTIO3',['../namespacearch.html#abafa01b25d7e7e2b081d6ecc5058eb5d',1,'arch']]],
   ['irq_5fvirtio4_17',['IRQ_VIRTIO4',['../namespacearch.html#a9c39a084cebdfc926cd28dd5ac4bd7f1',1,'arch']]],
   ['is_5fdir_18',['is_dir',['../structinitrd_1_1_initrd_entry.html#a48e95a6e7d3e3e0f77113e60847c9670',1,'initrd::InitrdEntry']]],
-  ['isr_5fnesting_5fdepth_19',['isr_nesting_depth',['../structkernel_1_1_cpu_context.html#aa924234f3ea16f826e2cc01b6b84b840',1,'kernel::CpuContext::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp']]]
+  ['is_5fuser_19',['is_user',['../classkernel_1_1cap_1_1_frame_cap.html#a9b8bba20072966fe71fd381c24201b25',1,'kernel::cap::FrameCap::is_user'],['../classkernel_1_1cap_1_1_untyped_mem.html#a75d0d58fcc87227e654d2255e72ec231',1,'kernel::cap::UntypedMem::is_user']]],
+  ['isr_5fnesting_5fdepth_20',['isr_nesting_depth',['../structkernel_1_1_cpu_context.html#aa924234f3ea16f826e2cc01b6b84b840',1,'kernel::CpuContext::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp']]]
 ];
