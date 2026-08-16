@@ -376,6 +376,10 @@ void ElfLoader::run_load() {
     seg_idx_ = 0;
     page_in_seg_ = 0;
 
+    // Note the load start in dmesg (0xDB01 "ELF load started").  Posted from
+    // the loader task so the entry is attributed to it.
+    post_event(0xDB01, " started", file_size_, 0, false);
+
     // ---- VALIDATING ----
     fd_ = open_owned_file(path_);
     if (fd_ < 0) {

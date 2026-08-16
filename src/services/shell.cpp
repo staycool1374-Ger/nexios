@@ -2513,7 +2513,8 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
         for (int i = 0; i < tidlen && p < end; ++i) *p++ = tidbuf[i];
         *p++ = ' ';
 
-        const char* err_s = "ERR=";
+        const char* err_s =
+            kernel::log::base_code_is_info(e.error_code) ? "INFO=" : "ERR=";
         while (*err_s && p < end) *p++ = *err_s++;
         const char* sub = kernel::log::subsystem_name(e.subsystem);
         while (*sub && p < end) *p++ = *sub++;

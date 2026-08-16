@@ -78,7 +78,8 @@ void dmesg_task_main() {
                 *p++ = *task_str++;
             format_u64(p, end, entry.task_id);
 
-            const char *err_str = " ERR=";
+            const char *err_str =
+                log::base_code_is_info(entry.error_code) ? " INFO=" : " ERR=";
             while (*err_str && p < end)
                 *p++ = *err_str++;
             const char *sub = log::subsystem_name(entry.subsystem);

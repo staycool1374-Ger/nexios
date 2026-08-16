@@ -313,6 +313,14 @@ inline bool dmesg_push_base(uint64_t err, const char *msg,
     return DmesgService::instance().push(ErrorSubsystem::BASE, err, msg, ctx);
 }
 
+/// @brief True when a base-subsystem code is an informational event rather
+///        than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF
+///        loader (0xDB00-0xDBFF) ranges.  Used by the dmesg renderers to
+///        print INFO= instead of ERR=.
+inline bool base_code_is_info(uint64_t code) {
+    return (code & ~0xFFULL) == 0xDA00 || (code & ~0xFFULL) == 0xDB00;
+}
+
 /// @brief Return a human-readable string for a base-subsystem error code.
 ///        The code space is split into kernel::Error values (0–9) and
 ///        a custom range for event codes:
