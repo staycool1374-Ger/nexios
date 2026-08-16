@@ -1,23 +1,31 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.2-dev | **Last Release:** v0.4.1 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.0)
+**Build:** v0.4.2-dev | **Last Release:** v0.4.1 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.1)
 
 ## Safety & Concurrency Guardrails (Strict)
 - **Transition to Fine-Grained Locks:** All new synchronization code must use `SpinLock` + `SpinLockGuard` for short critical sections and `sync::Mutex` (without IrqGuard) for blocking paths. The global `IrqGuard` is deprecated for all uses except boot, panic, and test isolation.
 - **Reference-Enforced Tasks:** When manipulating task blocks or IPC endpoints within the new init system or system calls, strictly enforce reference passing over raw pointers to prevent dangling lookups.
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
-## Active Development — v0.4.1
+## Active Development — v0.4.2
 
-v0.4.0 RELEASED (2026-08-15) — Memory Protection MP-1..MP-8, background ELF
-loader, CSpace Capability-Based Access Control iteration-1 + Untyped memory
-allocator, H2 deferred-switch race + elf_loader flake + pml4_clone CR3
-corruption all RESOLVED.  Details in `ROADMAP_done.md` §"Active Development —
-v0.4.0".
+v0.4.1 RELEASED (2026-08-16) — CSpace milestone: Capability-Based Access
+Control iteration-1 (CNode/CSlot, grant/copy/mint/revoke, SYS_CAP_* 51–54,
+Endpoint/FrameCap, cap-gated IPC + frame mapping) + Untyped memory allocator
+(`cap::retype`).  Details in `ROADMAP_done.md` §"Active Development — v0.4.0"
+(CSpace) and the v0.4.1 release commit.
 
-v0.4.1 work:
-- [ ] **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
-  requires an aarch64 boot path + test class before it can be enabled.
+v0.4.2 work:
+- [ ] **Untyped child-split + sub-range carve** — extend `cap::retype` to
+  carve partial regions with a child Untyped for the remainder; add
+  `SYS_CAP_RETYPE` (design in `docs/specs/cspace.md` §2.8).
+- [ ] **IRQ caps + user-space IRQ delivery** — `IrqCap` capability-backed
+  `sys_irq_register`/`sys_irq_wait` (eliminates Ring 0 driver execution).
+- [ ] **MMIO caps + fine-grained I/O delegation** — `MmioCap` wrapping a BAR
+  range; per-task TSS I/O port bitmap management (`sys_ioport_grant`).
+- [ ] **IOMMU DMA protection (VT-d / AMD-Vi / SMMU)** — capability-gated DMA.
+- [ ] **MP-4.4 — aarch64 PAN/PXN** — no-op stubs in place; requires an aarch64
+  boot path + test class before it can be enabled.
 
 
 ## Past Releases
