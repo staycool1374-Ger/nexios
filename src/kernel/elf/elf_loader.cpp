@@ -350,9 +350,24 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
     append_str(path_);
     append_str(verb);
     if (kind == PostKind::STARTED) {
-        // Wall-clock start time in seconds (boot epoch + ticks/1000).
+        // Wall-clock start time as HH:MM:SS (boot epoch + elapsed seconds).
+        uint64_t total_sec =
+            kernel::gs::get_boot_epoch() + arch::Timer::ticks() / 1000;
+        uint64_t rem = total_sec % 86400ULL;
+        uint64_t hh = rem / 3600ULL;
+        uint64_t mm = (rem % 3600ULL) / 60ULL;
+        uint64_t ss = rem % 60ULL;
+        auto append_two = [&slot, &n, &append_dec](uint64_t v) {
+            if (v < 10)
+                slot[n++] = '0';
+            append_dec(v);
+        };
         append_str(" at ");
-        append_dec(kernel::gs::get_boot_epoch() + arch::Timer::ticks() / 1000);
+        append_two(hh);
+        append_str(":");
+        append_two(mm);
+        append_str(":");
+        append_two(ss);
     } else if (kind == PostKind::COMPLETED) {
         // Elapsed wall time as seconds.milliseconds (1 tick = 1 ms).
         append_str(" in ");

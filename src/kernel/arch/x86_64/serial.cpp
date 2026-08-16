@@ -32,6 +32,10 @@ static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
 
 namespace arch {
 
+/// @brief Total characters written to the serial console since boot.  The
+///        interactive shell snapshots this to detect async background output.
+static volatile uint64_t s_serial_write_count = 0;
+
 /// @brief Initialise the serial port (COM1) at 115200 baud, 8N1.
 void Serial::init() {
     outb(arch::COM1 + 1, 0x00);
@@ -64,8 +68,15 @@ void Serial::putchar(char c) {
             break;
         arch::pause();
     }
-    if (i < SERIAL_TX_WAIT_ITERS)
+    if (i < SERIAL_TX_WAIT_ITERS) {
         outb(arch::COM1, c);
+        __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
+    }
+}
+
+/// @brief Total characters written to the serial console since boot.
+uint64_t Serial::write_count() noexcept {
+    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
 }
 
 /// @brief Read a single character from the serial port.

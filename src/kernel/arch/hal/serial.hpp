@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <types.hpp>
+
 namespace arch {
 
 /// @brief Serial port (UART) driver — architecture-agnostic interface.
@@ -39,6 +41,15 @@ class Serial {
     /// @brief Transmit a null-terminated string.
     /// @param str Null-terminated string to transmit.
     static void puts(const char *str);
+
+    /// @brief Returns the number of characters written to the serial console
+    ///        since boot.  The interactive shell snapshots this value before
+    ///        drawing its prompt; if it advanced while the shell waits for
+    ///        input, a background task wrote to the console and the shell
+    ///        redraws its prompt on a fresh line (prevents async output such
+    ///        as the ELF loader's "completed" event from gluing onto the
+    ///        prompt).
+    static uint64_t write_count() noexcept;
 };
 
 } // namespace arch

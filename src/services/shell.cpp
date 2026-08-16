@@ -28,6 +28,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/rtc.hpp>
+#include <kernel/arch/serial.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -357,7 +358,31 @@ void Shell::execute(const char* cmd) {
 
 static void update_status_bar();
 
-static bool readline(char* buf, size_t max_len) {
+/// @brief Draws the interactive prompt (exit-status glyph, cwd, "$ ").
+///        Extracted so readline can redraw it on a fresh line when a
+///        background task wrote async output to the console.
+static void draw_prompt(int exit_code) {
+    auto* task = kernel::Scheduler::current_task();
+    const char* cwd = task ? task->cwd : "/";
+
+    // Exit status indicator: green checkmark for 0, red X for non-zero
+    if (exit_code == 0) {
+        Terminal::set_fg(COLOR_SUCCESS);
+        Terminal::write("✓ ");
+    } else {
+        Terminal::set_fg(COLOR_WARN);
+        Terminal::write("✗ ");
+    }
+
+    // Current directory in blue
+    Terminal::set_fg(COLOR_DIR);
+    Terminal::write(cwd);
+    Terminal::write(" ");
+    Terminal::set_fg(COLOR_DEFAULT);
+    Terminal::write("$ ");
+}
+
+static bool readline(char* buf, size_t max_len, int exit_code) {
     size_t pos = 0;
     static uint64_t last_blink = 0;
     static bool cursor_on = false;
@@ -366,6 +391,12 @@ static bool readline(char* buf, size_t max_len) {
         cursor_on = on;
         Terminal::set_cursor_visible(on);
     };
+
+    // Snapshot the serial write count right after the prompt was drawn.  If a
+    // background task (e.g. the ELF loader) writes to the console while we
+    // wait for input, the count advances; we then end the async line and
+    // redraw the prompt on a fresh line so its output does not glue onto it.
+    uint64_t prompt_serial = arch::Serial::write_count();
 
     for (;;) {
         uint64_t now = arch::Timer::ticks();
@@ -390,6 +421,15 @@ static bool readline(char* buf, size_t max_len) {
         }
 
         if (!got_char) {
+            // Async background output arrived?  Move to a fresh line and
+            // redraw the prompt + any input typed so far.
+            if (arch::Serial::write_count() != prompt_serial) {
+                Terminal::putchar('\n');
+                draw_prompt(exit_code);
+                for (size_t i = 0; i < pos; ++i)
+                    Terminal::putchar(buf[i]);
+                prompt_serial = arch::Serial::write_count();
+            }
             arch::pause();
             continue;
         }
@@ -522,27 +562,10 @@ void Shell::shell_task_main() {
     while (true) {
         update_status_bar();
 
-        auto* task = kernel::Scheduler::current_task();
-        const char* cwd = task ? task->cwd : "/";
-
-        // Exit status indicator: green checkmark for 0, red X for non-zero
-        if (last_exit_code_ == 0) {
-            Terminal::set_fg(COLOR_SUCCESS);
-            Terminal::write("✓ ");
-        } else {
-            Terminal::set_fg(COLOR_WARN);
-            Terminal::write("✗ ");
-        }
-
-        // Current directory in blue
-        Terminal::set_fg(COLOR_DIR);
-        Terminal::write(cwd);
-        Terminal::write(" ");
-        Terminal::set_fg(COLOR_DEFAULT);
-        Terminal::write("$ ");
+        draw_prompt(last_exit_code_);
 
         arch::Keyboard::flush();
-        if (readline(line, BUF_SIZE)) {
+        if (readline(line, BUF_SIZE, last_exit_code_)) {
             last_exit_code_ = parse_and_exec(line);
             update_status_bar();
         }
