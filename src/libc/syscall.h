@@ -152,6 +152,10 @@ static inline long sys_pause(void) {
     return __syscall5(SYS_PAUSE, 0, 0, 0, 0);
 }
 
+static inline long sys_yield(void) {
+    return __syscall5(SYS_YIELD, 0, 0, 0, 0);
+}
+
 static inline long sys_reboot(void) {
     return __syscall5(SYS_REBOOT, 0, 0, 0, 0);
 }
