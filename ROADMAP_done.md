@@ -593,6 +593,34 @@ release-gate caveat in AGENTS.md is no longer applicable.
 
 ---
 
+## CSpace — Capability-Based Access Control + Untyped Allocator (2026-08-15..16, commits `f58be694`..`c0d54371`) — DONE
+
+**Purpose:** ROADMAP 0.4.1 CSpace milestone, landed under v0.4.0. Removes
+ambient authority (task-ID IPC, direct PMM frame grants) behind
+capability tables with deterministic reference-counted cleanup.
+
+- **CSpace core engine** (`f58be694`) — `CNode`/`CSlot`/handle decode,
+  per-CNode SpinLock slot ops, cascade revoke (iterative, depth-bounded),
+  `CapType::Null` lookup wildcard.  TCB `cspace_` root CNode + `ensure_cspace()`.
+  Class `cap_core` (10).
+- **Lifecycle primitives** (`f1270468`) — `cap::copy/grant/mint/revoke`,
+  `Endpoint`/`FrameCap` shared-heap objects.  Class `cap_lifecycle` (8).
+- **SYS_CAP_GRANT/COPY/REVOKE/MINT (51–54)** (`ec710192`) — syscall handlers
+  against the current task's root CNode.  Class `cap_syscall` (8).
+- **Capability-gated IPC + frame mapping** (`ed6c57a1`) —
+  `IPC::send_via_cap`/`recv_via_cap`, `VMM::map_frame_from_cap`.  Class
+  `cap_ipc` (6).
+- **Untyped memory allocator** (`c0d54371`) — `UntypedMem` (contiguous PMM
+  region, retype-once guard = single ownership bit), `cap::retype`
+  (Frame-only, exact-size carve, CAS-claimed transfer), `CapType::Untyped`,
+  `CONFIG_CAP_MAX_UNTYPED`.  Class `cap_untyped` (9).  Child-Untyped split +
+  sub-range carve + `SYS_CAP_RETYPE` deferred to v0.4.2.
+- **SIL 3:** APPROVED (no findings).  Spec: `docs/specs/cspace.md`.
+
+Gates at completion: debug `all` 926/926, release `all` 85/85, selftest 133/133.
+
+---
+
 ## KernelObject Shared-Reference-Count Foundation (2026-08-13, commits `ee2f24c0`..`62467804`)
 
 **Purpose:** the reference-counting primitive ROADMAP 0.4.1 (CSpace) builds on.

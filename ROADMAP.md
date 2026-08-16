@@ -10,23 +10,12 @@
 ## Active Development — v0.4.1
 
 v0.4.0 RELEASED (2026-08-15) — Memory Protection MP-1..MP-8, background ELF
-loader, H2 deferred-switch race + elf_loader flake + pml4_clone CR3 corruption
-all RESOLVED (debug `all` 873/873, release `all` 84/84, selftest 132/132).
-Details in `ROADMAP_done.md` §"Active Development — v0.4.0".
+loader, CSpace Capability-Based Access Control iteration-1 + Untyped memory
+allocator, H2 deferred-switch race + elf_loader flake + pml4_clone CR3
+corruption all RESOLVED.  Details in `ROADMAP_done.md` §"Active Development —
+v0.4.0".
 
 v0.4.1 work:
-- [x] **KernelObject Shared-Reference-Count Foundation** — already landed
-  (`kernel_object.hpp`, pre-v0.4.1).
-- [x] **CSpace Capability-Based Access Control** — iteration-1 IMPLEMENTED
-  (2026-08-15): `CNode`/`CSlot`/handle decode, `cap::copy/grant/mint/revoke`,
-  `SYS_CAP_GRANT/COPY/REVOKE/MINT` (51–54), `Endpoint`/`FrameCap` objects,
-  capability-gated IPC + frame mapping.  See `docs/specs/cspace.md`.
-  Gates: debug `all` 905/905, release `all` 84/84, selftest 132/132.
-- [x] **Untyped memory allocator (seL4-style retype)** — iteration-1 IMPLEMENTED
-  (2026-08-16, `c0d54371`): `UntypedMem` (contiguous PMM region, retype-once
-  guard), `cap::retype` (Frame-only, exact-size carve, ownership transfer),
-  `CONFIG_CAP_MAX_UNTYPED`.  Child-Untyped split + sub-range carve deferred to
-  v0.4.2 (design in `docs/specs/cspace.md` §2.8).
 - [ ] **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
   requires an aarch64 boot path + test class before it can be enabled.
 
@@ -69,9 +58,11 @@ corrupt capability, IPC and driver work built on top of them.
 ### Phase 4.6: Microkernel Primitives & Capability Foundation (0.4.x) — prerequisite for 0.7.x Microkernel Transition
 
 #### 0.4.1 — Capability-Based Access Control Architecture (CSpace)
-- [x] **Capability System Specification** — CNode/CSlot/CSpace structures for tasks, IPC endpoints, physical memory frames (iteration-1 scope); Untyped/IRQ/MMIO caps designed in `docs/specs/cspace.md` §2.6 and deferred to 0.4.2+.
+> Landed under v0.4.0 (see `ROADMAP_done.md` §"Active Development — v0.4.0");
+> the 0.4.1 slot is free for the next milestone.
+- [x] **Capability System Specification** — CNode/CSlot/CSpace structures for tasks, IPC endpoints, physical memory frames; Untyped caps designed in `docs/specs/cspace.md` §2.8.
 - [x] **Capability Lifecycle Primitives** — `SYS_CAP_GRANT`, `SYS_CAP_COPY`, `SYS_CAP_REVOKE`, `SYS_CAP_MINT` (51–54) with deterministic reference-counted cleanup (ResourceTracker-gated).
-- [ ] **Untyped Memory Allocator (seL4-style)** — Transition physical allocation away from direct PMM calls to explicit Untyped memory retyping (`Untyped.Retype` into Frame, PageTable, CNode, or Endpoint capabilities). DEFERRED to 0.4.2+.
+- [x] **Untyped Memory Allocator (seL4-style)** — `UntypedMem` + `cap::retype` (Frame-only, exact-size carve, ownership transfer); child-Untyped split + sub-range carve deferred to 0.4.2+.
 
 #### 0.4.2 — User-Space Driver Infrastructure & Hardware Isolation
 - [ ] **User-Space IRQ Delivery System** — Hardware IRQ dispatcher that transforms incoming interrupts into Capability-backed IPC Notifications (`sys_irq_register` / `sys_irq_wait`) to eliminate Ring 0 driver execution.
