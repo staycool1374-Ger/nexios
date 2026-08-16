@@ -289,18 +289,20 @@ JARVIS_TEST(shell_uptime_command, "PRE: vfsd, iocd | POST: none") {
 // Expect: Captured output contains the new memory columns
 // Depends: service::Shell, service::Terminal, kernel::TaskControlBlock
 JARVIS_TEST(shell_tasks_memory_columns, "PRE: vfsd, iocd | POST: none") {
-    char cap[2048];
+    // Capture must hold MAX_TASKS rows (~108 B each) + headers.
+    char cap[CONFIG_MAX_TASKS * 128u + 512u];
     service::Terminal::capture_begin(cap, sizeof(cap));
     service::Shell::execute("tasks");
     service::Terminal::capture_end();
 
     // New memory columns present in the header.
-    JARVIS_ASSERT(serial_contains(cap, "STACK_USED"));
-    JARVIS_ASSERT(serial_contains(cap, "STACK_FREE"));
-    JARVIS_ASSERT(serial_contains(cap, "TEXT_KiB"));
-    JARVIS_ASSERT(serial_contains(cap, "DATA_KiB"));
-    JARVIS_ASSERT(serial_contains(cap, "BSS_KiB"));
-    JARVIS_ASSERT(serial_contains(cap, "HEAP_KiB"));
+    JARVIS_ASSERT(serial_contains(cap, "/STACK"));
+    JARVIS_ASSERT(serial_contains(cap, "/TEXT"));
+    JARVIS_ASSERT(serial_contains(cap, "/DATA"));
+    JARVIS_ASSERT(serial_contains(cap, "/BSS"));
+    JARVIS_ASSERT(serial_contains(cap, "/HEAP"));
+    JARVIS_ASSERT(serial_contains(cap, "MEM_PG"));
+    JARVIS_ASSERT(serial_contains(cap, "CPU_TIME"));
 }
 
 JARVIS_TEST(shell_pwd_command, "PRE: vfsd, iocd | POST: none") {

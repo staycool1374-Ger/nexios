@@ -642,18 +642,6 @@ static void print_uint(uint64_t n) {
 /// @note A naive `while (v >= 10) { --pad; v /= 10; }` underflows when a
 ///       field holds a value with 10+ digits (e.g. the idle task's priority
 ///       0xFFFFFFFF), making the following `for` loop print 2^64 spaces.
-static uint64_t right_pad(uint64_t width, uint64_t value) {
-    uint64_t digits = 1;
-    uint64_t v = value;
-    while (v >= 10 && digits < width) {
-        v /= 10;
-        ++digits;
-    }
-    if (digits > width)
-        return 0;
-    return width - digits;
-}
-
 static const char *state_name(kernel::TaskState s) {
     using namespace kernel;
     switch (s) {
@@ -668,8 +656,70 @@ static const char *state_name(kernel::TaskState s) {
 }
 
 void Shell::cmd_tasks(int, const char**) {
-    Terminal::write("ID  NAME             STATE      PRIO   PERIOD   MEM_PG STACK_KiB STACK_USED STACK_FREE  TEXT_KiB  DATA_KiB   BSS_KiB HEAP_KiB CPU_TIME  CURRENT\n");
-    Terminal::write("--- ---------------- ---------- ----- ------- ------- --------- ---------- ---------- -------- -------- -------- -------- --------- -------\n");
+    // Condensed memory report.  Column widths are fixed so the sub-header,
+    // header and every row align exactly.  Group labels: /STACK covers the
+    // SIZE USED FREE triple; /TEXT /DATA /BSS /HEAP cover their SIZE columns.
+    //
+    // Layout (width, alignment):
+    //   ID(3,r) NAME(11,l) STATE(8,l) PRIO(5,r) PERIOD(7,r) MEM_PG(6,r)
+    //   |--- STACK group: SIZE(5,r) USED(5,r) FREE(5,r) ---|
+    //   TEXT(5,r) DATA(5,r) BSS(5,r) HEAP(5,r)
+    //   CPU_TIME(8,l) CURRENT(7,l)
+    auto field = [](const char *s, int width, bool right) {
+        int len = 0;
+        while (s[len] && len < width) ++len;
+        if (right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        for (int i = 0; i < len; ++i) Terminal::putchar(s[i]);
+        if (!right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        Terminal::putchar(' ');
+    };
+
+    // Sub-header: group labels aligned over their columns.
+    {
+        for (int i = 0; i < 46; ++i) Terminal::putchar(' '); // ID..MEM_PG
+        // Each header/data column is `width+1` chars (width + trailing space).
+        // The stack group = 3 cols x 6 = 18; a label that fills N columns of
+        // width W+1 must itself be written at width N*(W+1)-1 so that
+        // field()'s trailing space closes the group exactly.
+        field("/STACK", 17, false); // 17 + 1 = 18 == 3 stack columns
+        field("/TEXT",  5, false);  //  5 + 1 =  6 == 1 column
+        field("/DATA",  5, false);
+        field("/BSS",   5, false);
+        field("/HEAP",  5, false);
+        Terminal::write("\n");
+    }
+
+    // Header row.
+    field("ID",     3, true);
+    field("NAME",  11, false);
+    field("STATE",  8, false);
+    field("PRIO",   5, true);
+    field("PERIOD", 7, true);
+    field("MEM_PG", 6, true);
+    field("SIZE",   5, true);
+    field("USED",   5, true);
+    field("FREE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("CPU_TIME", 8, false);
+    field("CURRENT", 7, false);
+    Terminal::write("\n");
+
+    // Separator row (same widths, '-' fill).
+    auto dashes = [](int width) {
+        for (int i = 0; i < width; ++i) Terminal::putchar('-');
+        Terminal::putchar(' ');
+    };
+    dashes(3); dashes(11); dashes(8); dashes(5); dashes(7); dashes(6);
+    dashes(5); dashes(5); dashes(5); dashes(5); dashes(5); dashes(5); dashes(5);
+    dashes(8); dashes(7);
+    Terminal::write("\n");
 
     auto *cur = kernel::Scheduler::current_task();
     auto count = kernel::Scheduler::task_count();
@@ -696,59 +746,35 @@ void Shell::cmd_tasks(int, const char**) {
     for (size_t i = 0; i < n; ++i) {
         auto *t = sorted[i];
 
-        // ID (right-aligned, 3 chars)
-        if (t->id < 100) Terminal::putchar(' ');
-        if (t->id < 10)  Terminal::putchar(' ');
-        print_uint(t->id);
-        Terminal::putchar(' ');
+        // Local value-to-string helpers (print_uint writes to the terminal
+        // directly, so render into a scratch buffer for the field() padding).
+        char numbuf[24];
+        auto num = [&numbuf](uint64_t v) {
+            char rev[24];
+            int r = 0;
+            if (v == 0) rev[r++] = '0';
+            while (v > 0 && r < 23) {
+                rev[r++] = static_cast<char>('0' + (v % 10));
+                v /= 10;
+            }
+            int p = 0;
+            while (r > 0) numbuf[p++] = rev[--r];
+            numbuf[p] = '\0';
+            return numbuf;
+        };
 
-        // Name (left-aligned, 16 chars)
-        for (int c = 0; c < 15; ++c) {
-            if (t->name[c])
-                Terminal::putchar(t->name[c]);
-            else
-                Terminal::putchar(' ');
-        }
-        Terminal::putchar(' ');
+        field(num(t->id), 3, true);
+        field(t->name, 11, false);
+        field(state_name(t->state), 8, false);
+        field(num(t->priority), 5, true);
+        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD)
+            field("-", 7, true);
+        else
+            field(num(t->period_ticks), 7, true);
+        field(num(t->memory_used_pages_), 6, true);
 
-        // State (9 chars)
-        Terminal::write(state_name(t->state));
-        Terminal::putchar(' ');
-
-        // Priority (right-aligned, 5 chars)
-        for (uint64_t p = 1; p <= right_pad(5, t->priority); ++p)
-            Terminal::putchar(' ');
-        print_uint(t->priority);
-        Terminal::putchar(' ');
-
-        // Period (right-aligned, 7 chars) — aperiodic tasks (NO_PERIOD)
-        // have no period, display '-'.
-        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD) {
-            for (int p = 0; p < 6; ++p) Terminal::putchar(' ');
-            Terminal::putchar('-');
-        } else {
-            for (uint64_t p = 1; p <= right_pad(7, t->period_ticks); ++p)
-                Terminal::putchar(' ');
-            print_uint(t->period_ticks);
-        }
-        Terminal::putchar(' ');
-
-        // Memory used pages (right-aligned, 7 chars)
-        for (uint64_t p = 1; p <= right_pad(7, t->memory_used_pages_); ++p)
-            Terminal::putchar(' ');
-        print_uint(t->memory_used_pages_);
-        Terminal::putchar(' ');
-
-        // Stack total size in KiB (right-aligned, 9 chars)
+        // Stack: total size / high-water used / low-water free (KiB).
         uint64_t stack_kib = kernel::TaskControlBlock::STACK_SIZE / 1024;
-        for (uint64_t p = 1; p <= right_pad(9, stack_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(stack_kib);
-        Terminal::putchar(' ');
-
-        // Stack high-water: bytes actually consumed (top - low-water mark),
-        // reported in KiB.  kstack_low_water_==0 means the task has never
-        // been switched out yet -> 0 used.
         uint64_t kbase = reinterpret_cast<uint64_t>(t->kernel_stack);
         uint64_t ktop = t->kernel_stack_top;
         uint64_t stack_used = 0;
@@ -758,43 +784,21 @@ void Shell::cmd_tasks(int, const char**) {
             stack_used = (ktop - t->kstack_low_water_) / 1024;
             stack_free = (t->kstack_low_water_ - kbase) / 1024;
         }
-        for (uint64_t p = 1; p <= right_pad(10, stack_used); ++p)
-            Terminal::putchar(' ');
-        print_uint(stack_used);
-        Terminal::putchar(' ');
-        for (uint64_t p = 1; p <= right_pad(10, stack_free); ++p)
-            Terminal::putchar(' ');
-        print_uint(stack_free);
-        Terminal::putchar(' ');
+        field(num(stack_kib), 5, true);
+        field(num(stack_used), 5, true);
+        field(num(stack_free), 5, true);
 
-        // Loaded image segments (text/data/bss) in KiB.
+        // Loaded image segments (text/data/bss) and heap in KiB.
         auto seg_kib = [](uint64_t bytes) {
             return (bytes + 1023) / 1024;
         };
-        uint64_t text_kib = seg_kib(t->text_size_);
-        uint64_t data_kib = seg_kib(t->data_size_);
-        uint64_t bss_kib = seg_kib(t->bss_size_);
-        for (uint64_t p = 1; p <= right_pad(9, text_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(text_kib);
-        Terminal::putchar(' ');
-        for (uint64_t p = 1; p <= right_pad(9, data_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(data_kib);
-        Terminal::putchar(' ');
-        for (uint64_t p = 1; p <= right_pad(9, bss_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(bss_kib);
-        Terminal::putchar(' ');
-
-        // Heap used in KiB (program_break - start), '-' when no heap.
+        field(num(seg_kib(t->text_size_)), 5, true);
+        field(num(seg_kib(t->data_size_)), 5, true);
+        field(num(seg_kib(t->bss_size_)), 5, true);
         uint64_t heap_kib = 0;
         if (t->program_break > t->program_break_start)
             heap_kib = (t->program_break - t->program_break_start) / 1024;
-        for (uint64_t p = 1; p <= right_pad(9, heap_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(heap_kib);
-        Terminal::putchar(' ');
+        field(num(heap_kib), 5, true);
 
         // CPU time as hh:mm:ss (ticks at 1000 Hz = 1 ms per tick)
         {
@@ -804,22 +808,24 @@ void Shell::cmd_tasks(int, const char**) {
             uint64_t mm = total_ms / 60000;
             total_ms %= 60000;
             uint64_t ss = total_ms / 1000;
-
-            if (hh < 100) Terminal::putchar(' ');
-            if (hh < 10)  Terminal::putchar(' ');
-            print_uint(hh);
-            Terminal::putchar(':');
-            if (mm < 10) Terminal::putchar('0');
-            print_uint(mm);
-            Terminal::putchar(':');
-            if (ss < 10) Terminal::putchar('0');
-            print_uint(ss);
+            char timebuf[16];
+            int tp = 0;
+            char hh_s[4]; int hp = 0;
+            if (hh == 0) hh_s[hp++] = '0';
+            while (hh > 0 && hp < 3) { hh_s[hp++] = static_cast<char>('0' + (hh % 10)); hh /= 10; }
+            for (int k = hp - 1; k >= 0; --k) timebuf[tp++] = hh_s[k];
+            timebuf[tp++] = ':';
+            timebuf[tp++] = static_cast<char>('0' + mm / 10);
+            timebuf[tp++] = static_cast<char>('0' + mm % 10);
+            timebuf[tp++] = ':';
+            timebuf[tp++] = static_cast<char>('0' + ss / 10);
+            timebuf[tp++] = static_cast<char>('0' + ss % 10);
+            timebuf[tp] = '\0';
+            field(timebuf, 8, false);
         }
-        Terminal::putchar(' ');
 
         // Current marker
-        if (t == cur)
-            Terminal::write("<-");
+        field(t == cur ? "<-" : "", 7, false);
         Terminal::write("\n");
     }
 
