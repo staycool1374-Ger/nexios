@@ -1,8 +1,9 @@
 # CSpace — Capability-Based Access Control Architecture (v0.4.1)
 
-**Status:** IMPLEMENTED (2026-08-15) — iteration-1 CSpace core, lifecycle
-primitives, SYS_CAP_* syscalls and capability-gated IPC/frame mapping are
-landed and green.  Untyped/IRQ/MMIO caps deferred to v0.4.2+ (see §2.6).
+**Status:** IMPLEMENTED (2026-08-16) — iteration-1 CSpace core, lifecycle
+primitives, SYS_CAP_* syscalls, capability-gated IPC/frame mapping AND the
+Untyped memory allocator + `cap::retype` (§2.8) are landed and green.
+IRQ/MMIO caps remain deferred to v0.4.2+ (see §2.6).
 **Build:** v0.4.1-dev (post v0.4.0 release)
 **Owner:** kernel core (scheduler/IPC/memory/syscall)
 **ROADMAP source:** §"Active Development — v0.4.1" + §Phase 4.6 (0.4.1 items 1–3)
@@ -172,7 +173,9 @@ Add a row in `docs/specs/configuration.md` §1 (new §1.8 "Capabilities") docume
 
 ## 2.8 Untyped Memory Allocator (v0.4.1)
 
-**Status:** PLANNED — ROADMAP v0.4.1 item 3, iteration-1 foundation (supersedes the §2.6 deferred sketch for the Untyped slice; IRQ/MMIO caps remain 0.4.2+).
+**Status:** IMPLEMENTED (2026-08-16, `c0d54371`) — ROADMAP v0.4.1 item 3,
+iteration-1 foundation (supersedes the §2.6 deferred sketch for the Untyped
+slice; IRQ/MMIO caps remain 0.4.2+).
 
 ### 2.8.1 Current state assessment
 
@@ -455,6 +458,11 @@ All five phases landed 2026-08-15. Final gates: debug `all` 905/905 executed
   full queue), `VMM::map_frame_from_cap`/`unmap_frame_from_cap` (refuses a
   revoked cap).  Class `cap_ipc` (6 tests).
 - **Phase 5** — registry rows + counts (`all` 920), full gates above.
+- **Phase 6** (`c0d54371`) — Untyped memory allocator (ROADMAP 0.4.1 item 3):
+  `UntypedMem` (contiguous PMM region, retype-once guard = single ownership
+  bit), `cap::retype` (Frame-only, exact-size carve, CAS-claimed transfer),
+  `CapType::Untyped`, `CONFIG_CAP_MAX_UNTYPED`.  Class `cap_untyped` (9
+  tests); `all` 941.  Child-Untyped split deferred to v0.4.2 (§2.8).
 
 **Deviations from the plan (all recorded):**
 - `all` registered count is **920**, not the estimated 918 — the pre-CSpace

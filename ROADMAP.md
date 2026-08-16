@@ -22,9 +22,11 @@ v0.4.1 work:
   `SYS_CAP_GRANT/COPY/REVOKE/MINT` (51–54), `Endpoint`/`FrameCap` objects,
   capability-gated IPC + frame mapping.  See `docs/specs/cspace.md`.
   Gates: debug `all` 905/905, release `all` 84/84, selftest 132/132.
-- [ ] **Untyped memory allocator (seL4-style retype)** — 0.4.1 item 3,
-  DEFERRED to v0.4.2+ (design sketch in `docs/specs/cspace.md` §2.6; requires
-  `CONFIG_CAP_MAX_UNTYPED` + RegionAllocator).
+- [x] **Untyped memory allocator (seL4-style retype)** — iteration-1 IMPLEMENTED
+  (2026-08-16, `c0d54371`): `UntypedMem` (contiguous PMM region, retype-once
+  guard), `cap::retype` (Frame-only, exact-size carve, ownership transfer),
+  `CONFIG_CAP_MAX_UNTYPED`.  Child-Untyped split + sub-range carve deferred to
+  v0.4.2 (design in `docs/specs/cspace.md` §2.8).
 - [ ] **MP-4.4 — aarch64 PAN/PXN (DEFERRED from v0.4.0)** — no-op stubs in place;
   requires an aarch64 boot path + test class before it can be enabled.
 
