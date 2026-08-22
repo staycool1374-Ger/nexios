@@ -1,5 +1,6 @@
 # Jarvis RTOS Coding Style
 
+
 ## 1. Language & Build
 
 - **Standard**: C++20 freestanding (`-ffreestanding -fno-exceptions -fno-rtti -nostdlib`)
@@ -50,6 +51,18 @@ ENSURE(ptr != nullptr);  // panics with file:line
 ```
 For invariants that must never fail.
 
+**ENSURE vs. error code — the deciding rule:** ENSURE is only for conditions
+that are *impossible by design* (corrupted state, broken internal invariants).
+Any condition that can be reached by legitimate operation — resource
+exhaustion (`MAX_WAITERS` full, pool empty, ring full), bad user input,
+timeout — must return an error code or `ErrorOr<T>`, never panic.
+```cpp
+// Good: reachable exhaustion → error
+if (waiter_count_ >= MAX_WAITERS) return SYNC_ERR_MAX_WAITERS;
+// Bad: kernel panic on a reachable condition
+ENSURE(waiter_count_ < MAX_WAITERS);
+```
+
 ### 5.2 ASSERT (Debug Only)
 ```cpp
 ASSERT(pmm::Error::OOM);  // logs via Logger::error()
@@ -58,6 +71,11 @@ For expected failures (OOM, I/O errors). No-ops in release (`-UCONFIG_DEBUG`).
 
 ### 5.3 Module Error Headers
 Each module defines error codes in `*_errors.hpp` via X-macro pattern with `error_string<E>()`.
+
+**Error codes are mandatory, not optional:** if a module defines `*_errors.hpp`
+codes, every failure path in that module returns a specific code — never a
+generic `(uint64_t)-1`. Callers must be able to distinguish failure causes.
+A defined-but-unused error enum is dead code and an audit finding.
 
 ### 5.4 ErrorOr<T>
 ```cpp
@@ -69,10 +87,11 @@ uint64_t page = *r;
 ## 6. Safety & Compliance
 
 - MISRA C++:2023, AUTOSAR, ISO 26262 ASIL D / IEC 61508
-- **Fully bounded loops**: deterministic max iteration; no `while(true)`/`for(;;)` without bound. Exception: blocking I/O loops (`hlt`, `pause`, `inb`, keyboard poll)
+- **Fully bounded loops**: deterministic max iteration; no `while(true)`/`for(;;)` without bound. Exception: boot-time hardware calibration (pre-scheduler, bounded by a named constant) — **not** runtime blocking waits
 - No `volatile` for sync — use atomics or mutexes
 - No primitive `reinterpret_cast` — use aligned punning
 - No `dynamic_cast`, no `typeid`
+- **Debug/Release must not diverge in behavior**: `#ifdef CONFIG_DEBUG` may add logging, diagnostics, and extra invariant checks, but must never change control flow, failure policy, or state transitions between builds. A detect-and-halt policy exists in release too (it may log less). Rationale: test campaigns that only run debug builds would never exercise the failure behavior production ships with.
 
 ## 7. Testing
 
@@ -160,3 +179,90 @@ enum class VfsSentinel : int64_t    { INVALID_FD = -4 };
 
 ### 10.7 const_cast Is Forbidden
 Use `mutable` or redesign instead.
+
+## 11. Concurrency (`src/kernel/` only)
+
+These rules exist because every one of them was violated at least once
+(refer to `audits/audit-task-sync-v0.4.2.md` for the incident record).
+
+### 11.1 Never Hold a Spinlock Across a Context Switch
+`Scheduler::reschedule()` arms a *deferred* switch — the task keeps running
+until the timer ISR applies it. Holding any spinlock across the reschedule
+call deadlocks the ISR that takes it (timer IRQ → scheduler → spin forever).
+
+**Pattern (template: `Notify::wait()`):**
+```cpp
+{
+    SpinLockGuard<SpinLock> g(lock_);   // 1. inspect state, insert waiter
+    if (try_acquire()) return OK;
+    add_waiter(*task);
+}                                        // 2. release BEFORE blocking
+task->state = TaskState::BLOCKED;        // 3. transition under scheduler_lock_
+Scheduler::dequeue_ready(*task);         // 4. MUST dequeue (see §11.2)
+Scheduler::reschedule();
+```
+
+### 11.2 Every BLOCKED Transition Must Leave the Ready Queue
+Setting `state = BLOCKED` without `Scheduler::dequeue_ready()` leaves a
+blocked task physically queued (INV-2 desync). Debug builds halt on this;
+release builds live-lock. Every blocking path must dequeue before
+`reschedule()`, and should include the interrupts-disabled rollback branch
+used by `Queue::send/receive`.
+
+### 11.3 Blocking Waits Must Be Bounded or Scheduler-Mediated
+A task that blocks on a primitive either (a) gets woken by a documented
+waker, with a timeout fallback returning `*_ERR_TIMEOUT` /
+`SYNC_ERR_INTERRUPTED`, or (b) is descheduled (BLOCKED + dequeued). Spinning
+with `pause()` at raised priority on a condition another task must set is
+forbidden — a lost wakeup then spins forever.
+
+### 11.4 Priority Mutations Go Through the Scheduler Helper
+Never write `tcb->priority = X` directly. Use the scheduler helper that
+re-buckets a task sitting in the ready queue (`move_priority`). Direct
+writes make PI boosts ineffective and desynchronize queue order from
+priority.
+
+### 11.5 PI Boosts Must Be Revertible and Symmetric
+Every priority-inheritance boost stores the saved base priority in a holder
+field, and every wake/unlock path restores it **and clears the field**
+(uniform `>` semantics — see mutex `restore_priority()` as reference).
+An uncleared holder field permanently inflates the task's base priority
+(leaks across lock cycles).
+
+### 11.6 Atomics Are All-or-Nothing Per Index
+An object accessed concurrently must be accessed atomically from *every*
+context — mixing plain reads with `atomic_store` on the same index is UB
+(data race), even when "one side is the only writer". SPSC rings: declare
+indices atomic everywhere or document single-threaded ownership explicitly.
+
+## 12. Shared Resource & TCB Lifecycles
+
+### 12.1 Dead-State Filter: REAPED and TERMINATED
+Any code touching another task's TCB (waking, boosting, signalling) must
+reject both `TERMINATED` **and** `REAPED`. A reaped-and-recycled TCB is a
+use-after-free waiting to happen. Checking only `!= TERMINATED` is a bug:
+cleanup marks tasks REAPED, not TERMINATED.
+
+### 12.2 Generation-Tag Stored Pointers
+Raw TCB pointers stored across operations (`waiter_`, `last_sender_`,
+`owner_`) must carry a generation tag validated at use time. Pointer alone
+cannot distinguish the original task from its recycled successor.
+Reference: generation-tagged waiter arrays in `mutex.cpp` / `queue.cpp`.
+
+### 12.3 Wakers Own the Wakeup Contract
+A primitive that blocks tasks must wake them on *every* teardown/destruction
+path of that primitive (destructor, dispose, last-release). If blocked
+tasks can outlive the primitive, the destroy path drains waiters first —
+documented invariant without enforcement does not count.
+
+### 12.4 Single Ownership Discipline per Object Type
+Each dynamically-managed type has exactly one alloc/release pair (e.g.
+TCBs: `MemPool::alloc` ↔ `TaskControlBlock::cleanup()` + `MemPool::free`).
+Mixing `delete` with pool free on the same objects is heap mismatch →
+corruption/double-free on exactly the error paths the guards exist for.
+
+### 12.5 Ownership Checks Are Not Optional on State-Changing Ops
+For any handle-based resource, *every* operation that reads, maps, transfers,
+or frees must validate ownership/generation — not just some. A `map()`
+without an owner check next to `free()`/`transfer()` with checks is an
+audit blocker (privilege escalation by handle guessing).
