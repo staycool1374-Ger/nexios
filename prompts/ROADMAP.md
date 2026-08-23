@@ -47,4 +47,19 @@ titled `[<phase>] <item>` (search: `is:open label:feature`). Phase overview:
 - **Phase 7 (0.6.x):** Safety Systems
 - Later phases through Phase 10 (v1.0.0 release gate)
 
+### Design Papers (docs/specs/)
+
+Detailed, NexIOS-specific design documents derived from the Cyjon codebase
+study (2026-08); each targets a v0.4.x release and references the verified
+current-state anchors in `src/kernel/`:
+
+| Paper | Topic | Target |
+|---|---|---|
+| [`docs/specs/syscall-fastpath.md`](../docs/specs/syscall-fastpath.md) | Syscall dispatch via static asm jump table — deterministic per-call latency | v0.4.3 (Phase 4.7) |
+| [`docs/specs/fpu-context.md`](../docs/specs/fpu-context.md) | FPU/SIMD state: fixed-offset save areas + reentrancy rules for lazy FPU | v0.4.3 (Phase 4.7) |
+| [`docs/specs/exception-table-audit.md`](../docs/specs/exception-table-audit.md) | Exception vector audit incl. concrete fix: #VE/#HV error-code classification | v0.4.3 (Phase 4.7) |
+| [`docs/specs/per-cpu-smp.md`](../docs/specs/per-cpu-smp.md) | Per-CPU foundation (LAPIC-id indexed) + SMP bring-up skeleton | v0.4.4 (Phase 5) |
+| [`docs/specs/elf-shared-libs.md`](../docs/specs/elf-shared-libs.md) | DT_NEEDED shared-object resolution for user ELF images | v0.4.4 (Phase 6 prep) |
+| [`docs/specs/kernel-half-merge.md`](../docs/specs/kernel-half-merge.md) | Kernel-half page-table merge as fork/exec fast path (post-MP-7) | v0.4.5 (Phase 6 prep) |
+
 Browse the backlog: https://github.com/staycool1374-Ger/nexios/issues?q=is%3Aopen+label%3Afeature
