@@ -67,6 +67,46 @@ other. NexIOS takes the operating-system path:
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
 
+## Where this is going
+
+NexIOS is built for a simple idea: **your application is just an ELF file on
+the SD card — the system keeps it running on time, every time.**
+
+Write your control logic in C, C++, or Rust, copy `myapp.elf` onto the storage
+medium, boot, done. Your app runs in its own isolated address space on a hard
+real-time schedule. If your app crashes, the kernel recovers it — the system
+stays up, only the application restarts.
+
+That means a Raspberry Pi-class board plus one ELF file could become a
+deterministic controller for things like:
+
+* **Home automation:** shutter/blind control with sun-position logic,
+  heating hysteresis, lighting scenes — tasks where "switch within 50 ms of
+  trigger" actually matters
+* **Garden & greenhouse:** irrigation valve timing, climate control
+  ("fan on within 2 s above 28 °C")
+* **Robotics & model building:** servo loops on a hard 20 ms raster
+* **Rapid prototyping:** drop a new build onto developer boards and test
+  real-time behavior without re-flashing the whole system
+
+No other RTOS today combines this workflow — load-and-run an unmodified user
+ELF from the filesystem, with deterministic timing guarantees and crash
+isolation — with this level of simplicity. That gap is the destination of this
+project.
+
+**Honest status:** this is where the journey goes, not where we are today.
+The x86_64 kernel core already proves the concept (MMU-isolated processes,
+background ELF loader, capability security). The pieces that make the maker
+workflow real — ARM board bring-up, end-to-end user-ELF loading from storage,
+and automatic fault recovery — are open roadmap items tracked as GitHub
+Issues. The road is long, but every step on it is concrete and reachable.
+
+If you have been looking for exactly this kind of system and want to help
+test or build it: **this project is GPLv3 open source, and contributors are
+welcome.** See [Call for Contributions](#call-for-contributions).
+
+---
+
 ## Demo
 
 <p align="center">
