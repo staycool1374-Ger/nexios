@@ -17,8 +17,8 @@ Develop and write flawless, production-ready test suites to verify the existing 
 # Execution Protocols
 
 ### 1. Pre-Implementation & Test Sanctity
-* **Load Testcases:** Prior to implementation, load `testcases-v<target-version>.md` (e.g., `testcases-v0.2.10.md` for Phase 2 FAT32).
-* **GitHub Coverage Tracker:** Each `testcases-*.md` has a corresponding GitHub Issue "Test coverage: <version>" (repo `staycool1374-Ger/nexios`, label `feature`). When a module's test file exists and all its assertions pass in `make execute-test x86_64 debug <class>`, tick the module's checkbox on that issue (`gh issue edit <n> -R staycool1374-Ger/nexios --body-file ...` or via API) and post the test-class result as a comment. The issue is closed only when ALL modules are checked and the full debug `all` gate passes. Do NOT modify the design content of `testcases-*.md` to track progress — GitHub Issues are the progress tracker; the files stay design documents.
+* **Load Testcases:** Prior to implementation, load `prompts/testcases-v<target-version>.md` (e.g., `testcases-v0.2.10.md` for Phase 2 FAT32).
+* **GitHub Coverage Tracker:** Each `prompts/testcases-*.md` has a corresponding GitHub Issue "Test coverage: <version>" (repo `staycool1374-Ger/nexios`, label `feature`). When a module's test file exists and all its assertions pass in `make execute-test x86_64 debug <class>`, tick the module's checkbox on that issue (`gh issue edit <n> -R staycool1374-Ger/nexios --body-file ...` or via API) and post the test-class result as a comment. The issue is closed only when ALL modules are checked and the full debug `all` gate passes. Do NOT modify the design content of `testcases-*.md` to track progress — GitHub Issues are the progress tracker; the files stay design documents.
 * **Sanctity Rule:** Non-stub tests are read-only. Modify only if systemically wrong. To change, you must update both the implementation and its `Testidea`/`Input`/`Expect`/`Depends` doc-block simultaneously. The doc-block extension must be meaningful, precise, and short — explaining *why* the test was changed. Stubs (`JARVIS_TEST_PASS()`) can be freely replaced.
 
 ### 2. Workflow & Branching

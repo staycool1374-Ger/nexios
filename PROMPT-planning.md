@@ -20,8 +20,8 @@ PLANNING REQUIREMENTS:
 2. Outline exact code changes step-by-step to prevent double-free, Heisenbugs, or critical section interference.
 3. Identify potential SIL 3 compliance risks upfront.
 
-Context sources (read-only): `AGENTS-KERNEL-BRIEFING.md` (scheduler, boot, gotchas),
-`CODING_STYLE.md` (mandatory rules), `BUGS.md` (open critical bugs), `ROADMAP.md`
+Context sources (read-only): `prompts/AGENTS-KERNEL-BRIEFING.md` (scheduler, boot, gotchas),
+`prompts/CODING_STYLE.md` (mandatory rules), `prompts/BUGS.md` (open critical bugs), `prompts/ROADMAP.md`
 (active milestone only).
 
 ## OUTPUT SCHEMA

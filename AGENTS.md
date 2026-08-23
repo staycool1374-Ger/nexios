@@ -1,6 +1,6 @@
 # Global Operating Rules (all roles, always active)
 
-Mandatory reading for every role and session: `CODING_STYLE.md` — all coding,
+Mandatory reading for every role and session: `prompts/CODING_STYLE.md` — all coding,
 safety, and error-handling rules defined there apply unconditionally.
 
 ## MANDATORY PIPELINE WORKFLOW
@@ -53,14 +53,14 @@ If the branch does not match the intended role, do not proceed.
 - If `developer`: read `PROMPT-dev.md` for full role instructions
 - If `quality engineer` (`testbed` branch): read `PROMPT-testdev.md` for full role instructions
 - If neither: halt
-- Also read `AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
-- Read `CODING_STYLE.md` — mandatory for all code changes in every role
-- Current work state (objective, completed phases, next move): see `STATE.md`
+- Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
+- Read `prompts/CODING_STYLE.md` — mandatory for all code changes in every role
+- Current work state (objective, completed phases, next move): see `prompts/STATE.md`
 
 ## GitHub Issue Tracking (source of truth for bugs & features)
 - Repo: `staycool1374-Ger/nexios` (use `gh` CLI; `export PATH="/opt/homebrew/bin:$PATH"` if `gh` is not found).
-- **Open bugs and feature work are tracked as GitHub Issues — NOT in BUGS.md.**
-  BUGS.md is a historical archive of resolved bugs only; never add new open items to it.
+- **Open bugs and feature work are tracked as GitHub Issues — NOT in prompts/BUGS.md.**
+  prompts/BUGS.md is a historical archive of resolved bugs only; never add new open items to it.
 - **Information acquisition (developer, before planning/implementing):**
   - List open work: `gh issue list -R staycool1374-Ger/nexios --state open`
   - Read the full issue before working on it: `gh issue view <n> -R staycool1374-Ger/nexios --comments`
@@ -72,11 +72,11 @@ If the branch does not match the intended role, do not proceed.
   - Only close an issue when: implementation done + audit APPROVED + relevant test classes pass 0 failures.
 - Labels taxonomy: `bug`, `feature`, `kernel:<subsystem>`, `severity:S1|S2|S3`, `sil3-relevant`.
 - Issue templates live in `.github/ISSUE_TEMPLATE/` — new bugs/features reported by the user are filed via these schemas.
-- **Roadmap handling:** `ROADMAP.md` contains pointers only (guardrails, issue
+- **Roadmap handling:** `prompts/ROADMAP.md` contains pointers only (guardrails, issue
   table, phase overview) — NEVER add or check off work items in it. Version
   grouping happens via GitHub Milestones; completed milestone history is
-  appended to `ROADMAP_done.md` at release time only.
-- **Test-case design docs:** the `testcases-*.md` files are design documents
+  appended to `prompts/ROADMAP_done.md` at release time only.
+- **Test-case design docs:** the `prompts/testcases-*.md` files are design documents
   and stay in-repo; their PROGRESS is tracked as GitHub Issues "Test coverage:
   <version>" (checklist per test module). See PROMPT-testdev.md §1.
 - Work selection order: severity:S1 bugs → severity:S2 bugs → Milestone issues
@@ -184,14 +184,14 @@ evidence-backed. Do not stack changes across steps.
 - Do not run the "all" class until every individual class shows 0 failures.
 
 ## Pre-Flight
-- Run `bash ~/jarvis/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
+- Run `bash ~/jarvis/scripts/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
 
 ## Makefile Usage (MANDATORY — re-read this before every test invocation)
 - Only valid test target: `make execute-test <arch> <build> <class>`
 - Positional args: `<arch>` = `x86_64`, `<build>` = `debug`|`release`, `<class>` = `all`|`selftest`|`none`|`<name>`
 - Do NOT use `make test-qemu`, `make test`, `TEST_CLASS=`, `CLASS=`, or any other pattern
-- Full reference in AGENTS-KERNEL-BRIEFING.md §6
-- Before running any test, paste the syntax from §6 of AGENTS-KERNEL-BRIEFING.md to verify
+- Full reference in prompts/AGENTS-KERNEL-BRIEFING.md §6
+- Before running any test, paste the syntax from §6 of prompts/AGENTS-KERNEL-BRIEFING.md to verify
 
 ## QEMU Validation Circuit Breaker
 - Max **3 consecutive fix attempts** if a test fails. If still failing on the 3rd attempt, halt and await human input.

@@ -22,8 +22,8 @@ Safely implement, validate, and evolve the architecture under strict functional 
 - See AGENTS.md Pre-Flight rules.
 
 ### 2. Context Collection (Targeted Parsing)
-- Parse `~/jarvis/ROADMAP.md` using targeted tool operations (e.g., grep for `-[ ]`) to locate ONLY the active milestone. Do not ingest completed sections ([x]) to preserve token economy.
-- Check `~/jarvis/BUGS.md`. **Rule:** Critical bugs must be 100% resolved before feature work.
+- Parse `~/jarvis/prompts/ROADMAP.md` using targeted tool operations (e.g., grep for `-[ ]`) to locate ONLY the active milestone. Do not ingest completed sections ([x]) to preserve token economy.
+- Check `~/jarvis/prompts/BUGS.md`. **Rule:** Critical bugs must be 100% resolved before feature work.
 - Read `~/jarvis/project_structure.txt` to verify current workspace directory mappings and layout constraints.
 - Read `~/jarvis/Makefile`.
 - *Token Save:** Do not read full source files upfront; grep for specific functions/definitions as needed.
@@ -60,13 +60,13 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - See AGENTS.md for Circuit Breaker limits.
 
 ### 5. Bug Tracking & Documentation Updates
-- **Bugs are tracked as GitHub Issues**, not in BUGS.md (see AGENTS.md "GitHub Issue Tracking"):
+- **Bugs are tracked as GitHub Issues**, not in prompts/BUGS.md (see AGENTS.md "GitHub Issue Tracking"):
   - New failure found during development: file an issue
     `gh issue create -R staycool1374-Ger/nexios --title "<short>" --label bug --body "..."`.
   - Progress, audit decisions and test counts are posted as comments on the issue.
   - Commit messages reference the issue (`#<n>`; `fixes #<n>` auto-closes on push).
-- Update `LESSONS.md` with compressed hardware/architectural insights if not trivial.
-- Sync docs (`README.md`, `ROADMAP.md`).
+- Update `prompts/LESSONS.md` with compressed hardware/architectural insights if not trivial.
+- Sync docs (`README.md`, `prompts/ROADMAP.md`).
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
 
 ### ResourceTracker (Strict Awareness)
@@ -78,7 +78,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
 - Run `make execute-test x86_64 debug all` — this launches the kernel in QEMU and runs ALL registered tests via `run_registered(0)` (debug build, `all` test class). All must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the serial output shows the full test count (600+ tests, not ~96).
-- Check `testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
+- Check `prompts/testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
 **Release sequence:**
@@ -86,7 +86,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Update `Doxyfile` PROJECT_NUMBER to release version
 - Run `doxygen Doxyfile`
 - Update version strings in `README.md` and `readme.html`
-- Move completed roadmap items from `ROADMAP.md` → `ROADMAP_done.md`; update `EXECUTIVE OVERRIDE` to next target
+- Move completed roadmap items from `prompts/ROADMAP.md` → `prompts/ROADMAP_done.md`; update `EXECUTIVE OVERRIDE` to next target
 - Strip `-dev` from `KERNEL_VERSION_STRING` and set `stage = ""` in `version.hpp`
 - Regenerate manifest: `tree -I "build|obj|.git|node_modules" > ../project_structure.txt`
 - Commit all changes: `git add -A && git commit -m "release: v$(major).$(minor).$(patch)"`
@@ -95,7 +95,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Mirror to Nextcloud: `mkdir -p ~/Nextcloud/arnold/jarvis/ && rsync -a --delete --exclude=build --exclude=.git ~/jarvis/ ~/Nextcloud/arnold/jarvis/`
 
 **Post-release (new dev cycle):**
-- Increment patch (or major/minor per ROADMAP.md next milestone)
+- Increment patch (or major/minor per prompts/ROADMAP.md next milestone)
 - Re-add `-dev` to `KERNEL_VERSION_STRING` and set `stage = "dev"`
 - Commit: `git add -A && git commit -m "bump: v$(next)-dev"`
 - Push: `git push origin main`
@@ -250,7 +250,7 @@ Both `run_filtered()` and `run_registered()` drain the UART TX FIFO (wait for LS
 ---
 
 # Coding Standards
-All mandatory coding rules, safety constraints, and error-handling patterns are defined in `CODING_STYLE.md`. Refer to that document for:
+All mandatory coding rules, safety constraints, and error-handling patterns are defined in `prompts/CODING_STYLE.md`. Refer to that document for:
 - Language & build conventions (C++20 freestanding, no STL/RTTI/exceptions)
 - Naming, formatting, and documentation style
 - Memory & ownership (no dynamic allocation on real-time paths)
