@@ -67,6 +67,17 @@ other. NexIOS takes the operating-system path:
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
 
+## Demo
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=foApKYTFSlE">
+    <img src="https://img.youtube.com/vi/foApKYTFSlE/sddefault.jpg" alt="NexIOS demo video — watch on YouTube" width="720"/>
+  </a>
+</p>
+<p align="center">
+  <em>NexIOS demo — real-time kernel for safety (click to watch on YouTube)</em>
+</p>
+
 <p align="center">
   <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
 </p>
