@@ -55,6 +55,12 @@ The core design goal of NexIOS is to execute any user application (ELF binary) a
 * **Phase 7 (v0.7.x):** VFS (`vfsd`) and block I/O (`iocd`) externalized to isolated Ring 3 servers behind IPC gateways.
 * **Phase 8 (v0.8.x):** Kernel reduced to scheduler, IPC, page-table manager, and IRQ routing. Shell, init, VFS, and drivers run as capability-bearing Ring 3 servers.
 
+## Roadmap & History
+
+- **Current work:** [GitHub Milestone v0.4.2](https://github.com/staycool1374-Ger/nexios/milestone/1) — open items tracked as Issues.
+- **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
+- **Implementation history (what's already done):** [`ROADMAP_done.md`](ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.1 (CSpace capability security, KernelObject refcounting, concurrency redesign, lock/safety enforcement, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
+
 Full roadmap archived in `ROADMAP.md` and `README_done.md`.
 
 ---
