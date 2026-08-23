@@ -9,6 +9,10 @@ For any non-trivial code modification or user request, you MUST adhere strictly 
 
 1. **PHASE 1: PLANNING (Implicit Mandatory Step)**
    - Do NOT write or edit code directly.
+   - Every non-trivial task corresponds to a GitHub Issue (see "GitHub Issue
+     Tracking" below). If the user prompt has no issue yet, the developer files
+     one FIRST (via `.github/ISSUE_TEMPLATE/` schema) — the issue number anchors
+     all subsequent work.
    - Delegate the request first to the `planner` subagent (see `PROMPT-planning.md`).
    - Wait for the plan and analyze the architecture requirements.
 
@@ -19,6 +23,8 @@ For any non-trivial code modification or user request, you MUST adhere strictly 
    - Invoke the `auditor` subagent (see `PROMPT-audit.md`) to review the modified files against safety rules.
    - Fix any rejected code immediately if the auditor finds flaws.
    - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
+   - After the final decision, post the audit evidence on the issue: report file
+     path (`audits/report-<ts>.md`) + `DECISION: APPROVED|REJECTED` as a comment.
 
 ### Role Model (who triggers what)
 
@@ -66,6 +72,12 @@ If the branch does not match the intended role, do not proceed.
   - Only close an issue when: implementation done + audit APPROVED + relevant test classes pass 0 failures.
 - Labels taxonomy: `bug`, `feature`, `kernel:<subsystem>`, `severity:S1|S2|S3`, `sil3-relevant`.
 - Issue templates live in `.github/ISSUE_TEMPLATE/` — new bugs/features reported by the user are filed via these schemas.
+- **Roadmap handling:** `ROADMAP.md` contains pointers only (guardrails, issue
+  table, phase overview) — NEVER add or check off work items in it. Version
+  grouping happens via GitHub Milestones; completed milestone history is
+  appended to `ROADMAP_done.md` at release time only.
+- Work selection order: severity:S1 bugs → severity:S2 bugs → Milestone issues
+  (current version) → feature backlog.
 
 ## Communication
 - Be concise: no conversational filler, greetings, or post-completion summaries
