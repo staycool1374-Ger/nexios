@@ -76,6 +76,9 @@ If the branch does not match the intended role, do not proceed.
   table, phase overview) — NEVER add or check off work items in it. Version
   grouping happens via GitHub Milestones; completed milestone history is
   appended to `ROADMAP_done.md` at release time only.
+- **Test-case design docs:** the `testcases-*.md` files are design documents
+  and stay in-repo; their PROGRESS is tracked as GitHub Issues "Test coverage:
+  <version>" (checklist per test module). See PROMPT-testdev.md §1.
 - Work selection order: severity:S1 bugs → severity:S2 bugs → Milestone issues
   (current version) → feature backlog.
 
