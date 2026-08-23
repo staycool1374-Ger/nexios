@@ -39,6 +39,43 @@ After `AGENTS.md` routes a session to a role, that role drives the pipeline:
 - The planner and auditor are pure subagents: they never call each other and
   never call the developer; they return their result to the developer only.
 
+## Workflow State Machine (explicit transitions, mechanically gated)
+
+Every issue-driven cycle moves through the following states. Transitions have
+hard entry/exit criteria; `scripts/gate.py` enforces the mechanical ones.
+Rules written here are descriptions; rules enforced by the gate are invariants.
+
+```
+ISSUE_OPEN -> PLANNED -> IN_PROGRESS -> AUDITED -> VERIFIED -> CLOSED -> FEEDBACK
+```
+
+| State | Exit criteria |
+|---|---|
+| ISSUE_OPEN | Issue filed via template, labeled, milestone set |
+| PLANNED | planner subagent returned a plan; architecture questions answered or raised as blocking comments on the issue |
+| IN_PROGRESS | code changes complete; diff builds (`make build` green) |
+| AUDITED | auditor subagent posted evidence on the issue: report path + `DECISION: APPROVED` |
+| VERIFIED | relevant test classes pass 0 failures; test-history.txt updated |
+| CLOSED | `scripts/gate.py check-close <issue>` passes; issue closed with `closes #<n>` in the merge commit |
+| FEEDBACK | knowledge refresh done — see below |
+
+### FEEDBACK transition (mandatory after every cycle)
+
+Closing an issue is NOT the end of the cycle. Before starting new work:
+
+1. **Adapt new background knowledge:** append an entry to
+   `prompts/LEARNINGS.md` (format documented there): what was learned,
+   where it is now anchored (spec/AGENTS.md/comment).
+2. **Refresh the knowledge base:** if the cycle invalidated anything in
+   `prompts/AGENTS-KERNEL-BRIEFING.md`, STATE.md, or existing specs, update
+   them now — stale docs are a defect.
+3. **Re-surface CODING_STYLE.md:** name the style rules that were relevant to
+   this cycle's changes in the LEARNINGS entry so they stay in active focus
+   for the next session.
+
+Gate: `scripts/gate.py check-feedback <issue>` verifies the LEARNINGS entry
+exists for the closed issue and fails otherwise.
+
 ## Branch Safeguard
 Before writing or modifying kernel tests, run `git branch --show-current`:
 - If `main` → production development
