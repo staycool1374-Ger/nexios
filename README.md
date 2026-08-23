@@ -42,6 +42,10 @@ NexIOS RTOS is an independent, ground-up implementation of a real-time operating
 
 ## What's different about NexIOS
 
+**The core design goal of NexIOS is to execute any user application (ELF
+binary) as a dedicated, fully isolated user-task — scheduled deterministically,
+isolated in its own address space, and sandboxed without re-compiling.**
+
 Most hobby and embedded RTOS projects (FreeRTOS, Zephyr, STK) are **scheduler
 libraries**: threads share one address space and any task can corrupt any
 other. NexIOS takes the operating-system path:
@@ -56,6 +60,12 @@ other. NexIOS takes the operating-system path:
   can prove*.
 - **Deterministic core** — zero dynamic heap allocation on real-time paths,
   O(1) scheduling decisions, RAII-enforced interrupt windows (`IrqGuard`).
+- **AI-orchestrated development process** — every change passes a mandatory
+  three-agent pipeline (planner → developer → independent SIL 3 auditor) with
+  diff-based audits, in-kernel regression gates (873 debug / 84 release tests),
+  and full audit-trail documentation. NexIOS doubles as a long-running case
+  study: how far can structured LLM orchestration go in building a
+  safety-critical system?
 
 <p align="center">
   <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
