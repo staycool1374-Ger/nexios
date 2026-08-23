@@ -51,6 +51,22 @@ If the branch does not match the intended role, do not proceed.
 - Read `CODING_STYLE.md` — mandatory for all code changes in every role
 - Current work state (objective, completed phases, next move): see `STATE.md`
 
+## GitHub Issue Tracking (source of truth for bugs & features)
+- Repo: `staycool1374-Ger/nexios` (use `gh` CLI; `export PATH="/opt/homebrew/bin:$PATH"` if `gh` is not found).
+- **Open bugs and feature work are tracked as GitHub Issues — NOT in BUGS.md.**
+  BUGS.md is a historical archive of resolved bugs only; never add new open items to it.
+- **Information acquisition (developer, before planning/implementing):**
+  - List open work: `gh issue list -R staycool1374-Ger/nexios --state open`
+  - Read the full issue before working on it: `gh issue view <n> -R staycool1374-Ger/nexios --comments`
+  - Check severity/subsystem labels to prioritize (`severity:S1` > `severity:S2` > `severity:S3`; critical S1/S2 bugs block feature work).
+- **Keeping state consistent (developer, during/after work):**
+  - When starting an issue, assign yourself and comment that work has begun (with branch name).
+  - Post progress notes on the issue (audit decision, test results with counts) instead of editing local files.
+  - Reference issues in commits: include `#<n>` in the commit message; `fixes #<n>` / `closes #<n>` auto-closes the issue on push to main.
+  - Only close an issue when: implementation done + audit APPROVED + relevant test classes pass 0 failures.
+- Labels taxonomy: `bug`, `feature`, `kernel:<subsystem>`, `severity:S1|S2|S3`, `sil3-relevant`.
+- Issue templates live in `.github/ISSUE_TEMPLATE/` — new bugs/features reported by the user are filed via these schemas.
+
 ## Communication
 - Be concise: no conversational filler, greetings, or post-completion summaries
 - Speak only in executable commands, concise error logs, or direct code blocks

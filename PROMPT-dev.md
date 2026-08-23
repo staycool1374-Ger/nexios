@@ -60,9 +60,13 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - See AGENTS.md for Circuit Breaker limits.
 
 ### 5. Bug Tracking & Documentation Updates
-- Log new failures in `BUGS.md` using schema: ID, Description, Severity, Domain, Status.
+- **Bugs are tracked as GitHub Issues**, not in BUGS.md (see AGENTS.md "GitHub Issue Tracking"):
+  - New failure found during development: file an issue
+    `gh issue create -R staycool1374-Ger/nexios --title "<short>" --label bug --body "..."`.
+  - Progress, audit decisions and test counts are posted as comments on the issue.
+  - Commit messages reference the issue (`#<n>`; `fixes #<n>` auto-closes on push).
 - Update `LESSONS.md` with compressed hardware/architectural insights if not trivial.
-- Sync docs (`README.md`, `ROADMAP.md`, `BUGS.md`).
+- Sync docs (`README.md`, `ROADMAP.md`).
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
 
 ### ResourceTracker (Strict Awareness)
