@@ -12,11 +12,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
+  <img src="https://img.shields.io/badge/tests-873%20debug%20%7C%2084%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
-  <img src="https://img.shields.io/badge/arch-x86__64-1f425f?style=flat-square" alt="x86_64"/>
-  <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square&logo=clockifier" alt="Hard Real-Time"/>
-  <img src="https://img.shields.io/badge/concurrency-RAII%20guarded-2ea44f?style=flat-square" alt="RAII Concurrency"/>
-  <img src="https://img.shields.io/badge/tests-881%20passing-2ea44f?style=flat-square" alt="881 Tests Passing"/>
+  <img src="https://img.shields.io/badge/arch-x86__64%20%7C%20ARM64%2FRISCV%20planned-1f425f?style=flat-square" alt="x86_64"/>
+  <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
+  <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
+  <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
+  <img src="https://img.shields.io/badge/version-v0.4.2--dev-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -38,7 +41,25 @@ NexIOS RTOS is an independent, ground-up implementation of a real-time operating
 ---
 
 ## What's different about NexIOS
-The core design goal of NexIOS is to execute any user application (ELF binary) as a dedicated, fully isolated user-task, scheduled deterministically, isolated in its own address space and sandboxed without re-compiling.
+
+Most hobby and embedded RTOS projects (FreeRTOS, Zephyr, STK) are **scheduler
+libraries**: threads share one address space and any task can corrupt any
+other. NexIOS takes the operating-system path:
+
+- **MMU-isolated processes** — every user ELF runs as a dedicated task in its
+  own 4-level page-table space with guard pages, scheduled deterministically,
+  sandboxed without recompilation.
+- **Capability-based security (CSpace)** — tasks hold *capabilities* to kernel
+  objects (endpoints, frames, IRQs, Untyped memory). Grant/copy/mint/revoke
+  semantics; no ambient authority: a syscall without the matching capability
+  fails. Most monolithic kernels check *who you are*; NexIOS checks *what you
+  can prove*.
+- **Deterministic core** — zero dynamic heap allocation on real-time paths,
+  O(1) scheduling decisions, RAII-enforced interrupt windows (`IrqGuard`).
+
+<p align="center">
+  <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
+</p>
 
 ---
 
@@ -97,19 +118,8 @@ make renode-test          # Renode CI validation
 
 ### Build Architecture
 
-```
-  [ Userspace Apps ] <─── Ring 3 Isolation
-────── [ Syscall Interface: int 0x82 (47 syscalls) ] ──────
-  [ Shell (Kernel Task, 36 built-ins) ]  [ RMS Scheduler        ]
-  [ VFS / Initrd / Devfs / Procfs / FAT32 ] [ Priority IPC Mailbox]
-  [ Virtual Memory (VMM, 4-level PT)    ]  [ Notify & Event Groups]
-  [ O(1) PID→TCB Hash Table             ]  [ Priority Inheritance ]
-  [ Physical Memory (PMM, Buddy Alloc)   ]  [ Slab Alloc (MemPool) ]
-  [ Hardware: Serial, KBD, Framebuffer,   ]  [ ATA PIO, PIT, RTC    ]
-  [ PCI, Virtio, ACPI                    ]  [ RNG, FPU Lazy Switch ]
-  [ Gcov, Driver Registry, Integrity     ]  [ Deadlock Detection   ]
-═════════════ Monolithic Kernel (Ring 0) ═════════════
-```
+A detailed architecture diagram is shown above ("What's different about NexIOS");
+the interactive SVG version lives in [`docs/nexios-architecture.html`](docs/nexios-architecture.html).
 
 ---
 
