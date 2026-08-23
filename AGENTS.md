@@ -1,21 +1,38 @@
 # Global Operating Rules (all roles, always active)
 
-# MANDATORY PIPELINE WORKFLOW
+Mandatory reading for every role and session: `CODING_STYLE.md` — all coding,
+safety, and error-handling rules defined there apply unconditionally.
+
+## MANDATORY PIPELINE WORKFLOW
 
 For any non-trivial code modification or user request, you MUST adhere strictly to the following 3-step execution pipeline:
 
 1. **PHASE 1: PLANNING (Implicit Mandatory Step)**
    - Do NOT write or edit code directly.
-   - Delegate the request first to the `planner` subagent.
+   - Delegate the request first to the `planner` subagent (see `PROMPT-planning.md`).
    - Wait for the plan and analyze the architecture requirements.
 
 2. **PHASE 2: IMPLEMENTATION**
    - Execute the code changes strictly adhering to the plan generated in Phase 1.
 
 3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step)**
-   - Invoke the `auditor` subagent (Nemotron) to review the modified files against safety rules.
+   - Invoke the `auditor` subagent (see `PROMPT-audit.md`) to review the modified files against safety rules.
    - Fix any rejected code immediately if the auditor finds flaws.
    - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
+
+### Role Model (who triggers what)
+
+After `AGENTS.md` routes a session to a role, that role drives the pipeline:
+
+- The **developer** is the ORCHESTRATOR of the pipeline.
+  After loading `PROMPT-dev.md`, the developer triggers the full chain:
+  `planner → developer → auditor`.
+  1. Developer calls the `planner` subagent with the task (Phase 1).
+  2. Developer implements the plan itself (Phase 2).
+  3. Developer calls the `auditor` subagent on the resulting diff (Phase 3).
+- The planner and auditor are pure subagents: they never call each other and
+  never call the developer; they return their result to the developer only.
+
 ## Branch Safeguard
 Before writing or modifying kernel tests, run `git branch --show-current`:
 - If `main` → production development
@@ -31,6 +48,8 @@ If the branch does not match the intended role, do not proceed.
 - If `quality engineer` (`testbed` branch): read `PROMPT-testdev.md` for full role instructions
 - If neither: halt
 - Also read `AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
+- Read `CODING_STYLE.md` — mandatory for all code changes in every role
+- Current work state (objective, completed phases, next move): see `STATE.md`
 
 ## Communication
 - Be concise: no conversational filler, greetings, or post-completion summaries
@@ -153,11 +172,11 @@ evidence-backed. Do not stack changes across steps.
 
 ## Debugging Notes (historical)
 - **Release build gotchas:** framebuffer alpha channel (set byte 3 to 0xFF for bpp>24); serial deadlock from VFS daemon crash — use kernel shell as fallback; QWERTY scancodes are correct, AZERTY is QEMU-on-macOS host mapping
-- **Debug runtime issues:** use `make run-release` (not `make release`), build flags differ
+- **Debug runtime issues:** use the release build via `make execute-test x86_64 release <class>` — build flags differ from debug
 - **Crash reproduction:** simulate user input with `expect` scripts; strip components (test_fork, shell, release tests) to isolate
 - **Page-table fork bugs:** `clone()` shares PDPT/PD/PT pages — any `map_page_in_pml4` on child corrupts parent; fix: private PDPT copy for stack region
 - **Debug context-switch ring buffer** (`CONFIG_DEBUG`): each TCB has `debug_switch_ring[4]` — inspect via `p current->debug_switch_ring[current->debug_switch_idx % 4]`
-- **GDB debugging:** `make gdb` launches QEMU with GDB stub on `:1234`; connect with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
+- **GDB debugging:** use `make debug-test x86_64 debug all tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
 - **UART FIFO overflow:** 16-byte FIFO capacity; drain between write bursts; release tests use external expect scripting so only affects kernel self-test loopback
 
 ## Release Procedure
@@ -203,61 +222,3 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
-## Active Summary
-### Objective
-- Make `make build` green (check-style error gate) after the scheduler-deadlock fix and the full style/clang-tidy cleanup. Pivoted from "fix everything" to the "cheap high-value path: branch-clone fixes + checker exemptions so make build is green".
-- **DONE (2026-08-14):** Global-variable encapsulation refactor (7 phases, all committed + SIL 3 approved):
-  `src/kernel/core/global_state.{hpp,cpp}` is the single definition point for cross-TU kernel globals, grouped into BootState / FaultState / TestState / AsmSwitchState / VfsState / NetState, accessed via verified getters/setters (`verify_and_write`: IDEMPOTENT/BOOT_ONLY/RANGE_CHECKED). `g_dmesg`/`g_klog` → `DmesgService`/`KlogService` singletons. Full gates: debug `all` 870/870, release `all` 84/84.
-
-### Important Details
-- Branch `main`. Baseline `2f1a7faf`; refactor commits `8334a120`..`f37b3e2d`.
-- `make build` = `check-style debug`. check-style exits 1 ONLY when validate_style.py returns rc==1, which happens only when ERRORS > 0 (`return 1 if errors else 0` at tools/validate_style.py:979). Warnings do NOT fail the build.
-- clang-tidy is non-blocking (`|| true` in Makefile, line ~917).
-- 517 style WARNINGS remain (descriptive_names 354, ref_over_ptr 105, naming 46, formatting 12) — these do NOT block `make build`.
-- 26 clang-tidy warnings remain (non-blocking).
-- Build verified: `make debug NO_LTO=1` produces `debug/jarvis-rtos.iso` cleanly (clang-tidy prints only warnings).
-- **Pre-existing H2 deferred-switch race** (BUGS.md, RE-OPENED before this refactor): causes ~50% flaky TIMEOUT/PANIC in `ipc_core`/`elf_loader`/`all`/`selftest`. CONFIRMED reproducible on baseline `2f1a7faf` — NOT caused by the refactor. The `all` gate passes 870/870 when the flake doesn't trigger.
-
-### Work State
-#### Completed
-- **GLOBAL-VARIABLE ENCAPSULATION REFACTOR (2026-08-14, commits `8334a120`..`f37b3e2d`, SIL 3 approved):**
-  - **Phase 1** (`1b569a8c`): dead code + linkage hygiene — removed `g_boot_ns` (zero readers); made `g_virtio_net_dev`, `g_h2_ring`/`g_h2_idx`, `fat32_root_vnode`, `g_watchdog_*` static/TU-local; deleted stale `scheduler.cpp.bak*`.
-  - **Phase 2** (`a99bf374`): `g_dmesg` → `log::DmesgService`, `g_klog` → `log::KlogService` (Meyers singletons, private ctor + buffer); `dmesg_push*` macros → inline fns; all consumers migrated.
-  - **Phase 3** (`75a47590`): `src/kernel/core/global_state.{hpp,cpp}` created — single definition point; `verify_and_write<T>` (IDEMPOTENT/BOOT_ONLY/NEVER_WRITE rules + CONFIG_DEBUG audit ring); BootState/FaultState/TestState accessors; duplicate defs + unused externs removed (kernel.hpp/test.hpp/syscall.hpp/test_isolate.hpp).
-  - **Phase 4** (`43dd2f2d`): VfsState — `fat32_partition_instance` → `try_set_fat32_partition` (RANGE_CHECKED: null or kernel-half). Filesystem singletons stay module-owned (documented).
-  - **Phase 5** (`34d7cf2d`): NetState — `g_nic` → `try_set_nic` (RANGE_CHECKED). Daemon PIDs left file-static (already accessor-wrapped).
-  - **Phase 6** (`e06790ec`): AsmSwitchState — 14 deferred-switch globals (scheduler_save_rsp_to, isr_nesting_depth, fpu_owner, …) moved to global_state.cpp `extern "C"` block, byte-identical symbols for isr_stubs.asm; `kernel::fpu_owner` qualifier fixes.
-  - **Phase 7** (`f37b3e2d`): docs + full gates — **debug `all` 870/870 (trace ON), release `all` 84/84 (trace OFF)**.
-- Scheduler deadlocks fixed + committed (`dfc3aec`): pop_front cycle-guard, rebuild_ready_queue flag-clear, ready_queue_manager in_ready_queue_ maintenance + restore_pod, wake_waiting_parent, reap test, TEMP DEBUG removed. 16 runs clean.
-- Style errors 128 → 0: added `#pragma once` to 105 headers; fixed 117 `init_required` value-initializers; fixed 2 `no_const_cast` (block_device.hpp/.cpp param type, virtio_blk.cpp staging buffer); added `arch::pause()` to 5 infinite loops.
-- Checker false-positive fixes (tools/validate_style.py): skip assembly (`;`, .S/.asm); placement-new; `break`/`return` in `while(true)`; `wfi` halt loops.
-- clang-format applied to 297 files via new `.clang-format` (ColumnLimit 80, Attach braces, 4-space, SortIncludes false, BreakStringLiterals false); build verified clean.
-- Cheap-high-value path DONE: fixed 2 real `branch-clone` (scheduler.cpp can_reap ~698-707, fat32_fs.cpp SEEK_END/default); disabled 3 clang-tidy checks in Makefile (performance-no-int-to-ptr, bugprone-reserved-identifier, bugprone-easily-swappable-parameters).
-- MemoryChecker in tools/validate_style.py REWRITTEN to a brace-depth-aware function-nesting stack (func_stack + pending_func) with: boot-alloc exemption set (_boot_alloc_funcs: AhciDriver::probe, AtaPioDriver::probe_first_drive, VirtioBlkDriver::probe, virtio_net_probe, higherhalf_entry); control-keyword exclusion (_ctrl_keywords); skip of `#`/comment lines; and `\b` word boundaries on `_new_delete` (r"\bnew\b\s|\bdelete\b\s|\bmalloc\s*\(|\bfree\s*\(") to stop false matches on `is_free(`/`bufpool_free(`/`track_*_free(`.
-- VERIFIED: `make check-style` → Errors: 0, Passed. `make debug NO_LTO=1` → ISO built cleanly.
-
-#### Active
-- (none outstanding) — all 7 refactor phases committed; full gates green.
-
-#### Blocked
-- (none)
-
-### Next Move
-- Optional: reduce the 517 non-blocking style warnings and 26 clang-tidy warnings.
-- Tracked separately: the pre-existing H2 deferred-switch race (BUGS.md, RE-OPENED) — ~50% flaky TIMEOUT/PANIC in ipc_core/elf_loader/all/selftest, reproducible on baseline.
-
-### Relevant Files
-- src/kernel/core/global_state.{hpp,cpp}: single definition point for all cross-TU kernel globals; verify_and_write (IDEMPOTENT/BOOT_ONLY/RANGE_CHECKED) + CONFIG_DEBUG audit ring; BootState/FaultState/TestState/AsmSwitchState/VfsState/NetState accessors.
-- src/kernel/log/dmesg.{hpp,cpp}: DmesgService singleton (was g_dmesg global); DmesgBuffer stays public for tests.
-- src/kernel/log/ring_buffer.{hpp,cpp}: KlogService singleton (was g_klog global).
-- tools/validate_style.py: MemoryChecker rewritten (brace-depth stack, boot exemption, ctrl-keyword skip, `\b` boundaries); checker false-positive fixes.
-- .clang-format: new, clang-format config.
-- Makefile: CLANG_TIDY_CHECKS excludes 3 false-positive checks (line ~189).
-- src/kernel/task/scheduler.cpp: can_reap branch-clone dedup (~698-707); arch::pause() idle loop; deadlock fixes (committed dfc3aec).
-- src/kernel/vfs/fat32_fs.cpp: SEEK_END/default branch-clone fix.
-- src/kernel/driver/block_device.hpp / block_device.cpp: const_cast removed.
-- src/kernel/driver/virtio_blk.cpp: staging buffer replaces const_cast.
-- 105 kernel header files: #pragma once.
-- 297 kernel .cpp/.hpp/.h files: clang-format applied.
-- BUGS.md: elf_loader H2-family flake logged (2026-08-14).

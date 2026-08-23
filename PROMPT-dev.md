@@ -56,7 +56,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 * When writing new stub tests, a pseudocode block is required inside the test function to document the intended test flow.
 
 ### 4. Verification & QEMU Validation
-- Run automated test suites via `make execute-test x86 debug all` (or `selftest` for CI gate).
+- Run automated test suites via `make execute-test x86_64 debug all` (or `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
 
 ### 5. Bug Tracking & Documentation Updates
@@ -73,7 +73,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
-- Run `make execute-test x86 debug all` — this launches the kernel in QEMU and runs ALL registered tests via `run_registered(0)` (debug build, `all` test class). All must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the serial output shows the full test count (600+ tests, not ~96).
+- Run `make execute-test x86_64 debug all` — this launches the kernel in QEMU and runs ALL registered tests via `run_registered(0)` (debug build, `all` test class). All must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the serial output shows the full test count (600+ tests, not ~96).
 - Check `testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
@@ -117,6 +117,34 @@ Minimize information exchange by passing **diff patches**, never full file conte
    patch does not apply cleanly, resolve its objections manually and re-generate
    `audits/pending_patch.diff`.
 
+## Auditor Output Files & Handling
+
+The auditor produces exactly two artifacts per audit iteration:
+
+1. **`audits/report-<utc-timestamp>.md`** — the structured audit report:
+   - Header: patch path and list of files touched.
+   - `## FINDINGS` — severity-classified entries: `[S1]` blocker (safety/correctness
+     violation), `[S2]` major (likely defect), `[S3]` note (style/hardening), each
+     with `file:line`, the violated rule, and a one-sentence justification.
+   - Final line: `DECISION: APPROVED|REJECTED`. Rule: any S1/S2 ⇒ REJECTED;
+     S3-only ⇒ APPROVED.
+2. **`audits/rejected_patch.diff`** (only when REJECTED) — a machine-applicable
+   corrective patch (`git apply`-able, relative to the current worktree).
+
+**Developer handling protocol:**
+- On `DECISION: APPROVED`: record the report filename in the commit message or
+  changelog as evidence, then proceed. Do NOT modify the report.
+- On `DECISION: REJECTED`: read ALL findings first (do not cherry-pick S1s and
+  skip S2s). Apply `audits/rejected_patch.diff` with `git apply`; if it does not
+  apply cleanly, implement the corrections manually following the findings.
+  Re-run your own verification (`make execute-test x86_64 debug <class>`),
+  regenerate `audits/pending_patch.diff`, and resubmit for a fresh audit
+  (new iteration, goto step 1 of the PARALLEL AUDIT TRIGGER RULE).
+- Never delete or overwrite an existing `report-*.md` — reports are immutable
+  audit trail. A new iteration writes a new timestamped file.
+- If the auditor's reply lacks a DECISION line or a valid report file, treat the
+  audit as INCOMPLETE: do not merge, request the missing artifact explicitly.
+
 ---
 
 # New Test Infrastructure (v0.2.19+)
@@ -141,7 +169,7 @@ silently consumed by a match-all rule at the end of the Makefile.
 | `make debug-shell <arch> <build> none <gdb-script> <shell-cmds>` | GDB + serial interaction from commands file |
 
 **Parameters:**
-- `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64` (shorthand accepted)
+- `<arch>` — `x86_64` (the only supported architecture; do not use `x86`, `arm`, or other values)
 - `<build>` — `debug`|`release`
 - `<class>` — `none` (interactive shell, no tests) | `selftest` (safe class, CI gate) | `all` (full suite) | `<name>` (specific class)
 - `<gdb-script>` — path to GDB batch script (e.g. `tools/gdb/test-batch.gdb`)
@@ -149,13 +177,13 @@ silently consumed by a match-all rule at the end of the Makefile.
 
 **Examples:**
 ```
-make execute-test x86 debug none           # interactive QEMU (was: make run-qemu)
-make execute-test x86 debug all            # full debug suite (was: make test-all-debug)
-make execute-test x86 release all          # full release suite (was: make test-all-release)
-make execute-test x86 debug selftest       # CI gate (was: make test-selftest)
-make execute-test x86 debug fat32          # specific class (was: make test-class CLASS=fat32)
-make debug-test x86 debug all tools/gdb/test-batch.gdb  # GDB panic capture (was: make test-gdb)
-make debug-shell x86 debug none tools/gdb/init.gdb cmds.txt  # GDB + serial interaction
+make execute-test x86_64 debug none           # interactive QEMU
+make execute-test x86_64 debug all            # full debug suite
+make execute-test x86_64 release all          # full release suite
+make execute-test x86_64 debug selftest       # CI gate
+make execute-test x86_64 debug fat32          # specific class
+make debug-test x86_64 debug all tools/gdb/test-batch.gdb  # GDB panic capture
+make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt  # GDB + serial interaction
 ```
 
 ## Host-Side Watchdog
@@ -167,8 +195,8 @@ The serial log is captured via `tee` to `/tmp/jarvis-serial.log` for all automat
 | Step | Target | Timeout |
 |------|--------|---------|
 | Build | `make debug` | — |
-| Selftest gate | `make execute-test x86 debug selftest` (safe class) | `timeout 360` — Makefile expect timeout 120s |
-| Full suite | `make execute-test x86 debug all` (all classes) | `timeout 360` — Makefile expect timeout 180s |
+| Selftest gate | `make execute-test x86_64 debug selftest` (safe class) | `timeout 360` — Makefile expect timeout 120s |
+| Full suite | `make execute-test x86_64 debug all` (all classes) | `timeout 360` — Makefile expect timeout 180s |
 
 The full suite step runs only if selftest passes (`if: success()`). Both steps use the host-side watchdog and expect-based result parsing (extracts PLANNED/EXECUTED/FAILED from the TEST SUMMARY block).
 
@@ -202,10 +230,10 @@ Summary block (after all tests):
 Both `run_filtered()` and `run_registered()` drain the UART TX FIFO (wait for LSR bits 5&6) before QEMU exit to prevent report truncation.
 
 ## GDB Debugging
-- **Batch surveillance (CI):** `make debug-test x86 debug all tools/gdb/test-batch.gdb`
-- **Custom GDB script:** `make debug-test x86 debug <class> <path-to-gdb-script>`
-- **Interactive GDB + serial:** `make debug-shell x86 debug none tools/gdb/init.gdb cmds.txt`
-- **Manual (two terminals):** `make execute-test x86 debug none` in terminal 1, then `gdb build/kernel-debug.elf -ex 'target remote :1234' -x tools/gdb/init.gdb` in terminal 2
+- **Batch surveillance (CI):** `make debug-test x86_64 debug all tools/gdb/test-batch.gdb`
+- **Custom GDB script:** `make debug-test x86_64 debug <class> <path-to-gdb-script>`
+- **Interactive GDB + serial:** `make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt`
+- **Manual (two terminals):** `make execute-test x86_64 debug none` in terminal 1, then `gdb build/kernel-debug.elf -ex 'target remote :1234' -x tools/gdb/init.gdb` in terminal 2
 
 ## Known Test Patterns
 
@@ -232,7 +260,7 @@ All mandatory coding rules, safety constraints, and error-handling patterns are 
 
 # Diagnostic Verification
 If a test fails or a regression is detected:
-- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance targets (`make test-gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
+- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance target (`make debug-test x86_64 debug all tools/gdb/test-batch.gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
 - Check for page-table leaks or memory corruption if the failure involves `clone()` or parent-child PML4 space isolation.
 
 # Test Execution Rules (MANDATORY)
