@@ -557,6 +557,14 @@ struct TaskControlBlock {
     static errors::TaskError clone_err(uint64_t *regs,
                                        TaskControlBlock *&out_tcb);
 
+    /// @brief Destroys a TCB and returns its MemPool block (H-5: single
+    ///        pool-aware teardown path replacing raw `delete` on RT error
+    ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
+    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
+    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
+    ///        Mirrors operator delete() semantics exactly.
+    static void destroy(TaskControlBlock *tcb) noexcept;
+
     /// @brief Save the current register context into this TCB.
     /// @param rsp Reference to current stack pointer (updated on save).
     void save_context(uint64_t &rsp) noexcept;

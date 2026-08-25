@@ -936,7 +936,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 #if CONFIG_MEMORY_BUDGET
     if (!Scheduler::reserve_memory_pages(stack_pages)) {
         Logger::warn("TCB::create: budget OOM for %zu-page stack", stack_pages);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
 #endif
@@ -946,7 +946,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 #if CONFIG_MEMORY_BUDGET
         Scheduler::release_memory_pages(stack_pages);
 #endif
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
 
@@ -1023,7 +1023,7 @@ done_stack:
     tcb->page_table_ = VMM::clone_kernel_pml4();
     if (!tcb->page_table_) {
         ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
 
@@ -1144,7 +1144,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     uint64_t kstack_phys = PMM::alloc_contiguous(kernel_stack_pages);
     if (!kstack_phys) {
         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
     tcb->stack_phys_ = kstack_phys;
@@ -1176,7 +1176,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     uint64_t ustack_phys = PMM::alloc_user_contiguous(user_stack_pages);
     if (!ustack_phys) {
         ASSERT(errors::TaskError::TASK_ERR_USTACK_ALLOC);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
 
@@ -1186,7 +1186,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
         size_t pages = (user_stack_size + 4095) / arch::PAGE_SIZE;
         for (size_t i = 0; i < pages; ++i)
             PMM::free_page(ustack_phys + i * arch::PAGE_SIZE);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
     tcb->page_table_ = pml4;
@@ -1386,7 +1386,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     uint64_t kstack_phys = PMM::alloc_contiguous(stack_pages);
     if (!kstack_phys) {
         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
-        delete tcb;
+        TaskControlBlock::destroy(tcb);
         return nullptr;
     }
     tcb->stack_phys_ = kstack_phys;
@@ -1482,7 +1482,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         uint64_t new_pml4 = PMM::alloc_page();
         if (!new_pml4) {
             ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
-            delete tcb;
+            TaskControlBlock::destroy(tcb);
             return nullptr;
         }
         tcb->page_table_ = new_pml4;
@@ -1499,7 +1499,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         // Deep-copy user entries from parent (walk, allocate, copy).
         if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {
             ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
-            delete tcb;
+            TaskControlBlock::destroy(tcb);
             return nullptr;
         }
 
@@ -1524,7 +1524,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         uint64_t ustack_phys = PMM::alloc_user_contiguous(ustack_pages);
         if (!ustack_phys) {
             ASSERT(errors::TaskError::TASK_ERR_USTACK_ALLOC);
-            delete tcb;
+            TaskControlBlock::destroy(tcb);
             return nullptr;
         }
         tcb->user_stack_ = ustack_phys;
@@ -1894,12 +1894,11 @@ TaskError TaskControlBlock::clone_err(uint64_t *regs,
     return out_tcb ? TASK_ERR_OK : TASK_ERR_OOM;
 }
 
-void TaskControlBlock::operator delete(void *ptr) noexcept {
-    if (!ptr)
+void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
+    if (!tcb)
         return;
-    auto *tcb = static_cast<TaskControlBlock *>(ptr);
     if (tcb->magic == TCB_MAGIC) {
-        // If the caller already called cleanup() before delete, state
+        // If the caller already called cleanup() before destroy, state
         // is REAPED and we must NOT cleanup/remove again — doing so
         // double-frees resources and corrupts the scheduler lists.
         if (tcb->state != TaskState::REAPED) {
@@ -1907,13 +1906,17 @@ void TaskControlBlock::operator delete(void *ptr) noexcept {
             Scheduler::remove_task(*tcb);
         }
         tcb->magic =
-            0; // Prevent double-free if caller re-enters operator delete
-        MemPool::free(ptr);
+            0; // Prevent double-free if caller re-enters the destroy path
+        MemPool::free(tcb);
         return;
     }
     if (tcb->magic == 0)
-        MemPool::free(ptr);
+        MemPool::free(tcb);
     // magic == 0xDD: reaper already freed it — skip silently.
+}
+
+void TaskControlBlock::operator delete(void *ptr) noexcept {
+    destroy(static_cast<TaskControlBlock *>(ptr));
 }
 
 } // namespace kernel

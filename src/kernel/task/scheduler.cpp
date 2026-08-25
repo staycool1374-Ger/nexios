@@ -2982,17 +2982,17 @@ void Scheduler::process_deferred_kills() noexcept {
             // Contract: SporadicServer::on_completion() (and on_activation /
             // consume / process_replenishments) must NEVER release the object.
             // The ScopedRef pins it across the call; the ownership reference
-            // (refcount==1) is dropped by the delete task → cleanup() →
+            // (refcount==1) is dropped by the destroy → cleanup() →
             // release_all_objects() below.  If a future change lets the SS
             // callback trigger teardown, extend this guard to cover the
-            // `delete task` statement instead.
+            // destroy() statement instead.
             kernel::ScopedRef ss_ref{task->get_sporadic_server()};
             task->get_sporadic_server()->on_completion(arch::Timer::ticks());
         }
 
         Logger::info("[DMD] Task %lu (%s) killed and cleaned up", task->id,
                      task->name);
-        delete task;
+        TaskControlBlock::destroy(task);
     }
     s_deferred_kill_count = 0;
 }
