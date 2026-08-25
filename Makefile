@@ -215,7 +215,8 @@ CLANG_TIDY_NCORES   := $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/nul
 # ----- ccache (optional, no-op if not installed) -----
 CCACHE := $(shell which ccache 2>/dev/null)
 # Prepend ccache-wrapper and include arch-stamp in hash so cross-arch
-# builds don't poison each other's cache.
+# builds don't poison each other's cache.  ARCH_STAMP is defined before
+# mk/rules.mk is included (see the arch-stamp check near BUILD_STAMP).
 CCACHE_EXTRAFILES := $(ARCH_STAMP)
 CXX := $(CCACHE) $(CXX)
 
@@ -300,6 +301,23 @@ endif
 BUILD_STAMP := build/.build-type
 
 # ------------------------------------------------------------------------------
+# Architecture stamp — checked at PARSE TIME (before mk/rules.mk -includes the
+# per-object .d dependency files).  If make evaluated object timestamps first,
+# a mid-build clean (as a rule prerequisite) would be too late: make would have
+# already committed to "object up to date" from the previous arch's .d files
+# and never rebuild it.  Cleaning here, before any dependency file is loaded,
+# guarantees every object is re-derived for the target architecture.
+# ------------------------------------------------------------------------------
+ARCH_STAMP := build/.arch-stamp
+_arch_stamp_now := $(shell cat $(ARCH_STAMP) 2>/dev/null)
+ifneq ($(_arch_stamp_now),$(ARCH))
+$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH)))
+$(shell rm -rf build initrd_root debug release profiling)
+$(shell rm -f $(shell find userspace -maxdepth 1 -name '*.elf' 2>/dev/null) src/kernel/test/test_registry.gen.hpp *.d build/fat32.img build/external)
+endif
+$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
+
+# ------------------------------------------------------------------------------
 # Shared build rules (pattern rules, libc, userspace, initrd)
 # ------------------------------------------------------------------------------
 include mk/rules.mk
@@ -316,16 +334,17 @@ TEST_SRC_FILES       := $(filter src/kernel/test/%.cpp, $(SRC_CXX))
 TEST_REGISTRY_DEPS   := $(TEST_SRC_FILES) $(TEST_REGISTRY_SCRIPT)
 
 # Write the file list to a temporary file so the Python script reads the
-# same files the build system compiles (no directory walk).
-TEST_FILE_LIST       := build/.test-file-list
+# same files the build system compiles (no directory walk).  Keyed per arch so
+# a cross-arch switch never consumes a stale file list.
+TEST_FILE_LIST       := build/.test-file-list-$(ARCH)
 
-$(TEST_FILE_LIST): $(TEST_SRC_FILES)
+$(TEST_FILE_LIST): $(TEST_SRC_FILES) | check-arch
 	@mkdir -p $(dir $@)
 	@printf '%s\n' $(TEST_SRC_FILES) > $@
 
 $(TEST_REGISTRY_GEN): $(TEST_FILE_LIST) $(TEST_REGISTRY_DEPS)
 	@printf '  %-7s %s\n' 'GEN' '$@'
-	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST)
+	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST) --arch $(ARCH)
 
 # Kernel link targets depend on the generated test registry header.
 # This ensures it exists even in sub-make invocations (e.g. release build).

@@ -59,9 +59,13 @@ static inline uint64_t current_sp() {
     uint64_t sp{};
     asm volatile("mov %%rsp, %0" : "=r"(sp));
     return sp;
-#elif defined(__aarch64__) || defined(__riscv)
+#elif defined(__aarch64__)
     uint64_t sp{};
     asm volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#elif defined(__riscv)
+    uint64_t sp{};
+    asm volatile("mv %0, sp" : "=r"(sp));
     return sp;
 #else
     return 0;

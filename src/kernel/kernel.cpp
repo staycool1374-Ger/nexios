@@ -675,11 +675,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             panic("CONFIG_KERNEL_PRIV_DATA_BASE overlaps kernel PML4 entry");
     }
 
-    // Map APIC MMIO pages and initialise the local/I/O APIC.
+    // Map APIC MMIO pages and initialise the local/I/O APIC (x86_64 only;
+    // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
+#if defined(CONFIG_ARCH_X86_64)
     if (arch::APIC::is_apic_supported()) {
         arch::APIC::map_mmio();
         arch::APIC::init();
     }
+#endif // CONFIG_ARCH_X86_64
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
     }

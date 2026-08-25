@@ -98,6 +98,7 @@ namespace kernel {
 /// spinning on task->state) observes completion.  Previously this fell into
 /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
 /// any caller that waits for termination (ipc_blocking test hang).
+#if defined(CONFIG_ARCH_X86_64)
 static void _task_trampoline(void (*entry)()) {
     entry();
     auto *self = Scheduler::current_task();
@@ -106,6 +107,7 @@ static void _task_trampoline(void (*entry)()) {
     for (;;)
         arch::hlt();
 }
+#endif
 
 /// @brief Allocates and initialises a SporadicServer for a daemon task
 ///        from the MemPool.  Idempotent (returns early if already set).
@@ -513,11 +515,19 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
 /// @brief Physical addresses of the 8 pre-allocated PT pages for the window.
 static uint64_t s_kstack_pt_pages[8] = {};
 
+#if defined(CONFIG_ARCH_X86_64)
 static void init_kstack_window();
 static void map_kstack_page(uint64_t virt, uint64_t phys);
 static void unmap_kstack_page(uint64_t virt);
+#endif
 
 static uint64_t alloc_kslot(uint64_t stack_size) {
+#if !defined(CONFIG_ARCH_X86_64)
+    // The kstack VA window (and its CR3/invlpg page-table wiring) is
+    // x86_64-only; other arches use the HHDM direct-map fallback.
+    (void)stack_size;
+    return 0;
+#else
     // Lazy init: pre-allocate page table pages on first call.
     // Must be called after PMM and VMM init (first create() is in
     // Scheduler::init(), well after both).
@@ -556,6 +566,7 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
         s_kslot_bump = va + slot_size;
         return va;
     }
+#endif // CONFIG_ARCH_X86_64
 }
 
 static void free_kslot(uint64_t va, uint64_t size) {
@@ -574,6 +585,7 @@ static void free_kslot(uint64_t va, uint64_t size) {
 // Kernel-stack window page table pool
 // ---------------------------------------------------------------------------
 
+#if defined(CONFIG_ARCH_X86_64)
 /// @brief Pre-allocate all page table pages for the kernel-stack window and
 ///        wire them into the kernel PML4.  Called once at boot, before any
 ///        snapshot is taken.
@@ -662,6 +674,7 @@ static void unmap_kstack_page(uint64_t virt) {
     pt[entry] = 0;
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
+#endif // CONFIG_ARCH_X86_64
 
 } // anonymous namespace
 
@@ -713,6 +726,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
         __builtin_memcpy(
             reinterpret_cast<void *>(arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
             src + off, arch::PAGE_SIZE);
+#if defined(CONFIG_ARCH_X86_64)
         // Flush the TLB for every window VA backed by this PT page.  invlpg
         // on an unmapped VA is a documented no-op (no exception).
         uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
@@ -722,6 +736,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
                          :
                          : "r"(base_va + e * arch::PAGE_SIZE)
                          : "memory");
+#endif // CONFIG_ARCH_X86_64
         off += arch::PAGE_SIZE;
     }
     __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
@@ -965,7 +980,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     // This dual-path design is certified-safe because the test environment
     // provides equivalent fault containment (complete memory rewind),
     // while production builds never take the HHDM fallback.
+    // The kslot VA window (and its CR3/invlpg wiring) is x86_64-only; on
+    // other arches alloc_kslot() returns 0 and the HHDM fallback below is
+    // always taken.
     // ------------------------------------------------------------------
+#if defined(CONFIG_ARCH_X86_64)
     if (!Scheduler::is_test_active()) {
         uint64_t slot_va = alloc_kslot(stack_size);
         if (slot_va) {
@@ -982,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
             goto done_stack;
         }
     }
+#endif // CONFIG_ARCH_X86_64
     tcb->kstack_slot_va_ = 0;
     tcb->kstack_slot_size_ = 0;
     {
@@ -990,7 +1010,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
         TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(stack_virt));
         tcb->kernel_stack_top = stack_virt + stack_size;
     }
+#if defined(CONFIG_ARCH_X86_64)
 done_stack:
+#endif
 
     // v0.4.0 MP-1.2: every kernel task gets a private kernel-half PML4.
     // clone_kernel_pml4() zeroes the user entries (0..255) and copies the
@@ -1133,9 +1155,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
         tcb->kstack_slot_va_ = slot_va;
         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
         uint64_t kstack_va = slot_va + 4096;
+#if defined(CONFIG_ARCH_X86_64)
         for (size_t i = 0; i < kernel_stack_pages; ++i)
             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
                             kstack_phys + i * arch::PAGE_SIZE);
+#endif
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
@@ -1377,9 +1401,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         tcb->kstack_slot_va_ = slot_va;
         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
         uint64_t kstack_va = slot_va + 4096;
+#if defined(CONFIG_ARCH_X86_64)
         for (size_t i = 0; i < stack_pages; ++i)
             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
                             kstack_phys + i * arch::PAGE_SIZE);
+#endif
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
@@ -1591,6 +1617,9 @@ TaskControlBlock *TaskControlBlock::find_child(uint64_t pid) noexcept {
 /// clone().
 ///        Only frees intermediate page-table pages (PD, PT), not leaf pages
 ///        (those are freed separately by the user_stack_ loop in cleanup()).
+///        The private stack PDPT is an x86_64 (4-level PML4/PDPT/PD/PT)
+///        concept; AArch64/RISC-V use different page-table shapes.
+#if defined(CONFIG_ARCH_X86_64)
 static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
     constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
     constexpr uint64_t PAGE_HUGE = 1ULL << 7;
@@ -1620,6 +1649,7 @@ static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
     PMM::free_page(pd_phys);
     PMM::free_page(pdpt_phys);
 }
+#endif // CONFIG_ARCH_X86_64
 
 /// @brief Releases all resources owned by the task.
 /// Unlinks from parent's child list, detaches from message-queue blocked lists,
@@ -1765,9 +1795,11 @@ void TaskControlBlock::cleanup() noexcept {
                            : ((STACK_SIZE + 4095) / arch::PAGE_SIZE);
         if (kstack_slot_va_) {
             uint64_t slot_va = kstack_slot_va_;
+#if defined(CONFIG_ARCH_X86_64)
             uint64_t stack_va = slot_va + 4096;
             for (size_t i = 0; i < pages; ++i)
                 unmap_kstack_page(stack_va + i * arch::PAGE_SIZE);
+#endif
             free_kslot(slot_va, kstack_slot_size_);
         }
         // Poison physical pages via HHDM before freeing.
@@ -1799,10 +1831,12 @@ void TaskControlBlock::cleanup() noexcept {
         // during clone) is fully reclaimed here — no leak.
         VMM::free_user_pages(page_table_);
         PMM::free_page(page_table_);
+#if defined(CONFIG_ARCH_X86_64)
         if (stack_pdpt_phys_) {
             free_stack_pdpt(stack_pdpt_phys_);
             stack_pdpt_phys_ = 0;
         }
+#endif // CONFIG_ARCH_X86_64
         page_table_ = 0;
     }
 

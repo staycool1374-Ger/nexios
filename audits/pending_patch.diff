@@ -1,723 +1,1076 @@
-diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
-index 80274cb5..3c12d933 100644
---- a/src/kernel/cap/cap.hpp
-+++ b/src/kernel/cap/cap.hpp
-@@ -127,4 +127,12 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst) noexcept;
- int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
-          uint32_t badge) noexcept;
+diff --git a/Makefile b/Makefile
+index 46d02784..8843a71d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -215,7 +215,8 @@ CLANG_TIDY_NCORES   := $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/nul
+ # ----- ccache (optional, no-op if not installed) -----
+ CCACHE := $(shell which ccache 2>/dev/null)
+ # Prepend ccache-wrapper and include arch-stamp in hash so cross-arch
+-# builds don't poison each other's cache.
++# builds don't poison each other's cache.  ARCH_STAMP is defined before
++# mk/rules.mk is included (see the arch-stamp check near BUILD_STAMP).
+ CCACHE_EXTRAFILES := $(ARCH_STAMP)
+ CXX := $(CCACHE) $(CXX)
  
-+/// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
-+///        capability of @p target_type, installed into @p cspace.  Iteration-1
-+///        supports Frame targets with an exact-size carve (ROADMAP 0.4.1
-+///        item 3).  Kernel-internal API (no syscall yet).
-+/// @return the new slot index, or -1 on any failure.
-+int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-+           size_t size, uint32_t rights) noexcept;
-+
- } // namespace kernel::cap
-diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
-index 06ea6caa..14c6f2c6 100644
---- a/src/kernel/cap/cap_types.hpp
-+++ b/src/kernel/cap/cap_types.hpp
-@@ -35,6 +35,7 @@ enum class CapType : uint8_t {
-     Endpoint = 2,
-     Frame = 3,
-     CNode = 4,
-+    Untyped = 5, ///< retype target (ROADMAP 0.4.1 item 3)
- };
+@@ -299,6 +300,23 @@ endif
+ # ------------------------------------------------------------------------------
+ BUILD_STAMP := build/.build-type
  
- /// @brief Rights bitmap, checked by the operation that consumes the cap.
-diff --git a/src/kernel/cap/untyped.cpp b/src/kernel/cap/untyped.cpp
-new file mode 100644
-index 00000000..da43b296
---- /dev/null
-+++ b/src/kernel/cap/untyped.cpp
-@@ -0,0 +1,146 @@
-+/*
-+ * NexIOS RTOS — Capability-Based Access Control (CSpace)
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
++# ------------------------------------------------------------------------------
++# Architecture stamp — checked at PARSE TIME (before mk/rules.mk -includes the
++# per-object .d dependency files).  If make evaluated object timestamps first,
++# a mid-build clean (as a rule prerequisite) would be too late: make would have
++# already committed to "object up to date" from the previous arch's .d files
++# and never rebuild it.  Cleaning here, before any dependency file is loaded,
++# guarantees every object is re-derived for the target architecture.
++# ------------------------------------------------------------------------------
++ARCH_STAMP := build/.arch-stamp
++_arch_stamp_now := $(shell cat $(ARCH_STAMP) 2>/dev/null)
++ifneq ($(_arch_stamp_now),$(ARCH))
++$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH)))
++$(shell rm -rf build initrd_root debug release profiling)
++$(shell rm -f $(shell find userspace -maxdepth 1 -name '*.elf' 2>/dev/null) src/kernel/test/test_registry.gen.hpp *.d build/fat32.img build/external)
++endif
++$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
 +
-+/// @file untyped.cpp
-+/// @brief Untyped memory object implementation (ROADMAP 0.4.1 item 3).
-+
-+#include <kernel/cap/untyped.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/memory/mempool.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/test/resource_tracker.hpp>
-+#include <kernel/nexios_config.h>
-+#include <kernel/arch/page_table.hpp>
-+
-+// Placement new (defined in lib/new.cpp, no <new> header in freestanding)
-+inline void *operator new(unsigned long, void *p) noexcept {
-+    return p;
-+}
-+
-+namespace kernel::cap {
-+
-+/// @brief Live Untyped object count, bounded by CONFIG_CAP_MAX_UNTYPED.
-+///        TU-local (post global-state-refactor convention).
-+static uint32_t g_live_untypeds = 0;
-+
-+UntypedMem *UntypedMem::create(size_t size, bool is_user, CapType target) {
-+    if (size == 0 || (size % arch::PAGE_SIZE) != 0)
-+        return nullptr;
-+    if (target != CapType::Frame)
-+        return nullptr; // iteration-1: Frame is the only retype target
-+    if (__atomic_load_n(&g_live_untypeds, __ATOMIC_RELAXED) >=
-+        static_cast<uint32_t>(CONFIG_CAP_MAX_UNTYPED))
-+        return nullptr;
-+
-+    size_t pages = size / arch::PAGE_SIZE;
-+    uint64_t phys = is_user ? PMM::alloc_user_contiguous(pages)
-+                            : PMM::alloc_contiguous(pages);
-+    if (!phys)
-+        return nullptr;
-+
-+    auto *ut = static_cast<UntypedMem *>(MemPool::alloc(sizeof(UntypedMem)));
-+    if (!ut) {
-+        for (size_t i = 0; i < pages; ++i)
-+            PMM::free_page(phys + i * arch::PAGE_SIZE);
-+        return nullptr;
-+    }
-+    new (ut) UntypedMem;
-+    ut->mark_pool_backed();
-+    ut->phys = phys;
-+    ut->size = size;
-+    ut->is_user = is_user;
-+    ut->retype_target = target;
-+    __atomic_fetch_add(&g_live_untypeds, 1U, __ATOMIC_RELAXED);
-+    kernel::test::ResourceTracker::instance().track_cap_object_add();
-+    return ut;
-+}
-+
-+bool UntypedMem::claim_once() noexcept {
-+    bool expected = false;
-+    return __atomic_compare_exchange_n(&retyped_, &expected, true, false,
-+                                       __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-+}
-+
-+bool UntypedMem::owns_region() const noexcept {
-+    return !__atomic_load_n(&retyped_, __ATOMIC_ACQUIRE);
-+}
-+
-+void UntypedMem::dispose() noexcept {
-+    // Free the region ONLY if this Untyped still owns it.  After a successful
-+    // retype the retyped capability (FrameCap) owns and frees the frames.
-+    if (owns_region() && phys != 0) {
-+        size_t pages = size / arch::PAGE_SIZE;
-+        for (size_t i = 0; i < pages; ++i)
-+            PMM::free_page(phys + i * arch::PAGE_SIZE);
-+    }
-+    if (__atomic_load_n(&g_live_untypeds, __ATOMIC_RELAXED) > 0)
-+        __atomic_fetch_sub(&g_live_untypeds, 1U, __ATOMIC_RELAXED);
-+    kernel::test::ResourceTracker::instance().track_cap_object_remove();
-+    MemPool::free(this);
-+}
-+
-+int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-+           size_t size, uint32_t rights) noexcept {
-+    if (!cspace)
-+        return -1;
-+    // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
-+    // alive across the transfer so dispose() cannot run mid-retype.
-+    KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
-+                               CAP_RIGHT_WRITE);
-+    if (!obj)
-+        return -1;
-+    auto *ut = static_cast<UntypedMem *>(obj);
-+
-+    // Validation must not consume the Untyped (retype can be retried).
-+    if (target_type != ut->retype_target || size != ut->size) {
-+        ut->release();
-+        return -1;
-+    }
-+
-+    // Claim the single retype.  Loser -> -1.
-+    if (!ut->claim_once()) {
-+        ut->release();
-+        return -1;
-+    }
-+
-+    // Build the target capability.  On MemPool exhaustion roll the claim back
-+    // (no other retype can be mid-flight while the guard is set) and keep the
-+    // region with the Untyped.
-+    FrameCap *fc = FrameCap::create(ut->phys, ut->size / arch::PAGE_SIZE,
-+                                    ut->is_user);
-+    if (!fc) {
-+        ut->reset_claim();
-+        ut->release();
-+        return -1;
-+    }
-+
-+    int idx = cspace->install(fc, CapType::Frame, rights);
-+    if (idx >= 0) {
-+        fc->release(); // drop the creator ref; the slot holds one
-+        ut->release();
-+        return idx;
-+    }
-+    // Install failed (e.g. table full): FrameCap::dispose returns the region
-+    // to PMM.  Fail-closed — the Untyped is spent (guard stays set).
-+    fc->release();
-+    ut->release();
-+    return -1;
-+}
-+
-+} // namespace kernel::cap
-diff --git a/src/kernel/cap/untyped.hpp b/src/kernel/cap/untyped.hpp
-new file mode 100644
-index 00000000..6de7e640
---- /dev/null
-+++ b/src/kernel/cap/untyped.hpp
-@@ -0,0 +1,78 @@
-+/*
-+ * NexIOS RTOS — Capability-Based Access Control (CSpace)
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file untyped.hpp
-+/// @brief Untyped memory object (ROADMAP 0.4.1 item 3): owns a contiguous PMM
-+///        region and may be retyped at most once into a capability.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+#include <kernel/memory/kernel_object.hpp>
-+#include <kernel/cap/cap_types.hpp>
-+
-+namespace kernel::cap {
-+
-+/// @brief Owns a contiguous PMM region and may be retyped at most once.
-+///
-+/// Shared-heap class (PipeBuffer/CNode pattern).  The retype-once guard
-+/// (`retyped_`) is the single ownership bit: while false the Untyped owns the
-+/// region's frames and dispose() frees them; after a successful retype it owns
-+/// nothing and the retyped capability (e.g. FrameCap) frees the frames.  No
-+/// path frees the same frames twice.
-+class UntypedMem : public KernelObject {
-+  public:
-+    uint64_t phys = 0;                       ///< first frame of the owned region
-+    size_t size = 0;                         ///< region size in bytes (PAGE_SIZE multiple)
-+    bool is_user = false;                    ///< PMM ownership class (FrameCap parity)
-+    CapType retype_target = CapType::Frame;  ///< iteration-1: only Frame supported
-+
-+    /// @brief Allocates a contiguous PMM region and a MemPool-backed UntypedMem.
-+    ///        Validates size > 0 and PAGE_SIZE-aligned; enforces
-+    ///        CONFIG_CAP_MAX_UNTYPED.  Returns nullptr on any failure (the
-+    ///        region is returned to PMM on partial failure).
-+    static UntypedMem *create(size_t size, bool is_user,
-+                              CapType target = CapType::Frame);
-+
-+    /// @brief CAS false->true on the retype guard.  True iff this caller wins
-+    ///        the single retype.
-+    bool claim_once() noexcept;
-+
-+    /// @brief Rolls a failed claim back (only legal while no other retype is
-+    ///        mid-flight — the guard was set by this caller and never released).
-+    void reset_claim() noexcept {
-+        __atomic_store_n(&retyped_, false, __ATOMIC_RELEASE);
-+    }
-+
-+    /// @brief True iff this Untyped still owns its frames (never retyped).
-+    bool owns_region() const noexcept;
-+
-+    /// @brief Final teardown: frees the region ONLY if owns_region(); the
-+    ///        block is always returned to the MemPool.
-+    void dispose() noexcept override;
-+
-+    /// @brief Genuinely shared (referenced by capability slots).
-+    bool is_shared() const noexcept override {
-+        return true;
-+    }
-+
-+  private:
-+    volatile bool retyped_ = false;
-+};
-+
-+} // namespace kernel::cap
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 792972af..4c102cd3 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -508,6 +508,12 @@
- #define CONFIG_CAP_MAX_DEPTH 8
- #endif
+ # ------------------------------------------------------------------------------
+ # Shared build rules (pattern rules, libc, userspace, initrd)
+ # ------------------------------------------------------------------------------
+@@ -316,16 +334,17 @@ TEST_SRC_FILES       := $(filter src/kernel/test/%.cpp, $(SRC_CXX))
+ TEST_REGISTRY_DEPS   := $(TEST_SRC_FILES) $(TEST_REGISTRY_SCRIPT)
  
-+/// Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3).
-+/// Enforced by a TU-local live counter in untyped.cpp.
-+#ifndef CONFIG_CAP_MAX_UNTYPED
-+#define CONFIG_CAP_MAX_UNTYPED 16
+ # Write the file list to a temporary file so the Python script reads the
+-# same files the build system compiles (no directory walk).
+-TEST_FILE_LIST       := build/.test-file-list
++# same files the build system compiles (no directory walk).  Keyed per arch so
++# a cross-arch switch never consumes a stale file list.
++TEST_FILE_LIST       := build/.test-file-list-$(ARCH)
+ 
+-$(TEST_FILE_LIST): $(TEST_SRC_FILES)
++$(TEST_FILE_LIST): $(TEST_SRC_FILES) | check-arch
+ 	@mkdir -p $(dir $@)
+ 	@printf '%s\n' $(TEST_SRC_FILES) > $@
+ 
+ $(TEST_REGISTRY_GEN): $(TEST_FILE_LIST) $(TEST_REGISTRY_DEPS)
+ 	@printf '  %-7s %s\n' 'GEN' '$@'
+-	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST)
++	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST) --arch $(ARCH)
+ 
+ # Kernel link targets depend on the generated test registry header.
+ # This ensures it exists even in sub-make invocations (e.g. release build).
+diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
+index f2c1517f..1d241930 100644
+--- a/linker/linker_aarch64.ld
++++ b/linker/linker_aarch64.ld
+@@ -34,13 +34,26 @@ SECTIONS
+ 
+     .boot_stack : ALIGN(4K)
+     {
++        _stack_start_low = .;
+         *(.boot_stack)
++        _stack_end_low = .;
+     } :boot_data
+ 
+     . = ALIGN(., 4K);
+     boot_vma_end = .;
+     phys_lma = boot_vma_end;
+ 
++    /* Higher-half aliases of the boot stack bounds.  After MMU enable the
++     * kernel runs via TTBR1_EL1 and the live boot-stack SP is
++     * HHDM_OFFSET + low-VMA address (boot.S adds 0xFFFF800000000000).
++     * The scheduler's is_boot_stack_rsp() range-checks the live RSP against
++     * these, so they must be the higher-half alias.  Defined as plain linker
++     * absolute symbols (no section), so references materialise as immediates
++     * and never emit an AArch64 ADR_PREL_PG_HI21 relocation against a low-VMA
++     * section from higher-half .text. */
++    _stack_start = 0xFFFF800000000000 + _stack_start_low;
++    _stack_end = 0xFFFF800000000000 + _stack_end_low;
++
+     . = 0xFFFF800000000000 + phys_lma;
+ 
+     .text : AT(phys_lma) ALIGN(4K)
+diff --git a/linker/linker_riscv64.ld b/linker/linker_riscv64.ld
+index 06b73817..da0d6f81 100644
+--- a/linker/linker_riscv64.ld
++++ b/linker/linker_riscv64.ld
+@@ -88,8 +88,12 @@ SECTIONS
+         *(.sbss*)
+         *(.sbss.*)
+         *(.scommon)
++        _stack_start = .;
++        KEEP(*(.marker.stack.before))
+         *(.boot_stack)
+         *(.boot_stack.*)
++        KEEP(*(.marker.stack.after))
++        _stack_end = .;
+         *(.bss*)
+         *(.bss.*)
+         _bss_end = .;
+diff --git a/mk/rules.mk b/mk/rules.mk
+index 42050032..67ffe592 100644
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -19,10 +19,10 @@ ifneq ($(ARCH),x86_64)
+ SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
+ SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
+ endif
+-# Exclude x86_64 FPU/SSE test files that fail to compile with GCC 16
+-ifeq ($(ARCH),x86_64)
++# Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
++# (they are x86_64 SSE-specific and not portable; register symbols are covered
++# by weak stubs in test_weak_stubs.cpp).
+ SRC_CXX_GENERIC := $(filter-out src/kernel/test/test_fpu.cpp src/kernel/test/test_fpu_clone.cpp src/kernel/test/test_fpu_multi.cpp src/kernel/test/test_fpu_sse.cpp src/kernel/test/test_fpu_xmm_all.cpp, $(SRC_CXX_GENERIC))
+-endif
+ 
+ # External test suite support
+ # When EXTERNAL_TEST_DIR is set:
+@@ -120,7 +120,7 @@ FAT32_OBJ      := build/fat32/fat32_img.o
+ # workaround is to emit explicit per-file rules into a generated makefile via
+ # a shell loop and `-include` it.  .asm/.S objects have single-extension
+ # names (`isr_stubs.o`) so their pattern rules are fine.
+-GEN_CPP_RULES := mk/cpp-rules.gen.mk
++GEN_CPP_RULES := mk/cpp-rules.$(ARCH).gen.mk
+ -include $(GEN_CPP_RULES)
+ 
+ $(GEN_CPP_RULES): mk/rules.mk Makefile
+@@ -128,7 +128,7 @@ $(GEN_CPP_RULES): mk/rules.mk Makefile
+ 	@printf '' > $@
+ 	@for f in $(SRC_CXX); do \
+ 	    stem=$${f#src/}; stem=$${stem%.cpp}; \
+-	    printf 'build/%s.o: %s\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
++	    printf 'build/%s.o: %s | check-arch\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
+ 	done
+ 
+ 
+@@ -218,19 +218,14 @@ $(FAT32_OBJ): $(FAT32_IMG)
+ # Both debug and release use the same LDFLAGS and same .o files.  The
+ # difference in build type is driven entirely by CXXFLAGS on the .o files.
+ # ------------------------------------------------------------------------------
+-ARCH_STAMP := build/.arch-stamp
+-
+-# .PHONY check that triggers clean when ARCH changes
++# .PHONY check that guarantees the arch stamp matches the target arch.
++# The actual arch-switch clean is performed at PARSE TIME in the Makefile
++# (before .d files are -included), so this target only persists the stamp.
++# It runs as an order-only prerequisite of every emitted compile rule (see
++# GEN_CPP_RULES above), which is now a cheap no-op safety net.
+ .PHONY: check-arch
+ check-arch:
+-	@stamp_arch=$$(cat $(ARCH_STAMP) 2>/dev/null); \
+-	if [ "$$stamp_arch" != "$(ARCH)" ] && [ -n "$$stamp_arch" ]; then \
+-	    printf '  %-7s %s\n' 'CLEAN' "Architecture changed ($$stamp_arch -> $(ARCH))"; \
+-	    $(MAKE) clean >/dev/null 2>&1; \
+-	    $(MAKE) $(MAKECMDGOALS) >/dev/null 2>&1; \
+-	    exit $$?; \
+-	fi; \
+-	mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
++	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
+ 
+ $(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) check-arch linker/linker_$(ARCH).ld
+ 	@mkdir -p $(dir $@)
+diff --git a/src/kernel/arch/aarch64/serial.cpp b/src/kernel/arch/aarch64/serial.cpp
+index 0df99498..69497024 100644
+--- a/src/kernel/arch/aarch64/serial.cpp
++++ b/src/kernel/arch/aarch64/serial.cpp
+@@ -37,6 +37,11 @@ namespace arch {
+ #define UART_IMSC 0x038
+ #define UART_ICR 0x044
+ 
++/// @brief Number of characters written to the console since boot.
++/// The interactive shell snapshots this before drawing its prompt (see
++/// arch::Serial::write_count contract in arch/hal/serial.hpp).
++static volatile uint64_t s_serial_write_count = 0;
++
+ /// @brief Initialise the PL011 UART at 115200 baud (default QEMU virt config).
+ /// Disables UART, clears pending interrupts, sets baud rate, enables TX/RX.
+ void Serial::init() {
+@@ -63,6 +68,14 @@ void Serial::putchar(char c) {
+     while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5))
+         ;
+     mmio_write32(UART_BASE + UART_DR / 4, c);
++    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
++}
++
++/// @brief Returns the number of characters written to the serial console
++///        since boot.
++/// @return Character write count.
++uint64_t Serial::write_count() noexcept {
++    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
+ }
+ 
+ /// @brief Read a single character from the serial port (blocking).
+diff --git a/src/kernel/arch/aarch64/test_stubs.cpp b/src/kernel/arch/aarch64/test_stubs.cpp
+index d67db743..87be1811 100644
+--- a/src/kernel/arch/aarch64/test_stubs.cpp
++++ b/src/kernel/arch/aarch64/test_stubs.cpp
+@@ -30,6 +30,12 @@ void register_pci_tests() {
+         "Skipped: register_pci_tests (not supported on this arch)");
+ }
+ 
++/// @brief Stub — PML4 page-table tests are x86_64-specific.
++void register_pml4_clone_tests() {
++    kernel::Logger::info(
++        "Skipped: register_pml4_clone_tests (not supported on this arch)");
++}
++
+ /// @brief Stub — VirtIO tests are not supported on non-x86_64 architectures.
+ void register_virtio_tests() {
+     kernel::Logger::info(
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+index 4924c99a..f33c91ef 100644
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -27,7 +27,7 @@
+ 
+ namespace arch {
+ 
+-volatile uint64_t Timer::ticks_ = 0;
++constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::counter_freq_hz_ = 0;
+ 
+ /// @brief Initialise the timer with a given tick frequency and register the IRQ
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index aa71c2cb..8cb25fc9 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -24,6 +24,11 @@
+ 
+ namespace arch {
+ 
++/// @brief Number of characters written to the console since boot.
++/// The interactive shell snapshots this before drawing its prompt (see
++/// arch::Serial::write_count contract in arch/hal/serial.hpp).
++static volatile uint64_t s_serial_write_count = 0;
++
+ /// @brief Initialize the serial port (no-op on RISC-V64; SBI handles it).
+ void Serial::init() {
+ }
+@@ -39,6 +44,14 @@ void Serial::putchar(char c) {
+                  :
+                  : "r"(ch)
+                  : "a0", "a7", "memory");
++    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
++}
++
++/// @brief Returns the number of characters written to the serial console
++///        since boot.
++/// @return Character write count.
++uint64_t Serial::write_count() noexcept {
++    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
+ }
+ 
+ /// @brief Read a character from serial (stub — always returns NUL).
+diff --git a/src/kernel/arch/riscv64/test_stubs.cpp b/src/kernel/arch/riscv64/test_stubs.cpp
+index b7947cfd..96ae5a6f 100644
+--- a/src/kernel/arch/riscv64/test_stubs.cpp
++++ b/src/kernel/arch/riscv64/test_stubs.cpp
+@@ -30,6 +30,12 @@ void register_pci_tests() {
+         "Skipped: register_pci_tests (not supported on this arch)");
+ }
+ 
++/// @brief Stub — PML4 page-table tests are x86_64-specific.
++void register_pml4_clone_tests() {
++    kernel::Logger::info(
++        "Skipped: register_pml4_clone_tests (not supported on this arch)");
++}
++
+ /// @brief Stub — not supported on non-x86 architectures.
+ void register_virtio_tests() {
+     kernel::Logger::info(
+diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
+index 761fbc9b..ef5a9142 100644
+--- a/src/kernel/arch/riscv64/timer.cpp
++++ b/src/kernel/arch/riscv64/timer.cpp
+@@ -27,7 +27,7 @@
+ 
+ namespace arch {
+ 
+-volatile uint64_t Timer::ticks_ = 0;
++constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::timer_freq_hz_ = 0;
+ 
+ /// @brief Initialize the timer, set frequency, and register the IRQ handler.
+@@ -92,6 +92,12 @@ void Timer::set_ticks_for_test(uint64_t value) {
+     ticks_ = value;
+ }
+ 
++/// @brief Return the calibrated timer counter frequency in Hz (x86 TSC alias).
++/// @return Timer frequency in Hz.
++uint64_t Timer::tsc_freq_hz() {
++    return timer_freq_hz_;
++}
++
+ /// @brief Arm a one-shot timer via SBI.
+ /// @param ticks_from_now Number of milliseconds from now to fire.
+ void Timer::oneshot(uint64_t ticks_from_now) {
+diff --git a/src/kernel/debug/dump.cpp b/src/kernel/debug/dump.cpp
+index bc586959..1c219cb6 100644
+--- a/src/kernel/debug/dump.cpp
++++ b/src/kernel/debug/dump.cpp
+@@ -74,6 +74,7 @@ static void pkd(const char *key, uint64_t v) {
+ }
+ 
+ /// @brief Print two hex key-value pairs.
++#if defined(CONFIG_ARCH_X86_64)
+ static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
+     L::raw_write("[DUMP]   ");
+     L::raw_write(k1);
+@@ -85,6 +86,7 @@ static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
+     L::print_hex(v2);
+     L::raw_write("\n");
+ }
++#endif // CONFIG_ARCH_X86_64
+ 
+ /// @brief Print two decimal key-value pairs.
+ static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
+@@ -100,6 +102,7 @@ static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
+ }
+ 
+ /// @brief Print three hex key-value pairs.
++#if defined(CONFIG_ARCH_X86_64)
+ static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
+                  const char *k3, uint64_t v3) {
+     L::raw_write("[DUMP]   ");
+@@ -116,6 +119,7 @@ static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
+     L::print_hex(v3);
+     L::raw_write("\n");
+ }
++#endif // CONFIG_ARCH_X86_64
+ 
+ /// @brief Dump scheduler indices, counts, flags, and deferred-switch globals.
+ void dump_scheduler_info() {
+@@ -310,16 +314,30 @@ void dump_task_info(uint64_t task_id) {
+     pkv("kernel_stack_top", t->kernel_stack_top);
+ 
+     // context registers (the ones that matter for the crash)
++#if defined(CONFIG_ARCH_X86_64)
+     pkv("context.rsp", t->context.rsp);
+     pkv("context.rip", t->context.rip);
+     pkv2("context.cs", t->context.cs, "context.ss", t->context.ss);
+     pkv("context.rflags", t->context.rflags);
++#elif defined(CONFIG_ARCH_AARCH64)
++    pkv("context.sp_el0", t->context.sp_el0);
++    pkv("context.elr_el1", t->context.elr_el1);
++    pkv("context.spsr_el1", t->context.spsr_el1);
 +#endif
-+
+ 
+-    // check whether context.rsp is within its own kernel stack
++    // check whether the saved context stack pointer is within its own kernel
++    // stack (arch-specific field name)
+     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
+     uint64_t top = t->kernel_stack_top;
+-    bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
+-                         t->context.rsp <= top);
++#if defined(CONFIG_ARCH_X86_64)
++    uint64_t saved_sp = t->context.rsp;
++#elif defined(CONFIG_ARCH_AARCH64)
++    uint64_t saved_sp = t->context.sp_el0;
++#else
++    uint64_t saved_sp = t->context.sp;
++#endif
++    bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
++                         saved_sp <= top);
+ 
+     L::raw_write("[DUMP]   rsp_in_stack: ");
+     L::raw_write(rsp_in_stack ? "yes" : "NO (dangerous!)");
+@@ -357,8 +375,17 @@ void dump_task_info(uint64_t task_id) {
+ 
+     // show whether deferred-switch globals point to this task
+     bool is_switch_target = false;
++#if defined(CONFIG_ARCH_X86_64)
+     is_switch_target = is_switch_target ||
+                        (save_to == reinterpret_cast<uint64_t>(&t->context.rsp));
++#elif defined(CONFIG_ARCH_AARCH64)
++    is_switch_target = is_switch_target ||
++                       (save_to ==
++                        reinterpret_cast<uint64_t>(&t->context.sp_el0));
++#else
++    is_switch_target = is_switch_target ||
++                       (save_to == reinterpret_cast<uint64_t>(&t->context.sp));
++#endif
+     is_switch_target = is_switch_target || (next_id != 0 && next_id == t->id);
+     L::raw_write("[DUMP]   deferred_switch_target: ");
+     L::raw_write(is_switch_target ? "yes" : "no");
+@@ -380,10 +407,17 @@ void dump_task_info(uint64_t task_id) {
+         L::print_dec(rec.thread_id);
+         L::raw_write(" ticks=");
+         L::print_dec(rec.consumed_ticks);
++#if defined(CONFIG_ARCH_X86_64)
+         L::raw_write(" ctx.rip=0x");
+         L::print_hex(rec.regs.rip);
+         L::raw_write(" ctx.rsp=0x");
+         L::print_hex(rec.regs.rsp);
++#elif defined(CONFIG_ARCH_AARCH64)
++        L::raw_write(" ctx.elr=0x");
++        L::print_hex(rec.regs.elr_el1);
++        L::raw_write(" ctx.sp=0x");
++        L::print_hex(rec.regs.sp_el0);
++#endif
+         L::raw_write("\n");
+     }
+ #endif
+@@ -440,13 +474,28 @@ void dump_all_tasks() {
+         pkd2("parent", t->parent_id, "children", t->num_children);
+         pkd2("exec", t->executed_ticks, "rem", t->remaining_ticks);
+ 
++#if defined(CONFIG_ARCH_X86_64)
+         pkv("ctx.rsp", t->context.rsp);
+         pkv("ctx.rip", t->context.rip);
++#elif defined(CONFIG_ARCH_AARCH64)
++        pkv("ctx.sp", t->context.sp_el0);
++        pkv("ctx.elr", t->context.elr_el1);
++#else
++        pkv("ctx.sp", t->context.sp);
++        pkv("ctx.epc", t->context.sepc);
++#endif
+ 
+         uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
+         uint64_t top = t->kernel_stack_top;
+-        bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
+-                             t->context.rsp <= top);
++#if defined(CONFIG_ARCH_X86_64)
++        uint64_t saved_sp = t->context.rsp;
++#elif defined(CONFIG_ARCH_AARCH64)
++        uint64_t saved_sp = t->context.sp_el0;
++#else
++        uint64_t saved_sp = t->context.sp;
++#endif
++        bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
++                             saved_sp <= top);
+ 
+         L::raw_write("[DUMP]   kstack=[0x");
+         L::print_hex(base);
+@@ -471,9 +520,19 @@ void dump_all_tasks() {
+         L::raw_write("\n");
+ 
+         // deferred-switch target detection
+-        bool is_target =
+-            (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
+-            (next_id != 0 && next_id == t->id);
++        bool is_target = false;
++#if defined(CONFIG_ARCH_X86_64)
++        is_target = (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
++                    (next_id != 0 && next_id == t->id);
++#elif defined(CONFIG_ARCH_AARCH64)
++        is_target = (save_to ==
++                     reinterpret_cast<uint64_t>(&t->context.sp_el0)) ||
++                    (next_id != 0 && next_id == t->id);
++#else
++        is_target = (save_to ==
++                     reinterpret_cast<uint64_t>(&t->context.sp)) ||
++                    (next_id != 0 && next_id == t->id);
++#endif
+         L::raw_write("[DUMP]   deferred: ");
+         L::raw_write(is_target ? "TARGET" : "no");
+         L::raw_write("\n");
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 349780d8..a78b90fb 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -675,11 +675,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+             panic("CONFIG_KERNEL_PRIV_DATA_BASE overlaps kernel PML4 entry");
+     }
+ 
+-    // Map APIC MMIO pages and initialise the local/I/O APIC.
++    // Map APIC MMIO pages and initialise the local/I/O APIC (x86_64 only;
++    // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
++#if defined(CONFIG_ARCH_X86_64)
+     if (arch::APIC::is_apic_supported()) {
+         arch::APIC::map_mmio();
+         arch::APIC::init();
+     }
++#endif // CONFIG_ARCH_X86_64
+     if (kernel::gs::boot_info().cmdline[0]) {
+         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
+     }
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index b7a5f338..3aeb0efd 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -60,10 +60,14 @@ static inline uint64_t current_sp() noexcept {
+     uint64_t sp{};
+     asm volatile("mov %%rsp, %0" : "=r"(sp));
+     return sp;
+-#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++#elif defined(CONFIG_ARCH_AARCH64)
+     uint64_t sp{};
+     asm volatile("mov %0, sp" : "=r"(sp));
+     return sp;
++#elif defined(CONFIG_ARCH_RISCV64)
++    uint64_t sp{};
++    asm volatile("mv %0, sp" : "=r"(sp));
++    return sp;
+ #else
+     return 0;
+ #endif
+@@ -2152,8 +2156,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                 Logger::raw_write(" ss=0x");
+                 Logger::print_hex(cf[168 / 8]);
+                 Logger::raw_write("\n");
++#if defined(CONFIG_ARCH_X86_64)
+                 // Walk the harness's kslot stack PTE chain (read via the
+                 // direct map) to see WHICH phys the kslot VA maps right now.
++                // The CR3/PM4L walk is x86_64-specific.
+                 uint64_t cr3 = 0;
+                 asm volatile("mov %%cr3, %0" : "=r"(cr3));
+                 uint64_t kva = reinterpret_cast<uint64_t>(current->kernel_stack);
+@@ -2180,6 +2186,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                 Logger::raw_write(" SAME=");
+                 Logger::print_dec(kphys == (cur_rsp & ~0xFFFULL) ? 1u : 0u);
+                 Logger::raw_write("\n");
++#endif // CONFIG_ARCH_X86_64
+             }
+         }
+ #endif
+@@ -2707,11 +2714,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+             __atomic_load_n(&scheduler_switch_generation, __ATOMIC_RELAXED);
+         __atomic_store_n(&scheduler_switch_generation, gen + 1,
+                          __ATOMIC_RELEASE);
+-        __atomic_store_n(&scheduler_save_rsp_to, &exiting.context.rsp,
+-                         __ATOMIC_RELEASE);
++        __atomic_store_n(&scheduler_save_rsp_to,
++                         &TASK_STACK_PTR(&exiting), __ATOMIC_RELEASE);
++#if defined(CONFIG_ARCH_X86_64)
+         uint64_t cr0 = arch::read_cr0();
+         cr0 |= (1ULL << 3);
+         arch::write_cr0(cr0);
++#endif
+     }
+ }
+ 
+@@ -2800,8 +2809,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
+     ready_queue_.reset();
+ 
+     {
++#if defined(CONFIG_ARCH_X86_64)
+         uint32_t _a, _b, _c, _d;
+         asm volatile("cpuid" : "=a"(_a), "=b"(_b), "=c"(_c), "=d"(_d) : "a"(0));
++#endif
+     }
+     __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
+@@ -3257,7 +3268,9 @@ extern "C" void scheduler_diag_depth_skip() {
+     uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+                                   __ATOMIC_ACQUIRE);
+     uint64_t rfl = 0;
++#if defined(CONFIG_ARCH_X86_64)
+     asm volatile("pushfq; pop %0" : "=r"(rfl));
++#endif
+     kernel::Logger::raw_write("[H2-DEPTH] id=");
+     kernel::Logger::print_dec(id);
+     kernel::Logger::raw_write(" depth=");
+@@ -3293,7 +3306,9 @@ extern "C" void scheduler_diag_rsp_abort() {
+     uint64_t top = __atomic_load_n(&kernel::scheduler_load_kstack_top,
+                                    __ATOMIC_ACQUIRE);
+     uint64_t rfl = 0;
++#if defined(CONFIG_ARCH_X86_64)
+     asm volatile("pushfq; pop %0" : "=r"(rfl));
++#endif
+     kernel::Logger::raw_write("[H2-RSPABORT] id=");
+     kernel::Logger::print_dec(id);
+     kernel::Logger::raw_write(" rsp=0x");
+@@ -3398,7 +3413,9 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
+         uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+                                       __ATOMIC_ACQUIRE);
+         uint64_t rfl = 0;
++#if defined(CONFIG_ARCH_X86_64)
+         asm volatile("pushfq; pop %0" : "=r"(rfl));
++#endif
+         kernel::Logger::raw_write("[H2-SKIP] cap=0x");
+         kernel::Logger::print_hex(captured_gen);
+         kernel::Logger::raw_write(" cur=0x");
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 1687d717..b773b784 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -98,6 +98,7 @@ namespace kernel {
+ /// spinning on task->state) observes completion.  Previously this fell into
+ /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
+ /// any caller that waits for termination (ipc_blocking test hang).
++#if defined(CONFIG_ARCH_X86_64)
+ static void _task_trampoline(void (*entry)()) {
+     entry();
+     auto *self = Scheduler::current_task();
+@@ -106,6 +107,7 @@ static void _task_trampoline(void (*entry)()) {
+     for (;;)
+         arch::hlt();
+ }
++#endif
+ 
+ /// @brief Allocates and initialises a SporadicServer for a daemon task
+ ///        from the MemPool.  Idempotent (returns early if already set).
+@@ -513,11 +515,19 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
+ /// @brief Physical addresses of the 8 pre-allocated PT pages for the window.
+ static uint64_t s_kstack_pt_pages[8] = {};
+ 
++#if defined(CONFIG_ARCH_X86_64)
+ static void init_kstack_window();
+ static void map_kstack_page(uint64_t virt, uint64_t phys);
+ static void unmap_kstack_page(uint64_t virt);
++#endif
+ 
+ static uint64_t alloc_kslot(uint64_t stack_size) {
++#if !defined(CONFIG_ARCH_X86_64)
++    // The kstack VA window (and its CR3/invlpg page-table wiring) is
++    // x86_64-only; other arches use the HHDM direct-map fallback.
++    (void)stack_size;
++    return 0;
++#else
+     // Lazy init: pre-allocate page table pages on first call.
+     // Must be called after PMM and VMM init (first create() is in
+     // Scheduler::init(), well after both).
+@@ -556,6 +566,7 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
+         s_kslot_bump = va + slot_size;
+         return va;
+     }
++#endif // CONFIG_ARCH_X86_64
+ }
+ 
+ static void free_kslot(uint64_t va, uint64_t size) {
+@@ -574,6 +585,7 @@ static void free_kslot(uint64_t va, uint64_t size) {
+ // Kernel-stack window page table pool
  // ---------------------------------------------------------------------------
- // Priority Inheritance Protocol Configuration
- // ---------------------------------------------------------------------------
-diff --git a/src/kernel/test/test_cap_untyped.cpp b/src/kernel/test/test_cap_untyped.cpp
-new file mode 100644
-index 00000000..6b39d1e9
---- /dev/null
-+++ b/src/kernel/test/test_cap_untyped.cpp
-@@ -0,0 +1,378 @@
-+/*
-+ * NexIOS RTOS — Capability-Based Access Control (CSpace)
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_cap_untyped.cpp
-+/// @brief Untyped memory allocator tests (ROADMAP 0.4.1 item 3): UntypedMem
-+///        lifecycle and cap::retype ownership transfer.
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/cap_types.hpp>
-+#include <kernel/cap/untyped.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/memory/kernel_object.hpp>
-+#include <kernel/memory/mempool.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/test/resource_tracker.hpp>
-+#include <kernel/arch/page_table.hpp>
-+
-+using namespace kernel;
-+
-+// Runmode: kernel
-+// Testidea: UntypedMem::create carves a contiguous, page-aligned PMM region.
-+// Input: create(2 * PAGE_SIZE, true)
-+// Expect: phys != 0, page-aligned, size correct; PMM +2 pages, cap_objects +1
-+// Depends: kernel::cap::UntypedMem, kernel::memory::PMM
-+JARVIS_TEST(untyped_create_allocates_contiguous_region,
-+            "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = 2 * arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, true);
-+    JARVIS_ASSERT(ut != nullptr);
-+    JARVIS_ASSERT(ut->phys != 0);
-+    JARVIS_ASSERT((ut->phys & (arch::PAGE_SIZE - 1)) == 0);
-+    JARVIS_ASSERT_EQ(sz, ut->size);
-+    JARVIS_ASSERT(ut->is_user);
-+    JARVIS_ASSERT(ut->owns_region());
-+    JARVIS_ASSERT(ut->is_pool_backed());
-+
-+    ut->release(); // creator ref -> dispose frees region + block
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: An Untyped installed in a CNode frees its region on teardown.
-+// Input: create, install, remove slot, release creator
-+// Expect: pmm_pages_used / cap_objects / cap_slots back to baseline
-+// Depends: kernel::cap::UntypedMem, kernel::cap::CNode
-+JARVIS_TEST(untyped_dispose_returns_region_to_pmm, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = 3 * arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int idx = node.install(ut, cap::CapType::Untyped, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(idx >= 0);
-+    JARVIS_ASSERT_EQ(1U, cap::occupied_count(&node));
-+    node.remove(static_cast<uint32_t>(idx));
-+    JARVIS_ASSERT_EQ(1U, ut->refcount()); // creator ref only
-+    ut->release();                         // creator -> dispose
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: cap::copy duplicates an Untyped cap; both slots share the object
-+//           and the region stays owned (retype-ability intact).
-+// Input: install in src, copy to dst
-+// Expect: both slots type Untyped; refcount 3; owns_region() still true
-+// Depends: kernel::cap::UntypedMem, kernel::cap::CNode, kernel::cap::copy
-+JARVIS_TEST(untyped_cap_copy_shares_object, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode src;
-+    cap::CNode dst;
-+    int s = src.install(ut, cap::CapType::Untyped,
-+                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(src.cspace_id, static_cast<uint32_t>(s),
-+                                     src.slot_gen(static_cast<uint32_t>(s)));
-+    int d = cap::copy(&src, sh, &dst);
-+    JARVIS_ASSERT(d >= 0);
-+    JARVIS_ASSERT_EQ(3U, ut->refcount()); // creator + src + dst
-+    JARVIS_ASSERT(ut->owns_region());     // not retyped yet
-+
-+    dst.remove(static_cast<uint32_t>(d));
-+    src.remove(static_cast<uint32_t>(s));
-+    ut->release();
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: retype transfers an exact-size region to a FrameCap end-to-end.
-+// Input: create 4-page Untyped, install, retype(Frame, exact size)
-+// Expect: new Frame slot; FrameCap.phys == ut->phys, count == 4;
-+//         ut->owns_region() false; teardown frees frames exactly once
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype, kernel::cap::FrameCap
-+JARVIS_TEST(retype_frame_exact_size_end_to_end, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = 4 * arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, true);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
-+                                     node.slot_gen(static_cast<uint32_t>(s)));
-+
-+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz,
-+                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    JARVIS_ASSERT(r >= 0);
-+
-+    // The new slot is a FrameCap wrapping the exact same region.
-+    KernelObject *target =
-+        cap::lookup(&node, cap::encode_handle(node.cspace_id,
-+                                              static_cast<uint32_t>(r),
-+                                              node.slot_gen(static_cast<uint32_t>(r))),
-+                    cap::CapType::Frame, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(target != nullptr);
-+    auto *fc = static_cast<cap::FrameCap *>(target);
-+    JARVIS_ASSERT_EQ(ut->phys, fc->phys);
-+    JARVIS_ASSERT_EQ((size_t)4, fc->count);
-+    target->release();
-+    JARVIS_ASSERT(!ut->owns_region()); // ownership transferred
-+
-+    // Teardown: Untyped slot dispose frees NO frames (guard set); FrameCap
-+    // slot dispose frees the region exactly once.
-+    node.remove(static_cast<uint32_t>(s));
-+    node.remove(static_cast<uint32_t>(r));
-+    ut->release(); // Untyped dispose: no PMM free (guard set)
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: retype with a wrong size fails and leaves the Untyped intact.
-+// Input: 4-page Untyped, retype with 2-page size
-+// Expect: -1; owns_region() still true; exact-size retype succeeds after
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype
-+JARVIS_TEST(retype_wrong_size_fails_keeps_untyped, "PRE: none | POST: none") {
-+    const size_t sz = 4 * arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
-+                                     node.slot_gen(static_cast<uint32_t>(s)));
-+
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame,
-+                                     2 * arch::PAGE_SIZE, cap::CAP_RIGHT_READ));
-+    JARVIS_ASSERT(ut->owns_region()); // untouched
-+
-+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(r >= 0);
-+
-+    node.remove(static_cast<uint32_t>(s));
-+    node.remove(static_cast<uint32_t>(r));
-+    ut->release();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: A second retype of the same Untyped fails (single-winner guard).
-+// Input: retype succeeds; retype again with the same handle
-+// Expect: second returns -1; exactly one FrameCap ever owns the region
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype
-+JARVIS_TEST(retype_twice_fails_no_double_free, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
-+                                     node.slot_gen(static_cast<uint32_t>(s)));
-+
-+    int r1 = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(r1 >= 0);
-+    // Second retype on the same handle: the slot still points at the Untyped,
-+    // but the guard is set -> -1.  No second FrameCap is ever created.
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
-+                                     cap::CAP_RIGHT_READ));
-+
-+    node.remove(static_cast<uint32_t>(s));
-+    node.remove(static_cast<uint32_t>(r1));
-+    ut->release();
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: retype rejects non-Frame targets; the Untyped stays intact.
-+// Input: retype(Endpoint) and retype(CNode)
-+// Expect: -1 both; owns_region() true; exact-size Frame retype works after
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype
-+JARVIS_TEST(retype_wrong_target_type_fails, "PRE: none | POST: none") {
-+    const size_t sz = arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
-+                                     node.slot_gen(static_cast<uint32_t>(s)));
-+
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Endpoint, sz,
-+                                     cap::CAP_RIGHT_READ));
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::CNode, sz,
-+                                     cap::CAP_RIGHT_READ));
-+    JARVIS_ASSERT(ut->owns_region());
-+
-+    int r = cap::retype(&node, sh, cap::CapType::Frame, sz, cap::CAP_RIGHT_READ);
-+    JARVIS_ASSERT(r >= 0);
-+    node.remove(static_cast<uint32_t>(s));
-+    node.remove(static_cast<uint32_t>(r));
-+    ut->release();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: retype requires CAP_RIGHT_WRITE on the Untyped cap.
-+// Input: install with READ|COPY only (no WRITE)
-+// Expect: -1 (lookup rights check); Untyped intact
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype
-+JARVIS_TEST(retype_requires_write_right, "PRE: none | POST: none") {
-+    const size_t sz = arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode node;
-+    int s = node.install(ut, cap::CapType::Untyped,
-+                         cap::CAP_RIGHT_READ | cap::CAP_RIGHT_COPY);
-+    JARVIS_ASSERT(s >= 0);
-+    uint64_t sh = cap::encode_handle(node.cspace_id, static_cast<uint32_t>(s),
-+                                     node.slot_gen(static_cast<uint32_t>(s)));
-+
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&node, sh, cap::CapType::Frame, sz,
-+                                     cap::CAP_RIGHT_READ));
-+    JARVIS_ASSERT(ut->owns_region());
-+
-+    node.remove(static_cast<uint32_t>(s));
-+    ut->release();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: A revoked Untyped refuses retype; the region frees exactly once.
-+// Input: install in CNode A, revoke the slot; copied cap in CNode B
-+// Expect: retype via B's handle -> -1 (acquire refused); region freed once
-+// Depends: kernel::cap::UntypedMem, kernel::cap::retype, kernel::cap::revoke
-+JARVIS_TEST(retype_revoked_untyped_fails_single_free, "PRE: none | POST: none") {
-+    auto &rt = kernel::test::ResourceTracker::instance();
-+    kernel::test::ResourceCounters before{};
-+    rt.capture(before);
-+
-+    const size_t sz = arch::PAGE_SIZE;
-+    auto *ut = cap::UntypedMem::create(sz, false);
-+    JARVIS_ASSERT(ut != nullptr);
-+
-+    cap::CNode a;
-+    cap::CNode b;
-+    int sa = a.install(ut, cap::CapType::Untyped,
-+                       cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE |
-+                           cap::CAP_RIGHT_COPY);
-+    JARVIS_ASSERT(sa >= 0);
-+    uint64_t ha = cap::encode_handle(a.cspace_id, static_cast<uint32_t>(sa),
-+                                     a.slot_gen(static_cast<uint32_t>(sa)));
-+    int sb = cap::copy(&a, ha, &b);
-+    JARVIS_ASSERT(sb >= 0);
-+
-+    // Revoke the slot in A: marks the object revoked, drops A's ref.
-+    JARVIS_ASSERT(cap::revoke(&a, ha));
-+    JARVIS_ASSERT(ut->revoked());
-+
-+    // Retype via B's handle: acquire() refused -> -1.
-+    uint64_t hb = cap::encode_handle(b.cspace_id, static_cast<uint32_t>(sb),
-+                                     b.slot_gen(static_cast<uint32_t>(sb)));
-+    JARVIS_ASSERT_EQ(-1, cap::retype(&b, hb, cap::CapType::Frame, sz,
-+                                     cap::CAP_RIGHT_READ));
-+
-+    b.remove(static_cast<uint32_t>(sb));
-+    ut->release(); // region freed exactly once by Untyped dispose
-+
-+    kernel::test::ResourceCounters after{};
-+    rt.capture(after);
-+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
-+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
-+    JARVIS_ASSERT_EQ(before.cap_slots, after.cap_slots);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Registers all Untyped memory allocator tests.
-+// Input: None
-+// Expect: All tests registered
-+// Depends: test framework
-+void register_cap_untyped_tests() {
-+    Logger::info("Registering Untyped memory allocator tests");
-+    JARVIS_REGISTER_TEST(untyped_create_allocates_contiguous_region);
-+    JARVIS_REGISTER_TEST(untyped_dispose_returns_region_to_pmm);
-+    JARVIS_REGISTER_TEST(untyped_cap_copy_shares_object);
-+    JARVIS_REGISTER_TEST(retype_frame_exact_size_end_to_end);
-+    JARVIS_REGISTER_TEST(retype_wrong_size_fails_keeps_untyped);
-+    JARVIS_REGISTER_TEST(retype_twice_fails_no_double_free);
-+    JARVIS_REGISTER_TEST(retype_wrong_target_type_fails);
-+    JARVIS_REGISTER_TEST(retype_requires_write_right);
-+    JARVIS_REGISTER_TEST(retype_revoked_untyped_fails_single_free);
-+}
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index ff2b1a39..8e7240b3 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
-     {"selftest",            132,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                 932,    0,       0      },  // 931 + shell_interaction(+1); dump_class_counts verified
-+    {"all",                 941,    0,       0      },  // 932 + cap_untyped(+9); dump_class_counts verified
  
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -83,6 +83,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
-     {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
-     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
-+    {"cap_untyped",           9,    0,       0      },  // Untyped memory allocator + retype (0.4.1 item 3)
++#if defined(CONFIG_ARCH_X86_64)
+ /// @brief Pre-allocate all page table pages for the kernel-stack window and
+ ///        wire them into the kernel PML4.  Called once at boot, before any
+ ///        snapshot is taken.
+@@ -662,6 +674,7 @@ static void unmap_kstack_page(uint64_t virt) {
+     pt[entry] = 0;
+     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
+ }
++#endif // CONFIG_ARCH_X86_64
  
-     // ipc
-     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 4a2b3396..6163316d 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -93,6 +93,7 @@ void register_cap_core_tests();
- void register_cap_lifecycle_tests();
- void register_cap_syscall_tests();
- void register_cap_ipc_tests();
-+void register_cap_untyped_tests();
- void register_waitpid_tests();
- void register_buffer_pool_tests();
- void register_block_device_tests();
-@@ -306,6 +307,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"cap_lifecycle", []() { register_cap_lifecycle_tests(); }},
-     {"cap_syscall", []() { register_cap_syscall_tests(); }},
-     {"cap_ipc", []() { register_cap_ipc_tests(); }},
-+    {"cap_untyped", []() { register_cap_untyped_tests(); }},
+ } // anonymous namespace
  
-     // -- ipc: messages, events, notifications, pipes --
-     {"ipc_core", []() { register_ipc_tests(); }},
-@@ -521,6 +523,7 @@ static void register_all_tests() {
-     register_mutex_pcp_tests();
-     register_pml4_clone_tests();
-     register_cap_core_tests();
-+    register_cap_untyped_tests();
-     register_cap_ipc_tests();
-     register_cap_syscall_tests();
-     register_cap_lifecycle_tests();
-@@ -666,6 +669,7 @@ static void register_all_tests_first_half() {
-     register_cap_core_tests();
-     register_cap_lifecycle_tests();
-     register_cap_syscall_tests();
-+    register_cap_untyped_tests();
-     register_cap_ipc_tests();
-     register_waitpid_tests();
-     register_resource_exhaustion_tests();
+@@ -713,6 +726,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
+         __builtin_memcpy(
+             reinterpret_cast<void *>(arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
+             src + off, arch::PAGE_SIZE);
++#if defined(CONFIG_ARCH_X86_64)
+         // Flush the TLB for every window VA backed by this PT page.  invlpg
+         // on an unmapped VA is a documented no-op (no exception).
+         uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
+@@ -722,6 +736,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
+                          :
+                          : "r"(base_va + e * arch::PAGE_SIZE)
+                          : "memory");
++#endif // CONFIG_ARCH_X86_64
+         off += arch::PAGE_SIZE;
+     }
+     __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
+@@ -965,7 +980,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+     // This dual-path design is certified-safe because the test environment
+     // provides equivalent fault containment (complete memory rewind),
+     // while production builds never take the HHDM fallback.
++    // The kslot VA window (and its CR3/invlpg wiring) is x86_64-only; on
++    // other arches alloc_kslot() returns 0 and the HHDM fallback below is
++    // always taken.
+     // ------------------------------------------------------------------
++#if defined(CONFIG_ARCH_X86_64)
+     if (!Scheduler::is_test_active()) {
+         uint64_t slot_va = alloc_kslot(stack_size);
+         if (slot_va) {
+@@ -982,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+             goto done_stack;
+         }
+     }
++#endif // CONFIG_ARCH_X86_64
+     tcb->kstack_slot_va_ = 0;
+     tcb->kstack_slot_size_ = 0;
+     {
+@@ -990,7 +1010,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+         TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(stack_virt));
+         tcb->kernel_stack_top = stack_virt + stack_size;
+     }
++#if defined(CONFIG_ARCH_X86_64)
+ done_stack:
++#endif
+ 
+     // v0.4.0 MP-1.2: every kernel task gets a private kernel-half PML4.
+     // clone_kernel_pml4() zeroes the user entries (0..255) and copies the
+@@ -1133,9 +1155,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+         tcb->kstack_slot_va_ = slot_va;
+         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
+         uint64_t kstack_va = slot_va + 4096;
++#if defined(CONFIG_ARCH_X86_64)
+         for (size_t i = 0; i < kernel_stack_pages; ++i)
+             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
+                             kstack_phys + i * arch::PAGE_SIZE);
++#endif
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
+         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
+@@ -1377,9 +1401,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+         tcb->kstack_slot_va_ = slot_va;
+         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
+         uint64_t kstack_va = slot_va + 4096;
++#if defined(CONFIG_ARCH_X86_64)
+         for (size_t i = 0; i < stack_pages; ++i)
+             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
+                             kstack_phys + i * arch::PAGE_SIZE);
++#endif
+         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
+         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
+@@ -1591,6 +1617,9 @@ TaskControlBlock *TaskControlBlock::find_child(uint64_t pid) noexcept {
+ /// clone().
+ ///        Only frees intermediate page-table pages (PD, PT), not leaf pages
+ ///        (those are freed separately by the user_stack_ loop in cleanup()).
++///        The private stack PDPT is an x86_64 (4-level PML4/PDPT/PD/PT)
++///        concept; AArch64/RISC-V use different page-table shapes.
++#if defined(CONFIG_ARCH_X86_64)
+ static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
+     constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
+     constexpr uint64_t PAGE_HUGE = 1ULL << 7;
+@@ -1620,6 +1649,7 @@ static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
+     PMM::free_page(pd_phys);
+     PMM::free_page(pdpt_phys);
+ }
++#endif // CONFIG_ARCH_X86_64
+ 
+ /// @brief Releases all resources owned by the task.
+ /// Unlinks from parent's child list, detaches from message-queue blocked lists,
+@@ -1765,9 +1795,11 @@ void TaskControlBlock::cleanup() noexcept {
+                            : ((STACK_SIZE + 4095) / arch::PAGE_SIZE);
+         if (kstack_slot_va_) {
+             uint64_t slot_va = kstack_slot_va_;
++#if defined(CONFIG_ARCH_X86_64)
+             uint64_t stack_va = slot_va + 4096;
+             for (size_t i = 0; i < pages; ++i)
+                 unmap_kstack_page(stack_va + i * arch::PAGE_SIZE);
++#endif
+             free_kslot(slot_va, kstack_slot_size_);
+         }
+         // Poison physical pages via HHDM before freeing.
+@@ -1799,10 +1831,12 @@ void TaskControlBlock::cleanup() noexcept {
+         // during clone) is fully reclaimed here — no leak.
+         VMM::free_user_pages(page_table_);
+         PMM::free_page(page_table_);
++#if defined(CONFIG_ARCH_X86_64)
+         if (stack_pdpt_phys_) {
+             free_stack_pdpt(stack_pdpt_phys_);
+             stack_pdpt_phys_ = 0;
+         }
++#endif // CONFIG_ARCH_X86_64
+         page_table_ = 0;
+     }
+ 
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index b865cbeb..1292db9c 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -59,10 +59,14 @@ static inline uint64_t current_sp() {
+     uint64_t sp{};
+     asm volatile("mov %%rsp, %0" : "=r"(sp));
+     return sp;
+-#elif defined(__aarch64__) || defined(__riscv)
++#elif defined(__aarch64__)
+     uint64_t sp{};
+     asm volatile("mov %0, sp" : "=r"(sp));
+     return sp;
++#elif defined(__riscv)
++    uint64_t sp{};
++    asm volatile("mv %0, sp" : "=r"(sp));
++    return sp;
+ #else
+     return 0;
+ #endif
+diff --git a/src/kernel/test/test_pml4_clone.cpp b/src/kernel/test/test_pml4_clone.cpp
+index 2ea0aad5..5bb32293 100644
+--- a/src/kernel/test/test_pml4_clone.cpp
++++ b/src/kernel/test/test_pml4_clone.cpp
+@@ -28,6 +28,8 @@
+ #include <constants.hpp>
+ #include "test_sched_helpers.hpp"
+ 
++#if defined(CONFIG_ARCH_X86_64)
++
+ using namespace kernel;
+ 
+ // v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
+@@ -798,3 +800,5 @@ void register_pml4_clone_tests() {
+     JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
+     JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
+ }
++
++#endif // CONFIG_ARCH_X86_64
+diff --git a/src/kernel/test/test_stack_profiler.cpp b/src/kernel/test/test_stack_profiler.cpp
+index f903a611..4bfc4347 100644
+--- a/src/kernel/test/test_stack_profiler.cpp
++++ b/src/kernel/test/test_stack_profiler.cpp
+@@ -67,8 +67,10 @@ JARVIS_TEST(stack_profiler_context_rsp_in_range, "PRE: none | POST: none") {
+     uint64_t stack_base = reinterpret_cast<uint64_t>(t->kernel_stack);
+ #if defined(CONFIG_ARCH_X86_64)
+     JARVIS_ASSERT(t->context.rsp >= stack_base && t->context.rsp < t->kernel_stack_top);
+-#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++#elif defined(CONFIG_ARCH_AARCH64)
+     JARVIS_ASSERT(t->context.sp_el0 >= stack_base && t->context.sp_el0 < t->kernel_stack_top);
++#elif defined(CONFIG_ARCH_RISCV64)
++    JARVIS_ASSERT(t->context.sp >= stack_base && t->context.sp < t->kernel_stack_top);
+ #else
+     JARVIS_ASSERT(false && "unhandled arch in stack_profiler_context_rsp_in_range");
+ #endif
+@@ -96,8 +98,10 @@ JARVIS_TEST(stack_profiler_current_task_stack_valid,
+     uint64_t rsp;
+ #if defined(CONFIG_ARCH_X86_64)
+     asm volatile("mov %%rsp, %0" : "=r"(rsp));
+-#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++#elif defined(CONFIG_ARCH_AARCH64)
+     asm volatile("mov %0, sp" : "=r"(rsp));
++#elif defined(CONFIG_ARCH_RISCV64)
++    asm volatile("mv %0, sp" : "=r"(rsp));
+ #else
+     rsp = 0;
+ #endif
+diff --git a/tools/gen_test_registry.py b/tools/gen_test_registry.py
+index 1f4efc27..a2fc2bf7 100644
+--- a/tools/gen_test_registry.py
++++ b/tools/gen_test_registry.py
+@@ -106,45 +106,192 @@ def _is_config_disabled(cond: str) -> bool:
+     return False
+ 
+ 
+-def strip_disabled_blocks(text: str) -> str:
+-    """Remove disabled preprocessor blocks (#if 0, #if CONFIG_0, etc.) from C++ source."""
++# ---------------------------------------------------------------------------
++# Architecture-aware preprocessing for the test registry scanner.
++#
++# The scanner must not emit tests whose registration lives inside a
++# `#if defined(CONFIG_ARCH_*)` block for a *foreign* architecture: those test
++# functions are not compiled on the target arch, so referencing them from the
++# generated registry would produce undefined symbols at link time.
++#
++# Three per-level modes are tracked in a stack:
++#   SCAN  — legacy passthrough; every nested branch is scanned (unknown
++#           conditions are kept conservatively, matching the original tool).
++#   DROP  — entered for legacy-disabled conditions (#if 0, unknown CONFIG_*).
++#           The whole level is skipped and nested branches are NOT re-evaluated.
++#   ARCH  — the condition is a pure architecture expression
++#           (defined(CONFIG_ARCH_X), !defined(...), bare CONFIG_ARCH_X,
++#           combined with && / ||).  It is evaluated against the target
++#           architecture.  An `&&` chain whose *leftmost* arch term is false
++#           for the target is treated as disabled (covers
++#           `defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP` without affecting
++#           x86_64, where the term is true and falls through to legacy keep).
++# ---------------------------------------------------------------------------
++_ARCH_TERM_RE = re.compile(
++    r'^(!)?\s*'
++    r'(?:defined\s*\(\s*(CONFIG_ARCH_[A-Z0-9_]+)\s*\)'
++    r'|(CONFIG_ARCH_[A-Z0-9_]+))'
++    r'\s*$'
++)
++
++_ARCH_OP_RE = re.compile(r'\s*(&&|\|\|)\s*')
++
++
++def _eval_arch_condition(cond: str, target_arch: str) -> tuple[bool, bool]:
++    """Evaluate a preprocessor condition as a pure arch expression.
++
++    Returns (is_arch_expr, result).  is_arch_expr is True only when every
++    term in the expression is an arch macro reference (possibly negated),
++    combined with && / ||.  For the compound `leftmost-arch-false && rest`
++    case (rest is not a pure arch term) it returns (True, False) so the
++    foreign-arch block is dropped without changing x86_64, where the leftmost
++    term is true and the expression falls through to legacy handling.
++    """
++    own = "CONFIG_ARCH_" + target_arch.upper()
++    parts = _ARCH_OP_RE.split(cond)
++    ops = [p for p in parts if p in ("&&", "||")]
++    terms = [p.strip() for p in parts if p not in ("&&", "||") and p.strip()]
++    if not terms:
++        return (False, False)
++
++    # Try to parse every term as a pure arch macro reference.
++    parsed: list[tuple[str, bool] | None] = []  # (name, negated) or None
++    all_arch = True
++    for t in terms:
++        m = _ARCH_TERM_RE.match(t)
++        if m is None:
++            all_arch = False
++            parsed.append(None)
++        else:
++            parsed.append((m.group(2) or m.group(3), bool(m.group(1))))
++    if all_arch:
++        # Pure arch boolean expression — evaluate it.  All entries are
++        # guaranteed non-None here.
++        arch_terms: list[tuple[str, bool]] = []
++        for entry in parsed:
++            assert entry is not None
++            arch_terms.append(entry)
++        result = (arch_terms[0][0] == own)
++        if arch_terms[0][1]:
++            result = not result
++        for i, op in enumerate(ops):
++            tv = (arch_terms[i + 1][0] == own)
++            if arch_terms[i + 1][1]:
++                tv = not tv
++            result = (result and tv) if op == "&&" else (result or tv)
++        return (True, result)
++
++    # Not a pure arch expression.  Apply the leftmost-arch-false && rule:
++    # an `&&` chain whose leftmost term is a (non-negated) arch macro of a
++    # foreign architecture is disabled for the target.  This covers
++    # `defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP` (CONFIG_SMAP is 0 on
++    # non-x86_64) without changing x86_64, where the leftmost term is true.
++    if "||" not in cond:
++        m = _ARCH_TERM_RE.match(terms[0])
++        if m is not None and not bool(m.group(1)):
++            name = m.group(2) or m.group(3)
++            if name != own:
++                return (True, False)
++    return (False, False)
++
++
++def strip_disabled_blocks(text: str, target_arch: str = "x86_64") -> str:
++    """Remove disabled preprocessor blocks (#if 0, #if CONFIG_0, foreign-arch
++    #if defined(CONFIG_ARCH_*) blocks, etc.) from C++ source.
++
++    The per-level mode stack preserves the legacy conservative behavior for
++    non-arch conditions (SCAN/DROP) while correctly evaluating pure arch
++    expressions (ARCH) against `target_arch`.
++    """
+     result: list[str] = []
+-    disabled_depth = 0
++    # Stack of levels; each entry is a tuple (mode, active):
++    #   ("scan", True)        — legacy passthrough, content kept
++    #   ("drop", False)       — disabled, content dropped, never re-scanned
++    #   ("arch", bool)        — arch expr; True => this branch is live
++    stack: list[tuple] = []
+     for line in text.splitlines(keepends=True):
+         stripped = line.strip()
+         if stripped.startswith("#if "):
+             raw_cond = stripped[4:].strip()
+-            # Strip C++-style comments from the condition
+             comment_pos = raw_cond.find("//")
+             if comment_pos >= 0:
+                 raw_cond = raw_cond[:comment_pos].strip()
++            if any(mode == "drop" for mode, _ in stack):
++                stack.append(("drop", False))
++                continue
++            # Legacy disabled check first (matches original tool).
+             if _is_config_disabled(raw_cond):
+-                disabled_depth += 1
++                stack.append(("drop", False))
+                 continue
+-        elif stripped.startswith("#ifdef ") or stripped.startswith("#ifndef "):
+-            pass
+-        elif stripped.startswith("#elif"):
+-            raw_elif = stripped.lstrip("#elif").strip()
+-            if _is_config_disabled(raw_elif):
+-                # entering else branch of #if 0 ... #elif 0
+-                if disabled_depth > 0:
+-                    disabled_depth += 1
++            is_arch, arch_val = _eval_arch_condition(raw_cond, target_arch)
++            if is_arch:
++                stack.append(("arch", arch_val))
++            else:
++                stack.append(("scan", True))
++            continue
++        if stripped.startswith("#ifdef ") or stripped.startswith("#ifndef "):
++            if any(mode == "drop" for mode, _ in stack):
++                stack.append(("drop", False))
++                continue
++            # #ifdef CONFIG_ARCH_X is equivalent to the arch expression
++            # defined(CONFIG_ARCH_X); #ifndef to !defined(...).  Treat them
++            # as arch conditions when the macro is a CONFIG_ARCH_* macro.
++            macro = stripped.split(None, 1)[1].strip()
++            if macro.startswith("CONFIG_ARCH_"):
++                is_defined = stripped.startswith("#ifdef")
++                cond = ("defined(" + macro + ")" if is_defined
++                        else "!defined(" + macro + ")")
++                is_arch, arch_val = _eval_arch_condition(cond, target_arch)
++                if is_arch:
++                    stack.append(("arch", arch_val))
+                     continue
+-        elif stripped.startswith("#else"):
+-            if disabled_depth > 0:
+-                disabled_depth += 1
++            stack.append(("scan", True))
++            continue
++        if stripped.startswith("#elif"):
++            if not stack:
+                 continue
+-        elif stripped.startswith("#endif"):
+-            if disabled_depth > 0:
+-                disabled_depth -= 1
++            if stack[-1][0] == "drop":
+                 continue
+-        if disabled_depth > 0:
++            if stack[-1][0] == "arch":
++                if stack[-1][1]:
++                    # A prior branch was taken — this #elif branch is dead.
++                    stack[-1] = ("arch", False)
++                else:
++                    raw_elif = stripped.lstrip("#elif").strip()
++                    comment_pos = raw_elif.find("//")
++                    if comment_pos >= 0:
++                        raw_elif = raw_elif[:comment_pos].strip()
++                    is_arch, arch_val = _eval_arch_condition(
++                        raw_elif, target_arch)
++                    if is_arch:
++                        stack[-1] = ("arch", arch_val)
++                    else:
++                        # Unknown arch expr in #elif — conservative keep.
++                        stack[-1] = ("arch", True)
++            # SCAN levels keep their pass-through behavior (#elif ignored).
+             continue
+-        result.append(line)
++        if stripped.startswith("#else"):
++            if not stack:
++                continue
++            if stack[-1][0] == "arch":
++                stack[-1] = ("arch", not stack[-1][1])
++            elif stack[-1][0] == "drop":
++                continue
++            # SCAN levels keep pass-through.
++            continue
++        if stripped.startswith("#endif"):
++            if stack:
++                stack.pop()
++            continue
++        # Content line: emit unless an enclosing level suppresses it.
++        if all((mode == "scan") or (mode == "arch" and active)
++               for mode, active in stack):
++            result.append(line)
+     return "".join(result)
+ 
+ 
+-def scan_tests(root_dir: str, file_list: list[str] | None = None):
++def scan_tests(root_dir: str, file_list: list[str] | None = None,
++               target_arch: str = "x86_64"):
+     tests = []
+     sources: list[str] = []
+     if file_list:
+@@ -169,7 +316,7 @@ def scan_tests(root_dir: str, file_list: list[str] | None = None):
+             print(f"error: cannot read {path}: {e}", file=sys.stderr)
+             continue
+         content = strip_comments(content)
+-        content = strip_disabled_blocks(content)
++        content = strip_disabled_blocks(content, target_arch)
+         for m in RE_TEST.finditer(content):
+             name = m.group(1)
+             meta_raw = m.group(2)
+@@ -264,6 +411,13 @@ def main():
+         help="Path to a file listing source files to scan (one per line). "
+              "When set, only these files are scanned instead of walking input_dir.",
+     )
++    ap.add_argument(
++        "--arch",
++        default="x86_64",
++        help="Target architecture (x86_64, aarch64, riscv64). Tests inside "
++             "foreign-arch #if defined(CONFIG_ARCH_*) blocks are not emitted "
++             "into the registry, since they are not compiled on this arch.",
++    )
+     args = ap.parse_args()
+ 
+     if not os.path.isdir(args.input_dir):
+@@ -280,7 +434,7 @@ def main():
+                   file=sys.stderr)
+             sys.exit(1)
+ 
+-    tests = scan_tests(args.input_dir, file_list)
++    tests = scan_tests(args.input_dir, file_list, args.arch)
+     tests.sort(key=lambda t: t[0])
+     generate(tests, args.output_file)
+ 

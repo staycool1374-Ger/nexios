@@ -27,7 +27,7 @@
 
 namespace arch {
 
-volatile uint64_t Timer::ticks_ = 0;
+constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::counter_freq_hz_ = 0;
 
 /// @brief Initialise the timer with a given tick frequency and register the IRQ

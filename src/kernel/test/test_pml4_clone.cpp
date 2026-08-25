@@ -28,6 +28,8 @@
 #include <constants.hpp>
 #include "test_sched_helpers.hpp"
 
+#if defined(CONFIG_ARCH_X86_64)
+
 using namespace kernel;
 
 // v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
@@ -798,3 +800,5 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
     JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
 }
+
+#endif // CONFIG_ARCH_X86_64

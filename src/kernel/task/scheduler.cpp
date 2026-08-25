@@ -60,9 +60,13 @@ static inline uint64_t current_sp() noexcept {
     uint64_t sp{};
     asm volatile("mov %%rsp, %0" : "=r"(sp));
     return sp;
-#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+#elif defined(CONFIG_ARCH_AARCH64)
     uint64_t sp{};
     asm volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#elif defined(CONFIG_ARCH_RISCV64)
+    uint64_t sp{};
+    asm volatile("mv %0, sp" : "=r"(sp));
     return sp;
 #else
     return 0;
@@ -2152,8 +2156,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 Logger::raw_write(" ss=0x");
                 Logger::print_hex(cf[168 / 8]);
                 Logger::raw_write("\n");
+#if defined(CONFIG_ARCH_X86_64)
                 // Walk the harness's kslot stack PTE chain (read via the
                 // direct map) to see WHICH phys the kslot VA maps right now.
+                // The CR3/PM4L walk is x86_64-specific.
                 uint64_t cr3 = 0;
                 asm volatile("mov %%cr3, %0" : "=r"(cr3));
                 uint64_t kva = reinterpret_cast<uint64_t>(current->kernel_stack);
@@ -2180,6 +2186,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 Logger::raw_write(" SAME=");
                 Logger::print_dec(kphys == (cur_rsp & ~0xFFFULL) ? 1u : 0u);
                 Logger::raw_write("\n");
+#endif // CONFIG_ARCH_X86_64
             }
         }
 #endif
@@ -2707,11 +2714,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
             __atomic_load_n(&scheduler_switch_generation, __ATOMIC_RELAXED);
         __atomic_store_n(&scheduler_switch_generation, gen + 1,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_save_rsp_to, &exiting.context.rsp,
-                         __ATOMIC_RELEASE);
+        __atomic_store_n(&scheduler_save_rsp_to,
+                         &TASK_STACK_PTR(&exiting), __ATOMIC_RELEASE);
+#if defined(CONFIG_ARCH_X86_64)
         uint64_t cr0 = arch::read_cr0();
         cr0 |= (1ULL << 3);
         arch::write_cr0(cr0);
+#endif
     }
 }
 
@@ -2800,8 +2809,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     ready_queue_.reset();
 
     {
+#if defined(CONFIG_ARCH_X86_64)
         uint32_t _a, _b, _c, _d;
         asm volatile("cpuid" : "=a"(_a), "=b"(_b), "=c"(_c), "=d"(_d) : "a"(0));
+#endif
     }
     __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
@@ -3257,7 +3268,9 @@ extern "C" void scheduler_diag_depth_skip() {
     uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
                                   __ATOMIC_ACQUIRE);
     uint64_t rfl = 0;
+#if defined(CONFIG_ARCH_X86_64)
     asm volatile("pushfq; pop %0" : "=r"(rfl));
+#endif
     kernel::Logger::raw_write("[H2-DEPTH] id=");
     kernel::Logger::print_dec(id);
     kernel::Logger::raw_write(" depth=");
@@ -3293,7 +3306,9 @@ extern "C" void scheduler_diag_rsp_abort() {
     uint64_t top = __atomic_load_n(&kernel::scheduler_load_kstack_top,
                                    __ATOMIC_ACQUIRE);
     uint64_t rfl = 0;
+#if defined(CONFIG_ARCH_X86_64)
     asm volatile("pushfq; pop %0" : "=r"(rfl));
+#endif
     kernel::Logger::raw_write("[H2-RSPABORT] id=");
     kernel::Logger::print_dec(id);
     kernel::Logger::raw_write(" rsp=0x");
@@ -3398,7 +3413,9 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
         uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
                                       __ATOMIC_ACQUIRE);
         uint64_t rfl = 0;
+#if defined(CONFIG_ARCH_X86_64)
         asm volatile("pushfq; pop %0" : "=r"(rfl));
+#endif
         kernel::Logger::raw_write("[H2-SKIP] cap=0x");
         kernel::Logger::print_hex(captured_gen);
         kernel::Logger::raw_write(" cur=0x");

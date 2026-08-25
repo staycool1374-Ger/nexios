@@ -34,12 +34,25 @@ SECTIONS
 
     .boot_stack : ALIGN(4K)
     {
+        _stack_start_low = .;
         *(.boot_stack)
+        _stack_end_low = .;
     } :boot_data
 
     . = ALIGN(., 4K);
     boot_vma_end = .;
     phys_lma = boot_vma_end;
+
+    /* Higher-half aliases of the boot stack bounds.  After MMU enable the
+     * kernel runs via TTBR1_EL1 and the live boot-stack SP is
+     * HHDM_OFFSET + low-VMA address (boot.S adds 0xFFFF800000000000).
+     * The scheduler's is_boot_stack_rsp() range-checks the live RSP against
+     * these, so they must be the higher-half alias.  Defined as plain linker
+     * absolute symbols (no section), so references materialise as immediates
+     * and never emit an AArch64 ADR_PREL_PG_HI21 relocation against a low-VMA
+     * section from higher-half .text. */
+    _stack_start = 0xFFFF800000000000 + _stack_start_low;
+    _stack_end = 0xFFFF800000000000 + _stack_end_low;
 
     . = 0xFFFF800000000000 + phys_lma;
 
