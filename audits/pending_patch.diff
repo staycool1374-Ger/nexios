@@ -1,847 +1,427 @@
-diff --git a/src/kernel/sync/eventgroup.cpp b/src/kernel/sync/eventgroup.cpp
-index eeafd367..52bf876e 100644
---- a/src/kernel/sync/eventgroup.cpp
-+++ b/src/kernel/sync/eventgroup.cpp
-@@ -22,6 +22,7 @@
- #include <kernel/sync/eventgroup.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/sync/spinlock_guard.hpp>
-+#include <kernel/arch/io.hpp>
- #include <assert.hpp>
- 
- namespace kernel {
-@@ -149,24 +150,51 @@ void EventGroup::wake_matching() {
+diff --git a/src/kernel/sync/notify.cpp b/src/kernel/sync/notify.cpp
+index 5f4dde2a..603ae33b 100644
+--- a/src/kernel/sync/notify.cpp
++++ b/src/kernel/sync/notify.cpp
+@@ -30,9 +30,17 @@ namespace sync {
+ Notify::~Notify() {
+     SpinLockGuard<SpinLock> guard(lock_);
+     if (waiter_) {
+-        if (waiter_->state != TaskState::TERMINATED)
++        // H-2: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
++        // freed TCB to set_task_ready (ready-queue corruption / UAF).  Also
++        // require the generation captured at wait time — a recycled TCB that
++        // now occupies the slot must not be woken.
++        if (waiter_->state != TaskState::TERMINATED &&
++            waiter_->state != TaskState::REAPED &&
++            waiter_->generation == waiter_gen_) {
+             Scheduler::set_task_ready(*waiter_);
++        }
+         waiter_ = nullptr;
++        waiter_gen_ = 0;
+     }
+     initialized_ = false;
+ }
+@@ -42,6 +50,7 @@ void Notify::init() {
+     lock_.reset();
+     notify_value_ = 0;
+     waiter_ = nullptr;
++    waiter_gen_ = 0;
+     initialized_ = true;
  }
  
- /// @brief Block until any of the requested bits are set.
-+///
-+/// H-1 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
-+/// Scheduler::reschedule() — identical C-1 deadlock exposure as the semaphore.
-+/// The waiter-table-full path must never ENSURE(added): reachable resource
-+/// exhaustion is a retry condition, not an invariant violation.
- uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
--    SpinLockGuard<SpinLock> guard(lock_);
-     auto *task = Scheduler::current_task();
-     if (!task)
-         return bits_;
- 
--    if ((bits_ & bits) == bits) {
--        if (clear_on_exit)
--            bits_ &= ~bits;
--        return bits_;
--    }
-+    for (;;) {
-+        bool added;
-+        {
-+            SpinLockGuard<SpinLock> guard(lock_);
-+            if ((bits_ & bits) == bits) {
-+                if (clear_on_exit)
-+                    bits_ &= ~bits;
-+                return bits_;
-+            }
-+            added = add_waiter(*task, bits, clear_on_exit);
-+            if (added)
-+                task->state = TaskState::BLOCKED;
-+        }
- 
--    bool added = add_waiter(*task, bits, clear_on_exit);
--    ENSURE(added);
-+        if (!added) {
-+            Scheduler::reschedule();
-+            continue;
-+        }
-+        break;
-+    }
- 
--    task->state = TaskState::BLOCKED;
-+    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
-+    // queue so a BLOCKED task is never physically queued (INV-2 desync).
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
- 
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+        return bits_;
-+    }
-+    remove_waiter(*task);
-+    task->state = TaskState::RUNNING;
-+    Scheduler::enqueue_ready(*task);
-     return bits_;
- }
- 
-@@ -174,42 +202,66 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
- /// overload).
- errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
-                                             uint64_t *out_bits) {
--    SpinLockGuard<SpinLock> guard(lock_);
-     auto *task = Scheduler::current_task();
-     if (!task)
-         return errors::SYNC_ERR_NO_TASK;
- 
--    if ((bits_ & bits) == bits) {
--        if (clear_on_exit)
--            bits_ &= ~bits;
--        if (out_bits)
--            *out_bits = bits_;
--        return errors::SYNC_ERR_OK;
-+    bool added;
-+    {
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        if ((bits_ & bits) == bits) {
-+            if (clear_on_exit)
-+                bits_ &= ~bits;
-+            if (out_bits)
-+                *out_bits = bits_;
-+            return errors::SYNC_ERR_OK;
-+        }
-+
-+        if (wait_count_ >= MAX_WAITERS) {
-+            return errors::SYNC_ERR_MAX_WAITERS;
-+        }
-+
-+        added = add_waiter(*task, bits, clear_on_exit);
-+        if (added)
-+            task->state = TaskState::BLOCKED;
+@@ -52,6 +61,7 @@ errors::SyncError Notify::init_err() {
      }
- 
--    if (wait_count_ >= MAX_WAITERS) {
-+    if (!added) {
-         return errors::SYNC_ERR_MAX_WAITERS;
-     }
- 
--    bool added = add_waiter(*task, bits, clear_on_exit);
--    (void)added;
--
--    task->state = TaskState::BLOCKED;
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
- 
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+    } else {
-+        remove_waiter(*task);
-+        task->state = TaskState::RUNNING;
-+        Scheduler::enqueue_ready(*task);
-+        return errors::SYNC_ERR_MAX_WAITERS;
-+    }
-+
-     if (out_bits)
-         *out_bits = bits_;
+     notify_value_ = 0;
+     waiter_ = nullptr;
++    waiter_gen_ = 0;
+     initialized_ = true;
      return errors::SYNC_ERR_OK;
  }
- 
- /// @brief Check if bits are set without blocking.
-+///
-+/// M-6 serialization (audit-task-sync MEDIUM): read bits_ under the spinlock so
-+/// a concurrent set/clear can't return a stale answer.
- bool EventGroup::try_wait_bits(uint64_t bits) {
-+    SpinLockGuard<SpinLock> guard(lock_);
-     return (bits_ & bits) == bits;
+@@ -61,9 +71,13 @@ void Notify::notify(uint64_t value) {
+     SpinLockGuard<SpinLock> guard(lock_);
+     notify_value_ = value;
+     if (waiter_) {
+-        if (waiter_->state != TaskState::TERMINATED)
++        if (waiter_->state != TaskState::TERMINATED &&
++            waiter_->state != TaskState::REAPED &&
++            waiter_->generation == waiter_gen_) {
+             Scheduler::set_task_ready(*waiter_);
++        }
+         waiter_ = nullptr;
++        waiter_gen_ = 0;
+     }
  }
  
- /// @brief Check if bits are set without blocking (error-returning overload).
- errors::SyncError EventGroup::try_wait_bits_err(uint64_t bits,
-                                                 bool *out_result) {
-+    SpinLockGuard<SpinLock> guard(lock_);
-     bool result = (bits_ & bits) == bits;
-     if (out_result)
-         *out_result = result;
-diff --git a/src/kernel/sync/semaphore.cpp b/src/kernel/sync/semaphore.cpp
-index e37568e1..4d40c89a 100644
---- a/src/kernel/sync/semaphore.cpp
-+++ b/src/kernel/sync/semaphore.cpp
-@@ -22,6 +22,7 @@
- #include <kernel/sync/semaphore.hpp>
+@@ -72,9 +86,13 @@ errors::SyncError Notify::notify_err(uint64_t value) {
+     SpinLockGuard<SpinLock> guard(lock_);
+     notify_value_ = value;
+     if (waiter_) {
+-        if (waiter_->state != TaskState::TERMINATED)
++        if (waiter_->state != TaskState::TERMINATED &&
++            waiter_->state != TaskState::REAPED &&
++            waiter_->generation == waiter_gen_) {
+             Scheduler::set_task_ready(*waiter_);
++        }
+         waiter_ = nullptr;
++        waiter_gen_ = 0;
+         return errors::SYNC_ERR_OK;
+     }
+     return errors::SYNC_ERR_NO_WAITER;
+@@ -92,6 +110,7 @@ uint64_t Notify::wait() {
+             return 0;
+ 
+         waiter_ = task;
++        waiter_gen_ = task->generation;
+         task->state = TaskState::BLOCKED;
+     } // lock released BEFORE reschedule: never hold a spinlock across a
+       // context switch.  reschedule() arms a deferred switch and re-enables
+@@ -116,6 +135,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
+             return errors::SYNC_ERR_ALREADY_WAITING;
+ 
+         waiter_ = task;
++        waiter_gen_ = task->generation;
+         task->state = TaskState::BLOCKED;
+     } // lock released BEFORE reschedule (see wait())
+ 
+diff --git a/src/kernel/sync/notify.hpp b/src/kernel/sync/notify.hpp
+index b14da244..8cb3c602 100644
+--- a/src/kernel/sync/notify.hpp
++++ b/src/kernel/sync/notify.hpp
+@@ -39,7 +39,9 @@ static constexpr uint64_t NOTIFY_INVALID = 0;
+ 
+ class Notify {
+   public:
+-    Notify() : notify_value_(0), waiter_(nullptr), initialized_(false) {
++    Notify()
++        : notify_value_(0), waiter_(nullptr), waiter_gen_(0),
++          initialized_(false) {
+     }
+     /// @brief Destructor — wakes any waiter before the object is freed.
+     ~Notify();
+@@ -83,10 +85,12 @@ class Notify {
+     }
+ 
+   private:
+-    SpinLock lock_;            ///< Protects all notify state.
+-    uint64_t notify_value_;    ///< Value delivered to the waiter.
++    SpinLock lock_;          ///< Protects all notify state.
++    uint64_t notify_value_;  ///< Value delivered to the waiter.
+     TaskControlBlock *waiter_; ///< Currently waiting task (nullptr = none).
+-    bool initialized_;         ///< Whether init() has been called.
++    uint64_t waiter_gen_;    ///< TCB generation captured at wait registration
++                             ///< (H-2: defeats ABA if the TCB is recycled).
++    bool initialized_;       ///< Whether init() has been called.
+ };
+ 
+ } // namespace sync
+diff --git a/src/kernel/sync/queue.cpp b/src/kernel/sync/queue.cpp
+index dd4acbcf..9858d14a 100644
+--- a/src/kernel/sync/queue.cpp
++++ b/src/kernel/sync/queue.cpp
+@@ -24,6 +24,7 @@
  #include <kernel/task/scheduler.hpp>
  #include <kernel/sync/spinlock_guard.hpp>
-+#include <kernel/arch/io.hpp>
- #include <assert.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <string.hpp>
  
  namespace kernel {
-@@ -155,7 +156,7 @@ void Semaphore::restore_priority() {
-         if (waiters_[i]->priority > max_remaining)
-             max_remaining = waiters_[i]->priority;
-     }
--    if (max_remaining >= holder_priority_) {
-+    if (max_remaining > holder_priority_) {
-         owner_->priority = max_remaining;
-     } else {
-         owner_->priority = holder_priority_;
-@@ -165,55 +166,115 @@ void Semaphore::restore_priority() {
+@@ -38,6 +39,8 @@ void Queue::init() {
+     recv_waiters_count_ = 0;
+     last_sender_ = nullptr;
+     last_receiver_ = nullptr;
++    last_sender_gen_ = 0;
++    last_receiver_gen_ = 0;
+     send_holder_prio_ = 0;
+     recv_holder_prio_ = 0;
  }
- 
- /// @brief Decrement the count, blocking if zero.
-+///
-+/// C-1/C-2 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
-+/// Scheduler::reschedule() — reschedule() arms a deferred switch (INV-4) and
-+/// re-enables IRQs; a timer tick before this frame unwinds would save the task
-+/// holding lock_, and the ISR-side post() would spin forever on it (the
-+/// threaded-IRQ keyboard deadlock class documented by Notify::wait()).  The
-+/// waiter-table-full path must also never ENSURE(added): reachable resource
-+/// exhaustion is an error/retry condition, not an invariant violation.
- void Semaphore::wait() {
--    SpinLockGuard<SpinLock> guard(lock_);
-     auto *task = Scheduler::current_task();
-     if (!task)
-         return;
- 
--    if (count_ > 0) {
--        --count_;
--        if (count_ == 0) {
--            owner_ = task;
-+    // Retry loop: add_waiter fails only when the waiter table is full.
-+    // A void blocking API cannot report that; yield and retry (the table
-+    // drains as waiters are woken by post()).
-+    for (;;) {
-+        bool added;
-+        {
-+            SpinLockGuard<SpinLock> guard(lock_);
-+            if (count_ > 0) {
-+                --count_;
-+                if (count_ == 0) {
-+                    owner_ = task;
-+                }
-+                return;
-+            }
-+            inherit_priority(*task);
-+            added = add_waiter(*task);
-+            if (added)
-+                task->state = TaskState::BLOCKED;
-         }
--        return;
--    }
--
--    inherit_priority(*task);
- 
--    bool added = add_waiter(*task);
--    ENSURE(added);
-+        if (!added) {
-+            Scheduler::reschedule();
-+            continue;
-+        }
-+        break;
-+    }
- 
--    task->state = TaskState::BLOCKED;
-+    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
-+    // queue so a BLOCKED task is never physically queued (INV-2 desync —
-+    // release-build live-lock if the deferred switch applies late).
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
-+
-+    // reschedule() is deferred (INV-4): the current task keeps running with
-+    // state=BLOCKED until the timer ISR applies the switch and a post() wakes
-+    // it.  Spin-wait (mirrors IPC::send).  If interrupts are off the ISR can't
-+    // fire — roll back and leave without the semaphore.
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+        return;
-+    }
-+    remove_waiter(*task);
-+    task->state = TaskState::RUNNING;
-+    Scheduler::enqueue_ready(*task);
- }
- 
- /// @brief Decrement the count, blocking if zero (error-returning overload).
- errors::SyncError Semaphore::wait_err() {
--    SpinLockGuard<SpinLock> guard(lock_);
-     auto *task = Scheduler::current_task();
-     if (!task)
-         return errors::SYNC_ERR_NO_TASK;
- 
--    if (count_ > 0) {
--        --count_;
--        if (count_ == 0) {
--            owner_ = task;
-+    bool added;
-+    {
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        if (count_ > 0) {
-+            --count_;
-+            if (count_ == 0) {
-+                owner_ = task;
-+            }
-+            return errors::SYNC_ERR_OK;
-         }
--        return errors::SYNC_ERR_OK;
-+
-+        if (waiter_count_ >= MAX_WAITERS) {
-+            return errors::SYNC_ERR_MAX_WAITERS;
-+        }
-+
-+        inherit_priority(*task);
-+
-+        added = add_waiter(*task);
-+        if (added)
+@@ -54,6 +57,8 @@ errors::SyncError Queue::init_err() {
+     recv_waiters_count_ = 0;
+     last_sender_ = nullptr;
+     last_receiver_ = nullptr;
++    last_sender_gen_ = 0;
++    last_receiver_gen_ = 0;
+     send_holder_prio_ = 0;
+     recv_holder_prio_ = 0;
+     return errors::SYNC_ERR_OK;
+@@ -202,6 +207,7 @@ bool Queue::send(const uint8_t *data, size_t size) {
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             last_sender_ = task;
++            last_sender_gen_ = task->generation;
+             if (!is_full()) {
+                 memcpy(msgs_[tail_].data, data, size);
+                 msgs_[tail_].size = size;
+@@ -214,11 +220,15 @@ bool Queue::send(const uint8_t *data, size_t size) {
+             boost_receiver(*task);
+             if (!add_send_waiter(*task))
+                 return false;
++            // H-7: perform the BLOCKED transition inside the lock so no
++            // observer can see the waiter registered but still RUNNING, nor
++            // a half-transitioned state between the unlocked store and the
++            // deferred switch.
 +            task->state = TaskState::BLOCKED;
-     }
+         }
  
--    if (waiter_count_ >= MAX_WAITERS) {
-+    if (!added) {
-+        // Table became full between the check and the add (same critical
-+        // section, so unreachable) — defensive.
-         return errors::SYNC_ERR_MAX_WAITERS;
-     }
+         // Block OUTSIDE the queue lock so the receiver can drain the queue and
+         // wake us (holding lock_ across the block would deadlock the drain).
+-        task->state = TaskState::BLOCKED;
+         Scheduler::dequeue_ready(*task);
+         Scheduler::reschedule();
  
--    inherit_priority(*task);
--
--    add_waiter(*task);
--    task->state = TaskState::BLOCKED;
-+    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
+@@ -254,6 +264,7 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             last_sender_ = task;
++            last_sender_gen_ = task->generation;
+             if (!is_full()) {
+                 memcpy(msgs_[tail_].data, data, size);
+                 msgs_[tail_].size = size;
+@@ -269,9 +280,10 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
+                 return errors::SYNC_ERR_MAX_WAITERS;
+             boost_receiver(*task);
+             add_send_waiter(*task);
++            // H-7: BLOCKED transition inside the lock (see send()).
++            task->state = TaskState::BLOCKED;
+         }
  
--    return errors::SYNC_ERR_OK;
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+        return errors::SYNC_ERR_OK;
-+    }
-+    remove_waiter(*task);
-+    task->state = TaskState::RUNNING;
-+    Scheduler::enqueue_ready(*task);
-+    return errors::SYNC_ERR_MAX_WAITERS;
- }
+-        task->state = TaskState::BLOCKED;
+         Scheduler::dequeue_ready(*task);
+         Scheduler::reschedule();
  
- /// @brief Decrement count without blocking.
-diff --git a/src/kernel/task/sporadic_server.cpp b/src/kernel/task/sporadic_server.cpp
-index c597619b..40b0df28 100644
---- a/src/kernel/task/sporadic_server.cpp
-+++ b/src/kernel/task/sporadic_server.cpp
-@@ -46,6 +46,7 @@ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
-     replenishment_head_ = 0;
-     replenishment_tail_ = 0;
-     replenishment_count_ = 0;
-+    coalesce_count_ = 0;
- }
+@@ -294,7 +306,9 @@ bool Queue::try_send(const uint8_t *data, size_t size) {
+     if (size > QUEUE_MAX_MSG_SIZE || is_full())
+         return false;
  
- void SporadicServer::on_activation(uint64_t now) noexcept {
-@@ -138,15 +139,13 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
-             new_budget = budget_c_;
-         budget_remaining_ = new_budget;
+-    last_sender_ = Scheduler::current_task();
++    auto *snd = Scheduler::current_task();
++    last_sender_ = snd;
++    last_sender_gen_ = snd ? snd->generation : 0;
+     memcpy(msgs_[tail_].data, data, size);
+     msgs_[tail_].size = size;
+     tail_ = (tail_ + 1) % QUEUE_MAX_MSG_COUNT;
+@@ -314,7 +328,9 @@ errors::SyncError Queue::try_send_err(const uint8_t *data, size_t size,
+     if (is_full())
+         return errors::SYNC_ERR_QUEUE_FULL;
  
--        // If budget is now positive and server was exhausted, return to
-+        // If budget is now positive and the server was EXHAUSTED, return to
-         // normal priority (the caller checks current_priority()).
--        if (new_budget > 0 && state_ != ACTIVE) {
--            // Transition back to ACTIVE so the server can run at its
--            // base priority again.  The server may still be mid-job
--            // (if budget was exhausted mid-execution) or may be idle
--            // waiting for new work.  We conservatively set ACTIVE so
--            // the scheduler picks it up; if idle, the next on_completion
--            // will put it back.
-+        if (new_budget > 0 && state_ == EXHAUSTED) {
-+            // M-8 (audit-task-sync): only an EXHAUSTED server may be forced
-+            // ACTIVE by a replenishment.  An IDLE server must stay IDLE — a
-+            // forced ACTIVE blocks the next on_activation() (which requires
-+            // IDLE), delaying the next aperiodic job.
-             state_ = ACTIVE;
- #if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK
-             sporadic_server_deadline_handler(this, 1);
-@@ -158,17 +157,31 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
- // ---- Private helpers ----
+-    last_sender_ = Scheduler::current_task();
++    auto *snd = Scheduler::current_task();
++    last_sender_ = snd;
++    last_sender_gen_ = snd ? snd->generation : 0;
+     memcpy(msgs_[tail_].data, data, size);
+     msgs_[tail_].size = size;
+     tail_ = (tail_ + 1) % QUEUE_MAX_MSG_COUNT;
+@@ -336,6 +352,7 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             last_receiver_ = task;
++            last_receiver_gen_ = task->generation;
+             if (!is_empty()) {
+                 size_t copy_size = msgs_[head_].size;
+                 if (buf && size) {
+@@ -355,10 +372,11 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
+             boost_sender(*task);
+             if (!add_recv_waiter(*task))
+                 return false;
++            // H-7: BLOCKED transition inside the lock (see send()).
++            task->state = TaskState::BLOCKED;
+         }
  
- // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
--bool SporadicServer::schedule_replenishment(uint64_t time,
-+void SporadicServer::schedule_replenishment(uint64_t time,
-                                             uint64_t amount) noexcept {
--    if (replenishment_count_ == MAX_REPLENISHMENTS)
--        return false;
-+    if (replenishment_count_ == MAX_REPLENISHMENTS) {
-+        // C-3 (audit-task-sync-v0.4.2): ring full — do NOT silently drop the
-+        // consumed budget.  Merge the amount into the newest pending entry,
-+        // deferring its restore to the later of the two times (conservative
-+        // late restore).  The consumed budget is thus preserved, at worst
-+        // restored one period late instead of being lost permanently.
-+        Replenishment &newest =
-+            replenishments_[(replenishment_tail_ + MAX_REPLENISHMENTS - 1) %
-+                            MAX_REPLENISHMENTS];
-+        newest.amount += amount;
-+        if (newest.amount > budget_c_)
-+            newest.amount = budget_c_;
-+        if (time > newest.time)
-+            newest.time = time;
-+        ++coalesce_count_;
+         // Block OUTSIDE the queue lock so a sender can enqueue and wake us.
+-        task->state = TaskState::BLOCKED;
+         Scheduler::dequeue_ready(*task);
+         Scheduler::reschedule();
+ 
+@@ -391,6 +409,7 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             last_receiver_ = task;
++            last_receiver_gen_ = task->generation;
+             if (!is_empty()) {
+                 size_t copy_size = msgs_[head_].size;
+                 if (buf && size) {
+@@ -414,9 +433,10 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
+                 return errors::SYNC_ERR_MAX_WAITERS;
+             boost_sender(*task);
+             add_recv_waiter(*task);
++            // H-7: BLOCKED transition inside the lock (see send()).
++            task->state = TaskState::BLOCKED;
+         }
+ 
+-        task->state = TaskState::BLOCKED;
+         Scheduler::dequeue_ready(*task);
+         Scheduler::reschedule();
+ 
+@@ -439,7 +459,9 @@ bool Queue::try_receive(uint8_t *buf, size_t *size) {
+     if (is_empty())
+         return false;
+ 
+-    last_receiver_ = Scheduler::current_task();
++    auto *rcv = Scheduler::current_task();
++    last_receiver_ = rcv;
++    last_receiver_gen_ = rcv ? rcv->generation : 0;
+     size_t copy_size = msgs_[head_].size;
+     if (buf && size) {
+         if (*size < copy_size)
+@@ -464,7 +486,9 @@ errors::SyncError Queue::try_receive_err(uint8_t *buf, size_t *size,
+     if (is_empty())
+         return errors::SYNC_ERR_QUEUE_EMPTY;
+ 
+-    last_receiver_ = Scheduler::current_task();
++    auto *rcv = Scheduler::current_task();
++    last_receiver_ = rcv;
++    last_receiver_gen_ = rcv ? rcv->generation : 0;
+     size_t copy_size = msgs_[head_].size;
+     if (buf && size) {
+         if (*size < copy_size)
+@@ -490,14 +514,39 @@ errors::SyncError Queue::try_receive_err(uint8_t *buf, size_t *size,
+ 
+ /// @brief Boost the last receiver when a high-prio sender blocks on a full
+ /// queue.
++///
++/// H-3 (audit-task-sync-v0.4.2): (a) never dereference a freed/recycled TCB —
++/// validate against REAPED state and the generation captured when
++/// last_receiver_ was set (a TERMINATED zombie is still allocated and safe to
++/// boost; a REAPED or recycled block is not); (b) route the priority mutation
++/// through the scheduler's re-bucketing pattern (mirrors ipc.cpp:block_sender
++/// / Scheduler::set_priority) so a boosted task sitting in the ready queue
++/// moves to its new priority bucket.
+ void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
+ #if CONFIG_QUEUE_PIP
+     if (!last_receiver_)
+         return;
++    if (last_receiver_->state == TaskState::REAPED ||
++        last_receiver_->generation != last_receiver_gen_) {
++        last_receiver_ = nullptr;
++        recv_holder_prio_ = 0;
 +        return;
 +    }
- 
-     replenishments_[replenishment_tail_].time = time;
-     replenishments_[replenishment_tail_].amount = amount;
- 
-     replenishment_tail_ = (replenishment_tail_ + 1) % MAX_REPLENISHMENTS;
-     replenishment_count_++;
--    return true;
- }
- 
- SporadicServer::Replenishment SporadicServer::pop_replenishment() noexcept {
-diff --git a/src/kernel/task/sporadic_server.hpp b/src/kernel/task/sporadic_server.hpp
-index 12e460a0..70e60d2a 100644
---- a/src/kernel/task/sporadic_server.hpp
-+++ b/src/kernel/task/sporadic_server.hpp
-@@ -157,6 +157,13 @@ class SporadicServer : public KernelObject {
-         return replenishment_count_;
+     if (blocked_sender.priority > last_receiver_->priority) {
++        // IrqGuard excludes the timer ISR (deadline demote / sporadic
++        // priority changes) so the old/new effective_priority snapshots stay
++        // consistent — same discipline as ipc.cpp:block_sender.
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &receiver = *last_receiver_;
++        uint64_t old_prio = Scheduler::effective_priority(&receiver);
+         if (recv_holder_prio_ == 0)
+-            recv_holder_prio_ = last_receiver_->priority;
+-        last_receiver_->priority = blocked_sender.priority;
++            recv_holder_prio_ = receiver.priority;
++        receiver.priority = blocked_sender.priority;
++        uint64_t new_prio = Scheduler::effective_priority(&receiver);
++        // Only re-bucket a ready-queue member; a BLOCKED receiver has no
++        // bucket and will be enqueued at the boosted priority on wake.
++        if (old_prio != new_prio && receiver.in_ready_queue_)
++            Scheduler::move_priority(receiver, old_prio, new_prio);
      }
+ #else
+     (void)blocked_sender;
+@@ -506,14 +555,29 @@ void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
  
-+    /// @return Number of replenishments merged into an existing entry because
-+    ///         the ring was full (C-3 coalescing).  Non-zero only when the
-+    ///         ring saturated — a diagnostic that budget was restored late.
-+    uint64_t coalesce_count() const noexcept {
-+        return coalesce_count_;
+ /// @brief Boost the last sender when a high-prio receiver blocks on an empty
+ /// queue.
++///
++/// H-3: same freed-state validation + re-bucketing discipline as
++/// boost_receiver.
+ void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
+ #if CONFIG_QUEUE_PIP
+     if (!last_sender_)
+         return;
++    if (last_sender_->state == TaskState::REAPED ||
++        last_sender_->generation != last_sender_gen_) {
++        last_sender_ = nullptr;
++        send_holder_prio_ = 0;
++        return;
 +    }
-+
-     /// @brief Sets the normal scheduling priority for this server.
-     /// Call this after init() to assign the server's base priority level.
-     void set_base_priority(uint64_t prio) noexcept {
-@@ -188,12 +195,14 @@ class SporadicServer : public KernelObject {
-     uint64_t replenishment_head_;  ///< Dequeue from head.
-     uint64_t replenishment_tail_;  ///< Enqueue at tail.
-     uint64_t replenishment_count_; ///< Number of valid entries.
-+    uint64_t coalesce_count_;      ///< Ring-full merges performed (C-3).
- 
-     /// @brief Inserts a replenishment event into the queue.
-     /// @param time   Tick at which to replenish.
-     /// @param amount Budget amount to restore.
--    /// @return true if inserted, false if queue full.
--    bool schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
-+    /// Never fails: when the ring is full the amount is coalesced into the
-+    /// newest pending entry (C-3 — budget is restored late, never lost).
-+    void schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
- 
-     /// @brief Removes and returns the earliest replenishment.
-     /// @return The head Replenishment.  Undefined if queue is empty.
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 6163316d..a0c2a596 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -56,6 +56,7 @@ void register_rlimit_tests();
- void register_init_tests();
- void register_syscall_tests();
- void register_sync_tests();
-+void register_sync_block_pattern_tests();
- void register_spinlock_tests();
- void register_task_lifecycle_tests();
- void register_idle_task_tests();
-@@ -225,7 +226,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          register_spinlock_tests();
-          register_spinlock_stress_tests();
-      }},
--    {"synchronization_sync", []() { register_sync_tests(); }},
-+    {"synchronization_sync",
-+     []() {
-+         register_sync_tests();
-+         register_sync_block_pattern_tests();
-+     }},
-     {"synchronization_locking",
-      []() {
-          register_locking_tests();
-@@ -483,6 +488,7 @@ static void register_all_tests() {
-     register_syscall_tests();
-     register_syscall_fuzz_tests();
-     register_sync_tests();
-+    register_sync_block_pattern_tests();
-     register_spinlock_tests();
-     register_task_lifecycle_tests();
-     register_idle_task_tests();
-@@ -627,6 +633,7 @@ static void register_all_tests_first_half() {
-     register_syscall_tests();
-     register_syscall_fuzz_tests();
-     register_sync_tests();
-+    register_sync_block_pattern_tests();
-     register_spinlock_tests();
-     register_task_lifecycle_tests();
-     register_idle_task_tests();
-diff --git a/src/kernel/test/test_sporadic_server.cpp b/src/kernel/test/test_sporadic_server.cpp
-index 1f4a9b0a..0574e5de 100644
---- a/src/kernel/test/test_sporadic_server.cpp
-+++ b/src/kernel/test/test_sporadic_server.cpp
-@@ -429,7 +429,9 @@ JARVIS_TEST(sporadic_server_granularity_clamp_zero, "PRE: none | POST: none") {
- // Testidea: Granularity with completion — verify replenishment amount
- //           equals consumed units, not raw ticks.
- // Expect: budget=5, granularity=3, consume 2 units (6 calls), complete.
--//         Replenishment amount = 2 (not 6).
-+//         Replenishment amount = 2 (not 6).  M-8: the server completed (IDLE),
-+//         so a replenishment restores budget WITHOUT forcing it ACTIVE — only
-+//         an EXHAUSTED server may be re-activated by a replenishment.
- JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
-     SporadicServer ss;
-     ss.init(5, 100, 0, 3);
-@@ -449,7 +451,9 @@ JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
-     JARVIS_ASSERT_EQ(1ULL, ss.pending_count());
-     // Replenishment amount should be consumed_since_active_ = 2, not 6
-     ss.process_replenishments(110);
--    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
-+    // M-8: IDLE server stays IDLE after a replenishment (budget restored, but
-+    // no aperiodic work pending — forcing ACTIVE would delay the next job).
-+    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
-     // Budget was 3, replenished 2, capped at C=5
-     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget());
-     JARVIS_TEST_PASS();
-@@ -560,7 +564,8 @@ JARVIS_TEST(sporadic_server_consume_already_exhausted,
- // Testidea: Replenishment after partial consumption restores only the
- //           consumed amount, capped at C.
- // Expect: Consume 2 of 5 budget, complete. Replenishment restores 2.
--//         Budget goes from 3 → 5 (capped).
-+//         Budget goes from 3 → 5 (capped).  M-8: server completed (IDLE), so
-+//         the replenishment must NOT force it ACTIVE.
- JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
-     SporadicServer ss;
-     ss.init(5, 50, 0);
-@@ -575,7 +580,9 @@ JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
-     // Fire replenishment
-     ss.process_replenishments(60);
-     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget()); // 3 + 2 = 5
--    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
-+    // M-8: IDLE stays IDLE (replenishment restores budget, never re-activates
-+    // a server with no pending aperiodic work).
-+    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
-     JARVIS_TEST_PASS();
+     if (blocked_receiver.priority > last_sender_->priority) {
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &sender = *last_sender_;
++        uint64_t old_prio = Scheduler::effective_priority(&sender);
+         if (send_holder_prio_ == 0)
+-            send_holder_prio_ = last_sender_->priority;
+-        last_sender_->priority = blocked_receiver.priority;
++            send_holder_prio_ = sender.priority;
++        sender.priority = blocked_receiver.priority;
++        uint64_t new_prio = Scheduler::effective_priority(&sender);
++        if (old_prio != new_prio && sender.in_ready_queue_)
++            Scheduler::move_priority(sender, old_prio, new_prio);
+     }
+ #else
+     (void)blocked_receiver;
+@@ -521,21 +585,51 @@ void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
  }
  
-diff --git a/src/kernel/test/test_sync_block_pattern.cpp b/src/kernel/test/test_sync_block_pattern.cpp
-new file mode 100644
-index 00000000..d6f4932f
---- /dev/null
-+++ b/src/kernel/test/test_sync_block_pattern.cpp
-@@ -0,0 +1,322 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_sync_block_pattern.cpp
-+/// @brief Regression tests for audit-task-sync-v0.4.2 C-1/C-2/H-1 (spinlock
-+/// must NOT be held across Scheduler::reschedule(); a BLOCKED task must be
-+/// dequeued from the ready queue) and C-3 (sporadic-server replenishment ring
-+/// full must coalesce, never silently drop budget).
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/sync/semaphore.hpp>
-+#include <kernel/sync/eventgroup.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/sporadic_server.hpp>
-+#include <kernel/test/test_sched_helpers.hpp>
-+
-+using namespace kernel;
-+
-+// Runmode: kernel
-+// Testidea: Verifies a REAL task blocking in sem.wait() is removed from the
-+// ready queue (C-2/INV-2): while BLOCKED, the task must not be physically
-+// queued, so a later post() wake re-enqueues exactly once and the worker
-+// completes.  Also verifies wait() returns (does not spin on lock_) so the
-+// harness can post from task context (C-1: lock released before reschedule).
-+// Input: Worker (prio 11) genuinely blocks in sem.wait(); harness posts.
-+// Expect: Worker BLOCKED and not in ready queue; post() wakes it; worker
-+//         completes; no ResourceTracker delta.
-+// Depends: kernel::sync::Semaphore, kernel::TaskControlBlock, kernel::Scheduler
-+JARVIS_TEST(semaphore_wait_blocked_not_in_ready_queue,
-+            "PRE: none | POST: none") {
-+    sync::Semaphore sem;
-+    sem.init(0, 1);
-+    static uint64_t g_woken = 0;
-+    g_woken = 0;
-+
-+    auto *worker = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            sync::Semaphore *s = reinterpret_cast<sync::Semaphore *>(
-+                self->user_data);
-+            s->wait();
-+            while (self->state == TaskState::BLOCKED)
-+                arch::pause();
-+            __atomic_store_n(&g_woken, 1, __ATOMIC_RELEASE);
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(worker != nullptr);
-+    worker->user_data = &sem;
-+    Scheduler::add_task(*worker);
-+    Scheduler::reschedule();
-+
-+    // Worker genuinely blocks inside sem.wait() and is dequeued from the
-+    // ready queue (INV-2 — a BLOCKED task must never be physically queued).
-+    while (worker->state != TaskState::BLOCKED)
-+        arch::pause();
-+    JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(!worker->in_ready_queue_);
-+
-+    // Wake it (real post — from task context; proves the lock was released
-+    // before the deferred switch, otherwise this post would deadlock on lock_).
-+    sem.post();
-+    kernel::test::wait_for_termination_safe(worker);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(1ULL, g_woken);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: EventGroup::wait_bits() (H-1) must release lock_ before the
-+// deferred switch and dequeue the BLOCKED task (INV-2).  The harness posts
-+// the bit from task context; the worker must wake and complete.
-+// Input: Worker (prio 11) blocks in eg.wait_bits(0x1); harness sets the bit.
-+// Expect: Worker BLOCKED, not in ready queue; set_bits() wakes it; completes.
-+// Depends: kernel::sync::EventGroup, kernel::TaskControlBlock, kernel::Scheduler
-+JARVIS_TEST(eventgroup_wait_bits_blocked_not_in_ready_queue,
-+            "PRE: none | POST: none") {
-+    sync::EventGroup eg;
-+    eg.init();
-+    static uint64_t g_woken = 0;
-+    g_woken = 0;
-+
-+    auto *worker = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            sync::EventGroup *e =
-+                reinterpret_cast<sync::EventGroup *>(self->user_data);
-+            e->wait_bits(0x1);
-+            while (self->state == TaskState::BLOCKED)
-+                arch::pause();
-+            __atomic_store_n(&g_woken, 1, __ATOMIC_RELEASE);
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(worker != nullptr);
-+    worker->user_data = &eg;
-+    Scheduler::add_task(*worker);
-+    Scheduler::reschedule();
-+
-+    while (worker->state != TaskState::BLOCKED)
-+        arch::pause();
-+    JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(!worker->in_ready_queue_);
-+
-+    eg.set_bits(0x1);
-+    kernel::test::wait_for_termination_safe(worker);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(1ULL, g_woken);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: EventGroup::try_wait_bits (M-6 serialization) must observe a
-+// concurrently set bit — i.e. the read is under the spinlock and reflects a
-+// set_bits() that happened on another real task.
-+// Input: Harness sets a bit directly (no waiter), then try_wait_bits reads it.
-+// Expect: try_wait_bits returns true immediately.
-+// Depends: kernel::sync::EventGroup
-+JARVIS_TEST(eventgroup_try_wait_bits_serialized, "PRE: none | POST: none") {
-+    sync::EventGroup eg;
-+    eg.init();
-+    eg.set_bits(0x2);
-+    JARVIS_ASSERT(eg.try_wait_bits(0x2));
-+    JARVIS_ASSERT(!eg.try_wait_bits(0x1));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies the sporadic-server replenishment ring-full coalescing
-+// (C-3): consuming past MAX_REPLENISHMENTS worth of budget must NOT silently
-+// drop any consumed amount — the amount is merged into the newest pending
-+// replenishment, so the total eventual restore equals the total consumed and
-+// the coalesce counter reflects the merges.
-+// Input: Drive a SporadicServer through init/consume/on_completion cycles with
-+//        granularity 1 until the 8-entry ring saturates, then force more.
-+// Expect: coalesce_count() > 0 and sum of pending + restored budget == consumed.
-+// Depends: kernel::task::SporadicServer
-+JARVIS_TEST(sporadic_replenishment_ring_full_coalesces,
-+            "PRE: none | POST: none") {
-+    task::SporadicServer ss;
-+    // Budget large enough that the 9 cycles × 2 units consumed never exhausts
-+    // it (consume() returns false once budget hits zero).
-+    ss.init(/*budget_c=*/100, /*period_t=*/100, /*bg_prio=*/1,
-+            /*granularity=*/1);
-+    ss.set_base_priority(20);
-+
-+    // Saturate the ring: 8 replenishments pending.
-+    for (uint64_t i = 0; i < 8; ++i) {
-+        // on_activation then consume twice (2 units) then complete → one
-+        // replenishment of 2 per cycle.
-+        ss.on_activation(i * 10);
-+        JARVIS_ASSERT(ss.consume(i * 10 + 1));
-+        JARVIS_ASSERT(ss.consume(i * 10 + 2));
-+        ss.on_completion(i * 10 + 3);
+ /// @brief Restore the last receiver's priority after a message is enqueued.
++/// H-3: freed-state validation + re-bucketing on the way back down.
+ void Queue::restore_receiver() {
+ #if CONFIG_QUEUE_PIP
+     if (!last_receiver_ || recv_holder_prio_ == 0)
+         return;
+-    last_receiver_->priority = recv_holder_prio_;
++    if (last_receiver_->state == TaskState::REAPED ||
++        last_receiver_->generation != last_receiver_gen_) {
++        last_receiver_ = nullptr;
++        recv_holder_prio_ = 0;
++        return;
 +    }
-+    JARVIS_ASSERT_EQ(8ULL, ss.pending_count());
-+
-+    // One more cycle — ring full: must coalesce, not drop.
-+    ss.on_activation(1000);
-+    JARVIS_ASSERT(ss.consume(1001));
-+    JARVIS_ASSERT(ss.consume(1002));
-+    ss.on_completion(1003);
-+
-+    JARVIS_ASSERT(ss.coalesce_count() > 0);
-+    JARVIS_ASSERT_EQ(8ULL, ss.pending_count()); // still bounded at MAX
-+
-+    // Total budget accounted: 9 cycles × 2 consumed = 18; none dropped (the
-+    // 9th was coalesced into an existing entry).  budget_remaining_ was
-+    // 100-18=82; restoring all 18 reaches the cap C=100.  If the 9th cycle
-+    // had been silently dropped, only 16 would restore → 98, not 100.
-+    ss.process_replenishments(2000);
-+    JARVIS_ASSERT_EQ(100ULL, ss.remaining_budget());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies a replenishment must NOT force an IDLE server ACTIVE
-+// (M-8): an idle-but-ACTIVE server would block the next on_activation(),
-+// delaying aperiodic jobs.  After a budget-exhausted→replenished cycle the
-+// server returns to IDLE (not ACTIVE) when it completed its work.
-+// Input: Exhaust a server, let a replenishment restore budget while IDLE.
-+// Expect: state() is IDLE (not ACTIVE) after the replenishment.
-+// Depends: kernel::task::SporadicServer
-+JARVIS_TEST(sporadic_replenishment_does_not_force_idle_active,
-+            "PRE: none | POST: none") {
-+    task::SporadicServer ss;
-+    ss.init(/*budget_c=*/2, /*period_t=*/100, /*bg_prio=*/1,
-+            /*granularity=*/1);
-+    ss.set_base_priority(20);
-+
-+    ss.on_activation(0);
-+    JARVIS_ASSERT(ss.consume(1));
-+    JARVIS_ASSERT(!ss.consume(2)); // exhausted → schedules replenishment
-+    JARVIS_ASSERT(ss.state() == task::SporadicServer::EXHAUSTED);
-+
-+    // Replenishment due: budget restored, server was EXHAUSTED → ACTIVE.
-+    ss.process_replenishments(100);
-+    JARVIS_ASSERT(ss.state() == task::SporadicServer::ACTIVE);
-+
-+    // Job completes → server goes IDLE, replenishment scheduled for what was
-+    // consumed.  A LATER replenishment while IDLE must NOT force ACTIVE.
-+    ss.on_completion(101);
-+    JARVIS_ASSERT(ss.state() == task::SporadicServer::IDLE);
-+    ss.process_replenishments(200);
-+    JARVIS_ASSERT(ss.state() == task::SporadicServer::IDLE);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies semaphore priority-inheritance restore uses strict `>`
-+// (H-6): after a boost-and-restore cycle, holder_priority_ must clear and the
-+// owner's priority must return to its base — no permanent inflation across
-+// repeated lock cycles.
-+// Input: Owner (prio 10) holds a semaphore and blocks on a gate; a high-prio
-+//        waiter (prio 15) blocks on the semaphore (boosting the owner); the
-+//        gate is released, the owner posts the semaphore (restoring priority
-+//        and waking the waiter).
-+// Expect: Owner boosted to 15 while the waiter is blocked; after post, owner
-+//         priority restored to base 10 (no latch).
-+// Depends: kernel::sync::Semaphore, kernel::TaskControlBlock, kernel::Scheduler
-+JARVIS_TEST(semaphore_pi_restore_clears_holder_latch,
-+            "PRE: none | POST: none") {
-+    sync::Semaphore sem;
-+    sem.init(1, 1);
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+
-+    // Owner holds the semaphore (count 1 → 0), records acquisition, blocks on
-+    // the gate so the harness knows it owns the semaphore.
-+    struct OwnerCtx {
-+        uint64_t sem_;
-+        uint64_t gate_;
-+        uint64_t acquired_;
-+    } octx;
-+    octx.sem_ = reinterpret_cast<uint64_t>(&sem);
-+    octx.gate_ = reinterpret_cast<uint64_t>(&gate);
-+    octx.acquired_ = 0;
-+
-+    auto *owner = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            auto *c = reinterpret_cast<OwnerCtx *>(self->user_data);
-+            auto *s = reinterpret_cast<sync::Semaphore *>(c->sem_);
-+            auto *g = reinterpret_cast<sync::Semaphore *>(c->gate_);
-+            s->wait(); // acquires (count 1 → 0)
-+            __atomic_store_n(&c->acquired_, 1, __ATOMIC_RELEASE);
-+            g->wait(); // block until harness releases the gate
-+            while (self->state == TaskState::BLOCKED)
-+                arch::pause();
-+            s->post(); // restore priority + wake the waiter
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(owner != nullptr);
-+    owner->user_data = &octx;
-+    Scheduler::add_task(*owner);
-+    Scheduler::reschedule();
-+    while (octx.acquired_ != 1)
-+        arch::pause();
-+    while (owner->state != TaskState::BLOCKED)
-+        arch::pause();
-+    JARVIS_ASSERT_EQ(11ULL, owner->priority);
-+
-+    // Waiter (higher priority) blocks on the held semaphore → boosts owner.
-+    auto *waiter = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            sync::Semaphore *s = reinterpret_cast<sync::Semaphore *>(
-+                self->user_data);
-+            s->wait();
-+            while (self->state == TaskState::BLOCKED)
-+                arch::pause();
-+        },
-+        20, 10);
-+    JARVIS_ASSERT(waiter != nullptr);
-+    waiter->user_data = &sem;
-+    Scheduler::add_task(*waiter);
-+    while (waiter->state != TaskState::BLOCKED)
-+        arch::pause();
-+
-+    // Owner boosted to the waiter's priority while the waiter is blocked.
-+    JARVIS_ASSERT_EQ(20ULL, owner->priority);
-+
-+    // Release the gate: owner wakes, posts → waiter acquires, owner's
-+    // priority restored to base (no latch without the H-6 `>` fix).
-+    gate.post();
-+    kernel::test::wait_for_termination_safe(waiter);
-+    kernel::test::wait_for_termination_safe(owner);
-+    // Read priority while the zombie TCB is still allocated (before drain).
-+    JARVIS_ASSERT_EQ(11ULL, owner->priority);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Registers the audit-task-sync block-pattern regression tests.
-+// Input: None
-+// Expect: All tests registered via JARVIS_REGISTER_TEST
-+// Depends: kernel test framework
-+void register_sync_block_pattern_tests() {
-+    Logger::info("Registering sync block-pattern tests");
-+    JARVIS_REGISTER_TEST(semaphore_wait_blocked_not_in_ready_queue);
-+    JARVIS_REGISTER_TEST(eventgroup_wait_bits_blocked_not_in_ready_queue);
-+    JARVIS_REGISTER_TEST(eventgroup_try_wait_bits_serialized);
-+    JARVIS_REGISTER_TEST(sporadic_replenishment_ring_full_coalesces);
-+    JARVIS_REGISTER_TEST(sporadic_replenishment_does_not_force_idle_active);
-+    JARVIS_REGISTER_TEST(semaphore_pi_restore_clears_holder_latch);
-+}
-\ No newline at end of file
-diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index b7b4a242..0aeabf78 100644
---- a/src/kernel/test/test_weak_stubs.cpp
-+++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -24,6 +24,7 @@ __attribute__((weak)) void register_rlimit_tests() {}
- __attribute__((weak)) void register_init_tests() {}
- __attribute__((weak)) void register_syscall_tests() {}
- __attribute__((weak)) void register_sync_tests() {}
-+__attribute__((weak)) void register_sync_block_pattern_tests() {}
- __attribute__((weak)) void register_spinlock_tests() {}
- __attribute__((weak)) void register_capability_tests() {}
- __attribute__((weak)) void register_task_lifecycle_tests() {}
++    {
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &receiver = *last_receiver_;
++        uint64_t old_prio = Scheduler::effective_priority(&receiver);
++        receiver.priority = recv_holder_prio_;
++        uint64_t new_prio = Scheduler::effective_priority(&receiver);
++        if (old_prio != new_prio && receiver.in_ready_queue_)
++            Scheduler::move_priority(receiver, old_prio, new_prio);
++    }
+     recv_holder_prio_ = 0;
+ #endif
+ }
+ 
+ /// @brief Restore the last sender's priority after a message is dequeued.
++/// H-3: freed-state validation + re-bucketing on the way back down.
+ void Queue::restore_sender() {
+ #if CONFIG_QUEUE_PIP
+     if (!last_sender_ || send_holder_prio_ == 0)
+         return;
+-    last_sender_->priority = send_holder_prio_;
++    if (last_sender_->state == TaskState::REAPED ||
++        last_sender_->generation != last_sender_gen_) {
++        last_sender_ = nullptr;
++        send_holder_prio_ = 0;
++        return;
++    }
++    {
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &sender = *last_sender_;
++        uint64_t old_prio = Scheduler::effective_priority(&sender);
++        sender.priority = send_holder_prio_;
++        uint64_t new_prio = Scheduler::effective_priority(&sender);
++        if (old_prio != new_prio && sender.in_ready_queue_)
++            Scheduler::move_priority(sender, old_prio, new_prio);
++    }
+     send_holder_prio_ = 0;
+ #endif
+ }
+diff --git a/src/kernel/sync/queue.hpp b/src/kernel/sync/queue.hpp
+index ffd16370..bbad4c15 100644
+--- a/src/kernel/sync/queue.hpp
++++ b/src/kernel/sync/queue.hpp
+@@ -51,7 +51,8 @@ class Queue {
+     Queue()
+         : head_(0), tail_(0), count_(0), send_waiters_(0), recv_waiters_(0),
+           last_sender_(nullptr), last_receiver_(nullptr),
+-          send_holder_prio_(0), recv_holder_prio_(0) {
++          last_sender_gen_(0), last_receiver_gen_(0), send_holder_prio_(0),
++          recv_holder_prio_(0) {
+     }
+     /// @brief Initialize the message queue to empty.
+     void init();
+@@ -169,6 +170,8 @@ class Queue {
+ 
+     TaskControlBlock *last_sender_;    ///< Last task to enter send() (for PIP).
+     TaskControlBlock *last_receiver_;  ///< Last task to enter receive() (for PIP).
++    uint64_t last_sender_gen_;   ///< Generation of last_sender_ at capture (H-3).
++    uint64_t last_receiver_gen_; ///< Generation of last_receiver_ at capture (H-3).
+     uint64_t send_holder_prio_;        ///< Saved priority of last_sender_ for PIP restore.
+     uint64_t recv_holder_prio_;        ///< Saved priority of last_receiver_ for PIP restore.
+ };

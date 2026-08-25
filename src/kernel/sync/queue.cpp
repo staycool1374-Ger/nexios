@@ -24,6 +24,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <string.hpp>
 
 namespace kernel {
@@ -38,6 +39,8 @@ void Queue::init() {
     recv_waiters_count_ = 0;
     last_sender_ = nullptr;
     last_receiver_ = nullptr;
+    last_sender_gen_ = 0;
+    last_receiver_gen_ = 0;
     send_holder_prio_ = 0;
     recv_holder_prio_ = 0;
 }
@@ -54,6 +57,8 @@ errors::SyncError Queue::init_err() {
     recv_waiters_count_ = 0;
     last_sender_ = nullptr;
     last_receiver_ = nullptr;
+    last_sender_gen_ = 0;
+    last_receiver_gen_ = 0;
     send_holder_prio_ = 0;
     recv_holder_prio_ = 0;
     return errors::SYNC_ERR_OK;
@@ -202,6 +207,7 @@ bool Queue::send(const uint8_t *data, size_t size) {
         {
             SpinLockGuard<SpinLock> guard(lock_);
             last_sender_ = task;
+            last_sender_gen_ = task->generation;
             if (!is_full()) {
                 memcpy(msgs_[tail_].data, data, size);
                 msgs_[tail_].size = size;
@@ -214,11 +220,15 @@ bool Queue::send(const uint8_t *data, size_t size) {
             boost_receiver(*task);
             if (!add_send_waiter(*task))
                 return false;
+            // H-7: perform the BLOCKED transition inside the lock so no
+            // observer can see the waiter registered but still RUNNING, nor
+            // a half-transitioned state between the unlocked store and the
+            // deferred switch.
+            task->state = TaskState::BLOCKED;
         }
 
         // Block OUTSIDE the queue lock so the receiver can drain the queue and
         // wake us (holding lock_ across the block would deadlock the drain).
-        task->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
@@ -254,6 +264,7 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
         {
             SpinLockGuard<SpinLock> guard(lock_);
             last_sender_ = task;
+            last_sender_gen_ = task->generation;
             if (!is_full()) {
                 memcpy(msgs_[tail_].data, data, size);
                 msgs_[tail_].size = size;
@@ -269,9 +280,10 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
                 return errors::SYNC_ERR_MAX_WAITERS;
             boost_receiver(*task);
             add_send_waiter(*task);
+            // H-7: BLOCKED transition inside the lock (see send()).
+            task->state = TaskState::BLOCKED;
         }
 
-        task->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
@@ -294,7 +306,9 @@ bool Queue::try_send(const uint8_t *data, size_t size) {
     if (size > QUEUE_MAX_MSG_SIZE || is_full())
         return false;
 
-    last_sender_ = Scheduler::current_task();
+    auto *snd = Scheduler::current_task();
+    last_sender_ = snd;
+    last_sender_gen_ = snd ? snd->generation : 0;
     memcpy(msgs_[tail_].data, data, size);
     msgs_[tail_].size = size;
     tail_ = (tail_ + 1) % QUEUE_MAX_MSG_COUNT;
@@ -314,7 +328,9 @@ errors::SyncError Queue::try_send_err(const uint8_t *data, size_t size,
     if (is_full())
         return errors::SYNC_ERR_QUEUE_FULL;
 
-    last_sender_ = Scheduler::current_task();
+    auto *snd = Scheduler::current_task();
+    last_sender_ = snd;
+    last_sender_gen_ = snd ? snd->generation : 0;
     memcpy(msgs_[tail_].data, data, size);
     msgs_[tail_].size = size;
     tail_ = (tail_ + 1) % QUEUE_MAX_MSG_COUNT;
@@ -336,6 +352,7 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
         {
             SpinLockGuard<SpinLock> guard(lock_);
             last_receiver_ = task;
+            last_receiver_gen_ = task->generation;
             if (!is_empty()) {
                 size_t copy_size = msgs_[head_].size;
                 if (buf && size) {
@@ -355,10 +372,11 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
             boost_sender(*task);
             if (!add_recv_waiter(*task))
                 return false;
+            // H-7: BLOCKED transition inside the lock (see send()).
+            task->state = TaskState::BLOCKED;
         }
 
         // Block OUTSIDE the queue lock so a sender can enqueue and wake us.
-        task->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
@@ -391,6 +409,7 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
         {
             SpinLockGuard<SpinLock> guard(lock_);
             last_receiver_ = task;
+            last_receiver_gen_ = task->generation;
             if (!is_empty()) {
                 size_t copy_size = msgs_[head_].size;
                 if (buf && size) {
@@ -414,9 +433,10 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
                 return errors::SYNC_ERR_MAX_WAITERS;
             boost_sender(*task);
             add_recv_waiter(*task);
+            // H-7: BLOCKED transition inside the lock (see send()).
+            task->state = TaskState::BLOCKED;
         }
 
-        task->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
@@ -439,7 +459,9 @@ bool Queue::try_receive(uint8_t *buf, size_t *size) {
     if (is_empty())
         return false;
 
-    last_receiver_ = Scheduler::current_task();
+    auto *rcv = Scheduler::current_task();
+    last_receiver_ = rcv;
+    last_receiver_gen_ = rcv ? rcv->generation : 0;
     size_t copy_size = msgs_[head_].size;
     if (buf && size) {
         if (*size < copy_size)
@@ -464,7 +486,9 @@ errors::SyncError Queue::try_receive_err(uint8_t *buf, size_t *size,
     if (is_empty())
         return errors::SYNC_ERR_QUEUE_EMPTY;
 
-    last_receiver_ = Scheduler::current_task();
+    auto *rcv = Scheduler::current_task();
+    last_receiver_ = rcv;
+    last_receiver_gen_ = rcv ? rcv->generation : 0;
     size_t copy_size = msgs_[head_].size;
     if (buf && size) {
         if (*size < copy_size)
@@ -490,14 +514,39 @@ errors::SyncError Queue::try_receive_err(uint8_t *buf, size_t *size,
 
 /// @brief Boost the last receiver when a high-prio sender blocks on a full
 /// queue.
+///
+/// H-3 (audit-task-sync-v0.4.2): (a) never dereference a freed/recycled TCB —
+/// validate against REAPED state and the generation captured when
+/// last_receiver_ was set (a TERMINATED zombie is still allocated and safe to
+/// boost; a REAPED or recycled block is not); (b) route the priority mutation
+/// through the scheduler's re-bucketing pattern (mirrors ipc.cpp:block_sender
+/// / Scheduler::set_priority) so a boosted task sitting in the ready queue
+/// moves to its new priority bucket.
 void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
 #if CONFIG_QUEUE_PIP
     if (!last_receiver_)
         return;
+    if (last_receiver_->state == TaskState::REAPED ||
+        last_receiver_->generation != last_receiver_gen_) {
+        last_receiver_ = nullptr;
+        recv_holder_prio_ = 0;
+        return;
+    }
     if (blocked_sender.priority > last_receiver_->priority) {
+        // IrqGuard excludes the timer ISR (deadline demote / sporadic
+        // priority changes) so the old/new effective_priority snapshots stay
+        // consistent — same discipline as ipc.cpp:block_sender.
+        arch::IrqGuard irq_guard{};
+        TaskControlBlock &receiver = *last_receiver_;
+        uint64_t old_prio = Scheduler::effective_priority(&receiver);
         if (recv_holder_prio_ == 0)
-            recv_holder_prio_ = last_receiver_->priority;
-        last_receiver_->priority = blocked_sender.priority;
+            recv_holder_prio_ = receiver.priority;
+        receiver.priority = blocked_sender.priority;
+        uint64_t new_prio = Scheduler::effective_priority(&receiver);
+        // Only re-bucket a ready-queue member; a BLOCKED receiver has no
+        // bucket and will be enqueued at the boosted priority on wake.
+        if (old_prio != new_prio && receiver.in_ready_queue_)
+            Scheduler::move_priority(receiver, old_prio, new_prio);
     }
 #else
     (void)blocked_sender;
@@ -506,14 +555,29 @@ void Queue::boost_receiver(TaskControlBlock &blocked_sender) {
 
 /// @brief Boost the last sender when a high-prio receiver blocks on an empty
 /// queue.
+///
+/// H-3: same freed-state validation + re-bucketing discipline as
+/// boost_receiver.
 void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
 #if CONFIG_QUEUE_PIP
     if (!last_sender_)
         return;
+    if (last_sender_->state == TaskState::REAPED ||
+        last_sender_->generation != last_sender_gen_) {
+        last_sender_ = nullptr;
+        send_holder_prio_ = 0;
+        return;
+    }
     if (blocked_receiver.priority > last_sender_->priority) {
+        arch::IrqGuard irq_guard{};
+        TaskControlBlock &sender = *last_sender_;
+        uint64_t old_prio = Scheduler::effective_priority(&sender);
         if (send_holder_prio_ == 0)
-            send_holder_prio_ = last_sender_->priority;
-        last_sender_->priority = blocked_receiver.priority;
+            send_holder_prio_ = sender.priority;
+        sender.priority = blocked_receiver.priority;
+        uint64_t new_prio = Scheduler::effective_priority(&sender);
+        if (old_prio != new_prio && sender.in_ready_queue_)
+            Scheduler::move_priority(sender, old_prio, new_prio);
     }
 #else
     (void)blocked_receiver;
@@ -521,21 +585,51 @@ void Queue::boost_sender(TaskControlBlock &blocked_receiver) {
 }
 
 /// @brief Restore the last receiver's priority after a message is enqueued.
+/// H-3: freed-state validation + re-bucketing on the way back down.
 void Queue::restore_receiver() {
 #if CONFIG_QUEUE_PIP
     if (!last_receiver_ || recv_holder_prio_ == 0)
         return;
-    last_receiver_->priority = recv_holder_prio_;
+    if (last_receiver_->state == TaskState::REAPED ||
+        last_receiver_->generation != last_receiver_gen_) {
+        last_receiver_ = nullptr;
+        recv_holder_prio_ = 0;
+        return;
+    }
+    {
+        arch::IrqGuard irq_guard{};
+        TaskControlBlock &receiver = *last_receiver_;
+        uint64_t old_prio = Scheduler::effective_priority(&receiver);
+        receiver.priority = recv_holder_prio_;
+        uint64_t new_prio = Scheduler::effective_priority(&receiver);
+        if (old_prio != new_prio && receiver.in_ready_queue_)
+            Scheduler::move_priority(receiver, old_prio, new_prio);
+    }
     recv_holder_prio_ = 0;
 #endif
 }
 
 /// @brief Restore the last sender's priority after a message is dequeued.
+/// H-3: freed-state validation + re-bucketing on the way back down.
 void Queue::restore_sender() {
 #if CONFIG_QUEUE_PIP
     if (!last_sender_ || send_holder_prio_ == 0)
         return;
-    last_sender_->priority = send_holder_prio_;
+    if (last_sender_->state == TaskState::REAPED ||
+        last_sender_->generation != last_sender_gen_) {
+        last_sender_ = nullptr;
+        send_holder_prio_ = 0;
+        return;
+    }
+    {
+        arch::IrqGuard irq_guard{};
+        TaskControlBlock &sender = *last_sender_;
+        uint64_t old_prio = Scheduler::effective_priority(&sender);
+        sender.priority = send_holder_prio_;
+        uint64_t new_prio = Scheduler::effective_priority(&sender);
+        if (old_prio != new_prio && sender.in_ready_queue_)
+            Scheduler::move_priority(sender, old_prio, new_prio);
+    }
     send_holder_prio_ = 0;
 #endif
 }

@@ -39,7 +39,9 @@ static constexpr uint64_t NOTIFY_INVALID = 0;
 
 class Notify {
   public:
-    Notify() : notify_value_(0), waiter_(nullptr), initialized_(false) {
+    Notify()
+        : notify_value_(0), waiter_(nullptr), waiter_gen_(0),
+          initialized_(false) {
     }
     /// @brief Destructor — wakes any waiter before the object is freed.
     ~Notify();
@@ -83,10 +85,12 @@ class Notify {
     }
 
   private:
-    SpinLock lock_;            ///< Protects all notify state.
-    uint64_t notify_value_;    ///< Value delivered to the waiter.
+    SpinLock lock_;          ///< Protects all notify state.
+    uint64_t notify_value_;  ///< Value delivered to the waiter.
     TaskControlBlock *waiter_; ///< Currently waiting task (nullptr = none).
-    bool initialized_;         ///< Whether init() has been called.
+    uint64_t waiter_gen_;    ///< TCB generation captured at wait registration
+                             ///< (H-2: defeats ABA if the TCB is recycled).
+    bool initialized_;       ///< Whether init() has been called.
 };
 
 } // namespace sync

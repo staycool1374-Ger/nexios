@@ -51,7 +51,8 @@ class Queue {
     Queue()
         : head_(0), tail_(0), count_(0), send_waiters_(0), recv_waiters_(0),
           last_sender_(nullptr), last_receiver_(nullptr),
-          send_holder_prio_(0), recv_holder_prio_(0) {
+          last_sender_gen_(0), last_receiver_gen_(0), send_holder_prio_(0),
+          recv_holder_prio_(0) {
     }
     /// @brief Initialize the message queue to empty.
     void init();
@@ -169,6 +170,8 @@ class Queue {
 
     TaskControlBlock *last_sender_;    ///< Last task to enter send() (for PIP).
     TaskControlBlock *last_receiver_;  ///< Last task to enter receive() (for PIP).
+    uint64_t last_sender_gen_;   ///< Generation of last_sender_ at capture (H-3).
+    uint64_t last_receiver_gen_; ///< Generation of last_receiver_ at capture (H-3).
     uint64_t send_holder_prio_;        ///< Saved priority of last_sender_ for PIP restore.
     uint64_t recv_holder_prio_;        ///< Saved priority of last_receiver_ for PIP restore.
 };
