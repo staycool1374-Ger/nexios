@@ -14,9 +14,13 @@ comma := ,
 # ------------------------------------------------------------------------------
 SRC_CXX_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.cpp' -print)
 SRC_ASM_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.asm' -print)
+# P7 (issue #6): syscall_entry.asm is DEAD on all arches — the LSTAR/sysret
+# path was removed (MSR_KERNEL_GS_BASE never written; the sole live syscall
+# path is int $0x80 via isr_128).  Unassemble it unconditionally; it is kept
+# as a commented historical artifact pending deletion (see syscall_entry.asm).
+SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
 # Exclude x86-specific NASM files for non-x86 architectures
 ifneq ($(ARCH),x86_64)
-SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
 SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
 endif
 # Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches

@@ -58,18 +58,21 @@ JARVIS_TEST(idt_irq_remapped, "PRE: iocd | POST: none") {
     }
 }
 
-/// @brief Verifies the SYSCALL fast path is installed via IA32_LSTAR.
-/// @input Read the LSTAR MSR programmed by Syscall::init()
-/// @expect LSTAR is non-zero (points at syscall_entry) — x86_64 syscalls use
-///         MSR STAR/LSTAR → syscall_entry, NOT int 0x80.  The old test
-///         asserted IDT::has_handler(0x80), which was vacuous for this
-///         contract (the 0x80 IDT slot is unrelated to the syscall path).
-/// @depends kernel::arch::rdmsr, Syscall::init
+/// @brief Verifies the syscall trap gate (int $0x80 / isr_128) is installed.
+/// @input Inspect the IDT vector 0x80 slot and the LSTAR MSR.
+/// @expect The 0x80 IDT entry is a present trap gate — the sole live syscall
+///         path.  IA32_LSTAR must be 0 (P7, issue #6): the LSTAR/sysret
+///         fastpath was removed because MSR_KERNEL_GS_BASE was never written
+///         (entry swapgs left GS base 0 → guaranteed panic on any ring-3
+///         syscall).  int $0x80 is GS-free.
+/// @depends kernel::arch::IDT, Syscall::init
 JARVIS_TEST(idt_syscall_handler_installed, "PRE: iocd | POST: none") {
 #if defined(CONFIG_ARCH_X86_64)
+    // P7: LSTAR must NOT be programmed (fastpath removed).
     uint64_t lstar = arch::rdmsr(arch::IA32_LSTAR);
-    JARVIS_ASSERT(lstar != 0);
-    JARVIS_ASSERT(lstar >= 0xFFFF800000000000ULL);
+    JARVIS_ASSERT(lstar == 0);
+    // The live path is the 0x80 trap gate.
+    JARVIS_ASSERT(arch::IDT::has_handler(0x80));
 #else
     JARVIS_TEST_PASS();
 #endif

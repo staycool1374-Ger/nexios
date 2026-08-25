@@ -1,455 +1,139 @@
-diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
-index 18ce2a6e..da22961a 100644
---- a/docs/specs/drivers.md
-+++ b/docs/specs/drivers.md
-@@ -101,9 +101,11 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
-   Ordering: write header/data, `avail->ring[idx]=idx`, fence, `avail->idx++`,
-   fence, `virtio_notify` kick.  Completion: busy-poll `used->idx` (≤ 1M),
-   status == `VIRTIO_BLK_S_OK`, memcpy out.
--  ⚠️ **FLAW-06 (OPEN):** the 1M-iteration busy-wait ignores the DmaEngine
--  completion mechanism — unbounded core occupancy.  **Required:** ISR walking
--  the used_ ring + wait primitive.
-+  **FLAW-06 (BOUNDED — M-2 ledger update, 2026-08-25):** the poll is capped at
-+  1M iterations and now snapshots `used->idx` BEFORE `virtio_notify` (FLAW-03
-+  pattern), and the whole submit chain is serialized under a device mutex
-+  (H-3).  A fully IRQ-driven blocked wait (ISR walking the used_ ring + wait
-+  primitive) remains Phase 4.7 roadmap scope.
- 
- ## 6. Interrupt Layer (x86_64)
- 
-@@ -186,7 +188,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
- | FLAW-03 virtio-net ring races | virtio_net.cpp | **RESOLVED (2026-08-16, `a8fe7bd9`)** — lock + tx_inflight_; poll consume/recycle/advance atomic; used-snapshot-before-notify |
- | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | OPEN (§3) |
- | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | OPEN (§3) |
--| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | OPEN (§5) |
-+| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | BOUNDED (§5) — 1M cap + used-idx pre-notify snapshot + device mutex; IRQ-driven wait = Phase 4.7 |
- | FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
- | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
- 
-diff --git a/src/kernel/driver/ahci.cpp b/src/kernel/driver/ahci.cpp
-index 2e0590af..e2ef4672 100644
---- a/src/kernel/driver/ahci.cpp
-+++ b/src/kernel/driver/ahci.cpp
-@@ -26,6 +26,7 @@
- #include <kernel/driver/dma.hpp>
- #include <kernel/arch/pci.hpp>
+diff --git a/mk/rules.mk b/mk/rules.mk
+index 67ffe592..b1c4a4df 100644
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -14,9 +14,13 @@ comma := ,
+ # ------------------------------------------------------------------------------
+ SRC_CXX_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.cpp' -print)
+ SRC_ASM_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.asm' -print)
++# P7 (issue #6): syscall_entry.asm is DEAD on all arches — the LSTAR/sysret
++# path was removed (MSR_KERNEL_GS_BASE never written; the sole live syscall
++# path is int $0x80 via isr_128).  Unassemble it unconditionally; it is kept
++# as a commented historical artifact pending deletion (see syscall_entry.asm).
++SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
+ # Exclude x86-specific NASM files for non-x86 architectures
+ ifneq ($(ARCH),x86_64)
+-SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
+ SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
+ endif
+ # Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
+diff --git a/src/kernel/syscall/syscall.cpp b/src/kernel/syscall/syscall.cpp
+index ba7160c2..892cc7d6 100644
+--- a/src/kernel/syscall/syscall.cpp
++++ b/src/kernel/syscall/syscall.cpp
+@@ -30,23 +30,21 @@
  #include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/memory/vmm.hpp>
- #include <kernel/vfs/fat32.hpp>
-@@ -79,6 +80,15 @@ AhciDriver::~AhciDriver() {
-     if (!init_done_)
-         return;
+ #include <constants.hpp>
  
-+    // H-2 (audit-drivers-vfs-net-v0.4.2): clear per-port interrupt enable and
-+    // any asserted status BEFORE stopping ports and freeing DMA memory, so no
-+    // in-flight completion path can touch freed structures.  GHC_IE is never
-+    // set (see init), but per-port PORT_IE is cleared defensively.
-+    for (uint8_t p = 0; p < port_count_; ++p) {
-+        port_write(p, PORT_IE, 0);
-+        port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
-+    }
-+
-     // Stop ports and free memory
-     for (uint8_t p = 0; p < port_count_; ++p) {
-         port_write(p, PORT_CMD, 0);
-@@ -365,7 +375,15 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
+-extern "C" void syscall_entry();
+-
+ namespace kernel {
  
- // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
- bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
--    for (uint64_t i = 0; i < timeout_us; ++i) {
-+    // M-1 (audit-drivers-vfs-net-v0.4.2): the former 5,000,000-iteration
-+    // io_wait spin blocked the core for up to seconds — an outright WCET
-+    // violation.  Bound the poll by a tick deadline and yield with pause()
-+    // between checks.  A fully IRQ-driven scheduler-blocked wait is Phase 4.7
-+    // roadmap scope (requires an AHCI ISR); this bounded pause-wait is the
-+    // interim fix that preserves error-clear semantics.
-+    const uint64_t t0 = arch::Timer::ticks();
-+    const uint64_t deadline = t0 + timeout_us / 1000 + 1; // us→ticks(≈ms)
-+    for (;;) {
-         uint32_t ci = port_read(port, PORT_CI);
-         if (!(ci & (1U << slot))) {
-             // Command completed — check for errors
-@@ -386,11 +404,13 @@ bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
-             port_write(port, PORT_CI, 1U << slot); // clear CI
-             return false;
-         }
--        arch::io_wait();
-+        if (arch::Timer::ticks() >= deadline) {
-+            Logger::error("ahci: cmd slot %u timeout", slot);
-+            port_write(port, PORT_CI, 1U << slot); // clear CI
-+            return false;
-+        }
-+        arch::pause();
-     }
--    Logger::error("ahci: cmd slot %u timeout", slot);
--    port_write(port, PORT_CI, 1U << slot); // clear CI
--    return false;
+-/// @brief Initialise the syscall interface (MSR setup, syscall-table built at
+-/// compile time).
++/// @brief Initialise the syscall interface (syscall-table built at compile
++/// time).
+ void Syscall::init() {
+ #if defined(CONFIG_ARCH_X86_64)
+-    uint64_t star_val = (static_cast<uint64_t>(arch::SEG_KERNEL_CODE) << 32) |
+-                        (static_cast<uint64_t>(arch::SEG_USER_CODE) << 48);
+-    arch::wrmsr(arch::IA32_STAR, star_val);
+-    arch::wrmsr(arch::IA32_LSTAR, reinterpret_cast<uint64_t>(syscall_entry));
+-    arch::wrmsr(arch::IA32_FMASK, 0x200);
++    // P7 / gs-base-swapgs-audit F-1 (issue #6): the LSTAR/sysret path is
++    // REMOVED.  MSR_KERNEL_GS_BASE was never written, so syscall_entry's
++    // swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 — a
++    // guaranteed panic on any ring-3 `syscall` (0F 05).  The sole live syscall
++    // path is `int $0x80` (isr_128 trap gate, GS-free).  The fastpath redesign
++    // lives in docs/specs/syscall-fastpath.md (v0.4.3).
+ #elif defined(CONFIG_ARCH_AARCH64)
+     // AArch64 syscalls use SVC #0; VBAR_EL1 entry point handles dispatch.
+     // No MSR-based syscall setup needed.
+-    (void)syscall_entry;
+ #endif
  }
  
- // ──────────────────────────────────────────────
-@@ -401,9 +421,17 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
-     if (!init_done_ || active_port_ >= AHCI_MAX_PORTS)
-         return false;
+diff --git a/src/kernel/syscall/syscall_entry.asm b/src/kernel/syscall/syscall_entry.asm
+index 852a0319..f57eb1a9 100644
+--- a/src/kernel/syscall/syscall_entry.asm
++++ b/src/kernel/syscall/syscall_entry.asm
+@@ -14,6 +14,18 @@
+ ; You should have received a copy of the GNU General Public License
+ ; along with this program.  If not, see <https://www.gnu.org/licenses/>.
  
-+    // H-1: serialize the whole alloc→start→wait critical section per port so
-+    // two concurrent I/Os can never share a slot or its data_bufs_ DMA buffer.
-+    cmd_lock_[active_port_].lock();
-+    if (active_port_ >= AHCI_MAX_PORTS) {
-+        cmd_lock_[active_port_].unlock();
-+        return false;
-+    }
-     uint8_t slot = alloc_slot(active_port_);
-     if (slot >= AHCI_MAX_CMDS) {
-         Logger::error("ahci: no free slot for read");
-+        cmd_lock_[active_port_].unlock();
-         return false;
++; ============================================================================
++; DEAD CODE (P7, issue #6) — NOT ASSEMBLED on any architecture.
++;
++; The LSTAR/sysret fastpath was removed: MSR_KERNEL_GS_BASE was never written,
++; so the entry swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 —
++; a guaranteed kernel panic on any ring-3 `syscall` (0F 05).  The sole live
++; syscall path is `int $0x80` (trap gate isr_128, GS-free).  The fastpath
++; redesign lives in docs/specs/syscall-fastpath.md (v0.4.3).  This file is
++; retained as a commented historical artifact pending explicit approval to
++; delete (mk/rules.mk filters it out of SRC_ASM_GENERIC unconditionally).
++; ============================================================================
++
+ extern syscall_handler
+ 
+ global syscall_entry
+diff --git a/src/kernel/test/test_idt.cpp b/src/kernel/test/test_idt.cpp
+index ad14acfa..c6072fb9 100644
+--- a/src/kernel/test/test_idt.cpp
++++ b/src/kernel/test/test_idt.cpp
+@@ -58,18 +58,21 @@ JARVIS_TEST(idt_irq_remapped, "PRE: iocd | POST: none") {
      }
- 
-@@ -413,16 +441,19 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
- 
-     if (!start_cmd(active_port_, slot, ata_cmd, lba, 1, dbuf.phys_addr,
-                    ncq_supported_, slot)) {
-+        cmd_lock_[active_port_].unlock();
-         return false;
-     }
- 
-     if (!wait_cmd(active_port_, slot, 5000000)) { // 5s timeout
-+        cmd_lock_[active_port_].unlock();
-         return false;
-     }
- 
-     // Copy from DMA buffer to caller
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     memcpy(buffer, reinterpret_cast<void *>(dbuf.virt_addr), BLOCK_SIZE);
-+    cmd_lock_[active_port_].unlock();
-     return true;
  }
  
-@@ -430,9 +461,16 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
-     if (!init_done_ || active_port_ >= AHCI_MAX_PORTS)
-         return false;
- 
-+    // H-1: serialize per-port (see read_sector).
-+    cmd_lock_[active_port_].lock();
-+    if (active_port_ >= AHCI_MAX_PORTS) {
-+        cmd_lock_[active_port_].unlock();
-+        return false;
-+    }
-     uint8_t slot = alloc_slot(active_port_);
-     if (slot >= AHCI_MAX_CMDS) {
-         Logger::error("ahci: no free slot for write");
-+        cmd_lock_[active_port_].unlock();
-         return false;
-     }
- 
-@@ -446,13 +484,16 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
- 
-     if (!start_cmd(active_port_, slot, ata_cmd, lba, 1, dbuf.phys_addr,
-                    ncq_supported_, slot)) {
-+        cmd_lock_[active_port_].unlock();
-         return false;
-     }
- 
-     if (!wait_cmd(active_port_, slot, 5000000)) {
-+        cmd_lock_[active_port_].unlock();
-         return false;
-     }
- 
-+    cmd_lock_[active_port_].unlock();
-     return true;
- }
- 
-@@ -516,8 +557,12 @@ bool AhciDriver::init() {
-     }
-     Logger::info("ahci: HBA reset complete");
- 
--    // Enable AHCI
--    hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_AE | GHC_IE);
-+    // Enable AHCI.  H-2 (audit-drivers-vfs-net-v0.4.2): GHC_IE (global
-+    // interrupt enable) must NOT be asserted — no ISR is registered, so an
-+    // unacknowledged asserted line would stall the shared interrupt
-+    // controller (freedom-from-interference).  Completion is polled via
-+    // wait_cmd, which is sufficient and safe.
-+    hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_AE);
- 
-     // Initialize ports with devices
-     for (uint8_t p = 0; p < port_count_ && p < AHCI_MAX_PORTS; ++p) {
-diff --git a/src/kernel/driver/ahci.hpp b/src/kernel/driver/ahci.hpp
-index cf14e1a2..0c73c8fe 100644
---- a/src/kernel/driver/ahci.hpp
-+++ b/src/kernel/driver/ahci.hpp
-@@ -28,6 +28,7 @@
- #include <kernel/driver/block_device.hpp>
- #include <kernel/driver/ahci_protocol.hpp>
- #include <kernel/driver/dma.hpp>
-+#include <kernel/sync/mutex.hpp>
- 
- namespace kernel::block {
- 
-@@ -100,6 +101,12 @@ class AhciDriver final : public BlockDevice {
- 
-     // DMA data buffers per slot
-     dma::DmaBuffer data_bufs_[AHCI_MAX_PORTS][ahci::AHCI_MAX_CMDS] = {};
-+
-+    // H-1 (audit-drivers-vfs-net-v0.4.2): serializes alloc_slot → start_cmd →
-+    // wait_cmd per port.  Without it two concurrent read_sector/write_sector
-+    // calls can acquire the same slot and the same data_bufs_ DMA buffer →
-+    // data corruption; start_cmd/wait_cmd are likewise unsynchronized.
-+    sync::Mutex cmd_lock_[AHCI_MAX_PORTS] = {};
- };
- 
- } // namespace kernel::block
-\ No newline at end of file
-diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
-index e10ff06a..bb0ffcca 100644
---- a/src/kernel/driver/virtio_blk.cpp
-+++ b/src/kernel/driver/virtio_blk.cpp
-@@ -119,6 +119,12 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
-     if (!desc_ || !avail_ || !used_)
-         return false;
- 
-+    // H-3 (audit-drivers-vfs-net-v0.4.2): hold the device mutex across the
-+    // whole submit chain — the driver shares a single DMA buffer and the
-+    // avail/used rings; concurrent submissions would corrupt the descriptor
-+    // chain or lose completion checks.
-+    submit_lock_.lock();
-+
-     // Build the request header in the DMA buffer
-     auto *hdr = reinterpret_cast<VirtioBlkReqHdr *>(dma_buf_);
-     hdr->type = type;
-@@ -156,6 +162,11 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
-     desc_[status_idx].flags = VIRTIO_DESC_F_WRITE;
-     desc_[status_idx].next = 0;
- 
-+    // H-3 (FLAW-03 pattern): snapshot the used index BEFORE the avail push and
-+    // virtio_notify — reading it after notify races fast completions (the
-+    // device may have already advanced used_->idx by the time we sample it).
-+    uint16_t used_idx = used_->idx;
-+
-     // Place in available ring
-     avail_->ring[avail_->idx % queue_size_] = idx;
-     kernel::atomic_fence();
-@@ -165,14 +176,15 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
-     // Kick the device
-     arch::virtio_notify(transport_, 0);
- 
--    // Poll for completion (busy wait — acceptable for block I/O)
--    uint16_t used_idx = used_->idx;
-+    // Poll for completion (bounded busy wait — acceptable interim for block
-+    // I/O; a full IRQ-driven blocked wait is roadmap Phase 4.7 scope).
-     int timeout = 1000000;
-     while (used_->idx == used_idx && --timeout > 0) {
-         kernel::atomic_fence();
-     }
-     if (timeout <= 0) {
-         Logger::error("virtio-blk: request timeout");
-+        submit_lock_.unlock();
-         return false;
-     }
- 
-@@ -181,6 +193,7 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
-         dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
-     if (*status_ptr != VIRTIO_BLK_S_OK) {
-         Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
-+        submit_lock_.unlock();
-         return false;
-     }
- 
-@@ -190,6 +203,7 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
-     }
- 
-     avail_idx_ = static_cast<uint16_t>(avail_idx_ + 1);
-+    submit_lock_.unlock();
-     return true;
- }
- 
-diff --git a/src/kernel/driver/virtio_blk.hpp b/src/kernel/driver/virtio_blk.hpp
-index 549fc3e2..071e78ce 100644
---- a/src/kernel/driver/virtio_blk.hpp
-+++ b/src/kernel/driver/virtio_blk.hpp
-@@ -26,6 +26,7 @@
- #include <types.hpp>
- #include <kernel/arch/virtio.hpp>
- #include <kernel/driver/block_device.hpp>
-+#include <kernel/sync/mutex.hpp>
- 
- namespace kernel::block {
- 
-@@ -93,6 +94,12 @@ class VirtioBlkDriver final : public BlockDevice {
-     // DMA buffer physical address
-     uint64_t dma_buf_phys_ = 0;
-     uint8_t *dma_buf_ = nullptr;
-+
-+    // H-3 (audit-drivers-vfs-net-v0.4.2): serializes the whole
-+    // descriptor-fill → avail-push → notify → poll critical section.  The
-+    // driver shares one DMA buffer and the avail/used rings; concurrent
-+    // submit_request calls would corrupt the chain or lose completions.
-+    sync::Mutex submit_lock_{};
- };
- 
- } // namespace kernel::block
-diff --git a/src/kernel/driver/virtio_net.cpp b/src/kernel/driver/virtio_net.cpp
-index 4fead332..b83f32c9 100644
---- a/src/kernel/driver/virtio_net.cpp
-+++ b/src/kernel/driver/virtio_net.cpp
-@@ -21,6 +21,7 @@
- 
- #include <kernel/driver/virtio_net.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
- #include <kernel/memory/mempool.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/sync/spinlock.hpp>
-@@ -334,6 +335,16 @@ bool virtio_net_poll(uint8_t *buf, size_t &len) {
-     uint32_t desc_idx = dev.rx_used->ring[slot].id;
-     uint32_t pkt_len = dev.rx_used->ring[slot].len;
- 
-+    // M-4 (audit-drivers-vfs-net-v0.4.2): desc_idx comes from the DEVICE and
-+    // is used unchecked as an index into rx_bufs[].  A faulty/malicious device
-+    // can cause an out-of-bounds read/write.  Bounds-check against queue_size
-+    // and recycle the slot on an invalid id.
-+    if (desc_idx >= dev.queue_size) {
-+        dev.rx_last_seen_used =
-+            static_cast<uint16_t>(dev.rx_last_seen_used + 1);
-+        return false;
-+    }
-+
-     if (pkt_len > VIRTIO_NET_HDR_SIZE) {
-         size_t frame_len = pkt_len - VIRTIO_NET_HDR_SIZE;
-         if (frame_len > MAX_PACKET_SIZE)
-@@ -354,6 +365,22 @@ void virtio_net_destroy() {
-         return;
-     auto *dev = g_virtio_net_dev;
-     g_virtio_net_dev = nullptr; // late poll/send null-check and return
-+
-+    // M-5 (audit-drivers-vfs-net-v0.4.2): a send_frame() may be mid-flight —
-+    // it captured `dev` before our null (the local reference survives the
-+    // g_virtio_net_dev = nullptr check) and polls tx_used OUTSIDE the lock.
-+    // Drain tx_inflight_ (bounded) so no completion poll touches freed
-+    // descriptors/memory after we destruct.
-+    {
-+        IrqSpinLockGuard guard(dev->lock_);
-+        if (dev->tx_inflight_) {
-+            // Completion poll for a concurrent sender: bounded, no alloc.
-+            uint64_t t0 = arch::Timer::ticks();
-+            while (dev->tx_inflight_ && arch::Timer::ticks() - t0 < 1000000)
-+                arch::pause();
-+        }
-+    }
-+
-     dev->~VirtioNetDevice();
-     MemPool::free(dev);
- }
-diff --git a/src/kernel/net/net.cpp b/src/kernel/net/net.cpp
-index 96dc56ce..e45af644 100644
---- a/src/kernel/net/net.cpp
-+++ b/src/kernel/net/net.cpp
-@@ -23,6 +23,9 @@
+-/// @brief Verifies the SYSCALL fast path is installed via IA32_LSTAR.
+-/// @input Read the LSTAR MSR programmed by Syscall::init()
+-/// @expect LSTAR is non-zero (points at syscall_entry) — x86_64 syscalls use
+-///         MSR STAR/LSTAR → syscall_entry, NOT int 0x80.  The old test
+-///         asserted IDT::has_handler(0x80), which was vacuous for this
+-///         contract (the 0x80 IDT slot is unrelated to the syscall path).
+-/// @depends kernel::arch::rdmsr, Syscall::init
++/// @brief Verifies the syscall trap gate (int $0x80 / isr_128) is installed.
++/// @input Inspect the IDT vector 0x80 slot and the LSTAR MSR.
++/// @expect The 0x80 IDT entry is a present trap gate — the sole live syscall
++///         path.  IA32_LSTAR must be 0 (P7, issue #6): the LSTAR/sysret
++///         fastpath was removed because MSR_KERNEL_GS_BASE was never written
++///         (entry swapgs left GS base 0 → guaranteed panic on any ring-3
++///         syscall).  int $0x80 is GS-free.
++/// @depends kernel::arch::IDT, Syscall::init
+ JARVIS_TEST(idt_syscall_handler_installed, "PRE: iocd | POST: none") {
+ #if defined(CONFIG_ARCH_X86_64)
++    // P7: LSTAR must NOT be programmed (fastpath removed).
+     uint64_t lstar = arch::rdmsr(arch::IA32_LSTAR);
+-    JARVIS_ASSERT(lstar != 0);
+-    JARVIS_ASSERT(lstar >= 0xFFFF800000000000ULL);
++    JARVIS_ASSERT(lstar == 0);
++    // The live path is the 0x80 trap gate.
++    JARVIS_ASSERT(arch::IDT::has_handler(0x80));
+ #else
+     JARVIS_TEST_PASS();
+ #endif
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 1292db9c..2d312e0a 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/test/test_isolate.hpp>
  #include <kernel/core/global_state.hpp>
+ #include <test.hpp>
++#include <assert.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/mempool.hpp>
  #include <kernel/arch/timer.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/sync/spinlock.hpp>
-+#include <kernel/sync/spinlock_guard.hpp>
- #include <string.hpp>
- #include <logger.hpp>
+@@ -302,6 +303,13 @@ static void dump_pte_walk(uint64_t va) {
  
-@@ -30,6 +33,13 @@ using namespace kernel;
+ bool snapshot_create() {
+     arch::IrqGuard guard;
++#if defined(CONFIG_DEBUG)
++    // gs-base-swapgs-audit corrective #3 (issue #6): the snapshot window must
++    // run with IF=0 — no maskable interrupt may re-arm a deferred switch or
++    // touch GS mid-window.  The IrqGuard above guarantees it; ENSURE so a
++    // nested guard that silently re-enabled IRQs panics at the source.
++    ENSURE(!arch::interrupts_enabled());
++#endif
  
- namespace net {
- 
-+// M-3 (audit-drivers-vfs-net-v0.4.2): the RX path (net_poll / net_handle_frame)
-+// and the send/query paths (net_send_udp, net_arp_resolve) run in task context
-+// on a single core, but they interleave through cooperative polling — guard
-+// the shared mutable state with a module spinlock so a poll-driven RX can never
-+// tear an ARP-cache update or the ICMP reply record mid-read/write.
-+static sync::SpinLock g_net_lock{};
-+
- static ArpCache g_arp_cache{};
- static uint16_t g_ip_ident = 0;
- 
-@@ -38,12 +48,14 @@ static IcmpEchoReply g_icmp_reply{};
- 
- /// @brief Reset the ICMP echo reply record.
- void net_icmp_clear_reply() {
-+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-     g_icmp_reply.received = false;
- }
- 
- /// @brief Record an ICMP echo reply.
- // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
- void net_icmp_set_reply(uint16_t ident, uint16_t seq, Ipv4Addr src) {
-+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-     g_icmp_reply.received = true;
-     g_icmp_reply.ident = ident;
-     g_icmp_reply.seq = seq;
-@@ -53,6 +65,9 @@ void net_icmp_set_reply(uint16_t ident, uint16_t seq, Ipv4Addr src) {
- 
- /// @brief Return a pointer to the last received ICMP echo reply, or nullptr.
- const IcmpEchoReply *net_icmp_last_reply() {
-+    // The caller uses the returned record immediately (poll-driven RX in the
-+    // same task context); the lock orders the write before this read.
-+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-     return g_icmp_reply.received ? &g_icmp_reply : nullptr;
- }
- 
-@@ -68,7 +83,10 @@ void net_init(Nic &nic, MacAddr mac, Ipv4Addr ip, Ipv4Addr subnet,
-     nic.ip = ip;
-     nic.subnet = subnet;
-     nic.gateway = gateway;
--    g_arp_cache.clear();
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-+        g_arp_cache.clear();
-+    }
-     kernel::gs::try_set_nic(&nic);
-     Logger::info("net: initialized %d.%d.%d.%d", ip.addr[0], ip.addr[1],
-                  ip.addr[2], ip.addr[3]);
-@@ -121,6 +139,7 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
-             }
-         } else if (oper == ARP_OPER_REPLY) {
-             // Update ARP cache
-+            SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-             g_arp_cache.update(arp->spa, arp->sha);
-         }
-     } else if (type == ETH_TYPE_IPV4) {
-@@ -145,6 +164,7 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
-                 reinterpret_cast<const IcmpHeader *>(data + icmp_offset);
- 
-             if (icmp->type == ICMP_TYPE_ECHO_REPLY) {
-+                SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-                 g_icmp_reply.received = true;
-                 g_icmp_reply.ident = icmp->ident;
-                 g_icmp_reply.seq = icmp->seq;
-@@ -232,7 +252,10 @@ bool net_send_udp(Nic &nic, Ipv4Addr dst_ip, uint16_t dst_port,
-     ip->ver_ihl = 0x45; // IPv4, 20-byte header
-     ip->dscp_ecn = 0;
-     ip->total_length = __builtin_bswap16(static_cast<uint16_t>(total_ip_len));
--    ip->ident = __builtin_bswap16(g_ip_ident++);
-+    // M-3: atomic IP identification — the RX/send paths interleave through
-+    // cooperative polling and a plain post-increment could duplicate values.
-+    ip->ident = __builtin_bswap16(static_cast<uint16_t>(
-+        __atomic_fetch_add(&g_ip_ident, 1U, __ATOMIC_RELAXED)));
-     ip->flags_frag = __builtin_bswap16(0x4000); // Don't Fragment
-     ip->ttl = 64;
-     ip->protocol = IP_PROTO_UDP;
-@@ -278,6 +301,7 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
-                         const uint8_t *data, size_t data_len) {
-     // Loopback / self-ping: reflect instantly
-     if (dst_ip.as_u32() == 0x7F000001 || dst_ip.as_u32() == nic.ip.as_u32()) {
-+        SpinLockGuard<sync::SpinLock> guard(g_net_lock);
-         g_icmp_reply.received = true;
-         g_icmp_reply.ident = id;
-         g_icmp_reply.seq = seq;
-@@ -314,7 +338,8 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
-     ip->ver_ihl = 0x45;
-     ip->dscp_ecn = 0;
-     ip->total_length = __builtin_bswap16(static_cast<uint16_t>(ip_total));
--    ip->ident = __builtin_bswap16(g_ip_ident++);
-+    ip->ident = __builtin_bswap16(static_cast<uint16_t>(
-+        __atomic_fetch_add(&g_ip_ident, 1U, __ATOMIC_RELAXED)));
-     ip->flags_frag = __builtin_bswap16(0x4000);
-     ip->ttl = 64;
-     ip->protocol = IP_PROTO_ICMP;
+     // Count user-owned pages from the owner bitmap
+     size_t user_page_count = 0;

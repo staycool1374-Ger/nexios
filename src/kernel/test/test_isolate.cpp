@@ -22,6 +22,7 @@
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/core/global_state.hpp>
 #include <test.hpp>
+#include <assert.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/arch/timer.hpp>
@@ -302,6 +303,13 @@ static void dump_pte_walk(uint64_t va) {
 
 bool snapshot_create() {
     arch::IrqGuard guard;
+#if defined(CONFIG_DEBUG)
+    // gs-base-swapgs-audit corrective #3 (issue #6): the snapshot window must
+    // run with IF=0 — no maskable interrupt may re-arm a deferred switch or
+    // touch GS mid-window.  The IrqGuard above guarantees it; ENSURE so a
+    // nested guard that silently re-enabled IRQs panics at the source.
+    ENSURE(!arch::interrupts_enabled());
+#endif
 
     // Count user-owned pages from the owner bitmap
     size_t user_page_count = 0;
