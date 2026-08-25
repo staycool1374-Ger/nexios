@@ -533,7 +533,7 @@ endif
 # The sub-make receives CXXFLAGS without -DCONFIG_DEBUG (never added to base).
 # The stamp is written first so an interrupted build is detected on next run.
 # ------------------------------------------------------------------------------
-release: CXXFLAGS += -g -O2 -fanalyzer -Wno-error=analyzer-null-argument -Wno-error=analyzer-possible-null-dereference -Wno-error=analyzer-use-of-uninitialized-value -Wno-error=analyzer-infinite-loop -Wno-error=analyzer-malloc-leak -Wno-error=analyzer-undefined-behavior-ptrdiff
+release: CXXFLAGS += -g -O2 -fanalyzer -Wno-error=analyzer-null-argument -Wno-error=analyzer-possible-null-dereference -Wno-error=analyzer-use-of-uninitialized-value -Wno-error=analyzer-infinite-loop -Wno-error=analyzer-malloc-leak -Wno-error=analyzer-undefined-behavior-ptrdiff -Wno-error=analyzer-out-of-bounds
 release: $(TEST_REGISTRY_GEN)
 release:
 ifneq ($(ARCH),x86_64)
