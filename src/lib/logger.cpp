@@ -143,7 +143,12 @@ void Logger::vprint(LogLevel level, const char* fmt, __va_list args) {
     while (*fmt) {
         if (*fmt == '%') {
             ++fmt;
-            if (*fmt == 'l') ++fmt;
+            // Consume any length modifiers ('l'/'ll'/'z') — the custom
+            // formatter reads all integers as uint64_t, so 'l' is a no-op.
+            // H-3 (audit): mishandling 'll' left the va_arg list misaligned
+            // for the NEXT specifier (e.g. a following '%s' read garbage).
+            while (*fmt == 'l' || *fmt == 'z')
+                ++fmt;
             switch (*fmt) {
             case 's': {
                 const char* s = __builtin_va_arg(args, const char*);
@@ -188,7 +193,12 @@ void Logger::vprint_raw(const char* fmt, __va_list args) {
     while (*fmt) {
         if (*fmt == '%') {
             ++fmt;
-            if (*fmt == 'l') ++fmt;
+            // Consume any length modifiers ('l'/'ll'/'z') — the custom
+            // formatter reads all integers as uint64_t, so 'l' is a no-op.
+            // H-3 (audit): mishandling 'll' left the va_arg list misaligned
+            // for the NEXT specifier (e.g. a following '%s' read garbage).
+            while (*fmt == 'l' || *fmt == 'z')
+                ++fmt;
             switch (*fmt) {
             case 's': {
                 const char* s = __builtin_va_arg(args, const char*);

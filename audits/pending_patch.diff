@@ -1,175 +1,634 @@
+diff --git a/src/kernel/sync/eventgroup.cpp b/src/kernel/sync/eventgroup.cpp
+index 52bf876e..820b7225 100644
+--- a/src/kernel/sync/eventgroup.cpp
++++ b/src/kernel/sync/eventgroup.cpp
+@@ -161,7 +161,7 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
+         return bits_;
+ 
+     for (;;) {
+-        bool added;
++        bool added = false;
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             if ((bits_ & bits) == bits) {
+@@ -206,7 +206,7 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
+     if (!task)
+         return errors::SYNC_ERR_NO_TASK;
+ 
+-    bool added;
++    bool added = false;
+     {
+         SpinLockGuard<SpinLock> guard(lock_);
+         if ((bits_ & bits) == bits) {
+diff --git a/src/kernel/sync/semaphore.cpp b/src/kernel/sync/semaphore.cpp
+index 4d40c89a..825ef751 100644
+--- a/src/kernel/sync/semaphore.cpp
++++ b/src/kernel/sync/semaphore.cpp
+@@ -183,7 +183,7 @@ void Semaphore::wait() {
+     // A void blocking API cannot report that; yield and retry (the table
+     // drains as waiters are woken by post()).
+     for (;;) {
+-        bool added;
++        bool added = false;
+         {
+             SpinLockGuard<SpinLock> guard(lock_);
+             if (count_ > 0) {
+@@ -233,7 +233,7 @@ errors::SyncError Semaphore::wait_err() {
+     if (!task)
+         return errors::SYNC_ERR_NO_TASK;
+ 
+-    bool added;
++    bool added = false;
+     {
+         SpinLockGuard<SpinLock> guard(lock_);
+         if (count_ > 0) {
+diff --git a/src/kernel/task/ready_queue_manager.cpp b/src/kernel/task/ready_queue_manager.cpp
+index b0e50b1c..cf52ff4f 100644
+--- a/src/kernel/task/ready_queue_manager.cpp
++++ b/src/kernel/task/ready_queue_manager.cpp
+@@ -17,7 +17,9 @@ void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
+     // scheduler_lock_).
+     if (tcb.in_ready_queue_) {
+         static bool diag_dumped = false;
+-        if (!diag_dumped) {
++        // M-2 (audit): checked/set from task AND ISR context — access it
++        // atomically (one-shot diagnostic latch).
++        if (!__atomic_load_n(&diag_dumped, __ATOMIC_RELAXED)) {
+             bool phys = false;
+             for (auto *n = queues_[priority].head(); n; n = n->runq_next_) {
+                 if (n == &tcb) { phys = true; break; }
+@@ -31,7 +33,7 @@ void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
+             debug_write(" state=");
+             debug_write_hex((uint64_t)tcb.state);
+             debug_write("\n");
+-            diag_dumped = true;
++            __atomic_store_n(&diag_dumped, true, __ATOMIC_RELAXED);
+         }
+         return;
+     }
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 3aeb0efd..08ec61dc 100644
+index 08ec61dc..dac28fb1 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -2982,17 +2982,17 @@ void Scheduler::process_deferred_kills() noexcept {
-             // Contract: SporadicServer::on_completion() (and on_activation /
-             // consume / process_replenishments) must NEVER release the object.
-             // The ScopedRef pins it across the call; the ownership reference
--            // (refcount==1) is dropped by the delete task → cleanup() →
-+            // (refcount==1) is dropped by the destroy → cleanup() →
-             // release_all_objects() below.  If a future change lets the SS
-             // callback trigger teardown, extend this guard to cover the
--            // `delete task` statement instead.
-+            // destroy() statement instead.
-             kernel::ScopedRef ss_ref{task->get_sporadic_server()};
-             task->get_sporadic_server()->on_completion(arch::Timer::ticks());
-         }
+@@ -44,15 +44,6 @@ extern "C" void debug_write_dec(uint64_t value);
+ #include <kernel/vfs/vfsd.hpp>
+ #include <kernel/driver/iocd.hpp>
  
-         Logger::info("[DMD] Task %lu (%s) killed and cleaned up", task->id,
-                      task->name);
--        delete task;
-+        TaskControlBlock::destroy(task);
-     }
-     s_deferred_kill_count = 0;
- }
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index b773b784..49aba3d6 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -936,7 +936,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
- #if CONFIG_MEMORY_BUDGET
-     if (!Scheduler::reserve_memory_pages(stack_pages)) {
-         Logger::warn("TCB::create: budget OOM for %zu-page stack", stack_pages);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
+-// Architecture-aware stack pointer access
+-#if defined(CONFIG_ARCH_X86_64)
+-#define TASK_STACK_PTR(t) ((t)->context.rsp)
+-#elif defined(CONFIG_ARCH_AARCH64)
+-#define TASK_STACK_PTR(t) ((t)->context.sp_el0)
+-#elif defined(CONFIG_ARCH_RISCV64)
+-#define TASK_STACK_PTR(t) ((t)->context.sp)
+-#endif
+-
+ /// @brief Read the current stack pointer (portable across arches).
+ /// @return Current SP (kernel stack pointer for the running context).
+ static inline uint64_t current_sp() noexcept {
+@@ -72,10 +63,64 @@ static inline uint64_t current_sp() noexcept {
+     return 0;
  #endif
-@@ -946,7 +946,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
- #if CONFIG_MEMORY_BUDGET
-         Scheduler::release_memory_pages(stack_pages);
- #endif
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
- 
-@@ -1023,7 +1023,7 @@ done_stack:
-     tcb->page_table_ = VMM::clone_kernel_pml4();
-     if (!tcb->page_table_) {
-         ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
- 
-@@ -1144,7 +1144,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-     uint64_t kstack_phys = PMM::alloc_contiguous(kernel_stack_pages);
-     if (!kstack_phys) {
-         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
-     tcb->stack_phys_ = kstack_phys;
-@@ -1176,7 +1176,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-     uint64_t ustack_phys = PMM::alloc_user_contiguous(user_stack_pages);
-     if (!ustack_phys) {
-         ASSERT(errors::TaskError::TASK_ERR_USTACK_ALLOC);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
- 
-@@ -1186,7 +1186,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-         size_t pages = (user_stack_size + 4095) / arch::PAGE_SIZE;
-         for (size_t i = 0; i < pages; ++i)
-             PMM::free_page(ustack_phys + i * arch::PAGE_SIZE);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
-     tcb->page_table_ = pml4;
-@@ -1386,7 +1386,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     uint64_t kstack_phys = PMM::alloc_contiguous(stack_pages);
-     if (!kstack_phys) {
-         ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
--        delete tcb;
-+        TaskControlBlock::destroy(tcb);
-         return nullptr;
-     }
-     tcb->stack_phys_ = kstack_phys;
-@@ -1482,7 +1482,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-         uint64_t new_pml4 = PMM::alloc_page();
-         if (!new_pml4) {
-             ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
--            delete tcb;
-+            TaskControlBlock::destroy(tcb);
-             return nullptr;
-         }
-         tcb->page_table_ = new_pml4;
-@@ -1499,7 +1499,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-         // Deep-copy user entries from parent (walk, allocate, copy).
-         if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {
-             ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
--            delete tcb;
-+            TaskControlBlock::destroy(tcb);
-             return nullptr;
-         }
- 
-@@ -1524,7 +1524,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-         uint64_t ustack_phys = PMM::alloc_user_contiguous(ustack_pages);
-         if (!ustack_phys) {
-             ASSERT(errors::TaskError::TASK_ERR_USTACK_ALLOC);
--            delete tcb;
-+            TaskControlBlock::destroy(tcb);
-             return nullptr;
-         }
-         tcb->user_stack_ = ustack_phys;
-@@ -1894,12 +1894,11 @@ TaskError TaskControlBlock::clone_err(uint64_t *regs,
-     return out_tcb ? TASK_ERR_OK : TASK_ERR_OOM;
  }
- 
--void TaskControlBlock::operator delete(void *ptr) noexcept {
--    if (!ptr)
-+void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
-+    if (!tcb)
-         return;
--    auto *tcb = static_cast<TaskControlBlock *>(ptr);
-     if (tcb->magic == TCB_MAGIC) {
--        // If the caller already called cleanup() before delete, state
-+        // If the caller already called cleanup() before destroy, state
-         // is REAPED and we must NOT cleanup/remove again — doing so
-         // double-frees resources and corrupts the scheduler lists.
-         if (tcb->state != TaskState::REAPED) {
-@@ -1907,13 +1906,17 @@ void TaskControlBlock::operator delete(void *ptr) noexcept {
-             Scheduler::remove_task(*tcb);
-         }
-         tcb->magic =
--            0; // Prevent double-free if caller re-enters operator delete
--        MemPool::free(ptr);
-+            0; // Prevent double-free if caller re-enters the destroy path
-+        MemPool::free(tcb);
-         return;
-     }
-     if (tcb->magic == 0)
--        MemPool::free(ptr);
-+        MemPool::free(tcb);
-     // magic == 0xDD: reaper already freed it — skip silently.
- }
- 
-+void TaskControlBlock::operator delete(void *ptr) noexcept {
-+    destroy(static_cast<TaskControlBlock *>(ptr));
++
++// Boot stack (section .boot_stack, bounded by the linker's _stack_start /
++// _stack_end symbols).  The harness (init, PID 1) physically runs on this
++// stack in test mode — it is never switched onto its TCB kernel_stack, so no
++// task's kernel_stack range covers the live RSP while the harness executes.
++extern "C" {
++extern char _stack_start[];
++extern char _stack_end[];
 +}
 +
- } // namespace kernel
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index f7555153..8b4eb1ce 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -557,6 +557,14 @@ struct TaskControlBlock {
-     static errors::TaskError clone_err(uint64_t *regs,
-                                        TaskControlBlock *&out_tcb);
- 
-+    /// @brief Destroys a TCB and returns its MemPool block (H-5: single
-+    ///        pool-aware teardown path replacing raw `delete` on RT error
-+    ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
-+    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
-+    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
-+    ///        Mirrors operator delete() semantics exactly.
-+    static void destroy(TaskControlBlock *tcb) noexcept;
++/// @brief Validate an iret-frame candidate (audit-scheduler-tasks LOW: the
++///        duplicated frame validation in switch_to_task and
++///        switch_away_from_terminating).  A frame is valid only for a known
++///        CS (ring0 0x8 / ring3 0x1B), with interrupts enabled in RFLAGS,
++///        and — for ring0 — an RSP inside @p next's own kernel stack (or the
++///        linker boot stack when dispatching the harness).  A foreign RSP
++///        would iretq the task onto foreign memory (H2 hazard).
++/// @param next   The task whose frame is being validated.
++/// @param nbase  Next task's kernel-stack base VA.
++/// @param f_rflags RFLAGS field of the candidate frame.
++static bool validate_iret_frame(const kernel::TaskControlBlock &next,
++                                uint64_t nbase, uint64_t f_rflags, uint64_t rip,
++                                uint64_t cs, uint64_t rsp,
++                                uint64_t ss) noexcept {
++    const bool ring0 = (cs == 0x8);
++    const bool ring3 = (cs == 0x1B);
++    if (rip == 0 || (!ring0 && !ring3))
++        return false;
++    if ((ring0 || ring3) && (f_rflags & 0x2) == 0)
++        return false;
++    if (ring3 && (ss != 0x23 || rsp == 0))
++        return false;
++    if (ring0) {
++        const bool in_own = rsp >= nbase && rsp <= next.kernel_stack_top;
++        const bool harness_boot =
++            (&next == kernel::Scheduler::get_harness_task() &&
++             rsp >= reinterpret_cast<uint64_t>(_stack_start) &&
++             rsp < reinterpret_cast<uint64_t>(_stack_end));
++        if (!in_own && !harness_boot)
++            return false;
++    }
++    return true;
++}
+ #include <kernel/task/sporadic_server.hpp>
 +
-     /// @brief Save the current register context into this TCB.
-     /// @param rsp Reference to current stack pointer (updated on save).
-     void save_context(uint64_t &rsp) noexcept;
++/// @brief Named constants for the iret-frame layout indices (magic-numeric
++///        offsets audit-scheduler-tasks LOW: 136/8, 144/8, 152/8, 160/8,
++///        168/8).  Two orderings exist: the "created" frame (rip first) and
++///        the "isr_common/CPU" frame (ss first); both are validated.
++namespace {
++constexpr size_t IRET_RIP_IDX = 136 / 8;    ///< RIP (created order).
++constexpr size_t IRET_CS_IDX = 144 / 8;     ///< CS.
++constexpr size_t IRET_RFLAGS_IDX = 152 / 8; ///< RFLAGS.
++constexpr size_t IRET_RSP_IDX = 160 / 8;    ///< RSP (created order).
++constexpr size_t IRET_SS_IDX = 168 / 8;     ///< SS.
++} // namespace
+ #include <signal.hpp>
+ #include <logger.hpp>
+-#include <assert.hpp>
+ 
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+ // Wedge diagnostics for deferred-switch / ready-queue desync analysis.
+@@ -84,6 +129,23 @@ static inline uint64_t current_sp() noexcept {
+ 
+ namespace kernel {
+ 
++// Architecture-aware stack pointer access.  Returns a reference so the
++// address-of usage `&task_stack_ptr(t)` (switch_to_task's save target) keeps
++// writing the live TCB field (audit-scheduler-tasks LOW: macro → inline fn).
++static inline uint64_t &task_stack_ptr(TaskControlBlock *t) noexcept {
++#if defined(CONFIG_ARCH_X86_64)
++    return t->context.rsp;
++#elif defined(CONFIG_ARCH_AARCH64)
++    return t->context.sp_el0;
++#elif defined(CONFIG_ARCH_RISCV64)
++    return t->context.sp;
++#else
++    static uint64_t dummy = 0;
++    (void)t;
++    return dummy;
++#endif
++}
++
+ // Deferred-switch event codes for the H2 ring (see kernel::debug::H2Event).
+ inline constexpr uint64_t H2_EV_ARM      = 1;
+ inline constexpr uint64_t H2_EV_APPLY    = 2;
+@@ -520,9 +582,9 @@ static void wake_waiting_parent(TaskControlBlock &child) {
+     if (p->state == TaskState::BLOCKED) {
+         p->in_ready_queue_ = false;
+         Scheduler::set_task_ready(*p);
+-        if (TASK_STACK_PTR(p)) {
++        if (task_stack_ptr(p)) {
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-            auto *stack = reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
++            auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
+             stack[0] = child.id;
+         }
+     }
+@@ -995,11 +1057,17 @@ bool Scheduler::id_table_insert(uint64_t id, TaskControlBlock *tcb) {
+ }
+ 
+ uint64_t Scheduler::alloc_id() noexcept {
+-    return next_task_id_++;
++    // H-1/H-2 (audit-scheduler-tasks-v0.4.2): honor the documented contract —
++    // return TASK_INVALID when the ID/table capacity is exhausted, and
++    // increment the counter atomically.  Monotonic allocation with no ID
++    // reuse: TASK_INVALID (UINT64_MAX) is the out-of-capacity sentinel.
++    if (all_tasks_.size() >= MAX_TASKS)
++        return UINT64_MAX;
++    return __atomic_fetch_add(&next_task_id_, 1UL, __ATOMIC_RELAXED);
+ }
+ 
+ void Scheduler::reset_next_task_id(uint64_t id) noexcept {
+-    next_task_id_ = id;
++    __atomic_store_n(&next_task_id_, id, __ATOMIC_RELAXED);
+ }
+ 
+ void Scheduler::id_table_remove(TaskControlBlock *task) {
+@@ -1832,15 +1900,6 @@ static bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t,
+     return false;
+ }
+ 
+-// Boot stack (section .boot_stack, bounded by the linker's _stack_start /
+-// _stack_end symbols).  The harness (init, PID 1) physically runs on this
+-// stack in test mode — it is never switched onto its TCB kernel_stack, so no
+-// task's kernel_stack range covers the live RSP while the harness executes.
+-extern "C" {
+-extern char _stack_start[];
+-extern char _stack_end[];
+-}
+-
+ /// @brief Returns true when the live RSP belongs to the kernel boot stack
+ ///        (kernel-image space), i.e. the physically-running harness.
+ static inline bool is_boot_stack_rsp(uint64_t rsp) noexcept {
+@@ -1961,8 +2020,8 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
+         return false;
+     }
+     if (next != Scheduler::get_idle_task() &&
+-        !rsp_in_stack_range(TASK_STACK_PTR(next), next, label)) {
+-        if (TASK_STACK_PTR(next) <
++        !rsp_in_stack_range(task_stack_ptr(next), next, label)) {
++        if (task_stack_ptr(next) <
+             reinterpret_cast<uint64_t>(next->kernel_stack)) {
+             return true;
+         }
+@@ -1971,7 +2030,7 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
+         Logger::raw_write(": current id=");
+         Logger::print_dec(current->id);
+         Logger::raw_write(" rsp=0x");
+-        Logger::print_hex(TASK_STACK_PTR(current));
++        Logger::print_hex(task_stack_ptr(current));
+         Logger::raw_write(" state=");
+         Logger::print_dec(static_cast<uint64_t>(current->state));
+         Logger::raw_write(" kstack=[0x");
+@@ -2012,7 +2071,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         return;
+     }
+ 
+-    uint64_t *save_target = &TASK_STACK_PTR(current);
++    uint64_t *save_target = &task_stack_ptr(current);
+     bool cur_is_boot_stack = false;
+     {
+         uint64_t cur_rsp{};
+@@ -2036,7 +2095,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+             // never switched onto its TCB kernel_stack, so NO TCB kernel_stack
+             // covers this RSP.  Owner-resolution must NOT scan peers here: if
+             // current_task() has drifted onto a peer TCB, saving into
+-            // `&TASK_STACK_PTR(current)` would write the boot-stack RSP into the
++            // `&task_stack_ptr(current)` would write the boot-stack RSP into the
+             // peer's context.rsp (deferred-switch corruption).  Bind the save to
+             // the harness TCB explicitly; the boot stack belongs to the harness,
+             // not to any peer.
+@@ -2080,7 +2139,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         // task — a condition that was already checked at entry (see above) but
+         // can become true HERE, after the check.  Publishing a deferred switch
+         // in this state is a SELF-switch: the ISR would save a fresh RSP into
+-        // the runner's context.rsp (save_target == &TASK_STACK_PTR(next)) and
++        // the runner's context.rsp (save_target == &task_stack_ptr(next)) and
+         // then iretq the PRE-SAVE (stale) load_rsp_from value, displacing the
+         // runner onto a stale/fossil iret frame (docs/specs/ipc.md §4 H2).  No-op
+         // instead: the runner keeps executing.  Mirror the bad-frame no-op's
+@@ -2106,7 +2165,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         // (scheduler_validate_pending_switch) and the dispatch-guard both
+         // reject a stale/foreign arm before it can iretq, so keeping
+         // context.rsp current is safe.
+-        save_target = &TASK_STACK_PTR(current);
++        save_target = &task_stack_ptr(current);
+ #ifdef CONFIG_DEBUG
+         // H2 residual-race recorder (debug-only, fires ONLY on the orphaned
+         // displacement — the harness physically executing on a non-boot-stack,
+@@ -2122,7 +2181,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                 Logger::raw_write(" cur_rsp=0x");
+                 Logger::print_hex(cur_rsp);
+                 Logger::raw_write(" ctx_rsp=0x");
+-                Logger::print_hex(TASK_STACK_PTR(current));
++                Logger::print_hex(task_stack_ptr(current));
+                 Logger::raw_write(" callsite=0x");
+                 Logger::print_hex(
+                     reinterpret_cast<uint64_t>(__builtin_return_address(0)));
+@@ -2144,7 +2203,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                 // The harness's stored kslot iret frame — the rsp field at
+                 // +160 is what the NEXT dispatch's iretq would load.
+                 const uint64_t *cf =
+-                    reinterpret_cast<const uint64_t *>(TASK_STACK_PTR(current));
++                    reinterpret_cast<const uint64_t *>(task_stack_ptr(current));
+                 Logger::raw_write("  ctx-frame: rip=0x");
+                 Logger::print_hex(cf[136 / 8]);
+                 Logger::raw_write(" cs=0x");
+@@ -2211,7 +2270,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+     }
+ #endif
+     {
+-        uint64_t nsp = TASK_STACK_PTR(&next);
++        uint64_t nsp = task_stack_ptr(&next);
+         uint64_t nbase = reinterpret_cast<uint64_t>(next.kernel_stack);
+         uint64_t npg = reinterpret_cast<uint64_t>(next.page_table_);
+         // The harness's context.rsp may be a LIVE boot-stack RSP (its genuine
+@@ -2222,8 +2281,8 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         // own harness boot-stack allowance).
+         bool harness_boot_ctx =
+             (&next == Scheduler::get_harness_task() && nsp != 0 &&
+-             nsp >= reinterpret_cast<uint64_t>(kernel::_stack_start) &&
+-             nsp < reinterpret_cast<uint64_t>(kernel::_stack_end));
++             nsp >= reinterpret_cast<uint64_t>(_stack_start) &&
++             nsp < reinterpret_cast<uint64_t>(_stack_end));
+         bool bad =
+             (!nsp ||
+              (!harness_boot_ctx &&
+@@ -2239,48 +2298,17 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+             // orderings, so validate either one instead of assuming a single
+             // fixed order (the wrong order made valid RUN-task frames look
+             // corrupt and dropped their switch — wedging the `all` suite).
+-            uint64_t rip_a = f[136 / 8], cs_a = f[144 / 8], rsp_a = f[160 / 8],
+-                     ss_a = f[168 / 8]; // created order (rip first)
+-            uint64_t rip_b = f[168 / 8], cs_b = f[160 / 8], rsp_b = f[144 / 8],
+-                     ss_b = f[136 / 8]; // isr_common/CPU order (ss first)
+-            f_rflags = f[152 / 8];
+-            auto frame_ok = [&](uint64_t rip, uint64_t cs, uint64_t rsp,
+-                               uint64_t ss) -> bool {
+-                bool ring0 = (cs == 0x8);
+-                bool ring3 = (cs == 0x1B);
+-                if (rip == 0 || (!ring0 && !ring3))
+-                    return false;
+-                if ((ring0 || ring3) && (f_rflags & 0x2) == 0)
+-                    return false;
+-                if (ring3 && (ss != 0x23 || rsp == 0))
+-                    return false;
+-                // H2 root cause: the iret-frame RSP field is what iretq loads
+-                // to resume the task.  For a KERNEL (ring0) task it must lie
+-                // within its own kernel stack — or, when dispatching the
+-                // harness, within the linker boot-stack window (it may
+-                // legitimately run on the boot stack in test mode).  A stale/
+-                // foreign rsp (e.g. a freed test task's HHDM stack) otherwise
+-                // passes this guard and iretq resumes the task on foreign
+-                // memory — the harness displacement that strands it on a freed
+-                // stack (docs/specs/ipc.md §4 H2).  ring3 rsp is the
+-                // user stack and is checked elsewhere.  Note the frame's rsp
+-                // field is INCLUSIVE of kernel_stack_top: a freshly-created
+-                // task's frame carries rsp == kernel_stack_top (its initial
+-                // stack pointer before any push).
+-                if (ring0) {
+-                    const bool in_own =
+-                        rsp >= nbase && rsp <= next.kernel_stack_top;
+-                    const bool harness_boot =
+-                        (&next == Scheduler::get_harness_task() &&
+-                         rsp >= reinterpret_cast<uint64_t>(_stack_start) &&
+-                         rsp < reinterpret_cast<uint64_t>(_stack_end));
+-                    if (!in_own && !harness_boot)
+-                        return false;
+-                }
+-                return true;
+-            };
+-            if (!frame_ok(rip_a, cs_a, rsp_a, ss_a) &&
+-                !frame_ok(rip_b, cs_b, rsp_b, ss_b))
++            uint64_t rip_a = f[IRET_RIP_IDX], cs_a = f[IRET_CS_IDX],
++                     rsp_a = f[IRET_RSP_IDX],
++                     ss_a = f[IRET_SS_IDX]; // created order (rip first)
++            uint64_t rip_b = f[IRET_SS_IDX], cs_b = f[IRET_RSP_IDX],
++                     rsp_b = f[IRET_CS_IDX],
++                     ss_b = f[IRET_RIP_IDX]; // isr_common/CPU order (ss first)
++            f_rflags = f[IRET_RFLAGS_IDX];
++            if (!validate_iret_frame(next, nbase, f_rflags, rip_a, cs_a, rsp_a,
++                                     ss_a) &&
++                !validate_iret_frame(next, nbase, f_rflags, rip_b, cs_b, rsp_b,
++                                     ss_b))
+                 bad = true;
+         }
+         if (bad) {
+@@ -2335,7 +2363,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+             return; // do not set scheduler_load_rsp_from -> no switch
+         }
+     }
+-    __atomic_store_n(&scheduler_load_rsp_from, TASK_STACK_PTR(&next),
++    __atomic_store_n(&scheduler_load_rsp_from, task_stack_ptr(&next),
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_load_kstack_base,
+                      reinterpret_cast<uint64_t>(next.kernel_stack),
+@@ -2349,7 +2377,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         {
+             auto *c = Scheduler::current_task();
+             IPC_SCHED_TRACE("[SW]", "cur=", c ? c->id : 0u, "next=", next.id,
+-                            "rsp=", (uint64_t)TASK_STACK_PTR(&next), "x=", 0u);
++                            "rsp=", (uint64_t)task_stack_ptr(&next), "x=", 0u);
+         }
+ #endif
+ #if defined(CONFIG_ARCH_X86_64)
+@@ -2362,7 +2390,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         {
+             auto *c = Scheduler::current_task();
+             IPC_SCHED_TRACE("[SW]", "cur=", c ? c->id : 0u, "next=", next.id,
+-                            "rsp=", (uint64_t)TASK_STACK_PTR(&next), "x=", 0u);
++                            "rsp=", (uint64_t)task_stack_ptr(&next), "x=", 0u);
+         }
+ #endif
+     }
+@@ -2386,7 +2414,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+     if (!canary_verify_kernel_stack(current)) {
+         kernel::Logger::fatal(
+             "CANARY TRIP (kernel stack): task '%s' id=%u top=0x%lx",
+-            current->name, static_cast<unsigned>(current->id),
++            current->name, current->id,
+             current->kernel_stack_top);
+         panic("kernel-stack canary violated");
+     }
+@@ -2488,7 +2516,7 @@ void Scheduler::rate_monotonic_schedule() noexcept {
+     if (!canary_verify_kernel_stack(current)) {
+         kernel::Logger::fatal(
+             "CANARY TRIP (kernel stack, tick): task '%s' id=%u top=0x%lx",
+-            current->name, static_cast<unsigned>(current->id),
++            current->name, current->id,
+             current->kernel_stack_top);
+         panic("kernel-stack canary violated");
+     }
+@@ -2619,13 +2647,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+ 
+         // Validate `next`'s iret frame.
+         {
+-            uint64_t nsp = TASK_STACK_PTR(next);
++            uint64_t nsp = task_stack_ptr(next);
+             uint64_t nbase = reinterpret_cast<uint64_t>(next->kernel_stack);
+             // Harness boot-stack context.rsp is valid (see switch_to_task).
+             bool harness_boot_ctx =
+                 (next == Scheduler::get_harness_task() && nsp != 0 &&
+-                 nsp >= reinterpret_cast<uint64_t>(kernel::_stack_start) &&
+-                 nsp < reinterpret_cast<uint64_t>(kernel::_stack_end));
++                 nsp >= reinterpret_cast<uint64_t>(_stack_start) &&
++                 nsp < reinterpret_cast<uint64_t>(_stack_end));
+             bool bad =
+                 (!nsp ||
+                  (!harness_boot_ctx &&
+@@ -2634,41 +2662,15 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+                   (next->page_table_ & 0xFFF) != 0));
+             if (!bad) {
+                 const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+-                uint64_t rip_a = f[136 / 8], cs_a = f[144 / 8],
+-                         rsp_a = f[160 / 8], ss_a = f[168 / 8];
+-                uint64_t rip_b = f[168 / 8], cs_b = f[160 / 8],
+-                         rsp_b = f[144 / 8], ss_b = f[136 / 8];
+-                uint64_t f_rflags = f[152 / 8];
+-                auto frame_ok = [&](uint64_t rip, uint64_t cs, uint64_t rsp,
+-                                    uint64_t ss) -> bool {
+-                    bool ring0 = (cs == 0x8);
+-                    bool ring3 = (cs == 0x1B);
+-                    if (rip == 0 || (!ring0 && !ring3))
+-                        return false;
+-                    if ((ring0 || ring3) && (f_rflags & 0x2) == 0)
+-                        return false;
+-                    if (ring3 && (ss != 0x23 || rsp == 0))
+-                        return false;
+-                    // H2 root cause: a ring0 task's iret-frame RSP must lie
+-                    // within its own kernel stack (inclusive of the top — a
+-                    // fresh task's frame carries rsp == kernel_stack_top), or
+-                    // within the linker boot stack when dispatching the
+-                    // harness; a foreign rsp would iretq the task onto foreign
+-                    // memory (see switch_to_task).
+-                    if (ring0) {
+-                        const bool in_own =
+-                            rsp >= nbase && rsp <= next->kernel_stack_top;
+-                        const bool harness_boot =
+-                            (next == Scheduler::get_harness_task() &&
+-                             rsp >= reinterpret_cast<uint64_t>(_stack_start) &&
+-                             rsp < reinterpret_cast<uint64_t>(_stack_end));
+-                        if (!in_own && !harness_boot)
+-                            return false;
+-                    }
+-                    return true;
+-                };
+-                if (!frame_ok(rip_a, cs_a, rsp_a, ss_a) &&
+-                    !frame_ok(rip_b, cs_b, rsp_b, ss_b))
++                uint64_t rip_a = f[IRET_RIP_IDX], cs_a = f[IRET_CS_IDX],
++                         rsp_a = f[IRET_RSP_IDX], ss_a = f[IRET_SS_IDX];
++                uint64_t rip_b = f[IRET_SS_IDX], cs_b = f[IRET_RSP_IDX],
++                         rsp_b = f[IRET_CS_IDX], ss_b = f[IRET_RIP_IDX];
++                uint64_t f_rflags = f[IRET_RFLAGS_IDX];
++                if (!validate_iret_frame(*next, nbase, f_rflags, rip_a, cs_a,
++                                         rsp_a, ss_a) &&
++                    !validate_iret_frame(*next, nbase, f_rflags, rip_b, cs_b,
++                                         rsp_b, ss_b))
+                     bad = true;
+             }
+             if (bad)
+@@ -2678,7 +2680,7 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+             return;
+ 
+         // Publish the deferred switch globals (load side only under lock).
+-        __atomic_store_n(&scheduler_load_rsp_from, TASK_STACK_PTR(next),
++        __atomic_store_n(&scheduler_load_rsp_from, task_stack_ptr(next),
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&scheduler_load_kstack_base,
+                          reinterpret_cast<uint64_t>(next->kernel_stack),
+@@ -2715,7 +2717,7 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+         __atomic_store_n(&scheduler_switch_generation, gen + 1,
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&scheduler_save_rsp_to,
+-                         &TASK_STACK_PTR(&exiting), __ATOMIC_RELEASE);
++                         &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
+ #if defined(CONFIG_ARCH_X86_64)
+         uint64_t cr0 = arch::read_cr0();
+         cr0 |= (1ULL << 3);
+@@ -2741,7 +2743,7 @@ void Scheduler::capture_state(TaskControlBlock **tasks_out,
+                      sizeof(TaskControlBlock *) * ID_TABLE_SIZE);
+     task_count_out = all_tasks_.size();
+     current_idx_out = current_index();
+-    next_id_out = next_task_id_;
++    next_id_out = __atomic_load_n(&next_task_id_, __ATOMIC_RELAXED);
+     idle_out = idle_task_;
+     preempt_out = preempt_enabled_;
+     if (rq_bitmap_hi)
+@@ -2795,7 +2797,7 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
+     __builtin_memcpy(static_cast<void *>(id_table_),
+                      static_cast<const void *>(id_table_in),
+                      sizeof(TaskControlBlock *) * ID_TABLE_SIZE);
+-    next_task_id_ = next_id_in;
++    __atomic_store_n(&next_task_id_, next_id_in, __ATOMIC_RELAXED);
+     idle_task_ = idle_in;
+     preempt_enabled_ = preempt_in;
+     sporadic_task_count_ = sporadic_count_in;
+@@ -2929,7 +2931,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
+             // TESTED AND REVERTED as they regressed the race.  The live-RSP
+             // re-apply below is the only kept hardening.
+             if (t == harness && harness_live_rsp != 0) {
+-                TASK_STACK_PTR(t) = harness_live_rsp;
++                task_stack_ptr(t) = harness_live_rsp;
+             }
+             TCB_WRITE(t, kernel_stack,
+                       reinterpret_cast<uint8_t *>(saved[j].kernel_stack));
+@@ -3212,7 +3214,7 @@ extern "C" void scheduler_diag_pre_save() {
+             kernel::Logger::raw_write(" cur_rsp=0x");
+             kernel::Logger::print_hex(rsp);
+             kernel::Logger::raw_write(" ctx_rsp=0x");
+-            kernel::Logger::print_hex(TASK_STACK_PTR(cur));
++            kernel::Logger::print_hex(task_stack_ptr(cur));
+             kernel::Logger::raw_write(" state=");
+             kernel::Logger::print_dec(static_cast<uint64_t>(cur->state));
+             kernel::Logger::raw_write(" kstack=[0x");
+@@ -3375,7 +3377,10 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
+ }
+ 
+ SchedulerError Scheduler::alloc_id_err(uint64_t &out_id) {
+-    out_id = next_task_id_++;
++    // H-1/H-4: same table-full contract as alloc_id(); error-returning form.
++    if (all_tasks_.size() >= MAX_TASKS)
++        return SCHED_ERR_TABLE_FULL;
++    out_id = __atomic_fetch_add(&next_task_id_, 1UL, __ATOMIC_RELAXED);
+     return SCHED_ERR_OK;
+ }
+ 
+@@ -3500,8 +3505,8 @@ extern "C" int scheduler_validate_pending_switch() {
+     bool in_own = (base && top && rsp >= base && rsp <= top);
+     bool harness_boot =
+         (t == kernel::Scheduler::get_harness_task() &&
+-         rsp >= reinterpret_cast<uint64_t>(kernel::_stack_start) &&
+-         rsp < reinterpret_cast<uint64_t>(kernel::_stack_end));
++         rsp >= reinterpret_cast<uint64_t>(_stack_start) &&
++         rsp < reinterpret_cast<uint64_t>(_stack_end));
+     if (!in_own && !harness_boot) {
+         // Stale arm: the published RSP no longer lies inside the target's
+         // CURRENT kernel stack (it drifted to a foreign/direct-map address —
+@@ -3572,7 +3577,7 @@ extern "C" void scheduler_on_context_switch() {
+     // context.rsp as the iret frame — dump its content to see whether the
+     // harness resumes at a valid arch_hlt wait-loop frame or at stale test code.
+     if (id == 1) {
+-        uint64_t nsp = TASK_STACK_PTR(t);
++        uint64_t nsp = task_stack_ptr(t);
+         const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+         kernel::Logger::raw_write("[H2-APPLY] id=1 ctx.rsp=0x");
+         kernel::Logger::print_hex(nsp);
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 707ce27c..d2bb4a21 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -21,8 +21,6 @@
+ /// @file scheduler.hpp
+ /// @brief Rate-monotonic scheduler for task management and dispatching.
+ 
+-#pragma once
+-
+ #include <types.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler_config.hpp>
+@@ -525,6 +523,9 @@ class Scheduler {
+         static_cast<uint64_t>(CONFIG_MAX_TASKS) * 2;
+     static constexpr uint64_t ID_TABLE_MASK = ID_TABLE_SIZE - 1;
+ 
++    static_assert((ID_TABLE_SIZE & (ID_TABLE_SIZE - 1)) == 0,
++                  "ID_TABLE_SIZE must be a power of two (ID_TABLE_MASK)");
++
+     /// @brief Sentinel value for a removed hash-table entry.
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+     static TaskControlBlock *const ID_TOMBSTONE;
+diff --git a/src/lib/logger.cpp b/src/lib/logger.cpp
+index 1e180f4a..178e8146 100644
+--- a/src/lib/logger.cpp
++++ b/src/lib/logger.cpp
+@@ -143,7 +143,12 @@ void Logger::vprint(LogLevel level, const char* fmt, __va_list args) {
+     while (*fmt) {
+         if (*fmt == '%') {
+             ++fmt;
+-            if (*fmt == 'l') ++fmt;
++            // Consume any length modifiers ('l'/'ll'/'z') — the custom
++            // formatter reads all integers as uint64_t, so 'l' is a no-op.
++            // H-3 (audit): mishandling 'll' left the va_arg list misaligned
++            // for the NEXT specifier (e.g. a following '%s' read garbage).
++            while (*fmt == 'l' || *fmt == 'z')
++                ++fmt;
+             switch (*fmt) {
+             case 's': {
+                 const char* s = __builtin_va_arg(args, const char*);
+@@ -188,7 +193,12 @@ void Logger::vprint_raw(const char* fmt, __va_list args) {
+     while (*fmt) {
+         if (*fmt == '%') {
+             ++fmt;
+-            if (*fmt == 'l') ++fmt;
++            // Consume any length modifiers ('l'/'ll'/'z') — the custom
++            // formatter reads all integers as uint64_t, so 'l' is a no-op.
++            // H-3 (audit): mishandling 'll' left the va_arg list misaligned
++            // for the NEXT specifier (e.g. a following '%s' read garbage).
++            while (*fmt == 'l' || *fmt == 'z')
++                ++fmt;
+             switch (*fmt) {
+             case 's': {
+                 const char* s = __builtin_va_arg(args, const char*);

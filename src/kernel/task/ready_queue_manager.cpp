@@ -17,7 +17,9 @@ void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
     // scheduler_lock_).
     if (tcb.in_ready_queue_) {
         static bool diag_dumped = false;
-        if (!diag_dumped) {
+        // M-2 (audit): checked/set from task AND ISR context — access it
+        // atomically (one-shot diagnostic latch).
+        if (!__atomic_load_n(&diag_dumped, __ATOMIC_RELAXED)) {
             bool phys = false;
             for (auto *n = queues_[priority].head(); n; n = n->runq_next_) {
                 if (n == &tcb) { phys = true; break; }
@@ -31,7 +33,7 @@ void ReadyQueueManager::enqueue(TaskControlBlock &tcb,
             debug_write(" state=");
             debug_write_hex((uint64_t)tcb.state);
             debug_write("\n");
-            diag_dumped = true;
+            __atomic_store_n(&diag_dumped, true, __ATOMIC_RELAXED);
         }
         return;
     }

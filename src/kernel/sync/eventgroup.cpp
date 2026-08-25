@@ -161,7 +161,7 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
         return bits_;
 
     for (;;) {
-        bool added;
+        bool added = false;
         {
             SpinLockGuard<SpinLock> guard(lock_);
             if ((bits_ & bits) == bits) {
@@ -206,7 +206,7 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
 
-    bool added;
+    bool added = false;
     {
         SpinLockGuard<SpinLock> guard(lock_);
         if ((bits_ & bits) == bits) {

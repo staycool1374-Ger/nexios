@@ -183,7 +183,7 @@ void Semaphore::wait() {
     // A void blocking API cannot report that; yield and retry (the table
     // drains as waiters are woken by post()).
     for (;;) {
-        bool added;
+        bool added = false;
         {
             SpinLockGuard<SpinLock> guard(lock_);
             if (count_ > 0) {
@@ -233,7 +233,7 @@ errors::SyncError Semaphore::wait_err() {
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
 
-    bool added;
+    bool added = false;
     {
         SpinLockGuard<SpinLock> guard(lock_);
         if (count_ > 0) {
