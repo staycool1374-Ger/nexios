@@ -1,139 +1,117 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
-index 67ffe592..b1c4a4df 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -14,9 +14,13 @@ comma := ,
- # ------------------------------------------------------------------------------
- SRC_CXX_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.cpp' -print)
- SRC_ASM_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.asm' -print)
-+# P7 (issue #6): syscall_entry.asm is DEAD on all arches — the LSTAR/sysret
-+# path was removed (MSR_KERNEL_GS_BASE never written; the sole live syscall
-+# path is int $0x80 via isr_128).  Unassemble it unconditionally; it is kept
-+# as a commented historical artifact pending deletion (see syscall_entry.asm).
-+SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
- # Exclude x86-specific NASM files for non-x86 architectures
- ifneq ($(ARCH),x86_64)
--SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
- SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
- endif
- # Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
-diff --git a/src/kernel/syscall/syscall.cpp b/src/kernel/syscall/syscall.cpp
-index ba7160c2..892cc7d6 100644
---- a/src/kernel/syscall/syscall.cpp
-+++ b/src/kernel/syscall/syscall.cpp
-@@ -30,23 +30,21 @@
- #include <kernel/arch/io.hpp>
- #include <constants.hpp>
- 
--extern "C" void syscall_entry();
--
- namespace kernel {
- 
--/// @brief Initialise the syscall interface (MSR setup, syscall-table built at
--/// compile time).
-+/// @brief Initialise the syscall interface (syscall-table built at compile
-+/// time).
- void Syscall::init() {
- #if defined(CONFIG_ARCH_X86_64)
--    uint64_t star_val = (static_cast<uint64_t>(arch::SEG_KERNEL_CODE) << 32) |
--                        (static_cast<uint64_t>(arch::SEG_USER_CODE) << 48);
--    arch::wrmsr(arch::IA32_STAR, star_val);
--    arch::wrmsr(arch::IA32_LSTAR, reinterpret_cast<uint64_t>(syscall_entry));
--    arch::wrmsr(arch::IA32_FMASK, 0x200);
-+    // P7 / gs-base-swapgs-audit F-1 (issue #6): the LSTAR/sysret path is
-+    // REMOVED.  MSR_KERNEL_GS_BASE was never written, so syscall_entry's
-+    // swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 — a
-+    // guaranteed panic on any ring-3 `syscall` (0F 05).  The sole live syscall
-+    // path is `int $0x80` (isr_128 trap gate, GS-free).  The fastpath redesign
-+    // lives in docs/specs/syscall-fastpath.md (v0.4.3).
- #elif defined(CONFIG_ARCH_AARCH64)
-     // AArch64 syscalls use SVC #0; VBAR_EL1 entry point handles dispatch.
-     // No MSR-based syscall setup needed.
--    (void)syscall_entry;
- #endif
+diff --git a/src/kernel/sync/mutex.cpp b/src/kernel/sync/mutex.cpp
+index 7acdd21b..2f632619 100644
+--- a/src/kernel/sync/mutex.cpp
++++ b/src/kernel/sync/mutex.cpp
+@@ -47,6 +47,9 @@ void Mutex::init(uint64_t ceiling) {
+     lock_count_ = 0;
+     wait_count_ = 0;
+     priority_ceiling_ = ceiling;
++    // M-9 (audit-task-sync-v0.4.2): set the flag so a later init_err() sees
++    // this object as initialized (was never set by the void overload).
++    initialized_ = true;
  }
  
-diff --git a/src/kernel/syscall/syscall_entry.asm b/src/kernel/syscall/syscall_entry.asm
-index 852a0319..f57eb1a9 100644
---- a/src/kernel/syscall/syscall_entry.asm
-+++ b/src/kernel/syscall/syscall_entry.asm
-@@ -14,6 +14,18 @@
- ; You should have received a copy of the GNU General Public License
- ; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ /// @brief Initialise the mutex (error-returning overload).
+@@ -237,8 +240,13 @@ void Mutex::lock() {
+ #if CONFIG_PRIORITY_CEILING_PROTOCOL
+         if (priority_ceiling_ > 0 && task->system_ceiling_ > 0 &&
+             task->priority <= task->system_ceiling_) {
+-            bool added = add_waiter(*task);
+-            ENSURE(added);
++            // H-4: never ENSURE on waiter-table-full (reachable exhaustion).
++            if (!add_waiter(*task)) {
++                lock_.unlock();
++                Scheduler::reschedule();
++                lock_.lock();
++                continue;
++            }
+             task->waiting_on_mutex = this;
+             lock_.unlock();
+             task->state = TaskState::BLOCKED;
+@@ -274,8 +282,15 @@ void Mutex::lock() {
  
-+; ============================================================================
-+; DEAD CODE (P7, issue #6) — NOT ASSEMBLED on any architecture.
-+;
-+; The LSTAR/sysret fastpath was removed: MSR_KERNEL_GS_BASE was never written,
-+; so the entry swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 —
-+; a guaranteed kernel panic on any ring-3 `syscall` (0F 05).  The sole live
-+; syscall path is `int $0x80` (trap gate isr_128, GS-free).  The fastpath
-+; redesign lives in docs/specs/syscall-fastpath.md (v0.4.3).  This file is
-+; retained as a commented historical artifact pending explicit approval to
-+; delete (mk/rules.mk filters it out of SRC_ASM_GENERIC unconditionally).
-+; ============================================================================
-+
- extern syscall_handler
+         inherit_priority(*task);
  
- global syscall_entry
-diff --git a/src/kernel/test/test_idt.cpp b/src/kernel/test/test_idt.cpp
-index ad14acfa..c6072fb9 100644
---- a/src/kernel/test/test_idt.cpp
-+++ b/src/kernel/test/test_idt.cpp
-@@ -58,18 +58,21 @@ JARVIS_TEST(idt_irq_remapped, "PRE: iocd | POST: none") {
+-        bool added = add_waiter(*task);
+-        ENSURE(added);
++        // H-4 (audit-task-sync-v0.4.2): a void blocking API must NOT ENSURE on
++        // waiter-table-full - reachable resource exhaustion under contention
++        // saturation.  Yield and retry (the table drains as waiters wake).
++        if (!add_waiter(*task)) {
++            lock_.unlock();
++            Scheduler::reschedule();
++            lock_.lock();
++            continue;
++        }
+         task->waiting_on_mutex = this;
+ 
+         lock_.unlock();
+diff --git a/src/kernel/sync/spsc_ring.hpp b/src/kernel/sync/spsc_ring.hpp
+index 9b6fb5ec..f5aa7b1e 100644
+--- a/src/kernel/sync/spsc_ring.hpp
++++ b/src/kernel/sync/spsc_ring.hpp
+@@ -39,7 +39,7 @@ template <typename T, size_t N> class SPSCRing {
+     /// @brief Push an item (discards if full).
+     /// @return true on success.
+     bool try_push(const T &item) {
+-        size_t h = head_;
++        size_t h = kernel::atomic_load(&head_, __ATOMIC_RELAXED);
+         size_t t = kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
+         size_t next = (h + 1) & MASK;
+         if (next == t)
+@@ -52,7 +52,7 @@ template <typename T, size_t N> class SPSCRing {
+     /// @brief Pop an item (no-op if empty).
+     /// @return true on success.
+     bool try_pop(T &item) {
+-        size_t t = tail_;
++        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
+         size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
+         if (t == h)
+             return false;
+@@ -67,7 +67,9 @@ template <typename T, size_t N> class SPSCRing {
+                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
      }
- }
  
--/// @brief Verifies the SYSCALL fast path is installed via IA32_LSTAR.
--/// @input Read the LSTAR MSR programmed by Syscall::init()
--/// @expect LSTAR is non-zero (points at syscall_entry) — x86_64 syscalls use
--///         MSR STAR/LSTAR → syscall_entry, NOT int 0x80.  The old test
--///         asserted IDT::has_handler(0x80), which was vacuous for this
--///         contract (the 0x80 IDT slot is unrelated to the syscall path).
--/// @depends kernel::arch::rdmsr, Syscall::init
-+/// @brief Verifies the syscall trap gate (int $0x80 / isr_128) is installed.
-+/// @input Inspect the IDT vector 0x80 slot and the LSTAR MSR.
-+/// @expect The 0x80 IDT entry is a present trap gate — the sole live syscall
-+///         path.  IA32_LSTAR must be 0 (P7, issue #6): the LSTAR/sysret
-+///         fastpath was removed because MSR_KERNEL_GS_BASE was never written
-+///         (entry swapgs left GS base 0 → guaranteed panic on any ring-3
-+///         syscall).  int $0x80 is GS-free.
-+/// @depends kernel::arch::IDT, Syscall::init
- JARVIS_TEST(idt_syscall_handler_installed, "PRE: iocd | POST: none") {
- #if defined(CONFIG_ARCH_X86_64)
-+    // P7: LSTAR must NOT be programmed (fastpath removed).
-     uint64_t lstar = arch::rdmsr(arch::IA32_LSTAR);
--    JARVIS_ASSERT(lstar != 0);
--    JARVIS_ASSERT(lstar >= 0xFFFF800000000000ULL);
-+    JARVIS_ASSERT(lstar == 0);
-+    // The live path is the 0x80 trap gate.
-+    JARVIS_ASSERT(arch::IDT::has_handler(0x80));
- #else
-     JARVIS_TEST_PASS();
- #endif
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 1292db9c..2d312e0a 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -22,6 +22,7 @@
- #include <kernel/test/test_isolate.hpp>
- #include <kernel/core/global_state.hpp>
- #include <test.hpp>
-+#include <assert.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/memory/mempool.hpp>
- #include <kernel/arch/timer.hpp>
-@@ -302,6 +303,13 @@ static void dump_pte_walk(uint64_t va) {
- 
- bool snapshot_create() {
-     arch::IrqGuard guard;
-+#if defined(CONFIG_DEBUG)
-+    // gs-base-swapgs-audit corrective #3 (issue #6): the snapshot window must
-+    // run with IF=0 — no maskable interrupt may re-arm a deferred switch or
-+    // touch GS mid-window.  The IrqGuard above guarantees it; ENSURE so a
-+    // nested guard that silently re-enabled IRQs panics at the source.
-+    ENSURE(!arch::interrupts_enabled());
-+#endif
- 
-     // Count user-owned pages from the owner bitmap
-     size_t user_page_count = 0;
+-    /// @brief Reset to empty state.
++    /// @brief Reset to empty state.  M-5 (audit-task-sync-v0.4.2): QUIESCENT-
++    ///        ONLY — must not be called while either side is active (the
++    ///        head/tail pair is not published atomically together).
+     void reset() {
+         kernel::atomic_store(&head_, size_t{0}, __ATOMIC_RELEASE);
+         kernel::atomic_store(&tail_, size_t{0}, __ATOMIC_RELAXED);
+diff --git a/src/kernel/task/task_queue.cpp b/src/kernel/task/task_queue.cpp
+index 49cb29b2..73adb36e 100644
+--- a/src/kernel/task/task_queue.cpp
++++ b/src/kernel/task/task_queue.cpp
+@@ -34,13 +34,25 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
+     if (!head_ || count_ == 0)
+         return nullptr;
+     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
+-    // not be dereferenced — skip it and treat the queue as empty rather than
+-    // faulting with a #GP (this was the source of the GPF in next_ptr; the
+-    // AllTasksRegistry applies the same guard to pri_next_/pri_prev_).
++    // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
++    // offending head node and preserve the remaining queue instead of
++    // zeroing the whole list (which orphans every other queued task and
++    // suppresses the corruption rather than containing it).
+     if (!TaskControlBlock::is_valid(head_)) {
+-        head_ = nullptr;
+-        tail_ = nullptr;
+-        count_ = 0;
++        auto *bad = head_;
++        head_ = bad->runq_next_;
++        if (head_) {
++            if (TaskControlBlock::is_valid(head_))
++                head_->runq_prev_ = nullptr;
++            else
++                head_ = nullptr;
++        } else {
++            tail_ = nullptr;
++        }
++        bad->runq_next_ = nullptr;
++        bad->runq_prev_ = nullptr;
++        if (count_ > 0)
++            --count_;
+         return nullptr;
+     }
+     auto *tcb = head_;

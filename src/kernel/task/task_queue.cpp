@@ -34,13 +34,25 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
     if (!head_ || count_ == 0)
         return nullptr;
     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
-    // not be dereferenced — skip it and treat the queue as empty rather than
-    // faulting with a #GP (this was the source of the GPF in next_ptr; the
-    // AllTasksRegistry applies the same guard to pri_next_/pri_prev_).
+    // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
+    // offending head node and preserve the remaining queue instead of
+    // zeroing the whole list (which orphans every other queued task and
+    // suppresses the corruption rather than containing it).
     if (!TaskControlBlock::is_valid(head_)) {
-        head_ = nullptr;
-        tail_ = nullptr;
-        count_ = 0;
+        auto *bad = head_;
+        head_ = bad->runq_next_;
+        if (head_) {
+            if (TaskControlBlock::is_valid(head_))
+                head_->runq_prev_ = nullptr;
+            else
+                head_ = nullptr;
+        } else {
+            tail_ = nullptr;
+        }
+        bad->runq_next_ = nullptr;
+        bad->runq_prev_ = nullptr;
+        if (count_ > 0)
+            --count_;
         return nullptr;
     }
     auto *tcb = head_;

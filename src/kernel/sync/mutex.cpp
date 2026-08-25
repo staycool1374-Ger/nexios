@@ -47,6 +47,9 @@ void Mutex::init(uint64_t ceiling) {
     lock_count_ = 0;
     wait_count_ = 0;
     priority_ceiling_ = ceiling;
+    // M-9 (audit-task-sync-v0.4.2): set the flag so a later init_err() sees
+    // this object as initialized (was never set by the void overload).
+    initialized_ = true;
 }
 
 /// @brief Initialise the mutex (error-returning overload).
@@ -237,8 +240,13 @@ void Mutex::lock() {
 #if CONFIG_PRIORITY_CEILING_PROTOCOL
         if (priority_ceiling_ > 0 && task->system_ceiling_ > 0 &&
             task->priority <= task->system_ceiling_) {
-            bool added = add_waiter(*task);
-            ENSURE(added);
+            // H-4: never ENSURE on waiter-table-full (reachable exhaustion).
+            if (!add_waiter(*task)) {
+                lock_.unlock();
+                Scheduler::reschedule();
+                lock_.lock();
+                continue;
+            }
             task->waiting_on_mutex = this;
             lock_.unlock();
             task->state = TaskState::BLOCKED;
@@ -274,8 +282,15 @@ void Mutex::lock() {
 
         inherit_priority(*task);
 
-        bool added = add_waiter(*task);
-        ENSURE(added);
+        // H-4 (audit-task-sync-v0.4.2): a void blocking API must NOT ENSURE on
+        // waiter-table-full - reachable resource exhaustion under contention
+        // saturation.  Yield and retry (the table drains as waiters wake).
+        if (!add_waiter(*task)) {
+            lock_.unlock();
+            Scheduler::reschedule();
+            lock_.lock();
+            continue;
+        }
         task->waiting_on_mutex = this;
 
         lock_.unlock();
