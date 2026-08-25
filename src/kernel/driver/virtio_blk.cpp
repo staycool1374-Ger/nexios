@@ -119,6 +119,12 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     if (!desc_ || !avail_ || !used_)
         return false;
 
+    // H-3 (audit-drivers-vfs-net-v0.4.2): hold the device mutex across the
+    // whole submit chain — the driver shares a single DMA buffer and the
+    // avail/used rings; concurrent submissions would corrupt the descriptor
+    // chain or lose completion checks.
+    submit_lock_.lock();
+
     // Build the request header in the DMA buffer
     auto *hdr = reinterpret_cast<VirtioBlkReqHdr *>(dma_buf_);
     hdr->type = type;
@@ -156,6 +162,11 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     desc_[status_idx].flags = VIRTIO_DESC_F_WRITE;
     desc_[status_idx].next = 0;
 
+    // H-3 (FLAW-03 pattern): snapshot the used index BEFORE the avail push and
+    // virtio_notify — reading it after notify races fast completions (the
+    // device may have already advanced used_->idx by the time we sample it).
+    uint16_t used_idx = used_->idx;
+
     // Place in available ring
     avail_->ring[avail_->idx % queue_size_] = idx;
     kernel::atomic_fence();
@@ -165,14 +176,15 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     // Kick the device
     arch::virtio_notify(transport_, 0);
 
-    // Poll for completion (busy wait — acceptable for block I/O)
-    uint16_t used_idx = used_->idx;
+    // Poll for completion (bounded busy wait — acceptable interim for block
+    // I/O; a full IRQ-driven blocked wait is roadmap Phase 4.7 scope).
     int timeout = 1000000;
     while (used_->idx == used_idx && --timeout > 0) {
         kernel::atomic_fence();
     }
     if (timeout <= 0) {
         Logger::error("virtio-blk: request timeout");
+        submit_lock_.unlock();
         return false;
     }
 
@@ -181,6 +193,7 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
         dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
     if (*status_ptr != VIRTIO_BLK_S_OK) {
         Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
+        submit_lock_.unlock();
         return false;
     }
 
@@ -190,6 +203,7 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     }
 
     avail_idx_ = static_cast<uint16_t>(avail_idx_ + 1);
+    submit_lock_.unlock();
     return true;
 }
 

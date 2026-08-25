@@ -21,6 +21,7 @@
 
 #include <kernel/driver/virtio_net.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/sync/spinlock.hpp>
@@ -334,6 +335,16 @@ bool virtio_net_poll(uint8_t *buf, size_t &len) {
     uint32_t desc_idx = dev.rx_used->ring[slot].id;
     uint32_t pkt_len = dev.rx_used->ring[slot].len;
 
+    // M-4 (audit-drivers-vfs-net-v0.4.2): desc_idx comes from the DEVICE and
+    // is used unchecked as an index into rx_bufs[].  A faulty/malicious device
+    // can cause an out-of-bounds read/write.  Bounds-check against queue_size
+    // and recycle the slot on an invalid id.
+    if (desc_idx >= dev.queue_size) {
+        dev.rx_last_seen_used =
+            static_cast<uint16_t>(dev.rx_last_seen_used + 1);
+        return false;
+    }
+
     if (pkt_len > VIRTIO_NET_HDR_SIZE) {
         size_t frame_len = pkt_len - VIRTIO_NET_HDR_SIZE;
         if (frame_len > MAX_PACKET_SIZE)
@@ -354,6 +365,22 @@ void virtio_net_destroy() {
         return;
     auto *dev = g_virtio_net_dev;
     g_virtio_net_dev = nullptr; // late poll/send null-check and return
+
+    // M-5 (audit-drivers-vfs-net-v0.4.2): a send_frame() may be mid-flight —
+    // it captured `dev` before our null (the local reference survives the
+    // g_virtio_net_dev = nullptr check) and polls tx_used OUTSIDE the lock.
+    // Drain tx_inflight_ (bounded) so no completion poll touches freed
+    // descriptors/memory after we destruct.
+    {
+        IrqSpinLockGuard guard(dev->lock_);
+        if (dev->tx_inflight_) {
+            // Completion poll for a concurrent sender: bounded, no alloc.
+            uint64_t t0 = arch::Timer::ticks();
+            while (dev->tx_inflight_ && arch::Timer::ticks() - t0 < 1000000)
+                arch::pause();
+        }
+    }
+
     dev->~VirtioNetDevice();
     MemPool::free(dev);
 }

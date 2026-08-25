@@ -26,6 +26,7 @@
 #include <types.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/driver/block_device.hpp>
+#include <kernel/sync/mutex.hpp>
 
 namespace kernel::block {
 
@@ -93,6 +94,12 @@ class VirtioBlkDriver final : public BlockDevice {
     // DMA buffer physical address
     uint64_t dma_buf_phys_ = 0;
     uint8_t *dma_buf_ = nullptr;
+
+    // H-3 (audit-drivers-vfs-net-v0.4.2): serializes the whole
+    // descriptor-fill → avail-push → notify → poll critical section.  The
+    // driver shares one DMA buffer and the avail/used rings; concurrent
+    // submit_request calls would corrupt the chain or lose completions.
+    sync::Mutex submit_lock_{};
 };
 
 } // namespace kernel::block

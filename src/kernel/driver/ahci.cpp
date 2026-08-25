@@ -26,6 +26,7 @@
 #include <kernel/driver/dma.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/vfs/fat32.hpp>
@@ -78,6 +79,15 @@ AhciDriver::AhciDriver() {
 AhciDriver::~AhciDriver() {
     if (!init_done_)
         return;
+
+    // H-2 (audit-drivers-vfs-net-v0.4.2): clear per-port interrupt enable and
+    // any asserted status BEFORE stopping ports and freeing DMA memory, so no
+    // in-flight completion path can touch freed structures.  GHC_IE is never
+    // set (see init), but per-port PORT_IE is cleared defensively.
+    for (uint8_t p = 0; p < port_count_; ++p) {
+        port_write(p, PORT_IE, 0);
+        port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
+    }
 
     // Stop ports and free memory
     for (uint8_t p = 0; p < port_count_; ++p) {
@@ -365,7 +375,15 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
-    for (uint64_t i = 0; i < timeout_us; ++i) {
+    // M-1 (audit-drivers-vfs-net-v0.4.2): the former 5,000,000-iteration
+    // io_wait spin blocked the core for up to seconds — an outright WCET
+    // violation.  Bound the poll by a tick deadline and yield with pause()
+    // between checks.  A fully IRQ-driven scheduler-blocked wait is Phase 4.7
+    // roadmap scope (requires an AHCI ISR); this bounded pause-wait is the
+    // interim fix that preserves error-clear semantics.
+    const uint64_t t0 = arch::Timer::ticks();
+    const uint64_t deadline = t0 + timeout_us / 1000 + 1; // us→ticks(≈ms)
+    for (;;) {
         uint32_t ci = port_read(port, PORT_CI);
         if (!(ci & (1U << slot))) {
             // Command completed — check for errors
@@ -386,11 +404,13 @@ bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
             port_write(port, PORT_CI, 1U << slot); // clear CI
             return false;
         }
-        arch::io_wait();
+        if (arch::Timer::ticks() >= deadline) {
+            Logger::error("ahci: cmd slot %u timeout", slot);
+            port_write(port, PORT_CI, 1U << slot); // clear CI
+            return false;
+        }
+        arch::pause();
     }
-    Logger::error("ahci: cmd slot %u timeout", slot);
-    port_write(port, PORT_CI, 1U << slot); // clear CI
-    return false;
 }
 
 // ──────────────────────────────────────────────
@@ -401,9 +421,17 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
     if (!init_done_ || active_port_ >= AHCI_MAX_PORTS)
         return false;
 
+    // H-1: serialize the whole alloc→start→wait critical section per port so
+    // two concurrent I/Os can never share a slot or its data_bufs_ DMA buffer.
+    cmd_lock_[active_port_].lock();
+    if (active_port_ >= AHCI_MAX_PORTS) {
+        cmd_lock_[active_port_].unlock();
+        return false;
+    }
     uint8_t slot = alloc_slot(active_port_);
     if (slot >= AHCI_MAX_CMDS) {
         Logger::error("ahci: no free slot for read");
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
@@ -413,16 +441,19 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
 
     if (!start_cmd(active_port_, slot, ata_cmd, lba, 1, dbuf.phys_addr,
                    ncq_supported_, slot)) {
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
     if (!wait_cmd(active_port_, slot, 5000000)) { // 5s timeout
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
     // Copy from DMA buffer to caller
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     memcpy(buffer, reinterpret_cast<void *>(dbuf.virt_addr), BLOCK_SIZE);
+    cmd_lock_[active_port_].unlock();
     return true;
 }
 
@@ -430,9 +461,16 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
     if (!init_done_ || active_port_ >= AHCI_MAX_PORTS)
         return false;
 
+    // H-1: serialize per-port (see read_sector).
+    cmd_lock_[active_port_].lock();
+    if (active_port_ >= AHCI_MAX_PORTS) {
+        cmd_lock_[active_port_].unlock();
+        return false;
+    }
     uint8_t slot = alloc_slot(active_port_);
     if (slot >= AHCI_MAX_CMDS) {
         Logger::error("ahci: no free slot for write");
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
@@ -446,13 +484,16 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
 
     if (!start_cmd(active_port_, slot, ata_cmd, lba, 1, dbuf.phys_addr,
                    ncq_supported_, slot)) {
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
     if (!wait_cmd(active_port_, slot, 5000000)) {
+        cmd_lock_[active_port_].unlock();
         return false;
     }
 
+    cmd_lock_[active_port_].unlock();
     return true;
 }
 
@@ -516,8 +557,12 @@ bool AhciDriver::init() {
     }
     Logger::info("ahci: HBA reset complete");
 
-    // Enable AHCI
-    hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_AE | GHC_IE);
+    // Enable AHCI.  H-2 (audit-drivers-vfs-net-v0.4.2): GHC_IE (global
+    // interrupt enable) must NOT be asserted — no ISR is registered, so an
+    // unacknowledged asserted line would stall the shared interrupt
+    // controller (freedom-from-interference).  Completion is polled via
+    // wait_cmd, which is sufficient and safe.
+    hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_AE);
 
     // Initialize ports with devices
     for (uint8_t p = 0; p < port_count_ && p < AHCI_MAX_PORTS; ++p) {

@@ -101,9 +101,11 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   Ordering: write header/data, `avail->ring[idx]=idx`, fence, `avail->idx++`,
   fence, `virtio_notify` kick.  Completion: busy-poll `used->idx` (≤ 1M),
   status == `VIRTIO_BLK_S_OK`, memcpy out.
-  ⚠️ **FLAW-06 (OPEN):** the 1M-iteration busy-wait ignores the DmaEngine
-  completion mechanism — unbounded core occupancy.  **Required:** ISR walking
-  the used_ ring + wait primitive.
+  **FLAW-06 (BOUNDED — M-2 ledger update, 2026-08-25):** the poll is capped at
+  1M iterations and now snapshots `used->idx` BEFORE `virtio_notify` (FLAW-03
+  pattern), and the whole submit chain is serialized under a device mutex
+  (H-3).  A fully IRQ-driven blocked wait (ISR walking the used_ ring + wait
+  primitive) remains Phase 4.7 roadmap scope.
 
 ## 6. Interrupt Layer (x86_64)
 
@@ -186,7 +188,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 | FLAW-03 virtio-net ring races | virtio_net.cpp | **RESOLVED (2026-08-16, `a8fe7bd9`)** — lock + tx_inflight_; poll consume/recycle/advance atomic; used-snapshot-before-notify |
 | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | OPEN (§3) |
 | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | OPEN (§3) |
-| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | OPEN (§5) |
+| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | BOUNDED (§5) — 1M cap + used-idx pre-notify snapshot + device mutex; IRQ-driven wait = Phase 4.7 |
 | FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
 | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
 
