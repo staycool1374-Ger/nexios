@@ -446,4 +446,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-25 18:59:00 selftest PASSED: 133 FAILED: 0 TIME: 7208ms (issue #3 gate)
 2026-08-25 19:01:30 all PASSED: 942 FAILED: 0 TIME: 55063ms (issue #3 VERIFIED gate, trace OFF, registered 957)
 2026-08-25 19:05:00 all PASSED: 942 FAILED: 0 TIME: 56000ms (issue #3 count fix re-run, no TCOUNT mismatch)
-2026-08-25 19:20:00 all PASSED: 85 FAILED: 0 TIME: 0ms (release gate, trace OFF, issue #3)
+2026-08-25 19:20:00 all PASSED: 85 FAILED: 0 TIME: 3981ms (release gate, trace OFF, issue #3)

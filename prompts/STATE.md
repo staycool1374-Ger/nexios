@@ -5,13 +5,17 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-08-25):** Issue #3 "MMIO caps + fine-grained I/O delegation" — MmioCap (CapType::Mmio) + VMM::map_mmio_from_cap + SYS_IOPORT_GRANT per-task TSS I/O bitmap delegation; SIL 3 APPROVED (2 reports), issue CLOSED. Commits `08c21a5f`+`adaef25a`+`4d1bca31`.
 - **DONE (2026-08-25):** Issue #5 "MP-4.4 — aarch64 PAN/PXN enablement" — real aarch64 PAN enablement + PXN/UXN closure + 5 new arch_aarch64 tests, SIL 3 APPROVED (audits/report-2026-08-25T15-05-22Z.md), issue CLOSED. Commit `1577242c`.
 - **DONE (2026-08-25):** Issue #6 "Implement all pending audits/refactorings under audits/" — all 8 kernel remediation phases (P0–P8) implemented, SIL 3 APPROVED per phase, issue CLOSED. Full debug `all` **932/932 PASSED** (trace OFF), release selftest 85/85. P9 (test-hygiene backlog ~150 purges) deferred to testbed.
 - **DONE (2026-08-25):** Multi-arch compile-clean (#99, commit `36fa5118`): `make debug NO_LTO=1 ARCH={aarch64,riscv64}` now link green to a kernel ELF (QEMU virt targets) without changing x86_64 runtime behavior. SIL 3 approved (`audits/report-20260825T060240Z.md`).
 - Previous: `make build` green (check-style error gate) after the scheduler-deadlock fix and the full style/clang-tidy cleanup.
 
 ### Important Details
-- Branch `main`. Issue #5 commits: `1577242c` (feat aarch64 PAN/PXN), `0b1bd6e9` (test-history rows).
+- Branch `main`. Issue #3 commits: `08c21a5f` (feat MMIO caps + ioport grant), `adaef25a` (fix iopb default-deny TCB-memset gap), `4d1bca31` (build/analyzer + counts).
+- **Issue #3 (MMIO caps + I/O delegation):** `MmioCap : KernelObject` (phys/size/bar_type, CONFIG_CAP_MAX_MMIO, kernel-internal create); `VMM::map_mmio_from_cap`/`unmap_mmio_from_cap` (refuse revoked/IO caps); `SYS_IOPORT_GRANT` (55) — capability-driven per-task TSS I/O bitmap delegation (x86_64): `TSSBlock` (TSS + 8KiB bitmap + 0xFF terminator, iopb_offset=104, default-deny all-1s), `arch::iopb_*` static pool (CONFIG_IOPB_MAX_TASKS=4), owner-memoized bitmap swap on user-task switch, release in cleanup(), snapshot reset. **Found+fixed+audited during gate:** TCB `create/create_user/clone` + ELF loader memset the whole TCB without running the ctor → `iopb_slot_`=0 instead of NONE → every user task loaded the unclaimed all-zeros pool slot into the TSS bitmap (default-deny violated = privilege escalation). Fixed at 4 memset sites + claimed-slot defense (loaded TSS bitmap is always exactly a claimed slot; iopb_claim self-heals). Class cap_mmio (10 tests); `all` registered 957.
+- **TCB field sentinel gotcha (recurring):** TCB is memset-zeroed, NOT ctor-initialized — any new field with a non-zero default must be set explicitly after every memset site (create/create_user/clone/elf.cpp), and cross-checked against runtime dispatch behavior.
+- Issue #5 commits: `1577242c` (feat aarch64 PAN/PXN), `0b1bd6e9` (test-history rows).
 - **Issue #5 MP-4.4 (aarch64 PAN/PXN):** SCTLR_EL1.PAN (bit 23) gated on ID_AA64MMFR1_EL1.PAN[23:20]!=0 in `arch::pan_init()`; CONFIG_PAN; real stac/clac/read_rflags via PAN sysreg s3_0_c4_c2_4 (PSTATE.PAN bit 22), normalized bit-18 AC-equivalent contract, degraded no-op when unsupported. PXN(53)/UXN(54) closure: attr_from_flags USER PXN (SMEP parity), VMM aarch64 map_page/map_page_in_pml4 + block-split base_flags. Latent L3 DESC_TABLE (0b11) leaf fix. 5 new arch_aarch64 tests (arch_aarch64 17→22). `aarch64_page_table_map_leaf` TEST_VA moved off a boot 2MB block.
 - **aarch64 runtime reality (2026-08-25):** kernel BOOTS in QEMU (cortex-a72) through arch init but PANICs at meminit — PMM OOM (pmm.cpp:357/mempool.cpp:55), DTB memory regions never seeded into PMM. Filed as issue **#100** under #28 scope. QEMU cortex-a72 reports PAN==0 → PAN enable path is runtime-gated, tests exercise degraded mode until a real PAN-capable boot exists.
 - Issue #6 remediation commits: `eb3796e8` (P1 sync), `09c7490e` (P2 UAF), `02c799bd` (P3 TCB), `27bd582b` (P4 sched ID), `9e32d65a` (P5 IPC/cap), `b39b0066` (P6 drivers/net), `0d3c02d4` (P7 LSTAR), `9a558d7a` (P8 sync mediums).
@@ -29,6 +33,7 @@
 
 ### Work State
 #### Completed
+- **ISSUE #3 — MMIO caps + fine-grained I/O delegation (2026-08-25, commits `08c21a5f`+`adaef25a`+`4d1bca31`, SIL 3 APPROVED ×2):** MmioCap (phys/size/bar_type, CONFIG_CAP_MAX_MMIO), VMM::map_mmio_from_cap/unmap_mmio_from_cap, SYS_IOPORT_GRANT (55) + per-task TSS I/O bitmap (TSSBlock + arch::iopb_* static pool + owner-memoized switch + cleanup release + snapshot reset). Found+fixed a real privilege-escalation defect (TCB memset left iopb_slot_=0 → permissive TSS) + claimed-slot defense. Gates: cap_mmio 10/10, cap regressions (10/8/8/6/9), scheduler/hal/vmm regressions, selftest 133/133, debug all 942/942 executed (registered 957), release all 85/85. all-count 941→957. Revocation-limitation documented in cspace.md §2.6 (follow-up).
 - **ISSUE #5 MP-4.4 — aarch64 PAN/PXN enablement (2026-08-25, commits `1577242c`+`0b1bd6e9`, SIL 3 approved):** SCTLR_EL1.PAN (bit 23) + ID_AA64MMFR1_EL1.PAN detection (arch::pan_init, early_init.cpp); CONFIG_PAN; real PAN-sysreg stac/clac/read_rflags (normalized bit-18 contract, degraded no-op); PXN/UXN closure in attr_from_flags + VMM aarch64 paths; latent L3 DESC_TABLE leaf fix; 5 new arch_aarch64 tests; map_leaf TEST_VA moved off boot 2MB block; vmm.hpp PXN comment fix; riscv64 comment pointer. Gates: aarch64 compile+link green, x86_64 arch_cross 21/21. aarch64 runtime test execution deferred to #28 (boot OOM = #100).
 - **GLOBAL-VARIABLE ENCAPSULATION REFACTOR (2026-08-14, commits `8334a120`..`f37b3e2d`, SIL 3 approved):**
   - **Phase 1** (`1b569a8c`): dead code + linkage hygiene — removed `g_boot_ns` (zero readers); made `g_virtio_net_dev`, `g_h2_ring`/`g_h2_idx`, `fat32_root_vnode`, `g_watchdog_*` static/TU-local; deleted stale `scheduler.cpp.bak*`.
@@ -47,7 +52,7 @@
 - VERIFIED: `make check-style` → Errors: 0, Passed. `make debug NO_LTO=1` → ISO built cleanly.
 
 #### Active
-- (none outstanding) — issue #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 932/932.
+- (none outstanding) — issues #3, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 942/942.
 
 #### Blocked
 - **aarch64 runtime boot (#28/#100):** kernel boots to meminit then PMM OOM panic (DTB memory regions never seeded into PMM) — blocks all aarch64 runtime tests incl. the 22-test arch_aarch64 class. P9 test-hygiene (testbed) is future work.
@@ -60,6 +65,14 @@
 - Tracked separately: the pre-existing H2 deferred-switch race (BUGS.md, RE-OPENED) — ~50% flaky TIMEOUT/PANIC, reproducible on baseline.
 
 ### Relevant Files
+- src/kernel/cap/mmio.{hpp,cpp}: MmioCap (phys/size/bar_type, CONFIG_CAP_MAX_MMIO, create/create_from_bar).
+- src/kernel/memory/vmm.{hpp,cpp}: map_mmio_from_cap/unmap_mmio_from_cap (refuse revoked caps + IO types).
+- src/kernel/syscall/syscall_handlers_mmio.cpp: sys_ioport_grant (55) — IO MmioCap coverage + CAP_RIGHT_WRITE; immediate apply via iopb_switch_to.
+- src/kernel/arch/hal/gdt.hpp + x86_64/hal/gdt.cpp: TSSBlock (TSS + 8KiB IOPB + 0xFF terminator), iopb accessors, default-deny init.
+- src/kernel/arch/hal/iopb.hpp + x86_64/hal/iopb.cpp: per-task IOPB pool (CONFIG_IOPB_MAX_TASKS), claim/grant/switch/release/snapshot_reset; claimed-slot defense.
+- src/kernel/task/task.{hpp,cpp} + elf/elf.cpp: iopb_slot_ field + IOPB_SLOT_NONE sentinel at all 4 memset sites.
+- src/kernel/task/scheduler.{hpp,cpp}: TaskFields iopb_slot capture/restore; switch hooks.
+- src/kernel/test/test_cap_mmio.cpp: class cap_mmio (10 tests).
 - src/kernel/arch/aarch64/hal/io_impl.hpp: real stac/clac/read_rflags (PAN sysreg s3_0_c4_c2_4, PSTATE.PAN bit 22, normalized bit-18 contract) + g_pan_supported/pan_init decls.
 - src/kernel/arch/aarch64/early_init.cpp: arch::pan_init() — SCTLR_EL1.PAN (bit 23) gated on ID_AA64MMFR1_EL1.PAN[23:20], g_pan_supported definition.
 - src/kernel/arch/aarch64/hal/page_table_impl.hpp: attr_from_flags USER PXN (SMEP parity), L3 DESC_TABLE (0b11) leaf fix.
