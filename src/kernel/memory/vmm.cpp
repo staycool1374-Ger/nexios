@@ -147,7 +147,8 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
-            uint64_t base_flags = table[index] & (PAGE_PRESENT | PAGE_AF);
+            uint64_t base_flags =
+                table[index] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
             for (size_t i = 0; i < 512; ++i) {
                 new_table[i] =
                     (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
@@ -312,7 +313,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
-        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
+        uint64_t base_flags =
+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
 #else
         uint64_t base_flags =
             pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
@@ -338,7 +340,9 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
 #if defined(CONFIG_ARCH_AARCH64)
     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
     if (user)
-        flags |= PAGE_AP_USER;
+        flags |= PAGE_AP_USER | PAGE_PXN;
+    else
+        flags |= PAGE_UXN | PAGE_PXN;
 #else
     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
     if (user)
@@ -552,7 +556,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
-        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
+        uint64_t base_flags =
+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
         for (size_t i = 0; i < 512; ++i) {
             new_pt[i] = (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
         }
@@ -578,9 +583,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
 #if defined(CONFIG_ARCH_AARCH64)
     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
     if (user)
-        flags |= PAGE_AP_USER;
+        flags |= PAGE_AP_USER | PAGE_PXN;
+    else
+        flags |= PAGE_UXN | PAGE_PXN;
     if (!executable)
-        flags |= (1ULL << 54); // UXN — not executable at EL0
+        flags |= PAGE_UXN; // UXN — not executable at EL0
 #else
     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
     if (user)

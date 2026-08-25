@@ -200,7 +200,9 @@ inline uint64_t ArchPageTable::attr_from_flags(uint64_t flags) {
     else
         attr |= AP_RO;
     if (flags & kernel::PageFlags::USER) {
-        // User accessible
+        // User accessible; PXN (SMEP parity — EL1 must not execute user
+        // pages).  UXN left clear so EL0 may execute.
+        attr |= PXN;
     } else {
         attr |= UXN | PXN;
     }
@@ -264,7 +266,7 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
     if (!l3)
         return kernel::Error::OOM;
 
-    l3[l3_idx] = phys | entry_flags | DESC_BLOCK | (1ULL << 10);
+    l3[l3_idx] = phys | entry_flags | DESC_TABLE | (1ULL << 10);
     dsb_sy();
     isb();
     return {};

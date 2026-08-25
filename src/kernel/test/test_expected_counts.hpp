@@ -184,7 +184,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,    0,       0      },
+    {"arch_aarch64",          0,   22,       0      },  // 17 existing + 5 MP-4.4 PAN/PXN tests
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,       0      },

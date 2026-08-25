@@ -206,6 +206,11 @@ class VMM {
     static constexpr uint64_t PAGE_AP_USER = 1ULL
                                              << 6;    // AP[0] - EL0 accessible
     static constexpr uint64_t PAGE_AP_RO = 1ULL << 7; // AP[1] - read-only (EL1)
+    // MP-4.4: PXN (bit 53) forbids EL1 execution; UXN (bit 54) forbids EL0
+    // execution.  Kernel data pages carry both; user pages carry PXN
+    // (SMEP parity) unless NX adds UXN.
+    static constexpr uint64_t PAGE_PXN = 1ULL << 53;
+    static constexpr uint64_t PAGE_UXN = 1ULL << 54;
 
     // Compatibility aliases (used in flag-building expressions)
     static constexpr uint64_t PAGE_WRITE = 0; // no-op - writable by default
@@ -246,7 +251,7 @@ class VMM {
 
 #if defined(CONFIG_ARCH_AARCH64)
     // aarch64: physical frame bits [47:12] (48-bit PA).  Masks off flags,
-    // UXN (bit 54) and PXN (bit 55).
+    // UXN (bit 54) and PXN (bit 53).
     static constexpr uint64_t PAGE_FRAME_MASK = 0x0000FFFFFFFFF000ULL;
     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x0000FFFFFFE00000ULL;
 #elif defined(CONFIG_ARCH_RISCV64)

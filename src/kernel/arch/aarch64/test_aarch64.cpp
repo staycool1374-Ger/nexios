@@ -113,7 +113,7 @@ JARVIS_TEST(aarch64_page_table_map_leaf) {
     uint64_t phys_page = PMM::alloc_page();
     JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
 
-    constexpr uint64_t TEST_VA = 0xFFFF80004000F000ULL;
+    constexpr uint64_t TEST_VA = 0xFFFF800090001000ULL;
     constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
 
     auto map_result =
@@ -458,6 +458,156 @@ JARVIS_TEST(aarch64_exception_vector_installed) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Walk TTBR1_EL1 to the leaf descriptor for a higher-half VA.
+/// Mirrors the L0->L1->L2->L3 index math of aarch64_page_table_4level_walk.
+/// @param[in] va Higher-half virtual address (4K-aligned).
+/// @return Leaf descriptor bits, or 0 if any level is invalid.
+static uint64_t walk_leaf_descriptor(uint64_t va) {
+    constexpr uint64_t L0_SHIFT = 39;
+    constexpr uint64_t L1_SHIFT = 30;
+    constexpr uint64_t L2_SHIFT = 21;
+    constexpr uint64_t TABLE_MASK = 0x1FF;
+    constexpr uint64_t DESC_VALID = 1ULL << 0;
+    constexpr uint64_t DESC_TABLE = 1ULL << 1;
+
+    uint64_t l0_phys = arch::read_ttbr1_el1();
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    size_t l0_idx = (va >> L0_SHIFT) & TABLE_MASK;
+    if (!(l0[l0_idx] & DESC_VALID))
+        return 0;
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    size_t l1_idx = (va >> L1_SHIFT) & TABLE_MASK;
+    if (!(l1[l1_idx] & DESC_VALID))
+        return 0;
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+    size_t l2_idx = (va >> L2_SHIFT) & TABLE_MASK;
+    if (!(l2[l2_idx] & DESC_VALID))
+        return 0;
+    if (!(l2[l2_idx] & DESC_TABLE))
+        return l2[l2_idx];
+    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
+    size_t l3_idx = (va >> 12) & TABLE_MASK;
+    return (l3[l3_idx] & DESC_VALID) ? l3[l3_idx] : 0;
+}
+
+/// @brief Verify SCTLR_EL1.PAN (bit 23) matches FEAT_PAN detection, and
+/// degraded mode (unsupported) keeps read_rflags() == 0.
+JARVIS_TEST(aarch64_pan_sctlr_bit_set) {
+    uint64_t sctlr{};
+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+    if (arch::g_pan_supported) {
+        JARVIS_ASSERT_FMT(sctlr & (1ULL << 23),
+                          "SCTLR_EL1.PAN not set: sctlr=0x%lx", sctlr);
+    } else {
+        JARVIS_ASSERT_FMT((sctlr & (1ULL << 23)) == 0,
+                          "SCTLR_EL1.PAN set but unsupported: sctlr=0x%lx",
+                          sctlr);
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+    }
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Verify stac/clac toggle the normalized AC-equivalent (bit 18)
+/// contract and end in default-deny (PAN set) state.
+JARVIS_TEST(aarch64_pan_stac_clac_roundtrip) {
+    if (arch::g_pan_supported) {
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
+        arch::stac();
+        JARVIS_ASSERT_FMT(arch::read_rflags() & (1ULL << 18),
+                          "stac did not set AC-equivalent bit");
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
+    } else {
+        arch::stac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+    }
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a kernel (non-USER) page; verify UXN (bit 54) and PXN
+/// (bit 53) are both set on the leaf descriptor.
+JARVIS_TEST(aarch64_pte_kernel_page_uxn_pxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090002000ULL;
+    constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "kernel PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "kernel PTE UXN not set: 0x%lx",
+                      leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a USER page; verify PXN (bit 53) is set (SMEP parity — EL1
+/// may not execute user pages) and UXN (bit 54) is clear (EL0 may execute).
+JARVIS_TEST(aarch64_pte_user_page_pxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090003000ULL;
+    constexpr uint64_t RW_FLAGS =
+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT((leaf & (1ULL << 54)) == 0,
+                      "user PTE UXN set (EL0 exec blocked): 0x%lx", leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a USER|NX page; verify both UXN (bit 54) and PXN (bit 53)
+/// are set.
+JARVIS_TEST(aarch64_pte_user_nx_uxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090004000ULL;
+    constexpr uint64_t RW_FLAGS =
+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER |
+        PageFlags::NX;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user NX PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "user NX PTE UXN not set: 0x%lx",
+                      leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all AArch64 architecture test cases.
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -479,6 +629,11 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_rtc_read);
     JARVIS_REGISTER_TEST(aarch64_boot_dtb_pointer);
     JARVIS_REGISTER_TEST(aarch64_exception_vector_installed);
+    JARVIS_REGISTER_TEST(aarch64_pan_sctlr_bit_set);
+    JARVIS_REGISTER_TEST(aarch64_pan_stac_clac_roundtrip);
+    JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
+    JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
+    JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
 }
 
 #endif

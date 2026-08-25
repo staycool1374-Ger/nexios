@@ -580,6 +580,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::IDT::init();
     arch::IDT::load();
 
+#if defined(CONFIG_ARCH_AARCH64) && CONFIG_PAN
+    // v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1.PAN.
+    // When FEAT_PAN is present, stac/clac become real PSTATE.PAN toggles
+    // (mirror of x86_64 SMAP); every kernel->user deref stays wrapped.
+    if (arch::pan_init()) {
+        debug_write("[BOOT] PAN enabled (SCTLR_EL1.PAN)\n");
+    } else {
+        debug_write("[BOOT] PAN not supported by CPU — leaving off\n");
+    }
+#endif
+
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
     arch::ArchInterruptController::init();
 

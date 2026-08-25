@@ -670,6 +670,18 @@
 #endif
 #endif
 
+/// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
+/// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
+/// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
+/// stac/clac (mirror of x86_64 SMAP).  Runtime-gated by arch::g_pan_supported.
+#ifndef CONFIG_PAN
+#if defined(CONFIG_ARCH_AARCH64)
+#define CONFIG_PAN 1
+#else
+#define CONFIG_PAN 0
+#endif
+#endif
+
 /// If non-zero, declares weak symbol oom_hook(size_t requested_size).
 #ifndef CONFIG_OOM_HOOK
 #define CONFIG_OOM_HOOK 0

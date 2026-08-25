@@ -1,117 +1,479 @@
-diff --git a/src/kernel/sync/mutex.cpp b/src/kernel/sync/mutex.cpp
-index 7acdd21b..2f632619 100644
---- a/src/kernel/sync/mutex.cpp
-+++ b/src/kernel/sync/mutex.cpp
-@@ -47,6 +47,9 @@ void Mutex::init(uint64_t ceiling) {
-     lock_count_ = 0;
-     wait_count_ = 0;
-     priority_ceiling_ = ceiling;
-+    // M-9 (audit-task-sync-v0.4.2): set the flag so a later init_err() sees
-+    // this object as initialized (was never set by the void overload).
-+    initialized_ = true;
+diff --git a/src/kernel/arch/aarch64/early_init.cpp b/src/kernel/arch/aarch64/early_init.cpp
+index 8fddc023..38049934 100644
+--- a/src/kernel/arch/aarch64/early_init.cpp
++++ b/src/kernel/arch/aarch64/early_init.cpp
+@@ -17,11 +17,48 @@
+  */
+ 
+ /// @file early_init.cpp
+-/// @brief Stub file — early AArch64 init is performed in boot.S assembly.
++/// @brief Early AArch64 init not covered by boot.S assembly: PAN (FEAT_PAN)
++///        detection + enablement for MP-4.4 (issue #5).
++
++// The bulk of early AArch64 init (UART, page tables, MMU, higher-half
++// transition) is performed in boot.S.  This TU hosts arch::g_pan_supported
++// and arch::pan_init() — the only arch-level init that needs C++ (ID register
++// field parsing) rather than assembly.
++
++#include <kernel/nexios_config.h>
++#include <kernel/arch/hal/io.hpp>
++
++namespace arch {
++
++bool g_pan_supported = false;
++
++/// @brief Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4.
++/// Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and
++/// CONFIG_PAN is on, then defaults PSTATE.PAN to deny (clac).  Every PAN
++/// sysreg/SCTLR access is gated on this detection — an access on a CPU
++/// without FEAT_PAN raises an UNDEFINED exception at EL1.
++/// @return true if PAN was enabled.
++bool pan_init() {
++#if CONFIG_PAN
++    uint64_t mmfr1{};
++    asm volatile("mrs %0, id_aa64mmfr1_el1" : "=r"(mmfr1));
++    if (((mmfr1 >> 20) & 0xF) == 0)
++        return false;
++    uint64_t sctlr{};
++    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
++    sctlr |= (1ULL << 23); // SCTLR_EL1.PAN
++    asm volatile("msr sctlr_el1, %0" : : "r"(sctlr) : "memory");
++    asm volatile("isb");
++    g_pan_supported = true;
++    clac(); // default-deny: PSTATE.PAN = 1
++    return true;
++#else
++    return false;
++#endif
++}
++
++} // namespace arch
+ 
+-// Early init is now done in boot.S (assembly).
+-// This file exists only to keep the build system from complaining
+-// about a missing .cpp file in the aarch64 arch directory.
+ struct EarlyInitStub {
+     EarlyInitStub() {
+     }
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index b496b39c..73424e2c 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -112,14 +112,47 @@ inline void hlt() {
+ inline void pause() {
+     asm volatile("yield");
+ }
+-/// @brief Set AC-equivalent (PAN clear) — no-op until aarch64 PAN/PXN
+-///        enforcement lands (ROADMAP MP-4.4).  Shared with x86_64 SMAP code.
+-inline void stac() {}
+-/// @brief Clear AC-equivalent — no-op (see stac()).
+-inline void clac() {}
+-/// @brief Read the AC-equivalent PSTATE bit — no-op placeholder.
++/// @brief Whether aarch64 PAN (FEAT_PAN) is available and enabled.  Written
++/// once by arch::pan_init() during BOOT (single CPU, IRQs masked); read-only
++/// thereafter from any context (incl. IRQ epilogue) — plain read is safe.
++extern bool g_pan_supported;
++
++/// @brief Detect FEAT_PAN (ID_AA64MMFR1_EL1.PAN[23:20] != 0), enable PAN via
++/// SCTLR_EL1.PAN (bit 23), and default PSTATE.PAN to deny (clac).  Called
++/// once from higherhalf_entry on the boot CPU.
++/// @return true if PAN was enabled.
++bool pan_init();
++
++/// @brief Set AC-equivalent (PAN clear) — permit kernel access to EL0 data.
++/// Toggles PSTATE.PAN (bit 22 of the PAN sysreg S3_0_C4_C2_4) to 0.
++/// No-op when PAN is unsupported (degraded mode matches the old stub).
++inline void stac() {
++    if (!g_pan_supported)
++        return;
++    uint64_t pan{};
++    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
++    pan &= ~(1ULL << 22);
++    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
++}
++/// @brief Clear AC-equivalent (PAN set) — default-deny; further kernel deref
++/// of EL0-accessible pages faults.  Toggles PSTATE.PAN to 1.
++inline void clac() {
++    if (!g_pan_supported)
++        return;
++    uint64_t pan{};
++    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
++    pan |= (1ULL << 22);
++    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
++}
++/// @brief Read the AC-equivalent PSTATE bit, normalized to the x86_64
++/// contract: bit 18 set means "user-access override active" (PAN clear).
++/// Raw PSTATE.PAN is bit 22 of the PAN sysreg with inverted polarity.
+ inline uint64_t read_rflags() {
+-    return 0;
++    if (!g_pan_supported)
++        return 0;
++    uint64_t pan{};
++    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
++    return (pan & (1ULL << 22)) == 0 ? (1ULL << 18) : 0;
+ }
+ /// @brief Disable IRQ interrupts (set DAIF bit).
+ inline void cli() {
+diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+index 947b2fd1..f7b4cec3 100644
+--- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+@@ -200,7 +200,9 @@ inline uint64_t ArchPageTable::attr_from_flags(uint64_t flags) {
+     else
+         attr |= AP_RO;
+     if (flags & kernel::PageFlags::USER) {
+-        // User accessible
++        // User accessible; PXN (SMEP parity — EL1 must not execute user
++        // pages).  UXN left clear so EL0 may execute.
++        attr |= PXN;
+     } else {
+         attr |= UXN | PXN;
+     }
+@@ -264,7 +266,7 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
+     if (!l3)
+         return kernel::Error::OOM;
+ 
+-    l3[l3_idx] = phys | entry_flags | DESC_BLOCK | (1ULL << 10);
++    l3[l3_idx] = phys | entry_flags | DESC_TABLE | (1ULL << 10);
+     dsb_sy();
+     isb();
+     return {};
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index 7fb5636a..a1064148 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -113,7 +113,7 @@ JARVIS_TEST(aarch64_page_table_map_leaf) {
+     uint64_t phys_page = PMM::alloc_page();
+     JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+ 
+-    constexpr uint64_t TEST_VA = 0xFFFF80004000F000ULL;
++    constexpr uint64_t TEST_VA = 0xFFFF800090001000ULL;
+     constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
+ 
+     auto map_result =
+@@ -458,6 +458,156 @@ JARVIS_TEST(aarch64_exception_vector_installed) {
+     JARVIS_TEST_PASS();
  }
  
- /// @brief Initialise the mutex (error-returning overload).
-@@ -237,8 +240,13 @@ void Mutex::lock() {
- #if CONFIG_PRIORITY_CEILING_PROTOCOL
-         if (priority_ceiling_ > 0 && task->system_ceiling_ > 0 &&
-             task->priority <= task->system_ceiling_) {
--            bool added = add_waiter(*task);
--            ENSURE(added);
-+            // H-4: never ENSURE on waiter-table-full (reachable exhaustion).
-+            if (!add_waiter(*task)) {
-+                lock_.unlock();
-+                Scheduler::reschedule();
-+                lock_.lock();
-+                continue;
-+            }
-             task->waiting_on_mutex = this;
-             lock_.unlock();
-             task->state = TaskState::BLOCKED;
-@@ -274,8 +282,15 @@ void Mutex::lock() {
++/// @brief Walk TTBR1_EL1 to the leaf descriptor for a higher-half VA.
++/// Mirrors the L0->L1->L2->L3 index math of aarch64_page_table_4level_walk.
++/// @param[in] va Higher-half virtual address (4K-aligned).
++/// @return Leaf descriptor bits, or 0 if any level is invalid.
++static uint64_t walk_leaf_descriptor(uint64_t va) {
++    constexpr uint64_t L0_SHIFT = 39;
++    constexpr uint64_t L1_SHIFT = 30;
++    constexpr uint64_t L2_SHIFT = 21;
++    constexpr uint64_t TABLE_MASK = 0x1FF;
++    constexpr uint64_t DESC_VALID = 1ULL << 0;
++    constexpr uint64_t DESC_TABLE = 1ULL << 1;
++
++    uint64_t l0_phys = arch::read_ttbr1_el1();
++    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
++    size_t l0_idx = (va >> L0_SHIFT) & TABLE_MASK;
++    if (!(l0[l0_idx] & DESC_VALID))
++        return 0;
++    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
++    size_t l1_idx = (va >> L1_SHIFT) & TABLE_MASK;
++    if (!(l1[l1_idx] & DESC_VALID))
++        return 0;
++    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
++    size_t l2_idx = (va >> L2_SHIFT) & TABLE_MASK;
++    if (!(l2[l2_idx] & DESC_VALID))
++        return 0;
++    if (!(l2[l2_idx] & DESC_TABLE))
++        return l2[l2_idx];
++    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
++    size_t l3_idx = (va >> 12) & TABLE_MASK;
++    return (l3[l3_idx] & DESC_VALID) ? l3[l3_idx] : 0;
++}
++
++/// @brief Verify SCTLR_EL1.PAN (bit 23) matches FEAT_PAN detection, and
++/// degraded mode (unsupported) keeps read_rflags() == 0.
++JARVIS_TEST(aarch64_pan_sctlr_bit_set) {
++    uint64_t sctlr{};
++    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
++    if (arch::g_pan_supported) {
++        JARVIS_ASSERT_FMT(sctlr & (1ULL << 23),
++                          "SCTLR_EL1.PAN not set: sctlr=0x%lx", sctlr);
++    } else {
++        JARVIS_ASSERT_FMT((sctlr & (1ULL << 23)) == 0,
++                          "SCTLR_EL1.PAN set but unsupported: sctlr=0x%lx",
++                          sctlr);
++        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
++    }
++    JARVIS_TEST_PASS();
++}
++
++/// @brief Verify stac/clac toggle the normalized AC-equivalent (bit 18)
++/// contract and end in default-deny (PAN set) state.
++JARVIS_TEST(aarch64_pan_stac_clac_roundtrip) {
++    if (arch::g_pan_supported) {
++        arch::clac();
++        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
++        arch::stac();
++        JARVIS_ASSERT_FMT(arch::read_rflags() & (1ULL << 18),
++                          "stac did not set AC-equivalent bit");
++        arch::clac();
++        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
++    } else {
++        arch::stac();
++        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
++        arch::clac();
++        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
++    }
++    JARVIS_TEST_PASS();
++}
++
++/// @brief Map a kernel (non-USER) page; verify UXN (bit 54) and PXN
++/// (bit 53) are both set on the leaf descriptor.
++JARVIS_TEST(aarch64_pte_kernel_page_uxn_pxn) {
++    uint64_t phys_page = PMM::alloc_page();
++    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
++
++    constexpr uint64_t TEST_VA = 0xFFFF800090002000ULL;
++    constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
++
++    auto map_result =
++        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
++    JARVIS_ASSERT(map_result.ok());
++
++    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
++    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "kernel PTE PXN not set: 0x%lx",
++                      leaf);
++    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "kernel PTE UXN not set: 0x%lx",
++                      leaf);
++
++    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
++    JARVIS_ASSERT(unmap_result.ok());
++    PMM::free_page(phys_page);
++
++    JARVIS_TEST_PASS();
++}
++
++/// @brief Map a USER page; verify PXN (bit 53) is set (SMEP parity — EL1
++/// may not execute user pages) and UXN (bit 54) is clear (EL0 may execute).
++JARVIS_TEST(aarch64_pte_user_page_pxn) {
++    uint64_t phys_page = PMM::alloc_page();
++    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
++
++    constexpr uint64_t TEST_VA = 0xFFFF800090003000ULL;
++    constexpr uint64_t RW_FLAGS =
++        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER;
++
++    auto map_result =
++        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
++    JARVIS_ASSERT(map_result.ok());
++
++    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
++    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user PTE PXN not set: 0x%lx",
++                      leaf);
++    JARVIS_ASSERT_FMT((leaf & (1ULL << 54)) == 0,
++                      "user PTE UXN set (EL0 exec blocked): 0x%lx", leaf);
++
++    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
++    JARVIS_ASSERT(unmap_result.ok());
++    PMM::free_page(phys_page);
++
++    JARVIS_TEST_PASS();
++}
++
++/// @brief Map a USER|NX page; verify both UXN (bit 54) and PXN (bit 53)
++/// are set.
++JARVIS_TEST(aarch64_pte_user_nx_uxn) {
++    uint64_t phys_page = PMM::alloc_page();
++    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
++
++    constexpr uint64_t TEST_VA = 0xFFFF800090004000ULL;
++    constexpr uint64_t RW_FLAGS =
++        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER |
++        PageFlags::NX;
++
++    auto map_result =
++        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
++    JARVIS_ASSERT(map_result.ok());
++
++    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
++    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user NX PTE PXN not set: 0x%lx",
++                      leaf);
++    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "user NX PTE UXN not set: 0x%lx",
++                      leaf);
++
++    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
++    JARVIS_ASSERT(unmap_result.ok());
++    PMM::free_page(phys_page);
++
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Register all AArch64 architecture test cases.
+ void register_aarch64_tests() {
+     Logger::info("Registering aarch64 architecture tests");
+@@ -479,6 +629,11 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_rtc_read);
+     JARVIS_REGISTER_TEST(aarch64_boot_dtb_pointer);
+     JARVIS_REGISTER_TEST(aarch64_exception_vector_installed);
++    JARVIS_REGISTER_TEST(aarch64_pan_sctlr_bit_set);
++    JARVIS_REGISTER_TEST(aarch64_pan_stac_clac_roundtrip);
++    JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
++    JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
++    JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
+ }
  
-         inherit_priority(*task);
+ #endif
+\ No newline at end of file
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index fbcfe020..54cbdacf 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -101,6 +101,9 @@ inline void pause() {
+     asm volatile("nop");
+ }
+ /// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
++/// @note MP-4.4 scope was aarch64-only.  The aarch64 PAN implementation
++/// (stac/clac via PSTATE.PAN in arch/aarch64/hal/io_impl.hpp + arch::pan_init
++/// in early_init.cpp) is the model for a future SSTATUS.SUM-based port.
+ inline void stac() {}
+ /// @brief Clear AC-equivalent — no-op (see stac()).
+ inline void clac() {}
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index a78b90fb..cab27108 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -580,6 +580,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     arch::IDT::init();
+     arch::IDT::load();
  
--        bool added = add_waiter(*task);
--        ENSURE(added);
-+        // H-4 (audit-task-sync-v0.4.2): a void blocking API must NOT ENSURE on
-+        // waiter-table-full - reachable resource exhaustion under contention
-+        // saturation.  Yield and retry (the table drains as waiters wake).
-+        if (!add_waiter(*task)) {
-+            lock_.unlock();
-+            Scheduler::reschedule();
-+            lock_.lock();
-+            continue;
-+        }
-         task->waiting_on_mutex = this;
++#if defined(CONFIG_ARCH_AARCH64) && CONFIG_PAN
++    // v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1.PAN.
++    // When FEAT_PAN is present, stac/clac become real PSTATE.PAN toggles
++    // (mirror of x86_64 SMAP); every kernel->user deref stays wrapped.
++    if (arch::pan_init()) {
++        debug_write("[BOOT] PAN enabled (SCTLR_EL1.PAN)\n");
++    } else {
++        debug_write("[BOOT] PAN not supported by CPU — leaving off\n");
++    }
++#endif
++
+ #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+     arch::ArchInterruptController::init();
  
-         lock_.unlock();
-diff --git a/src/kernel/sync/spsc_ring.hpp b/src/kernel/sync/spsc_ring.hpp
-index 9b6fb5ec..f5aa7b1e 100644
---- a/src/kernel/sync/spsc_ring.hpp
-+++ b/src/kernel/sync/spsc_ring.hpp
-@@ -39,7 +39,7 @@ template <typename T, size_t N> class SPSCRing {
-     /// @brief Push an item (discards if full).
-     /// @return true on success.
-     bool try_push(const T &item) {
--        size_t h = head_;
-+        size_t h = kernel::atomic_load(&head_, __ATOMIC_RELAXED);
-         size_t t = kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
-         size_t next = (h + 1) & MASK;
-         if (next == t)
-@@ -52,7 +52,7 @@ template <typename T, size_t N> class SPSCRing {
-     /// @brief Pop an item (no-op if empty).
-     /// @return true on success.
-     bool try_pop(T &item) {
--        size_t t = tail_;
-+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
-         size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
-         if (t == h)
-             return false;
-@@ -67,7 +67,9 @@ template <typename T, size_t N> class SPSCRing {
-                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
-     }
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 20bbdfdf..fa7816b5 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -147,7 +147,8 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
+             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
+ #if defined(CONFIG_ARCH_AARCH64)
+-            uint64_t base_flags = table[index] & (PAGE_PRESENT | PAGE_AF);
++            uint64_t base_flags =
++                table[index] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+             for (size_t i = 0; i < 512; ++i) {
+                 new_table[i] =
+                     (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
+@@ -312,7 +313,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
+         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
+ #if defined(CONFIG_ARCH_AARCH64)
+-        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
++        uint64_t base_flags =
++            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+ #else
+         uint64_t base_flags =
+             pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+@@ -338,7 +340,9 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+ #if defined(CONFIG_ARCH_AARCH64)
+     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
+     if (user)
+-        flags |= PAGE_AP_USER;
++        flags |= PAGE_AP_USER | PAGE_PXN;
++    else
++        flags |= PAGE_UXN | PAGE_PXN;
+ #else
+     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
+     if (user)
+@@ -552,7 +556,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
+         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
+ #if defined(CONFIG_ARCH_AARCH64)
+-        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
++        uint64_t base_flags =
++            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+         for (size_t i = 0; i < 512; ++i) {
+             new_pt[i] = (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
+         }
+@@ -578,9 +583,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+ #if defined(CONFIG_ARCH_AARCH64)
+     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
+     if (user)
+-        flags |= PAGE_AP_USER;
++        flags |= PAGE_AP_USER | PAGE_PXN;
++    else
++        flags |= PAGE_UXN | PAGE_PXN;
+     if (!executable)
+-        flags |= (1ULL << 54); // UXN — not executable at EL0
++        flags |= PAGE_UXN; // UXN — not executable at EL0
+ #else
+     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
+     if (user)
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index c50185c0..9019da3a 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -206,6 +206,11 @@ class VMM {
+     static constexpr uint64_t PAGE_AP_USER = 1ULL
+                                              << 6;    // AP[0] - EL0 accessible
+     static constexpr uint64_t PAGE_AP_RO = 1ULL << 7; // AP[1] - read-only (EL1)
++    // MP-4.4: PXN (bit 53) forbids EL1 execution; UXN (bit 54) forbids EL0
++    // execution.  Kernel data pages carry both; user pages carry PXN
++    // (SMEP parity) unless NX adds UXN.
++    static constexpr uint64_t PAGE_PXN = 1ULL << 53;
++    static constexpr uint64_t PAGE_UXN = 1ULL << 54;
  
--    /// @brief Reset to empty state.
-+    /// @brief Reset to empty state.  M-5 (audit-task-sync-v0.4.2): QUIESCENT-
-+    ///        ONLY — must not be called while either side is active (the
-+    ///        head/tail pair is not published atomically together).
-     void reset() {
-         kernel::atomic_store(&head_, size_t{0}, __ATOMIC_RELEASE);
-         kernel::atomic_store(&tail_, size_t{0}, __ATOMIC_RELAXED);
-diff --git a/src/kernel/task/task_queue.cpp b/src/kernel/task/task_queue.cpp
-index 49cb29b2..73adb36e 100644
---- a/src/kernel/task/task_queue.cpp
-+++ b/src/kernel/task/task_queue.cpp
-@@ -34,13 +34,25 @@ TaskControlBlock *TaskQueue::pop_front() noexcept {
-     if (!head_ || count_ == 0)
-         return nullptr;
-     // A freed/overwritten head (poisoned with 0xDD under CONFIG_DEBUG) must
--    // not be dereferenced — skip it and treat the queue as empty rather than
--    // faulting with a #GP (this was the source of the GPF in next_ptr; the
--    // AllTasksRegistry applies the same guard to pri_next_/pri_prev_).
-+    // not be dereferenced — M-2 (audit-task-sync-v0.4.2): drop ONLY the
-+    // offending head node and preserve the remaining queue instead of
-+    // zeroing the whole list (which orphans every other queued task and
-+    // suppresses the corruption rather than containing it).
-     if (!TaskControlBlock::is_valid(head_)) {
--        head_ = nullptr;
--        tail_ = nullptr;
--        count_ = 0;
-+        auto *bad = head_;
-+        head_ = bad->runq_next_;
-+        if (head_) {
-+            if (TaskControlBlock::is_valid(head_))
-+                head_->runq_prev_ = nullptr;
-+            else
-+                head_ = nullptr;
-+        } else {
-+            tail_ = nullptr;
-+        }
-+        bad->runq_next_ = nullptr;
-+        bad->runq_prev_ = nullptr;
-+        if (count_ > 0)
-+            --count_;
-         return nullptr;
-     }
-     auto *tcb = head_;
+     // Compatibility aliases (used in flag-building expressions)
+     static constexpr uint64_t PAGE_WRITE = 0; // no-op - writable by default
+@@ -246,7 +251,7 @@ class VMM {
+ 
+ #if defined(CONFIG_ARCH_AARCH64)
+     // aarch64: physical frame bits [47:12] (48-bit PA).  Masks off flags,
+-    // UXN (bit 54) and PXN (bit 55).
++    // UXN (bit 54) and PXN (bit 53).
+     static constexpr uint64_t PAGE_FRAME_MASK = 0x0000FFFFFFFFF000ULL;
+     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x0000FFFFFFE00000ULL;
+ #elif defined(CONFIG_ARCH_RISCV64)
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 4c102cd3..e177ac96 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -670,6 +670,18 @@
+ #endif
+ #endif
+ 
++/// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
++/// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
++/// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
++/// stac/clac (mirror of x86_64 SMAP).  Runtime-gated by arch::g_pan_supported.
++#ifndef CONFIG_PAN
++#if defined(CONFIG_ARCH_AARCH64)
++#define CONFIG_PAN 1
++#else
++#define CONFIG_PAN 0
++#endif
++#endif
++
+ /// If non-zero, declares weak symbol oom_hook(size_t requested_size).
+ #ifndef CONFIG_OOM_HOOK
+ #define CONFIG_OOM_HOOK 0
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 8e7240b3..007c543c 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -184,7 +184,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,    0,       0      },
++    {"arch_aarch64",          0,   22,       0      },  // 17 existing + 5 MP-4.4 PAN/PXN tests
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,       0      },
