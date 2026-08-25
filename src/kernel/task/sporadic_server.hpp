@@ -157,6 +157,13 @@ class SporadicServer : public KernelObject {
         return replenishment_count_;
     }
 
+    /// @return Number of replenishments merged into an existing entry because
+    ///         the ring was full (C-3 coalescing).  Non-zero only when the
+    ///         ring saturated — a diagnostic that budget was restored late.
+    uint64_t coalesce_count() const noexcept {
+        return coalesce_count_;
+    }
+
     /// @brief Sets the normal scheduling priority for this server.
     /// Call this after init() to assign the server's base priority level.
     void set_base_priority(uint64_t prio) noexcept {
@@ -188,12 +195,14 @@ class SporadicServer : public KernelObject {
     uint64_t replenishment_head_;  ///< Dequeue from head.
     uint64_t replenishment_tail_;  ///< Enqueue at tail.
     uint64_t replenishment_count_; ///< Number of valid entries.
+    uint64_t coalesce_count_;      ///< Ring-full merges performed (C-3).
 
     /// @brief Inserts a replenishment event into the queue.
     /// @param time   Tick at which to replenish.
     /// @param amount Budget amount to restore.
-    /// @return true if inserted, false if queue full.
-    bool schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
+    /// Never fails: when the ring is full the amount is coalesced into the
+    /// newest pending entry (C-3 — budget is restored late, never lost).
+    void schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
 
     /// @brief Removes and returns the earliest replenishment.
     /// @return The head Replenishment.  Undefined if queue is empty.

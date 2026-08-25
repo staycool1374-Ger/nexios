@@ -24,6 +24,7 @@ __attribute__((weak)) void register_rlimit_tests() {}
 __attribute__((weak)) void register_init_tests() {}
 __attribute__((weak)) void register_syscall_tests() {}
 __attribute__((weak)) void register_sync_tests() {}
+__attribute__((weak)) void register_sync_block_pattern_tests() {}
 __attribute__((weak)) void register_spinlock_tests() {}
 __attribute__((weak)) void register_capability_tests() {}
 __attribute__((weak)) void register_task_lifecycle_tests() {}

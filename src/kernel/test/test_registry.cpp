@@ -56,6 +56,7 @@ void register_rlimit_tests();
 void register_init_tests();
 void register_syscall_tests();
 void register_sync_tests();
+void register_sync_block_pattern_tests();
 void register_spinlock_tests();
 void register_task_lifecycle_tests();
 void register_idle_task_tests();
@@ -225,7 +226,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_spinlock_tests();
          register_spinlock_stress_tests();
      }},
-    {"synchronization_sync", []() { register_sync_tests(); }},
+    {"synchronization_sync",
+     []() {
+         register_sync_tests();
+         register_sync_block_pattern_tests();
+     }},
     {"synchronization_locking",
      []() {
          register_locking_tests();
@@ -483,6 +488,7 @@ static void register_all_tests() {
     register_syscall_tests();
     register_syscall_fuzz_tests();
     register_sync_tests();
+    register_sync_block_pattern_tests();
     register_spinlock_tests();
     register_task_lifecycle_tests();
     register_idle_task_tests();
@@ -627,6 +633,7 @@ static void register_all_tests_first_half() {
     register_syscall_tests();
     register_syscall_fuzz_tests();
     register_sync_tests();
+    register_sync_block_pattern_tests();
     register_spinlock_tests();
     register_task_lifecycle_tests();
     register_idle_task_tests();

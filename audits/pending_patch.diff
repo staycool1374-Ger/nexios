@@ -1,1076 +1,847 @@
-diff --git a/Makefile b/Makefile
-index 46d02784..8843a71d 100644
---- a/Makefile
-+++ b/Makefile
-@@ -215,7 +215,8 @@ CLANG_TIDY_NCORES   := $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/nul
- # ----- ccache (optional, no-op if not installed) -----
- CCACHE := $(shell which ccache 2>/dev/null)
- # Prepend ccache-wrapper and include arch-stamp in hash so cross-arch
--# builds don't poison each other's cache.
-+# builds don't poison each other's cache.  ARCH_STAMP is defined before
-+# mk/rules.mk is included (see the arch-stamp check near BUILD_STAMP).
- CCACHE_EXTRAFILES := $(ARCH_STAMP)
- CXX := $(CCACHE) $(CXX)
+diff --git a/src/kernel/sync/eventgroup.cpp b/src/kernel/sync/eventgroup.cpp
+index eeafd367..52bf876e 100644
+--- a/src/kernel/sync/eventgroup.cpp
++++ b/src/kernel/sync/eventgroup.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/sync/eventgroup.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/arch/io.hpp>
+ #include <assert.hpp>
  
-@@ -299,6 +300,23 @@ endif
- # ------------------------------------------------------------------------------
- BUILD_STAMP := build/.build-type
+ namespace kernel {
+@@ -149,24 +150,51 @@ void EventGroup::wake_matching() {
+ }
  
-+# ------------------------------------------------------------------------------
-+# Architecture stamp — checked at PARSE TIME (before mk/rules.mk -includes the
-+# per-object .d dependency files).  If make evaluated object timestamps first,
-+# a mid-build clean (as a rule prerequisite) would be too late: make would have
-+# already committed to "object up to date" from the previous arch's .d files
-+# and never rebuild it.  Cleaning here, before any dependency file is loaded,
-+# guarantees every object is re-derived for the target architecture.
-+# ------------------------------------------------------------------------------
-+ARCH_STAMP := build/.arch-stamp
-+_arch_stamp_now := $(shell cat $(ARCH_STAMP) 2>/dev/null)
-+ifneq ($(_arch_stamp_now),$(ARCH))
-+$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH)))
-+$(shell rm -rf build initrd_root debug release profiling)
-+$(shell rm -f $(shell find userspace -maxdepth 1 -name '*.elf' 2>/dev/null) src/kernel/test/test_registry.gen.hpp *.d build/fat32.img build/external)
-+endif
-+$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
+ /// @brief Block until any of the requested bits are set.
++///
++/// H-1 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
++/// Scheduler::reschedule() — identical C-1 deadlock exposure as the semaphore.
++/// The waiter-table-full path must never ENSURE(added): reachable resource
++/// exhaustion is a retry condition, not an invariant violation.
+ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
+-    SpinLockGuard<SpinLock> guard(lock_);
+     auto *task = Scheduler::current_task();
+     if (!task)
+         return bits_;
+ 
+-    if ((bits_ & bits) == bits) {
+-        if (clear_on_exit)
+-            bits_ &= ~bits;
+-        return bits_;
+-    }
++    for (;;) {
++        bool added;
++        {
++            SpinLockGuard<SpinLock> guard(lock_);
++            if ((bits_ & bits) == bits) {
++                if (clear_on_exit)
++                    bits_ &= ~bits;
++                return bits_;
++            }
++            added = add_waiter(*task, bits, clear_on_exit);
++            if (added)
++                task->state = TaskState::BLOCKED;
++        }
+ 
+-    bool added = add_waiter(*task, bits, clear_on_exit);
+-    ENSURE(added);
++        if (!added) {
++            Scheduler::reschedule();
++            continue;
++        }
++        break;
++    }
+ 
+-    task->state = TaskState::BLOCKED;
++    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
++    // queue so a BLOCKED task is never physically queued (INV-2 desync).
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
+ 
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++        return bits_;
++    }
++    remove_waiter(*task);
++    task->state = TaskState::RUNNING;
++    Scheduler::enqueue_ready(*task);
+     return bits_;
+ }
+ 
+@@ -174,42 +202,66 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
+ /// overload).
+ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
+                                             uint64_t *out_bits) {
+-    SpinLockGuard<SpinLock> guard(lock_);
+     auto *task = Scheduler::current_task();
+     if (!task)
+         return errors::SYNC_ERR_NO_TASK;
+ 
+-    if ((bits_ & bits) == bits) {
+-        if (clear_on_exit)
+-            bits_ &= ~bits;
+-        if (out_bits)
+-            *out_bits = bits_;
+-        return errors::SYNC_ERR_OK;
++    bool added;
++    {
++        SpinLockGuard<SpinLock> guard(lock_);
++        if ((bits_ & bits) == bits) {
++            if (clear_on_exit)
++                bits_ &= ~bits;
++            if (out_bits)
++                *out_bits = bits_;
++            return errors::SYNC_ERR_OK;
++        }
 +
- # ------------------------------------------------------------------------------
- # Shared build rules (pattern rules, libc, userspace, initrd)
- # ------------------------------------------------------------------------------
-@@ -316,16 +334,17 @@ TEST_SRC_FILES       := $(filter src/kernel/test/%.cpp, $(SRC_CXX))
- TEST_REGISTRY_DEPS   := $(TEST_SRC_FILES) $(TEST_REGISTRY_SCRIPT)
- 
- # Write the file list to a temporary file so the Python script reads the
--# same files the build system compiles (no directory walk).
--TEST_FILE_LIST       := build/.test-file-list
-+# same files the build system compiles (no directory walk).  Keyed per arch so
-+# a cross-arch switch never consumes a stale file list.
-+TEST_FILE_LIST       := build/.test-file-list-$(ARCH)
- 
--$(TEST_FILE_LIST): $(TEST_SRC_FILES)
-+$(TEST_FILE_LIST): $(TEST_SRC_FILES) | check-arch
- 	@mkdir -p $(dir $@)
- 	@printf '%s\n' $(TEST_SRC_FILES) > $@
- 
- $(TEST_REGISTRY_GEN): $(TEST_FILE_LIST) $(TEST_REGISTRY_DEPS)
- 	@printf '  %-7s %s\n' 'GEN' '$@'
--	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST)
-+	@python3 $(TEST_REGISTRY_SCRIPT) $(TEST_SRC_DIR) $@ --file-list $(TEST_FILE_LIST) --arch $(ARCH)
- 
- # Kernel link targets depend on the generated test registry header.
- # This ensures it exists even in sub-make invocations (e.g. release build).
-diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
-index f2c1517f..1d241930 100644
---- a/linker/linker_aarch64.ld
-+++ b/linker/linker_aarch64.ld
-@@ -34,13 +34,26 @@ SECTIONS
- 
-     .boot_stack : ALIGN(4K)
-     {
-+        _stack_start_low = .;
-         *(.boot_stack)
-+        _stack_end_low = .;
-     } :boot_data
- 
-     . = ALIGN(., 4K);
-     boot_vma_end = .;
-     phys_lma = boot_vma_end;
- 
-+    /* Higher-half aliases of the boot stack bounds.  After MMU enable the
-+     * kernel runs via TTBR1_EL1 and the live boot-stack SP is
-+     * HHDM_OFFSET + low-VMA address (boot.S adds 0xFFFF800000000000).
-+     * The scheduler's is_boot_stack_rsp() range-checks the live RSP against
-+     * these, so they must be the higher-half alias.  Defined as plain linker
-+     * absolute symbols (no section), so references materialise as immediates
-+     * and never emit an AArch64 ADR_PREL_PG_HI21 relocation against a low-VMA
-+     * section from higher-half .text. */
-+    _stack_start = 0xFFFF800000000000 + _stack_start_low;
-+    _stack_end = 0xFFFF800000000000 + _stack_end_low;
++        if (wait_count_ >= MAX_WAITERS) {
++            return errors::SYNC_ERR_MAX_WAITERS;
++        }
 +
-     . = 0xFFFF800000000000 + phys_lma;
++        added = add_waiter(*task, bits, clear_on_exit);
++        if (added)
++            task->state = TaskState::BLOCKED;
+     }
  
-     .text : AT(phys_lma) ALIGN(4K)
-diff --git a/linker/linker_riscv64.ld b/linker/linker_riscv64.ld
-index 06b73817..da0d6f81 100644
---- a/linker/linker_riscv64.ld
-+++ b/linker/linker_riscv64.ld
-@@ -88,8 +88,12 @@ SECTIONS
-         *(.sbss*)
-         *(.sbss.*)
-         *(.scommon)
-+        _stack_start = .;
-+        KEEP(*(.marker.stack.before))
-         *(.boot_stack)
-         *(.boot_stack.*)
-+        KEEP(*(.marker.stack.after))
-+        _stack_end = .;
-         *(.bss*)
-         *(.bss.*)
-         _bss_end = .;
-diff --git a/mk/rules.mk b/mk/rules.mk
-index 42050032..67ffe592 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -19,10 +19,10 @@ ifneq ($(ARCH),x86_64)
- SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
- SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
- endif
--# Exclude x86_64 FPU/SSE test files that fail to compile with GCC 16
--ifeq ($(ARCH),x86_64)
-+# Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
-+# (they are x86_64 SSE-specific and not portable; register symbols are covered
-+# by weak stubs in test_weak_stubs.cpp).
- SRC_CXX_GENERIC := $(filter-out src/kernel/test/test_fpu.cpp src/kernel/test/test_fpu_clone.cpp src/kernel/test/test_fpu_multi.cpp src/kernel/test/test_fpu_sse.cpp src/kernel/test/test_fpu_xmm_all.cpp, $(SRC_CXX_GENERIC))
--endif
+-    if (wait_count_ >= MAX_WAITERS) {
++    if (!added) {
+         return errors::SYNC_ERR_MAX_WAITERS;
+     }
  
- # External test suite support
- # When EXTERNAL_TEST_DIR is set:
-@@ -120,7 +120,7 @@ FAT32_OBJ      := build/fat32/fat32_img.o
- # workaround is to emit explicit per-file rules into a generated makefile via
- # a shell loop and `-include` it.  .asm/.S objects have single-extension
- # names (`isr_stubs.o`) so their pattern rules are fine.
--GEN_CPP_RULES := mk/cpp-rules.gen.mk
-+GEN_CPP_RULES := mk/cpp-rules.$(ARCH).gen.mk
- -include $(GEN_CPP_RULES)
- 
- $(GEN_CPP_RULES): mk/rules.mk Makefile
-@@ -128,7 +128,7 @@ $(GEN_CPP_RULES): mk/rules.mk Makefile
- 	@printf '' > $@
- 	@for f in $(SRC_CXX); do \
- 	    stem=$${f#src/}; stem=$${stem%.cpp}; \
--	    printf 'build/%s.o: %s\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
-+	    printf 'build/%s.o: %s | check-arch\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
- 	done
- 
- 
-@@ -218,19 +218,14 @@ $(FAT32_OBJ): $(FAT32_IMG)
- # Both debug and release use the same LDFLAGS and same .o files.  The
- # difference in build type is driven entirely by CXXFLAGS on the .o files.
- # ------------------------------------------------------------------------------
--ARCH_STAMP := build/.arch-stamp
+-    bool added = add_waiter(*task, bits, clear_on_exit);
+-    (void)added;
 -
--# .PHONY check that triggers clean when ARCH changes
-+# .PHONY check that guarantees the arch stamp matches the target arch.
-+# The actual arch-switch clean is performed at PARSE TIME in the Makefile
-+# (before .d files are -included), so this target only persists the stamp.
-+# It runs as an order-only prerequisite of every emitted compile rule (see
-+# GEN_CPP_RULES above), which is now a cheap no-op safety net.
- .PHONY: check-arch
- check-arch:
--	@stamp_arch=$$(cat $(ARCH_STAMP) 2>/dev/null); \
--	if [ "$$stamp_arch" != "$(ARCH)" ] && [ -n "$$stamp_arch" ]; then \
--	    printf '  %-7s %s\n' 'CLEAN' "Architecture changed ($$stamp_arch -> $(ARCH))"; \
--	    $(MAKE) clean >/dev/null 2>&1; \
--	    $(MAKE) $(MAKECMDGOALS) >/dev/null 2>&1; \
--	    exit $$?; \
--	fi; \
--	mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
-+	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
+-    task->state = TaskState::BLOCKED;
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
  
- $(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
-diff --git a/src/kernel/arch/aarch64/serial.cpp b/src/kernel/arch/aarch64/serial.cpp
-index 0df99498..69497024 100644
---- a/src/kernel/arch/aarch64/serial.cpp
-+++ b/src/kernel/arch/aarch64/serial.cpp
-@@ -37,6 +37,11 @@ namespace arch {
- #define UART_IMSC 0x038
- #define UART_ICR 0x044
- 
-+/// @brief Number of characters written to the console since boot.
-+/// The interactive shell snapshots this before drawing its prompt (see
-+/// arch::Serial::write_count contract in arch/hal/serial.hpp).
-+static volatile uint64_t s_serial_write_count = 0;
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++    } else {
++        remove_waiter(*task);
++        task->state = TaskState::RUNNING;
++        Scheduler::enqueue_ready(*task);
++        return errors::SYNC_ERR_MAX_WAITERS;
++    }
 +
- /// @brief Initialise the PL011 UART at 115200 baud (default QEMU virt config).
- /// Disables UART, clears pending interrupts, sets baud rate, enables TX/RX.
- void Serial::init() {
-@@ -63,6 +68,14 @@ void Serial::putchar(char c) {
-     while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5))
-         ;
-     mmio_write32(UART_BASE + UART_DR / 4, c);
-+    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
-+}
-+
-+/// @brief Returns the number of characters written to the serial console
-+///        since boot.
-+/// @return Character write count.
-+uint64_t Serial::write_count() noexcept {
-+    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
+     if (out_bits)
+         *out_bits = bits_;
+     return errors::SYNC_ERR_OK;
  }
  
- /// @brief Read a single character from the serial port (blocking).
-diff --git a/src/kernel/arch/aarch64/test_stubs.cpp b/src/kernel/arch/aarch64/test_stubs.cpp
-index d67db743..87be1811 100644
---- a/src/kernel/arch/aarch64/test_stubs.cpp
-+++ b/src/kernel/arch/aarch64/test_stubs.cpp
-@@ -30,6 +30,12 @@ void register_pci_tests() {
-         "Skipped: register_pci_tests (not supported on this arch)");
+ /// @brief Check if bits are set without blocking.
++///
++/// M-6 serialization (audit-task-sync MEDIUM): read bits_ under the spinlock so
++/// a concurrent set/clear can't return a stale answer.
+ bool EventGroup::try_wait_bits(uint64_t bits) {
++    SpinLockGuard<SpinLock> guard(lock_);
+     return (bits_ & bits) == bits;
  }
  
-+/// @brief Stub — PML4 page-table tests are x86_64-specific.
-+void register_pml4_clone_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_pml4_clone_tests (not supported on this arch)");
-+}
-+
- /// @brief Stub — VirtIO tests are not supported on non-x86_64 architectures.
- void register_virtio_tests() {
-     kernel::Logger::info(
-diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
-index 4924c99a..f33c91ef 100644
---- a/src/kernel/arch/aarch64/timer.cpp
-+++ b/src/kernel/arch/aarch64/timer.cpp
-@@ -27,7 +27,7 @@
+ /// @brief Check if bits are set without blocking (error-returning overload).
+ errors::SyncError EventGroup::try_wait_bits_err(uint64_t bits,
+                                                 bool *out_result) {
++    SpinLockGuard<SpinLock> guard(lock_);
+     bool result = (bits_ & bits) == bits;
+     if (out_result)
+         *out_result = result;
+diff --git a/src/kernel/sync/semaphore.cpp b/src/kernel/sync/semaphore.cpp
+index e37568e1..4d40c89a 100644
+--- a/src/kernel/sync/semaphore.cpp
++++ b/src/kernel/sync/semaphore.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/sync/semaphore.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/arch/io.hpp>
+ #include <assert.hpp>
  
- namespace arch {
- 
--volatile uint64_t Timer::ticks_ = 0;
-+constinit uint64_t Timer::ticks_ = 0;
- uint64_t Timer::counter_freq_hz_ = 0;
- 
- /// @brief Initialise the timer with a given tick frequency and register the IRQ
-diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
-index aa71c2cb..8cb25fc9 100644
---- a/src/kernel/arch/riscv64/serial.cpp
-+++ b/src/kernel/arch/riscv64/serial.cpp
-@@ -24,6 +24,11 @@
- 
- namespace arch {
- 
-+/// @brief Number of characters written to the console since boot.
-+/// The interactive shell snapshots this before drawing its prompt (see
-+/// arch::Serial::write_count contract in arch/hal/serial.hpp).
-+static volatile uint64_t s_serial_write_count = 0;
-+
- /// @brief Initialize the serial port (no-op on RISC-V64; SBI handles it).
- void Serial::init() {
- }
-@@ -39,6 +44,14 @@ void Serial::putchar(char c) {
-                  :
-                  : "r"(ch)
-                  : "a0", "a7", "memory");
-+    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
-+}
-+
-+/// @brief Returns the number of characters written to the serial console
-+///        since boot.
-+/// @return Character write count.
-+uint64_t Serial::write_count() noexcept {
-+    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
- }
- 
- /// @brief Read a character from serial (stub — always returns NUL).
-diff --git a/src/kernel/arch/riscv64/test_stubs.cpp b/src/kernel/arch/riscv64/test_stubs.cpp
-index b7947cfd..96ae5a6f 100644
---- a/src/kernel/arch/riscv64/test_stubs.cpp
-+++ b/src/kernel/arch/riscv64/test_stubs.cpp
-@@ -30,6 +30,12 @@ void register_pci_tests() {
-         "Skipped: register_pci_tests (not supported on this arch)");
- }
- 
-+/// @brief Stub — PML4 page-table tests are x86_64-specific.
-+void register_pml4_clone_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_pml4_clone_tests (not supported on this arch)");
-+}
-+
- /// @brief Stub — not supported on non-x86 architectures.
- void register_virtio_tests() {
-     kernel::Logger::info(
-diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
-index 761fbc9b..ef5a9142 100644
---- a/src/kernel/arch/riscv64/timer.cpp
-+++ b/src/kernel/arch/riscv64/timer.cpp
-@@ -27,7 +27,7 @@
- 
- namespace arch {
- 
--volatile uint64_t Timer::ticks_ = 0;
-+constinit uint64_t Timer::ticks_ = 0;
- uint64_t Timer::timer_freq_hz_ = 0;
- 
- /// @brief Initialize the timer, set frequency, and register the IRQ handler.
-@@ -92,6 +92,12 @@ void Timer::set_ticks_for_test(uint64_t value) {
-     ticks_ = value;
- }
- 
-+/// @brief Return the calibrated timer counter frequency in Hz (x86 TSC alias).
-+/// @return Timer frequency in Hz.
-+uint64_t Timer::tsc_freq_hz() {
-+    return timer_freq_hz_;
-+}
-+
- /// @brief Arm a one-shot timer via SBI.
- /// @param ticks_from_now Number of milliseconds from now to fire.
- void Timer::oneshot(uint64_t ticks_from_now) {
-diff --git a/src/kernel/debug/dump.cpp b/src/kernel/debug/dump.cpp
-index bc586959..1c219cb6 100644
---- a/src/kernel/debug/dump.cpp
-+++ b/src/kernel/debug/dump.cpp
-@@ -74,6 +74,7 @@ static void pkd(const char *key, uint64_t v) {
- }
- 
- /// @brief Print two hex key-value pairs.
-+#if defined(CONFIG_ARCH_X86_64)
- static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
-     L::raw_write("[DUMP]   ");
-     L::raw_write(k1);
-@@ -85,6 +86,7 @@ static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
-     L::print_hex(v2);
-     L::raw_write("\n");
- }
-+#endif // CONFIG_ARCH_X86_64
- 
- /// @brief Print two decimal key-value pairs.
- static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
-@@ -100,6 +102,7 @@ static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
- }
- 
- /// @brief Print three hex key-value pairs.
-+#if defined(CONFIG_ARCH_X86_64)
- static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
-                  const char *k3, uint64_t v3) {
-     L::raw_write("[DUMP]   ");
-@@ -116,6 +119,7 @@ static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
-     L::print_hex(v3);
-     L::raw_write("\n");
- }
-+#endif // CONFIG_ARCH_X86_64
- 
- /// @brief Dump scheduler indices, counts, flags, and deferred-switch globals.
- void dump_scheduler_info() {
-@@ -310,16 +314,30 @@ void dump_task_info(uint64_t task_id) {
-     pkv("kernel_stack_top", t->kernel_stack_top);
- 
-     // context registers (the ones that matter for the crash)
-+#if defined(CONFIG_ARCH_X86_64)
-     pkv("context.rsp", t->context.rsp);
-     pkv("context.rip", t->context.rip);
-     pkv2("context.cs", t->context.cs, "context.ss", t->context.ss);
-     pkv("context.rflags", t->context.rflags);
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    pkv("context.sp_el0", t->context.sp_el0);
-+    pkv("context.elr_el1", t->context.elr_el1);
-+    pkv("context.spsr_el1", t->context.spsr_el1);
-+#endif
- 
--    // check whether context.rsp is within its own kernel stack
-+    // check whether the saved context stack pointer is within its own kernel
-+    // stack (arch-specific field name)
-     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
-     uint64_t top = t->kernel_stack_top;
--    bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
--                         t->context.rsp <= top);
-+#if defined(CONFIG_ARCH_X86_64)
-+    uint64_t saved_sp = t->context.rsp;
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    uint64_t saved_sp = t->context.sp_el0;
-+#else
-+    uint64_t saved_sp = t->context.sp;
-+#endif
-+    bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
-+                         saved_sp <= top);
- 
-     L::raw_write("[DUMP]   rsp_in_stack: ");
-     L::raw_write(rsp_in_stack ? "yes" : "NO (dangerous!)");
-@@ -357,8 +375,17 @@ void dump_task_info(uint64_t task_id) {
- 
-     // show whether deferred-switch globals point to this task
-     bool is_switch_target = false;
-+#if defined(CONFIG_ARCH_X86_64)
-     is_switch_target = is_switch_target ||
-                        (save_to == reinterpret_cast<uint64_t>(&t->context.rsp));
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    is_switch_target = is_switch_target ||
-+                       (save_to ==
-+                        reinterpret_cast<uint64_t>(&t->context.sp_el0));
-+#else
-+    is_switch_target = is_switch_target ||
-+                       (save_to == reinterpret_cast<uint64_t>(&t->context.sp));
-+#endif
-     is_switch_target = is_switch_target || (next_id != 0 && next_id == t->id);
-     L::raw_write("[DUMP]   deferred_switch_target: ");
-     L::raw_write(is_switch_target ? "yes" : "no");
-@@ -380,10 +407,17 @@ void dump_task_info(uint64_t task_id) {
-         L::print_dec(rec.thread_id);
-         L::raw_write(" ticks=");
-         L::print_dec(rec.consumed_ticks);
-+#if defined(CONFIG_ARCH_X86_64)
-         L::raw_write(" ctx.rip=0x");
-         L::print_hex(rec.regs.rip);
-         L::raw_write(" ctx.rsp=0x");
-         L::print_hex(rec.regs.rsp);
-+#elif defined(CONFIG_ARCH_AARCH64)
-+        L::raw_write(" ctx.elr=0x");
-+        L::print_hex(rec.regs.elr_el1);
-+        L::raw_write(" ctx.sp=0x");
-+        L::print_hex(rec.regs.sp_el0);
-+#endif
-         L::raw_write("\n");
+ namespace kernel {
+@@ -155,7 +156,7 @@ void Semaphore::restore_priority() {
+         if (waiters_[i]->priority > max_remaining)
+             max_remaining = waiters_[i]->priority;
      }
- #endif
-@@ -440,13 +474,28 @@ void dump_all_tasks() {
-         pkd2("parent", t->parent_id, "children", t->num_children);
-         pkd2("exec", t->executed_ticks, "rem", t->remaining_ticks);
+-    if (max_remaining >= holder_priority_) {
++    if (max_remaining > holder_priority_) {
+         owner_->priority = max_remaining;
+     } else {
+         owner_->priority = holder_priority_;
+@@ -165,55 +166,115 @@ void Semaphore::restore_priority() {
+ }
  
-+#if defined(CONFIG_ARCH_X86_64)
-         pkv("ctx.rsp", t->context.rsp);
-         pkv("ctx.rip", t->context.rip);
-+#elif defined(CONFIG_ARCH_AARCH64)
-+        pkv("ctx.sp", t->context.sp_el0);
-+        pkv("ctx.elr", t->context.elr_el1);
-+#else
-+        pkv("ctx.sp", t->context.sp);
-+        pkv("ctx.epc", t->context.sepc);
-+#endif
+ /// @brief Decrement the count, blocking if zero.
++///
++/// C-1/C-2 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
++/// Scheduler::reschedule() — reschedule() arms a deferred switch (INV-4) and
++/// re-enables IRQs; a timer tick before this frame unwinds would save the task
++/// holding lock_, and the ISR-side post() would spin forever on it (the
++/// threaded-IRQ keyboard deadlock class documented by Notify::wait()).  The
++/// waiter-table-full path must also never ENSURE(added): reachable resource
++/// exhaustion is an error/retry condition, not an invariant violation.
+ void Semaphore::wait() {
+-    SpinLockGuard<SpinLock> guard(lock_);
+     auto *task = Scheduler::current_task();
+     if (!task)
+         return;
  
-         uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
-         uint64_t top = t->kernel_stack_top;
--        bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
--                             t->context.rsp <= top);
-+#if defined(CONFIG_ARCH_X86_64)
-+        uint64_t saved_sp = t->context.rsp;
-+#elif defined(CONFIG_ARCH_AARCH64)
-+        uint64_t saved_sp = t->context.sp_el0;
-+#else
-+        uint64_t saved_sp = t->context.sp;
-+#endif
-+        bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
-+                             saved_sp <= top);
- 
-         L::raw_write("[DUMP]   kstack=[0x");
-         L::print_hex(base);
-@@ -471,9 +520,19 @@ void dump_all_tasks() {
-         L::raw_write("\n");
- 
-         // deferred-switch target detection
--        bool is_target =
--            (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
--            (next_id != 0 && next_id == t->id);
-+        bool is_target = false;
-+#if defined(CONFIG_ARCH_X86_64)
-+        is_target = (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
-+                    (next_id != 0 && next_id == t->id);
-+#elif defined(CONFIG_ARCH_AARCH64)
-+        is_target = (save_to ==
-+                     reinterpret_cast<uint64_t>(&t->context.sp_el0)) ||
-+                    (next_id != 0 && next_id == t->id);
-+#else
-+        is_target = (save_to ==
-+                     reinterpret_cast<uint64_t>(&t->context.sp)) ||
-+                    (next_id != 0 && next_id == t->id);
-+#endif
-         L::raw_write("[DUMP]   deferred: ");
-         L::raw_write(is_target ? "TARGET" : "no");
-         L::raw_write("\n");
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 349780d8..a78b90fb 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -675,11 +675,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-             panic("CONFIG_KERNEL_PRIV_DATA_BASE overlaps kernel PML4 entry");
-     }
- 
--    // Map APIC MMIO pages and initialise the local/I/O APIC.
-+    // Map APIC MMIO pages and initialise the local/I/O APIC (x86_64 only;
-+    // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
-+#if defined(CONFIG_ARCH_X86_64)
-     if (arch::APIC::is_apic_supported()) {
-         arch::APIC::map_mmio();
-         arch::APIC::init();
-     }
-+#endif // CONFIG_ARCH_X86_64
-     if (kernel::gs::boot_info().cmdline[0]) {
-         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
-     }
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index b7a5f338..3aeb0efd 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -60,10 +60,14 @@ static inline uint64_t current_sp() noexcept {
-     uint64_t sp{};
-     asm volatile("mov %%rsp, %0" : "=r"(sp));
-     return sp;
--#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
-+#elif defined(CONFIG_ARCH_AARCH64)
-     uint64_t sp{};
-     asm volatile("mov %0, sp" : "=r"(sp));
-     return sp;
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    uint64_t sp{};
-+    asm volatile("mv %0, sp" : "=r"(sp));
-+    return sp;
- #else
-     return 0;
- #endif
-@@ -2152,8 +2156,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                 Logger::raw_write(" ss=0x");
-                 Logger::print_hex(cf[168 / 8]);
-                 Logger::raw_write("\n");
-+#if defined(CONFIG_ARCH_X86_64)
-                 // Walk the harness's kslot stack PTE chain (read via the
-                 // direct map) to see WHICH phys the kslot VA maps right now.
-+                // The CR3/PM4L walk is x86_64-specific.
-                 uint64_t cr3 = 0;
-                 asm volatile("mov %%cr3, %0" : "=r"(cr3));
-                 uint64_t kva = reinterpret_cast<uint64_t>(current->kernel_stack);
-@@ -2180,6 +2186,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                 Logger::raw_write(" SAME=");
-                 Logger::print_dec(kphys == (cur_rsp & ~0xFFFULL) ? 1u : 0u);
-                 Logger::raw_write("\n");
-+#endif // CONFIG_ARCH_X86_64
-             }
+-    if (count_ > 0) {
+-        --count_;
+-        if (count_ == 0) {
+-            owner_ = task;
++    // Retry loop: add_waiter fails only when the waiter table is full.
++    // A void blocking API cannot report that; yield and retry (the table
++    // drains as waiters are woken by post()).
++    for (;;) {
++        bool added;
++        {
++            SpinLockGuard<SpinLock> guard(lock_);
++            if (count_ > 0) {
++                --count_;
++                if (count_ == 0) {
++                    owner_ = task;
++                }
++                return;
++            }
++            inherit_priority(*task);
++            added = add_waiter(*task);
++            if (added)
++                task->state = TaskState::BLOCKED;
          }
- #endif
-@@ -2707,11 +2714,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
-             __atomic_load_n(&scheduler_switch_generation, __ATOMIC_RELAXED);
-         __atomic_store_n(&scheduler_switch_generation, gen + 1,
-                          __ATOMIC_RELEASE);
--        __atomic_store_n(&scheduler_save_rsp_to, &exiting.context.rsp,
--                         __ATOMIC_RELEASE);
-+        __atomic_store_n(&scheduler_save_rsp_to,
-+                         &TASK_STACK_PTR(&exiting), __ATOMIC_RELEASE);
-+#if defined(CONFIG_ARCH_X86_64)
-         uint64_t cr0 = arch::read_cr0();
-         cr0 |= (1ULL << 3);
-         arch::write_cr0(cr0);
-+#endif
-     }
+-        return;
+-    }
+-
+-    inherit_priority(*task);
+ 
+-    bool added = add_waiter(*task);
+-    ENSURE(added);
++        if (!added) {
++            Scheduler::reschedule();
++            continue;
++        }
++        break;
++    }
+ 
+-    task->state = TaskState::BLOCKED;
++    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
++    // queue so a BLOCKED task is never physically queued (INV-2 desync —
++    // release-build live-lock if the deferred switch applies late).
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
++
++    // reschedule() is deferred (INV-4): the current task keeps running with
++    // state=BLOCKED until the timer ISR applies the switch and a post() wakes
++    // it.  Spin-wait (mirrors IPC::send).  If interrupts are off the ISR can't
++    // fire — roll back and leave without the semaphore.
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++        return;
++    }
++    remove_waiter(*task);
++    task->state = TaskState::RUNNING;
++    Scheduler::enqueue_ready(*task);
  }
  
-@@ -2800,8 +2809,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
-     ready_queue_.reset();
+ /// @brief Decrement the count, blocking if zero (error-returning overload).
+ errors::SyncError Semaphore::wait_err() {
+-    SpinLockGuard<SpinLock> guard(lock_);
+     auto *task = Scheduler::current_task();
+     if (!task)
+         return errors::SYNC_ERR_NO_TASK;
  
-     {
-+#if defined(CONFIG_ARCH_X86_64)
-         uint32_t _a, _b, _c, _d;
-         asm volatile("cpuid" : "=a"(_a), "=b"(_b), "=c"(_c), "=d"(_d) : "a"(0));
-+#endif
-     }
-     __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-     __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-@@ -3257,7 +3268,9 @@ extern "C" void scheduler_diag_depth_skip() {
-     uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
-                                   __ATOMIC_ACQUIRE);
-     uint64_t rfl = 0;
-+#if defined(CONFIG_ARCH_X86_64)
-     asm volatile("pushfq; pop %0" : "=r"(rfl));
-+#endif
-     kernel::Logger::raw_write("[H2-DEPTH] id=");
-     kernel::Logger::print_dec(id);
-     kernel::Logger::raw_write(" depth=");
-@@ -3293,7 +3306,9 @@ extern "C" void scheduler_diag_rsp_abort() {
-     uint64_t top = __atomic_load_n(&kernel::scheduler_load_kstack_top,
-                                    __ATOMIC_ACQUIRE);
-     uint64_t rfl = 0;
-+#if defined(CONFIG_ARCH_X86_64)
-     asm volatile("pushfq; pop %0" : "=r"(rfl));
-+#endif
-     kernel::Logger::raw_write("[H2-RSPABORT] id=");
-     kernel::Logger::print_dec(id);
-     kernel::Logger::raw_write(" rsp=0x");
-@@ -3398,7 +3413,9 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
-         uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
-                                       __ATOMIC_ACQUIRE);
-         uint64_t rfl = 0;
-+#if defined(CONFIG_ARCH_X86_64)
-         asm volatile("pushfq; pop %0" : "=r"(rfl));
-+#endif
-         kernel::Logger::raw_write("[H2-SKIP] cap=0x");
-         kernel::Logger::print_hex(captured_gen);
-         kernel::Logger::raw_write(" cur=0x");
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 1687d717..b773b784 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -98,6 +98,7 @@ namespace kernel {
- /// spinning on task->state) observes completion.  Previously this fell into
- /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
- /// any caller that waits for termination (ipc_blocking test hang).
-+#if defined(CONFIG_ARCH_X86_64)
- static void _task_trampoline(void (*entry)()) {
-     entry();
-     auto *self = Scheduler::current_task();
-@@ -106,6 +107,7 @@ static void _task_trampoline(void (*entry)()) {
-     for (;;)
-         arch::hlt();
- }
-+#endif
- 
- /// @brief Allocates and initialises a SporadicServer for a daemon task
- ///        from the MemPool.  Idempotent (returns early if already set).
-@@ -513,11 +515,19 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
- /// @brief Physical addresses of the 8 pre-allocated PT pages for the window.
- static uint64_t s_kstack_pt_pages[8] = {};
- 
-+#if defined(CONFIG_ARCH_X86_64)
- static void init_kstack_window();
- static void map_kstack_page(uint64_t virt, uint64_t phys);
- static void unmap_kstack_page(uint64_t virt);
-+#endif
- 
- static uint64_t alloc_kslot(uint64_t stack_size) {
-+#if !defined(CONFIG_ARCH_X86_64)
-+    // The kstack VA window (and its CR3/invlpg page-table wiring) is
-+    // x86_64-only; other arches use the HHDM direct-map fallback.
-+    (void)stack_size;
-+    return 0;
-+#else
-     // Lazy init: pre-allocate page table pages on first call.
-     // Must be called after PMM and VMM init (first create() is in
-     // Scheduler::init(), well after both).
-@@ -556,6 +566,7 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
-         s_kslot_bump = va + slot_size;
-         return va;
-     }
-+#endif // CONFIG_ARCH_X86_64
- }
- 
- static void free_kslot(uint64_t va, uint64_t size) {
-@@ -574,6 +585,7 @@ static void free_kslot(uint64_t va, uint64_t size) {
- // Kernel-stack window page table pool
- // ---------------------------------------------------------------------------
- 
-+#if defined(CONFIG_ARCH_X86_64)
- /// @brief Pre-allocate all page table pages for the kernel-stack window and
- ///        wire them into the kernel PML4.  Called once at boot, before any
- ///        snapshot is taken.
-@@ -662,6 +674,7 @@ static void unmap_kstack_page(uint64_t virt) {
-     pt[entry] = 0;
-     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
- }
-+#endif // CONFIG_ARCH_X86_64
- 
- } // anonymous namespace
- 
-@@ -713,6 +726,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
-         __builtin_memcpy(
-             reinterpret_cast<void *>(arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
-             src + off, arch::PAGE_SIZE);
-+#if defined(CONFIG_ARCH_X86_64)
-         // Flush the TLB for every window VA backed by this PT page.  invlpg
-         // on an unmapped VA is a documented no-op (no exception).
-         uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
-@@ -722,6 +736,7 @@ void kslot_snapshot_restore(const uint8_t *src) {
-                          :
-                          : "r"(base_va + e * arch::PAGE_SIZE)
-                          : "memory");
-+#endif // CONFIG_ARCH_X86_64
-         off += arch::PAGE_SIZE;
-     }
-     __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
-@@ -965,7 +980,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-     // This dual-path design is certified-safe because the test environment
-     // provides equivalent fault containment (complete memory rewind),
-     // while production builds never take the HHDM fallback.
-+    // The kslot VA window (and its CR3/invlpg wiring) is x86_64-only; on
-+    // other arches alloc_kslot() returns 0 and the HHDM fallback below is
-+    // always taken.
-     // ------------------------------------------------------------------
-+#if defined(CONFIG_ARCH_X86_64)
-     if (!Scheduler::is_test_active()) {
-         uint64_t slot_va = alloc_kslot(stack_size);
-         if (slot_va) {
-@@ -982,6 +1001,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-             goto done_stack;
+-    if (count_ > 0) {
+-        --count_;
+-        if (count_ == 0) {
+-            owner_ = task;
++    bool added;
++    {
++        SpinLockGuard<SpinLock> guard(lock_);
++        if (count_ > 0) {
++            --count_;
++            if (count_ == 0) {
++                owner_ = task;
++            }
++            return errors::SYNC_ERR_OK;
          }
+-        return errors::SYNC_ERR_OK;
++
++        if (waiter_count_ >= MAX_WAITERS) {
++            return errors::SYNC_ERR_MAX_WAITERS;
++        }
++
++        inherit_priority(*task);
++
++        added = add_waiter(*task);
++        if (added)
++            task->state = TaskState::BLOCKED;
      }
-+#endif // CONFIG_ARCH_X86_64
-     tcb->kstack_slot_va_ = 0;
-     tcb->kstack_slot_size_ = 0;
-     {
-@@ -990,7 +1010,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-         TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(stack_virt));
-         tcb->kernel_stack_top = stack_virt + stack_size;
-     }
-+#if defined(CONFIG_ARCH_X86_64)
- done_stack:
-+#endif
  
-     // v0.4.0 MP-1.2: every kernel task gets a private kernel-half PML4.
-     // clone_kernel_pml4() zeroes the user entries (0..255) and copies the
-@@ -1133,9 +1155,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-         tcb->kstack_slot_va_ = slot_va;
-         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
-         uint64_t kstack_va = slot_va + 4096;
-+#if defined(CONFIG_ARCH_X86_64)
-         for (size_t i = 0; i < kernel_stack_pages; ++i)
-             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
-                             kstack_phys + i * arch::PAGE_SIZE);
-+#endif
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
-         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
-@@ -1377,9 +1401,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-         tcb->kstack_slot_va_ = slot_va;
-         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
-         uint64_t kstack_va = slot_va + 4096;
-+#if defined(CONFIG_ARCH_X86_64)
-         for (size_t i = 0; i < stack_pages; ++i)
-             map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
-                             kstack_phys + i * arch::PAGE_SIZE);
-+#endif
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
-         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
-@@ -1591,6 +1617,9 @@ TaskControlBlock *TaskControlBlock::find_child(uint64_t pid) noexcept {
- /// clone().
- ///        Only frees intermediate page-table pages (PD, PT), not leaf pages
- ///        (those are freed separately by the user_stack_ loop in cleanup()).
-+///        The private stack PDPT is an x86_64 (4-level PML4/PDPT/PD/PT)
-+///        concept; AArch64/RISC-V use different page-table shapes.
-+#if defined(CONFIG_ARCH_X86_64)
- static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
-     constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
-     constexpr uint64_t PAGE_HUGE = 1ULL << 7;
-@@ -1620,6 +1649,7 @@ static void free_stack_pdpt(uint64_t pdpt_phys) noexcept {
-     PMM::free_page(pd_phys);
-     PMM::free_page(pdpt_phys);
+-    if (waiter_count_ >= MAX_WAITERS) {
++    if (!added) {
++        // Table became full between the check and the add (same critical
++        // section, so unreachable) — defensive.
+         return errors::SYNC_ERR_MAX_WAITERS;
+     }
+ 
+-    inherit_priority(*task);
+-
+-    add_waiter(*task);
+-    task->state = TaskState::BLOCKED;
++    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
+ 
+-    return errors::SYNC_ERR_OK;
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++        return errors::SYNC_ERR_OK;
++    }
++    remove_waiter(*task);
++    task->state = TaskState::RUNNING;
++    Scheduler::enqueue_ready(*task);
++    return errors::SYNC_ERR_MAX_WAITERS;
  }
-+#endif // CONFIG_ARCH_X86_64
  
- /// @brief Releases all resources owned by the task.
- /// Unlinks from parent's child list, detaches from message-queue blocked lists,
-@@ -1765,9 +1795,11 @@ void TaskControlBlock::cleanup() noexcept {
-                            : ((STACK_SIZE + 4095) / arch::PAGE_SIZE);
-         if (kstack_slot_va_) {
-             uint64_t slot_va = kstack_slot_va_;
-+#if defined(CONFIG_ARCH_X86_64)
-             uint64_t stack_va = slot_va + 4096;
-             for (size_t i = 0; i < pages; ++i)
-                 unmap_kstack_page(stack_va + i * arch::PAGE_SIZE);
-+#endif
-             free_kslot(slot_va, kstack_slot_size_);
-         }
-         // Poison physical pages via HHDM before freeing.
-@@ -1799,10 +1831,12 @@ void TaskControlBlock::cleanup() noexcept {
-         // during clone) is fully reclaimed here — no leak.
-         VMM::free_user_pages(page_table_);
-         PMM::free_page(page_table_);
-+#if defined(CONFIG_ARCH_X86_64)
-         if (stack_pdpt_phys_) {
-             free_stack_pdpt(stack_pdpt_phys_);
-             stack_pdpt_phys_ = 0;
-         }
-+#endif // CONFIG_ARCH_X86_64
-         page_table_ = 0;
+ /// @brief Decrement count without blocking.
+diff --git a/src/kernel/task/sporadic_server.cpp b/src/kernel/task/sporadic_server.cpp
+index c597619b..40b0df28 100644
+--- a/src/kernel/task/sporadic_server.cpp
++++ b/src/kernel/task/sporadic_server.cpp
+@@ -46,6 +46,7 @@ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
+     replenishment_head_ = 0;
+     replenishment_tail_ = 0;
+     replenishment_count_ = 0;
++    coalesce_count_ = 0;
+ }
+ 
+ void SporadicServer::on_activation(uint64_t now) noexcept {
+@@ -138,15 +139,13 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
+             new_budget = budget_c_;
+         budget_remaining_ = new_budget;
+ 
+-        // If budget is now positive and server was exhausted, return to
++        // If budget is now positive and the server was EXHAUSTED, return to
+         // normal priority (the caller checks current_priority()).
+-        if (new_budget > 0 && state_ != ACTIVE) {
+-            // Transition back to ACTIVE so the server can run at its
+-            // base priority again.  The server may still be mid-job
+-            // (if budget was exhausted mid-execution) or may be idle
+-            // waiting for new work.  We conservatively set ACTIVE so
+-            // the scheduler picks it up; if idle, the next on_completion
+-            // will put it back.
++        if (new_budget > 0 && state_ == EXHAUSTED) {
++            // M-8 (audit-task-sync): only an EXHAUSTED server may be forced
++            // ACTIVE by a replenishment.  An IDLE server must stay IDLE — a
++            // forced ACTIVE blocks the next on_activation() (which requires
++            // IDLE), delaying the next aperiodic job.
+             state_ = ACTIVE;
+ #if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK
+             sporadic_server_deadline_handler(this, 1);
+@@ -158,17 +157,31 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
+ // ---- Private helpers ----
+ 
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+-bool SporadicServer::schedule_replenishment(uint64_t time,
++void SporadicServer::schedule_replenishment(uint64_t time,
+                                             uint64_t amount) noexcept {
+-    if (replenishment_count_ == MAX_REPLENISHMENTS)
+-        return false;
++    if (replenishment_count_ == MAX_REPLENISHMENTS) {
++        // C-3 (audit-task-sync-v0.4.2): ring full — do NOT silently drop the
++        // consumed budget.  Merge the amount into the newest pending entry,
++        // deferring its restore to the later of the two times (conservative
++        // late restore).  The consumed budget is thus preserved, at worst
++        // restored one period late instead of being lost permanently.
++        Replenishment &newest =
++            replenishments_[(replenishment_tail_ + MAX_REPLENISHMENTS - 1) %
++                            MAX_REPLENISHMENTS];
++        newest.amount += amount;
++        if (newest.amount > budget_c_)
++            newest.amount = budget_c_;
++        if (time > newest.time)
++            newest.time = time;
++        ++coalesce_count_;
++        return;
++    }
+ 
+     replenishments_[replenishment_tail_].time = time;
+     replenishments_[replenishment_tail_].amount = amount;
+ 
+     replenishment_tail_ = (replenishment_tail_ + 1) % MAX_REPLENISHMENTS;
+     replenishment_count_++;
+-    return true;
+ }
+ 
+ SporadicServer::Replenishment SporadicServer::pop_replenishment() noexcept {
+diff --git a/src/kernel/task/sporadic_server.hpp b/src/kernel/task/sporadic_server.hpp
+index 12e460a0..70e60d2a 100644
+--- a/src/kernel/task/sporadic_server.hpp
++++ b/src/kernel/task/sporadic_server.hpp
+@@ -157,6 +157,13 @@ class SporadicServer : public KernelObject {
+         return replenishment_count_;
      }
  
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index b865cbeb..1292db9c 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -59,10 +59,14 @@ static inline uint64_t current_sp() {
-     uint64_t sp{};
-     asm volatile("mov %%rsp, %0" : "=r"(sp));
-     return sp;
--#elif defined(__aarch64__) || defined(__riscv)
-+#elif defined(__aarch64__)
-     uint64_t sp{};
-     asm volatile("mov %0, sp" : "=r"(sp));
-     return sp;
-+#elif defined(__riscv)
-+    uint64_t sp{};
-+    asm volatile("mv %0, sp" : "=r"(sp));
-+    return sp;
- #else
-     return 0;
- #endif
-diff --git a/src/kernel/test/test_pml4_clone.cpp b/src/kernel/test/test_pml4_clone.cpp
-index 2ea0aad5..5bb32293 100644
---- a/src/kernel/test/test_pml4_clone.cpp
-+++ b/src/kernel/test/test_pml4_clone.cpp
-@@ -28,6 +28,8 @@
- #include <constants.hpp>
- #include "test_sched_helpers.hpp"
- 
-+#if defined(CONFIG_ARCH_X86_64)
++    /// @return Number of replenishments merged into an existing entry because
++    ///         the ring was full (C-3 coalescing).  Non-zero only when the
++    ///         ring saturated — a diagnostic that budget was restored late.
++    uint64_t coalesce_count() const noexcept {
++        return coalesce_count_;
++    }
 +
- using namespace kernel;
+     /// @brief Sets the normal scheduling priority for this server.
+     /// Call this after init() to assign the server's base priority level.
+     void set_base_priority(uint64_t prio) noexcept {
+@@ -188,12 +195,14 @@ class SporadicServer : public KernelObject {
+     uint64_t replenishment_head_;  ///< Dequeue from head.
+     uint64_t replenishment_tail_;  ///< Enqueue at tail.
+     uint64_t replenishment_count_; ///< Number of valid entries.
++    uint64_t coalesce_count_;      ///< Ring-full merges performed (C-3).
  
- // v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
-@@ -798,3 +800,5 @@ void register_pml4_clone_tests() {
-     JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
-     JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
+     /// @brief Inserts a replenishment event into the queue.
+     /// @param time   Tick at which to replenish.
+     /// @param amount Budget amount to restore.
+-    /// @return true if inserted, false if queue full.
+-    bool schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
++    /// Never fails: when the ring is full the amount is coalesced into the
++    /// newest pending entry (C-3 — budget is restored late, never lost).
++    void schedule_replenishment(uint64_t time, uint64_t amount) noexcept;
+ 
+     /// @brief Removes and returns the earliest replenishment.
+     /// @return The head Replenishment.  Undefined if queue is empty.
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 6163316d..a0c2a596 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -56,6 +56,7 @@ void register_rlimit_tests();
+ void register_init_tests();
+ void register_syscall_tests();
+ void register_sync_tests();
++void register_sync_block_pattern_tests();
+ void register_spinlock_tests();
+ void register_task_lifecycle_tests();
+ void register_idle_task_tests();
+@@ -225,7 +226,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          register_spinlock_tests();
+          register_spinlock_stress_tests();
+      }},
+-    {"synchronization_sync", []() { register_sync_tests(); }},
++    {"synchronization_sync",
++     []() {
++         register_sync_tests();
++         register_sync_block_pattern_tests();
++     }},
+     {"synchronization_locking",
+      []() {
+          register_locking_tests();
+@@ -483,6 +488,7 @@ static void register_all_tests() {
+     register_syscall_tests();
+     register_syscall_fuzz_tests();
+     register_sync_tests();
++    register_sync_block_pattern_tests();
+     register_spinlock_tests();
+     register_task_lifecycle_tests();
+     register_idle_task_tests();
+@@ -627,6 +633,7 @@ static void register_all_tests_first_half() {
+     register_syscall_tests();
+     register_syscall_fuzz_tests();
+     register_sync_tests();
++    register_sync_block_pattern_tests();
+     register_spinlock_tests();
+     register_task_lifecycle_tests();
+     register_idle_task_tests();
+diff --git a/src/kernel/test/test_sporadic_server.cpp b/src/kernel/test/test_sporadic_server.cpp
+index 1f4a9b0a..0574e5de 100644
+--- a/src/kernel/test/test_sporadic_server.cpp
++++ b/src/kernel/test/test_sporadic_server.cpp
+@@ -429,7 +429,9 @@ JARVIS_TEST(sporadic_server_granularity_clamp_zero, "PRE: none | POST: none") {
+ // Testidea: Granularity with completion — verify replenishment amount
+ //           equals consumed units, not raw ticks.
+ // Expect: budget=5, granularity=3, consume 2 units (6 calls), complete.
+-//         Replenishment amount = 2 (not 6).
++//         Replenishment amount = 2 (not 6).  M-8: the server completed (IDLE),
++//         so a replenishment restores budget WITHOUT forcing it ACTIVE — only
++//         an EXHAUSTED server may be re-activated by a replenishment.
+ JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
+     SporadicServer ss;
+     ss.init(5, 100, 0, 3);
+@@ -449,7 +451,9 @@ JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
+     JARVIS_ASSERT_EQ(1ULL, ss.pending_count());
+     // Replenishment amount should be consumed_since_active_ = 2, not 6
+     ss.process_replenishments(110);
+-    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
++    // M-8: IDLE server stays IDLE after a replenishment (budget restored, but
++    // no aperiodic work pending — forcing ACTIVE would delay the next job).
++    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
+     // Budget was 3, replenished 2, capped at C=5
+     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget());
+     JARVIS_TEST_PASS();
+@@ -560,7 +564,8 @@ JARVIS_TEST(sporadic_server_consume_already_exhausted,
+ // Testidea: Replenishment after partial consumption restores only the
+ //           consumed amount, capped at C.
+ // Expect: Consume 2 of 5 budget, complete. Replenishment restores 2.
+-//         Budget goes from 3 → 5 (capped).
++//         Budget goes from 3 → 5 (capped).  M-8: server completed (IDLE), so
++//         the replenishment must NOT force it ACTIVE.
+ JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
+     SporadicServer ss;
+     ss.init(5, 50, 0);
+@@ -575,7 +580,9 @@ JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
+     // Fire replenishment
+     ss.process_replenishments(60);
+     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget()); // 3 + 2 = 5
+-    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
++    // M-8: IDLE stays IDLE (replenishment restores budget, never re-activates
++    // a server with no pending aperiodic work).
++    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
+     JARVIS_TEST_PASS();
  }
-+
-+#endif // CONFIG_ARCH_X86_64
-diff --git a/src/kernel/test/test_stack_profiler.cpp b/src/kernel/test/test_stack_profiler.cpp
-index f903a611..4bfc4347 100644
---- a/src/kernel/test/test_stack_profiler.cpp
-+++ b/src/kernel/test/test_stack_profiler.cpp
-@@ -67,8 +67,10 @@ JARVIS_TEST(stack_profiler_context_rsp_in_range, "PRE: none | POST: none") {
-     uint64_t stack_base = reinterpret_cast<uint64_t>(t->kernel_stack);
- #if defined(CONFIG_ARCH_X86_64)
-     JARVIS_ASSERT(t->context.rsp >= stack_base && t->context.rsp < t->kernel_stack_top);
--#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
-+#elif defined(CONFIG_ARCH_AARCH64)
-     JARVIS_ASSERT(t->context.sp_el0 >= stack_base && t->context.sp_el0 < t->kernel_stack_top);
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    JARVIS_ASSERT(t->context.sp >= stack_base && t->context.sp < t->kernel_stack_top);
- #else
-     JARVIS_ASSERT(false && "unhandled arch in stack_profiler_context_rsp_in_range");
- #endif
-@@ -96,8 +98,10 @@ JARVIS_TEST(stack_profiler_current_task_stack_valid,
-     uint64_t rsp;
- #if defined(CONFIG_ARCH_X86_64)
-     asm volatile("mov %%rsp, %0" : "=r"(rsp));
--#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
-+#elif defined(CONFIG_ARCH_AARCH64)
-     asm volatile("mov %0, sp" : "=r"(rsp));
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    asm volatile("mv %0, sp" : "=r"(rsp));
- #else
-     rsp = 0;
- #endif
-diff --git a/tools/gen_test_registry.py b/tools/gen_test_registry.py
-index 1f4efc27..a2fc2bf7 100644
---- a/tools/gen_test_registry.py
-+++ b/tools/gen_test_registry.py
-@@ -106,45 +106,192 @@ def _is_config_disabled(cond: str) -> bool:
-     return False
  
- 
--def strip_disabled_blocks(text: str) -> str:
--    """Remove disabled preprocessor blocks (#if 0, #if CONFIG_0, etc.) from C++ source."""
-+# ---------------------------------------------------------------------------
-+# Architecture-aware preprocessing for the test registry scanner.
-+#
-+# The scanner must not emit tests whose registration lives inside a
-+# `#if defined(CONFIG_ARCH_*)` block for a *foreign* architecture: those test
-+# functions are not compiled on the target arch, so referencing them from the
-+# generated registry would produce undefined symbols at link time.
-+#
-+# Three per-level modes are tracked in a stack:
-+#   SCAN  — legacy passthrough; every nested branch is scanned (unknown
-+#           conditions are kept conservatively, matching the original tool).
-+#   DROP  — entered for legacy-disabled conditions (#if 0, unknown CONFIG_*).
-+#           The whole level is skipped and nested branches are NOT re-evaluated.
-+#   ARCH  — the condition is a pure architecture expression
-+#           (defined(CONFIG_ARCH_X), !defined(...), bare CONFIG_ARCH_X,
-+#           combined with && / ||).  It is evaluated against the target
-+#           architecture.  An `&&` chain whose *leftmost* arch term is false
-+#           for the target is treated as disabled (covers
-+#           `defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP` without affecting
-+#           x86_64, where the term is true and falls through to legacy keep).
-+# ---------------------------------------------------------------------------
-+_ARCH_TERM_RE = re.compile(
-+    r'^(!)?\s*'
-+    r'(?:defined\s*\(\s*(CONFIG_ARCH_[A-Z0-9_]+)\s*\)'
-+    r'|(CONFIG_ARCH_[A-Z0-9_]+))'
-+    r'\s*$'
-+)
+diff --git a/src/kernel/test/test_sync_block_pattern.cpp b/src/kernel/test/test_sync_block_pattern.cpp
+new file mode 100644
+index 00000000..d6f4932f
+--- /dev/null
++++ b/src/kernel/test/test_sync_block_pattern.cpp
+@@ -0,0 +1,322 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
 +
-+_ARCH_OP_RE = re.compile(r'\s*(&&|\|\|)\s*')
++/// @file test_sync_block_pattern.cpp
++/// @brief Regression tests for audit-task-sync-v0.4.2 C-1/C-2/H-1 (spinlock
++/// must NOT be held across Scheduler::reschedule(); a BLOCKED task must be
++/// dequeued from the ready queue) and C-3 (sporadic-server replenishment ring
++/// full must coalesce, never silently drop budget).
 +
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/sync/semaphore.hpp>
++#include <kernel/sync/eventgroup.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/sporadic_server.hpp>
++#include <kernel/test/test_sched_helpers.hpp>
 +
-+def _eval_arch_condition(cond: str, target_arch: str) -> tuple[bool, bool]:
-+    """Evaluate a preprocessor condition as a pure arch expression.
++using namespace kernel;
 +
-+    Returns (is_arch_expr, result).  is_arch_expr is True only when every
-+    term in the expression is an arch macro reference (possibly negated),
-+    combined with && / ||.  For the compound `leftmost-arch-false && rest`
-+    case (rest is not a pure arch term) it returns (True, False) so the
-+    foreign-arch block is dropped without changing x86_64, where the leftmost
-+    term is true and the expression falls through to legacy handling.
-+    """
-+    own = "CONFIG_ARCH_" + target_arch.upper()
-+    parts = _ARCH_OP_RE.split(cond)
-+    ops = [p for p in parts if p in ("&&", "||")]
-+    terms = [p.strip() for p in parts if p not in ("&&", "||") and p.strip()]
-+    if not terms:
-+        return (False, False)
++// Runmode: kernel
++// Testidea: Verifies a REAL task blocking in sem.wait() is removed from the
++// ready queue (C-2/INV-2): while BLOCKED, the task must not be physically
++// queued, so a later post() wake re-enqueues exactly once and the worker
++// completes.  Also verifies wait() returns (does not spin on lock_) so the
++// harness can post from task context (C-1: lock released before reschedule).
++// Input: Worker (prio 11) genuinely blocks in sem.wait(); harness posts.
++// Expect: Worker BLOCKED and not in ready queue; post() wakes it; worker
++//         completes; no ResourceTracker delta.
++// Depends: kernel::sync::Semaphore, kernel::TaskControlBlock, kernel::Scheduler
++JARVIS_TEST(semaphore_wait_blocked_not_in_ready_queue,
++            "PRE: none | POST: none") {
++    sync::Semaphore sem;
++    sem.init(0, 1);
++    static uint64_t g_woken = 0;
++    g_woken = 0;
 +
-+    # Try to parse every term as a pure arch macro reference.
-+    parsed: list[tuple[str, bool] | None] = []  # (name, negated) or None
-+    all_arch = True
-+    for t in terms:
-+        m = _ARCH_TERM_RE.match(t)
-+        if m is None:
-+            all_arch = False
-+            parsed.append(None)
-+        else:
-+            parsed.append((m.group(2) or m.group(3), bool(m.group(1))))
-+    if all_arch:
-+        # Pure arch boolean expression — evaluate it.  All entries are
-+        # guaranteed non-None here.
-+        arch_terms: list[tuple[str, bool]] = []
-+        for entry in parsed:
-+            assert entry is not None
-+            arch_terms.append(entry)
-+        result = (arch_terms[0][0] == own)
-+        if arch_terms[0][1]:
-+            result = not result
-+        for i, op in enumerate(ops):
-+            tv = (arch_terms[i + 1][0] == own)
-+            if arch_terms[i + 1][1]:
-+                tv = not tv
-+            result = (result and tv) if op == "&&" else (result or tv)
-+        return (True, result)
++    auto *worker = TaskControlBlock::create(
++        []() {
++            auto *self = Scheduler::current_task();
++            sync::Semaphore *s = reinterpret_cast<sync::Semaphore *>(
++                self->user_data);
++            s->wait();
++            while (self->state == TaskState::BLOCKED)
++                arch::pause();
++            __atomic_store_n(&g_woken, 1, __ATOMIC_RELEASE);
++        },
++        11, 10);
++    JARVIS_ASSERT(worker != nullptr);
++    worker->user_data = &sem;
++    Scheduler::add_task(*worker);
++    Scheduler::reschedule();
 +
-+    # Not a pure arch expression.  Apply the leftmost-arch-false && rule:
-+    # an `&&` chain whose leftmost term is a (non-negated) arch macro of a
-+    # foreign architecture is disabled for the target.  This covers
-+    # `defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP` (CONFIG_SMAP is 0 on
-+    # non-x86_64) without changing x86_64, where the leftmost term is true.
-+    if "||" not in cond:
-+        m = _ARCH_TERM_RE.match(terms[0])
-+        if m is not None and not bool(m.group(1)):
-+            name = m.group(2) or m.group(3)
-+            if name != own:
-+                return (True, False)
-+    return (False, False)
++    // Worker genuinely blocks inside sem.wait() and is dequeued from the
++    // ready queue (INV-2 — a BLOCKED task must never be physically queued).
++    while (worker->state != TaskState::BLOCKED)
++        arch::pause();
++    JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
++    JARVIS_ASSERT(!worker->in_ready_queue_);
 +
++    // Wake it (real post — from task context; proves the lock was released
++    // before the deferred switch, otherwise this post would deadlock on lock_).
++    sem.post();
++    kernel::test::wait_for_termination_safe(worker);
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(1ULL, g_woken);
++    JARVIS_TEST_PASS();
++}
 +
-+def strip_disabled_blocks(text: str, target_arch: str = "x86_64") -> str:
-+    """Remove disabled preprocessor blocks (#if 0, #if CONFIG_0, foreign-arch
-+    #if defined(CONFIG_ARCH_*) blocks, etc.) from C++ source.
++// Runmode: kernel
++// Testidea: EventGroup::wait_bits() (H-1) must release lock_ before the
++// deferred switch and dequeue the BLOCKED task (INV-2).  The harness posts
++// the bit from task context; the worker must wake and complete.
++// Input: Worker (prio 11) blocks in eg.wait_bits(0x1); harness sets the bit.
++// Expect: Worker BLOCKED, not in ready queue; set_bits() wakes it; completes.
++// Depends: kernel::sync::EventGroup, kernel::TaskControlBlock, kernel::Scheduler
++JARVIS_TEST(eventgroup_wait_bits_blocked_not_in_ready_queue,
++            "PRE: none | POST: none") {
++    sync::EventGroup eg;
++    eg.init();
++    static uint64_t g_woken = 0;
++    g_woken = 0;
 +
-+    The per-level mode stack preserves the legacy conservative behavior for
-+    non-arch conditions (SCAN/DROP) while correctly evaluating pure arch
-+    expressions (ARCH) against `target_arch`.
-+    """
-     result: list[str] = []
--    disabled_depth = 0
-+    # Stack of levels; each entry is a tuple (mode, active):
-+    #   ("scan", True)        — legacy passthrough, content kept
-+    #   ("drop", False)       — disabled, content dropped, never re-scanned
-+    #   ("arch", bool)        — arch expr; True => this branch is live
-+    stack: list[tuple] = []
-     for line in text.splitlines(keepends=True):
-         stripped = line.strip()
-         if stripped.startswith("#if "):
-             raw_cond = stripped[4:].strip()
--            # Strip C++-style comments from the condition
-             comment_pos = raw_cond.find("//")
-             if comment_pos >= 0:
-                 raw_cond = raw_cond[:comment_pos].strip()
-+            if any(mode == "drop" for mode, _ in stack):
-+                stack.append(("drop", False))
-+                continue
-+            # Legacy disabled check first (matches original tool).
-             if _is_config_disabled(raw_cond):
--                disabled_depth += 1
-+                stack.append(("drop", False))
-                 continue
--        elif stripped.startswith("#ifdef ") or stripped.startswith("#ifndef "):
--            pass
--        elif stripped.startswith("#elif"):
--            raw_elif = stripped.lstrip("#elif").strip()
--            if _is_config_disabled(raw_elif):
--                # entering else branch of #if 0 ... #elif 0
--                if disabled_depth > 0:
--                    disabled_depth += 1
-+            is_arch, arch_val = _eval_arch_condition(raw_cond, target_arch)
-+            if is_arch:
-+                stack.append(("arch", arch_val))
-+            else:
-+                stack.append(("scan", True))
-+            continue
-+        if stripped.startswith("#ifdef ") or stripped.startswith("#ifndef "):
-+            if any(mode == "drop" for mode, _ in stack):
-+                stack.append(("drop", False))
-+                continue
-+            # #ifdef CONFIG_ARCH_X is equivalent to the arch expression
-+            # defined(CONFIG_ARCH_X); #ifndef to !defined(...).  Treat them
-+            # as arch conditions when the macro is a CONFIG_ARCH_* macro.
-+            macro = stripped.split(None, 1)[1].strip()
-+            if macro.startswith("CONFIG_ARCH_"):
-+                is_defined = stripped.startswith("#ifdef")
-+                cond = ("defined(" + macro + ")" if is_defined
-+                        else "!defined(" + macro + ")")
-+                is_arch, arch_val = _eval_arch_condition(cond, target_arch)
-+                if is_arch:
-+                    stack.append(("arch", arch_val))
-                     continue
--        elif stripped.startswith("#else"):
--            if disabled_depth > 0:
--                disabled_depth += 1
-+            stack.append(("scan", True))
-+            continue
-+        if stripped.startswith("#elif"):
-+            if not stack:
-                 continue
--        elif stripped.startswith("#endif"):
--            if disabled_depth > 0:
--                disabled_depth -= 1
-+            if stack[-1][0] == "drop":
-                 continue
--        if disabled_depth > 0:
-+            if stack[-1][0] == "arch":
-+                if stack[-1][1]:
-+                    # A prior branch was taken — this #elif branch is dead.
-+                    stack[-1] = ("arch", False)
-+                else:
-+                    raw_elif = stripped.lstrip("#elif").strip()
-+                    comment_pos = raw_elif.find("//")
-+                    if comment_pos >= 0:
-+                        raw_elif = raw_elif[:comment_pos].strip()
-+                    is_arch, arch_val = _eval_arch_condition(
-+                        raw_elif, target_arch)
-+                    if is_arch:
-+                        stack[-1] = ("arch", arch_val)
-+                    else:
-+                        # Unknown arch expr in #elif — conservative keep.
-+                        stack[-1] = ("arch", True)
-+            # SCAN levels keep their pass-through behavior (#elif ignored).
-             continue
--        result.append(line)
-+        if stripped.startswith("#else"):
-+            if not stack:
-+                continue
-+            if stack[-1][0] == "arch":
-+                stack[-1] = ("arch", not stack[-1][1])
-+            elif stack[-1][0] == "drop":
-+                continue
-+            # SCAN levels keep pass-through.
-+            continue
-+        if stripped.startswith("#endif"):
-+            if stack:
-+                stack.pop()
-+            continue
-+        # Content line: emit unless an enclosing level suppresses it.
-+        if all((mode == "scan") or (mode == "arch" and active)
-+               for mode, active in stack):
-+            result.append(line)
-     return "".join(result)
- 
- 
--def scan_tests(root_dir: str, file_list: list[str] | None = None):
-+def scan_tests(root_dir: str, file_list: list[str] | None = None,
-+               target_arch: str = "x86_64"):
-     tests = []
-     sources: list[str] = []
-     if file_list:
-@@ -169,7 +316,7 @@ def scan_tests(root_dir: str, file_list: list[str] | None = None):
-             print(f"error: cannot read {path}: {e}", file=sys.stderr)
-             continue
-         content = strip_comments(content)
--        content = strip_disabled_blocks(content)
-+        content = strip_disabled_blocks(content, target_arch)
-         for m in RE_TEST.finditer(content):
-             name = m.group(1)
-             meta_raw = m.group(2)
-@@ -264,6 +411,13 @@ def main():
-         help="Path to a file listing source files to scan (one per line). "
-              "When set, only these files are scanned instead of walking input_dir.",
-     )
-+    ap.add_argument(
-+        "--arch",
-+        default="x86_64",
-+        help="Target architecture (x86_64, aarch64, riscv64). Tests inside "
-+             "foreign-arch #if defined(CONFIG_ARCH_*) blocks are not emitted "
-+             "into the registry, since they are not compiled on this arch.",
-+    )
-     args = ap.parse_args()
- 
-     if not os.path.isdir(args.input_dir):
-@@ -280,7 +434,7 @@ def main():
-                   file=sys.stderr)
-             sys.exit(1)
- 
--    tests = scan_tests(args.input_dir, file_list)
-+    tests = scan_tests(args.input_dir, file_list, args.arch)
-     tests.sort(key=lambda t: t[0])
-     generate(tests, args.output_file)
- 
++    auto *worker = TaskControlBlock::create(
++        []() {
++            auto *self = Scheduler::current_task();
++            sync::EventGroup *e =
++                reinterpret_cast<sync::EventGroup *>(self->user_data);
++            e->wait_bits(0x1);
++            while (self->state == TaskState::BLOCKED)
++                arch::pause();
++            __atomic_store_n(&g_woken, 1, __ATOMIC_RELEASE);
++        },
++        11, 10);
++    JARVIS_ASSERT(worker != nullptr);
++    worker->user_data = &eg;
++    Scheduler::add_task(*worker);
++    Scheduler::reschedule();
++
++    while (worker->state != TaskState::BLOCKED)
++        arch::pause();
++    JARVIS_ASSERT(worker->state == TaskState::BLOCKED);
++    JARVIS_ASSERT(!worker->in_ready_queue_);
++
++    eg.set_bits(0x1);
++    kernel::test::wait_for_termination_safe(worker);
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(1ULL, g_woken);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: EventGroup::try_wait_bits (M-6 serialization) must observe a
++// concurrently set bit — i.e. the read is under the spinlock and reflects a
++// set_bits() that happened on another real task.
++// Input: Harness sets a bit directly (no waiter), then try_wait_bits reads it.
++// Expect: try_wait_bits returns true immediately.
++// Depends: kernel::sync::EventGroup
++JARVIS_TEST(eventgroup_try_wait_bits_serialized, "PRE: none | POST: none") {
++    sync::EventGroup eg;
++    eg.init();
++    eg.set_bits(0x2);
++    JARVIS_ASSERT(eg.try_wait_bits(0x2));
++    JARVIS_ASSERT(!eg.try_wait_bits(0x1));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies the sporadic-server replenishment ring-full coalescing
++// (C-3): consuming past MAX_REPLENISHMENTS worth of budget must NOT silently
++// drop any consumed amount — the amount is merged into the newest pending
++// replenishment, so the total eventual restore equals the total consumed and
++// the coalesce counter reflects the merges.
++// Input: Drive a SporadicServer through init/consume/on_completion cycles with
++//        granularity 1 until the 8-entry ring saturates, then force more.
++// Expect: coalesce_count() > 0 and sum of pending + restored budget == consumed.
++// Depends: kernel::task::SporadicServer
++JARVIS_TEST(sporadic_replenishment_ring_full_coalesces,
++            "PRE: none | POST: none") {
++    task::SporadicServer ss;
++    // Budget large enough that the 9 cycles × 2 units consumed never exhausts
++    // it (consume() returns false once budget hits zero).
++    ss.init(/*budget_c=*/100, /*period_t=*/100, /*bg_prio=*/1,
++            /*granularity=*/1);
++    ss.set_base_priority(20);
++
++    // Saturate the ring: 8 replenishments pending.
++    for (uint64_t i = 0; i < 8; ++i) {
++        // on_activation then consume twice (2 units) then complete → one
++        // replenishment of 2 per cycle.
++        ss.on_activation(i * 10);
++        JARVIS_ASSERT(ss.consume(i * 10 + 1));
++        JARVIS_ASSERT(ss.consume(i * 10 + 2));
++        ss.on_completion(i * 10 + 3);
++    }
++    JARVIS_ASSERT_EQ(8ULL, ss.pending_count());
++
++    // One more cycle — ring full: must coalesce, not drop.
++    ss.on_activation(1000);
++    JARVIS_ASSERT(ss.consume(1001));
++    JARVIS_ASSERT(ss.consume(1002));
++    ss.on_completion(1003);
++
++    JARVIS_ASSERT(ss.coalesce_count() > 0);
++    JARVIS_ASSERT_EQ(8ULL, ss.pending_count()); // still bounded at MAX
++
++    // Total budget accounted: 9 cycles × 2 consumed = 18; none dropped (the
++    // 9th was coalesced into an existing entry).  budget_remaining_ was
++    // 100-18=82; restoring all 18 reaches the cap C=100.  If the 9th cycle
++    // had been silently dropped, only 16 would restore → 98, not 100.
++    ss.process_replenishments(2000);
++    JARVIS_ASSERT_EQ(100ULL, ss.remaining_budget());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies a replenishment must NOT force an IDLE server ACTIVE
++// (M-8): an idle-but-ACTIVE server would block the next on_activation(),
++// delaying aperiodic jobs.  After a budget-exhausted→replenished cycle the
++// server returns to IDLE (not ACTIVE) when it completed its work.
++// Input: Exhaust a server, let a replenishment restore budget while IDLE.
++// Expect: state() is IDLE (not ACTIVE) after the replenishment.
++// Depends: kernel::task::SporadicServer
++JARVIS_TEST(sporadic_replenishment_does_not_force_idle_active,
++            "PRE: none | POST: none") {
++    task::SporadicServer ss;
++    ss.init(/*budget_c=*/2, /*period_t=*/100, /*bg_prio=*/1,
++            /*granularity=*/1);
++    ss.set_base_priority(20);
++
++    ss.on_activation(0);
++    JARVIS_ASSERT(ss.consume(1));
++    JARVIS_ASSERT(!ss.consume(2)); // exhausted → schedules replenishment
++    JARVIS_ASSERT(ss.state() == task::SporadicServer::EXHAUSTED);
++
++    // Replenishment due: budget restored, server was EXHAUSTED → ACTIVE.
++    ss.process_replenishments(100);
++    JARVIS_ASSERT(ss.state() == task::SporadicServer::ACTIVE);
++
++    // Job completes → server goes IDLE, replenishment scheduled for what was
++    // consumed.  A LATER replenishment while IDLE must NOT force ACTIVE.
++    ss.on_completion(101);
++    JARVIS_ASSERT(ss.state() == task::SporadicServer::IDLE);
++    ss.process_replenishments(200);
++    JARVIS_ASSERT(ss.state() == task::SporadicServer::IDLE);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies semaphore priority-inheritance restore uses strict `>`
++// (H-6): after a boost-and-restore cycle, holder_priority_ must clear and the
++// owner's priority must return to its base — no permanent inflation across
++// repeated lock cycles.
++// Input: Owner (prio 10) holds a semaphore and blocks on a gate; a high-prio
++//        waiter (prio 15) blocks on the semaphore (boosting the owner); the
++//        gate is released, the owner posts the semaphore (restoring priority
++//        and waking the waiter).
++// Expect: Owner boosted to 15 while the waiter is blocked; after post, owner
++//         priority restored to base 10 (no latch).
++// Depends: kernel::sync::Semaphore, kernel::TaskControlBlock, kernel::Scheduler
++JARVIS_TEST(semaphore_pi_restore_clears_holder_latch,
++            "PRE: none | POST: none") {
++    sync::Semaphore sem;
++    sem.init(1, 1);
++    sync::Semaphore gate;
++    gate.init(0, 1);
++
++    // Owner holds the semaphore (count 1 → 0), records acquisition, blocks on
++    // the gate so the harness knows it owns the semaphore.
++    struct OwnerCtx {
++        uint64_t sem_;
++        uint64_t gate_;
++        uint64_t acquired_;
++    } octx;
++    octx.sem_ = reinterpret_cast<uint64_t>(&sem);
++    octx.gate_ = reinterpret_cast<uint64_t>(&gate);
++    octx.acquired_ = 0;
++
++    auto *owner = TaskControlBlock::create(
++        []() {
++            auto *self = Scheduler::current_task();
++            auto *c = reinterpret_cast<OwnerCtx *>(self->user_data);
++            auto *s = reinterpret_cast<sync::Semaphore *>(c->sem_);
++            auto *g = reinterpret_cast<sync::Semaphore *>(c->gate_);
++            s->wait(); // acquires (count 1 → 0)
++            __atomic_store_n(&c->acquired_, 1, __ATOMIC_RELEASE);
++            g->wait(); // block until harness releases the gate
++            while (self->state == TaskState::BLOCKED)
++                arch::pause();
++            s->post(); // restore priority + wake the waiter
++        },
++        11, 10);
++    JARVIS_ASSERT(owner != nullptr);
++    owner->user_data = &octx;
++    Scheduler::add_task(*owner);
++    Scheduler::reschedule();
++    while (octx.acquired_ != 1)
++        arch::pause();
++    while (owner->state != TaskState::BLOCKED)
++        arch::pause();
++    JARVIS_ASSERT_EQ(11ULL, owner->priority);
++
++    // Waiter (higher priority) blocks on the held semaphore → boosts owner.
++    auto *waiter = TaskControlBlock::create(
++        []() {
++            auto *self = Scheduler::current_task();
++            sync::Semaphore *s = reinterpret_cast<sync::Semaphore *>(
++                self->user_data);
++            s->wait();
++            while (self->state == TaskState::BLOCKED)
++                arch::pause();
++        },
++        20, 10);
++    JARVIS_ASSERT(waiter != nullptr);
++    waiter->user_data = &sem;
++    Scheduler::add_task(*waiter);
++    while (waiter->state != TaskState::BLOCKED)
++        arch::pause();
++
++    // Owner boosted to the waiter's priority while the waiter is blocked.
++    JARVIS_ASSERT_EQ(20ULL, owner->priority);
++
++    // Release the gate: owner wakes, posts → waiter acquires, owner's
++    // priority restored to base (no latch without the H-6 `>` fix).
++    gate.post();
++    kernel::test::wait_for_termination_safe(waiter);
++    kernel::test::wait_for_termination_safe(owner);
++    // Read priority while the zombie TCB is still allocated (before drain).
++    JARVIS_ASSERT_EQ(11ULL, owner->priority);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Registers the audit-task-sync block-pattern regression tests.
++// Input: None
++// Expect: All tests registered via JARVIS_REGISTER_TEST
++// Depends: kernel test framework
++void register_sync_block_pattern_tests() {
++    Logger::info("Registering sync block-pattern tests");
++    JARVIS_REGISTER_TEST(semaphore_wait_blocked_not_in_ready_queue);
++    JARVIS_REGISTER_TEST(eventgroup_wait_bits_blocked_not_in_ready_queue);
++    JARVIS_REGISTER_TEST(eventgroup_try_wait_bits_serialized);
++    JARVIS_REGISTER_TEST(sporadic_replenishment_ring_full_coalesces);
++    JARVIS_REGISTER_TEST(sporadic_replenishment_does_not_force_idle_active);
++    JARVIS_REGISTER_TEST(semaphore_pi_restore_clears_holder_latch);
++}
+\ No newline at end of file
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index b7b4a242..0aeabf78 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -24,6 +24,7 @@ __attribute__((weak)) void register_rlimit_tests() {}
+ __attribute__((weak)) void register_init_tests() {}
+ __attribute__((weak)) void register_syscall_tests() {}
+ __attribute__((weak)) void register_sync_tests() {}
++__attribute__((weak)) void register_sync_block_pattern_tests() {}
+ __attribute__((weak)) void register_spinlock_tests() {}
+ __attribute__((weak)) void register_capability_tests() {}
+ __attribute__((weak)) void register_task_lifecycle_tests() {}

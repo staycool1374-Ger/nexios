@@ -334,3 +334,16 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-16 03:10:00 release_all PASSED: 85 FAILED: 0 TIME: 4145ms
 2026-08-16 03:15:00 selftest PASSED: 133 FAILED: 0 TIME: 7332ms
 2026-08-24 22:40:52 selftest PASSED: 133 FAILED: 0 TIME: 7031ms
+2026-08-25 10:12:00 synchronization_sync PASSED: 19 FAILED: 0 TIME: 678ms (P1 C-1/C-2/H-1/H-6)
+2026-08-25 10:13:00 scheduler_sporadic PASSED: 25 FAILED: 0 TIME: 665ms (P1 C-3/M-8)
+2026-08-25 10:14:00 synchronization_locking PASSED: 19 FAILED: 0 TIME: 5070ms (P1)
+2026-08-25 10:14:30 synchronization_spinlock PASSED: 10 FAILED: 0 TIME: 404ms (P1)
+2026-08-25 10:15:00 synchronization_pip PASSED: 10 FAILED: 0 TIME: 430ms (P1)
+2026-08-25 10:15:30 synchronization_pcp PASSED: 8 FAILED: 0 TIME: 1564ms (P1)
+2026-08-25 10:16:00 synchronization_pi_donation PASSED: 5 FAILED: 0 TIME: 408ms (P1)
+2026-08-25 10:16:30 scheduler_starvation PASSED: 3 FAILED: 0 TIME: 7206ms (P1)
+2026-08-25 10:17:00 deadline_miss PASSED: 5 FAILED: 0 TIME: 3740ms (P1)
+2026-08-25 10:17:30 deadline_recovery PASSED: 4 FAILED: 0 TIME: 3159ms (P1)
+2026-08-25 10:18:00 deadline_action PASSED: 1 FAILED: 0 TIME: 355ms (P1)
+2026-08-25 10:18:30 deadline_ss PASSED: 3 FAILED: 0 TIME: 311ms (P1)
+2026-08-25 10:19:00 selftest PASSED: 133 FAILED: 0 TIME: 7376ms (P1 gate)

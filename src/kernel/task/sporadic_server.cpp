@@ -46,6 +46,7 @@ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
     replenishment_head_ = 0;
     replenishment_tail_ = 0;
     replenishment_count_ = 0;
+    coalesce_count_ = 0;
 }
 
 void SporadicServer::on_activation(uint64_t now) noexcept {
@@ -138,15 +139,13 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
             new_budget = budget_c_;
         budget_remaining_ = new_budget;
 
-        // If budget is now positive and server was exhausted, return to
+        // If budget is now positive and the server was EXHAUSTED, return to
         // normal priority (the caller checks current_priority()).
-        if (new_budget > 0 && state_ != ACTIVE) {
-            // Transition back to ACTIVE so the server can run at its
-            // base priority again.  The server may still be mid-job
-            // (if budget was exhausted mid-execution) or may be idle
-            // waiting for new work.  We conservatively set ACTIVE so
-            // the scheduler picks it up; if idle, the next on_completion
-            // will put it back.
+        if (new_budget > 0 && state_ == EXHAUSTED) {
+            // M-8 (audit-task-sync): only an EXHAUSTED server may be forced
+            // ACTIVE by a replenishment.  An IDLE server must stay IDLE — a
+            // forced ACTIVE blocks the next on_activation() (which requires
+            // IDLE), delaying the next aperiodic job.
             state_ = ACTIVE;
 #if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK
             sporadic_server_deadline_handler(this, 1);
@@ -158,17 +157,31 @@ void SporadicServer::process_replenishments(uint64_t now) noexcept {
 // ---- Private helpers ----
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool SporadicServer::schedule_replenishment(uint64_t time,
+void SporadicServer::schedule_replenishment(uint64_t time,
                                             uint64_t amount) noexcept {
-    if (replenishment_count_ == MAX_REPLENISHMENTS)
-        return false;
+    if (replenishment_count_ == MAX_REPLENISHMENTS) {
+        // C-3 (audit-task-sync-v0.4.2): ring full — do NOT silently drop the
+        // consumed budget.  Merge the amount into the newest pending entry,
+        // deferring its restore to the later of the two times (conservative
+        // late restore).  The consumed budget is thus preserved, at worst
+        // restored one period late instead of being lost permanently.
+        Replenishment &newest =
+            replenishments_[(replenishment_tail_ + MAX_REPLENISHMENTS - 1) %
+                            MAX_REPLENISHMENTS];
+        newest.amount += amount;
+        if (newest.amount > budget_c_)
+            newest.amount = budget_c_;
+        if (time > newest.time)
+            newest.time = time;
+        ++coalesce_count_;
+        return;
+    }
 
     replenishments_[replenishment_tail_].time = time;
     replenishments_[replenishment_tail_].amount = amount;
 
     replenishment_tail_ = (replenishment_tail_ + 1) % MAX_REPLENISHMENTS;
     replenishment_count_++;
-    return true;
 }
 
 SporadicServer::Replenishment SporadicServer::pop_replenishment() noexcept {
