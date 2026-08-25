@@ -11,6 +11,7 @@ nexios-rtos.iso
 debug/
 release/
 jarvis/
+nexios/
 userspace/*.elf
 debug/
 release/
