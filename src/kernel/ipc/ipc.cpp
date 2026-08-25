@@ -45,12 +45,30 @@ MessageQueue::~MessageQueue() {
         auto *next = task->blocked_next;
         task->blocked_next = nullptr;
         task->blocked_on_queue = nullptr;
-        if (task->state != TaskState::TERMINATED)
+        // H-3: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
+        // freed TCB to set_task_ready (ready-queue corruption / UAF).
+        if (task->state != TaskState::TERMINATED &&
+            task->state != TaskState::REAPED)
             Scheduler::set_task_ready(*task);
         task = next;
     }
     blocked_senders_head = nullptr;
     blocked_senders_tail = nullptr;
+
+    // M-4 (audit-ipc-cap-syscalls-v0.4.2): undo the priority-inheritance
+    // boost applied to the owner by block_sender() — with no blocked senders
+    // left the owner must return to its base priority.  Without this the
+    // owner kept its elevated priority permanently (priority-inversion
+    // residue across repeated block/wake cycles).
+    if (owner) {
+        TaskControlBlock &owner_task = *owner;
+        arch::IrqGuard irq_guard{};
+        uint64_t old_prio = Scheduler::effective_priority(&owner_task);
+        owner_task.priority = owner_task.base_priority;
+        uint64_t new_prio = Scheduler::effective_priority(&owner_task);
+        if (old_prio != new_prio && owner_task.in_ready_queue_)
+            Scheduler::move_priority(owner_task, old_prio, new_prio);
+    }
 }
 
 /// @brief Initialise or reset the message queue to empty.
@@ -279,11 +297,20 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
         return false;
     if (ep->revoked())
         return false; // revoked endpoint refuses sends (CSpace revocation)
+    if (ep->disposed_)
+        return false; // freed mid-flight — never touch ep->q on a freed block
+
+    auto *cur = Scheduler::current_task();
+
+    // M-2 (audit-ipc-cap-syscalls-v0.4.2): a task sending to its OWN bound
+    // endpoint would block forever on a full queue it can never drain.  The
+    // task-ID self-send guard exists in send() but was missing here.
+    if (cur && ep->bound_receiver == cur)
+        return false;
 
     if (ep->q.is_full_locked()) {
         if (flags & IPC_NONBLOCK)
             return false;
-        auto *cur = Scheduler::current_task();
         if (!cur)
             return false;
         block_sender(ep->q, *cur);
@@ -296,12 +323,17 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
             unblock_sender_rollback(ep->q, *cur);
             return false;
         }
+        // H-3: dispose() may have run while we were blocked — the endpoint is
+        // freed, so never dereference ep->q here.  The disposed_ flag was
+        // published under q.lock_ before the wake.
+        if (ep->disposed_)
+            return false;
         if (ep->q.is_full())
             return false;
     }
 
     Message m = msg;
-    m.sender_id = Scheduler::current_task() ? Scheduler::current_task()->id : 0;
+    m.sender_id = cur ? cur->id : 0;
     if (!ep->q.push(m))
         return false;
 

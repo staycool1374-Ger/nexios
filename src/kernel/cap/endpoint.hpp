@@ -44,6 +44,10 @@ class Endpoint : public KernelObject {
     uint32_t badge = 0;
     sync::SpinLock lock_;
 
+    /// @brief Set by dispose() before the block is freed; blocked senders
+    ///        re-check it after wake so they never touch freed memory (H-3).
+    volatile bool disposed_ = false;
+
     /// @brief Allocates an Endpoint from the MemPool, pool-marks it and
     ///        initialises the embedded queue.  Returns nullptr on failure.
     static Endpoint *create(uint32_t badge);

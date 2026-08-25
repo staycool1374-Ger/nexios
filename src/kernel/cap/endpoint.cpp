@@ -20,6 +20,9 @@
 /// @brief Capability-backed IPC endpoint object implementation.
 
 #include <kernel/cap/endpoint.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/test/resource_tracker.hpp>
 
@@ -44,6 +47,46 @@ Endpoint *Endpoint::create(uint32_t badge) {
 }
 
 void Endpoint::dispose() noexcept {
+    // H-3 (audit-ipc-cap-syscalls-v0.4.2): a sender blocked in
+    // IPC::send_via_cap on a full endpoint queue holds a raw `ep` pointer and
+    // touches `ep->q` on wakeup.  The embedded MessageQueue destructor never
+    // runs (MemPool::free bypasses it), so dispose() MUST drain the blocked
+    // senders itself — mirroring MessageQueue::~MessageQueue — before the
+    // block is freed, else the sender writes into freed memory.
+    {
+        SpinLockGuard<sync::SpinLock> guard(q.lock_);
+        auto *task = q.blocked_senders_head;
+        while (task) {
+            auto *next = task->blocked_next;
+            task->blocked_next = nullptr;
+            task->blocked_on_queue = nullptr;
+            // H-3: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
+            // freed TCB to set_task_ready (ready-queue corruption / UAF).
+            if (task->state != TaskState::TERMINATED &&
+                task->state != TaskState::REAPED)
+                Scheduler::set_task_ready(*task);
+            task = next;
+        }
+        q.blocked_senders_head = nullptr;
+        q.blocked_senders_tail = nullptr;
+
+        // M-4: undo the priority-inheritance boost applied to the owner by
+        // block_sender() for every drained sender — with no senders left the
+        // owner must return to its base priority (mirrors wake_sender's
+        // restore-to-max-remaining, here restoring to base since none remain).
+        if (q.owner) {
+            TaskControlBlock &owner = *q.owner;
+            arch::IrqGuard irq_guard{};
+            uint64_t old_prio = Scheduler::effective_priority(&owner);
+            owner.priority = owner.base_priority;
+            uint64_t new_prio = Scheduler::effective_priority(&owner);
+            if (old_prio != new_prio && owner.in_ready_queue_)
+                Scheduler::move_priority(owner, old_prio, new_prio);
+        }
+
+        disposed_ = true; // publish BEFORE waking senders (they re-check it)
+    }
+
     bound_receiver = nullptr;
     kernel::test::ResourceTracker::instance().track_cap_object_remove();
     MemPool::free(this);
