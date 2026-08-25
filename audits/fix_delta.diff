@@ -1,0 +1,151 @@
+diff --git a/src/kernel/arch/x86_64/hal/iopb.cpp b/src/kernel/arch/x86_64/hal/iopb.cpp
+index a2669de6..afb9773e 100644
+--- a/src/kernel/arch/x86_64/hal/iopb.cpp
++++ b/src/kernel/arch/x86_64/hal/iopb.cpp
+@@ -52,9 +52,12 @@ static kernel::sync::SpinLock g_iopb_lock{};
+ 
+ bool iopb_claim(kernel::TaskControlBlock &t) {
+     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+-    if (t.iopb_slot_ != kernel::TaskControlBlock::IOPB_SLOT_NONE)
+-        return true; // already holds a slot
++    if (t.iopb_slot_ != kernel::TaskControlBlock::IOPB_SLOT_NONE &&
++        (g_iopb_claimed & (1u << t.iopb_slot_)) != 0)
++        return true; // already holds a live slot
+ 
++    // Stale non-NONE slot (creation path forgot to initialize) or no slot:
++    // claim a fresh pool entry below.
+     for (uint32_t i = 0; i < CONFIG_IOPB_MAX_TASKS; ++i) {
+         if (g_iopb_claimed & (1u << i))
+             continue;
+@@ -83,7 +86,8 @@ void iopb_release(kernel::TaskControlBlock &t) {
+ bool iopb_grant_range(kernel::TaskControlBlock &t, uint16_t start,
+                       uint32_t count) {
+     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+-    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE)
++    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE ||
++        (g_iopb_claimed & (1u << t.iopb_slot_)) == 0)
+         return false;
+ 
+     uint8_t *slot = g_iopb_pool[t.iopb_slot_];
+@@ -104,7 +108,14 @@ void iopb_switch_to(const kernel::TaskControlBlock &next) {
+         return; // CPL0 ignores the bitmap; keep the loaded owner valid
+ 
+     const uint8_t slot = next.iopb_slot_;
+-    if (slot != kernel::TaskControlBlock::IOPB_SLOT_NONE) {
++    // Defense-in-depth: a slot is loadable only if it is actually claimed.
++    // A stale non-NONE value (e.g. a task-creation path that forgot to
++    // initialize the field) must never load an unclaimed, all-zeros slot
++    // into the TSS (that would make every port allowed).
++    const bool valid_slot =
++        (slot != kernel::TaskControlBlock::IOPB_SLOT_NONE) &&
++        (g_iopb_claimed & (1u << slot)) != 0;
++    if (valid_slot) {
+         if (g_iopb_owner != &next) {
+             GDT::iopb_load(g_iopb_pool[slot]);
+             g_iopb_owner = &next;
+@@ -129,7 +140,8 @@ const void *iopb_loaded_owner() {
+ 
+ bool iopb_port_allowed(const kernel::TaskControlBlock &t, uint16_t port) {
+     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+-    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE)
++    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE ||
++        (g_iopb_claimed & (1u << t.iopb_slot_)) == 0)
+         return false;
+     const uint8_t *slot = g_iopb_pool[t.iopb_slot_];
+     return (slot[port / 8] & (1u << (port % 8))) == 0;
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index e5035c59..dd7ff756 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -489,6 +489,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+     if (!tcb)
+         return nullptr;
+     memset(tcb, 0, sizeof(TaskControlBlock));
++    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+     tcb->magic = TaskControlBlock::TCB_MAGIC;
+     tcb->id = kernel::Scheduler::alloc_id();
+     tcb->state = TaskState::READY;
+diff --git a/src/kernel/syscall/syscall_handlers_mmio.cpp b/src/kernel/syscall/syscall_handlers_mmio.cpp
+index 6b7997d7..15692a43 100644
+--- a/src/kernel/syscall/syscall_handlers_mmio.cpp
++++ b/src/kernel/syscall/syscall_handlers_mmio.cpp
+@@ -81,6 +81,11 @@ uint64_t Syscall::sys_ioport_grant(uint64_t cap_handle, uint64_t port_start,
+         return static_cast<uint64_t>(-1);
+     }
+ 
++    // Make the grant immediately effective for the running task (the loaded
++    // owner is only updated on context switch; a user task must not wait for
++    // its next dispatch to use the granted ports).  No-op for kernel tasks.
++    arch::iopb_switch_to(*t);
++
+     obj->release();
+     return 0;
+ #else
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index f285abc3..243a4eba 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -897,6 +897,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+ 
+     TCB_WRITE(tcb, magic, TCB_MAGIC);
+     TCB_WRITE(tcb, id, Scheduler::alloc_id());
++    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+     {
+         char buf[CONFIG_TASK_NAME_LEN];
+         size_t pos = 0;
+@@ -1126,6 +1127,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+ 
+     TCB_WRITE(tcb, magic, TCB_MAGIC);
+     TCB_WRITE(tcb, id, Scheduler::alloc_id());
++    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+     TCB_WRITE(tcb, state, TaskState::READY);
+     tcb->priority = priority;
+     tcb->base_priority = priority;
+@@ -1305,6 +1307,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+ 
+     TCB_WRITE(tcb, magic, TCB_MAGIC);
+     TCB_WRITE(tcb, id, Scheduler::alloc_id());
++    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+     __builtin_memcpy(tcb->name, parent->name, CONFIG_TASK_NAME_LEN);
+     tcb->parent_id = parent->id;
+     TCB_WRITE(tcb, state, TaskState::READY);
+diff --git a/src/kernel/test/test_cap_mmio.cpp b/src/kernel/test/test_cap_mmio.cpp
+index dc65cc2a..f7e3fb12 100644
+--- a/src/kernel/test/test_cap_mmio.cpp
++++ b/src/kernel/test/test_cap_mmio.cpp
+@@ -197,13 +197,16 @@ JARVIS_TEST(mmio_cap_create_io_bar_bounds, "PRE: none | POST: none") {
+ // Expect: lookup honors type/rights/gen; revoke invalidates
+ // Depends: kernel::cap, kernel::TaskControlBlock
+ JARVIS_TEST(mmio_cap_install_lookup_revoke, "PRE: none | POST: none") {
++    // The harness root CNode is a persistent per-task object; create it before
++    // the baseline capture so it is not counted as a test leak.
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    cur->ensure_cspace();
++
+     auto &rt = kernel::test::ResourceTracker::instance();
+     kernel::test::ResourceCounters before{};
+     rt.capture(before);
+ 
+-    auto *cur = Scheduler::current_task();
+-    JARVIS_ASSERT(cur != nullptr);
+-    cur->ensure_cspace();
+     cap::CNode *cs = cur->get_cspace();
+ 
+     auto *mmio = cap::MmioCap::create(0x1000000, 0x1000,
+@@ -309,8 +312,14 @@ JARVIS_TEST(ioport_grant_dispatch_happy, "PRE: none | POST: none") {
+     g_grant_owner_ok = 0;
+     g_grant_port_ok = 0;
+ 
+-    auto *t = run_cap_task(ioport_grant_happy_entry, 11);
++    // User-mode fixture task so the loaded-owner path (iopb_switch_to) applies.
++    auto *t = TaskControlBlock::create(ioport_grant_happy_entry, 11, 10);
+     JARVIS_ASSERT(t != nullptr);
++    t->is_user_ = true;
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    Scheduler::drain_zombie_list();
+     JARVIS_ASSERT_EQ(0ULL, g_grant_ret);
+     JARVIS_ASSERT_EQ(1ULL, g_grant_owner_ok);
+     JARVIS_ASSERT_EQ(1ULL, g_grant_port_ok);

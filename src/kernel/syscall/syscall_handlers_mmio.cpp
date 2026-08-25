@@ -81,6 +81,11 @@ uint64_t Syscall::sys_ioport_grant(uint64_t cap_handle, uint64_t port_start,
         return static_cast<uint64_t>(-1);
     }
 
+    // Make the grant immediately effective for the running task (the loaded
+    // owner is only updated on context switch; a user task must not wait for
+    // its next dispatch to use the granted ports).  No-op for kernel tasks.
+    arch::iopb_switch_to(*t);
+
     obj->release();
     return 0;
 #else

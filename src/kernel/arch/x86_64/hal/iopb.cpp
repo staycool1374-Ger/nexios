@@ -52,9 +52,12 @@ static kernel::sync::SpinLock g_iopb_lock{};
 
 bool iopb_claim(kernel::TaskControlBlock &t) {
     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
-    if (t.iopb_slot_ != kernel::TaskControlBlock::IOPB_SLOT_NONE)
-        return true; // already holds a slot
+    if (t.iopb_slot_ != kernel::TaskControlBlock::IOPB_SLOT_NONE &&
+        (g_iopb_claimed & (1u << t.iopb_slot_)) != 0)
+        return true; // already holds a live slot
 
+    // Stale non-NONE slot (creation path forgot to initialize) or no slot:
+    // claim a fresh pool entry below.
     for (uint32_t i = 0; i < CONFIG_IOPB_MAX_TASKS; ++i) {
         if (g_iopb_claimed & (1u << i))
             continue;
@@ -83,7 +86,8 @@ void iopb_release(kernel::TaskControlBlock &t) {
 bool iopb_grant_range(kernel::TaskControlBlock &t, uint16_t start,
                       uint32_t count) {
     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
-    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE)
+    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE ||
+        (g_iopb_claimed & (1u << t.iopb_slot_)) == 0)
         return false;
 
     uint8_t *slot = g_iopb_pool[t.iopb_slot_];
@@ -104,7 +108,14 @@ void iopb_switch_to(const kernel::TaskControlBlock &next) {
         return; // CPL0 ignores the bitmap; keep the loaded owner valid
 
     const uint8_t slot = next.iopb_slot_;
-    if (slot != kernel::TaskControlBlock::IOPB_SLOT_NONE) {
+    // Defense-in-depth: a slot is loadable only if it is actually claimed.
+    // A stale non-NONE value (e.g. a task-creation path that forgot to
+    // initialize the field) must never load an unclaimed, all-zeros slot
+    // into the TSS (that would make every port allowed).
+    const bool valid_slot =
+        (slot != kernel::TaskControlBlock::IOPB_SLOT_NONE) &&
+        (g_iopb_claimed & (1u << slot)) != 0;
+    if (valid_slot) {
         if (g_iopb_owner != &next) {
             GDT::iopb_load(g_iopb_pool[slot]);
             g_iopb_owner = &next;
@@ -129,7 +140,8 @@ const void *iopb_loaded_owner() {
 
 bool iopb_port_allowed(const kernel::TaskControlBlock &t, uint16_t port) {
     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
-    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE)
+    if (t.iopb_slot_ == kernel::TaskControlBlock::IOPB_SLOT_NONE ||
+        (g_iopb_claimed & (1u << t.iopb_slot_)) == 0)
         return false;
     const uint8_t *slot = g_iopb_pool[t.iopb_slot_];
     return (slot[port / 8] & (1u << (port % 8))) == 0;

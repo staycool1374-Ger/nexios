@@ -489,6 +489,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     if (!tcb)
         return nullptr;
     memset(tcb, 0, sizeof(TaskControlBlock));
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = kernel::Scheduler::alloc_id();
     tcb->state = TaskState::READY;

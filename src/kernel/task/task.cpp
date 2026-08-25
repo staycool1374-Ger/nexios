@@ -897,6 +897,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     {
         char buf[CONFIG_TASK_NAME_LEN];
         size_t pos = 0;
@@ -1126,6 +1127,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
@@ -1305,6 +1307,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     __builtin_memcpy(tcb->name, parent->name, CONFIG_TASK_NAME_LEN);
     tcb->parent_id = parent->id;
     TCB_WRITE(tcb, state, TaskState::READY);

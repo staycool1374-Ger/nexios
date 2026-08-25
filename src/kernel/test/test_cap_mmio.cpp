@@ -197,13 +197,16 @@ JARVIS_TEST(mmio_cap_create_io_bar_bounds, "PRE: none | POST: none") {
 // Expect: lookup honors type/rights/gen; revoke invalidates
 // Depends: kernel::cap, kernel::TaskControlBlock
 JARVIS_TEST(mmio_cap_install_lookup_revoke, "PRE: none | POST: none") {
+    // The harness root CNode is a persistent per-task object; create it before
+    // the baseline capture so it is not counted as a test leak.
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    cur->ensure_cspace();
+
     auto &rt = kernel::test::ResourceTracker::instance();
     kernel::test::ResourceCounters before{};
     rt.capture(before);
 
-    auto *cur = Scheduler::current_task();
-    JARVIS_ASSERT(cur != nullptr);
-    cur->ensure_cspace();
     cap::CNode *cs = cur->get_cspace();
 
     auto *mmio = cap::MmioCap::create(0x1000000, 0x1000,
@@ -309,8 +312,14 @@ JARVIS_TEST(ioport_grant_dispatch_happy, "PRE: none | POST: none") {
     g_grant_owner_ok = 0;
     g_grant_port_ok = 0;
 
-    auto *t = run_cap_task(ioport_grant_happy_entry, 11);
+    // User-mode fixture task so the loaded-owner path (iopb_switch_to) applies.
+    auto *t = TaskControlBlock::create(ioport_grant_happy_entry, 11, 10);
     JARVIS_ASSERT(t != nullptr);
+    t->is_user_ = true;
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
     JARVIS_ASSERT_EQ(0ULL, g_grant_ret);
     JARVIS_ASSERT_EQ(1ULL, g_grant_owner_ok);
     JARVIS_ASSERT_EQ(1ULL, g_grant_port_ok);
