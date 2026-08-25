@@ -15,10 +15,14 @@ permission:
     "git show*": allow
     "git status*": allow
     "git apply*": allow
-    "diff*": allow
-    "tee*": allow
-    "grep*": allow
-    "echo*": allow
+    "diff *": allow
+    "tee *": allow
+    "grep *": allow
+    "echo *": allow
+    "sed *": allow
+    "cat *": allow
+    "tail *": allow
+    "wc *": allo
 ---
 
 # AUDIT-AGENT PERSONA (SIL 3 VERIFIER)
