@@ -44,6 +44,7 @@
 #include <kernel/sync/queue.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/iopb.hpp>
 #include <assert.hpp>
 
 // BUGS.md#020: ring buffer of recently-created tasks so that when a wild
@@ -1848,6 +1849,10 @@ void TaskControlBlock::cleanup() noexcept {
 
     event_group.~EventGroup();
     kernel::test::ResourceTracker::instance().track_event_group_remove();
+
+    // Release the task's I/O permission bitmap slot (x86_64, issue #3)
+    // before tearing down its capability objects.
+    arch::iopb_release(*this);
 
     release_all_objects();
     if (cwd_vnode)

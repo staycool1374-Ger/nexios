@@ -38,6 +38,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/arch/gdt.hpp>
+#include <kernel/arch/hal/iopb.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
 
@@ -1343,6 +1344,10 @@ void snapshot_restore(const char *test_name) {
         if (idle && idle->magic == TaskControlBlock::TCB_MAGIC) {
             arch::GDT::set_tss_rsp0(idle->kernel_stack_top);
         }
+        // Reset the I/O permission bitmap pool/owner state (issue #3) so a
+        // test that granted ports can never leak a permissive bitmap or a
+        // dangling owner across snapshot cycles.
+        arch::iopb_snapshot_reset();
 #endif
     }
 

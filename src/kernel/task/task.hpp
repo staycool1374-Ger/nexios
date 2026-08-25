@@ -226,6 +226,7 @@ struct TaskControlBlock {
           zombie_next_(nullptr), waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
           alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
+          iopb_slot_(IOPB_SLOT_NONE),
           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
@@ -411,6 +412,12 @@ struct TaskControlBlock {
     ///        sync with the list by attach_object()/detach_object() — the
     ///        same ownership model as sporadic_server.
     cap::CNode *cspace_;
+
+    /// @brief I/O permission bitmap pool slot (x86_64, issue #3).  The task
+    /// must hold a slot to receive port-I/O grants via sys_ioport_grant.
+    /// Freed by cleanup() -> arch::iopb_release().  IOPB_SLOT_NONE = none.
+    static constexpr uint8_t IOPB_SLOT_NONE = 0xFF;
+    uint8_t iopb_slot_;
 
     /// @brief Head of doubly-linked list of buffer handles owned by
     /// this task. -1 means the list is empty. Used by the BufferPool

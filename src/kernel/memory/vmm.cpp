@@ -19,6 +19,8 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/cap/frame.hpp>
+#include <kernel/cap/mmio.hpp>
+#include <kernel/arch/pci.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/io.hpp>
 #include <constants.hpp>
@@ -1252,6 +1254,38 @@ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
 /// @brief Unmaps one page previously mapped via map_frame_from_cap().
 void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
     map_page_in_pml4(virt_addr, 0, false, pml4_phys);
+}
+
+/// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
+bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
+                            uint64_t pml4_phys) {
+    if (!mmio || mmio->revoked())
+        return false;
+    if (mmio->phys == 0 || mmio->size == 0)
+        return false;
+    if (mmio->bar_type == arch::PciBarType::IO)
+        return false; // port I/O is delegated via sys_ioport_grant, not MMIO
+    const size_t pages =
+        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    for (size_t i = 0; i < pages; ++i) {
+        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
+                         mmio->phys + i * arch::PAGE_SIZE, user, pml4_phys);
+    }
+    return true;
+}
+
+/// @brief Unmaps an MmioCap's memory BAR range previously mapped via
+///        map_mmio_from_cap().
+void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
+                              uint64_t pml4_phys) {
+    if (!mmio || mmio->size == 0)
+        return;
+    const size_t pages =
+        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    for (size_t i = 0; i < pages; ++i) {
+        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
+                         pml4_phys);
+    }
 }
 
 } // namespace kernel

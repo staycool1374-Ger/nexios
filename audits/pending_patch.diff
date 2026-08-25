@@ -1,479 +1,560 @@
-diff --git a/src/kernel/arch/aarch64/early_init.cpp b/src/kernel/arch/aarch64/early_init.cpp
-index 8fddc023..38049934 100644
---- a/src/kernel/arch/aarch64/early_init.cpp
-+++ b/src/kernel/arch/aarch64/early_init.cpp
-@@ -17,11 +17,48 @@
-  */
+diff --git a/docs/specs/configuration.md b/docs/specs/configuration.md
+index 31842a40..b1a18e45 100644
+--- a/docs/specs/configuration.md
++++ b/docs/specs/configuration.md
+@@ -124,6 +124,9 @@ feeds must be re-validated** (check-config cross-check).
+ |---|---|---|
+ | `CONFIG_CSLOT_COUNT` | 64 | slots per CNode (the task's root CNode is its CSpace); power of two preferred — slot-index bits are carved from the capability handle |
+ | `CONFIG_CAP_MAX_DEPTH` | 8 | cascade-revoke depth bound; the revoke walk is iterative (explicit work list), never unbounded recursion |
++| `CONFIG_CAP_MAX_UNTYPED` | 16 | live Untyped memory objects (TU-local counter in untyped.cpp) |
++| `CONFIG_CAP_MAX_MMIO` | 16 | live MmioCap objects (TU-local counter in mmio.cpp; issue #3) |
++| `CONFIG_IOPB_MAX_TASKS` | 4 | per-task TSS I/O-bitmap pool slots (x86_64 sys_ioport_grant; static 8 KiB×N .bss, no RT-path allocation; issue #3) |
  
- /// @file early_init.cpp
--/// @brief Stub file — early AArch64 init is performed in boot.S assembly.
-+/// @brief Early AArch64 init not covered by boot.S assembly: PAN (FEAT_PAN)
-+///        detection + enablement for MP-4.4 (issue #5).
-+
-+// The bulk of early AArch64 init (UART, page tables, MMU, higher-half
-+// transition) is performed in boot.S.  This TU hosts arch::g_pan_supported
-+// and arch::pan_init() — the only arch-level init that needs C++ (ID register
-+// field parsing) rather than assembly.
-+
-+#include <kernel/nexios_config.h>
-+#include <kernel/arch/hal/io.hpp>
-+
-+namespace arch {
-+
-+bool g_pan_supported = false;
-+
-+/// @brief Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4.
-+/// Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and
-+/// CONFIG_PAN is on, then defaults PSTATE.PAN to deny (clac).  Every PAN
-+/// sysreg/SCTLR access is gated on this detection — an access on a CPU
-+/// without FEAT_PAN raises an UNDEFINED exception at EL1.
-+/// @return true if PAN was enabled.
-+bool pan_init() {
-+#if CONFIG_PAN
-+    uint64_t mmfr1{};
-+    asm volatile("mrs %0, id_aa64mmfr1_el1" : "=r"(mmfr1));
-+    if (((mmfr1 >> 20) & 0xF) == 0)
-+        return false;
-+    uint64_t sctlr{};
-+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
-+    sctlr |= (1ULL << 23); // SCTLR_EL1.PAN
-+    asm volatile("msr sctlr_el1, %0" : : "r"(sctlr) : "memory");
-+    asm volatile("isb");
-+    g_pan_supported = true;
-+    clac(); // default-deny: PSTATE.PAN = 1
-+    return true;
-+#else
-+    return false;
-+#endif
-+}
-+
-+} // namespace arch
+ ## 2. The Matrix Runners
  
--// Early init is now done in boot.S (assembly).
--// This file exists only to keep the build system from complaining
--// about a missing .cpp file in the aarch64 arch directory.
- struct EarlyInitStub {
-     EarlyInitStub() {
+diff --git a/docs/specs/cspace.md b/docs/specs/cspace.md
+index aa77cdc3..67282ed3 100644
+--- a/docs/specs/cspace.md
++++ b/docs/specs/cspace.md
+@@ -156,6 +156,16 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
+ - **Untyped memory (ROADMAP 0.4.1 item 3):** `UntypedMem : KernelObject` owning a contiguous PMM region; `retype(untyped_cap, Frame|CNode|Endpoint, ...)` carves one capability out of the region, transferring ownership; an Untyped cap may be retyped at most once (guard flag), and only the region's exact size may be carved. Requires a `CONFIG_CAP_MAX_UNTYPED` bound and a RegionAllocator (bump/bitmap over the Untyped range) — deferred with item 3 of 0.4.1, not blocking items 1–2.
+ - **IRQ caps (0.4.2):** `IrqCap : KernelObject` wrapping an IRQ vector → capability-backed `sys_irq_register`/`sys_irq_wait`.
+ - **MMIO caps (0.4.2):** `MmioCap : KernelObject` wrapping a BAR range → capability-gated mapping (drives `sys_ioport_grant`).
++  **IMPLEMENTED (2026-08-25, issue #3):** `CapType::Mmio`, `src/kernel/cap/mmio.{hpp,cpp}`
++  (kernel-internal `create`/`create_from_bar`; `CONFIG_CAP_MAX_MMIO`; MEMORY ranges page-aligned,
++  IO ranges confined to the 64 KiB port space), `VMM::map_mmio_from_cap`/`unmap_mmio_from_cap`
++  (refuse revoked caps and IO-type ranges), and `SYS_IOPORT_GRANT` (55): capability-gated
++  per-task TSS I/O bitmap delegation (x86_64, `arch::iopb_*`, static `CONFIG_IOPB_MAX_TASKS`
++  pool, single global TSS with the 8 KiB bitmap inside `TSSBlock`, owner-memoized swap on user
++  task switches, default-deny).  **Revocation limitation:** revoking an IO MmioCap blocks new
++  grants but does NOT retroactively clear already-granted port bits in a live task's bitmap —
++  task-bound grants die at task cleanup (derivation tracking is a follow-up).  aarch64/riscv64:
++  handler returns -1 (no port I/O).
+ - **Multi-level CNodes (0.7.x):** CNode-of-CNodes; the handle decode gains a radix walk.
+ 
+ ### 2.7 Configuration additions (`src/kernel/nexios_config.h`)
+diff --git a/src/kernel/arch/hal/gdt.hpp b/src/kernel/arch/hal/gdt.hpp
+index 59ecab3a..7e93f109 100644
+--- a/src/kernel/arch/hal/gdt.hpp
++++ b/src/kernel/arch/hal/gdt.hpp
+@@ -68,6 +68,17 @@ struct TSS {
+     uint16_t iopb_offset; ///< I/O Permission Bitmap offset.
+ } __attribute__((packed));
+ 
++/// @brief TSS plus the I/O permission bitmap, in one contiguous block so the
++/// bitmap lies inside the TSS segment (hardware requirement: the bitmap is
++/// addressed relative to the TSS base via @c iopb_offset).
++struct TSSBlock {
++    TSS tss;
++    uint8_t iopb[8192];         ///< bit N of the bitmap gates port N
++                                ///< (bit=1 -> #GP at CPL3, 0 -> allowed).
++    uint8_t iopb_terminator;    ///< 0xFF sentinel marking the end of the
++                                ///< bitmap (Intel SDM requirement).
++};
++
+ /// @brief x86-64 Global Descriptor Table manager.
+ class GDT {
+   public:
+@@ -79,13 +90,30 @@ class GDT {
+     /// @brief Update RSP0 in the TSS (used on syscall entry).
+     /// @param rsp New kernel stack pointer for ring 0.
+     static void set_tss_rsp0(uint64_t rsp);
++    /// @brief Load an 8 KiB I/O permission bitmap into the TSS.
++    /// @param bitmap Pointer to an 8192-byte bitmap (bit=1 denies the port).
++    static void iopb_load(const uint8_t *bitmap);
++    /// @brief Set the I/O permission bitmap to all-1s (default-deny).
++    static void iopb_mask_all();
++    /// @brief Pointer to the TSS I/O permission bitmap (test accessor).
++    /// @return Pointer to the 8192-byte bitmap inside the TSS block.
++    static uint8_t *iopb_bitmap();
++    /// @brief IOPB offset stored in the TSS (test accessor).
++    /// @return Offset of the bitmap from the TSS base.
++    static uint16_t tss_iopb_offset();
++    /// @brief TSS descriptor limit (test accessor).
++    /// @return Limit field of the TSS descriptor.
++    static uint16_t tss_descriptor_limit();
++    /// @brief Terminator byte after the I/O bitmap (test accessor).
++    /// @return 0xFF.
++    static uint8_t iopb_terminator();
+ 
+   private:
+     static constexpr size_t NUM_ENTRIES = 7;
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+     static GDTEntry entries_[NUM_ENTRIES];
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+-    static TSS tss_;
++    static TSSBlock tss_block_;
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+     static GDTDescriptor desc_;
+ };
+@@ -112,6 +140,22 @@ class GDT {
      }
-diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
-index b496b39c..73424e2c 100644
---- a/src/kernel/arch/aarch64/hal/io_impl.hpp
-+++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
-@@ -112,14 +112,47 @@ inline void hlt() {
- inline void pause() {
-     asm volatile("yield");
- }
--/// @brief Set AC-equivalent (PAN clear) — no-op until aarch64 PAN/PXN
--///        enforcement lands (ROADMAP MP-4.4).  Shared with x86_64 SMAP code.
--inline void stac() {}
--/// @brief Clear AC-equivalent — no-op (see stac()).
--inline void clac() {}
--/// @brief Read the AC-equivalent PSTATE bit — no-op placeholder.
-+/// @brief Whether aarch64 PAN (FEAT_PAN) is available and enabled.  Written
-+/// once by arch::pan_init() during BOOT (single CPU, IRQs masked); read-only
-+/// thereafter from any context (incl. IRQ epilogue) — plain read is safe.
-+extern bool g_pan_supported;
-+
-+/// @brief Detect FEAT_PAN (ID_AA64MMFR1_EL1.PAN[23:20] != 0), enable PAN via
-+/// SCTLR_EL1.PAN (bit 23), and default PSTATE.PAN to deny (clac).  Called
-+/// once from higherhalf_entry on the boot CPU.
-+/// @return true if PAN was enabled.
-+bool pan_init();
-+
-+/// @brief Set AC-equivalent (PAN clear) — permit kernel access to EL0 data.
-+/// Toggles PSTATE.PAN (bit 22 of the PAN sysreg S3_0_C4_C2_4) to 0.
-+/// No-op when PAN is unsupported (degraded mode matches the old stub).
-+inline void stac() {
-+    if (!g_pan_supported)
-+        return;
-+    uint64_t pan{};
-+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
-+    pan &= ~(1ULL << 22);
-+    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
-+}
-+/// @brief Clear AC-equivalent (PAN set) — default-deny; further kernel deref
-+/// of EL0-accessible pages faults.  Toggles PSTATE.PAN to 1.
-+inline void clac() {
-+    if (!g_pan_supported)
-+        return;
-+    uint64_t pan{};
-+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
-+    pan |= (1ULL << 22);
-+    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
-+}
-+/// @brief Read the AC-equivalent PSTATE bit, normalized to the x86_64
-+/// contract: bit 18 set means "user-access override active" (PAN clear).
-+/// Raw PSTATE.PAN is bit 22 of the PAN sysreg with inverted polarity.
- inline uint64_t read_rflags() {
--    return 0;
-+    if (!g_pan_supported)
-+        return 0;
-+    uint64_t pan{};
-+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
-+    return (pan & (1ULL << 22)) == 0 ? (1ULL << 18) : 0;
- }
- /// @brief Disable IRQ interrupts (set DAIF bit).
- inline void cli() {
-diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-index 947b2fd1..f7b4cec3 100644
---- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-+++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-@@ -200,7 +200,9 @@ inline uint64_t ArchPageTable::attr_from_flags(uint64_t flags) {
-     else
-         attr |= AP_RO;
-     if (flags & kernel::PageFlags::USER) {
--        // User accessible
-+        // User accessible; PXN (SMEP parity — EL1 must not execute user
-+        // pages).  UXN left clear so EL0 may execute.
-+        attr |= PXN;
-     } else {
-         attr |= UXN | PXN;
+     static inline void set_tss_rsp0(uint64_t) {
      }
-@@ -264,7 +266,7 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
-     if (!l3)
-         return kernel::Error::OOM;
- 
--    l3[l3_idx] = phys | entry_flags | DESC_BLOCK | (1ULL << 10);
-+    l3[l3_idx] = phys | entry_flags | DESC_TABLE | (1ULL << 10);
-     dsb_sy();
-     isb();
-     return {};
-diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
-index 7fb5636a..a1064148 100644
---- a/src/kernel/arch/aarch64/test_aarch64.cpp
-+++ b/src/kernel/arch/aarch64/test_aarch64.cpp
-@@ -113,7 +113,7 @@ JARVIS_TEST(aarch64_page_table_map_leaf) {
-     uint64_t phys_page = PMM::alloc_page();
-     JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
- 
--    constexpr uint64_t TEST_VA = 0xFFFF80004000F000ULL;
-+    constexpr uint64_t TEST_VA = 0xFFFF800090001000ULL;
-     constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
- 
-     auto map_result =
-@@ -458,6 +458,156 @@ JARVIS_TEST(aarch64_exception_vector_installed) {
-     JARVIS_TEST_PASS();
- }
- 
-+/// @brief Walk TTBR1_EL1 to the leaf descriptor for a higher-half VA.
-+/// Mirrors the L0->L1->L2->L3 index math of aarch64_page_table_4level_walk.
-+/// @param[in] va Higher-half virtual address (4K-aligned).
-+/// @return Leaf descriptor bits, or 0 if any level is invalid.
-+static uint64_t walk_leaf_descriptor(uint64_t va) {
-+    constexpr uint64_t L0_SHIFT = 39;
-+    constexpr uint64_t L1_SHIFT = 30;
-+    constexpr uint64_t L2_SHIFT = 21;
-+    constexpr uint64_t TABLE_MASK = 0x1FF;
-+    constexpr uint64_t DESC_VALID = 1ULL << 0;
-+    constexpr uint64_t DESC_TABLE = 1ULL << 1;
-+
-+    uint64_t l0_phys = arch::read_ttbr1_el1();
-+    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
-+    size_t l0_idx = (va >> L0_SHIFT) & TABLE_MASK;
-+    if (!(l0[l0_idx] & DESC_VALID))
-+        return 0;
-+    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
-+    size_t l1_idx = (va >> L1_SHIFT) & TABLE_MASK;
-+    if (!(l1[l1_idx] & DESC_VALID))
-+        return 0;
-+    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
-+    size_t l2_idx = (va >> L2_SHIFT) & TABLE_MASK;
-+    if (!(l2[l2_idx] & DESC_VALID))
-+        return 0;
-+    if (!(l2[l2_idx] & DESC_TABLE))
-+        return l2[l2_idx];
-+    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
-+    size_t l3_idx = (va >> 12) & TABLE_MASK;
-+    return (l3[l3_idx] & DESC_VALID) ? l3[l3_idx] : 0;
-+}
-+
-+/// @brief Verify SCTLR_EL1.PAN (bit 23) matches FEAT_PAN detection, and
-+/// degraded mode (unsupported) keeps read_rflags() == 0.
-+JARVIS_TEST(aarch64_pan_sctlr_bit_set) {
-+    uint64_t sctlr{};
-+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
-+    if (arch::g_pan_supported) {
-+        JARVIS_ASSERT_FMT(sctlr & (1ULL << 23),
-+                          "SCTLR_EL1.PAN not set: sctlr=0x%lx", sctlr);
-+    } else {
-+        JARVIS_ASSERT_FMT((sctlr & (1ULL << 23)) == 0,
-+                          "SCTLR_EL1.PAN set but unsupported: sctlr=0x%lx",
-+                          sctlr);
-+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
++    static inline void iopb_load(const uint8_t *) {
 +    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+/// @brief Verify stac/clac toggle the normalized AC-equivalent (bit 18)
-+/// contract and end in default-deny (PAN set) state.
-+JARVIS_TEST(aarch64_pan_stac_clac_roundtrip) {
-+    if (arch::g_pan_supported) {
-+        arch::clac();
-+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
-+        arch::stac();
-+        JARVIS_ASSERT_FMT(arch::read_rflags() & (1ULL << 18),
-+                          "stac did not set AC-equivalent bit");
-+        arch::clac();
-+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
-+    } else {
-+        arch::stac();
-+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
-+        arch::clac();
-+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
++    static inline void iopb_mask_all() {
 +    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+/// @brief Map a kernel (non-USER) page; verify UXN (bit 54) and PXN
-+/// (bit 53) are both set on the leaf descriptor.
-+JARVIS_TEST(aarch64_pte_kernel_page_uxn_pxn) {
-+    uint64_t phys_page = PMM::alloc_page();
-+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
-+
-+    constexpr uint64_t TEST_VA = 0xFFFF800090002000ULL;
-+    constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
-+
-+    auto map_result =
-+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
-+    JARVIS_ASSERT(map_result.ok());
-+
-+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
-+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "kernel PTE PXN not set: 0x%lx",
-+                      leaf);
-+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "kernel PTE UXN not set: 0x%lx",
-+                      leaf);
-+
-+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
-+    JARVIS_ASSERT(unmap_result.ok());
-+    PMM::free_page(phys_page);
-+
-+    JARVIS_TEST_PASS();
-+}
-+
-+/// @brief Map a USER page; verify PXN (bit 53) is set (SMEP parity — EL1
-+/// may not execute user pages) and UXN (bit 54) is clear (EL0 may execute).
-+JARVIS_TEST(aarch64_pte_user_page_pxn) {
-+    uint64_t phys_page = PMM::alloc_page();
-+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
-+
-+    constexpr uint64_t TEST_VA = 0xFFFF800090003000ULL;
-+    constexpr uint64_t RW_FLAGS =
-+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER;
-+
-+    auto map_result =
-+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
-+    JARVIS_ASSERT(map_result.ok());
-+
-+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
-+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user PTE PXN not set: 0x%lx",
-+                      leaf);
-+    JARVIS_ASSERT_FMT((leaf & (1ULL << 54)) == 0,
-+                      "user PTE UXN set (EL0 exec blocked): 0x%lx", leaf);
-+
-+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
-+    JARVIS_ASSERT(unmap_result.ok());
-+    PMM::free_page(phys_page);
-+
-+    JARVIS_TEST_PASS();
-+}
-+
-+/// @brief Map a USER|NX page; verify both UXN (bit 54) and PXN (bit 53)
-+/// are set.
-+JARVIS_TEST(aarch64_pte_user_nx_uxn) {
-+    uint64_t phys_page = PMM::alloc_page();
-+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
-+
-+    constexpr uint64_t TEST_VA = 0xFFFF800090004000ULL;
-+    constexpr uint64_t RW_FLAGS =
-+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER |
-+        PageFlags::NX;
-+
-+    auto map_result =
-+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
-+    JARVIS_ASSERT(map_result.ok());
-+
-+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
-+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user NX PTE PXN not set: 0x%lx",
-+                      leaf);
-+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "user NX PTE UXN not set: 0x%lx",
-+                      leaf);
-+
-+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
-+    JARVIS_ASSERT(unmap_result.ok());
-+    PMM::free_page(phys_page);
-+
-+    JARVIS_TEST_PASS();
-+}
-+
- /// @brief Register all AArch64 architecture test cases.
- void register_aarch64_tests() {
-     Logger::info("Registering aarch64 architecture tests");
-@@ -479,6 +629,11 @@ void register_aarch64_tests() {
-     JARVIS_REGISTER_TEST(aarch64_rtc_read);
-     JARVIS_REGISTER_TEST(aarch64_boot_dtb_pointer);
-     JARVIS_REGISTER_TEST(aarch64_exception_vector_installed);
-+    JARVIS_REGISTER_TEST(aarch64_pan_sctlr_bit_set);
-+    JARVIS_REGISTER_TEST(aarch64_pan_stac_clac_roundtrip);
-+    JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
-+    JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
-+    JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
- }
- 
- #endif
-\ No newline at end of file
-diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
-index fbcfe020..54cbdacf 100644
---- a/src/kernel/arch/riscv64/hal/io_impl.hpp
-+++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
-@@ -101,6 +101,9 @@ inline void pause() {
-     asm volatile("nop");
- }
- /// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
-+/// @note MP-4.4 scope was aarch64-only.  The aarch64 PAN implementation
-+/// (stac/clac via PSTATE.PAN in arch/aarch64/hal/io_impl.hpp + arch::pan_init
-+/// in early_init.cpp) is the model for a future SSTATUS.SUM-based port.
- inline void stac() {}
- /// @brief Clear AC-equivalent — no-op (see stac()).
- inline void clac() {}
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index a78b90fb..cab27108 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -580,6 +580,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     arch::IDT::init();
-     arch::IDT::load();
- 
-+#if defined(CONFIG_ARCH_AARCH64) && CONFIG_PAN
-+    // v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1.PAN.
-+    // When FEAT_PAN is present, stac/clac become real PSTATE.PAN toggles
-+    // (mirror of x86_64 SMAP); every kernel->user deref stays wrapped.
-+    if (arch::pan_init()) {
-+        debug_write("[BOOT] PAN enabled (SCTLR_EL1.PAN)\n");
-+    } else {
-+        debug_write("[BOOT] PAN not supported by CPU — leaving off\n");
++    static inline uint8_t *iopb_bitmap() {
++        return nullptr;
 +    }
++    static inline uint16_t tss_iopb_offset() {
++        return 0;
++    }
++    static inline uint16_t tss_descriptor_limit() {
++        return 0;
++    }
++    static inline uint8_t iopb_terminator() {
++        return 0;
++    }
+ };
+ 
+ #else
+diff --git a/src/kernel/arch/x86_64/hal/gdt.cpp b/src/kernel/arch/x86_64/hal/gdt.cpp
+index 7bbe4d79..830385e2 100644
+--- a/src/kernel/arch/x86_64/hal/gdt.cpp
++++ b/src/kernel/arch/x86_64/hal/gdt.cpp
+@@ -23,6 +23,12 @@
+ #include <kernel/arch/gdt.hpp>
+ #include <types.hpp>
+ 
++// Freestanding build has no <cstddef>; provide offsetof via the compiler
++// builtin (same pattern as tcb_write_log.hpp).
++#ifndef offsetof
++#define offsetof(type, member) __builtin_offsetof(type, member)
 +#endif
 +
- #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
-     arch::ArchInterruptController::init();
+ namespace arch {
  
+ /// @brief Dedicated 4 KiB stack for the double-fault handler (IST1).
+@@ -32,8 +38,9 @@ static uint8_t df_stack[4096] __attribute__((aligned(16)));
+ 
+ /// @brief GDT entry table.
+ GDTEntry GDT::entries_[NUM_ENTRIES] = {};
+-/// @brief Task State Segment — stores RSP0 and IST pointers.
+-TSS GDT::tss_ = {};
++/// @brief Task State Segment plus I/O permission bitmap (single global block;
++/// per-task bitmap content is swapped by arch::iopb_*).
++TSSBlock GDT::tss_block_ = {};
+ /// @brief GDT pseudo-descriptor (base + limit) loaded by LGDT.
+ GDTDescriptor GDT::desc_ = {};
+ 
+@@ -67,8 +74,8 @@ void GDT::init() {
+     entries_[GDT_USER_CODE / 8] = make_entry(0, 0, 0xFA, 0x20);
+     entries_[GDT_USER_DATA / 8] = make_entry(0, 0, 0xF2, 0x00);
+ 
+-    uint64_t tss_base = reinterpret_cast<uint64_t>(&tss_);
+-    uint32_t tss_limit = sizeof(TSS) - 1;
++    uint64_t tss_base = reinterpret_cast<uint64_t>(&tss_block_);
++    uint32_t tss_limit = sizeof(TSSBlock) - 1;
+ 
+     GDTEntry tss_low = {};
+     tss_low.limit_low = tss_limit & 0xFFFF;
+@@ -87,7 +94,16 @@ void GDT::init() {
+     desc_.base = reinterpret_cast<uint64_t>(entries_);
+ 
+     // Set up IST1 for double-fault handler (vector 8)
+-    tss_.ist1 = reinterpret_cast<uint64_t>(df_stack + sizeof(df_stack));
++    tss_block_.tss.ist1 = reinterpret_cast<uint64_t>(df_stack + sizeof(df_stack));
++
++    // I/O permission bitmap: default-deny (all-1s) + 0xFF terminator.
++    // The bitmap lives inside the TSS segment, so the descriptor limit is
++    // sizeof(TSSBlock)-1 and iopb_offset is the bitmap's position.
++    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
++        tss_block_.iopb[i] = 0xFF;
++    tss_block_.iopb_terminator = 0xFF;
++    tss_block_.tss.iopb_offset =
++        static_cast<uint16_t>(offsetof(TSSBlock, iopb));
+ }
+ 
+ /// @brief Load the GDT and TSS into the CPU.
+@@ -110,7 +126,42 @@ void GDT::load() {
+ /// @param rsp The stack pointer to use when transitioning from ring-3 to
+ /// ring-0.
+ void GDT::set_tss_rsp0(uint64_t rsp) {
+-    tss_.rsp0 = rsp;
++    tss_block_.tss.rsp0 = rsp;
++}
++
++/// @brief Load an 8 KiB I/O permission bitmap into the TSS.
++void GDT::iopb_load(const uint8_t *bitmap) {
++    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
++        tss_block_.iopb[i] = bitmap[i];
++}
++
++/// @brief Set the I/O permission bitmap to all-1s (default-deny).
++void GDT::iopb_mask_all() {
++    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
++        tss_block_.iopb[i] = 0xFF;
++}
++
++/// @brief Pointer to the TSS I/O permission bitmap.
++uint8_t *GDT::iopb_bitmap() {
++    return tss_block_.iopb;
++}
++
++/// @brief IOPB offset stored in the TSS.
++uint16_t GDT::tss_iopb_offset() {
++    return tss_block_.tss.iopb_offset;
++}
++
++/// @brief TSS descriptor limit (reconstructed from the GDT entry).
++uint16_t GDT::tss_descriptor_limit() {
++    const GDTEntry &e = entries_[GDT_TSS / 8];
++    return static_cast<uint16_t>(e.limit_low |
++                                 (static_cast<uint16_t>(e.granularity & 0x0F)
++                                  << 16));
++}
++
++/// @brief Terminator byte after the I/O bitmap.
++uint8_t GDT::iopb_terminator() {
++    return tss_block_.iopb_terminator;
+ }
+ 
+ } // namespace arch
+diff --git a/src/kernel/cap/cap_types.hpp b/src/kernel/cap/cap_types.hpp
+index 14c6f2c6..6e4e661c 100644
+--- a/src/kernel/cap/cap_types.hpp
++++ b/src/kernel/cap/cap_types.hpp
+@@ -36,6 +36,7 @@ enum class CapType : uint8_t {
+     Frame = 3,
+     CNode = 4,
+     Untyped = 5, ///< retype target (ROADMAP 0.4.1 item 3)
++    Mmio = 6,    ///< MMIO BAR range (v0.4.2, issue #3)
+ };
+ 
+ /// @brief Rights bitmap, checked by the operation that consumes the cap.
 diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 20bbdfdf..fa7816b5 100644
+index fa7816b5..090cced2 100644
 --- a/src/kernel/memory/vmm.cpp
 +++ b/src/kernel/memory/vmm.cpp
-@@ -147,7 +147,8 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
-                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
-             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
- #if defined(CONFIG_ARCH_AARCH64)
--            uint64_t base_flags = table[index] & (PAGE_PRESENT | PAGE_AF);
-+            uint64_t base_flags =
-+                table[index] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
-             for (size_t i = 0; i < 512; ++i) {
-                 new_table[i] =
-                     (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
-@@ -312,7 +313,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
- #if defined(CONFIG_ARCH_AARCH64)
--        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
-+        uint64_t base_flags =
-+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
- #else
-         uint64_t base_flags =
-             pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
-@@ -338,7 +340,9 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
- #if defined(CONFIG_ARCH_AARCH64)
-     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
-     if (user)
--        flags |= PAGE_AP_USER;
-+        flags |= PAGE_AP_USER | PAGE_PXN;
-+    else
-+        flags |= PAGE_UXN | PAGE_PXN;
- #else
-     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
-     if (user)
-@@ -552,7 +556,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
-             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_pt_phys);
-         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
- #if defined(CONFIG_ARCH_AARCH64)
--        uint64_t base_flags = pd[pd_idx] & (PAGE_PRESENT | PAGE_AF);
-+        uint64_t base_flags =
-+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
-         for (size_t i = 0; i < 512; ++i) {
-             new_pt[i] = (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
-         }
-@@ -578,9 +583,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
- #if defined(CONFIG_ARCH_AARCH64)
-     uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
-     if (user)
--        flags |= PAGE_AP_USER;
-+        flags |= PAGE_AP_USER | PAGE_PXN;
-+    else
-+        flags |= PAGE_UXN | PAGE_PXN;
-     if (!executable)
--        flags |= (1ULL << 54); // UXN — not executable at EL0
-+        flags |= PAGE_UXN; // UXN — not executable at EL0
- #else
-     uint64_t flags = PAGE_PRESENT | PAGE_WRITE;
-     if (user)
+@@ -19,6 +19,8 @@
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/cap/frame.hpp>
++#include <kernel/cap/mmio.hpp>
++#include <kernel/arch/pci.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <constants.hpp>
+@@ -1254,4 +1256,36 @@ void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
+     map_page_in_pml4(virt_addr, 0, false, pml4_phys);
+ }
+ 
++/// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
++bool VMM::map_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr, bool user,
++                            uint64_t pml4_phys) {
++    if (!mmio || mmio->revoked())
++        return false;
++    if (mmio->phys == 0 || mmio->size == 0)
++        return false;
++    if (mmio->bar_type == arch::PciBarType::IO)
++        return false; // port I/O is delegated via sys_ioport_grant, not MMIO
++    const size_t pages =
++        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++    for (size_t i = 0; i < pages; ++i) {
++        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE,
++                         mmio->phys + i * arch::PAGE_SIZE, user, pml4_phys);
++    }
++    return true;
++}
++
++/// @brief Unmaps an MmioCap's memory BAR range previously mapped via
++///        map_mmio_from_cap().
++void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
++                              uint64_t pml4_phys) {
++    if (!mmio || mmio->size == 0)
++        return;
++    const size_t pages =
++        (mmio->size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++    for (size_t i = 0; i < pages; ++i) {
++        map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
++                         pml4_phys);
++    }
++}
++
+ } // namespace kernel
 diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index c50185c0..9019da3a 100644
+index 9019da3a..3d2d6afe 100644
 --- a/src/kernel/memory/vmm.hpp
 +++ b/src/kernel/memory/vmm.hpp
-@@ -206,6 +206,11 @@ class VMM {
-     static constexpr uint64_t PAGE_AP_USER = 1ULL
-                                              << 6;    // AP[0] - EL0 accessible
-     static constexpr uint64_t PAGE_AP_RO = 1ULL << 7; // AP[1] - read-only (EL1)
-+    // MP-4.4: PXN (bit 53) forbids EL1 execution; UXN (bit 54) forbids EL0
-+    // execution.  Kernel data pages carry both; user pages carry PXN
-+    // (SMEP parity) unless NX adds UXN.
-+    static constexpr uint64_t PAGE_PXN = 1ULL << 53;
-+    static constexpr uint64_t PAGE_UXN = 1ULL << 54;
+@@ -33,6 +33,7 @@ namespace kernel {
  
-     // Compatibility aliases (used in flag-building expressions)
-     static constexpr uint64_t PAGE_WRITE = 0; // no-op - writable by default
-@@ -246,7 +251,7 @@ class VMM {
+ namespace cap {
+ class FrameCap;
++class MmioCap;
+ }
  
- #if defined(CONFIG_ARCH_AARCH64)
-     // aarch64: physical frame bits [47:12] (48-bit PA).  Masks off flags,
--    // UXN (bit 54) and PXN (bit 55).
-+    // UXN (bit 54) and PXN (bit 53).
-     static constexpr uint64_t PAGE_FRAME_MASK = 0x0000FFFFFFFFF000ULL;
-     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x0000FFFFFFE00000ULL;
- #elif defined(CONFIG_ARCH_RISCV64)
+ /// @brief Virtual memory manager — maps virtual to physical pages.
+@@ -172,6 +173,26 @@ class VMM {
+     /// @param pml4_phys Physical address of the target PML4.
+     static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
+ 
++    /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys
++    ///        (v0.4.2, issue #3).  Refuses a revoked cap and IO-type ranges.
++    ///        Page-granular: the BAR tail is rounded up to a full page.
++    /// @param mmio      The MmioCap (must be pinned by the caller).
++    /// @param virt_addr Base virtual address (page-aligned).
++    /// @param user      If true, sets user-accessible flag.
++    /// @param pml4_phys Physical address of the target PML4.
++    /// @return true when every page was mapped, false on a revoked/IO-type
++    ///         cap or a zero range.
++    static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
++                                  bool user, uint64_t pml4_phys);
++
++    /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
++    ///        map_mmio_from_cap().
++    /// @param mmio      The MmioCap (must be pinned by the caller).
++    /// @param virt_addr Base virtual address the range was mapped at.
++    /// @param pml4_phys Physical address of the target PML4.
++    static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
++                                    uint64_t virt_addr, uint64_t pml4_phys);
++
+     /// @brief Translates a virtual address to a physical address
+     /// using a specific PML4.
+     /// @param virt_addr Virtual address to translate.
 diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 4c102cd3..e177ac96 100644
+index e177ac96..b215617c 100644
 --- a/src/kernel/nexios_config.h
 +++ b/src/kernel/nexios_config.h
-@@ -670,6 +670,18 @@
- #endif
+@@ -514,6 +514,20 @@
+ #define CONFIG_CAP_MAX_UNTYPED 16
  #endif
  
-+/// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
-+/// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
-+/// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
-+/// stac/clac (mirror of x86_64 SMAP).  Runtime-gated by arch::g_pan_supported.
-+#ifndef CONFIG_PAN
-+#if defined(CONFIG_ARCH_AARCH64)
-+#define CONFIG_PAN 1
-+#else
-+#define CONFIG_PAN 0
-+#endif
++/// Maximum number of live MmioCap objects (v0.4.2, issue #3).  Enforced by a
++/// TU-local live counter in mmio.cpp.
++#ifndef CONFIG_CAP_MAX_MMIO
++#define CONFIG_CAP_MAX_MMIO 16
 +#endif
 +
- /// If non-zero, declares weak symbol oom_hook(size_t requested_size).
- #ifndef CONFIG_OOM_HOOK
- #define CONFIG_OOM_HOOK 0
++/// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
++/// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
++/// static pool.  Bounded so the pool is a fixed .bss allocation — no
++/// dynamic allocation on real-time paths.
++#ifndef CONFIG_IOPB_MAX_TASKS
++#define CONFIG_IOPB_MAX_TASKS 4
++#endif
++
+ // ---------------------------------------------------------------------------
+ // Priority Inheritance Protocol Configuration
+ // ---------------------------------------------------------------------------
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index a57a47b6..f71ec232 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -84,7 +84,8 @@ enum class SyscallNumber : uint8_t {
+     CAP_COPY = 52,
+     CAP_REVOKE = 53,
+     CAP_MINT = 54,
+-    MAX_SYSCALL = 55,
++    IOPORT_GRANT = 55, ///< x86_64 fine-grained I/O delegation (issue #3)
++    MAX_SYSCALL = 56,
+ };
+ 
+ /// @brief System call handler function signature.
+@@ -224,6 +225,8 @@ class Syscall {
+                                    uint64_t *);
+     static uint64_t sys_cap_mint(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
++    static uint64_t sys_ioport_grant(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
+ 
+     static constexpr SyscallHandler
+         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
+@@ -282,6 +285,7 @@ class Syscall {
+             &Syscall::sys_cap_copy,
+             &Syscall::sys_cap_revoke,
+             &Syscall::sys_cap_mint,
++            &Syscall::sys_ioport_grant,
+     };
+ };
+ 
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index dac28fb1..4c9716e9 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -25,6 +25,7 @@
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/memory/vmm.hpp>
+@@ -2395,6 +2396,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+ #endif
+     }
+ 
++    // Apply the target task's I/O permission bitmap (issue #3).  No-op for
++    // kernel tasks and when the owner is unchanged.
++    arch::iopb_switch_to(next);
++
+     // Re-enqueue the current task if it must remain schedulable.  A task with
+     // state RUNNING is always re-queued (normal preemption).  The boot-stack
+     // harness is a special case: its TCB state can be READY while it physically
+@@ -2703,6 +2708,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+ 
+         if (next->page_table_)
+             arch::GDT::set_tss_rsp0(next->kernel_stack_top);
++
++        // Apply the target task's I/O permission bitmap (issue #3).
++        arch::iopb_switch_to(*next);
+     }
+ 
+     // IRQ-guarded publish step (lock released).
+@@ -2872,6 +2880,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
+         out[idx].runq_prev = t->runq_prev_;
+         out[idx].in_ready_queue = t->in_ready_queue_;
+         out[idx].rq_priority = t->rq_priority_;
++        out[idx].iopb_slot = t->iopb_slot_;
+         ++idx;
+     }
+     while (idx < MAX_TASKS)
+@@ -2951,6 +2960,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
+             t->runq_prev_ = saved[j].runq_prev;
+             t->in_ready_queue_ = saved[j].in_ready_queue;
+             t->rq_priority_ = saved[j].rq_priority;
++            t->iopb_slot_ = saved[j].iopb_slot;
+             break;
+         }
+         ++t_idx;
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index d2bb4a21..1545edd9 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -419,6 +419,7 @@ class Scheduler {
+         TaskControlBlock *runq_prev;
+         bool in_ready_queue;
+         uint64_t rq_priority;
++        uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
+     };
+     static uint64_t snapshot_task_fields_size() {
+         return sizeof(TaskFields) * MAX_TASKS;
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 49aba3d6..f285abc3 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -44,6 +44,7 @@
+ #include <kernel/sync/queue.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/hal/iopb.hpp>
+ #include <assert.hpp>
+ 
+ // BUGS.md#020: ring buffer of recently-created tasks so that when a wild
+@@ -1849,6 +1850,10 @@ void TaskControlBlock::cleanup() noexcept {
+     event_group.~EventGroup();
+     kernel::test::ResourceTracker::instance().track_event_group_remove();
+ 
++    // Release the task's I/O permission bitmap slot (x86_64, issue #3)
++    // before tearing down its capability objects.
++    arch::iopb_release(*this);
++
+     release_all_objects();
+     if (cwd_vnode)
+         vfs::vnode_ref_dec(cwd_vnode);
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 8b4eb1ce..e6a5709d 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -226,6 +226,7 @@ struct TaskControlBlock {
+           zombie_next_(nullptr), waiting_child_pid(0),
+           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
+           alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
++          iopb_slot_(IOPB_SLOT_NONE),
+           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
+           blocked_next(nullptr), blocked_prev(nullptr),
+           blocked_on_queue(nullptr), reply_wait(false),
+@@ -412,6 +413,12 @@ struct TaskControlBlock {
+     ///        same ownership model as sporadic_server.
+     cap::CNode *cspace_;
+ 
++    /// @brief I/O permission bitmap pool slot (x86_64, issue #3).  The task
++    /// must hold a slot to receive port-I/O grants via sys_ioport_grant.
++    /// Freed by cleanup() -> arch::iopb_release().  IOPB_SLOT_NONE = none.
++    static constexpr uint8_t IOPB_SLOT_NONE = 0xFF;
++    uint8_t iopb_slot_;
++
+     /// @brief Head of doubly-linked list of buffer handles owned by
+     /// this task. -1 means the list is empty. Used by the BufferPool
+     /// for zero-copy IPC.
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 8e7240b3..007c543c 100644
+index 007c543c..e4c48f85 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -184,7 +184,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // arch
-     {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
- #if defined(CONFIG_ARCH_AARCH64)
--    {"arch_aarch64",          0,    0,       0      },
-+    {"arch_aarch64",          0,   22,       0      },  // 17 existing + 5 MP-4.4 PAN/PXN tests
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
+     {"selftest",            132,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                 941,    0,       0      },  // 932 + cap_untyped(+9); dump_class_counts verified
++    {"all",                 951,    0,       0      },  // 941 + cap_mmio(+10); dump_class_counts verified
+ 
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -84,6 +84,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
+     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
+     {"cap_untyped",           9,    0,       0      },  // Untyped memory allocator + retype (0.4.1 item 3)
++    {"cap_mmio",              10,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3)
+ 
+     // ipc
+     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 2d312e0a..56131530 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -38,6 +38,7 @@
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+ #include <kernel/arch/gdt.hpp>
++#include <kernel/arch/hal/iopb.hpp>
+ #include <logger.hpp>
+ #include "test_registry.gen.hpp"
+ 
+@@ -1343,6 +1344,10 @@ void snapshot_restore(const char *test_name) {
+         if (idle && idle->magic == TaskControlBlock::TCB_MAGIC) {
+             arch::GDT::set_tss_rsp0(idle->kernel_stack_top);
+         }
++        // Reset the I/O permission bitmap pool/owner state (issue #3) so a
++        // test that granted ports can never leak a permissive bitmap or a
++        // dangling owner across snapshot cycles.
++        arch::iopb_snapshot_reset();
  #endif
- #if defined(CONFIG_ARCH_RISCV64)
-     {"arch_riscv64",          0,    0,       0      },
+     }
+ 
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index a0c2a596..07fd8b4c 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -95,6 +95,7 @@ void register_cap_lifecycle_tests();
+ void register_cap_syscall_tests();
+ void register_cap_ipc_tests();
+ void register_cap_untyped_tests();
++void register_cap_mmio_tests();
+ void register_waitpid_tests();
+ void register_buffer_pool_tests();
+ void register_block_device_tests();
+@@ -313,6 +314,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"cap_syscall", []() { register_cap_syscall_tests(); }},
+     {"cap_ipc", []() { register_cap_ipc_tests(); }},
+     {"cap_untyped", []() { register_cap_untyped_tests(); }},
++    {"cap_mmio", []() { register_cap_mmio_tests(); }},
+ 
+     // -- ipc: messages, events, notifications, pipes --
+     {"ipc_core", []() { register_ipc_tests(); }},
+@@ -530,6 +532,7 @@ static void register_all_tests() {
+     register_pml4_clone_tests();
+     register_cap_core_tests();
+     register_cap_untyped_tests();
++    register_cap_mmio_tests();
+     register_cap_ipc_tests();
+     register_cap_syscall_tests();
+     register_cap_lifecycle_tests();
+@@ -677,6 +680,7 @@ static void register_all_tests_first_half() {
+     register_cap_lifecycle_tests();
+     register_cap_syscall_tests();
+     register_cap_untyped_tests();
++    register_cap_mmio_tests();
+     register_cap_ipc_tests();
+     register_waitpid_tests();
+     register_resource_exhaustion_tests();

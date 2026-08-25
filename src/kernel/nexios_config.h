@@ -514,6 +514,20 @@
 #define CONFIG_CAP_MAX_UNTYPED 16
 #endif
 
+/// Maximum number of live MmioCap objects (v0.4.2, issue #3).  Enforced by a
+/// TU-local live counter in mmio.cpp.
+#ifndef CONFIG_CAP_MAX_MMIO
+#define CONFIG_CAP_MAX_MMIO 16
+#endif
+
+/// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
+/// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
+/// static pool.  Bounded so the pool is a fixed .bss allocation — no
+/// dynamic allocation on real-time paths.
+#ifndef CONFIG_IOPB_MAX_TASKS
+#define CONFIG_IOPB_MAX_TASKS 4
+#endif
+
 // ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------

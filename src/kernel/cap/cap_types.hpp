@@ -36,6 +36,7 @@ enum class CapType : uint8_t {
     Frame = 3,
     CNode = 4,
     Untyped = 5, ///< retype target (ROADMAP 0.4.1 item 3)
+    Mmio = 6,    ///< MMIO BAR range (v0.4.2, issue #3)
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.

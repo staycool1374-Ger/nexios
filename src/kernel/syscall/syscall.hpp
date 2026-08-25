@@ -84,7 +84,8 @@ enum class SyscallNumber : uint8_t {
     CAP_COPY = 52,
     CAP_REVOKE = 53,
     CAP_MINT = 54,
-    MAX_SYSCALL = 55,
+    IOPORT_GRANT = 55, ///< x86_64 fine-grained I/O delegation (issue #3)
+    MAX_SYSCALL = 56,
 };
 
 /// @brief System call handler function signature.
@@ -224,6 +225,8 @@ class Syscall {
                                    uint64_t *);
     static uint64_t sys_cap_mint(uint64_t, uint64_t, uint64_t, uint64_t,
                                  uint64_t *);
+    static uint64_t sys_ioport_grant(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -282,6 +285,7 @@ class Syscall {
             &Syscall::sys_cap_copy,
             &Syscall::sys_cap_revoke,
             &Syscall::sys_cap_mint,
+            &Syscall::sys_ioport_grant,
     };
 };
 

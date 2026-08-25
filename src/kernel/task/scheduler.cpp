@@ -25,6 +25,7 @@
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/iopb.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -2395,6 +2396,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 #endif
     }
 
+    // Apply the target task's I/O permission bitmap (issue #3).  No-op for
+    // kernel tasks and when the owner is unchanged.
+    arch::iopb_switch_to(next);
+
     // Re-enqueue the current task if it must remain schedulable.  A task with
     // state RUNNING is always re-queued (normal preemption).  The boot-stack
     // harness is a special case: its TCB state can be READY while it physically
@@ -2703,6 +2708,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
 
         if (next->page_table_)
             arch::GDT::set_tss_rsp0(next->kernel_stack_top);
+
+        // Apply the target task's I/O permission bitmap (issue #3).
+        arch::iopb_switch_to(*next);
     }
 
     // IRQ-guarded publish step (lock released).
@@ -2872,6 +2880,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
         out[idx].rq_priority = t->rq_priority_;
+        out[idx].iopb_slot = t->iopb_slot_;
         ++idx;
     }
     while (idx < MAX_TASKS)
@@ -2951,6 +2960,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;
             t->rq_priority_ = saved[j].rq_priority;
+            t->iopb_slot_ = saved[j].iopb_slot;
             break;
         }
         ++t_idx;

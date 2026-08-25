@@ -33,6 +33,7 @@ namespace kernel {
 
 namespace cap {
 class FrameCap;
+class MmioCap;
 }
 
 /// @brief Virtual memory manager — maps virtual to physical pages.
@@ -171,6 +172,26 @@ class VMM {
     /// @param virt_addr Virtual address to unmap.
     /// @param pml4_phys Physical address of the target PML4.
     static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
+
+    /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys
+    ///        (v0.4.2, issue #3).  Refuses a revoked cap and IO-type ranges.
+    ///        Page-granular: the BAR tail is rounded up to a full page.
+    /// @param mmio      The MmioCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address (page-aligned).
+    /// @param user      If true, sets user-accessible flag.
+    /// @param pml4_phys Physical address of the target PML4.
+    /// @return true when every page was mapped, false on a revoked/IO-type
+    ///         cap or a zero range.
+    static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
+                                  bool user, uint64_t pml4_phys);
+
+    /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
+    ///        map_mmio_from_cap().
+    /// @param mmio      The MmioCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address the range was mapped at.
+    /// @param pml4_phys Physical address of the target PML4.
+    static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
+                                    uint64_t virt_addr, uint64_t pml4_phys);
 
     /// @brief Translates a virtual address to a physical address
     /// using a specific PML4.

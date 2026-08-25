@@ -419,6 +419,7 @@ class Scheduler {
         TaskControlBlock *runq_prev;
         bool in_ready_queue;
         uint64_t rq_priority;
+        uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
     };
     static uint64_t snapshot_task_fields_size() {
         return sizeof(TaskFields) * MAX_TASKS;

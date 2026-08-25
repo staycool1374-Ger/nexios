@@ -156,6 +156,16 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
 - **Untyped memory (ROADMAP 0.4.1 item 3):** `UntypedMem : KernelObject` owning a contiguous PMM region; `retype(untyped_cap, Frame|CNode|Endpoint, ...)` carves one capability out of the region, transferring ownership; an Untyped cap may be retyped at most once (guard flag), and only the region's exact size may be carved. Requires a `CONFIG_CAP_MAX_UNTYPED` bound and a RegionAllocator (bump/bitmap over the Untyped range) — deferred with item 3 of 0.4.1, not blocking items 1–2.
 - **IRQ caps (0.4.2):** `IrqCap : KernelObject` wrapping an IRQ vector → capability-backed `sys_irq_register`/`sys_irq_wait`.
 - **MMIO caps (0.4.2):** `MmioCap : KernelObject` wrapping a BAR range → capability-gated mapping (drives `sys_ioport_grant`).
+  **IMPLEMENTED (2026-08-25, issue #3):** `CapType::Mmio`, `src/kernel/cap/mmio.{hpp,cpp}`
+  (kernel-internal `create`/`create_from_bar`; `CONFIG_CAP_MAX_MMIO`; MEMORY ranges page-aligned,
+  IO ranges confined to the 64 KiB port space), `VMM::map_mmio_from_cap`/`unmap_mmio_from_cap`
+  (refuse revoked caps and IO-type ranges), and `SYS_IOPORT_GRANT` (55): capability-gated
+  per-task TSS I/O bitmap delegation (x86_64, `arch::iopb_*`, static `CONFIG_IOPB_MAX_TASKS`
+  pool, single global TSS with the 8 KiB bitmap inside `TSSBlock`, owner-memoized swap on user
+  task switches, default-deny).  **Revocation limitation:** revoking an IO MmioCap blocks new
+  grants but does NOT retroactively clear already-granted port bits in a live task's bitmap —
+  task-bound grants die at task cleanup (derivation tracking is a follow-up).  aarch64/riscv64:
+  handler returns -1 (no port I/O).
 - **Multi-level CNodes (0.7.x):** CNode-of-CNodes; the handle decode gains a radix walk.
 
 ### 2.7 Configuration additions (`src/kernel/nexios_config.h`)
