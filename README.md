@@ -48,7 +48,7 @@ Write your control logic in C, C++, or Rust and execute it directly via the POSI
 * **MMU-Isolated Processes:** Every user ELF binary runs in its own address space under a deterministic hard real-time schedule.
 * **Fault Interception & Recovery:** If a process crashes or faults, the kernel catches the exception and isolates the failure. The rest of the operating system stays up, while only the individual process restarts.
 
-This architecture enables deterministic execution for time-critical workloads as example:
+This architecture enables deterministic execution for time-critical workloads, such as:
 
 * **Robotics & Motion Control:** High-frequency servo and actuator control loops requiring strict sub-millisecond execution windows.
 * **Industrial & Home Automation:** Multi-tasking controllers (e.g., climate regulation, energy management, sensor pipelines) where individual services can be updated on the fly without stopping core safety routines.
@@ -93,7 +93,6 @@ other. NexIOS takes the operating-system path:
   and full audit-trail documentation. NexIOS doubles as a long-running case
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
-
 
 ---
 
