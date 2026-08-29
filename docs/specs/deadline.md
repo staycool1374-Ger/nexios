@@ -139,5 +139,4 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   is off by default.
 - **`CONFIG_DEBUG_IPC_SCHED`** (`ipc_sched_trace.hpp`) must be **undefined** for
   release gates: the `[TICK]`/`[SW]`/`[APPLY]`/`[RMS]` traces perturb
-  timing-sensitive tests (and the debug `all` suite relies on it being ON to
-  mask the residual H2 race — see `specs/ipc.md`).
+  timing-sensitive tests.

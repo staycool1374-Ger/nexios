@@ -84,7 +84,9 @@ switch_to_task (publisher, task ctx)            isr_stubs.asm (applier, ISR)
 ```
 
 **H1 (send_sync reply loss) — FIXED** as described in §2.
-**H2 (deferred-switch race) — RESOLVED 2026-08-05** by three committed layers:
+**H2 (deferred-switch race) — RESOLVED 2026-08-13/15** (final fix commits
+`71b3a088`, `4bf751b4`, `b85ba27d`; the earlier 2026-08-05 claim was
+premature — the three layers below contain but did not eliminate it):
 1. **Dispatch-guard frame.rsp validation** (C++): a ring0 task's iret-frame
    `rsp` field must lie in its own `[kernel_stack, kernel_stack_top]` (or the
    boot stack for the harness) before it may be dispatched.
@@ -95,11 +97,10 @@ switch_to_task (publisher, task ctx)            isr_stubs.asm (applier, ISR)
    is inside `[scheduler_load_kstack_base, scheduler_load_kstack_top)` before
    `iretq`, aborting any stale/foreign load.
 
-**RESIDUAL (open, see ROADMAP "Open Issues"):** a narrow boot-time window can
-still displace the harness onto an orphaned page during a test's daemon wait
-(`all` gate ~17-50%; H2 layers contain but do not eliminate it).  Investigated
-via the `[H2W]` kernel recorder + `tools/gdb/h2_walk_pt.py`; QEMU gdb-stub
-hardware watchpoints are unusable.
+**RESIDUAL — RESOLVED 2026-08-13/15** (commits `71b3a088` — stale-resume
+orphan re-enqueue; `4bf751b4` — owner-resolution self-switch no-op;
+`b85ba27d` — elf_loader `lock_` held across a timer-ISR preemption).  Debug
+`all` gates pass with the trace OFF (873/873 ×2, 932/932, 942/942).
 
 ## 5. Sync Audit Findings (status ledger)
 

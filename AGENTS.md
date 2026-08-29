@@ -254,22 +254,18 @@ evidence-backed. Do not stack changes across steps.
   `[APPLY]` serial traces fire inside `reschedule()`/`on_tick()`/the
   context-switch epilogue on every invocation, polluting timing-sensitive
   tests and perturbing the scheduler.
-  **VERIFIED STATE (2026-08-01):** the *release* gate
+  **VERIFIED STATE:** the *release* gate
   (`make execute-test x86_64 release all`, 84/84) passes with the trace OFF.
-  The *debug* `all` class (881 tests) passes 881/881 with the trace **ON**;
-  with it OFF, the pre-existing H2 deferred-switch race
-  (`docs/specs/ipc.md` §4) becomes deterministic and hangs at
-  `ipc_send_sync_roundtrip` (~test 77/78).  Fix tracked in ROADMAP §v0.3.9.
-  The earlier claim that "`all` only passes 881/881 with the trace off" was
-  made in commit `4644d795` without ever running a full debug `all` in that
-  state — it is superseded by the above.
+  The H2 deferred-switch race (`docs/specs/ipc.md` §4) is **RESOLVED**
+  (2026-08-13/15, commits `71b3a088` + `4bf751b4` + `b85ba27d` — stale-resume
+  orphan re-enqueue, owner-resolution self-switch, elf_loader
+  lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
+  trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
 - Before running the release gate (`make execute-test x86_64 release all`),
   verify the macro is undefined:
   `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
   must show it commented out.  Re-enable only for targeted debug analysis,
-  then disable again before any release gate run.  For the *debug* `all`
-  development gate (boundary-audit stepwise runs), keep the trace **ON**
-  until the H2 race is fixed (ROADMAP §v0.3.9).
+  then disable again before any release gate run.
 - **Interactive release shell:** `make run-release-mode` MUST run with the
   trace OFF.  With it ON, the `[TICK]`/`[SW]`/`[APPLY]` serial spam on every
   timer tick and context switch makes the shell appear input-dead.  Verified

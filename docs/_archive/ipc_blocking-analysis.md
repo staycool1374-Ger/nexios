@@ -1,7 +1,8 @@
 # ipc_blocking Flakiness — Root-Cause Analysis (2026-07-18)
 
 Single-core x86_64 kernel. `ipc_blocking` test class has **two distinct failure
-modes**. One is FIXED; the other is characterized but NOT yet fixed.
+modes**. One is FIXED; the other (H2) was characterized here and is
+**RESOLVED 2026-08-13/15** (see the final fix section below).
 
 ## FIXED: H1 — send_sync reply loss (caused `LEAK: Tasks -3` FAIL)
 
@@ -25,7 +26,7 @@ modes**. One is FIXED; the other is characterized but NOT yet fixed.
   own queue ⇒ success).
 - **Verification:** 0 FAIL across 20+ runs after the fix (was ~1/8 before).
 
-## OPEN: H2 — deferred-switch / userspace-task crash in test 3 & 4 (HANG)
+## H2 — deferred-switch / userspace-task crash in test 3 & 4 (HANG — RESOLVED 2026-08-13/15)
 
 Two HANG subtypes, both rooted in test 3/4's **userspace task** design +
 the deferred context-switch machinery. ~45% of runs hang.
@@ -156,6 +157,12 @@ the sender's user PML4 → freeze.  Verify the CR3 reload on the return path
 
 ## H2 RESOLVED (2026-08-05) — Investigation Log + Final Fix
 
+> **Note (2026-08-13/15):** this 2026-08-05 resolution was premature — the
+> residual race persisted (~17–50% `ipc`/`all` hang) until the final fixes
+> `71b3a088` (stale-resume orphan re-enqueue), `4bf751b4` (owner-resolution
+> self-switch no-op) and `b85ba27d` (elf_loader `lock_` across a timer-ISR
+> preemption).  Debug `all` gates: 873/873 ×2, 932/932, 942/942 (trace OFF).
+
 ### Symptom (unmasked)
 With the logging backend routed through the QEMU debugcon (0xE9, no UART
 latency — see `src/kernel/arch/qemu_debugcon.hpp`), the `ipc` class hung at
@@ -239,5 +246,7 @@ test 21 `ipc_send_sync_roundtrip` with:
 - `priority_inheritance` test 1 `MutexPriorityDonates`: INV-4 gate-spin
   test-code race in `spawn_holder` (self-terminates before the harness observes
   BLOCKED).
-- `ipc` residual ~17% hang from the narrow H2 boot-time window (needs a
-  hardware-watchpoint session).
+- `ipc` residual ~17% hang from the narrow H2 boot-time window — **RESOLVED
+  2026-08-13/15** (`71b3a088` stale-resume orphan re-enqueue, `4bf751b4`
+  owner-resolution self-switch, `b85ba27d` elf_loader lock-across-preemption);
+  debug `all` gates pass with the trace OFF (873/873 ×2, 932/932, 942/942).

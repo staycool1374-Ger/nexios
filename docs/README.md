@@ -70,7 +70,7 @@ retained for traceability).  Open issues are tracked in `ROADMAP.md` →
    ├─ reads: zombie-list-spec.md (termination)   specs/ipc.md (send_sync RQ rows)
    ├─ read-by: specs/ipc.md (deferred-switch), specs/memory.md (snapshot RQ)
    ├─ read-by: specs/deadline.md (INV-6 move_priority), specs/test-harness.md (INV set)
-   └─ read-by: ROADMAP.md Open Issues (H2, ss_deadline)
+   └─ read-by: ROADMAP_done.md (H2, ss_deadline — both resolved)
 
  IPC (specs/ipc.md)
    ├─ reads: specs/scheduler.md (INV-5, move_priority)

@@ -29,7 +29,7 @@
 - **Multi-arch portability (from #99):** parse-time arch-stamp clean; arch-keyed cpp-rules; gen_test_registry --arch; CONFIG_ARCH_X86_64 guards.
 - **Key invariant now enforced tree-wide:** no spinlock held across Scheduler::reschedule(); BLOCKED tasks dequeued from the ready queue (INV-2); generation-tagged waiter/peer pointers; ENSURE only for impossible invariants.
 - **Known caveats:** aarch64/riscv64 COMPILE-CLEAN only (issues #28/#29). M-1 per-spin budgets, M-3 trace gating, queue/semaphore init flags deferred (documented in code). syscall_entry.asm retained as commented dead file (deletion needs user approval).
-- **Pre-existing H2 deferred-switch race** (BUGS.md, RE-OPENED): ~50% flaky TIMEOUT/PANIC in ipc_core/elf_loader/all/selftest; reproducible on baseline. (Issue #6's full `all` run passed 932/932 trace OFF, but the flake is not eliminated.)
+- **H2 deferred-switch race — RESOLVED** (2026-08-13/15, commits `71b3a088`, `4bf751b4`, `b85ba27d`; see BUGS.md): stale-resume orphan re-enqueue, owner-resolution self-switch, elf_loader lock-across-preemption. Debug `all` passes with the trace OFF (873/873 ×2, 932/932, 942/942).
 
 ### Work State
 #### Completed
@@ -62,7 +62,7 @@
 - **aarch64 runtime boot (issues #28/#100):** seed PMM from DTB memory regions (fix the meminit OOM), then run the arch_aarch64 class (22 tests) + PAN runtime enablement on a PAN-capable CPU model.
 - **P9 test-hygiene (issue #6 remainder):** on `testbed` — ~50 Rule-4 `remove_task+cleanup+delete` sites → `terminate_and_drain`, ~150 stub/tautology purges (§2.5 of audits/test-suite-v0.3.10.md).
 - Next multi-arch step (when scheduled): riscv64 runtime boot path (issue #29).
-- Tracked separately: the pre-existing H2 deferred-switch race (BUGS.md, RE-OPENED) — ~50% flaky TIMEOUT/PANIC, reproducible on baseline.
+- H2 deferred-switch race: RESOLVED — no longer tracked (see above, BUGS.md).
 
 ### Relevant Files
 - src/kernel/cap/mmio.{hpp,cpp}: MmioCap (phys/size/bar_type, CONFIG_CAP_MAX_MMIO, create/create_from_bar).

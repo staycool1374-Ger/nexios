@@ -208,4 +208,4 @@ kernel PML4[0..255] · kernel stacks · PtPoolSnapshot · HHDM PD (undo huge spl
 | D5/D6 | magic stays TCB_MAGIC until unlink; 0xDD poison only by MemPool::free; canonical termination sequence |
 | RQ | a current task must never be queued |
 | Snapshot | rebuild_ready_queue heals all ready-queue desyncs |
-| H2 | deferred-switch race layers + residual (see `specs/ipc.md`) |
+| H2 | deferred-switch race — RESOLVED 2026-08-13/15 (see `specs/ipc.md`) |
