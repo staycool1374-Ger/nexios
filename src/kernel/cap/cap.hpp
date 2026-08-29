@@ -128,10 +128,14 @@ int mint(CNode *src, uint64_t src_handle, CNode *dst, uint32_t rights_mask,
          uint32_t badge) noexcept;
 
 /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
-///        capability of @p target_type, installed into @p cspace.  Iteration-1
-///        supports Frame targets with an exact-size carve (ROADMAP 0.4.1
-///        item 3).  Kernel-internal API (no syscall yet).
-/// @return the new slot index, or -1 on any failure.
+///        capability of @p target_type, installed into @p cspace.  Supports
+///        Frame targets with a sub-range carve (issue #1): @p size may be
+///        smaller than the Untyped's region (PAGE-aligned, prefix-only); the
+///        remainder is installed as a child Untyped in the same @p cspace and
+///        is itself retypable (exhaustion model).  size == ut->size is the
+///        exact-size degenerate case (no child).  Non-destructive on
+///        validation/capacity failure; fail-closed after the guard is claimed.
+/// @return the new target slot index, or -1 on any failure.
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
            size_t size, uint32_t rights) noexcept;
 

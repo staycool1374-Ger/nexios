@@ -106,4 +106,21 @@ uint64_t Syscall::sys_cap_mint(uint64_t src_handle, uint64_t dst_handle,
     return static_cast<uint64_t>(idx);
 }
 
+uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
+                                 uint64_t size, uint64_t rights, uint64_t *) {
+    cap::CNode *src = current_cspace();
+    if (!src)
+        return static_cast<uint64_t>(-1);
+    // Installs the retyped target (and, on a sub-range carve, the child
+    // Untyped) into the caller's own root CNode.  cap::retype validates the
+    // type/size (garbage target_type or oversize/unaligned -> -1, parent kept).
+    int idx = cap::retype(src, untyped_handle,
+                          static_cast<cap::CapType>(target_type),
+                          static_cast<size_t>(size),
+                          static_cast<uint32_t>(rights));
+    if (idx < 0)
+        return static_cast<uint64_t>(-1);
+    return static_cast<uint64_t>(idx);
+}
+
 } // namespace kernel

@@ -187,6 +187,11 @@ Add a row in `docs/specs/configuration.md` §1 (new §1.8 "Capabilities") docume
 iteration-1 foundation (supersedes the §2.6 deferred sketch for the Untyped
 slice; IRQ/MMIO caps remain 0.4.2+).
 
+**v0.4.2 extension — sub-range carve + child split (issue #1):** `cap::retype`
+now carves a PAGE-aligned partial region and installs a **child Untyped** for
+the remainder (exhaustion model — the child is itself retypable); added
+**`SYS_CAP_RETYPE` (56)**. See §2.8.2 "Child Untyped for leftover".
+
 ### 2.8.1 Current state assessment
 
 Already in place (integration points for Untyped):
@@ -228,10 +233,16 @@ class UntypedMem : public KernelObject {
 
     static UntypedMem *create(size_t size, bool is_user,
                               CapType target = CapType::Frame);
+    /// Wraps an already-owned PAGE-aligned sub-range as a new Untyped WITHOUT
+    /// allocating frames (the child remainder of a sub-range carve).  Enforces
+    /// the shared CONFIG_CAP_MAX_UNTYPED live bound + cap-object tracking.
+    static UntypedMem *create_subrange(uint64_t phys, size_t size,
+                                       bool is_user,
+                                       CapType target = CapType::Frame);
 
-    /// CAS false->true; true iff this caller wins the single retype.
+    /// CAS false->true; true iff this caller wins the region transfer.
     bool claim_once() noexcept;
-    /// True iff this Untyped still owns its frames (never retyped).
+    /// True iff this Untyped still owns its whole region (never retyped).
     bool owns_region() const noexcept;
 
     void dispose() noexcept override;  // frees frames ONLY if owns_region()
@@ -245,31 +256,50 @@ class UntypedMem : public KernelObject {
 - `dispose()`: if `owns_region()` (never retyped) → `PMM::free_page(phys + i * arch::PAGE_SIZE)` for each frame; then `track_cap_object_remove()` + `MemPool::free(this)`. If retyped → frames are owned by the retyped object; dispose MUST NOT free them (double-free guard).
 - The guard flag IS the ownership bit: `retyped_ == false` ⇒ Untyped owns the frames; `retyped_ == true` ⇒ Untyped owns nothing. Single flag, single source of truth.
 
-**retype() operation** — kernel-internal API in iteration 1 (no syscall, mirroring §2.1; `SYS_CAP_RETYPE` is a 0.4.2 item):
+**retype() operation** — kernel-internal API; `SYS_CAP_RETYPE` (56) dispatches
+it on the caller's root CNode (v0.4.2, issue #1):
 
 ```cpp
 /// Retypes the Untyped at @p untyped_handle in @p cspace into a new capability
-/// of @p target_type, installed into @p cspace.
-/// @return the new slot index, or -1 on any failure.
+/// of @p target_type, installed into @p cspace.  Supports sub-range carves
+/// (PAGE-aligned, prefix-only): the remainder is installed as a child Untyped.
+/// @return the new target slot index, or -1 on any failure.
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
            size_t size, uint32_t rights) noexcept;
 ```
 
 Semantics (task context only; no IRQ context; no blocking):
 
-1. `lookup(cspace, untyped_handle, CapType::Untyped, CAP_RIGHT_WRITE)` pins the Untyped (WRITE = mutation right; a dedicated `CAP_RIGHT_RETYPE` rides in with the 0.4.2 syscall).
-2. Validate `target_type == ut->retype_target` (iteration 1: must be `CapType::Frame`) and `size == ut->size` (exact-size carve). Any failure → release pin, -1. **The Untyped is left intact** on validation failure.
-3. **Claim the guard**: `ut->claim_once()` (CAS on `retyped_` false→true). Loser → release pin, -1. From this instant the Untyped owns nothing and no other retype can win.
-4. `FrameCap *fc = FrameCap::create(ut->phys, ut->size / arch::PAGE_SIZE, ut->is_user)`. On nullptr (MemPool exhaustion) → roll back the claim, release pin, -1. Region stays with the Untyped.
-5. `int idx = cspace->install(fc, CapType::Frame, rights)`:
-   - Success → `fc->release()` (drop the creator ref; the slot holds one), release pin, return idx. Ownership transferred.
-   - Failure (table full) → `fc->release()` → `FrameCap::dispose` returns the region to PMM; guard stays set (fail-closed: a retype whose install fails consumes the Untyped); release pin, -1.
+1. `lookup(cspace, untyped_handle, CapType::Untyped, CAP_RIGHT_WRITE)` pins the Untyped (WRITE = mutation right; a dedicated `CAP_RIGHT_RETYPE` is a future extension).
+2. Validate `target_type == ut->retype_target` (`CapType::Frame`), `size > 0`, PAGE-aligned, `size <= ut->size`. Any failure → release pin, -1. **The Untyped is left intact** on validation failure. `exact = (size == ut->size)`.
+3. **Non-destructive slot-capacity pre-check**: a sub-range carve installs two slots (target + child), so `occupied_count(cspace) + (exact ? 1 : 2) <= CONFIG_CSLOT_COUNT` is required; failure → release pin, -1, parent intact.
+4. **Claim the guard**: `ut->claim_once()` (CAS on `retyped_` false→true). Loser → release pin, -1. From this instant the Untyped owns nothing and no other retype can win.
+5. `FrameCap *fc = FrameCap::create(ut->phys, size / arch::PAGE_SIZE, ut->is_user)`. On nullptr (MemPool exhaustion) → roll back the claim, release pin, -1. Region stays with the Untyped.
+6. If `!exact`: `child = UntypedMem::create_subrange(ut->phys + size, ut->size - size, ...)`. On nullptr (MemPool / `CONFIG_CAP_MAX_UNTYPED` bound) → **stretch fail-closed**: set `fc->count = ut->size / arch::PAGE_SIZE`, release `fc` (whole region → PMM exactly once), release pin, -1. The parent stays spent (guard set).
+7. `idx_target = cspace->install(fc, CapType::Frame, rights)`:
+   - Success (and `!exact`) → `idx_child = cspace->install(child, CapType::Untyped, rights)`. On child-install failure → `cspace->remove(idx_target)` (rollback), release child (disposes remainder), release pin, -1.
+   - Failure → release `fc` (disposes carved sub-range) and `child` if any (disposes remainder) — together the whole region returns to PMM exactly once; guard stays set (fail-closed); release pin, -1.
+8. Success → drop creator refs (`fc->release()`, `child->release()` if any), release pin, return `idx_target`.
 
-**Ownership/transfer invariant:** every frame in a region has exactly one owner at every instant — Untyped (before claim) → in-flight (claim set) → FrameCap (after install) or PMM free-list (install failure). PMM bitmap stays consistent: the region is allocated exactly once (at `UntypedMem::create`) and freed exactly once (by whichever owner disposes).
+**Ownership/transfer invariant:** every frame in a region has exactly one owner
+at every instant — Untyped (before claim) → in-flight (claim set) → exactly one
+of {target FrameCap, child Untyped, PMM free-list} (after). PMM bitmap stays
+consistent: the region is allocated exactly once (at `UntypedMem::create`) and
+every page is freed exactly once by whichever owner disposes.
 
-**RegionAllocator — NOT needed in iteration 1.** Exact-size carve means the whole region transfers in one step; the "allocation" of the region is PMM at create time. PMM is already a bitmap allocator; a second bump/bitmap is redundant. `UntypedMem::phys`/`size` are exactly the range a future RegionAllocator would manage.
+**RegionAllocator — NOT needed.** The carve is prefix-only: the remainder is a
+single contiguous child range, so no interior free-list bookkeeping is
+required.  Arbitrary interior carves are expressible by chaining child
+retypes.  `UntypedMem::phys`/`size` are exactly the range a future
+RegionAllocator would manage.
 
-**Child Untyped for leftover — NOT in iteration 1 (exact-size carve only).** The §2.6 sketch mandates "only the region's exact size may be carved" and "retype at most once (guard flag)". A child-Untyped splitter contradicts the guard and needs sub-range bookkeeping. Natural 0.4.2 extension: add `CapType::Untyped` as a retype target with a sub-range carve, creating a child Untyped for the remainder.
+**Child Untyped for leftover — IMPLEMENTED (v0.4.2, issue #1).**  The §2.8.2
+iteration-1 "exact-size carve only / retype at most once" limitation is lifted:
+the retype guard now means "this Untyped's region has been transferred" (the
+exhaustion model), and a sub-range carve installs a child Untyped for the
+remainder.  The child is a full Untyped (owns its sub-range, itself retypable),
+so a region can be split repeatedly.  Both child and parent dispose free
+exactly their own sub-ranges; no frame is owned twice or by nobody.
 
 **Retype targets — Frame only in iteration 1.** CNode and Endpoint are MemPool-allocated shared-heap structs, not physical-memory-resident objects; retyping a region "into" them requires object-storage-in-region support (deferred to 0.4.2). `retype_target` is the documented extension point.
 
@@ -304,6 +334,14 @@ Per AGENTS.md: `make build` clean between phases; one class at a time; `test-his
 - Verify: 9/9 + regressions (cap_core 10, cap_lifecycle 8, cap_syscall 8, cap_ipc 6, memory_pmm 5) + debug `all` **941/941** (trace ON) + release `all` 84/84 (trace OFF) + selftest 132/132.
 - Follow-up docs: ROADMAP.md item-3 checkbox; cspace.md status header amended.
 
+**Phase 4 — sub-range carve + child split + SYS_CAP_RETYPE (v0.4.2, issue #1; +9 tests)**
+- MODIFY `src/kernel/cap/untyped.{hpp,cpp}` — `create_subrange()`; retype() sub-range carve (prefix-only, exhaustion model, stretch fail-closed); shared `g_live_untypeds` bound counts children.
+- MODIFY `src/kernel/cap/cap.hpp` — retype() doc (sub-range + child).
+- MODIFY `src/kernel/syscall/syscall.hpp` + `syscall_handlers_cap.cpp` — `CAP_RETYPE = 56`, `MAX_SYSCALL = 57`, `sys_cap_retype` on the caller's root CNode.
+- MODIFY `src/kernel/test/test_cap_untyped.cpp` — `retype_wrong_size_fails_keeps_untyped` inverted to `retype_oversize_rejected_parent_intact`; `retype_frame_exact_size_end_to_end` +occupied-count assert; 9 new tests (carve+child, two-level split, unaligned rejected, child-dispose-frees-remainder, parent-dispose-frees-nothing, full-table precheck, syscall dispatch + validation matrix, live-bound counts children).
+- MODIFY `src/kernel/test/test_expected_counts.hpp` — `cap_untyped` 9→**18**; `all` 957→**966**.
+- Verify: `cap_untyped` 18/18 + regressions (cap_core 10, cap_lifecycle 8, cap_syscall 8, cap_mmio 10, cap_ipc 6) + debug `all` **966/966** (trace ON) + release `all` 84/84 (trace OFF) + selftest.
+
 ### 2.8.4 SIL 3 considerations
 
 1. **Double-free (primary risk).** The retype-once guard `retyped_` is the single ownership bit: `dispose()` frees the region iff `owns_region()`; after a successful retype the Untyped frees nothing and the FrameCap frees the same region once. No path frees twice: claim is CAS-single-winner; install failure frees via FrameCap::dispose with the guard left set (fail-closed); validation failure never touches ownership. The transient in-flight state (claim set, no FrameCap yet) is invisible to dispose because retype holds a pin (`lookup` acquire) — `dispose()` runs only on the 1→0 transition and cannot run while a pin exists.
@@ -324,6 +362,8 @@ Per AGENTS.md: `make build` clean between phases; one class at a time; `test-his
 - [ ] SIL 3 audit (auditor subagent) approves every modified file; diff-patch protocol for any REJECT.
 
 **Counts summary:** +9 tests (class `cap_untyped`) → `all` 932 → **941**. Release/safe counts unchanged (84/132) — cap_untyped tests are TF_KERNEL.
+
+**v0.4.2 (issue #1) counts:** `cap_untyped` 9→**18**, `all` 941→**966**. Release/safe counts unchanged — the new carve/syscall tests are TF_KERNEL. SIL 3 audit evidence: `audits/report-<issue-#1>` (DECISION: APPROVED).
 
 ---
 

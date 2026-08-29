@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
     {"selftest",            132,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 957,    0,       0      },  // 947 + cap_mmio(+10); dump_class_counts verified
+    {"all",                 966,    0,       0      },  // 957 + cap_untyped(+9)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -83,7 +83,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
     {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
-    {"cap_untyped",           9,    0,       0      },  // Untyped memory allocator + retype (0.4.1 item 3)
+    {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
     {"cap_mmio",              10,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3)
 
     // ipc

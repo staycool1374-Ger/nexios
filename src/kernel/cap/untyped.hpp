@@ -28,19 +28,21 @@
 
 namespace kernel::cap {
 
-/// @brief Owns a contiguous PMM region and may be retyped at most once.
+/// @brief Owns a contiguous PMM region and may be retyped into capabilities.
 ///
-/// Shared-heap class (PipeBuffer/CNode pattern).  The retype-once guard
+/// Shared-heap class (PipeBuffer/CNode pattern).  The retype guard
 /// (`retyped_`) is the single ownership bit: while false the Untyped owns the
-/// region's frames and dispose() frees them; after a successful retype it owns
-/// nothing and the retyped capability (e.g. FrameCap) frees the frames.  No
-/// path frees the same frames twice.
+/// whole region and dispose() frees it; after a successful retype it owns
+/// nothing and the carved-out capabilities own the frames.  Retype uses an
+/// exhaustion model (issue #1): a sub-range carve creates a child Untyped for
+/// the remainder, so a region can be split repeatedly (each child is itself
+/// retypable).  No path frees the same frame twice.
 class UntypedMem : public KernelObject {
   public:
     uint64_t phys = 0;                       ///< first frame of the owned region
     size_t size = 0;                         ///< region size in bytes (PAGE_SIZE multiple)
     bool is_user = false;                    ///< PMM ownership class (FrameCap parity)
-    CapType retype_target = CapType::Frame;  ///< iteration-1: only Frame supported
+    CapType retype_target = CapType::Frame;  ///< supported target type
 
     /// @brief Allocates a contiguous PMM region and a MemPool-backed UntypedMem.
     ///        Validates size > 0 and PAGE_SIZE-aligned; enforces
@@ -49,17 +51,27 @@ class UntypedMem : public KernelObject {
     static UntypedMem *create(size_t size, bool is_user,
                               CapType target = CapType::Frame);
 
+    /// @brief Wraps an already-owned, PAGE-aligned sub-range as a new Untyped
+    ///        WITHOUT allocating frames (the child remainder of a sub-range
+    ///        carve).  Enforces the shared CONFIG_CAP_MAX_UNTYPED live bound
+    ///        and cap-object tracking.  Returns nullptr on any failure.
+    static UntypedMem *create_subrange(uint64_t phys, size_t size,
+                                       bool is_user,
+                                       CapType target = CapType::Frame);
+
     /// @brief CAS false->true on the retype guard.  True iff this caller wins
-    ///        the single retype.
+    ///        the transfer of this Untyped's region.
     bool claim_once() noexcept;
 
     /// @brief Rolls a failed claim back (only legal while no other retype is
-    ///        mid-flight — the guard was set by this caller and never released).
+    ///        mid-flight and no object over the region was ever created — the
+    ///        guard was set by this caller and never consumed).
     void reset_claim() noexcept {
         __atomic_store_n(&retyped_, false, __ATOMIC_RELEASE);
     }
 
-    /// @brief True iff this Untyped still owns its frames (never retyped).
+    /// @brief True iff this Untyped still owns its whole region (never
+    ///        retyped).  After a carve the parent owns nothing.
     bool owns_region() const noexcept;
 
     /// @brief Final teardown: frees the region ONLY if owns_region(); the
