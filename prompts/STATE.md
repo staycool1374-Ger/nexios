@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-08-29):** Issue #1 "Untyped child-split + sub-range carve" — cap::retype exhaustion-model sub-range carve (PAGE-aligned, prefix-only) + child Untyped for the remainder + SYS_CAP_RETYPE (56). SIL 3 APPROVED (audits/report-20260829T181710Z.md, 3 iterations). Class cap_untyped 9→18; debug `all` registered 966 (951 executed, 0 fail); release all 85/85; selftest 133/133. Commit `3eb2a50b` (closes #1).
 - **DONE (2026-08-25):** Issue #3 "MMIO caps + fine-grained I/O delegation" — MmioCap (CapType::Mmio) + VMM::map_mmio_from_cap + SYS_IOPORT_GRANT per-task TSS I/O bitmap delegation; SIL 3 APPROVED (2 reports), issue CLOSED. Commits `08c21a5f`+`adaef25a`+`4d1bca31`.
 - **DONE (2026-08-25):** Issue #5 "MP-4.4 — aarch64 PAN/PXN enablement" — real aarch64 PAN enablement + PXN/UXN closure + 5 new arch_aarch64 tests, SIL 3 APPROVED (audits/report-2026-08-25T15-05-22Z.md), issue CLOSED. Commit `1577242c`.
 - **DONE (2026-08-25):** Issue #6 "Implement all pending audits/refactorings under audits/" — all 8 kernel remediation phases (P0–P8) implemented, SIL 3 APPROVED per phase, issue CLOSED. Full debug `all` **932/932 PASSED** (trace OFF), release selftest 85/85. P9 (test-hygiene backlog ~150 purges) deferred to testbed.
@@ -33,6 +34,7 @@
 
 ### Work State
 #### Completed
+- **ISSUE #1 — Untyped child-split + sub-range carve (2026-08-29, commit `3eb2a50b` "closes #1", SIL 3 APPROVED ×3 iterations):** cap::retype sub-range carve (exhaustion model: parent spent, target owns [0,carve), child Untyped owns [carve,size) and is itself retypable); create_subrange() factory (no PMM alloc, shared CONFIG_CAP_MAX_UNTYPED bound counting children); stretch fail-closed on child-creation failure; non-destructive slot-capacity pre-check; SYS_CAP_RETYPE=56 (MAX_SYSCALL=57) via current_cspace(); child installed with rights|CAP_RIGHT_WRITE (no new authority — caller held WRITE over parent). Gates: cap_untyped 18/18; regressions cap_core 10, cap_lifecycle 8, cap_syscall 8, cap_mmio 10, cap_ipc 6; debug all 951/951 (registered 966); release all 85/85; selftest 133/133. Evidence: audits/report-20260829T181710Z.md.
 - **ISSUE #3 — MMIO caps + fine-grained I/O delegation (2026-08-25, commits `08c21a5f`+`adaef25a`+`4d1bca31`, SIL 3 APPROVED ×2):** MmioCap (phys/size/bar_type, CONFIG_CAP_MAX_MMIO), VMM::map_mmio_from_cap/unmap_mmio_from_cap, SYS_IOPORT_GRANT (55) + per-task TSS I/O bitmap (TSSBlock + arch::iopb_* static pool + owner-memoized switch + cleanup release + snapshot reset). Found+fixed a real privilege-escalation defect (TCB memset left iopb_slot_=0 → permissive TSS) + claimed-slot defense. Gates: cap_mmio 10/10, cap regressions (10/8/8/6/9), scheduler/hal/vmm regressions, selftest 133/133, debug all 942/942 executed (registered 957), release all 85/85. all-count 941→957. Revocation-limitation documented in cspace.md §2.6 (follow-up).
 - **ISSUE #5 MP-4.4 — aarch64 PAN/PXN enablement (2026-08-25, commits `1577242c`+`0b1bd6e9`, SIL 3 approved):** SCTLR_EL1.PAN (bit 23) + ID_AA64MMFR1_EL1.PAN detection (arch::pan_init, early_init.cpp); CONFIG_PAN; real PAN-sysreg stac/clac/read_rflags (normalized bit-18 contract, degraded no-op); PXN/UXN closure in attr_from_flags + VMM aarch64 paths; latent L3 DESC_TABLE leaf fix; 5 new arch_aarch64 tests; map_leaf TEST_VA moved off boot 2MB block; vmm.hpp PXN comment fix; riscv64 comment pointer. Gates: aarch64 compile+link green, x86_64 arch_cross 21/21. aarch64 runtime test execution deferred to #28 (boot OOM = #100).
 - **GLOBAL-VARIABLE ENCAPSULATION REFACTOR (2026-08-14, commits `8334a120`..`f37b3e2d`, SIL 3 approved):**
@@ -52,7 +54,7 @@
 - VERIFIED: `make check-style` → Errors: 0, Passed. `make debug NO_LTO=1` → ISO built cleanly.
 
 #### Active
-- (none outstanding) — issues #3, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 942/942.
+- (none outstanding) — issues #1, #3, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 951/951 (registered 966).
 
 #### Blocked
 - **aarch64 runtime boot (#28/#100):** kernel boots to meminit then PMM OOM panic (DTB memory regions never seeded into PMM) — blocks all aarch64 runtime tests incl. the 22-test arch_aarch64 class. P9 test-hygiene (testbed) is future work.
@@ -65,6 +67,11 @@
 - H2 deferred-switch race: RESOLVED — no longer tracked (see above, BUGS.md).
 
 ### Relevant Files
+- src/kernel/cap/untyped.{hpp,cpp}: exhaustion-model retype (sub-range carve + child Untyped remainder), create_subrange, stretch fail-closed, shared g_live_untypeds bound.
+- src/kernel/cap/cap.hpp: retype() doc (sub-range + child, non-destructive pre-check).
+- src/kernel/syscall/syscall.hpp + syscall_handlers_cap.cpp: SYS_CAP_RETYPE (56, MAX_SYSCALL=57) on the caller root CNode.
+- src/kernel/test/test_cap_untyped.cpp: class cap_untyped 18 tests (carve+child, two-level split, unaligned/oversize rejected, child/parent dispose, full-table precheck, syscall dispatch + validation matrix, live-bound counts children).
+- docs/specs/cspace.md §2.8: exhaustion model, child atomicity, stretch fail-closed, SYS_CAP_RETYPE, counts 966.
 - src/kernel/cap/mmio.{hpp,cpp}: MmioCap (phys/size/bar_type, CONFIG_CAP_MAX_MMIO, create/create_from_bar).
 - src/kernel/memory/vmm.{hpp,cpp}: map_mmio_from_cap/unmap_mmio_from_cap (refuse revoked caps + IO types).
 - src/kernel/syscall/syscall_handlers_mmio.cpp: sys_ioport_grant (55) — IO MmioCap coverage + CAP_RIGHT_WRITE; immediate apply via iopb_switch_to.
