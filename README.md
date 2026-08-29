@@ -25,7 +25,7 @@
 
 ---
 
-# Overview NexIOS
+## Overview NexIOS
 
 A freestanding C++20 real-time operating system for x86_64 with zero dynamic heap allocation in critical paths and deterministic O(1) scheduling.
 
@@ -77,7 +77,7 @@ Most hobby and embedded RTOS projects (FreeRTOS, Zephyr, STK) are **scheduler
 libraries**: threads share one address space and any task can corrupt any
 other. NexIOS takes the operating-system path:
 
-- **MMU-isolated processes** — every user ELF runs as a dedicated task in its
+- **MIsolated process execution** — every user ELF runs as a dedicated task in its
   own 4-level page-table space with guard pages, scheduled deterministically,
   sandboxed without recompilation.
 - **Capability-based security (CSpace)** — tasks hold *capabilities* to kernel
