@@ -67,19 +67,15 @@ other. NexIOS takes the operating-system path:
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
 
-## Where this is going
+## What's the plan
 
-NexIOS is built for a simple idea: **your application is just an ELF file on
-the SD card — the system keeps it running on time, every time.**
+The core vision of NexIOS is straightforward: **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
+Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from stor$
 
-Write your control logic in C, C++, or Rust, copy `myapp.elf` onto the storage
-medium, boot, done. Your app runs in its own isolated address space on a hard
-real-time schedule. If your app crashes, the kernel recovers it — the system
-stays up, only the application restarts.
+* **MMU-Isolated Processes:** Every user ELF binary runs in its own address space under a deterministic hard real-time schedule.
+* **Fault Interception & Recovery:** If a process crashes or faults, the kernel catches the exception and isolates the failure. The rest of the operating $
 
-That means a Raspberry Pi-class board plus one ELF file could become a
-deterministic controller for things like:
-
+This architecture enables deterministic execution for time-critical workloads such as:
 * **Home automation:** shutter/blind control with sun-position logic,
   heating hysteresis, lighting scenes — tasks where "switch within 50 ms of
   trigger" actually matters
@@ -89,9 +85,9 @@ deterministic controller for things like:
 * **Rapid prototyping:** drop a new build onto developer boards and test
   real-time behavior without re-flashing the whole system
 
-No other RTOS today combines this workflow — load-and-run an unmodified user
-ELF from the filesystem, with deterministic timing guarantees and crash
-isolation — with this level of simplicity. That gap is the destination of this
+As far as known no other RTOS today combines this workflow — load-and-run an unmodified user
+ELF with deterministic timing guarantees and crash
+isolation. That gap is the destination of this
 project.
 
 **Honest status:** this is where the journey goes, not where we are today.
