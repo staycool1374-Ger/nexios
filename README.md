@@ -39,6 +39,33 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
 
 ---
+## What's the plan
+
+The core vision of NexIOS is straightforward: **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
+
+Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from storage or secondary media without needing a system reboot. If an application fails, simply reload and restart it:
+
+* **MMU-Isolated Processes:** Every user ELF binary runs in its own address space under a deterministic hard real-time schedule.
+* **Fault Interception & Recovery:** If a process crashes or faults, the kernel catches the exception and isolates the failure. The rest of the operating system stays up, while only the individual process restarts.
+
+This architecture enables deterministic execution for time-critical workloads as example:
+
+* **Robotics & Motion Control:** High-frequency servo and actuator control loops requiring strict sub-millisecond execution windows.
+* **Industrial & Home Automation:** Multi-tasking controllers (e.g., climate regulation, energy management, sensor pipelines) where individual services can be updated on the fly without stopping core safety routines.
+* **Rapid Edge Prototyping:** Dropping and testing updated user binaries on real-time target hardware without re-flashing the underlying kernel.
+
+As far as known, no other open-source RTOS today combines this exact workflow — load-and-run an unmodified user ELF with deterministic timing guarantees, capability-based security, and crash isolation. That gap is the destination of this project.
+
+**Honest status:** this is where the journey goes, not where we are today.
+The x86_64 kernel core already proves the concept (MMU-isolated processes,
+background ELF loader, capability security). The pieces that make the maker
+workflow real — ARM and RISC-V board bring-up, end-to-end user-ELF loading from storage,
+and automatic fault recovery — are open roadmap items tracked as GitHub
+Issues. The road is long, but every step on it is concrete and reachable.
+
+If you have been looking for exactly this kind of system and want to help
+test or build it: **this project is GPLv3 open source, and contributors are
+welcome.** See [Call for Contributions](#call-for-contributions).
 
 ## What's different about NexIOS
 
@@ -67,39 +94,6 @@ other. NexIOS takes the operating-system path:
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
 
-## What's the plan
-
-The core vision of NexIOS is straightforward: **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
-Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from stor$
-
-* **MMU-Isolated Processes:** Every user ELF binary runs in its own address space under a deterministic hard real-time schedule.
-* **Fault Interception & Recovery:** If a process crashes or faults, the kernel catches the exception and isolates the failure. The rest of the operating $
-
-This architecture enables deterministic execution for time-critical workloads such as:
-* **Home automation:** shutter/blind control with sun-position logic,
-  heating hysteresis, lighting scenes — tasks where "switch within 50 ms of
-  trigger" actually matters
-* **Garden & greenhouse:** irrigation valve timing, climate control
-  ("fan on within 2 s above 28 °C")
-* **Robotics & model building:** servo loops on a hard 20 ms raster
-* **Rapid prototyping:** drop a new build onto developer boards and test
-  real-time behavior without re-flashing the whole system
-
-As far as known no other RTOS today combines this workflow — load-and-run an unmodified user
-ELF with deterministic timing guarantees and crash
-isolation. That gap is the destination of this
-project.
-
-**Honest status:** this is where the journey goes, not where we are today.
-The x86_64 kernel core already proves the concept (MMU-isolated processes,
-background ELF loader, capability security). The pieces that make the maker
-workflow real — ARM board bring-up, end-to-end user-ELF loading from storage,
-and automatic fault recovery — are open roadmap items tracked as GitHub
-Issues. The road is long, but every step on it is concrete and reachable.
-
-If you have been looking for exactly this kind of system and want to help
-test or build it: **this project is GPLv3 open source, and contributors are
-welcome.** See [Call for Contributions](#call-for-contributions).
 
 ---
 
