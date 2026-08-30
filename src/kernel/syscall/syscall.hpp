@@ -88,7 +88,9 @@ enum class SyscallNumber : uint8_t {
     CAP_RETYPE = 56,   ///< Untyped sub-range carve + child remainder (issue #1)
     IRQ_REGISTER = 57, ///< arm user-space IRQ delivery for an IrqCap (issue #2)
     IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2)
-    MAX_SYSCALL = 59,
+    IOMMU_MAP = 59,    ///< map an owned frame into the IOMMU DMA domain (issue #4)
+    IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
+    MAX_SYSCALL = 61,
 };
 
 /// @brief System call handler function signature.
@@ -236,6 +238,10 @@ class Syscall {
                                      uint64_t *);
     static uint64_t sys_irq_wait(uint64_t, uint64_t, uint64_t, uint64_t,
                                  uint64_t *);
+    static uint64_t sys_iommu_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_iommu_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -298,6 +304,8 @@ class Syscall {
             &Syscall::sys_cap_retype,
             &Syscall::sys_irq_register,
             &Syscall::sys_irq_wait,
+            &Syscall::sys_iommu_map,
+            &Syscall::sys_iommu_unmap,
     };
 };
 

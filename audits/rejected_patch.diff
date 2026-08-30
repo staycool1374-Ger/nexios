@@ -1,0 +1,84 @@
+--- a/src/kernel/iommu/iommu.cpp
++++ b/src/kernel/iommu/iommu.cpp
+@@ -87,16 +87,30 @@
+     return static_cast<size_t>(bdf.device) * 8 + bdf.function;
+ }
+ 
++/// @brief True when @p bdf is within the encodable PCI range (device 0-31,
++///        function 0-7) so ctx_index stays inside the 256-entry context
++///        table.  PciBdf fields are raw uint8_t: an unvalidated BDF indexes
++///        up to 255*8+255 = 2295 — out of bounds.  Fail closed.
++bool bdf_valid(arch::PciBdf bdf) {
++    return bdf.device < 32 && bdf.function < 8;
++}
++
+ /// @brief Walks (and optionally allocates) the 4-level SL path for @p iova.
+ /// @param[out] path Physical address of every table page on the walk
+ ///                  (path[0] = L4 root ... path[3] = L1 leaf table).
+ /// @param[out] idx  512-index used at each level (idx[3] = leaf index).
+ /// @return Pointer to the leaf (L1) entry, or nullptr when a table is
+ ///         missing and !alloc, or a page allocation failed (fail-closed —
+-///         a page is either allocated AND linked, or nothing happened).
++///         a failed walk leaves NO state: every page it linked is
++///         unlinked and freed again before returning (no orphaned pages).
+ uint64_t *sl_walk(uint64_t root_phys, uint64_t iova, bool alloc,
+                   uint64_t path[vtd::kSlLevels], size_t idx[vtd::kSlLevels]) {
+     uint64_t table_phys = root_phys;
++    // Pages linked by THIS walk: freshly allocated under the manager lock,
++    // referenced only by entries this walk wrote — unwindable on failure.
++    uint64_t *linked_entry[vtd::kSlLevels - 1];
++    uint64_t linked_page[vtd::kSlLevels - 1];
++    size_t nlinked = 0;
+     for (size_t level = vtd::kSlLevels; level >= 1; --level) {
+         size_t slot = vtd::kSlLevels - level;
+         path[slot] = table_phys;
+@@ -111,9 +125,21 @@
+             if (!alloc)
+                 return nullptr;
+             uint64_t page = alloc_zeroed_table_page();
+-            if (page == 0)
++            if (page == 0) {
++                // Unwind the links this walk made: unlink (parent entry = 0)
++                // then free — freshly allocated single-owner pages, each
++                // freed exactly once.  A failed walk leaves NO state behind.
++                while (nlinked > 0) {
++                    --nlinked;
++                    *linked_entry[nlinked] = 0;
++                    PMM::free_page(linked_page[nlinked]);
++                }
+                 return nullptr;
++            }
+             *entry = page; // address bits 51:12, no permission flags
++            linked_entry[nlinked] = entry;
++            linked_page[nlinked] = page;
++            ++nlinked;
+             table_phys = page;
+         } else {
+             table_phys = next;
+@@ -312,6 +338,8 @@
+ bool IoMmuManager::attach_device(int16_t idx, arch::PciBdf bdf) {
+     if (!g_present)
+         return false;
++    if (!bdf_valid(bdf))
++        return false; // unencodable BDF — never index out of bounds
+     if (idx < 0 || idx >= static_cast<int16_t>(CONFIG_IOMMU_MAX_DOMAINS))
+         return false;
+     SpinLockGuard<sync::SpinLock> guard(g_lock_);
+@@ -356,6 +384,8 @@
+ void IoMmuManager::clear_attachment(int16_t idx, arch::PciBdf bdf) {
+     if (idx < 0 || idx >= static_cast<int16_t>(CONFIG_IOMMU_MAX_DOMAINS))
+         return;
++    if (!bdf_valid(bdf))
++        return; // unencodable BDF — never index out of bounds
+     SpinLockGuard<sync::SpinLock> guard(g_lock_);
+     if (!g_domains[idx].occupied)
+         return;
+@@ -418,6 +448,8 @@
+ uint64_t IoMmuManager::context_asr(int16_t idx, arch::PciBdf bdf) {
+     if (idx < 0 || idx >= static_cast<int16_t>(CONFIG_IOMMU_MAX_DOMAINS))
+         return 0;
++    if (!bdf_valid(bdf))
++        return 0; // unencodable BDF — never index out of bounds
+     SpinLockGuard<sync::SpinLock> guard(g_lock_);
+     if (!g_domains[idx].occupied)
+         return 0;

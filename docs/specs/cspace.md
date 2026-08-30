@@ -180,6 +180,19 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
   grants but does NOT retroactively clear already-granted port bits in a live task's bitmap —
   task-bound grants die at task cleanup (derivation tracking is a follow-up).  aarch64/riscv64:
   handler returns -1 (no port I/O).
+- **IOMMU DMA caps (0.4.2):** `IoMmuDmaCap : KernelObject` wrapping one private IOMMU DMA protection domain → capability-gated translation-table programming (`SYS_IOMMU_MAP`/`SYS_IOMMU_UNMAP`).
+  **IMPLEMENTED (2026-08-30, issue #4):** `CapType::IoMmuDma`, `src/kernel/cap/iommu.{hpp,cpp}`
+  (kernel-internal `create`; `CONFIG_CAP_MAX_IOMMU`; domain bound to the creating task — strict
+  single-owner, a granted cap held by another task is refused), the static bounded table manager
+  `src/kernel/iommu/iommu.{hpp,cpp}` (identity-IOVA second-level tables in the VT-d layout,
+  `vtd.hpp`; per-domain SL root from zeroed PMM pages; cascade-empty-free; overlapping mappings
+  rejected; revoked frames refused; leaf SpinLock, never held across cspace/dispose), and
+  `SYS_IOMMU_MAP` (59) / `SYS_IOMMU_UNMAP` (60) via
+  `src/kernel/syscall/syscall_handlers_iommu.cpp` (WRITE = arming authority; SL flags flow from
+  the FRAME SLOT's granted rights; absent IOMMU → graceful -1).  `IoMmuDmaCap::dispose/revoke`
+  destroys the domain FIRST (fail-closed: authority loss removes ALL DMA access).  Design +
+  phase-2 (live DMAR/GCMD/IOTLB, AMD-Vi/SMMU backends): `docs/specs/iommu.md`.  aarch64/riscv64:
+  handlers return -1.
 - **Multi-level CNodes (0.7.x):** CNode-of-CNodes; the handle decode gains a radix walk.
 
 ### 2.7 Configuration additions (`src/kernel/nexios_config.h`)

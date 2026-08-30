@@ -128,6 +128,10 @@ feeds must be re-validated** (check-config cross-check).
 | `CONFIG_CAP_MAX_MMIO` | 16 | live MmioCap objects (TU-local counter in mmio.cpp; issue #3) |
 | `CONFIG_CAP_MAX_IRQ` | 16 | live IrqCap objects + IRQ delivery-table slots (TU-local counter in irq.cpp; static table in irq_delivery.cpp, no RT-path allocation; issue #2) |
 | `CONFIG_IOPB_MAX_TASKS` | 4 | per-task TSS I/O-bitmap pool slots (x86_64 sys_ioport_grant; static 8 KiB×N .bss, no RT-path allocation; issue #3) |
+| `CONFIG_CAP_MAX_IOMMU` | 16 | live IoMmuDmaCap objects (TU-local counter in cap/iommu.cpp; issue #4) |
+| `CONFIG_IOMMU_MAX_DOMAINS` | 8 | concurrent IOMMU DMA domains (static table in iommu.cpp; each domain owns one zeroed PMM SL-root page; issue #4) |
+| `CONFIG_IOMMU_MAX_MAPPINGS` | 32 | outstanding DMA mappings per domain (bounded record table; exhausting fails closed; issue #4) |
+| `CONFIG_IOMMU_MAX_BUSES` | 8 | PCI buses with a static IOMMU context table (256×16 B .bss each; issue #4) |
 
 ## 2. The Matrix Runners
 

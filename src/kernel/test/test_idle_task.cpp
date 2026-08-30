@@ -214,16 +214,24 @@ JARVIS_TEST(idle_task_integrity_markers, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: Tests that incremental CRC processing over the code segment
-// makes progress and eventually completes.
+// makes progress and eventually completes.  The iteration bound is derived
+// from the actual .text length (4 KiB per crc_process_chunk call) plus a
+// fixed slack — NOT a hard-coded count: a hard-coded budget silently breaks
+// whenever the kernel legitimately grows past it (issue #4: text grew to
+// 204 chunks vs. a stale 200-iteration bound).  Bounded-progress intent is
+// unchanged: completion within chunks_needed + 64 calls.
 // Input: Multiple calls to crc_process_chunk().
-// Expect: After enough iterations, crc_process_chunk() returns true
+// Expect: Within the derived bound, crc_process_chunk() returns true
 // (indicating CRC is complete). The CRC verification is skipped during
 // tests (expected CRC is patched at link time).
 JARVIS_TEST(idle_task_integrity_crc_incremental, "PRE: none | POST: none") {
     kernel::integrity::reset_crc_state();
+    uint64_t text_len =
+        reinterpret_cast<uint64_t>(kernel::integrity::_text_end) -
+        (reinterpret_cast<uint64_t>(kernel::integrity::_text_start) + 8);
+    uint64_t const MAX_ITER = ((text_len + 4095) / 4096) + 64;
     bool done = false;
     uint64_t iterations = 0;
-    uint64_t const MAX_ITER = 200;
     while (!done && iterations < MAX_ITER) {
         done = kernel::integrity::crc_process_chunk();
         ++iterations;

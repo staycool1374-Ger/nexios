@@ -536,6 +536,32 @@
 #define CONFIG_IOPB_MAX_TASKS 4
 #endif
 
+/// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
+/// by a TU-local live counter in cap/iommu.cpp.
+#ifndef CONFIG_CAP_MAX_IOMMU
+#define CONFIG_CAP_MAX_IOMMU 16
+#endif
+
+/// Maximum number of concurrent IOMMU DMA protection domains (v0.4.2, issue
+/// #4).  The domain table is a static bounded array — no dynamic allocation
+/// on real-time paths.  Each domain owns one PMM page-table root page.
+#ifndef CONFIG_IOMMU_MAX_DOMAINS
+#define CONFIG_IOMMU_MAX_DOMAINS 8
+#endif
+
+/// Maximum number of outstanding DMA mappings per IOMMU domain (v0.4.2,
+/// issue #4).  Bounded per-domain record table; exhausting it fails closed.
+#ifndef CONFIG_IOMMU_MAX_MAPPINGS
+#define CONFIG_IOMMU_MAX_MAPPINGS 32
+#endif
+
+/// Maximum number of PCI buses with a static IOMMU context table (v0.4.2,
+/// issue #4).  Each bus table is a fixed .bss allocation (256 x 16-byte
+/// context entries) — no dynamic allocation on real-time paths.
+#ifndef CONFIG_IOMMU_MAX_BUSES
+#define CONFIG_IOMMU_MAX_BUSES 8
+#endif
+
 // ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------
