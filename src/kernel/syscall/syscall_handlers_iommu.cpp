@@ -49,6 +49,7 @@ namespace {
 ///        handle addressed.  Single-core/task-context: cap mutation is task-
 ///        context only (SMP derivation tracking is a documented follow-up).
 /// @return SL flags, or 0 on any validation failure (caller releases pins).
+#if defined(CONFIG_ARCH_X86_64)
 uint32_t validate_iommu_pair(cap::CNode *cs, uint64_t frame_handle,
                              const KernelObject *fobj,
                              const cap::IoMmuDmaCap *dma) {
@@ -77,6 +78,7 @@ uint32_t validate_iommu_pair(cap::CNode *cs, uint64_t frame_handle,
         flags |= iommu::vtd::kSlEntryWrite;
     return flags;
 }
+#endif // CONFIG_ARCH_X86_64
 
 } // namespace
 

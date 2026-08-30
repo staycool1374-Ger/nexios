@@ -37,6 +37,23 @@ namespace arch {
 /// @brief Higher-half offset: convert physical → kernel-visible virtual.
 inline constexpr uint64_t HHDM_OFFSET = CONFIG_HHDM_OFFSET;
 
+/// @brief Size of the PMM allocatable window — the linear-mapped RAM span
+/// the page allocator scans.  Must be covered by the architecture's MMU
+/// higher-half mapping (x86_64 identity window; aarch64/riscv64 map it
+/// starting at RAM_BASE_FALLBACK).
+inline constexpr uint64_t HHDM_WINDOW_SIZE = 128_MiB;
+
+/// @brief Fallback RAM base when the firmware/bootloader provides no memory
+/// regions (QEMU virt machine layout for the non-x86 targets; x86_64 RAM
+/// starts at physical 0).
+#if defined(CONFIG_ARCH_AARCH64)
+inline constexpr uint64_t RAM_BASE_FALLBACK = 0x40000000ULL;
+#elif defined(CONFIG_ARCH_RISCV64)
+inline constexpr uint64_t RAM_BASE_FALLBACK = 0x80000000ULL;
+#else
+inline constexpr uint64_t RAM_BASE_FALLBACK = 0x0ULL;
+#endif
+
 /// @brief Page-table layout: indices 0-255 = user (TTBR0), 256-511 = kernel (TTBR1).
 inline constexpr uint64_t PML4_USER_COUNT    = CONFIG_PML4_USER_COUNT;   // entries 0-255
 inline constexpr uint64_t PML4_KERNEL_START  = CONFIG_PML4_USER_COUNT;   // entry 256

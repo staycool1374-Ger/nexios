@@ -2288,10 +2288,11 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             (!nsp ||
              (!harness_boot_ctx &&
               (nsp < nbase || nsp >= next.kernel_stack_top)) ||
-             (npg != 0 && (npg & 0xFFF) != 0));
-        uint64_t f_rflags = 0;
+              (npg != 0 && (npg & 0xFFF) != 0));
         if (!bad) {
             const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+#if defined(CONFIG_ARCH_X86_64)
+            uint64_t f_rflags = 0;
             // The iret frame sits above the saved register frame.  Two valid
             // layouts exist: a freshly-created task (task.cpp builds rip first)
             // and a task saved by isr_common (CPU order: ss first).  Both place
@@ -2311,6 +2312,21 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 !validate_iret_frame(next, nbase, f_rflags, rip_b, cs_b, rsp_b,
                                      ss_b))
                 bad = true;
+#elif defined(CONFIG_ARCH_AARCH64)
+            // AArch64 saved/initial context is the vectors.S save area:
+            // x0-x30 (+0..240), sp_el0 (+248), elr_el1 (+256), spsr_el1
+            // (+264).  Validate the exception-return state instead of an
+            // x86 iret frame: ELR must be non-zero and SPSR must encode a
+            // sane AArch64 exception-return mode (EL0t = 0b0000 or
+            // EL1h = 0b0101) — a garbage frame (zeroed fresh stack) must
+            // never be dispatched.
+            uint64_t elr = f[256 / 8];
+            uint64_t spsr = f[264 / 8];
+            uint64_t mode = spsr & 0xFULL;
+            if (elr == 0 || (mode != 0x0 && mode != 0x5)) {
+                bad = true;
+            }
+#endif
         }
         if (bad) {
             // ---- Dispatch guard ----
@@ -3564,8 +3580,75 @@ extern "C" void scheduler_abort_switch_fixup() {
 #endif
 }
 
-extern "C" void scheduler_on_context_switch() {
-    uint64_t id =
+/// @brief Handle a synchronous exception from EL0 that is not an SVC
+/// (aarch64, called from vectors.S el0_sync).
+///
+/// User-task faults (data/page abort, illegal instruction, ...) must never be
+/// dispatched as syscalls.  Report the fault once per task, park the task
+/// (BLOCKED + dequeued) so the rest of the system keeps running, and advance
+/// ELR past the faulting instruction so the parked context stays consistent.
+extern "C" void aarch64_el0_fault_handler() {
+    static bool fault_reported[64] = {};
+    uint64_t esr = 0;
+    uint64_t far_addr = 0;
+    asm volatile("mrs %0, esr_el1" : "=r"(esr));
+    asm volatile("mrs %0, far_el1" : "=r"(far_addr));
+    auto *t = kernel::Scheduler::current_task();
+    uint64_t tid = t ? t->id : 0;
+    if (tid < 64 && !fault_reported[tid]) {
+        fault_reported[tid] = true;
+        uint64_t elr = 0;
+        asm volatile("mrs %0, elr_el1" : "=r"(elr));
+        debug_write("[FAULT] task=");
+        debug_write_hex(tid);
+        debug_write(" esr=");
+        debug_write_hex(esr);
+        debug_write(" elr=");
+        debug_write_hex(elr);
+        debug_write(" far=");
+        debug_write_hex(far_addr);
+        debug_write(" pt=");
+        debug_write_hex(t ? t->page_table_ : 0);
+        uint64_t ttbr0 = 0;
+        asm volatile("mrs %0, ttbr0_el1" : "=r"(ttbr0));
+        debug_write(" ttbr0=");
+        debug_write_hex(ttbr0 & ~0xFFULL);
+        debug_write("\n");
+        if (t && t->page_table_) {
+            auto *l0 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (t->page_table_ & ~0xFFFULL));
+            auto *l1 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET +
+                (l0[(far_addr >> 39) & 0x1FF] & ~0xFFFULL));
+            auto *l2 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET +
+                (l1[(far_addr >> 30) & 0x1FF] & ~0xFFFULL));
+            auto *l3 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET +
+                (l2[(far_addr >> 21) & 0x1FF] & ~0xFFFULL));
+            debug_write("[FAULT] L0=");
+            debug_write_hex(l0[(far_addr >> 39) & 0x1FF]);
+            debug_write(" L1=");
+            debug_write_hex(l1[(far_addr >> 30) & 0x1FF]);
+            debug_write(" L2=");
+            debug_write_hex(l2[(far_addr >> 21) & 0x1FF]);
+            debug_write(" L3=");
+            debug_write_hex(l3[(far_addr >> 12) & 0x1FF]);
+            debug_write("\n");
+        }
+    }
+    if (t) {
+        arch::IrqGuard irq_guard{};
+        kernel::Scheduler::dequeue_ready(*t);
+        t->state = kernel::TaskState::BLOCKED;
+    }
+    uint64_t next_elr = 0;
+    asm volatile("mrs %0, elr_el1" : "=r"(next_elr));
+    next_elr += 4;
+    asm volatile("msr elr_el1, %0" : : "r"(next_elr));
+}
+
+extern "C" void scheduler_on_context_switch() {    uint64_t id =
         __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
     H2_REC(kernel::H2_EV_APPLY, id, 0, 0);
     if (id == UINT64_MAX)

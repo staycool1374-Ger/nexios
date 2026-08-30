@@ -111,7 +111,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
-    {"memory_pmm",            5,    0,       0      },  // PMM alloc/free unit tests (hosts 0-test delegate)
+    {"memory_pmm",            8,    0,       0      },  // PMM alloc/free unit tests + window geometry (hosts 0-test delegate)
     {"memory_mempool",        4,    0,       0      },  // MemPool allocator tests
     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries

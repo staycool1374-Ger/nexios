@@ -1,6 +1,10 @@
 .section .text
 .globl syscall_entry
 .type syscall_entry, @function
+.extern scheduler_save_rsp_to
+.extern irq_context_switch_common
+.extern debug_write
+.extern debug_write_hex
 
 // AArch64 syscall entry via SVC #0 from EL0
 // On entry:
@@ -54,6 +58,19 @@ syscall_entry:
 
     str     x0, [sp, #272]
 
+    // A blocking syscall (IPC receive/send_sync, IRQ wait, exit, ...) arms
+    // the deferred switch (scheduler_save_rsp_to) before returning.  If the
+    // arm is set, do NOT return into the (now BLOCKED) task — apply the
+    // switch instead: the new task's context is restored and this task's
+    // frame (including the syscall return value at +272) is saved into its
+    // own context for later resumption.  Mirrors the x86_64 isr_stubs
+    // syscall epilogue (isr_stubs.asm).
+    adrp    x0, scheduler_save_rsp_to
+    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
+    cbz     x0, .sys_no_switch
+    b       irq_context_switch_common
+
+.sys_no_switch:
     ldp     x5, x6, [sp, #248]
     msr     sp_el0, x5
     msr     elr_el1, x6

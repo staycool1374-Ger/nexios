@@ -25,6 +25,7 @@
 #include <constants.hpp>
 #include <utils.hpp>
 #include <assert.hpp>
+#include <logger.hpp>
 #include <kernel/memory/pmm_errors.hpp>
 
 namespace kernel {
@@ -47,6 +48,8 @@ constinit PMM::OOMHandler PMM::oom_handler_ = nullptr;
 constinit uint64_t PMM::free_list_ = 0;
 constinit uint64_t PMM::free_head_ = UINT64_MAX;
 constinit uint64_t PMM::pool_free_head_ = UINT64_MAX;
+constinit uint64_t PMM::window_base_page_ = 0;
+constinit uint64_t PMM::window_end_page_ = 0;
 
 #if CONFIG_STATIC_POOLS_ONLY
 static bool g_pmm_init_done = false;
@@ -58,10 +61,17 @@ static bool g_pmm_init_done = false;
 /// @param mem_size    Total physical memory in bytes.
 /// @param kernel_start Physical address of kernel image start.
 /// @param kernel_end   Physical address of kernel image end.
-void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end) {
+/// @param window_base  Physical base of the allocatable RAM window (min
+///                     usable-region base; 0 on x86_64).
+void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end,
+               uint64_t window_base) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     total_pages_ = mem_size / PAGE_SIZE;
     free_pages_ = total_pages_;
+
+    WindowPages win = compute_window_pages(mem_size, window_base);
+    window_base_page_ = win.base_page;
+    window_end_page_ = win.end_page;
 
     bitmap_size_ = align_up<uint64_t>(total_pages_ / 8, 8_KiB);
     uint64_t free_list_bytes = align_up<uint64_t>(total_pages_ * sizeof(uint64_t), 8_KiB);
@@ -97,17 +107,23 @@ void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end) {
         --free_pages_;
     }
 
-    // Place the page-table pool at the end of the HHDM window (128 MiB)
-    // so general allocations (try_alloc_kernel scanning from 0) naturally
-    // find free pages before the pool.  Only alloc_page_table uses the
-    // pool range.  PtPoolSnapshot protects the pool bitmap from PMM restore.
-    uint64_t hhdm_limit_pages = (128ULL * 1024 * 1024) / PAGE_SIZE; // 32768
+    // Place the page-table pool at the end of the allocatable window
+    // (128 MiB of linear-mapped RAM) so general allocations (try_alloc_kernel
+    // scanning from the window base) naturally find free pages before the
+    // pool.  Only alloc_page_table uses the pool range.  PtPoolSnapshot
+    // protects the pool bitmap from PMM restore.
+    uint64_t window_pages = window_end_page_ - window_base_page_;
     uint64_t pool_size_pages = CONFIG_PAGE_TABLE_POOL_SIZE;
-    uint64_t pool_start_page = hhdm_limit_pages - pool_size_pages - 16;
-    if (pool_start_page > reserved_end_page &&
-        pool_start_page + pool_size_pages <= hhdm_limit_pages) {
-        page_table_pool_start_ = pool_start_page * PAGE_SIZE;
-        page_table_pool_end_ = (pool_start_page + pool_size_pages) * PAGE_SIZE;
+    if (window_pages > pool_size_pages + 16) {
+        uint64_t pool_start_page = window_base_page_ + window_pages -
+                                   pool_size_pages - 16;
+        // pool_start_page + pool_size_pages <= window_end_page_ holds by
+        // construction (16-page guard above).
+        if (pool_start_page > reserved_end_page) {
+            page_table_pool_start_ = pool_start_page * PAGE_SIZE;
+            page_table_pool_end_ =
+                (pool_start_page + pool_size_pages) * PAGE_SIZE;
+        }
     }
 
     // Reserve the last 16 pages.
@@ -121,8 +137,14 @@ void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end) {
         }
     }
 
-    // Build the O(1) free list (pages within HHDM window only).
+    // Build the O(1) free list (pages within the allocatable window only).
     rebuild_free_list();
+
+    if (free_head_ == UINT64_MAX) {
+        kernel::Logger::error(
+            "[PMM] allocatable window [%lu, %lu) has no free pages",
+            window_base_page_, window_end_page_);
+    }
 
     // Register the default OOM handler based on CONFIG_OOM_POLICY.
 #if CONFIG_OOM_POLICY == 1 && !CONFIG_OOM_HOOK
@@ -139,19 +161,17 @@ void PMM::init(uint64_t mem_size, uint64_t kernel_start, uint64_t kernel_end) {
 void PMM::rebuild_free_list() noexcept {
     free_head_ = UINT64_MAX;
     auto *fl = reinterpret_cast<uint64_t *>(free_list_);
-    uint64_t hhdm_limit = (128ULL * 1024 * 1024) / PAGE_SIZE;
     uint64_t pool_start = page_table_pool_start_ / PAGE_SIZE;
     uint64_t pool_end = page_table_pool_end_ / PAGE_SIZE;
-    uint64_t limit = (hhdm_limit < total_pages_) ? hhdm_limit : total_pages_;
-    for (uint64_t i = 0; i < limit; ++i) {
-        if (bitmap_test(i))
+    for (uint64_t idx = window_base_page_; idx < window_end_page_; ++idx) {
+        if (bitmap_test(idx))
             continue;
-        if (i >= pool_start && i < pool_end) {
-            fl[i] = pool_free_head_;
-            pool_free_head_ = i;
+        if (idx >= pool_start && idx < pool_end) {
+            fl[idx] = pool_free_head_;
+            pool_free_head_ = idx;
         } else {
-            fl[i] = free_head_;
-            free_head_ = i;
+            fl[idx] = free_head_;
+            free_head_ = idx;
         }
     }
 }
@@ -161,11 +181,14 @@ void PMM::rebuild_free_list() noexcept {
 /// @param count Number of contiguous pages.
 /// @return Physical address or 0.
 uint64_t PMM::try_alloc_kernel(size_t count) {
-    uint64_t hhdm_limit = (128ULL * 1024 * 1024) / PAGE_SIZE;
-    uint64_t limit = (hhdm_limit < total_pages_) ? hhdm_limit : total_pages_;
+    if (count == 0) {
+        return 0;
+    }
     if (count == 1) {
-        // O(1) fast path: pop from free list (pages within HHDM window).
-        if (free_head_ < limit) {
+        // O(1) fast path: pop from free list (pages within the allocatable
+        // window).
+        if (free_head_ >= window_base_page_ &&
+            free_head_ < window_end_page_) {
             uint64_t idx = free_head_;
             free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
             bitmap_set(idx);
@@ -173,34 +196,36 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
             --free_pages_;
             return idx * PAGE_SIZE;
         }
-        // Fallback: bitmap scan within HHDM window for pages not on the
-        // free list (e.g., freed via paths that didn't update it).
-        for (uint64_t i = 0; i < limit; ++i) {
-            if (!bitmap_test(i)) {
-                bitmap_set(i);
-                owner_set_kernel(i);
+        // Fallback: bitmap scan within the allocatable window for pages not
+        // on the free list (e.g., freed via paths that didn't update it).
+        for (uint64_t idx = window_base_page_; idx < window_end_page_;
+             ++idx) {
+            if (!bitmap_test(idx)) {
+                bitmap_set(idx);
+                owner_set_kernel(idx);
                 --free_pages_;
-                return i * PAGE_SIZE;
+                return idx * PAGE_SIZE;
             }
         }
         return 0;
     }
-    for (uint64_t i = 0; i <= limit - count; ++i) {
+    for (uint64_t idx = window_base_page_;
+         idx + count <= window_end_page_; ++idx) {
         bool ok = true;
         for (size_t j = 0; j < count; ++j) {
-            if (bitmap_test(i + j)) {
+            if (bitmap_test(idx + j)) {
                 ok = false;
                 break;
             }
         }
         if (ok) {
             for (size_t j = 0; j < count; ++j) {
-                bitmap_set(i + j);
-                owner_set_kernel(i + j);
+                bitmap_set(idx + j);
+                owner_set_kernel(idx + j);
                 --free_pages_;
             }
             rebuild_free_list();
-            return i * PAGE_SIZE;
+            return idx * PAGE_SIZE;
         }
     }
     return 0;
@@ -211,10 +236,12 @@ uint64_t PMM::try_alloc_kernel(size_t count) {
 /// @param count Number of contiguous pages.
 /// @return Physical address or 0.
 uint64_t PMM::try_alloc_user(size_t count) {
-    uint64_t hhdm_limit_pages = (128ULL * 1024 * 1024) / arch::PAGE_SIZE;
-    uint64_t limit = (hhdm_limit_pages < total_pages_) ? hhdm_limit_pages : total_pages_;
+    if (count == 0) {
+        return 0;
+    }
     if (count == 1) {
-        if (free_head_ < limit) {
+        if (free_head_ >= window_base_page_ &&
+            free_head_ < window_end_page_) {
             uint64_t idx = free_head_;
             free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
             bitmap_set(idx);
@@ -222,32 +249,34 @@ uint64_t PMM::try_alloc_user(size_t count) {
             --free_pages_;
             return idx * PAGE_SIZE;
         }
-        for (uint64_t i = 0; i < limit; ++i) {
-            if (!bitmap_test(i)) {
-                bitmap_set(i);
-                owner_set_user(i);
+        for (uint64_t idx = window_base_page_; idx < window_end_page_;
+             ++idx) {
+            if (!bitmap_test(idx)) {
+                bitmap_set(idx);
+                owner_set_user(idx);
                 --free_pages_;
-                return i * PAGE_SIZE;
+                return idx * PAGE_SIZE;
             }
         }
         return 0;
     }
-    for (uint64_t i = 0; i <= limit - count; ++i) {
+    for (uint64_t idx = window_base_page_;
+         idx + count <= window_end_page_; ++idx) {
         bool ok = true;
         for (size_t j = 0; j < count; ++j) {
-            if (bitmap_test(i + j)) {
+            if (bitmap_test(idx + j)) {
                 ok = false;
                 break;
             }
         }
         if (ok) {
             for (size_t j = 0; j < count; ++j) {
-                bitmap_set(i + j);
-                owner_set_user(i + j);
+                bitmap_set(idx + j);
+                owner_set_user(idx + j);
                 --free_pages_;
             }
             rebuild_free_list();
-            return i * PAGE_SIZE;
+            return idx * PAGE_SIZE;
         }
     }
     return 0;
@@ -430,9 +459,8 @@ uint64_t PMM::alloc_page_table() {
     }
     {
         sync::IrqSpinLockGuard lock(pmm_lock_);
-        uint64_t hhdm_limit_pages = (128ULL * 1024 * 1024) / arch::PAGE_SIZE;
-        uint64_t limit = (hhdm_limit_pages < total_pages_) ? hhdm_limit_pages : total_pages_;
-        if (pool_free_head_ < limit) {
+        if (pool_free_head_ >= window_base_page_ &&
+            pool_free_head_ < window_end_page_) {
             uint64_t idx = pool_free_head_;
             pool_free_head_ = reinterpret_cast<uint64_t *>(free_list_)[idx];
             bitmap_set(idx);
@@ -456,7 +484,7 @@ uint64_t PMM::alloc_page_table() {
 void PMM::free_page(uint64_t phys_addr) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     uint64_t index = phys_addr / PAGE_SIZE;
-    if (index >= total_pages_)
+    if (index >= total_pages_ || index < window_base_page_)
         return;
     if (bitmap_test(index)) {
         bitmap_clear(index);
@@ -563,12 +591,19 @@ bool PMM::owner_test(size_t index) {
 /// @param mem_size    Total physical memory in bytes.
 /// @param kernel_start Physical address of kernel image start.
 /// @param kernel_end   Physical address of kernel image end.
+/// @param window_base  Physical base of the allocatable RAM window.
 /// @return PmmError code.
+/// @note Unlike init(), this variant does not build the O(1) free list
+///       (pre-existing behavior; no current callers).
 errors::PmmError PMM::init_err(uint64_t mem_size, uint64_t kernel_start,
-                               uint64_t kernel_end) {
+                               uint64_t kernel_end, uint64_t window_base) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     total_pages_ = mem_size / PAGE_SIZE;
     free_pages_ = total_pages_;
+
+    WindowPages win = compute_window_pages(mem_size, window_base);
+    window_base_page_ = win.base_page;
+    window_end_page_ = win.end_page;
 
     bitmap_size_ = align_up<uint64_t>(total_pages_ / 8, 8_KiB);
     uint64_t bitmap_phys = align_up<uint64_t>(kernel_end, 8_KiB);
@@ -601,13 +636,16 @@ errors::PmmError PMM::init_err(uint64_t mem_size, uint64_t kernel_start,
         --free_pages_;
     }
 
-    uint64_t hhdm_limit_pages = (128ULL * 1024 * 1024) / PAGE_SIZE;
+    uint64_t window_pages = window_end_page_ - window_base_page_;
     uint64_t pool_size_pages = CONFIG_PAGE_TABLE_POOL_SIZE;
-    uint64_t pool_start_page = hhdm_limit_pages - pool_size_pages - 16;
-    if (pool_start_page > reserved_end_page &&
-        pool_start_page + pool_size_pages <= hhdm_limit_pages) {
-        page_table_pool_start_ = pool_start_page * PAGE_SIZE;
-        page_table_pool_end_ = (pool_start_page + pool_size_pages) * PAGE_SIZE;
+    if (window_pages > pool_size_pages + 16) {
+        uint64_t pool_start_page = window_base_page_ + window_pages -
+                                   pool_size_pages - 16;
+        if (pool_start_page > reserved_end_page) {
+            page_table_pool_start_ = pool_start_page * PAGE_SIZE;
+            page_table_pool_end_ =
+                (pool_start_page + pool_size_pages) * PAGE_SIZE;
+        }
     }
 
     if (total_pages_ > 16) {
@@ -781,7 +819,7 @@ errors::PmmError PMM::alloc_page_table_err(uint64_t &out_phys_addr) {
 errors::PmmError PMM::free_page_err(uint64_t phys_addr) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     uint64_t index = phys_addr / PAGE_SIZE;
-    if (index >= total_pages_) {
+    if (index >= total_pages_ || index < window_base_page_) {
         return errors::PMM_ERR_INVALID;
     }
     if (bitmap_test(index)) {

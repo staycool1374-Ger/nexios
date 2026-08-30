@@ -281,7 +281,7 @@ JARVIS_TEST(irq_cap_install_lookup_revoke, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: sys_irq_register over a live IrqCap succeeds: the vector is armed,
 //           the current task becomes the recipient and the PIC line is
-//           unmasked.
+//           unmasked (PIC mask restore check is x86_64-only).
 // Input: real task installing an IrqCap; dispatch SYS_IRQ_REGISTER
 // Expect: ret 0; delivery slot armed; recipient == task
 // Depends: kernel::Syscall, kernel::IrqDelivery
@@ -291,6 +291,9 @@ JARVIS_TEST(irq_register_dispatch_happy, "PRE: none | POST: none") {
     g_wait_ret = 0;
 
     arch::IrqState pic = arch::ArchInterruptController::snapshot();
+#if !defined(CONFIG_ARCH_X86_64)
+    (void)pic;
+#endif
 
     auto *t = TaskControlBlock::create(
         []() {
@@ -333,12 +336,15 @@ JARVIS_TEST(irq_register_dispatch_happy, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(0ULL, g_reg_ret);
     JARVIS_ASSERT(g_armed);
 
-    // Slot released at task teardown: table empty, PIC mask restored.
+    // Slot released at task teardown: table empty, line masks restored
+    // (x86_64: 8259A PIC masks; other architectures have no PIC state).
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_ASSERT_EQ(static_cast<uint16_t>(pic.pic1_mask),
                      static_cast<uint16_t>(arch::ArchInterruptController::snapshot().pic1_mask));
     JARVIS_ASSERT_EQ(static_cast<uint16_t>(pic.pic2_mask),
                      static_cast<uint16_t>(arch::ArchInterruptController::snapshot().pic2_mask));
+#endif
     JARVIS_TEST_PASS();
 }
 
@@ -614,10 +620,12 @@ JARVIS_TEST(irq_wait_task_died_drain, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: The PIC mask state and the delivery table return to their
 //           pre-test baseline after a full register → deliver → teardown
-//           cycle.
+//           cycle.  x86_64 only — the 8259A line-mask save/restore does not
+//           exist on other architectures.
 // Input: full cycle on vector 40 with PIC mask snapshot/restore
 // Expect: mask == snapshot; occupied_count == baseline; RT == baseline
 // Depends: kernel::arch::ArchInterruptController, kernel::IrqDelivery
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {
     auto &rt = kernel::test::ResourceTracker::instance();
     kernel::test::ResourceCounters before{};
@@ -644,6 +652,7 @@ JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64
 
 /// @brief Registers all IRQ-cap / user-space delivery test cases (issue #2).
 void register_cap_irq_tests() {
@@ -658,5 +667,7 @@ void register_cap_irq_tests() {
     JARVIS_REGISTER_TEST(irq_wait_blocking_wakeup);
     JARVIS_REGISTER_TEST(irq_wait_revoked_mid_wait);
     JARVIS_REGISTER_TEST(irq_wait_task_died_drain);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(irq_delivery_ack_pic_state);
+#endif
 }

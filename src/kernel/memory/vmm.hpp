@@ -216,14 +216,17 @@ class VMM {
 
 #if defined(CONFIG_ARCH_AARCH64)
     // aarch64 stage-1 page-table descriptor bit layout.
-    // Table descriptors (L0-L2) and page descriptors (L3): bits[1:0]=11.
-    // Block descriptors (L1-L2): bits[1:0]=01.
+    // Table descriptors (L0-L2): bits[1:0]=11 (V=1, bit1=1 → next-level
+    // table).  Block descriptors (L1-L2): bits[1:0]=01 (bit1=0).
+    // Page descriptors (L3): bits[1:0]=11 — bit1=0 at L3 is a
+    // block-at-invalid-level encoding and faults as a translation fault.
     // AP[1:0] in bits[7:6];  00=EL1-RW/EL0-*, 01=EL1-RW/EL0-RW,
     //   10=EL1-RO/EL0-*, 11=EL1-RO/EL0-RO.
-    // AF (Access Flag) must be 1 for stage-1 - bit 8 (NOT bit 10).
+    // AF (Access Flag) = bit 10 (stage-1); an AF=0 leaf faults on first
+    // access.  Bits 9:8 = SH (shareability).
     static constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
     static constexpr uint64_t PAGE_TABLE = 1ULL << 1;
-    static constexpr uint64_t PAGE_AF = 1ULL << 8; // Access Flag (stage-1)
+    static constexpr uint64_t PAGE_AF = 1ULL << 10; // Access Flag (stage-1)
     static constexpr uint64_t PAGE_AP_USER = 1ULL
                                              << 6;    // AP[0] - EL0 accessible
     static constexpr uint64_t PAGE_AP_RO = 1ULL << 7; // AP[1] - read-only (EL1)
@@ -232,6 +235,10 @@ class VMM {
     // (SMEP parity) unless NX adds UXN.
     static constexpr uint64_t PAGE_PXN = 1ULL << 53;
     static constexpr uint64_t PAGE_UXN = 1ULL << 54;
+    /// @brief MAIR attribute index (bits[4:2]) for Normal cacheable memory.
+    /// boot.S programs MAIR: attr0=Device, attr1=Normal WB — leaves must
+    /// select index 1 (Device memory is never executable).
+    static constexpr uint64_t PAGE_ATTR_NORMAL = 1ULL << 2;
 
     // Compatibility aliases (used in flag-building expressions)
     static constexpr uint64_t PAGE_WRITE = 0; // no-op - writable by default

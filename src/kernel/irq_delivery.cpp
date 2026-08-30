@@ -65,6 +65,9 @@ static void restore_line_mask(IrqRegistration &r, bool force_mask) {
     if (force_mask || r.line_was_masked) {
         arch::ArchInterruptController::mask(irq_line);
     }
+#else
+    (void)r;
+    (void)force_mask;
 #endif
 }
 

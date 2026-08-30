@@ -150,10 +150,13 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
             uint64_t base_flags =
-                table[index] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+                table[index] &
+                (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
+                 PAGE_ATTR_NORMAL);
             for (size_t i = 0; i < 512; ++i) {
-                new_table[i] =
-                    (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
+                // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
+                new_table[i] = (huge_base + i * 0x1000) | base_flags |
+                               PAGE_ATTR_NORMAL;
             }
             table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
 #elif defined(CONFIG_ARCH_RISCV64)
@@ -340,7 +343,11 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
                "map_page: KERNEL page mapped as user-accessible");
 
 #if defined(CONFIG_ARCH_AARCH64)
-    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
+    // L3 page descriptors are bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
+    // is a block-at-invalid-level encoding and faults as a translation
+    // fault.  AttrIndx=1 selects the Normal WB MAIR attribute; Device
+    // memory is never executable and must not back user/kernel code.
+    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
     if (user)
         flags |= PAGE_AP_USER | PAGE_PXN;
     else
@@ -559,9 +566,12 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
         uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
+                          PAGE_ATTR_NORMAL);
         for (size_t i = 0; i < 512; ++i) {
-            new_pt[i] = (huge_base + i * 0x1000) | base_flags | PAGE_TABLE;
+            // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
+            new_pt[i] =
+                (huge_base + i * 0x1000) | base_flags | PAGE_ATTR_NORMAL;
         }
         pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
 #else
@@ -583,7 +593,9 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
 #if defined(CONFIG_ARCH_AARCH64)
-    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
+    // L3 page descriptors: bits[1:0]=11 (see map_page note).
+    // AttrIndx=1 = Normal WB (see map_page note).
+    uint64_t flags = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
     if (user)
         flags |= PAGE_AP_USER | PAGE_PXN;
     else

@@ -561,7 +561,8 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     *--stack = 0;          // padding
     *--stack = 0;          // padding
-    *--stack = 0x10;       // SPSR_EL1: EL0t
+    *--stack = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) — bit 4 set
+                           // would eret into AArch32 EL0, not EL0t.
     *--stack = hdr->entry; // ELR_EL1
     *--stack = user_rsp;   // SP_EL0
     for (int j = 0; j < 31; ++j)
@@ -756,7 +757,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
 #elif defined(CONFIG_ARCH_AARCH64)
     regs[0] = 0;           // X0 = 0
     regs[17] = hdr->entry; // ELR_EL1 (index 17)
-    regs[19] = 0x10;       // SPSR_EL1: EL0t (index 19)
+    regs[19] = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) (index 19)
     regs[20] = user_rsp;   // SP_EL0 (index 20)
 #elif defined(CONFIG_ARCH_RISCV64)
     (void)regs;

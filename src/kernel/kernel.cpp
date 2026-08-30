@@ -654,25 +654,32 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     uint64_t kend =
         reinterpret_cast<uint64_t>(kernel_virt_end) - arch::HHDM_OFFSET;
     uint64_t mem_size = 0;
+    // Allocatable-window base: min usable RAM base from the firmware map.
+    // arch::RAM_BASE_FALLBACK is 0 on x86_64 (window byte-identical to the
+    // pre-window-base behavior) and the QEMU virt RAM base for
+    // aarch64/riscv64.
+    uint64_t ram_base = arch::RAM_BASE_FALLBACK;
     if (kernel::gs::boot_info().num_mem_regions > 0) {
         for (int i = 0; i < kernel::gs::boot_info().num_mem_regions; ++i) {
-            uint64_t end = kernel::gs::boot_info().mem_regions[i].base +
-                           kernel::gs::boot_info().mem_regions[i].size;
-            if (end > mem_size)
-                mem_size = end;
+            const auto &region = kernel::gs::boot_info().mem_regions[i];
+            uint64_t region_end = region.base + region.size;
+            if (region_end > mem_size)
+                mem_size = region_end;
+            if (region.type == 1 && region.base < ram_base)
+                ram_base = region.base;
         }
     } else {
 #if defined(CONFIG_ARCH_X86_64)
         mem_size = 64_MiB;
 #elif defined(CONFIG_ARCH_AARCH64)
-        mem_size = 0x40000000 + 256_MiB;
+        mem_size = arch::RAM_BASE_FALLBACK + 256_MiB;
 #elif defined(CONFIG_ARCH_RISCV64)
-        mem_size = 0x80000000 + 128_MiB;
+        mem_size = arch::RAM_BASE_FALLBACK + 128_MiB;
 
 #endif
 
     }
-    kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend);
+    kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
     kernel::VMM::init();
 
     // v0.4.0 MP-1.5: the per-kernel-task private-data window must not overlap

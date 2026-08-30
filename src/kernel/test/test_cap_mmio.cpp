@@ -123,12 +123,15 @@ uint64_t ioport_grant_attempt(uint64_t cap_handle, uint64_t start,
 } // namespace
 
 // Runmode: kernel
-// Testidea: The TSS I/O permission bitmap layout is default-deny: iopb
-//           offset == sizeof(TSS), descriptor limit == sizeof(TSSBlock)-1,
-//           terminator == 0xFF and the loaded bitmap is all-1s.
+// Testidea: The x86_64 TSS I/O permission bitmap layout is default-deny:
+//           iopb offset == sizeof(TSS), descriptor limit ==
+//           sizeof(TSSBlock)-1, terminator == 0xFF and the loaded bitmap is
+//           all-1s.  x86_64 only — the TSS/IOPB mechanism does not exist on
+//           other architectures.
 // Input: none (boot-time GDT::init state)
 // Expect: layout invariants hold
 // Depends: kernel::arch::GDT
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(tss_iopb_layout_valid, "PRE: none | POST: none") {
     uint16_t off = arch::GDT::tss_iopb_offset();
     uint16_t limit = arch::GDT::tss_descriptor_limit();
@@ -138,6 +141,7 @@ JARVIS_TEST(tss_iopb_layout_valid, "PRE: none | POST: none") {
     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
     JARVIS_TEST_PASS();
 }
+#endif
 
 // Runmode: kernel
 // Testidea: An MEMORY_32 MmioCap wraps a BAR range with correct fields and
@@ -497,7 +501,9 @@ JARVIS_TEST(ioport_pool_exhaustion_fails_closed, "PRE: none | POST: none") {
 
 /// @brief Registers all MMIO-cap / I/O-delegation test cases (issue #3).
 void register_cap_mmio_tests() {
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(tss_iopb_layout_valid);
+#endif
     JARVIS_REGISTER_TEST(mmio_cap_create_memory_bar_fields);
     JARVIS_REGISTER_TEST(mmio_cap_create_io_bar_bounds);
     JARVIS_REGISTER_TEST(mmio_cap_install_lookup_revoke);

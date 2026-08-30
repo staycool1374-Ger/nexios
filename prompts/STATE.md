@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **IN PROGRESS (2026-08-30):** Issue #100 "aarch64 boot: PMM OOM panic" — PRIMARY DEFECT FIXED + 8 first-run boot-path defects fixed. aarch64 now boots meminit→kernel init→test class loaded (22)→reboot→init runs (tmpfs mounted, harness entered); user ELFs execute at EL0. x86_64 debug all 978/978 (zero regressions). REMAINING: init's daemon-ready IPC handshake (arch_aarch64 class still TIMEOUT). Full evidence: issue #100 comment 2026-08-30 + test-history.txt.
 - **DONE (2026-08-30):** Issue #4 "IOMMU DMA protection (VT-d / AMD-Vi / SMMU)" — capability-gated identity-IOVA VT-d table infrastructure (IoMmuDmaCap + IoMmuManager + SYS_IOMMU_MAP(59)/SYS_IOMMU_UNMAP(60)); live-DMAR programming documented as phase-2. SIL 3 APPROVED (audits/report-2026-08-30T11-14-39Z.md, 3 iterations). Class cap_iommu 12; debug `all` registered 990 (975 executed, 0 fail); release all 85/85; selftest 133/133. Commit `bf0984b1` (closes #4).
 - **DONE (2026-08-30):** Issue #2 "IRQ caps + user-space IRQ delivery (IrqCap)" — IrqCap (CapType::Irq) + bounded owner-tagged IRQ delivery table (CONFIG_CAP_MAX_IRQ=16) + SYS_IRQ_REGISTER(57)/SYS_IRQ_WAIT(58). SIL 3 APPROVED (audits/report-2026-08-30T00-08-05Z.md, 3 iterations). Class cap_irq 12; debug `all` registered 978 (963 executed, 0 fail); release all 85/85. Commit `ef9b748b` (closes #2).
 - **DONE (2026-08-29):** Issue #1 "Untyped child-split + sub-range carve" — cap::retype exhaustion-model sub-range carve (PAGE-aligned, prefix-only) + child Untyped for the remainder + SYS_CAP_RETYPE (56). SIL 3 APPROVED (audits/report-20260829T181710Z.md, 3 iterations). Class cap_untyped 9→18; debug `all` registered 966 (951 executed, 0 fail); release all 85/85; selftest 133/133. Commit `3eb2a50b` (closes #1).
@@ -64,7 +65,17 @@
 - (none outstanding) — issues #1, #2, #3, #4, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 975/975 (registered 990).
 
 #### Blocked
-- **aarch64 runtime boot (#28/#100):** kernel boots to meminit then PMM OOM panic (DTB memory regions never seeded into PMM) — blocks all aarch64 runtime tests incl. the 22-test arch_aarch64 class. P9 test-hygiene (testbed) is future work.
+- **aarch64 daemon-ready handshake (#100 remainder):** boot now reaches init's daemon wait; vfsd/iocd execute their real ELFs fault-free but the MSG_DAEMON_READY send→init-wake path + user console output (Terminal drops user writes on aarch64?) need verification. Next: instrument the send/notify path, then run the 22-test arch_aarch64 class. P9 test-hygiene (testbed) is future work.
+
+#### aarch64 boot-path fixes landed (issue #100, 2026-08-30 — uncommitted, SIL 3 audit pending)
+- PMM window base: pmm.{hpp,cpp} + kernel.cpp (window_base from min usable region; x86=0 byte-identical) + test_pmm.cpp (3 new tests, memory_pmm 5→8) + constants.hpp (HHDM_WINDOW_SIZE, RAM_BASE_FALLBACK).
+- GIC: interrupt_controller.cpp (IGROUPR=0 Group-0-only, CTLR enable-only, intid>=1020 spurious guard) + boot.S (GIC 2MiB block in HHDM MMIO window L2[64]) + hal/gic.hpp (HHDM-relative accessors).
+- Timer: aarch64/timer.cpp (handle_irq re-arms CNTP_TVAL via stored tick_interval_).
+- Scheduler: scheduler.cpp (dispatch guard arch-gated: aarch64 validates save-area ELR/SPSR instead of the x86 iret frame).
+- Task frames: task.cpp + elf.cpp (SPSR 0x10→0x0 = EL0t at 3 initial-frame sites; SPSR bit4 = AArch32-on-eret).
+- Syscall epilogue: syscall_entry.S (applies deferred switch via irq_context_switch_common, mirroring x86 isr_stubs).
+- EL0 entry: vectors.S (el0_sync: ESR.EC check — SVC 0x15→syscall, other→fault handler; per-task kernel stack via scheduler_load_kstack_top; el0_irq same; TTBR0 switch now tlbi vmalle1) + scheduler.cpp (aarch64_el0_fault_handler: report-once + park).
+- VMM leaf encoding: vmm.hpp (PAGE_AF=bit 10 stage-1 — was bit 8; PAGE_ATTR_NORMAL=AttrIndx 1; L3 pages are bits[1:0]=11) + vmm.cpp (all leaf paths: AF@10 + AttrIndx=1; bit1 kept on leaves).
 
 ### Next Move
 - Optional: reduce the non-blocking style warnings and clang-tidy warnings.

@@ -109,6 +109,8 @@ class Timer {
   private:
     static constinit uint64_t ticks_;
     static constinit uint64_t counter_freq_hz_;
+    /// @brief Current compare interval in counter ticks (re-arm value).
+    static constinit uint32_t tick_interval_;
 };
 
 /// @cond

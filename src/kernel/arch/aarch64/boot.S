@@ -161,6 +161,14 @@ _start:
     ldr     x14, =0x40008000
     ldr     x12, =0x9000421       // 0x9000000 | Device: Valid|Block|NS|AF
     str     x12, [x14, #72*8]
+    // Map GICv2 MMIO at VA 0xFFFF800008000000 (PA 0x08000000), L2 index 64.
+    // One 2MiB Device block covers GICD (0x08000000), GICC (0x08010000) and
+    // GICH/GICV (0x08020000/0x08030000).  The GIC must be reachable through
+    // the TTBR1 kernel window: the TTBR0 identity map does not exist in user
+    // page tables, so raw-physical GIC access faults once a user table is
+    // loaded (silent sync-exception loop in the IRQ path).
+    ldr     x12, =0x8000421       // 0x8000000 | Device: Valid|Block|NS|AF
+    str     x12, [x14, #64*8]
     ldr     x12, =0x40008000
     orr     x12, x12, #3
     ldr     x13, =0x40006000  // L1 base

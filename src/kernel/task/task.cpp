@@ -1244,7 +1244,9 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     *--stack = 0;    // padding
     *--stack = 0;    // padding
-    *--stack = 0x10; // SPSR_EL1: EL0t, all interrupts unmasked (DAIF=0)
+    *--stack = 0x0; // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0), DAIF unmasked.
+    // NOTE: bit 4 selects AArch32 on exception return — SPSR 0x10 would
+    // eret into AArch32 EL0 (wrong ISA), not EL0t.
     *--stack = reinterpret_cast<uint64_t>(entry); // ELR_EL1
     *--stack = user_rsp;                          // SP_EL0
     for (int i = 0; i < 31; ++i)
