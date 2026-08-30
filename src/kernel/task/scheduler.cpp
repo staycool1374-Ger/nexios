@@ -3615,25 +3615,38 @@ extern "C" void aarch64_el0_fault_handler() {
         debug_write_hex(ttbr0 & ~0xFFULL);
         debug_write("\n");
         if (t && t->page_table_) {
+            // Walk the faulting VA's descriptors for the report.  Every
+            // level is valid-bit checked: an unmapped intermediate points
+            // at HHDM+0 (physical 0) and must not be dereferenced.
+            // NOTE: fault_reported[] is single-entry-per-task by design —
+            // entry ids are masked to < 64 and the handler runs only from
+            // the el0_sync vector (task context, IRQs masked by the
+            // exception), so no concurrent writer exists.
             auto *l0 = reinterpret_cast<uint64_t *>(
                 arch::HHDM_OFFSET + (t->page_table_ & ~0xFFFULL));
-            auto *l1 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET +
-                (l0[(far_addr >> 39) & 0x1FF] & ~0xFFFULL));
-            auto *l2 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET +
-                (l1[(far_addr >> 30) & 0x1FF] & ~0xFFFULL));
-            auto *l3 = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET +
-                (l2[(far_addr >> 21) & 0x1FF] & ~0xFFFULL));
+            uint64_t l0e = l0[(far_addr >> 39) & 0x1FF];
             debug_write("[FAULT] L0=");
-            debug_write_hex(l0[(far_addr >> 39) & 0x1FF]);
-            debug_write(" L1=");
-            debug_write_hex(l1[(far_addr >> 30) & 0x1FF]);
-            debug_write(" L2=");
-            debug_write_hex(l2[(far_addr >> 21) & 0x1FF]);
-            debug_write(" L3=");
-            debug_write_hex(l3[(far_addr >> 12) & 0x1FF]);
+            debug_write_hex(l0e);
+            if (l0e & 1) {
+                auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                        (l0e & ~0xFFFULL));
+                uint64_t l1e = l1[(far_addr >> 30) & 0x1FF];
+                debug_write(" L1=");
+                debug_write_hex(l1e);
+                if (l1e & 1) {
+                    auto *l2 = reinterpret_cast<uint64_t *>(
+                        arch::HHDM_OFFSET + (l1e & ~0xFFFULL));
+                    uint64_t l2e = l2[(far_addr >> 21) & 0x1FF];
+                    debug_write(" L2=");
+                    debug_write_hex(l2e);
+                    if (l2e & 1) {
+                        auto *l3 = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + (l2e & ~0xFFFULL));
+                        debug_write(" L3=");
+                        debug_write_hex(l3[(far_addr >> 12) & 0x1FF]);
+                    }
+                }
+            }
             debug_write("\n");
         }
     }
@@ -3648,7 +3661,8 @@ extern "C" void aarch64_el0_fault_handler() {
     asm volatile("msr elr_el1, %0" : : "r"(next_elr));
 }
 
-extern "C" void scheduler_on_context_switch() {    uint64_t id =
+extern "C" void scheduler_on_context_switch() {
+    uint64_t id =
         __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
     H2_REC(kernel::H2_EV_APPLY, id, 0, 0);
     if (id == UINT64_MAX)

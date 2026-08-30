@@ -156,7 +156,7 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             for (size_t i = 0; i < 512; ++i) {
                 // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
                 new_table[i] = (huge_base + i * 0x1000) | base_flags |
-                               PAGE_ATTR_NORMAL;
+                               PAGE_TABLE | PAGE_ATTR_NORMAL;
             }
             table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
 #elif defined(CONFIG_ARCH_RISCV64)
@@ -319,16 +319,28 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
 #if defined(CONFIG_ARCH_AARCH64)
         uint64_t base_flags =
-            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
+                          PAGE_ATTR_NORMAL);
 #else
         uint64_t base_flags =
             pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
 #endif
         for (size_t i = 0; i < 512; ++i) {
+#if defined(CONFIG_ARCH_AARCH64)
+            // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
+            // is a block-at-invalid-level encoding and faults as a
+            // translation fault.  AttrIndx=1 = Normal WB (see the leaf-flags
+            // note in map_page / map_page_in_pml4).
+            new_pt[i] = (huge_base + i * 0x1000) | base_flags |
+                        PAGE_TABLE | PAGE_ATTR_NORMAL;
+#else
             new_pt[i] = (huge_base + i * 0x1000) | base_flags;
+#endif
         }
 #if defined(CONFIG_ARCH_AARCH64)
-        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
+        // Table descriptor: bits[1:0]=11 only — AF (bit 10) is a block/page
+        // attribute and RES0 in table descriptors.
+        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
 #else
         pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
 #endif
@@ -571,7 +583,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
         for (size_t i = 0; i < 512; ++i) {
             // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set).
             new_pt[i] =
-                (huge_base + i * 0x1000) | base_flags | PAGE_ATTR_NORMAL;
+                (huge_base + i * 0x1000) | base_flags | PAGE_TABLE |
+                PAGE_ATTR_NORMAL;
         }
         pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
 #else

@@ -107,7 +107,8 @@ JARVIS_TEST(pmm_window_geometry, "PRE: none | POST: none") {
 //           mapped RAM (guards the arch-specific window base at runtime).
 // Input: PMM::window_base_page()/window_end_page() after PMM init.
 // Expect: window non-empty; x86_64 base_page == 0 and end == min(window,
-//         total) pages; aarch64 base_page == 0x40000000 / PAGE_SIZE.
+//         total - base) pages; x86_64 base_page == 0; aarch64
+//         base_page == 0x40000000 / PAGE_SIZE.
 // Depends: kernel/memory/pmm.hpp, constants.hpp
 JARVIS_TEST(pmm_window_live_state, "PRE: PMM init | POST: none") {
     uint64_t win_base = PMM::window_base_page();
@@ -116,7 +117,9 @@ JARVIS_TEST(pmm_window_live_state, "PRE: PMM init | POST: none") {
     uint64_t total_pages = PMM::total_memory() / arch::PAGE_SIZE;
     uint64_t window_pages = arch::HHDM_WINDOW_SIZE / arch::PAGE_SIZE;
     uint64_t want_end =
-        (window_pages < total_pages) ? window_pages : total_pages;
+        win_base + ((window_pages < total_pages - win_base)
+                        ? window_pages
+                        : (total_pages - win_base));
     JARVIS_ASSERT_EQ(win_end, want_end);
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_ASSERT_EQ(win_base, 0u);

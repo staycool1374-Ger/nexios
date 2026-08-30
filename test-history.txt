@@ -490,3 +490,7 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-30 21:21:58 arch_aarch64 PASSED: 0 FAILED: 0 TIME: 40s STATUS: TIMEOUT (issue #100: PMM OOM fixed, boot+scheduler+user-ELF execution restored; harness waits on daemon-ready IPC — follow-up)
 2026-08-30 21:23:38 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (issue #100 final x86 check)
 2026-08-30 21:23:38 all PASSED: 978 FAILED: 0 TIME: 61s (issue #100 x86 regression gate, registered 978)
+2026-08-30 22:18:05 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit-fix iteration 1 x86 check)
+2026-08-30 22:18:05 all PASSED: 978 FAILED: 0 TIME: 62s (audit-fix iteration 1 x86 gate)
+2026-08-30 22:45:20 memory_pmm PASSED: 8 FAILED: 0 TIME: 300ms (audit iteration 2 fix check)
+2026-08-30 22:45:20 all PASSED: 978 FAILED: 0 TIME: 62s (audit iteration 2 fix x86 gate)

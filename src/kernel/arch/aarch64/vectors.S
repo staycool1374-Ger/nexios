@@ -87,12 +87,17 @@ default_exception:
 // on every dispatch.
 .type el0_sync, @function
 el0_sync:
+    // Stash user x0/x1 BEFORE any register is clobbered: the kstack load
+    // below needs a scratch register and every GPR is user state at EL0.
+    stp     x0, x1, [sp, #-16]!
+    mov     x1, sp             // carry &stash (original x1 is in the stash)
     adrp    x0, scheduler_load_kstack_top
     ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
     cbz     x0, 2f
-    mov     sp, x0
+    mov     sp, x0             // switch to the task's own kernel stack
+    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
+    stp     x0, x1, [sp, #-16]! // re-stash on the working stack
 2:
-    stp     x0, x1, [sp, #-16]!
     mrs     x0, esr_el1
     lsr     x0, x0, #26        // EC = ESR bits [31:26]
     cmp     x0, #0x15          // SVC from AArch64
@@ -183,16 +188,27 @@ el1_irq:
 .type el0_irq, @function
 el0_irq:
     // Land on the current task's own kernel stack (see el0_sync note).
+    // Stash user x0/x1 first: the kstack load clobbers a GPR and every
+    // GPR is user state at EL0 entry.
+    stp     x0, x1, [sp, #-16]!
+    mov     x1, sp             // carry &stash (original x1 is in the stash)
     adrp    x0, scheduler_load_kstack_top
     ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
     cbz     x0, 3f
     mov     sp, x0
-3:
+    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
+    b       4f
+3:  ldp     x0, x1, [sp], #16  // no switch: pop the stash in place
+4:
     save_all
     bl      handle_gic_irq
     // fall through to irq_context_switch_common
 
 // After handle_gic_irq, check for scheduler context switch
+// NOTE (audited limitation, S3): unlike the x86_64 isr_stubs epilogue this
+// path performs no deferred-switch generation re-check, no isr-nesting
+// depth guard and no H2 liveness/ownership re-validation — the arm is
+// applied as observed.  Documented follow-up for the aarch64 H2 port.
 .globl irq_context_switch_common
 .type irq_context_switch_common, @function
 irq_context_switch_common:

@@ -57,6 +57,13 @@ syscall_entry:
     bl      syscall_handler
 
     str     x0, [sp, #272]
+    // The deferred-switch resume path (vectors.S restore_all) loads x0
+    // from the frame's slot 0 — the aarch64 analogue of the x86 iret-frame
+    // rax slot filled by handle_interrupt_c (regs[0] = syscall_handler).
+    // Publish the return value there before applying the switch, or the
+    // resumed task erets with the syscall number in x0 instead of the
+    // result.  The no-switch epilogue overwrites x0 from +272 unchanged.
+    str     x0, [sp, #0]
 
     // A blocking syscall (IPC receive/send_sync, IRQ wait, exit, ...) arms
     // the deferred switch (scheduler_save_rsp_to) before returning.  If the
