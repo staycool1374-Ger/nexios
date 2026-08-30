@@ -5115,8 +5115,8 @@
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall.hpp": {
-    "mtime": 1788087638.724224,
-    "ast_hash": "9377dd60dcdd633264c692e32d865772",
+    "mtime": 1788030104.0270803,
+    "ast_hash": "a30b6698c9cf9e874e898947960ab1b4",
     "semantic_hash": ""
   },
   "src/kernel/syscall/syscall_errors.hpp": {
@@ -5345,8 +5345,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_expected_counts.hpp": {
-    "mtime": 1788087638.7243693,
-    "ast_hash": "8cc83d6d59b4eb7dd8913ea01ac3aa4b",
+    "mtime": 1788030181.7667668,
+    "ast_hash": "f3023f48734c7eb7174033893565d025",
     "semantic_hash": ""
   },
   "src/kernel/test/test_fat32.cpp": {
@@ -5410,8 +5410,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_idle_task.cpp": {
-    "mtime": 1788087928.9567378,
-    "ast_hash": "1ed792198a8ffd3b9c1fe1aa23adf3c2",
+    "mtime": 1786825262.5829775,
+    "ast_hash": "59ff94fb3179a4a896295db2d4074b0d",
     "semantic_hash": ""
   },
   "src/kernel/test/test_idt.cpp": {
@@ -5520,8 +5520,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_o1_scheduler.cpp": {
-    "mtime": 1788088019.99017,
-    "ast_hash": "d3b201071f8d26cede5d60ae9b1b3371",
+    "mtime": 1786384198.1419315,
+    "ast_hash": "a64c9bab03c310ecc00c35e1b637250c",
     "semantic_hash": ""
   },
   "src/kernel/test/test_pci.cpp": {
@@ -5585,8 +5585,8 @@
     "semantic_hash": ""
   },
   "src/kernel/test/test_registry.cpp": {
-    "mtime": 1788087638.724497,
-    "ast_hash": "fca4ae5701a78864dbeca4991b155ff5",
+    "mtime": 1788030174.9445148,
+    "ast_hash": "46e30a85937ad32ea0fd27a39fd20592",
     "semantic_hash": ""
   },
   "src/kernel/test/test_resource_exhaustion.cpp": {
@@ -18690,8 +18690,8 @@
     "semantic_hash": ""
   },
   "test-history.txt": {
-    "mtime": 1788088164.6142445,
-    "ast_hash": "04a11587aef1d2d3e8e6ebbf13b8d204",
+    "mtime": 1788048577.7118988,
+    "ast_hash": "77149a12fa3432ec8389c777f2ef89b8",
     "semantic_hash": ""
   },
   "audits/run_asil_audit.sh": {
@@ -19140,8 +19140,8 @@
     "semantic_hash": ""
   },
   "src/kernel/nexios_config.h": {
-    "mtime": 1788087638.72407,
-    "ast_hash": "d0c905ea56623a2f22e7df92146f0c62",
+    "mtime": 1788029914.6421251,
+    "ast_hash": "ad8916b017593b265fa9303005bd2a71",
     "semantic_hash": ""
   },
   "src/kernel/task/scheduler_config.hpp": {
@@ -19615,8 +19615,8 @@
     "semantic_hash": ""
   },
   "docs/specs/configuration.md": {
-    "mtime": 1788087638.7166464,
-    "ast_hash": "5daf2a2bc9c8d1d13de9114cc5156daa",
+    "mtime": 1788045217.6473773,
+    "ast_hash": "667cf847c6a8658f9603a159e5165860",
     "semantic_hash": ""
   },
   "docs/specs/deadline.md": {
@@ -19905,8 +19905,8 @@
     "semantic_hash": ""
   },
   "src/kernel/cap/cap_types.hpp": {
-    "mtime": 1788087638.7239335,
-    "ast_hash": "fee7af681ec24505ae7f383b15905622",
+    "mtime": 1788029917.8747156,
+    "ast_hash": "1f462c8693a7b14bf24badec11fb534b",
     "semantic_hash": ""
   },
   "src/kernel/cap/endpoint.cpp": {
@@ -21240,8 +21240,8 @@
     "semantic_hash": ""
   },
   "docs/specs/cspace.md": {
-    "mtime": 1788087638.7168353,
-    "ast_hash": "71fadfee3c93551090eb275cafe26e51",
+    "mtime": 1788045214.1074939,
+    "ast_hash": "fe4ead9e13ced277434b0178e8bf1d91",
     "semantic_hash": ""
   },
   "docs/specs/elf-loader.md": {
@@ -21305,8 +21305,8 @@
     "semantic_hash": ""
   },
   "prompts/LEARNINGS.md": {
-    "mtime": 1788088650.282166,
-    "ast_hash": "9ad498879fd5ce34bb146a80ad048c1b",
+    "mtime": 1788048683.1387496,
+    "ast_hash": "b8a3878af8ffbb17946555b87237fe43",
     "semantic_hash": ""
   },
   "prompts/LESSONS.md": {
@@ -21320,18 +21320,18 @@
     "semantic_hash": ""
   },
   "prompts/PROMPT-audit.md": {
-    "mtime": 1788081786.5579295,
-    "ast_hash": "c377209686be5989a5b2429ab8a035b8",
+    "mtime": 1787725060.3371158,
+    "ast_hash": "1f26e17fddb709659447e296b42a79c7",
     "semantic_hash": ""
   },
   "prompts/PROMPT-dev.md": {
-    "mtime": 1788081786.5586646,
-    "ast_hash": "2d977e434a5cb5f36322acce79f85eb5",
+    "mtime": 1788021887.678381,
+    "ast_hash": "8bb0a4c8772e4bb34089c28f22a371e5",
     "semantic_hash": ""
   },
   "prompts/PROMPT-planning.md": {
-    "mtime": 1788087638.7238004,
-    "ast_hash": "ec55c5053e21ec71ba7ff1b6a7c6ebdd",
+    "mtime": 1788026115.1166952,
+    "ast_hash": "c61d56b3f7aac710874dc8fc2e98b6af",
     "semantic_hash": ""
   },
   "prompts/PROMPT-testdev.md": {
@@ -21355,8 +21355,8 @@
     "semantic_hash": ""
   },
   "prompts/STATE.md": {
-    "mtime": 1788088698.5868397,
-    "ast_hash": "a52b6f2eda98ab283909ba4839c146a7",
+    "mtime": 1788048725.7656171,
+    "ast_hash": "0f3b44bd263dea20670a19ea0616fcf2",
     "semantic_hash": ""
   },
   "prompts/testcases-v0.3.10.md": {
@@ -21472,61 +21472,6 @@
   "audits/report-20260829T181710Z.md": {
     "mtime": 1788027452.8342023,
     "ast_hash": "aeef73cc61d4af79bbcb060641451115",
-    "semantic_hash": ""
-  },
-  "src/kernel/cap/iommu.cpp": {
-    "mtime": 1788087638.7506835,
-    "ast_hash": "ca459aeb7610d5aee775547f52aec7a6",
-    "semantic_hash": ""
-  },
-  "src/kernel/cap/iommu.hpp": {
-    "mtime": 1788087638.7507699,
-    "ast_hash": "e8550a9aece5e4e822a57d5d82717d60",
-    "semantic_hash": ""
-  },
-  "src/kernel/iommu/iommu.cpp": {
-    "mtime": 1788087638.7509103,
-    "ast_hash": "3afe7ee572d52b5f4348c550be052a6c",
-    "semantic_hash": ""
-  },
-  "src/kernel/iommu/iommu.hpp": {
-    "mtime": 1788087638.7510283,
-    "ast_hash": "12f0834763a47962a2075f8847ecc9ca",
-    "semantic_hash": ""
-  },
-  "src/kernel/iommu/vtd.hpp": {
-    "mtime": 1788087638.7511294,
-    "ast_hash": "e4954ddbdb3c03ae18e88e919f7f0422",
-    "semantic_hash": ""
-  },
-  "src/kernel/syscall/syscall_handlers_iommu.cpp": {
-    "mtime": 1788087638.7512417,
-    "ast_hash": "9066ecbf46edfa60bb67bc5febafe527",
-    "semantic_hash": ""
-  },
-  "src/kernel/test/test_cap_iommu.cpp": {
-    "mtime": 1788087638.751371,
-    "ast_hash": "cf9c0620074d2b26e43ba04837eb4259",
-    "semantic_hash": ""
-  },
-  "audits/report-2026-08-30T10-42-48Z.md": {
-    "mtime": 1788087638.741723,
-    "ast_hash": "6e19080499d9e31e5a2bcc3ecb007567",
-    "semantic_hash": ""
-  },
-  "audits/report-2026-08-30T10-56-32Z.md": {
-    "mtime": 1788087638.7418184,
-    "ast_hash": "73105cb3fcdfc1eb4d183673ed52f4db",
-    "semantic_hash": ""
-  },
-  "audits/report-2026-08-30T11-14-39Z.md": {
-    "mtime": 1788088514.4553783,
-    "ast_hash": "ce50e795ec8801927e2f29a277187670",
-    "semantic_hash": ""
-  },
-  "docs/specs/iommu.md": {
-    "mtime": 1788087638.7419322,
-    "ast_hash": "7ec4bea627c7051e70753c400abe0a09",
     "semantic_hash": ""
   }
 }
