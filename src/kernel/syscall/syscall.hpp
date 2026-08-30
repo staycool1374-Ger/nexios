@@ -86,7 +86,9 @@ enum class SyscallNumber : uint8_t {
     CAP_MINT = 54,
     IOPORT_GRANT = 55, ///< x86_64 fine-grained I/O delegation (issue #3)
     CAP_RETYPE = 56,   ///< Untyped sub-range carve + child remainder (issue #1)
-    MAX_SYSCALL = 57,
+    IRQ_REGISTER = 57, ///< arm user-space IRQ delivery for an IrqCap (issue #2)
+    IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2)
+    MAX_SYSCALL = 59,
 };
 
 /// @brief System call handler function signature.
@@ -230,6 +232,10 @@ class Syscall {
                                      uint64_t *);
     static uint64_t sys_cap_retype(uint64_t, uint64_t, uint64_t, uint64_t,
                                    uint64_t *);
+    static uint64_t sys_irq_register(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_irq_wait(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -290,6 +296,8 @@ class Syscall {
             &Syscall::sys_cap_mint,
             &Syscall::sys_ioport_grant,
             &Syscall::sys_cap_retype,
+            &Syscall::sys_irq_register,
+            &Syscall::sys_irq_wait,
     };
 };
 

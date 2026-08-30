@@ -24,6 +24,7 @@
 #include <kernel/arch/apic.hpp>
 #include <kernel/arch/irq_latency_histogram.hpp>
 #include <kernel/irq_thread.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/io.hpp>
@@ -1510,6 +1511,15 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
         return;
     }
+
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_CAP_MAX_IRQ
+    // User-space IRQ delivery (issue #2): an armed IrqCap slot consumes the
+    // vector — EOI + pending-record + waiter wake — and returns early so the
+    // tail EOI below does not double-fire.  Unarmed vectors fall through to
+    // the generic handler.
+    if (kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(vector)))
+        return;
+#endif
 
 #if CONFIG_THREADED_IRQS
     // Threaded IRQ dispatch: if this vector has an IrqThread, let the

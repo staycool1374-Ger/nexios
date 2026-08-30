@@ -45,6 +45,7 @@
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
 
 // BUGS.md#020: ring buffer of recently-created tasks so that when a wild
@@ -1856,6 +1857,11 @@ void TaskControlBlock::cleanup() noexcept {
     // Release the task's I/O permission bitmap slot (x86_64, issue #3)
     // before tearing down its capability objects.
     arch::iopb_release(*this);
+
+    // Drain the user-space IRQ delivery table: a dying task must never leave
+    // a dangling recipient/waiter (issue #2).  Runs before capability teardown
+    // so no slot reference survives into a recycled TCB.
+    IrqDelivery::drain_task(*this);
 
     release_all_objects();
     if (cwd_vnode)

@@ -155,6 +155,20 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
 
 - **Untyped memory (ROADMAP 0.4.1 item 3):** `UntypedMem : KernelObject` owning a contiguous PMM region; `retype(untyped_cap, Frame|CNode|Endpoint, ...)` carves one capability out of the region, transferring ownership; an Untyped cap may be retyped at most once (guard flag), and only the region's exact size may be carved. Requires a `CONFIG_CAP_MAX_UNTYPED` bound and a RegionAllocator (bump/bitmap over the Untyped range) — deferred with item 3 of 0.4.1, not blocking items 1–2.
 - **IRQ caps (0.4.2):** `IrqCap : KernelObject` wrapping an IRQ vector → capability-backed `sys_irq_register`/`sys_irq_wait`.
+  **IMPLEMENTED (2026-08-30, issue #2):** `CapType::Irq`, `src/kernel/cap/irq.{hpp,cpp}`
+  (kernel-internal `create`; `CONFIG_CAP_MAX_IRQ`; single-owner per vector — a second live
+  IrqCap for the same vector fails closed; x86_64 hardware IRQ window 33–47, timer vector 32
+  reserved), the bounded delivery table `src/kernel/irq_delivery.{hpp,cpp}`
+  (static `CONFIG_CAP_MAX_IRQ` slots; ISR entry from `handle_interrupt_c` BEFORE the threaded-IRQ
+  path; EOI exactly once; pending IRQs never lost; blocked waiters woken by ISR/revoke/dispose —
+  never left BLOCKED forever), and `SYS_IRQ_REGISTER` (57) / `SYS_IRQ_WAIT` (58) via
+  `src/kernel/syscall/syscall_handlers_irq.cpp`.  Rights split: `sys_irq_register` requires
+  WRITE (arming authority), `sys_irq_wait` requires READ (observe).  `IrqCap::dispose/revoke`
+  and `TaskControlBlock::cleanup()` drain the delivery table (a dying task can never leave a
+  dangling recipient/waiter); PIC mask state is captured at arm and restored at release.
+  **Revocation limitation:** revoking/disposing an armed IrqCap wakes a blocked `sys_irq_wait`
+  waiter with -1 (the wait contract holds); re-arming the same vector after teardown works
+  (the slot is released).  aarch64/riscv64: handlers return -1 (no user-deliverable PIC vectors).
 - **MMIO caps (0.4.2):** `MmioCap : KernelObject` wrapping a BAR range → capability-gated mapping (drives `sys_ioport_grant`).
   **IMPLEMENTED (2026-08-25, issue #3):** `CapType::Mmio`, `src/kernel/cap/mmio.{hpp,cpp}`
   (kernel-internal `create`/`create_from_bar`; `CONFIG_CAP_MAX_MMIO`; MEMORY ranges page-aligned,

@@ -126,6 +126,7 @@ feeds must be re-validated** (check-config cross-check).
 | `CONFIG_CAP_MAX_DEPTH` | 8 | cascade-revoke depth bound; the revoke walk is iterative (explicit work list), never unbounded recursion |
 | `CONFIG_CAP_MAX_UNTYPED` | 16 | live Untyped memory objects (TU-local counter in untyped.cpp) |
 | `CONFIG_CAP_MAX_MMIO` | 16 | live MmioCap objects (TU-local counter in mmio.cpp; issue #3) |
+| `CONFIG_CAP_MAX_IRQ` | 16 | live IrqCap objects + IRQ delivery-table slots (TU-local counter in irq.cpp; static table in irq_delivery.cpp, no RT-path allocation; issue #2) |
 | `CONFIG_IOPB_MAX_TASKS` | 4 | per-task TSS I/O-bitmap pool slots (x86_64 sys_ioport_grant; static 8 KiB×N .bss, no RT-path allocation; issue #3) |
 
 ## 2. The Matrix Runners

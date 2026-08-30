@@ -37,6 +37,7 @@ enum class CapType : uint8_t {
     CNode = 4,
     Untyped = 5, ///< retype target (ROADMAP 0.4.1 item 3)
     Mmio = 6,    ///< MMIO BAR range (v0.4.2, issue #3)
+    Irq = 7,     ///< hardware IRQ vector (v0.4.2, issue #2)
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.

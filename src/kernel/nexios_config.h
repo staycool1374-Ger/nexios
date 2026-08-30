@@ -520,6 +520,14 @@
 #define CONFIG_CAP_MAX_MMIO 16
 #endif
 
+/// Maximum number of live IrqCap objects and IRQ delivery-table entries
+/// (v0.4.2, issue #2).  The delivery table is a static bounded array — no
+/// dynamic allocation on real-time paths.  Enforced by a TU-local live
+/// counter in irq.cpp.
+#ifndef CONFIG_CAP_MAX_IRQ
+#define CONFIG_CAP_MAX_IRQ 16
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
