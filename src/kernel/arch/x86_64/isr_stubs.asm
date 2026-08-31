@@ -33,12 +33,26 @@ extern scheduler_diag_rsp_abort
 extern isr_nesting_depth
 extern irq_entry_tsc
 
+; Uniform-frame discipline (exception-table-audit.md §3.2): every vector
+; reaches isr_common with an 8-byte vector + 8-byte error slot at [rsp]/[rsp+8].
+; NOERR vectors push a synthetic 0 so the frame is byte-identical to ERR
+; vectors (which get the CPU-pushed error code).  The %assign audits below
+; pin each macro's push depth: if the two classes ever diverge, the build
+; fails instead of silently producing a misaligned iretq frame.
+%assign isr_frame_bytes_noerr 0
+%assign isr_frame_bytes_err 0
+%assign isr_noerr_count 0
+%assign isr_err_count 0
+%assign isr_err_mask_0_31 0
+
 %macro ISR_NOERR 1
 global isr_%1
 isr_%1:
     push 0
     push %1
     jmp isr_common
+%assign isr_frame_bytes_noerr isr_frame_bytes_noerr + 16
+%assign isr_noerr_count isr_noerr_count + 1
 %endmacro
 
 %macro ISR_ERR 1
@@ -46,6 +60,9 @@ global isr_%1
 isr_%1:
     push %1
     jmp isr_common
+%assign isr_frame_bytes_err isr_frame_bytes_err + 8
+%assign isr_err_count isr_err_count + 1
+%assign isr_err_mask_0_31 isr_err_mask_0_31 | (1 << %1)
 %endmacro
 
 ISR_NOERR  0
@@ -69,14 +86,14 @@ ISR_ERR   17
 ISR_NOERR 18
 ISR_NOERR 19
 ISR_NOERR 20
-ISR_NOERR 21
+ISR_ERR   21
 ISR_NOERR 22
 ISR_NOERR 23
 ISR_NOERR 24
 ISR_NOERR 25
 ISR_NOERR 26
 ISR_NOERR 27
-ISR_NOERR 28
+ISR_ERR   28
 ISR_NOERR 29
 ISR_ERR   30
 ISR_NOERR 31
@@ -86,6 +103,17 @@ ISR_NOERR 31
 ISR_NOERR i
 %assign i i+1
 %endrep
+
+; Assemble-time frame audit (exception-table-audit.md §3.1): both classes must
+; yield an identical 16-byte stub frame (NOERR = synthetic 0 + vec, ERR =
+; 8-byte CPU error code + vec).  Pins each macro's push depth so a future edit
+; that breaks uniformity fails the build.
+%if isr_frame_bytes_noerr != isr_noerr_count * 16
+%error "ISR_NOERR stub frame changed — uniform-frame invariant violated"
+%endif
+%if isr_frame_bytes_err != isr_err_count * 8
+%error "ISR_ERR stub frame changed — uniform-frame invariant violated"
+%endif
 
 section .text
 isr_common:
@@ -411,3 +439,11 @@ __isr_vector:
     dq isr_%+i
 %assign i i+1
 %endrep
+
+; Bitmask of the 0-31 vectors declared ISR_ERR (CPU-pushed error code).
+; Consumed by the exc_table test class (err_macro_consistency) so a future
+; misclassification of any vector is caught as a test failure.
+section .rodata
+global __isr_vectors_err_mask
+__isr_vectors_err_mask:
+    dq isr_err_mask_0_31

@@ -17,10 +17,10 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
-    {"selftest",            132,    0,       0      },  // same as safe
+    {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+    {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 990,    0,       0      },  // 978 + cap_iommu(+12)
+    {"all",                 996,    0,       0      },  // 981 executed +15 filtered; 990 + memory_pmm(5→8,#100) + exc_table(+3,#91)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -151,6 +151,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
+    {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD

@@ -1135,6 +1135,32 @@ __attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
 }
 #endif // CONFIG_STACK_OVERFLOW_HOOK
 
+// exception-table-audit.md §3.3/§3.4 (issue #91): weak hooks mirroring the
+// stack_overflow_hook pattern.  The production defaults preserve exact
+// behavior (probe = no-op, reserved = fail-stop panic); strong test overrides
+// latch instead of firing, and only when explicitly armed.
+__attribute__((weak)) bool exception_dispatch_probe(uint64_t vector,
+                                                    uint64_t error_code,
+                                                    uint64_t rip,
+                                                    uint64_t *regs) {
+    (void)vector;
+    (void)error_code;
+    (void)rip;
+    (void)regs;
+    return false;
+}
+
+__attribute__((weak)) void reserved_exception_hook(uint64_t vector,
+                                                   uint64_t error_code,
+                                                   uint64_t rip,
+                                                   uint64_t *regs) {
+    (void)vector;
+    (void)error_code;
+    (void)rip;
+    (void)regs;
+    panic("reserved exception");
+}
+
 static const char *exception_name(uint64_t vector) __attribute__((unused));
 static const char *exception_name(uint64_t vector) {
 #if defined(CONFIG_ARCH_X86_64)
@@ -1175,6 +1201,14 @@ static const char *exception_name(uint64_t vector) {
         return "Machine Check";
     case 19:
         return "SIMD FP Exception";
+    case 20:
+        return "SIMD FP Exception (#XM)";
+    case 21:
+        return "Control Protection (#CP/#VE)";
+    case 28:
+        return "Hypervisor Injection (#HV)";
+    case 29:
+        return "VMM Communication";
     case 30:
         return "Security Exception";
     default:
@@ -1385,6 +1419,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
         return;
     }
+
+    // exception-table-audit.md §4.2 (issue #91): test-mode dispatch probe.
+    // Weak default returns false (production no-op); the exc_table strong
+    // override latches synthetic frames and returns true only when armed.
+    if (exception_dispatch_probe(vector, error_code, rip, regs)) {
+        return;
+    }
 #endif
 
 #if defined(CONFIG_ARCH_X86_64)
@@ -1399,6 +1440,20 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     if (kernel::g_user_access_recover_ip && regs) {
         regs[17] = kernel::g_user_access_recover_ip;
         kernel::g_user_access_recover_ip = 0;
+        return;
+    }
+
+    // exception-table-audit.md §3.4 (issue #91): reserved/vendor-specific
+    // vectors (15, 22-26, 29, 31) must never reach generic user-recover or
+    // signal handling — firing at all means something is deeply wrong, so
+    // route them to a named fail-stop hook.  Weak default panics; test
+    // overrides latch.  Excludes 14 (#PF guard page) and every other
+    // user-recoverable vector.
+    if (vector == 15 || (vector >= 22 && vector <= 26) || vector == 29 ||
+        vector == 31) {
+        kernel::Logger::fatal("RESERVED EXCEPTION: %s (vector=%x err=%x rip=%x)",
+                              exception_name(vector), vector, error_code, rip);
+        reserved_exception_hook(vector, error_code, rip, regs);
         return;
     }
 

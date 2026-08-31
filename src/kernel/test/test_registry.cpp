@@ -85,6 +85,7 @@ void register_bench_irq_latency_tests();
 void register_apic_timer_tests();
 void register_jitter_tests();
 void register_idt_tests();
+void register_exc_table_tests();
 void register_pipe_tests();
 void register_gcov_tests();
 void register_debug_tests();
@@ -388,6 +389,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_core", []() { register_hal_tests(); }},
     {"hal_bits", []() { register_hal_bits_tests(); }},
     {"hal_idt", []() { register_idt_tests(); }},
+    {"exc_table", []() { register_exc_table_tests(); }},
     {"hal_timer", []() { register_timer_tests(); }},
     {"hal_apic", []() { register_apic_timer_tests(); }},
     {"hal_rtc", []() { register_rtc_tests(); }},
@@ -508,6 +510,7 @@ static void register_all_tests() {
     register_timing_tests();
     register_spsc_tests();
     register_idt_tests();
+    register_exc_table_tests();
     register_pipe_tests();
      register_gcov_tests();
      register_debug_tests();
@@ -656,6 +659,7 @@ static void register_all_tests_first_half() {
     register_timing_tests();
     register_spsc_tests();
     register_idt_tests();
+    register_exc_table_tests();
     register_pipe_tests();
      register_gcov_tests();
      register_debug_tests();

@@ -504,3 +504,14 @@ SUMMARY: total=108 ok=106 fail=2
 2026-08-31 18:59:34 arch_cross PASSED: 16 FAILED: 0 TIME: 100ms (issue #100 audit-fix: init_stack by-ref frame scan)
 2026-08-31 18:59:34 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 audit-fix recheck 2)
 2026-08-31 19:07:12 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 final: S3 reclaim-guard hardening)
+2026-08-31 19:36:37 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
+2026-08-31 19:36:54 hal_idt PASSED: 6 FAILED: 0 TIME: 247ms
+2026-08-31 19:37:11 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 388ms
+2026-08-31 19:37:28 arch_cross PASSED: 21 FAILED: 0 TIME: 598ms
+2026-08-31 19:38:53 all PASSED: 978 FAILED: 0 TIME: 239835ms (issue #91 regression; expected-count fix pending re-run)
+2026-08-31 19:39:32 all PASSED: 978 FAILED: 0 TIME: 226964ms
+2026-08-31 19:41:00 selftest PASSED: 85 FAILED: 0 TIME: 17414ms
+2026-08-31 19:41:19 all PASSED: 85 FAILED: 0 TIME: 3995ms
+2026-08-31 19:51:23 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
+2026-08-31 19:52:53 all PASSED: 981 FAILED: 0 TIME: 232111ms
+2026-08-31 19:53:13 all PASSED: 85 FAILED: 0 TIME: 16862ms
