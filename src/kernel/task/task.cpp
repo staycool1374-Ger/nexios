@@ -1079,7 +1079,11 @@ done_stack:
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     *--stack = 0;     // padding
     *--stack = 0;     // padding
-    *--stack = 0x3C5; // SPSR_EL1: EL1h, all interrupts masked
+    *--stack = 0x345; // SPSR_EL1: EL1h, DAIF with I=0 (IRQs enabled) so
+                      // voluntary reschedule()s are applied by the next
+                      // timer tick (x86 kernel tasks run with IF=1).
+                      // 0x3C5 (all masked) would leave a blocking kernel
+                      // task spinning forever on aarch64.
     *--stack = reinterpret_cast<uint64_t>(entry); // ELR_EL1
     *--stack = 0; // SP_EL0 (unused for kernel task)
     for (int i = 0; i < 31; ++i)

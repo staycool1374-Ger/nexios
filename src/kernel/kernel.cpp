@@ -673,8 +673,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         mem_size = 64_MiB;
 #elif defined(CONFIG_ARCH_AARCH64)
         mem_size = arch::RAM_BASE_FALLBACK + 256_MiB;
+        // Record the fallback RAM span so boot_info() carries a usable
+        // memory configuration even when no DTB/firmware map is provided.
+        kernel::gs::boot_info().add_region(
+            arch::RAM_BASE_FALLBACK,
+            mem_size - arch::RAM_BASE_FALLBACK, 1);
 #elif defined(CONFIG_ARCH_RISCV64)
         mem_size = arch::RAM_BASE_FALLBACK + 128_MiB;
+        kernel::gs::boot_info().add_region(
+            arch::RAM_BASE_FALLBACK,
+            mem_size - arch::RAM_BASE_FALLBACK, 1);
 
 #endif
 

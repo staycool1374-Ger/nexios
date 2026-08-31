@@ -5,7 +5,8 @@
 
 ## Active Summary
 ### Objective
-- **IN PROGRESS (2026-08-30):** Issue #100 "aarch64 boot: PMM OOM panic" — PRIMARY DEFECT FIXED + 8 first-run boot-path defects fixed. aarch64 now boots meminit→kernel init→test class loaded (22)→reboot→init runs (tmpfs mounted, harness entered); user ELFs execute at EL0. x86_64 debug all 978/978 (zero regressions). REMAINING: init's daemon-ready IPC handshake (arch_aarch64 class still TIMEOUT). Full evidence: issue #100 comment 2026-08-30 + test-history.txt.
+- **IN PROGRESS (2026-08-31):** Issue #100 remainder COMPLETED — aarch64 daemon-ready handshake + full arch_aarch64 bring-up. Root causes: (1) aarch64 syscall ABI dispatched on x0 not x8; (2) switch_away_from_terminating used x86-only iret-frame validation (discarded dequeued init → stranded READY); (3) aarch64 kernel-task SPSR=0x3C5 masked IRQs → voluntary reschedule never applied → harness starved; (4) page-table phys derefs needed HHDM + 48-bit phys mask; (5) PCI ECAM base wrong (0x100000000 → 0x30000000); (6) boot page tables at 0x40000000 clobbered DTB region (relocated to 0x40020000); (7) RTC used cntpct not PL031. Gates: aarch64 arch_aarch64 **22/22**, x86_64 debug all **978/978**, x86_64 release all **85/85**. SIL 3 audit pending.
+- **DONE (2026-08-30):** Issue #100 primary defect + 8 first-run defects fixed (commits `adde2324`+`e24b1415`), SIL 3 APPROVED; arch_aarch64 TIMEOUT at daemon-ready handshake was the remainder.
 - **DONE (2026-08-30):** Issue #4 "IOMMU DMA protection (VT-d / AMD-Vi / SMMU)" — capability-gated identity-IOVA VT-d table infrastructure (IoMmuDmaCap + IoMmuManager + SYS_IOMMU_MAP(59)/SYS_IOMMU_UNMAP(60)); live-DMAR programming documented as phase-2. SIL 3 APPROVED (audits/report-2026-08-30T11-14-39Z.md, 3 iterations). Class cap_iommu 12; debug `all` registered 990 (975 executed, 0 fail); release all 85/85; selftest 133/133. Commit `bf0984b1` (closes #4).
 - **DONE (2026-08-30):** Issue #2 "IRQ caps + user-space IRQ delivery (IrqCap)" — IrqCap (CapType::Irq) + bounded owner-tagged IRQ delivery table (CONFIG_CAP_MAX_IRQ=16) + SYS_IRQ_REGISTER(57)/SYS_IRQ_WAIT(58). SIL 3 APPROVED (audits/report-2026-08-30T00-08-05Z.md, 3 iterations). Class cap_irq 12; debug `all` registered 978 (963 executed, 0 fail); release all 85/85. Commit `ef9b748b` (closes #2).
 - **DONE (2026-08-29):** Issue #1 "Untyped child-split + sub-range carve" — cap::retype exhaustion-model sub-range carve (PAGE-aligned, prefix-only) + child Untyped for the remainder + SYS_CAP_RETYPE (56). SIL 3 APPROVED (audits/report-20260829T181710Z.md, 3 iterations). Class cap_untyped 9→18; debug `all` registered 966 (951 executed, 0 fail); release all 85/85; selftest 133/133. Commit `3eb2a50b` (closes #1).
@@ -62,25 +63,28 @@
 - VERIFIED: `make check-style` → Errors: 0, Passed. `make debug NO_LTO=1` → ISO built cleanly.
 
 #### Active
-- (none outstanding) — issues #1, #2, #3, #4, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 975/975 (registered 990).
+- (none outstanding) — issues #1, #2, #3, #4, #5 closed; issue #6 fully remediated (P0–P8, SIL 3 approved, closed); full `all` 975/975 (registered 990); issue #100 remainder (arch_aarch64 daemon handshake + bring-up) COMPLETED 2026-08-31 (22/22), audit pending.
 
 #### Blocked
-- **aarch64 daemon-ready handshake (#100 remainder):** boot now reaches init's daemon wait; vfsd/iocd execute their real ELFs fault-free but the MSG_DAEMON_READY send→init-wake path + user console output (Terminal drops user writes on aarch64?) need verification. Next: instrument the send/notify path, then run the 22-test arch_aarch64 class. P9 test-hygiene (testbed) is future work.
+- (none) — aarch64 arch_aarch64 class now 22/22; P9 test-hygiene (testbed) is future work.
 
-#### aarch64 boot-path fixes landed (issue #100, 2026-08-30 — uncommitted, SIL 3 audit pending)
-- PMM window base: pmm.{hpp,cpp} + kernel.cpp (window_base from min usable region; x86=0 byte-identical) + test_pmm.cpp (3 new tests, memory_pmm 5→8) + constants.hpp (HHDM_WINDOW_SIZE, RAM_BASE_FALLBACK).
-- GIC: interrupt_controller.cpp (IGROUPR=0 Group-0-only, CTLR enable-only, intid>=1020 spurious guard) + boot.S (GIC 2MiB block in HHDM MMIO window L2[64]) + hal/gic.hpp (HHDM-relative accessors).
-- Timer: aarch64/timer.cpp (handle_irq re-arms CNTP_TVAL via stored tick_interval_).
-- Scheduler: scheduler.cpp (dispatch guard arch-gated: aarch64 validates save-area ELR/SPSR instead of the x86 iret frame).
-- Task frames: task.cpp + elf.cpp (SPSR 0x10→0x0 = EL0t at 3 initial-frame sites; SPSR bit4 = AArch32-on-eret).
-- Syscall epilogue: syscall_entry.S (applies deferred switch via irq_context_switch_common, mirroring x86 isr_stubs).
-- EL0 entry: vectors.S (el0_sync: ESR.EC check — SVC 0x15→syscall, other→fault handler; per-task kernel stack via scheduler_load_kstack_top; el0_irq same; TTBR0 switch now tlbi vmalle1) + scheduler.cpp (aarch64_el0_fault_handler: report-once + park).
-- VMM leaf encoding: vmm.hpp (PAGE_AF=bit 10 stage-1 — was bit 8; PAGE_ATTR_NORMAL=AttrIndx 1; L3 pages are bits[1:0]=11) + vmm.cpp (all leaf paths: AF@10 + AttrIndx=1; bit1 kept on leaves).
+#### aarch64 bring-up fixes landed (issue #100, 2026-08-31 — uncommitted, SIL 3 audit pending)
+- Boot page tables relocated 0x40000000→0x40020000 (was clobbering the QEMU DTB region).
+- Syscall ABI: syscall_entry.S dispatches on saved x8 (user x8=syscall number, x0-x3=args), not x0 — every aarch64 user syscall was misrouted.
+- Scheduler: switch_away_from_terminating x86-only iret-frame validation → aarch64 ELR/SPSR branch (dequeued init was discarded → stranded READY, never dispatched).
+- Kernel-task SPSR: 0x3C5 (all-masked) → 0x345 (I=0) so voluntary reschedule()s are applied by the timer tick (aarch64 kernel tasks were un-preemptible → block loops spun forever).
+- Page tables: HHDM alias for all phys derefs + DESC_PHYS_MASK (48-bit; UXN/PXN at bits 53/54 leaked into ~0xFFF phys extraction) + empty-table reclaim in unmap_page.
+- PCI ECAM base: 0x100000000 → 0x30000000 (QEMU virt) in hal/pci.hpp + aarch64/pci_impl.hpp.
+- RTC: cntpct-based → PL031 wall clock (0x09010000).
+- PAN: pan_init clears SCTLR.PAN when FEAT_PAN unsupported (reset value had it set).
+- context.hpp init_stack: stack_top by reference (was by value).
+- GIC test: verify via ISENABLER (ICENABLER read-back unreliable on QEMU GICv2); DTB test: HHDM deref + tolerate absent DTB (QEMU non-Linux `-kernel` provides none), fallback memory region recorded in boot_info.
 
 ### Next Move
 - Optional: reduce the non-blocking style warnings and clang-tidy warnings.
 - **IOMMU phase-2 (follow-up to #4):** live VT-d — ACPI/DMAR discovery, GCMD/IRTA/RTA programming, IOTLB flush, fault-event handling, kernel-DMA domain, QEMU `-device intel-iommu` integration; then AMD-Vi/SMMU backends behind the same IoMmuManager interface (docs/specs/iommu.md §8). Also: reclaim the per-bus ctx-table slot in clear_attachment + bidirectional static_assert (S3 notes).
-- **aarch64 runtime boot (issues #28/#100):** seed PMM from DTB memory regions (fix the meminit OOM), then run the arch_aarch64 class (22 tests) + PAN runtime enablement on a PAN-capable CPU model.
+- **aarch64 PAN runtime:** arch_aarch64 class green 22/22 on cortex-a72 (PAN unsupported — degraded mode). PAN-capable CPU model (e.g. `-cpu max`/neoverse) would enable the real PAN path.
+- **DTB handoff (follow-up):** QEMU `-kernel` non-Linux boots pass no DTB in x0 (no ARM64 Linux header). Optional future work: add the ARM64 boot header so memory comes from the real DTB instead of the platform fallback.
 - **P9 test-hygiene (issue #6 remainder):** on `testbed` — ~50 Rule-4 `remove_task+cleanup+delete` sites → `terminate_and_drain`, ~150 stub/tautology purges (§2.5 of audits/test-suite-v0.3.10.md).
 - Next multi-arch step (when scheduled): riscv64 runtime boot path (issue #29).
 - H2 deferred-switch race: RESOLVED — no longer tracked (see above, BUGS.md).

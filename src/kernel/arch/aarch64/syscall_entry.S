@@ -7,9 +7,10 @@
 .extern debug_write_hex
 
 // AArch64 syscall entry via SVC #0 from EL0
-// On entry:
-//   x0 = syscall number
-//   x1-x4 = arguments
+// On entry (user ABI, see src/libc/syscall.h __syscall5):
+//   x8 = syscall number
+//   x0-x3 = arguments
+//   x4 = 0
 //   SP_EL1 = kernel stack, SP_EL0 = user stack
 //   ELR_EL1 = return address (user PC)
 //   SPSR_EL1 = saved processor state
@@ -50,9 +51,10 @@ syscall_entry:
     str     x7, [sp, #264]
 
     // syscall_handler(number, arg0, arg1, arg2, arg3, regs)
-    ldp     x0, x1, [sp, #0]
-    ldp     x2, x3, [sp, #16]
-    ldr     x4, [sp, #32]
+    // User ABI: number rides in x8 (saved @ sp+64); x0-x3 are the args.
+    ldr     x0, [sp, #64]      // number = saved user x8
+    ldp     x1, x2, [sp, #0]   // arg0, arg1 = saved user x0, x1
+    ldp     x3, x4, [sp, #16]  // arg2, arg3 = saved user x2, x3
     mov     x5, sp
     bl      syscall_handler
 

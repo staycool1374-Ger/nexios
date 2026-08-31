@@ -26,6 +26,7 @@
 #include <kernel/arch/page_table.hpp>
 #include <kernel/arch/context.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/arch/aarch64/hal/gic.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/rtc.hpp>
@@ -47,8 +48,11 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT(ttbr1 != 0, "TTBR1_EL1 must be non-zero, got 0x%lx",
                       ttbr1);
 
+    // Page-table pages are physical; dereference through the HHDM direct-map
+    // alias so the walk is independent of the currently-active TTBR0 (which
+    // may be a user/private PML4 without the identity map).
     uint64_t l0_phys = ttbr1;
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     constexpr uint64_t L0_SHIFT = 39;
     constexpr uint64_t L1_SHIFT = 30;
@@ -71,7 +75,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT((l1_phys & 0xFFF) == 0,
                       "L1 table not page-aligned: 0x%lx", l1_phys);
 
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l1_phys);
+    uint64_t *l1 =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
     size_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
     uint64_t l1_entry = l1[l1_idx];
     JARVIS_ASSERT_FMT(l1_entry & DESC_VALID, "L1 entry %zu not valid: 0x%lx",
@@ -82,7 +87,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT((l2_phys & 0xFFF) == 0,
                       "L2 table not page-aligned: 0x%lx", l2_phys);
 
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l2_phys);
+    uint64_t *l2 =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
     size_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
     uint64_t l2_entry = l2[l2_idx];
     JARVIS_ASSERT_FMT(l2_entry & DESC_VALID, "L2 entry %zu not valid: 0x%lx",
@@ -92,7 +98,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
         JARVIS_ASSERT_FMT((l3_phys & 0xFFF) == 0,
                           "L3 table not page-aligned: 0x%lx", l3_phys);
 
-        uint64_t *l3 = reinterpret_cast<uint64_t *>(l3_phys);
+        uint64_t *l3 =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l3_phys);
         size_t l3_idx = (virt >> L3_SHIFT) & TABLE_MASK;
         uint64_t l3_entry = l3[l3_idx];
         JARVIS_ASSERT_FMT(l3_entry & DESC_VALID,
@@ -227,10 +234,8 @@ JARVIS_TEST(aarch64_context_init_stack) {
 JARVIS_TEST(aarch64_gic_init) {
     arch::ArchInterruptController::init();
 
-    volatile uint32_t *gicd =
-        reinterpret_cast<volatile uint32_t *>(0x8000000ULL);
-    volatile uint32_t *gicc =
-        reinterpret_cast<volatile uint32_t *>(0x8010000ULL);
+    volatile uint32_t *gicd = arch::gicd_reg(0);
+    volatile uint32_t *gicc = arch::gicc_reg(0);
 
     uint32_t gicd_ctlr = gicd[0];
     JARVIS_ASSERT_FMT(gicd_ctlr & 1, "GICD_CTLR Enable not set: 0x%x",
@@ -250,22 +255,28 @@ JARVIS_TEST(aarch64_gic_init) {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Mask and unmask IRQ 64, verify ICENABLER and ISENABLER registers.
+/// @brief Mask and unmask IRQ 64, verify the ISENABLER enable state.
+/// ICENABLER is a write-to-disable bank whose read-back is unreliable on
+/// QEMU virt GICv2; the enabled state is authoritative in ISENABLER.
 JARVIS_TEST(aarch64_gic_mask_unmask) {
-    arch::ArchInterruptController::mask(64);
+    volatile uint32_t *gicd = arch::gicd_reg(0);
 
-    volatile uint32_t *gicd =
-        reinterpret_cast<volatile uint32_t *>(0x8000000ULL);
-    uint32_t icenabler = gicd[0x180 / 4 + 2];
-    JARVIS_ASSERT_FMT(icenabler & (1U << 0),
-                      "GICD_ICENABLER bit 0 not set for IRQ 64: 0x%x",
-                      icenabler);
-
+    // Enable IRQ 64 (SPI, ISENABLER bank 2, bit 0).
     arch::ArchInterruptController::unmask(64);
     uint32_t isenabler = gicd[0x100 / 4 + 2];
     JARVIS_ASSERT_FMT(isenabler & (1U << 0),
-                      "GICD_ISENABLER bit 0 not set for IRQ 64: 0x%x",
+                      "GICD_ISENABLER bit 0 not set after unmask IRQ 64: 0x%x",
                       isenabler);
+
+    // Mask IRQ 64 — the enable bit must clear.
+    arch::ArchInterruptController::mask(64);
+    isenabler = gicd[0x100 / 4 + 2];
+    JARVIS_ASSERT_FMT((isenabler & (1U << 0)) == 0,
+                      "GICD_ISENABLER bit 0 still set after mask IRQ 64: 0x%x",
+                      isenabler);
+
+    // Restore the enabled state.
+    arch::ArchInterruptController::unmask(64);
 
     JARVIS_TEST_PASS();
 }
@@ -405,30 +416,46 @@ JARVIS_TEST(aarch64_rtc_read) {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Verify the DTB pointer from boot info is valid, correctly aligned,
-/// and has a valid FDT header.
+/// @brief Verify the DTB pointer from boot info, when provided, is valid,
+/// correctly aligned, and has a valid FDT header; and that the kernel has a
+/// correct memory configuration either way.
+///
+/// QEMU `-machine virt` `-kernel` boots only hand the DTB to Linux-style
+/// images (ARM64 boot-header magic).  This kernel is booted as a generic ELF
+/// (no header), so the DTB is absent and memory comes from the platform
+/// fallback — both are valid configurations the boot must tolerate.
 JARVIS_TEST(aarch64_boot_dtb_pointer) {
-    JARVIS_ASSERT_FMT(kernel::gs::boot_info().dtb_ptr != 0, "DTB pointer is zero");
+    uintptr_t dtb_addr =
+        static_cast<uintptr_t>(kernel::gs::boot_info().dtb_ptr);
 
-    uintptr_t dtb_addr = static_cast<uintptr_t>(kernel::gs::boot_info().dtb_ptr);
-    JARVIS_ASSERT_FMT(
-        dtb_addr >= 0x40000000ULL && dtb_addr <= 0x50000000ULL,
-        "DTB pointer 0x%lx not in expected RAM range (0x40000000-0x50000000)",
-        dtb_addr);
+    if (dtb_addr != 0) {
+        JARVIS_ASSERT_FMT(
+            dtb_addr >= 0x40000000ULL && dtb_addr <= 0x50000000ULL,
+            "DTB pointer 0x%lx not in expected RAM range (0x40000000-0x50000000)",
+            dtb_addr);
 
-    void *dtb = reinterpret_cast<void *>(kernel::gs::boot_info().dtb_ptr);
-    JARVIS_ASSERT_FMT(fdt_check_header(dtb) == 0,
-                      "FDT header validation failed");
+        // Page-table pages are physical; dereference through the HHDM
+        // direct-map alias (raw phys VAs resolve through the active TTBR0).
+        void *dtb = reinterpret_cast<void *>(arch::HHDM_OFFSET + dtb_addr);
+        JARVIS_ASSERT_FMT(fdt_check_header(dtb) == 0,
+                          "FDT header validation failed");
 
-    uint32_t magic = *static_cast<const uint32_t *>(dtb);
-    magic = __builtin_bswap32(magic);
-    JARVIS_ASSERT_FMT(magic == 0xD00DFEED,
-                      "DTB magic mismatch: 0x%x (expected 0xD00DFEED)", magic);
+        uint32_t magic = *static_cast<const uint32_t *>(dtb);
+        magic = __builtin_bswap32(magic);
+        JARVIS_ASSERT_FMT(magic == 0xD00DFEED,
+                          "DTB magic mismatch: 0x%x (expected 0xD00DFEED)",
+                          magic);
 
-    JARVIS_ASSERT_FMT(kernel::gs::boot_info().num_mem_regions > 0,
-                      "No memory regions parsed from DTB");
+        JARVIS_ASSERT_FMT(kernel::gs::boot_info().num_mem_regions > 0,
+                          "No memory regions parsed from DTB");
+        JARVIS_ASSERT_FMT(kernel::gs::boot_info().total_mem_size > 0,
+                          "Total memory size is zero after DTB parsing");
+    }
+
+    // Either source (DTB or platform fallback) must yield a usable memory
+    // configuration — the kernel must not boot with zero memory.
     JARVIS_ASSERT_FMT(kernel::gs::boot_info().total_mem_size > 0,
-                      "Total memory size is zero after DTB parsing");
+                      "No memory configured (DTB absent and fallback empty)");
 
     JARVIS_TEST_PASS();
 }
@@ -471,21 +498,24 @@ static uint64_t walk_leaf_descriptor(uint64_t va) {
     constexpr uint64_t DESC_TABLE = 1ULL << 1;
 
     uint64_t l0_phys = arch::read_ttbr1_el1();
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
     size_t l0_idx = (va >> L0_SHIFT) & TABLE_MASK;
     if (!(l0[l0_idx] & DESC_VALID))
         return 0;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l0[l0_idx] & ~0xFFF));
     size_t l1_idx = (va >> L1_SHIFT) & TABLE_MASK;
     if (!(l1[l1_idx] & DESC_VALID))
         return 0;
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l1[l1_idx] & ~0xFFF));
     size_t l2_idx = (va >> L2_SHIFT) & TABLE_MASK;
     if (!(l2[l2_idx] & DESC_VALID))
         return 0;
     if (!(l2[l2_idx] & DESC_TABLE))
         return l2[l2_idx];
-    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
+    uint64_t *l3 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l2[l2_idx] & ~0xFFF));
     size_t l3_idx = (va >> 12) & TABLE_MASK;
     return (l3[l3_idx] & DESC_VALID) ? l3[l3_idx] : 0;
 }

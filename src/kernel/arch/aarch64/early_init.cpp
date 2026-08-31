@@ -42,8 +42,17 @@ bool pan_init() {
 #if CONFIG_PAN
     uint64_t mmfr1{};
     asm volatile("mrs %0, id_aa64mmfr1_el1" : "=r"(mmfr1));
-    if (((mmfr1 >> 20) & 0xF) == 0)
+    if (((mmfr1 >> 20) & 0xF) == 0) {
+        // FEAT_PAN not implemented.  The reset SCTLR value may leave the
+        // PAN bit (23) set; it is ignored by the hardware, but clear it so
+        // the runtime state matches detection (degraded mode contract).
+        uint64_t sctlr{};
+        asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+        sctlr &= ~(1ULL << 23);
+        asm volatile("msr sctlr_el1, %0" : : "r"(sctlr) : "memory");
+        asm volatile("isb");
         return false;
+    }
     uint64_t sctlr{};
     asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
     sctlr |= (1ULL << 23); // SCTLR_EL1.PAN

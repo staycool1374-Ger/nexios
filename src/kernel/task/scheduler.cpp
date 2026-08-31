@@ -84,6 +84,7 @@ extern char _stack_end[];
 /// @param next   The task whose frame is being validated.
 /// @param nbase  Next task's kernel-stack base VA.
 /// @param f_rflags RFLAGS field of the candidate frame.
+#if defined(CONFIG_ARCH_X86_64)
 static bool validate_iret_frame(const kernel::TaskControlBlock &next,
                                 uint64_t nbase, uint64_t f_rflags, uint64_t rip,
                                 uint64_t cs, uint64_t rsp,
@@ -107,6 +108,7 @@ static bool validate_iret_frame(const kernel::TaskControlBlock &next,
     }
     return true;
 }
+#endif
 #include <kernel/task/sporadic_server.hpp>
 
 /// @brief Named constants for the iret-frame layout indices (magic-numeric
@@ -2683,6 +2685,7 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                   (next->page_table_ & 0xFFF) != 0));
             if (!bad) {
                 const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+#if defined(CONFIG_ARCH_X86_64)
                 uint64_t rip_a = f[IRET_RIP_IDX], cs_a = f[IRET_CS_IDX],
                          rsp_a = f[IRET_RSP_IDX], ss_a = f[IRET_SS_IDX];
                 uint64_t rip_b = f[IRET_SS_IDX], cs_b = f[IRET_RSP_IDX],
@@ -2693,6 +2696,20 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                     !validate_iret_frame(*next, nbase, f_rflags, rip_b, cs_b,
                                          rsp_b, ss_b))
                     bad = true;
+#elif defined(CONFIG_ARCH_AARCH64)
+                // AArch64 saved/initial context is the vectors.S save area:
+                // x0-x30 (+0..240), sp_el0 (+248), elr_el1 (+256), spsr_el1
+                // (+264).  Validate the exception-return state (mirrors the
+                // switch_to_task dispatch guard): ELR must be non-zero and
+                // SPSR must encode a sane AArch64 return mode (EL0t = 0b0000
+                // or EL1h = 0b0101) — a garbage frame (zeroed fresh stack)
+                // must never be dispatched.
+                uint64_t elr = f[256 / 8];
+                uint64_t spsr = f[264 / 8];
+                uint64_t mode = spsr & 0xFULL;
+                if (elr == 0 || (mode != 0x0 && mode != 0x5))
+                    bad = true;
+#endif
             }
             if (bad)
                 next = idle_task_;
@@ -3587,6 +3604,7 @@ extern "C" void scheduler_abort_switch_fixup() {
 /// dispatched as syscalls.  Report the fault once per task, park the task
 /// (BLOCKED + dequeued) so the rest of the system keeps running, and advance
 /// ELR past the faulting instruction so the parked context stays consistent.
+#if defined(CONFIG_ARCH_AARCH64)
 extern "C" void aarch64_el0_fault_handler() {
     static bool fault_reported[64] = {};
     uint64_t esr = 0;
@@ -3660,6 +3678,7 @@ extern "C" void aarch64_el0_fault_handler() {
     next_elr += 4;
     asm volatile("msr elr_el1, %0" : : "r"(next_elr));
 }
+#endif // CONFIG_ARCH_AARCH64
 
 extern "C" void scheduler_on_context_switch() {
     uint64_t id =
