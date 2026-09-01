@@ -86,8 +86,8 @@ enum class SyscallNumber : uint8_t {
     CAP_MINT = 54,
     IOPORT_GRANT = 55, ///< x86_64 fine-grained I/O delegation (issue #3)
     CAP_RETYPE = 56,   ///< Untyped sub-range carve + child remainder (issue #1)
-    IRQ_REGISTER = 57, ///< arm user-space IRQ delivery for an IrqCap (issue #2)
-    IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2)
+    IRQ_REGISTER = 57, ///< arm user-space IRQ delivery for an IrqCap (issue #2); arg1 = delivery mode: 0 = WAIT (blocking sys_irq_wait), 1 = NOTIFY (IPC notification on the task's Notify, issue #7)
+    IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2); refuses NOTIFY-armed slots (issue #7)
     IOMMU_MAP = 59,    ///< map an owned frame into the IOMMU DMA domain (issue #4)
     IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
     MAX_SYSCALL = 61,

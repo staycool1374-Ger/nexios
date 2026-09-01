@@ -17,11 +17,14 @@
  */
 
 /// @file syscall_handlers_irq.cpp
-/// @brief SYS_IRQ_REGISTER / SYS_IRQ_WAIT handlers (issue #2):
+/// @brief SYS_IRQ_REGISTER / SYS_IRQ_WAIT handlers (issues #2/#7):
 /// capability-gated user-space IRQ delivery.  sys_irq_register arms the
-/// current task as the recipient of the IrqCap's vector; sys_irq_wait blocks
-/// until the IRQ fires (or returns immediately when one is pending).  All
-/// dereferences through a capability slot validated by cap::lookup.  Both
+/// current task as the recipient of the IrqCap's vector; arg1 selects the
+/// delivery mode (0 = WAIT — blocking sys_irq_wait, 1 = NOTIFY — IPC
+/// notification on the task's Notify, issue #7).  sys_irq_wait blocks until
+/// the IRQ fires (or returns immediately when one is pending); it refuses
+/// slots armed in NOTIFY mode (the driver must use sys_notify_wait instead).
+/// All dereferences through a capability slot validated by cap::lookup.  Both
 /// returns are -1 on any validation failure (reachable states, never ENSURE).
 /// Non-x86_64 builds return -1 (no user-deliverable PIC vectors).
 
@@ -39,8 +42,8 @@ namespace kernel {
 // Shared with syscall_handlers_cap.cpp (same TU-visible helper).
 cap::CNode *current_cspace();
 
-uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t, uint64_t,
-                                   uint64_t, uint64_t *) {
+uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
+                                   uint64_t, uint64_t, uint64_t *) {
 #if defined(CONFIG_ARCH_X86_64)
     cap::CNode *src = current_cspace();
     if (!src)
@@ -59,6 +62,18 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t, uint64_t,
         return static_cast<uint64_t>(-1);
     }
 
+    // arg1 = delivery mode (issue #7): 0 = WAIT (blocking sys_irq_wait),
+    // 1 = NOTIFY (IPC notification on the task's Notify).  arm() validates
+    // the mode under the slot lock and rejects unknown values (fail closed).
+    // Validate the RAW 64-bit arg1 BEFORE the narrowing cast to uint8_t: an
+    // out-of-range value whose low byte wraps to 0 or 1 (e.g. 0x101 -> NOTIFY,
+    // 0x100 -> WAIT) would otherwise defeat arm()'s fail-closed rejection.
+    if (arg1 != 0ULL && arg1 != 1ULL) {
+        obj->release();
+        return static_cast<uint64_t>(-1);
+    }
+    auto mode = static_cast<IrqDeliveryMode>(arg1);
+
     // Slot-reuse safety (issue #2): arm() re-validates UNDER THE SLOT LOCK
     // that the slot at reg_idx_ still belongs to THIS cap and still carries
     // THIS cap's vector, so a slot drained at task death (or released by a
@@ -67,7 +82,8 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t, uint64_t,
     // one atomic critical section, closing the slot_belongs_to->arm TOCTOU
     // (arming a different cap's slot would hijack its vector and starve its
     // legitimate owner; fail closed, never ENSURE).
-    if (!IrqDelivery::arm(static_cast<int16_t>(irq->reg_idx_), *irq, *t)) {
+    if (!IrqDelivery::arm(static_cast<int16_t>(irq->reg_idx_), *irq, *t,
+                          mode)) {
         obj->release();
         return static_cast<uint64_t>(-1);
     }
@@ -76,6 +92,7 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t, uint64_t,
     return 0;
 #else
     (void)cap_handle;
+    (void)arg1;
     return static_cast<uint64_t>(-1);
 #endif
 }
@@ -120,9 +137,12 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         // carries THIS cap's vector, owner AND recipient before touching
         // pending/waiter (the find() above is a fast path; a concurrent
         // drain+reuse, or a shared cap armed by a different task, must not let
-        // us consume or register against a foreign slot).
+        // us consume or register against a foreign slot).  NOTIFY-armed slots
+        // are refused in BOTH lock scopes: their delivery path bypasses
+        // pending/waiter entirely (issue #7), so a WAIT would never wake.
         if (!r->occupied || r->vector != vector || r->owner != irq ||
-            r->recipient != t) {
+            r->recipient != t ||
+            r->delivery_mode != IrqDeliveryMode::WAIT) {
             obj->release();
             return static_cast<uint64_t>(-1);
         }
@@ -175,7 +195,8 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     {
         SpinLockGuard<sync::SpinLock> guard(r->lock_);
         if (r->occupied && r->vector == vector && r->owner == irq &&
-            r->recipient == t) {
+            r->recipient == t &&
+            r->delivery_mode == IrqDeliveryMode::WAIT) {
             if (r->pending > 0 && r->armed) {
                 --r->pending;
                 result = static_cast<uint64_t>(vector);

@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 996,    0,       0      },  // 981 executed +15 filtered; 990 + memory_pmm(5→8,#100) + exc_table(+3,#91)
+    {"all",                1003,   0,       0      },  // 981 executed +22 filtered; 996 + cap_irq_notify(+7,#7)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -86,6 +86,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
     {"cap_mmio",              10,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3)
     {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
+    {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
 
     // ipc

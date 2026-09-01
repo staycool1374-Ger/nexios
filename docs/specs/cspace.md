@@ -169,6 +169,19 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
   **Revocation limitation:** revoking/disposing an armed IrqCap wakes a blocked `sys_irq_wait`
   waiter with -1 (the wait contract holds); re-arming the same vector after teardown works
   (the slot is released).  aarch64/riscv64: handlers return -1 (no user-deliverable PIC vectors).
+  **NOTIFY mode (2026-09-01, issue #7 — User-Space IRQ Delivery System):** `sys_irq_register`
+  arg1 = delivery mode (`IrqDeliveryMode`: 0 = WAIT blocking `sys_irq_wait`, 1 = NOTIFY —
+  IPC notification bridge).  In NOTIFY mode the ISR transforms the incoming interrupt into a
+  notification on the recipient task's `Notify` object (value = vector, coalescing: last vector
+  wins; drivers needing per-IRQ counts use WAIT mode), eliminating Ring 0 driver execution for
+  notification-driven user-space drivers.  `sys_irq_wait` refuses NOTIFY-armed slots in both
+  lock scopes.  The mode is bound atomically at arm under the slot lock (unknown modes fail
+  closed).  Revoke/dispose/drain wake a blocked `sys_notify_wait` driver with the revoked
+  sentinel 0 (wakers own the wakeup, CODING_STYLE §12.3); `drain_task` never calls notify on a
+  dying task's already-destroyed Notify (cleanup destroys `~Notify` before `drain_task`).
+  **EventGroup mode is deferred** to a follow-up: EventGroup has no error/value channel, so the
+  revoke-wake contract would need a documented bit protocol, and its multi-waiter model mismatches
+  the single-recipient delivery slot.  Class `cap_irq_notify` (7 tests); `all` registered 1003.
 - **MMIO caps (0.4.2):** `MmioCap : KernelObject` wrapping a BAR range → capability-gated mapping (drives `sys_ioport_grant`).
   **IMPLEMENTED (2026-08-25, issue #3):** `CapType::Mmio`, `src/kernel/cap/mmio.{hpp,cpp}`
   (kernel-internal `create`/`create_from_bar`; `CONFIG_CAP_MAX_MMIO`; MEMORY ranges page-aligned,

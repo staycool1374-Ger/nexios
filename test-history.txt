@@ -522,3 +522,14 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-01 08:28:33 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 402ms
 2026-09-01 08:29:15 all PASSED: 981 FAILED: 0 TIME: 235264ms
 2026-09-01 08:29:31 all PASSED: 85 FAILED: 0 TIME: 4933ms
+2026-09-01 09:11:24 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 346ms (issue #7 NOTIFY mode)
+2026-09-01 09:13:22 cap_irq PASSED: 12 FAILED: 0 TIME: 467ms (issue #7 regression)
+2026-09-01 09:13:22 cap_core PASSED: 10 FAILED: 0 TIME: 357ms (issue #7 regression)
+2026-09-01 09:13:22 cap_syscall PASSED: 8 FAILED: 0 TIME: 1560ms (issue #7 regression)
+2026-09-01 09:13:22 cap_lifecycle PASSED: 8 FAILED: 0 TIME: 1244ms (issue #7 regression)
+2026-09-01 09:13:22 scheduler_core PASSED: 16 FAILED: 0 TIME: 522ms (issue #7 regression)
+2026-09-01 09:13:22 ipc_core PASSED: 23 FAILED: 0 TIME: 3432ms (issue #7 regression)
+2026-09-01 09:13:22 synchronization_sync PASSED: 19 FAILED: 0 TIME: 711ms (issue #7 regression)
+2026-09-01 15:39:34 cap_irq_notify PASSED: 7 FAILED: 0 TIME: 337ms (issue #7 after audit iter-2)
+2026-09-01 15:48:31 all PASSED: 988 FAILED: 0 TIME: 244525ms (issue #7 debug gate, registered 1003)
+2026-09-01 15:48:52 all PASSED: 85 FAILED: 0 TIME: 16659ms (issue #7 release gate, trace OFF)

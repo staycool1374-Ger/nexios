@@ -17,12 +17,15 @@
  */
 
 /// @file irq_delivery.cpp
-/// @brief User-space IRQ delivery table (issue #2).  A static bounded table
-/// of armed IRQ vectors mapping to their recipient task.  All state
+/// @brief User-space IRQ delivery table (issues #2/#7).  A static bounded
+/// table of armed IRQ vectors mapping to their recipient task.  All state
 /// transitions serialize on the per-slot SpinLock: the ISR and the
 /// syscall/teardown paths share one lock, so a pending IRQ is never lost
 /// between the pending-check and waiter registration, and a blocked
-/// sys_irq_wait is woken exactly once (never left BLOCKED forever).
+/// sys_irq_wait is woken exactly once (never left BLOCKED forever).  Issue #7
+/// adds the NOTIFY delivery mode: the ISR transforms the interrupt into an IPC
+/// notification on the recipient's Notify object (capability-backed, no Ring 0
+/// driver execution).  The mode is read/written only under the slot lock.
 
 #include <kernel/irq_delivery.hpp>
 #include <kernel/cap/irq.hpp>
@@ -46,6 +49,12 @@ namespace kernel {
 ///        scheduler tick through the delivery hook.
 constexpr uint8_t IRQ_VECTOR_MIN = 33;
 constexpr uint8_t IRQ_VECTOR_MAX = 47;
+
+/// @brief Value signalled to a NOTIFY-mode recipient's Notify when its slot
+///        is released (revoke/dispose/drain): the waker-owns-wakeup contract
+///        (CODING_STYLE §12.3).  0 is sync::NOTIFY_INVALID — outside the
+///        vector range (33–47) and distinguishable from a real delivery.
+constexpr uint64_t kIrqNotifyRevoked = 0;
 
 /// @brief Static delivery table (no dynamic allocation on RT paths).
 IrqRegistration g_irq_regs[CONFIG_CAP_MAX_IRQ];
@@ -108,6 +117,7 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
             r.occupied = true;
             r.armed = false;
             r.line_was_masked = true;
+            r.delivery_mode = IrqDeliveryMode::WAIT;
             r.owner = nullptr;
             r.recipient = nullptr;
             r.recipient_gen = 0;
@@ -131,7 +141,8 @@ void IrqDelivery::set_slot_owner(int16_t idx, cap::IrqCap *owner) {
 }
 
 bool IrqDelivery::arm(int16_t reg_idx, cap::IrqCap &owner,
-                      TaskControlBlock &recipient) {
+                      TaskControlBlock &recipient,
+                      IrqDeliveryMode delivery_mode) {
     IrqRegistration *r = slot(reg_idx);
     if (!r)
         return false;
@@ -144,6 +155,12 @@ bool IrqDelivery::arm(int16_t reg_idx, cap::IrqCap &owner,
     if (!r->occupied || r->armed || r->owner != &owner ||
         r->vector != owner.vector)
         return false;
+    // Unknown delivery mode fails closed (issue #7): a mode must never be
+    // stored that the ISR cannot dispatch on.
+    if (delivery_mode != IrqDeliveryMode::WAIT &&
+        delivery_mode != IrqDeliveryMode::NOTIFY)
+        return false;
+    r->delivery_mode = delivery_mode;
     r->recipient = &recipient;
     r->recipient_gen = recipient.generation;
     r->armed = true;
@@ -180,16 +197,31 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
         return false;
 
     // Record the pending IRQ first — never lost even with no waiter.
-    ++r->pending;
+    if (r->delivery_mode == IrqDeliveryMode::WAIT) {
+        ++r->pending;
 
-    // Wake a blocked sys_irq_wait waiter (Notify discipline: reject dead /
-    // recycled TCBs).
-    if (r->waiter && r->waiter->state != TaskState::TERMINATED &&
-        r->waiter->state != TaskState::REAPED &&
-        r->waiter->generation == r->waiter_gen) {
-        Scheduler::set_task_ready(*r->waiter);
-        r->waiter = nullptr;
-        r->waiter_gen = 0;
+        // Wake a blocked sys_irq_wait waiter (Notify discipline: reject dead /
+        // recycled TCBs).
+        if (r->waiter && r->waiter->state != TaskState::TERMINATED &&
+            r->waiter->state != TaskState::REAPED &&
+            r->waiter->generation == r->waiter_gen) {
+            Scheduler::set_task_ready(*r->waiter);
+            r->waiter = nullptr;
+            r->waiter_gen = 0;
+        }
+    } else {
+        // NOTIFY mode (issue #7): transform the interrupt into an IPC
+        // notification on the recipient's Notify — no pending/waiter
+        // bookkeeping (coalescing: the last vector value wins).  Lock order:
+        // slot lock -> Notify lock (leaf; acyclic — notify() never touches the
+        // slot table and is already invoked from ISR context today).  Reject
+        // dead / recycled TCBs (Notify discipline); notify() additionally
+        // guards its own waiter internally.
+        if (r->recipient && r->recipient->state != TaskState::TERMINATED &&
+            r->recipient->state != TaskState::REAPED &&
+            r->recipient->generation == r->recipient_gen) {
+            r->recipient->notify.notify(static_cast<uint64_t>(r->vector));
+        }
     }
 
     // EOI exactly once for the consumed vector (the caller returns early, so
@@ -224,19 +256,32 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
         r->armed = false;
         restore_line_mask(*r, false);
     }
+
+    // Wakers own the wakeup (CODING_STYLE §12.3): never leave the driver
+    // BLOCKED forever.  WAIT mode wakes a blocked sys_irq_wait with -1;
+    // NOTIFY mode signals the recipient's Notify with the revoked sentinel
+    // (0) so a blocked sys_notify_wait returns.  Capture the recipient/gen
+    // BEFORE clearing the slot fields.
+    if (r->delivery_mode == IrqDeliveryMode::NOTIFY) {
+        TaskControlBlock *notify_target = r->recipient;
+        uint64_t notify_gen = r->recipient_gen;
+        if (notify_target && notify_target->state != TaskState::TERMINATED &&
+            notify_target->state != TaskState::REAPED &&
+            notify_target->generation == notify_gen) {
+            notify_target->notify.notify(kIrqNotifyRevoked);
+        }
+    } else if (r->waiter && r->waiter->state != TaskState::TERMINATED &&
+               r->waiter->state != TaskState::REAPED &&
+               r->waiter->generation == r->waiter_gen) {
+        Scheduler::set_task_ready(*r->waiter);
+    }
     r->recipient = nullptr;
     r->recipient_gen = 0;
     r->owner = nullptr;
-
-    // Wake any blocked waiter with -1 (the wake contract: never left BLOCKED).
-    if (r->waiter && r->waiter->state != TaskState::TERMINATED &&
-        r->waiter->state != TaskState::REAPED &&
-        r->waiter->generation == r->waiter_gen) {
-        Scheduler::set_task_ready(*r->waiter);
-    }
     r->waiter = nullptr;
     r->waiter_gen = 0;
     r->pending = 0;
+    r->delivery_mode = IrqDeliveryMode::WAIT;
     r->occupied = false;
     return true;
 }
@@ -251,6 +296,24 @@ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
         if (!mine)
             continue;
 
+        // NOTIFY-mode ordering trap (issue #7): TaskControlBlock::cleanup()
+        // destroys the task's Notify (task.cpp) BEFORE drain_task runs, so the
+        // dying task's Notify object is already destroyed.  NEVER call
+        // notify() on it — that is a use-after-free on a poisoned object.
+        // The wakers-own-wakeup contract does not apply here: the drained task
+        // is TERMINATED/REAPED and must never be fed to the scheduler anyway.
+        if (r.delivery_mode == IrqDeliveryMode::NOTIFY && r.recipient != &tcb) {
+            // Defensive branch (unreachable via the current syscall path where
+            // the recipient is always the arming task): another task's Notify
+            // must still be signalled so it is never left BLOCKED forever.
+            if (r.recipient &&
+                r.recipient->state != TaskState::TERMINATED &&
+                r.recipient->state != TaskState::REAPED &&
+                r.recipient->generation == r.recipient_gen) {
+                r.recipient->notify.notify(kIrqNotifyRevoked);
+            }
+        }
+
         if (r.armed) {
             r.armed = false;
             restore_line_mask(r, false);
@@ -263,6 +326,7 @@ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
         r.waiter = nullptr;
         r.waiter_gen = 0;
         r.pending = 0;
+        r.delivery_mode = IrqDeliveryMode::WAIT;
         r.occupied = false;
     }
 }

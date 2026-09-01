@@ -98,6 +98,7 @@ void register_cap_ipc_tests();
 void register_cap_untyped_tests();
 void register_cap_mmio_tests();
 void register_cap_irq_tests();
+void register_cap_irq_notify_tests();
 void register_cap_iommu_tests();
 void register_waitpid_tests();
 void register_buffer_pool_tests();
@@ -319,6 +320,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_untyped", []() { register_cap_untyped_tests(); }},
     {"cap_mmio", []() { register_cap_mmio_tests(); }},
     {"cap_irq", []() { register_cap_irq_tests(); }},
+    {"cap_irq_notify", []() { register_cap_irq_notify_tests(); }},
     {"cap_iommu", []() { register_cap_iommu_tests(); }},
 
     // -- ipc: messages, events, notifications, pipes --
@@ -541,6 +543,7 @@ static void register_all_tests() {
     register_cap_untyped_tests();
     register_cap_mmio_tests();
     register_cap_irq_tests();
+    register_cap_irq_notify_tests();
     register_cap_iommu_tests();
     register_cap_ipc_tests();
     register_cap_syscall_tests();
@@ -692,6 +695,7 @@ static void register_all_tests_first_half() {
     register_cap_untyped_tests();
     register_cap_mmio_tests();
     register_cap_irq_tests();
+    register_cap_irq_notify_tests();
     register_cap_iommu_tests();
     register_cap_ipc_tests();
     register_waitpid_tests();

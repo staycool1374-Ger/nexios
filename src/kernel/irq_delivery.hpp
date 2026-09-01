@@ -17,12 +17,16 @@
  */
 
 /// @file irq_delivery.hpp
-/// @brief User-space IRQ delivery table (v0.4.2, issue #2).  A static, bounded
-/// set of slots (CONFIG_CAP_MAX_IRQ) that maps an armed IRQ vector to the
-/// task registered to receive it.  The ISR entry is invoked from
+/// @brief User-space IRQ delivery table (v0.4.2, issues #2/#7).  A static,
+/// bounded set of slots (CONFIG_CAP_MAX_IRQ) that maps an armed IRQ vector to
+/// the task registered to receive it.  The ISR entry is invoked from
 /// handle_interrupt_c BEFORE the threaded-IRQ path; it EOI-acks, records a
 /// pending IRQ and wakes a blocked sys_irq_wait waiter under the slot lock
-/// (no lost wakeup, no double delivery).
+/// (no lost wakeup, no double delivery).  Issue #7 adds a NOTIFY delivery
+/// mode that transforms the incoming interrupt into a capability-backed IPC
+/// notification (the recipient task's Notify object) instead of the blocking
+/// sys_irq_wait wait — eliminating Ring 0 driver execution for
+/// notification-driven user-space drivers.
 
 #pragma once
 
@@ -38,12 +42,21 @@ namespace cap {
 class IrqCap;
 }
 
+/// @brief Delivery mode of an armed IRQ slot (issue #7).  Bound atomically at
+/// arm() time under the slot lock; immutable for the arm lifetime.
+enum class IrqDeliveryMode : uint8_t {
+    WAIT = 0,  ///< blocking sys_irq_wait delivery (issue #2, default)
+    NOTIFY = 1 ///< capability-backed IPC notification to the recipient's
+               ///< Notify (issue #7) — no pending/waiter bookkeeping
+};
+
 /// @brief One armed IRQ delivery registration.
 struct IrqRegistration {
     uint8_t vector = 0;        ///< hardware vector (x86_64 PIC window 32–47)
     bool occupied = false;     ///< slot in use
     bool armed = false;        ///< vector unmasked + delivering to recipient
     bool line_was_masked = true; ///< PIC mask state of this line before arm
+    IrqDeliveryMode delivery_mode = IrqDeliveryMode::WAIT; ///< arm-time mode
     cap::IrqCap *owner = nullptr; ///< the cap that claimed this slot (issue #2)
     TaskControlBlock *recipient = nullptr; ///< task armed to receive
     uint64_t recipient_gen = 0;            ///< TCB generation at arm time
@@ -83,23 +96,32 @@ class IrqDelivery {
     ///        critical section — issue #2).
     /// @param reg_idx Slot index from claim_slot().
     /// @param owner   The cap that must own the slot (revalidated under lock).
+    /// @param recipient The task armed to receive delivery.
+    /// @param delivery_mode Delivery mode (issue #7); unknown modes are
+    ///        rejected (fail closed).  Bound at arm time, immutable until
+    ///        release.
     /// @return true on success.
     static bool arm(int16_t reg_idx, cap::IrqCap &owner,
-                    TaskControlBlock &recipient);
+                    TaskControlBlock &recipient,
+                    IrqDeliveryMode delivery_mode = IrqDeliveryMode::WAIT);
 
     /// @brief ISR entry — called from handle_interrupt_c.  Scans for an armed
-    ///        slot, EOI-acks the controller, records a pending IRQ and wakes a
-    ///        blocked waiter.
+    ///        slot, EOI-acks the controller, and dispatches per delivery_mode:
+    ///        WAIT records a pending IRQ and wakes a blocked waiter; NOTIFY
+    ///        signals the recipient's Notify with the vector value (no
+    ///        pending/waiter bookkeeping — coalescing: last vector wins).
     /// @return true if the vector was consumed by an IrqCap registration (the
     ///         caller must NOT continue to the generic handler path).
     static bool isr_entry(uint8_t vector);
 
     /// @brief Disarms the slot at @p reg_idx (re-masks the line) and wakes any
-    ///        blocked waiter with -1.  Called from IrqCap::dispose/revoke via
-    ///        the cap's stored reg_idx_.  Revalidates ownership under the lock
-    ///        (issue #2): a slot drained-and-reused between an outer check and
-    ///        this call is NOT released.  @p owner == nullptr releases an
-    ///        ownerless claimed slot (create()'s alloc-failure path).
+    ///        blocked waiter with -1 (WAIT mode) or signals the recipient's
+    ///        Notify with the revoked sentinel (NOTIFY mode, issue #7).  Called
+    ///        from IrqCap::dispose/revoke via the cap's stored reg_idx_.
+    ///        Revalidates ownership under the lock (issue #2): a slot
+    ///        drained-and-reused between an outer check and this call is NOT
+    ///        released.  @p owner == nullptr releases an ownerless claimed slot
+    ///        (create()'s alloc-failure path).
     /// @return true when the slot was actually released.
     static bool release_slot_idx(int16_t reg_idx, const cap::IrqCap *owner);
 
