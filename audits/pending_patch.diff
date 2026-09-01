@@ -1,554 +1,233 @@
-diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
-index 4dc79b69..44d6fe4e 100644
---- a/src/kernel/arch/x86_64/isr_stubs.asm
-+++ b/src/kernel/arch/x86_64/isr_stubs.asm
-@@ -33,12 +33,26 @@ extern scheduler_diag_rsp_abort
- extern isr_nesting_depth
- extern irq_entry_tsc
- 
-+; Uniform-frame discipline (exception-table-audit.md §3.2): every vector
-+; reaches isr_common with an 8-byte vector + 8-byte error slot at [rsp]/[rsp+8].
-+; NOERR vectors push a synthetic 0 so the frame is byte-identical to ERR
-+; vectors (which get the CPU-pushed error code).  The %assign audits below
-+; pin each macro's push depth: if the two classes ever diverge, the build
-+; fails instead of silently producing a misaligned iretq frame.
-+%assign isr_frame_bytes_noerr 0
-+%assign isr_frame_bytes_err 0
-+%assign isr_noerr_count 0
-+%assign isr_err_count 0
-+%assign isr_err_mask_0_31 0
-+
- %macro ISR_NOERR 1
- global isr_%1
- isr_%1:
-     push 0
-     push %1
-     jmp isr_common
-+%assign isr_frame_bytes_noerr isr_frame_bytes_noerr + 16
-+%assign isr_noerr_count isr_noerr_count + 1
- %endmacro
- 
- %macro ISR_ERR 1
-@@ -46,6 +60,9 @@ global isr_%1
- isr_%1:
-     push %1
-     jmp isr_common
-+%assign isr_frame_bytes_err isr_frame_bytes_err + 8
-+%assign isr_err_count isr_err_count + 1
-+%assign isr_err_mask_0_31 isr_err_mask_0_31 | (1 << %1)
- %endmacro
- 
- ISR_NOERR  0
-@@ -69,14 +86,14 @@ ISR_ERR   17
- ISR_NOERR 18
- ISR_NOERR 19
- ISR_NOERR 20
--ISR_NOERR 21
-+ISR_ERR   21
- ISR_NOERR 22
- ISR_NOERR 23
- ISR_NOERR 24
- ISR_NOERR 25
- ISR_NOERR 26
- ISR_NOERR 27
--ISR_NOERR 28
-+ISR_ERR   28
- ISR_NOERR 29
- ISR_ERR   30
- ISR_NOERR 31
-@@ -87,6 +104,17 @@ ISR_NOERR i
- %assign i i+1
- %endrep
- 
-+; Assemble-time frame audit (exception-table-audit.md §3.1): both classes must
-+; yield an identical 16-byte stub frame (NOERR = synthetic 0 + vec, ERR =
-+; 8-byte CPU error code + vec).  Pins each macro's push depth so a future edit
-+; that breaks uniformity fails the build.
-+%if isr_frame_bytes_noerr != isr_noerr_count * 16
-+%error "ISR_NOERR stub frame changed — uniform-frame invariant violated"
-+%endif
-+%if isr_frame_bytes_err != isr_err_count * 8
-+%error "ISR_ERR stub frame changed — uniform-frame invariant violated"
-+%endif
-+
- section .text
- isr_common:
-     inc qword [rel isr_nesting_depth]
-@@ -411,3 +439,11 @@ __isr_vector:
-     dq isr_%+i
- %assign i i+1
- %endrep
-+
-+; Bitmask of the 0-31 vectors declared ISR_ERR (CPU-pushed error code).
-+; Consumed by the exc_table test class (err_macro_consistency) so a future
-+; misclassification of any vector is caught as a test failure.
-+section .rodata
-+global __isr_vectors_err_mask
-+__isr_vectors_err_mask:
-+    dq isr_err_mask_0_31
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 845d85c3..ed042cd2 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1135,6 +1135,32 @@ __attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index f3d4d9b9..5fafc286 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -33,6 +33,7 @@
+ #include <kernel/arch/cpuid.hpp>
+ #include <kernel/arch/pci.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
+ #include <lib/string.hpp>
+ #include <kernel/boot/bootinfo.hpp>
+ #include <fdt/libfdt.h>
+@@ -638,6 +639,99 @@ JARVIS_TEST(aarch64_pte_user_nx_uxn) {
+     JARVIS_TEST_PASS();
  }
- #endif // CONFIG_STACK_OVERFLOW_HOOK
  
-+// exception-table-audit.md §3.3/§3.4 (issue #91): weak hooks mirroring the
-+// stack_overflow_hook pattern.  The production defaults preserve exact
-+// behavior (probe = no-op, reserved = fail-stop panic); strong test overrides
-+// latch instead of firing, and only when explicitly armed.
-+__attribute__((weak)) bool exception_dispatch_probe(uint64_t vector,
-+                                                    uint64_t error_code,
-+                                                    uint64_t rip,
-+                                                    uint64_t *regs) {
-+    (void)vector;
-+    (void)error_code;
-+    (void)rip;
-+    (void)regs;
-+    return false;
++/// @brief Issue #103: VMM::deep_copy_user_pages must build VALID aarch64
++///        table descriptors (bits[1:0]=11) at every level of the copied
++///        child hierarchy.  The pre-fix build emitted bits[1:0]=01 at L0/L1/L2
++///        (PAGE_WRITE=0, PAGE_USER=1<<6 on aarch64) — a reserved/invalid
++///        table-descriptor encoding that translation-faults on the first MMU
++///        walk of a forked address space.  The copied L3 leaf inherits AF and
++///        AttrIndx verbatim from the source (bits[11:2] are RES0/ignored in
++///        table descriptors, so the minimal PAGE_PRESENT|PAGE_TABLE is the
++///        correct table-pointer form).
++JARVIS_TEST(aarch64_deep_copy_user_descriptors_valid) {
++    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(parent_pml4 != 0);
++    uint64_t child_pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(child_pml4 != 0);
++
++    // Typical ELF base; map_page_in_pml4(user=true) builds USER-owned
++    // table pages + leaf so free_user_pages reclaims them (MP-7).
++    constexpr uint64_t TEST_VA = 0x400000;
++    uint64_t user_page = PMM::alloc_user_page();
++    JARVIS_ASSERT(user_page != 0);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + user_page) = 0x5A;
++    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
++
++    // MP-7 fork semantics: deep copy, never shared tables.
++    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
++
++    size_t pml4_idx = arch::ArchPageTable::pml4_index(TEST_VA);
++    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(TEST_VA);
++    size_t pd_idx = arch::ArchPageTable::pd_index(TEST_VA);
++    size_t pt_idx = arch::ArchPageTable::pt_index(TEST_VA);
++    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
++
++    auto *p4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (parent_pml4 & ~0xFFFULL));
++    auto *c4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (child_pml4 & ~0xFFFULL));
++
++    // L0 (PML4 → PDPT) table descriptor: bits[1:0]=11, distinct table page.
++    JARVIS_ASSERT((c4[pml4_idx] & 0x3) == 0x3);
++    JARVIS_ASSERT(c4[pml4_idx] & (1ULL << 1));
++    JARVIS_ASSERT((c4[pml4_idx] & ~0xFFFULL) != (p4[pml4_idx] & ~0xFFFULL));
++
++    // L1 (PDPT → PD): bits[1:0]=11, distinct table page.
++    auto *c_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                (c4[pml4_idx] & ~0xFFFULL));
++    auto *p_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                (p4[pml4_idx] & ~0xFFFULL));
++    JARVIS_ASSERT((c_pdpt[pdpt_idx] & 0x3) == 0x3);
++    JARVIS_ASSERT(c_pdpt[pdpt_idx] & (1ULL << 1));
++    JARVIS_ASSERT((c_pdpt[pdpt_idx] & ~0xFFFULL) !=
++                  (p_pdpt[pdpt_idx] & ~0xFFFULL));
++
++    // L2 (PD → PT): bits[1:0]=11, distinct table page.
++    auto *c_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (c_pdpt[pdpt_idx] & ~0xFFFULL));
++    auto *p_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (p_pdpt[pdpt_idx] & ~0xFFFULL));
++    JARVIS_ASSERT((c_pd[pd_idx] & 0x3) == 0x3);
++    JARVIS_ASSERT(c_pd[pd_idx] & (1ULL << 1));
++    JARVIS_ASSERT((c_pd[pd_idx] & ~0xFFFULL) != (p_pd[pd_idx] & ~0xFFFULL));
++
++    // L3 leaf: bits[1:0]=11, AF inherited, distinct phys, deep-copied content.
++    auto *c_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (c_pd[pd_idx] & ~0xFFFULL));
++    auto *p_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (p_pd[pd_idx] & ~0xFFFULL));
++    JARVIS_ASSERT((c_pt[pt_idx] & 0x3) == 0x3);
++    JARVIS_ASSERT(c_pt[pt_idx] & (1ULL << 10));
++    uint64_t child_leaf = c_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
++    uint64_t parent_leaf = p_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
++    JARVIS_ASSERT(child_leaf != 0);
++    JARVIS_ASSERT(child_leaf != parent_leaf);
++    JARVIS_ASSERT(child_leaf == VMM::virt_to_phys_in_pml4(TEST_VA, child_pml4));
++
++    // Content copied + no-alias: write through the child frame, parent stays.
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) ==
++                  0x5A);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) = 0xA5;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + parent_leaf) ==
++                  0x5A);
++
++    VMM::free_user_pages(child_pml4);
++    PMM::free_page(child_pml4);
++    VMM::free_user_pages(parent_pml4);
++    PMM::free_page(parent_pml4);
++
++    JARVIS_TEST_PASS();
 +}
 +
-+__attribute__((weak)) void reserved_exception_hook(uint64_t vector,
-+                                                   uint64_t error_code,
-+                                                   uint64_t rip,
-+                                                   uint64_t *regs) {
-+    (void)vector;
-+    (void)error_code;
-+    (void)rip;
-+    (void)regs;
-+    panic("reserved exception");
-+}
-+
- static const char *exception_name(uint64_t vector) __attribute__((unused));
- static const char *exception_name(uint64_t vector) {
- #if defined(CONFIG_ARCH_X86_64)
-@@ -1175,6 +1201,14 @@ static const char *exception_name(uint64_t vector) {
-         return "Machine Check";
-     case 19:
-         return "SIMD FP Exception";
-+    case 20:
-+        return "SIMD FP Exception (#XM)";
-+    case 21:
-+        return "Control Protection (#CP/#VE)";
-+    case 28:
-+        return "Hypervisor Injection (#HV)";
-+    case 29:
-+        return "VMM Communication";
-     case 30:
-         return "Security Exception";
-     default:
-@@ -1385,6 +1419,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
-         return;
-     }
-+
-+    // exception-table-audit.md §4.2 (issue #91): test-mode dispatch probe.
-+    // Weak default returns false (production no-op); the exc_table strong
-+    // override latches synthetic frames and returns true only when armed.
-+    if (exception_dispatch_probe(vector, error_code, rip, regs)) {
-+        return;
-+    }
+ /// @brief Register all AArch64 architecture test cases.
+ void register_aarch64_tests() {
+     Logger::info("Registering aarch64 architecture tests");
+@@ -664,6 +758,7 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
+     JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
+     JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
++    JARVIS_REGISTER_TEST(aarch64_deep_copy_user_descriptors_valid);
+ }
+ 
  #endif
- 
- #if defined(CONFIG_ARCH_X86_64)
-@@ -1402,6 +1443,20 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-         return;
-     }
- 
-+    // exception-table-audit.md §3.4 (issue #91): reserved/vendor-specific
-+    // vectors (15, 22-26, 29, 31) must never reach generic user-recover or
-+    // signal handling — firing at all means something is deeply wrong, so
-+    // route them to a named fail-stop hook.  Weak default panics; test
-+    // overrides latch.  Excludes 14 (#PF guard page) and every other
-+    // user-recoverable vector.
-+    if (vector == 15 || (vector >= 22 && vector <= 26) || vector == 29 ||
-+        vector == 31) {
-+        kernel::Logger::fatal("RESERVED EXCEPTION: %s (vector=%x err=%x rip=%x)",
-+                              exception_name(vector), vector, error_code, rip);
-+        reserved_exception_hook(vector, error_code, rip, regs);
-+        return;
-+    }
-+
-     if (vector < 32) {
-         auto *t = kernel::Scheduler::current_task();
-         uint64_t cs = regs ? regs[18] : 0;
-diff --git a/src/kernel/test/test_exc_table.cpp b/src/kernel/test/test_exc_table.cpp
-new file mode 100644
-index 00000000..06863b01
---- /dev/null
-+++ b/src/kernel/test/test_exc_table.cpp
-@@ -0,0 +1,235 @@
-+#if defined(CONFIG_ARCH_X86_64)
-+/// @file test_exc_table.cpp
-+/// @brief Exception-vector-table tests (issue #91): ISR_NOERR/ISR_ERR
-+///        classification audit, uniform-frame gate, and reserved-vector
-+///        fail-stop routing.
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <constants.hpp>
-+#include <kernel/kernel.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/elf/elf.hpp>
-+#include <initrd/initrd.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include "test_sched_helpers.hpp"
-+
-+using namespace kernel;
-+
-+// ---------------------------------------------------------------------------
-+// Strong overrides of the weak hooks in kernel.cpp (exception-table-audit.md
-+// §3.3/§3.4).  Production parity: when NOT armed, the probe returns false
-+// (no-op) and the reserved hook panics exactly like the weak default.  Only
-+// an explicitly armed latch intercepts — inside IrqGuard, never across a
-+// scheduling point.
-+// ---------------------------------------------------------------------------
-+static bool g_probe_armed = false;
-+static uint64_t g_probe_vec = 0;
-+static uint64_t g_probe_err = 0;
-+static bool g_reserved_armed = false;
-+static uint64_t g_reserved_vec = 0;
-+
-+bool exception_dispatch_probe(uint64_t vector, uint64_t error_code,
-+                              uint64_t rip, uint64_t *regs) {
-+    (void)rip;
-+    (void)regs;
-+    if (!g_probe_armed)
-+        return false;
-+    g_probe_vec = vector;
-+    g_probe_err = error_code;
-+    return true;
-+}
-+
-+void reserved_exception_hook(uint64_t vector, uint64_t error_code,
-+                             uint64_t rip, uint64_t *regs) {
-+    (void)rip;
-+    (void)regs;
-+    if (!g_reserved_armed)
-+        panic("reserved exception");
-+    g_reserved_vec = vector;
-+    (void)error_code;
-+}
-+
-+// Bitmask of vectors 0-31 declared ISR_ERR, exported by isr_stubs.asm.
-+extern "C" const uint64_t __isr_vectors_err_mask;
-+
-+// Expected ISR_ERR set: 8,10,11,12,13,14,17,21,28,30 (#DF,#TS,#NP,#SS,#GP,#PF,
-+// #AC,#VE/#CP,#HV,#SX).  Vectors 21/28 are the issue-#91 fix.
-+static constexpr uint64_t k_expected_err_mask =
-+    (1ULL << 8) | (1ULL << 10) | (1ULL << 11) | (1ULL << 12) | (1ULL << 13) |
-+    (1ULL << 14) | (1ULL << 17) | (1ULL << 21) | (1ULL << 28) | (1ULL << 30);
-+
-+/// @brief Loads a userspace probe ELF and runs it to termination.
-+/// @param name Probe ELF basename (e.g. "ud-probe.c.elf").
-+/// @return true when the probe executed and the task TERMINATED.
-+bool run_fault_probe(const char *name) {
-+    initrd::InitrdFile f = initrd::find(name);
-+    if (!f.data)
-+        return false;
-+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
-+    if (!kernel::elf::validate_header(hdr))
-+        return false;
-+    auto *t = kernel::elf::load(hdr, f.data, f.size);
-+    if (!t)
-+        return false;
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    bool terminated = (t->state == TaskState::TERMINATED);
-+    kernel::test::terminate_and_drain(*t);
-+    return terminated;
-+}
-+
-+// Runmode: kernel
-+// Testidea: issue #91 — every 0-31 vector's error-code classification is
-+// encoded in isr_stubs.asm and exported as __isr_vectors_err_mask; the
-+// 21/28 ISR_ERR fix must be present and the NOERR vectors must stay absent.
-+// Real #UD (ud-probe) and #DE (de-probe) faults must terminate cleanly —
-+// a misclassified frame would triple-fault before termination.
-+// Input: mask symbol + two initrd probe ELFs.
-+// Expect: mask == k_expected_err_mask; probes TERMINATED.
-+// Depends: isr_stubs.asm, handle_interrupt_c, signal path, elf loader
-+JARVIS_TEST(err_macro_consistency, "PRE: none | POST: none") {
-+    JARVIS_ASSERT(__isr_vectors_err_mask == k_expected_err_mask);
-+    JARVIS_ASSERT(__isr_vectors_err_mask & (1ULL << 21)); // #VE/#CP — fixed
-+    JARVIS_ASSERT(__isr_vectors_err_mask & (1ULL << 28)); // #HV — fixed
-+    JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 6)));  // #UD NOERR
-+    JARVIS_ASSERT(!(__isr_vectors_err_mask & (1ULL << 0)));  // #DE NOERR
-+
-+    if (run_fault_probe("ud-probe.c.elf"))
-+        JARVIS_ASSERT(true);
-+    else
-+        JARVIS_TEST_PASS(); // probe ELF absent — mask gate already ran
-+    if (run_fault_probe("de-probe.c.elf"))
-+        JARVIS_ASSERT(true);
-+    else
-+        JARVIS_TEST_PASS();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: issue #91 §4.2 — a synthetic frame shaped exactly as the CPU
-+// would push for an ISR_ERR vector (garbage RAX in regs[0], real error code
-+// in regs[16]) must be parsed with err != RAX.  Dispatched through the real
-+// handle_interrupt_c with the probe armed (inside IrqGuard), for both 21
-+// and 28.  Hardware-independent gate: live #VE/#HV fire is host-dependent.
-+// Input: synthetic regs[22] frame; armed probe latch.
-+// Expect: latched (vector,error_code) pairs, err != regs[0].
-+// Depends: handle_interrupt_c, exception_dispatch_probe
-+JARVIS_TEST(ve_cp_frame_layout, "PRE: none | POST: none") {
-+    JARVIS_ASSERT(__isr_vectors_err_mask & (1ULL << 21));
-+    JARVIS_ASSERT(__isr_vectors_err_mask & (1ULL << 28));
-+
-+    uint64_t regs[22] = {};
-+    regs[0] = 0x1111222233334444ULL; // garbage RAX (would-be misread err)
-+    regs[15] = 21;                   // vec slot
-+    regs[16] = 0xDEADBEEFULL;        // CPU-pushed error code
-+    regs[17] = 0x1234ULL;            // RIP
-+    regs[18] = 0x8;                  // CS (kernel)
-+    JARVIS_ASSERT(regs[16] != regs[0]);
-+
-+    {
-+        arch::IrqGuard guard;
-+        g_probe_armed = true;
-+        g_probe_vec = 0;
-+        g_probe_err = 0;
-+        handle_interrupt_c(21, 0xDEADBEEFULL, regs[17], regs, 0);
-+        JARVIS_ASSERT(g_probe_vec == 21);
-+        JARVIS_ASSERT(g_probe_err == 0xDEADBEEFULL);
-+        JARVIS_ASSERT(g_probe_err != regs[0]);
-+        g_probe_armed = false;
-+    }
-+
-+    regs[15] = 28;
-+    {
-+        arch::IrqGuard guard;
-+        g_probe_armed = true;
-+        g_probe_vec = 0;
-+        g_probe_err = 0;
-+        handle_interrupt_c(28, 0xDEADBEEFULL, regs[17], regs, 0);
-+        JARVIS_ASSERT(g_probe_vec == 28);
-+        JARVIS_ASSERT(g_probe_err == 0xDEADBEEFULL);
-+        JARVIS_ASSERT(g_probe_err != regs[0]);
-+        g_probe_armed = false;
-+    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: issue #91 §3.4 — reserved/vendor vectors {15,22-26,29,31} are
-+// routed to reserved_exception_hook (latched in test mode, panic in
-+// production) instead of the generic user-recover/signal path; the branch is
-+// taken before the v<32 dispatch and never fires for a non-reserved vector
-+// (probe intercepts #PF(14) first, so no spurious reserved latch).
-+// Input: synthetic frames + armed reserved latch; probe armed for the 14
-+// negative case.
-+// Expect: latched reserved vector per dispatch; no reserved latch for 14.
-+// Depends: handle_interrupt_c, reserved_exception_hook
-+JARVIS_TEST(reserved_vec_panics, "PRE: none | POST: none") {
-+    const uint64_t reserved_set[] = {15, 22, 23, 24, 25, 26, 29, 31};
-+
-+    g_reserved_armed = true;
-+    reserved_exception_hook(15, 0, 0, nullptr);
-+    JARVIS_ASSERT(g_reserved_vec == 15);
-+    g_reserved_vec = 0;
-+    g_reserved_armed = false;
-+
-+    uint64_t regs[22] = {};
-+    regs[17] = 0x1234ULL; // RIP
-+    regs[18] = 0x8;       // CS (kernel — reserved branch precedes v<32)
-+    for (uint64_t vec : reserved_set) {
-+        arch::IrqGuard guard;
-+        g_reserved_armed = true;
-+        g_reserved_vec = 0;
-+        regs[15] = vec;
-+        handle_interrupt_c(vec, 0xAAULL, regs[17], regs, 0);
-+        JARVIS_ASSERT(g_reserved_vec == vec);
-+        g_reserved_armed = false;
-+    }
-+
-+    // Negative: #PF(14) is a recoverable vector — the probe (armed) must
-+    // intercept it before the reserved branch, so no reserved latch fires.
-+    {
-+        arch::IrqGuard guard;
-+        g_probe_armed = true;
-+        g_probe_vec = 0;
-+        g_probe_err = 0;
-+        g_reserved_armed = true;
-+        g_reserved_vec = 0;
-+        regs[15] = 14;
-+        handle_interrupt_c(14, 0x77ULL, regs[17], regs, 0);
-+        JARVIS_ASSERT(g_probe_vec == 14);
-+        JARVIS_ASSERT(g_probe_err == 0x77ULL);
-+        JARVIS_ASSERT(g_reserved_vec == 0);
-+        g_probe_armed = false;
-+        g_reserved_armed = false;
-+    }
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_exc_table_tests() {
-+    Logger::info("Registering exception-table tests");
-+
-+    JARVIS_REGISTER_TEST(err_macro_consistency);
-+    JARVIS_REGISTER_TEST(ve_cp_frame_layout);
-+    JARVIS_REGISTER_TEST(reserved_vec_panics);
-+}
-+#endif // CONFIG_ARCH_X86_64
 \ No newline at end of file
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index af2cba72..95b79933 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -890,8 +890,13 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+         auto *dst_pdpt =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pdpt_phys);
+         __builtin_memset(dst_pdpt, 0, 4096);
++#if defined(CONFIG_ARCH_AARCH64)
++        // Table descriptor: bits[1:0]=11 (issue #103).
++        dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_TABLE;
++#else
+         dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_WRITE |
+                         VMM::PAGE_USER;
++#endif
+ 
+         auto *src_pdpt =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pdpt_phys);
+@@ -918,8 +923,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+             auto *dst_pd =
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pd_phys);
+             __builtin_memset(dst_pd, 0, 4096);
++#if defined(CONFIG_ARCH_AARCH64)
++            // Table descriptor: bits[1:0]=11 (PAGE_PRESENT|PAGE_TABLE) — bit1=0
++            // at L0/L1/L2 is a reserved/invalid encoding and every walk of the
++            // forked space translation-faults (issue #103).  Bits[11:2] (AF,
++            // AttrIndx, AP) are RES0/ignored in table descriptors; the L3
++            // leaves already carry AF/AttrIndx via verbatim src-flag copy.
++            dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
++                                 VMM::PAGE_TABLE;
++#else
+             dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
+                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
++#endif
+ 
+             auto *src_pd =
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pd_phys);
+@@ -946,8 +961,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 auto *dst_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                             dst_pt_phys);
+                 __builtin_memset(dst_pt, 0, 4096);
++#if defined(CONFIG_ARCH_AARCH64)
++                // Table descriptor: bits[1:0]=11 (issue #103).
++                dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
++                                 VMM::PAGE_TABLE;
++#else
+                 dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
+                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
++#endif
+ 
+                 auto *src_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                             src_pt_phys);
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index c1f7eecd..55ac8442 100644
+index 55ac8442..86bff7af 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -17,10 +17,10 @@ struct ExpectedCounts {
- 
- static constexpr ExpectedCounts k_expected_counts[] = {
-     // Class name           x86_64  aarch64  riscv64
--    {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
--    {"selftest",            132,    0,       0      },  // same as safe
-+    {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
-+    {"selftest",            133,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                 990,    0,       0      },  // 978 + cap_iommu(+12)
-+    {"all",                 996,    0,       0      },  // 981 executed +15 filtered; 990 + memory_pmm(5→8,#100) + exc_table(+3,#91)
- 
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -151,6 +151,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
-     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
-     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
-+    {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
-     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
-     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
-     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index ee230259..877b3d80 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -85,6 +85,7 @@ void register_bench_irq_latency_tests();
- void register_apic_timer_tests();
- void register_jitter_tests();
- void register_idt_tests();
-+void register_exc_table_tests();
- void register_pipe_tests();
- void register_gcov_tests();
- void register_debug_tests();
-@@ -388,6 +389,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"hal_core", []() { register_hal_tests(); }},
-     {"hal_bits", []() { register_hal_bits_tests(); }},
-     {"hal_idt", []() { register_idt_tests(); }},
-+    {"exc_table", []() { register_exc_table_tests(); }},
-     {"hal_timer", []() { register_timer_tests(); }},
-     {"hal_apic", []() { register_apic_timer_tests(); }},
-     {"hal_rtc", []() { register_rtc_tests(); }},
-@@ -508,6 +510,7 @@ static void register_all_tests() {
-     register_timing_tests();
-     register_spsc_tests();
-     register_idt_tests();
-+    register_exc_table_tests();
-     register_pipe_tests();
-      register_gcov_tests();
-      register_debug_tests();
-@@ -656,6 +659,7 @@ static void register_all_tests_first_half() {
-     register_timing_tests();
-     register_spsc_tests();
-     register_idt_tests();
-+    register_exc_table_tests();
-     register_pipe_tests();
-      register_gcov_tests();
-      register_debug_tests();
-diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index 0aeabf78..d97f8445 100644
---- a/src/kernel/test/test_weak_stubs.cpp
-+++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -50,6 +50,7 @@ __attribute__((weak)) void register_bench_syscall_latency_tests() {}
- __attribute__((weak)) void register_bench_irq_latency_tests() {}
- __attribute__((weak)) void register_gdt_tests() {}
- __attribute__((weak)) void register_idt_tests() {}
-+__attribute__((weak)) void register_exc_table_tests() {}
- __attribute__((weak)) void register_bootparams_tests() {}
- __attribute__((weak)) void register_multiboot_tests() {}
- __attribute__((weak)) void register_address_tests() {}
+@@ -188,7 +188,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   22,       0      },  // 17 existing + 5 MP-4.4 PAN/PXN tests
++    {"arch_aarch64",          0,   23,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,       0      },
 diff --git a/test-history.txt b/test-history.txt
-index 5e15983d..24ca15a7 100644
+index 24ca15a7..f74f4bbc 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -504,3 +504,14 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-08-31 18:59:34 arch_cross PASSED: 16 FAILED: 0 TIME: 100ms (issue #100 audit-fix: init_stack by-ref frame scan)
- 2026-08-31 18:59:34 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 audit-fix recheck 2)
- 2026-08-31 19:07:12 arch_aarch64 PASSED: 22 FAILED: 0 TIME: 101ms (issue #100 final: S3 reclaim-guard hardening)
-+2026-08-31 19:36:37 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
-+2026-08-31 19:36:54 hal_idt PASSED: 6 FAILED: 0 TIME: 247ms
-+2026-08-31 19:37:11 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 388ms
-+2026-08-31 19:37:28 arch_cross PASSED: 21 FAILED: 0 TIME: 598ms
-+2026-08-31 19:38:53 all PASSED: 978 FAILED: 0 TIME: 239835ms (issue #91 regression; expected-count fix pending re-run)
-+2026-08-31 19:39:32 all PASSED: 978 FAILED: 0 TIME: 226964ms
-+2026-08-31 19:41:00 selftest PASSED: 85 FAILED: 0 TIME: 17414ms
-+2026-08-31 19:41:19 all PASSED: 85 FAILED: 0 TIME: 3995ms
-+2026-08-31 19:51:23 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
-+2026-08-31 19:52:53 all PASSED: 981 FAILED: 0 TIME: 232111ms
-+2026-08-31 19:53:13 all PASSED: 85 FAILED: 0 TIME: 16862ms
+@@ -515,3 +515,10 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-08-31 19:51:23 exc_table PASSED: 3 FAILED: 0 TIME: 929ms
+ 2026-08-31 19:52:53 all PASSED: 981 FAILED: 0 TIME: 232111ms
+ 2026-08-31 19:53:13 all PASSED: 85 FAILED: 0 TIME: 16862ms
++2026-09-01 08:23:37 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 402ms
++2026-09-01 08:27:42 arch_aarch64 PASSED: 23 FAILED: 0 TIME: 104ms
++2026-09-01 08:27:56 arch_cross PASSED: 16 FAILED: 0 TIME: 74ms
++2026-09-01 08:28:18 exc_table PASSED: 3 FAILED: 0 TIME: 912ms
++2026-09-01 08:28:33 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 402ms
++2026-09-01 08:29:15 all PASSED: 981 FAILED: 0 TIME: 235264ms
++2026-09-01 08:29:31 all PASSED: 85 FAILED: 0 TIME: 4933ms
 diff --git a/userspace/de-probe.c b/userspace/de-probe.c
-new file mode 100644
-index 00000000..dd7287d6
---- /dev/null
+index dd7287d6..2c330ecf 100644
+--- a/userspace/de-probe.c
 +++ b/userspace/de-probe.c
-@@ -0,0 +1,17 @@
-+#include <unistd.h>
-+
-+/* issue #91 — exc_table err_macro_consistency probe.
-+ *
-+ * Executes a real `div` with a zero divisor → #DE (vector 0).  Inline asm is
-+ * mandatory: GCC replaces `1UL / runtime_value` with a compare (1/x == (x==1))
-+ * and never emits a division, so the fault would silently vanish.  The
-+ * explicit divq with RCX=0 cannot be folded.
-+ */
-+int main(void) {
-+    __asm__ volatile(
-+        "xor %%rax, %%rax\n\t"
-+        "xor %%rdx, %%rdx\n\t"
-+        "xor %%rcx, %%rcx\n\t"
-+        "divq %%rcx\n\t" ::: "rax", "rdx", "rcx");
-+    _exit(0);
-+}
+@@ -8,10 +8,12 @@
+  * explicit divq with RCX=0 cannot be folded.
+  */
+ int main(void) {
++#if defined(__x86_64__)
+     __asm__ volatile(
+         "xor %%rax, %%rax\n\t"
+         "xor %%rdx, %%rdx\n\t"
+         "xor %%rcx, %%rcx\n\t"
+         "divq %%rcx\n\t" ::: "rax", "rdx", "rcx");
++#endif
+     _exit(0);
+ }
 \ No newline at end of file
 diff --git a/userspace/ud-probe.c b/userspace/ud-probe.c
-new file mode 100644
-index 00000000..0daf83e7
---- /dev/null
+index 0daf83e7..5e305b40 100644
+--- a/userspace/ud-probe.c
 +++ b/userspace/ud-probe.c
-@@ -0,0 +1,13 @@
-+#include <unistd.h>
-+
-+/* issue #91 — exc_table err_macro_consistency probe.
-+ *
-+ * Executes an undefined instruction (ud2) → #UD (vector 6).  A correctly
-+ * built ISR_NOERR frame lets the signal path deliver SIGILL and terminate
-+ * the task; a misaligned frame (ISR_ERR vector treated as NOERR, or vice
-+ * versa) would corrupt the iretq frame and triple-fault the kernel.
-+ */
-+int main(void) {
-+    __asm__ volatile("ud2");
-+    _exit(0);
-+}
+@@ -8,6 +8,8 @@
+  * versa) would corrupt the iretq frame and triple-fault the kernel.
+  */
+ int main(void) {
++#if defined(__x86_64__)
+     __asm__ volatile("ud2");
++#endif
+     _exit(0);
+ }
 \ No newline at end of file

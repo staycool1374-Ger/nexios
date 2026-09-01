@@ -890,8 +890,13 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
         auto *dst_pdpt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pdpt_phys);
         __builtin_memset(dst_pdpt, 0, 4096);
+#if defined(CONFIG_ARCH_AARCH64)
+        // Table descriptor: bits[1:0]=11 (issue #103).
+        dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_TABLE;
+#else
         dst[pml4_idx] = dst_pdpt_phys | VMM::PAGE_PRESENT | VMM::PAGE_WRITE |
                         VMM::PAGE_USER;
+#endif
 
         auto *src_pdpt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pdpt_phys);
@@ -918,8 +923,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
             auto *dst_pd =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_pd_phys);
             __builtin_memset(dst_pd, 0, 4096);
+#if defined(CONFIG_ARCH_AARCH64)
+            // Table descriptor: bits[1:0]=11 (PAGE_PRESENT|PAGE_TABLE) — bit1=0
+            // at L0/L1/L2 is a reserved/invalid encoding and every walk of the
+            // forked space translation-faults (issue #103).  Bits[11:2] (AF,
+            // AttrIndx, AP) are RES0/ignored in table descriptors; the L3
+            // leaves already carry AF/AttrIndx via verbatim src-flag copy.
+            dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
+                                 VMM::PAGE_TABLE;
+#else
             dst_pdpt[pdpt_idx] = dst_pd_phys | VMM::PAGE_PRESENT |
                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
+#endif
 
             auto *src_pd =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_pd_phys);
@@ -946,8 +961,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 auto *dst_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                             dst_pt_phys);
                 __builtin_memset(dst_pt, 0, 4096);
+#if defined(CONFIG_ARCH_AARCH64)
+                // Table descriptor: bits[1:0]=11 (issue #103).
+                dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
+                                 VMM::PAGE_TABLE;
+#else
                 dst_pd[pd_idx] = dst_pt_phys | VMM::PAGE_PRESENT |
                                  VMM::PAGE_WRITE | VMM::PAGE_USER;
+#endif
 
                 auto *src_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                             src_pt_phys);

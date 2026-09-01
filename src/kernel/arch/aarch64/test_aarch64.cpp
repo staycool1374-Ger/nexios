@@ -33,6 +33,7 @@
 #include <kernel/arch/cpuid.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/memory/vmm.hpp>
 #include <lib/string.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <fdt/libfdt.h>
@@ -638,6 +639,99 @@ JARVIS_TEST(aarch64_pte_user_nx_uxn) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Issue #103: VMM::deep_copy_user_pages must build VALID aarch64
+///        table descriptors (bits[1:0]=11) at every level of the copied
+///        child hierarchy.  The pre-fix build emitted bits[1:0]=01 at L0/L1/L2
+///        (PAGE_WRITE=0, PAGE_USER=1<<6 on aarch64) — a reserved/invalid
+///        table-descriptor encoding that translation-faults on the first MMU
+///        walk of a forked address space.  The copied L3 leaf inherits AF and
+///        AttrIndx verbatim from the source (bits[11:2] are RES0/ignored in
+///        table descriptors, so the minimal PAGE_PRESENT|PAGE_TABLE is the
+///        correct table-pointer form).
+JARVIS_TEST(aarch64_deep_copy_user_descriptors_valid) {
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+
+    // Typical ELF base; map_page_in_pml4(user=true) builds USER-owned
+    // table pages + leaf so free_user_pages reclaims them (MP-7).
+    constexpr uint64_t TEST_VA = 0x400000;
+    uint64_t user_page = PMM::alloc_user_page();
+    JARVIS_ASSERT(user_page != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + user_page) = 0x5A;
+    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
+
+    // MP-7 fork semantics: deep copy, never shared tables.
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    size_t pml4_idx = arch::ArchPageTable::pml4_index(TEST_VA);
+    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(TEST_VA);
+    size_t pd_idx = arch::ArchPageTable::pd_index(TEST_VA);
+    size_t pt_idx = arch::ArchPageTable::pt_index(TEST_VA);
+    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
+
+    auto *p4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (parent_pml4 & ~0xFFFULL));
+    auto *c4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (child_pml4 & ~0xFFFULL));
+
+    // L0 (PML4 → PDPT) table descriptor: bits[1:0]=11, distinct table page.
+    JARVIS_ASSERT((c4[pml4_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c4[pml4_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c4[pml4_idx] & ~0xFFFULL) != (p4[pml4_idx] & ~0xFFFULL));
+
+    // L1 (PDPT → PD): bits[1:0]=11, distinct table page.
+    auto *c_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (c4[pml4_idx] & ~0xFFFULL));
+    auto *p_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (p4[pml4_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pdpt[pdpt_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pdpt[pdpt_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c_pdpt[pdpt_idx] & ~0xFFFULL) !=
+                  (p_pdpt[pdpt_idx] & ~0xFFFULL));
+
+    // L2 (PD → PT): bits[1:0]=11, distinct table page.
+    auto *c_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (c_pdpt[pdpt_idx] & ~0xFFFULL));
+    auto *p_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (p_pdpt[pdpt_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pd[pd_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pd[pd_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c_pd[pd_idx] & ~0xFFFULL) != (p_pd[pd_idx] & ~0xFFFULL));
+
+    // L3 leaf: bits[1:0]=11, AF inherited, distinct phys, deep-copied content.
+    auto *c_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (c_pd[pd_idx] & ~0xFFFULL));
+    auto *p_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (p_pd[pd_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pt[pt_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pt[pt_idx] & (1ULL << 10));
+    uint64_t child_leaf = c_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
+    uint64_t parent_leaf = p_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
+    JARVIS_ASSERT(child_leaf != 0);
+    JARVIS_ASSERT(child_leaf != parent_leaf);
+    JARVIS_ASSERT(child_leaf == VMM::virt_to_phys_in_pml4(TEST_VA, child_pml4));
+
+    // Content copied + no-alias: write through the child frame, parent stays.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) ==
+                  0x5A);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) = 0xA5;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + parent_leaf) ==
+                  0x5A);
+
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all AArch64 architecture test cases.
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -664,6 +758,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
     JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
     JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
+    JARVIS_REGISTER_TEST(aarch64_deep_copy_user_descriptors_valid);
 }
 
 #endif

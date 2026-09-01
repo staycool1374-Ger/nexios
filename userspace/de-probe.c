@@ -8,10 +8,12 @@
  * explicit divq with RCX=0 cannot be folded.
  */
 int main(void) {
+#if defined(__x86_64__)
     __asm__ volatile(
         "xor %%rax, %%rax\n\t"
         "xor %%rdx, %%rdx\n\t"
         "xor %%rcx, %%rcx\n\t"
         "divq %%rcx\n\t" ::: "rax", "rdx", "rcx");
+#endif
     _exit(0);
 }

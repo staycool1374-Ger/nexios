@@ -8,6 +8,8 @@
  * versa) would corrupt the iretq frame and triple-fault the kernel.
  */
 int main(void) {
+#if defined(__x86_64__)
     __asm__ volatile("ud2");
+#endif
     _exit(0);
 }
