@@ -536,6 +536,37 @@
 #define CONFIG_IOPB_MAX_TASKS 4
 #endif
 
+/// Maximum number of concurrent IOPB grant-ledger entries (issue #8).  The
+/// ledger tracks which capability-backed grants are live so revoking/disposing
+/// an IO MmioCap retroactively clears the granted port bits in a live task's
+/// bitmap (closing the #3 revocation gap).  Static bounded array — no dynamic
+/// allocation on real-time paths.
+#ifndef CONFIG_IOPB_MAX_GRANTS
+#define CONFIG_IOPB_MAX_GRANTS 8
+#endif
+
+/// Maximum number of concurrent user-space MMIO page-frame mappings per
+/// registry (issue #8).  Each entry reserves one slot in a fixed user VA
+/// window (CONFIG_USER_MMIO_VA_BASE + slot*CONFIG_USER_MMIO_REGION_SIZE).
+/// Static bounded array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_MMIO_MAPS
+#define CONFIG_CAP_MAX_MMIO_MAPS 8
+#endif
+
+/// Base of the fixed user-space MMIO mapping window (issue #8).  Lies below
+/// mem::STACK_VADDR (0x70000000) and above the heap (mem::HEAP_VADDR +
+/// mem::HEAP_SIZE = 0x60100000), clear of ELF segments (which must end below
+/// mem::HEAP_VADDR).  A static_assert in cap/mmio.cpp pins the window bounds.
+#ifndef CONFIG_USER_MMIO_VA_BASE
+#define CONFIG_USER_MMIO_VA_BASE 0x61000000ULL
+#endif
+
+/// Size of one user MMIO mapping region (issue #8).  Each registry slot maps
+/// its device BAR range into this many bytes of the user VA window.
+#ifndef CONFIG_USER_MMIO_REGION_SIZE
+#define CONFIG_USER_MMIO_REGION_SIZE 0x200000ULL // 2 MiB
+#endif
+
 /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
 /// by a TU-local live counter in cap/iommu.cpp.
 #ifndef CONFIG_CAP_MAX_IOMMU

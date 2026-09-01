@@ -90,7 +90,9 @@ enum class SyscallNumber : uint8_t {
     IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2); refuses NOTIFY-armed slots (issue #7)
     IOMMU_MAP = 59,    ///< map an owned frame into the IOMMU DMA domain (issue #4)
     IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
-    MAX_SYSCALL = 61,
+    MMIO_MAP = 61,     ///< map an MmioCap memory BAR into the caller's user VA window (issue #8)
+    MMIO_UNMAP = 62,   ///< unmap a user MMIO mapping by VA (issue #8)
+    MAX_SYSCALL = 63,
 };
 
 /// @brief System call handler function signature.
@@ -242,6 +244,10 @@ class Syscall {
                                   uint64_t *);
     static uint64_t sys_iommu_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
                                     uint64_t *);
+    static uint64_t sys_mmio_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -306,6 +312,8 @@ class Syscall {
             &Syscall::sys_irq_wait,
             &Syscall::sys_iommu_map,
             &Syscall::sys_iommu_unmap,
+            &Syscall::sys_mmio_map,
+            &Syscall::sys_mmio_unmap,
     };
 };
 

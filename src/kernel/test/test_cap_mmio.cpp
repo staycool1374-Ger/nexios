@@ -499,7 +499,307 @@ JARVIS_TEST(ioport_pool_exhaustion_fails_closed, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Registers all MMIO-cap / I/O-delegation test cases (issue #3).
+#if defined(CONFIG_ARCH_X86_64)
+// Runmode: kernel
+// Testidea: Revoking an IO MmioCap retroactively re-masks the granted port
+//           bits in the live task's bitmap (issue #8 revocation closure —
+//           the #3 gap).  After revoke the port is denied again and the TSS
+//           owner's bitmap reflects the denied state.
+// Input: task grants [0x3F8,8); harness revokes the cap mid-lifetime
+// Expect: port 0x3F8 denied after revoke; ledger empty; grant_count 0
+// Depends: kernel::arch::iopb, kernel::cap::MmioCap
+JARVIS_TEST(ioport_revoke_clears_live_bits, "PRE: none | POST: none") {
+    static uint64_t g_handle = 0;
+    static TaskControlBlock *g_waiter = nullptr;
+    g_handle = 0;
+    g_waiter = nullptr;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            cur->ensure_cspace();
+            cap::CNode *cs = cur->get_cspace();
+            auto *mmio = cap::MmioCap::create(0x3F8, 8, arch::PciBarType::IO);
+            if (!mmio) {
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            int s = cs->install(mmio, cap::CapType::Mmio,
+                                cap::CAP_RIGHT_WRITE);
+            if (s < 0) {
+                mmio->release();
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            uint64_t h = cap::encode_handle(
+                cs->cspace_id, static_cast<uint32_t>(s),
+                cs->slot_gen(static_cast<uint32_t>(s)));
+            uint64_t r = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT), h, 0x3F8,
+                8, 0, nullptr);
+            if (r != 0) {
+                cs->remove(static_cast<uint32_t>(s));
+                mmio->release();
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            // Signal the harness ONLY after the grant is installed (no
+            // cross-task race on the bitmap state).
+            g_handle = h;
+            g_waiter = cur;
+            // Wait for the harness to revoke the cap, then terminate (the
+            // harness asserts the bitmap state).
+            while (g_handle != 0)
+                arch::pause();
+            Scheduler::terminate(*cur, 0);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->is_user_ = true;
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+
+    // Wait until the grant is installed and the bitmap shows it.
+    while (g_waiter == nullptr || g_handle == 0)
+        arch::pause();
+    JARVIS_ASSERT(arch::iopb_port_allowed(*t, 0x3F8));
+    JARVIS_ASSERT_EQ(static_cast<size_t>(1), arch::iopb_grant_count(*t));
+
+    // Revoke the cap: the grant's port bits must be re-masked (deny).
+    JARVIS_ASSERT(g_waiter->get_cspace() != nullptr);
+    JARVIS_ASSERT(cap::revoke(g_waiter->get_cspace(), g_handle));
+    JARVIS_ASSERT(!arch::iopb_port_allowed(*t, 0x3F8));
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), arch::iopb_grant_count(*t));
+
+    __atomic_store_n(&g_handle, 0ULL, __ATOMIC_RELEASE); // release the worker
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Revoking one IO MmioCap only clears that cap's grants — a
+//           different cap's grants survive (cross-cap isolation).
+// Input: two IO caps granted to the same task; revoke cap A
+// Expect: A's ports denied, B's ports still allowed
+// Depends: kernel::arch::iopb, kernel::cap::MmioCap
+JARVIS_TEST(ioport_revoke_other_cap_keeps_bits, "PRE: none | POST: none") {
+    static uint64_t g_h_a = 0;
+    static uint64_t g_h_b = 0;
+    static TaskControlBlock *g_worker = nullptr;
+    g_h_a = 0;
+    g_h_b = 0;
+    g_worker = nullptr;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            cur->ensure_cspace();
+            cap::CNode *cs = cur->get_cspace();
+            auto *a = cap::MmioCap::create(0x3F8, 8, arch::PciBarType::IO);
+            auto *b = cap::MmioCap::create(0x2F8, 8, arch::PciBarType::IO);
+            if (!a || !b) {
+                if (a)
+                    a->release();
+                if (b)
+                    b->release();
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            int sa = cs->install(a, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+            int sb = cs->install(b, cap::CapType::Mmio, cap::CAP_RIGHT_WRITE);
+            if (sa < 0 || sb < 0) {
+                a->release();
+                b->release();
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            uint64_t ha = cap::encode_handle(
+                cs->cspace_id, static_cast<uint32_t>(sa),
+                cs->slot_gen(static_cast<uint32_t>(sa)));
+            uint64_t hb = cap::encode_handle(
+                cs->cspace_id, static_cast<uint32_t>(sb),
+                cs->slot_gen(static_cast<uint32_t>(sb)));
+            uint64_t ra = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT), ha, 0x3F8,
+                8, 0, nullptr);
+            uint64_t rb = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT), hb, 0x2F8,
+                8, 0, nullptr);
+            if (ra != 0 || rb != 0) {
+                cs->remove(static_cast<uint32_t>(sa));
+                cs->remove(static_cast<uint32_t>(sb));
+                a->release();
+                b->release();
+                Scheduler::terminate(*cur, 0);
+                return;
+            }
+            // Signal the harness only AFTER both grants are installed.
+            g_h_a = ha;
+            g_h_b = hb;
+            g_worker = cur;
+            while (g_h_a != 0 || g_h_b != 0)
+                arch::pause();
+            cs->remove(static_cast<uint32_t>(sa));
+            cs->remove(static_cast<uint32_t>(sb));
+            a->release();
+            b->release();
+            Scheduler::terminate(*cur, 0);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->is_user_ = true;
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+
+    while (g_worker == nullptr || g_h_a == 0 || g_h_b == 0)
+        arch::pause();
+    JARVIS_ASSERT(arch::iopb_port_allowed(*t, 0x3F8));
+    JARVIS_ASSERT(arch::iopb_port_allowed(*t, 0x2F8));
+
+    // Revoke A: A's ports denied, B's survive.
+    JARVIS_ASSERT(cap::revoke(g_worker->get_cspace(), g_h_a));
+    JARVIS_ASSERT(!arch::iopb_port_allowed(*t, 0x3F8));
+    JARVIS_ASSERT(arch::iopb_port_allowed(*t, 0x2F8));
+    JARVIS_ASSERT_EQ(static_cast<size_t>(1), arch::iopb_grant_count(*t));
+
+    __atomic_store_n(&g_h_a, 0ULL, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_h_b, 0ULL, __ATOMIC_RELEASE);
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The grant ledger is bounded; when it is full a new grant fails
+//           closed (never a grant without a ledger record).
+// Input: fill the ledger with MAX_GRANTS distinct caps; one more grant
+// Expect: the overflow grant returns -1; the installed grants still hold
+// Depends: kernel::arch::iopb, CONFIG_IOPB_MAX_GRANTS
+JARVIS_TEST(ioport_ledger_full_fails_closed, "PRE: none | POST: none") {
+    enum { MAX = CONFIG_IOPB_MAX_GRANTS };
+    static uint64_t g_handles[MAX];
+    static TaskControlBlock *g_worker = nullptr;
+    for (int i = 0; i < MAX; ++i)
+        g_handles[i] = 0;
+    g_worker = nullptr;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            cur->ensure_cspace();
+            cap::CNode *cs = cur->get_cspace();
+            cap::MmioCap *caps[MAX];
+            int slots[MAX];
+            for (int i = 0; i < MAX; ++i) {
+                caps[i] = cap::MmioCap::create(
+                    static_cast<uint64_t>(0x100 + i), 8, arch::PciBarType::IO);
+                if (!caps[i]) {
+                    for (int j = 0; j < i; ++j)
+                        caps[j]->release();
+                    Scheduler::terminate(*cur, 0);
+                    return;
+                }
+                slots[i] = cs->install(caps[i], cap::CapType::Mmio,
+                                       cap::CAP_RIGHT_WRITE);
+                if (slots[i] < 0) {
+                    caps[i]->release();
+                    for (int j = 0; j < i; ++j)
+                        caps[j]->release();
+                    Scheduler::terminate(*cur, 0);
+                    return;
+                }
+                g_handles[i] = cap::encode_handle(
+                    cs->cspace_id, static_cast<uint32_t>(slots[i]),
+                    cs->slot_gen(static_cast<uint32_t>(slots[i])));
+            }
+            // Install all MAX grants (fills the ledger exactly).
+            for (int i = 0; i < MAX; ++i) {
+                uint64_t r = Syscall::handle(
+                    static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT),
+                    g_handles[i], static_cast<uint64_t>(0x100 + i), 8, 0,
+                    nullptr);
+                if (r != 0) {
+                    for (int j = 0; j < MAX; ++j) {
+                        cs->remove(static_cast<uint32_t>(slots[j]));
+                        caps[j]->release();
+                    }
+                    Scheduler::terminate(*cur, 0);
+                    return;
+                }
+            }
+            // Ledger full: this grant must fail closed.  All assertions run
+            // INSIDE the worker before teardown — the harness only waits for
+            // termination (no cross-task race on the ledger state).
+            uint64_t hfull = cap::encode_handle(
+                cs->cspace_id, static_cast<uint32_t>(slots[0]),
+                cs->slot_gen(static_cast<uint32_t>(slots[0])));
+            uint64_t rf = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOPORT_GRANT), hfull,
+                0x200, 8, 0, nullptr);
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), rf);
+            for (int i = 0; i < MAX; ++i)
+                JARVIS_ASSERT(arch::iopb_port_allowed(
+                    *cur, static_cast<uint16_t>(0x100 + i)));
+            JARVIS_ASSERT(!arch::iopb_port_allowed(*cur, 0x200));
+            JARVIS_ASSERT_EQ(static_cast<size_t>(MAX),
+                             arch::iopb_grant_count(*cur));
+            g_worker = cur;
+            for (int j = 0; j < MAX; ++j) {
+                cs->remove(static_cast<uint32_t>(slots[j]));
+                caps[j]->release();
+            }
+            Scheduler::terminate(*cur, 0);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->is_user_ = true;
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(g_worker != nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Task teardown drops the task's ledger entries; the bitmap slot is
+//           released (the port access dies with the task, as before #8).
+// Input: task grants a port, then terminates
+// Expect: ledger empty after cleanup; port denied
+// Depends: kernel::arch::iopb
+JARVIS_TEST(ioport_ledger_dropped_at_cleanup, "PRE: none | POST: none") {
+    static TaskControlBlock *g_tracked = nullptr;
+    g_tracked = nullptr;
+    {
+        TaskPtr t = create_test_task();
+        JARVIS_ASSERT(t.get() != nullptr);
+        t->is_user_ = true;
+        JARVIS_ASSERT(arch::iopb_claim(*t));
+        JARVIS_ASSERT(arch::iopb_grant_range(*t, 0x60, 4));
+        JARVIS_ASSERT(arch::iopb_ledger_add(*t, reinterpret_cast<const void *>(0x1234),
+                                            0x60, 4));
+        JARVIS_ASSERT_EQ(static_cast<size_t>(1), arch::iopb_grant_count(*t));
+        g_tracked = t.get();
+        // TaskPtr dtor: remove_task + cleanup -> ledger_drop_task + iopb_release.
+    }
+    JARVIS_ASSERT(g_tracked != nullptr);
+    // g_tracked points at a cleaned-up/zombie TCB — never dereference it after
+    // cleanup() (the block may be freed or recycled; iopb_port_allowed reads
+    // freed memory = use-after-free).  Verify the ledger drop + slot release
+    // through a fresh task that reclaims the same slot.
+    TaskPtr fresh = create_test_task();
+    JARVIS_ASSERT(fresh.get() != nullptr);
+    fresh->is_user_ = true;
+    JARVIS_ASSERT(arch::iopb_claim(*fresh));
+    JARVIS_ASSERT(!arch::iopb_port_allowed(*fresh, 0x60));
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), arch::iopb_grant_count(*fresh));
+    JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_ARCH_X86_64
+
+/// @brief Registers all MMIO-cap / I/O-delegation test cases (issues #3/#8).
 void register_cap_mmio_tests() {
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(tss_iopb_layout_valid);
@@ -513,4 +813,11 @@ void register_cap_mmio_tests() {
     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);
     JARVIS_REGISTER_TEST(ioport_task_cleanup_releases_slot_and_remasks);
     JARVIS_REGISTER_TEST(ioport_pool_exhaustion_fails_closed);
+#if defined(CONFIG_ARCH_X86_64)
+    // issue #8 revocation-closure tests (ledger lives in the x86_64 IOPB layer).
+    JARVIS_REGISTER_TEST(ioport_revoke_clears_live_bits);
+    JARVIS_REGISTER_TEST(ioport_revoke_other_cap_keeps_bits);
+    JARVIS_REGISTER_TEST(ioport_ledger_full_fails_closed);
+    JARVIS_REGISTER_TEST(ioport_ledger_dropped_at_cleanup);
+#endif
 }

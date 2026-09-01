@@ -189,10 +189,19 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
   (refuse revoked caps and IO-type ranges), and `SYS_IOPORT_GRANT` (55): capability-gated
   per-task TSS I/O bitmap delegation (x86_64, `arch::iopb_*`, static `CONFIG_IOPB_MAX_TASKS`
   pool, single global TSS with the 8 KiB bitmap inside `TSSBlock`, owner-memoized swap on user
-  task switches, default-deny).  **Revocation limitation:** revoking an IO MmioCap blocks new
-  grants but does NOT retroactively clear already-granted port bits in a live task's bitmap —
-  task-bound grants die at task cleanup (derivation tracking is a follow-up).  aarch64/riscv64:
-  handler returns -1 (no port I/O).
+  task switches, default-deny).
+  **User MMIO mapping + IOPB revocation closure (2026-09-01, issue #8):** `SYS_MMIO_MAP` (61) /
+  `SYS_MMIO_UNMAP` (62) map an MEMORY-type MmioCap's BAR into a fixed user VA window
+  (`CONFIG_USER_MMIO_VA_BASE`, `CONFIG_CAP_MAX_MMIO_MAPS` slots × `CONFIG_USER_MMIO_REGION_SIZE`,
+  static_assert-pinned below `mem::STACK_VADDR` and above the heap) via the static
+  `MmioUserMap` registry (owner-task-id + generation-keyed, IrqDelivery pattern; no new TCB
+  field).  Revoke/dispose of the backing cap IMMEDIATELY unmaps the PTE (fail-closed).
+  The #3 revocation limitation is CLOSED: `SYS_IOPORT_GRANT` records each grant in the bounded
+  `arch::iopb_ledger` (`CONFIG_IOPB_MAX_GRANTS`), and `MmioCap::dispose/revoke` calls
+  `iopb_ledger_clear_cap` to retroactively re-mask the granted port bits in the live task's
+  bitmap (re-loading the TSS when the task is the loaded owner); a full ledger fails a new
+  grant closed (never a grant without a ledger record).  Class `cap_mmio_user` (8 tests) +
+  4 revocation-closure tests in `cap_mmio` (14); `all` registered 1025.
 - **IOMMU DMA caps (0.4.2):** `IoMmuDmaCap : KernelObject` wrapping one private IOMMU DMA protection domain → capability-gated translation-table programming (`SYS_IOMMU_MAP`/`SYS_IOMMU_UNMAP`).
   **IMPLEMENTED (2026-08-30, issue #4):** `CapType::IoMmuDma`, `src/kernel/cap/iommu.{hpp,cpp}`
   (kernel-internal `create`; `CONFIG_CAP_MAX_IOMMU`; domain bound to the creating task — strict

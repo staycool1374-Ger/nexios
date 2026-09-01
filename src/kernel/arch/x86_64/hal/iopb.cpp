@@ -17,11 +17,13 @@
  */
 
 /// @file iopb.cpp
-/// @brief x86_64 per-task I/O permission bitmap management (issue #3).
+/// @brief x86_64 per-task I/O permission bitmap management (issues #3/#8).
 /// A single global TSS carries an 8 KiB bitmap inside its segment.  Per-task
 /// bitmaps live in a static pool (default-deny all-1s); on context switch the
 /// TSS bitmap is loaded only when the owner changes.  SMP (per-CPU TSS) is
 /// v0.4.4 scope (docs/specs/per-cpu-smp.md) — this module is UP-only.
+/// Issue #8 adds the grant ledger: revoking/disposing an IO MmioCap
+/// retroactively re-masks the granted port bits in live task bitmaps.
 
 #if defined(CONFIG_ARCH_X86_64)
 
@@ -49,6 +51,22 @@ static const kernel::TaskControlBlock *g_iopb_owner = nullptr;
 /// @brief Serializes pool/owner/TSS-bitmap state.  Lock order:
 /// scheduler_lock_ -> g_iopb_lock (never the reverse).
 static kernel::sync::SpinLock g_iopb_lock{};
+
+// --- issue #8: capability-gated grant ledger ---
+// Records which granted port range was installed under which capability so a
+// revoke/dispose of that capability can retroactively re-deny the ports.
+
+struct IopbGrantEntry {
+    kernel::TaskControlBlock *owner = nullptr; ///< owning task (pointer-compare)
+    const void *cap_ptr = nullptr; ///< backing cap — equality-match ONLY, never
+                                   ///< dereferenced (dispose frees the block)
+    uint16_t start = 0;
+    uint32_t count = 0;
+    bool active = false;
+};
+
+/// @brief Static bounded ledger — no dynamic allocation on RT paths.
+static IopbGrantEntry g_iopb_ledger[CONFIG_IOPB_MAX_GRANTS];
 
 bool iopb_claim(kernel::TaskControlBlock &t) {
     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
@@ -130,6 +148,13 @@ void iopb_snapshot_reset() {
     SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
     g_iopb_claimed = 0;
     g_iopb_owner = nullptr;
+    for (size_t i = 0; i < CONFIG_IOPB_MAX_GRANTS; ++i) {
+        g_iopb_ledger[i].owner = nullptr;
+        g_iopb_ledger[i].cap_ptr = nullptr;
+        g_iopb_ledger[i].start = 0;
+        g_iopb_ledger[i].count = 0;
+        g_iopb_ledger[i].active = false;
+    }
     GDT::iopb_mask_all();
 }
 
@@ -145,6 +170,76 @@ bool iopb_port_allowed(const kernel::TaskControlBlock &t, uint16_t port) {
         return false;
     const uint8_t *slot = g_iopb_pool[t.iopb_slot_];
     return (slot[port / 8] & (1u << (port % 8))) == 0;
+}
+
+bool iopb_ledger_add(kernel::TaskControlBlock &t, const void *cap_ptr,
+                     uint16_t start, uint32_t count) {
+    SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+    for (size_t i = 0; i < CONFIG_IOPB_MAX_GRANTS; ++i) {
+        if (g_iopb_ledger[i].active)
+            continue;
+        g_iopb_ledger[i].owner = &t;
+        g_iopb_ledger[i].cap_ptr = cap_ptr;
+        g_iopb_ledger[i].start = start;
+        g_iopb_ledger[i].count = count;
+        g_iopb_ledger[i].active = true;
+        return true;
+    }
+    return false; // ledger full — fail closed
+}
+
+void iopb_ledger_clear_cap(const void *cap_ptr) {
+    SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+    for (size_t i = 0; i < CONFIG_IOPB_MAX_GRANTS; ++i) {
+        IopbGrantEntry &e = g_iopb_ledger[i];
+        if (!e.active || e.cap_ptr != cap_ptr)
+            continue;
+        // Retroactive revocation: re-mask the granted ports to 1 (deny) in
+        // the owning task's bitmap using the same bit math as grant_range.
+        kernel::TaskControlBlock *owner = e.owner;
+        if (owner && owner->iopb_slot_ !=
+                         kernel::TaskControlBlock::IOPB_SLOT_NONE &&
+            (g_iopb_claimed & (1u << owner->iopb_slot_)) != 0) {
+            uint8_t *slot = g_iopb_pool[owner->iopb_slot_];
+            const uint32_t end =
+                static_cast<uint32_t>(e.start) + e.count;
+            for (uint32_t p = static_cast<uint32_t>(e.start); p < end; ++p) {
+                slot[p / 8] |= static_cast<uint8_t>(1u << (p % 8));
+            }
+            // Re-load the TSS if the affected task is the loaded owner, else
+            // the denied state would not take effect until its next switch.
+            if (g_iopb_owner == owner)
+                GDT::iopb_load(slot);
+        }
+        e.owner = nullptr;
+        e.cap_ptr = nullptr;
+        e.start = 0;
+        e.count = 0;
+        e.active = false;
+    }
+}
+
+void iopb_ledger_drop_task(kernel::TaskControlBlock &t) {
+    SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+    for (size_t i = 0; i < CONFIG_IOPB_MAX_GRANTS; ++i) {
+        IopbGrantEntry &e = g_iopb_ledger[i];
+        if (!e.active || e.owner != &t)
+            continue;
+        e.owner = nullptr;
+        e.cap_ptr = nullptr;
+        e.start = 0;
+        e.count = 0;
+        e.active = false;
+    }
+}
+
+size_t iopb_grant_count(const kernel::TaskControlBlock &t) {
+    SpinLockGuard<kernel::sync::SpinLock> guard(g_iopb_lock);
+    size_t n = 0;
+    for (size_t i = 0; i < CONFIG_IOPB_MAX_GRANTS; ++i)
+        if (g_iopb_ledger[i].active && g_iopb_ledger[i].owner == &t)
+            ++n;
+    return n;
 }
 
 } // namespace arch

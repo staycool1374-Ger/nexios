@@ -20,8 +20,10 @@
 
 /// @file iopb.hpp
 /// @brief Arch-neutral per-task I/O-permission-bitmap (IOPB) interface
-///        (v0.4.2, issue #3).  x86_64: per-task TSS I/O bitmap delegation;
-///        other arches: no-op stubs.
+///        (v0.4.2, issues #3/#8).  x86_64: per-task TSS I/O bitmap delegation;
+///        other arches: no-op stubs.  Issue #8 adds the grant ledger so
+///        revoking/disposing an IO MmioCap retroactively clears the granted
+///        port bits in live task bitmaps (closing the #3 revocation gap).
 
 #include <types.hpp>
 
@@ -65,6 +67,32 @@ const void *iopb_loaded_owner();
 /// @return true if @p t holds a slot with the port bit cleared.
 bool iopb_port_allowed(const kernel::TaskControlBlock &t, uint16_t port);
 
+// --- issue #8: capability-gated grant ledger (revocation closure) ---
+
+/// @brief Records a granted port range [start, start+count) in @p t's bitmap
+///        against the capability @p cap_ptr (non-owning, equality-match only —
+///        never dereferenced).  Called by sys_ioport_grant AFTER a successful
+///        iopb_grant_range, so a later iopb_ledger_clear_cap(cap) can restore
+///        the exact denied state.
+/// @return true when the entry was recorded; false when the ledger is full
+///         (fail closed — the grant still stands but its revoke rollback is
+///         best-effort; callers reserve BEFORE granting to avoid this).
+bool iopb_ledger_add(kernel::TaskControlBlock &t, const void *cap_ptr,
+                     uint16_t start, uint32_t count);
+
+/// @brief Retroactively revokes every granted range recorded against @p cap_ptr:
+///        re-masks those port bits to 1 (deny) in the owning task's bitmap and
+///        re-loads the TSS if the task is the loaded owner.  Called from
+///        MmioCap::dispose/revoke (issue #8 revocation closure).
+void iopb_ledger_clear_cap(const void *cap_ptr);
+
+/// @brief Drops every ledger entry owned by @p t.  Called from
+///        TaskControlBlock::cleanup() (task teardown).
+void iopb_ledger_drop_task(kernel::TaskControlBlock &t);
+
+/// @brief Number of live ledger entries for @p t (test accessor).
+size_t iopb_grant_count(const kernel::TaskControlBlock &t);
+
 #else // CONFIG_ARCH_X86_64
 
 inline bool iopb_claim(kernel::TaskControlBlock &) {
@@ -84,6 +112,17 @@ inline const void *iopb_loaded_owner() {
 }
 inline bool iopb_port_allowed(const kernel::TaskControlBlock &, uint16_t) {
     return false;
+}
+inline bool iopb_ledger_add(kernel::TaskControlBlock &, const void *,
+                            uint16_t, uint32_t) {
+    return false;
+}
+inline void iopb_ledger_clear_cap(const void *) {
+}
+inline void iopb_ledger_drop_task(kernel::TaskControlBlock &) {
+}
+inline size_t iopb_grant_count(const kernel::TaskControlBlock &) {
+    return 0;
 }
 
 #endif // CONFIG_ARCH_X86_64

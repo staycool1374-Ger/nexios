@@ -256,7 +256,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     if (!l2)
         return;
 
-    if (user)
+    if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
@@ -350,7 +350,7 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     if (!pt)
         return;
 
-    if (user)
+    if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
@@ -534,7 +534,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     if (!l2)
         return;
 
-    if (user)
+    if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
@@ -601,7 +601,7 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     if (!pt)
         return;
 
-    if (user)
+    if (user && phys_addr < PMM::total_memory())
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
@@ -979,6 +979,17 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     uint64_t src_data = src_pt[pt_idx] & PAGE_FRAME_MASK;
                     uint64_t flags = src_pt[pt_idx] & ~PAGE_FRAME_MASK;
 
+                    // Issue #8 (S2): never deep-copy a non-RAM frame into the
+                    // child.  A user MMIO-window PTE points at device phys
+                    // (>= total RAM): memcpy'ing HHDM+device_phys reads device
+                    // registers or raises a kernel-mode #PF (user-triggerable
+                    // panic), and the child must not inherit a device mapping
+                    // (fail-closed — the window stays unmapped in the child).
+                    if (!PMM::is_user_page(src_data)) {
+                        dst_pt[pt_idx] = 0;
+                        continue;
+                    }
+
                     uint64_t dst_data = PMM::alloc_user_page();
                     if (!dst_data)
                         return false;
@@ -1053,6 +1064,10 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 if ((src_l2[l2_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
                     uint64_t src_data = src_l2[l2_idx] & ~0xFFFULL;
                     uint64_t flags = src_l2[l2_idx] & 0xFFFULL;
+                    if (!PMM::is_user_page(src_data)) {
+                        dst_l2[l2_idx] = 0;
+                        continue;
+                    }
                     uint64_t dst_data = PMM::alloc_user_page();
                     if (!dst_data)
                         return false;
@@ -1079,6 +1094,10 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                             continue;
                         uint64_t src_data = src_l3[l3_idx] & ~0xFFFULL;
                         uint64_t flags = src_l3[l3_idx] & 0xFFFULL;
+                        if (!PMM::is_user_page(src_data)) {
+                            dst_l3[l3_idx] = 0;
+                            continue;
+                        }
                         uint64_t dst_data = PMM::alloc_user_page();
                         if (!dst_data)
                             return false;

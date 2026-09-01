@@ -24,6 +24,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/cap/mmio.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -712,6 +713,11 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // Free zero-copy buffers mapped into the OLD page table before swapping it
     // out
     BufferPool::unmap_all(*tcb);
+    // Issue #8: drain the task's user MMIO mappings from the OLD page table
+    // before it is freed - a stored slot pml4 must never dangle past exec
+    // (a later unmap/revoke/cleanup would write PTE entries into freed
+    // page-table memory).
+    cap::MmioUserMap::drain_task(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
     tcb->page_table_ = new_pml4;

@@ -39,6 +39,7 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
+#include <kernel/cap/mmio.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
 
@@ -1348,6 +1349,10 @@ void snapshot_restore(const char *test_name) {
         // test that granted ports can never leak a permissive bitmap or a
         // dangling owner across snapshot cycles.
         arch::iopb_snapshot_reset();
+        // Reset the user MMIO map registry (issue #8) so a test that mapped
+        // device pages can never leak a stale registry slot or VA across
+        // snapshot cycles.
+        cap::MmioUserMap::snapshot_reset();
 #endif
     }
 

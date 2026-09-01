@@ -45,6 +45,7 @@
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
+#include <kernel/cap/mmio.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
 
@@ -1834,6 +1835,17 @@ void TaskControlBlock::cleanup() noexcept {
         // page tables
         BufferPool::unmap_all(*this);
 
+        // Issue #8: drain the task's user MMIO mappings from the OLD page
+        // table BEFORE it is freed - a stored slot pml4 must never be walked
+        // after the PML4 (and its PDPT/PD/PT pages) are released.  VMM's
+        // map_page_in_pml4 (get_table, create=true) allocates fresh table
+        // pages and writes table[index] = new_page; running drain_task after
+        // free_user_pages/PMM::free_page would write those entries into freed
+        // page-table memory (UAF), exactly the defect the exec-into-current
+        // drain was added to prevent (iter-2 S1).  Runs while the mapping's
+        // cap reference is still valid (before release_all_objects).
+        cap::MmioUserMap::drain_task(*this);
+
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
         // kernel PML4; no task ever shares another task's user entries.
@@ -1863,6 +1875,8 @@ void TaskControlBlock::cleanup() noexcept {
     // Release the task's I/O permission bitmap slot (x86_64, issue #3)
     // before tearing down its capability objects.
     arch::iopb_release(*this);
+    // Drop the task's capability-grant ledger entries (issue #8).
+    arch::iopb_ledger_drop_task(*this);
 
     // Drain the user-space IRQ delivery table: a dying task must never leave
     // a dangling recipient/waiter (issue #2).  Runs before capability teardown
