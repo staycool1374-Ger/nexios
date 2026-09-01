@@ -17,14 +17,15 @@
  */
 
 /// @file iommu.hpp
-/// @brief IOMMU DMA protection manager (v0.4.2, issue #4): capability-gated,
-/// identity-IOVA second-level translation tables in memory (VT-d layout,
-/// vtd.hpp).  Iteration-1 programs TABLES ONLY — no live DMAR register
-/// programming exists in this repo (no ACPI/DMAR parser), so a runtime
-/// presence flag gates every path: with no IOMMU present all calls fail
-/// gracefully and kernel DMA is untouched.  The live-DMAR phase-2 sketch
-/// (GCMD enable, IOTLB flush, fault events, kernel-DMA domain) lives in
-/// docs/specs/iommu.md.
+/// @brief IOMMU DMA protection manager (v0.4.2, issues #4 + #9): capability-
+/// gated, identity-IOVA second-level translation tables in memory (VT-d
+/// layout, vtd.hpp) plus live VT-d enablement (issue #9).  Iteration-1
+/// (#4) programs TABLES ONLY.  Phase-2 (#9) adds: ACPI DMAR discovery,
+/// a real hardware probe, register-level enablement (RTADDR + kernel
+/// passthrough pre-pass + GCMD.TE) and IOTLB/context-cache invalidation
+/// after every SL/context mutation when a live unit is present.  The live
+/// path is strictly gated on `g_live` — with no IOMMU present all calls
+/// fail gracefully and kernel DMA is untouched.
 
 #pragma once
 
@@ -68,7 +69,39 @@ class IoMmuManager {
 
     /// @brief Test-injection setter for the runtime presence flag.  NOT
     ///        #ifdef-gated: control flow is identical in debug and release.
+    ///        Sets the SOFTWARE authority gate only — a live unit detected
+    ///        by probe_hardware() keeps the hardware path active.
     static void force_present(bool present);
+
+    /// @brief Live hardware detection (phase-2, issue #9).  Scans the ACPI
+    ///        DMAR table, maps the remapping unit's MMIO page and validates
+    ///        its version register.  On success sets the live flag so
+    ///        register programming / IOTLB invalidation become active.
+    ///        Fail-closed: a malformed or unvalidatable table leaves the
+    ///        manager on the software-only path.
+    /// @return True when a live remapping unit was detected.
+    static bool probe_hardware();
+
+    /// @brief Actively enables DMA translation on the live unit (issue #9):
+    ///        programs RTADDR to the manager's root table, gives every
+    ///        kernel-owned device (AHCI / virtio) a T=0 passthrough context
+    ///        entry so TE=1 never blocks kernel DMA, then sets GCMD.TE.
+    ///        Order is fail-closed: RTADDR + passthrough pre-pass FIRST,
+    ///        TE LAST; any failure leaves TE=0 and translation off.
+    /// @return True when translation is live; false (translation stays off)
+    ///         on any failure.
+    static bool enable_translation();
+
+    /// @brief Reads and clears the unit's fault-status register (minimal
+    ///        fault handling — FECTL disables fault logging; no fault-log
+    ///        walk, no task kill; documented phase-2 follow-up).
+    static void read_clear_faults();
+
+    /// @brief MMIO register base of the live unit (0 when software-only).
+    static uint64_t mmio_base();
+
+    /// @brief True when the live unit has translation enabled (GSTS.TES).
+    static bool translation_live();
 
     /// @brief Creates an empty DMA domain bound to @p task_id.
     /// @return domain index (>= 0), or -1 when absent/exhausted (fail-closed).
@@ -114,6 +147,11 @@ class IoMmuManager {
     static bool root_entry_present(uint8_t bus);
     /// @brief Context-entry ASR for @p bdf when attached to @p idx, else 0.
     static uint64_t context_asr(int16_t idx, arch::PciBdf bdf);
+    /// @brief Low 64 bits of the context entry programmed for @p bdf (the
+    ///        full raw entry — Present + TT + ASR).  0 when no context table
+    ///        covers @p bdf.  Test introspection for the live passthrough
+    ///        entries programmed by enable_translation().
+    static uint64_t context_entry(arch::PciBdf bdf);
 };
 
 } // namespace kernel::iommu

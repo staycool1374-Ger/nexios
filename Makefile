@@ -273,6 +273,23 @@ QEMU_FLAGS_INTERACTIVE = -cdrom $(DEBUG_ISO) -m 256M \
 QEMU_FLAGS_INTERACTIVE += -drive file=$(FAT32_DISK),format=raw,if=ide,index=1,media=disk
 endif
 
+# Live VT-d test variant (issue #9): class=iommu_live boots the kernel on the
+# q35 machine with the emulated Intel IOMMU (VT-d) attached.  The kernel ISO
+# is UEFI-only El Torito, which SeaBIOS cannot read under q35 (SATA CD path),
+# so the run uses OVMF (UEFI) via pflash instead of the default SeaBIOS.  The
+# FAT32 IDE drive is dropped (q35 has no IDE) — the iommu_live class is a
+# disk-free test class.  OVMF_CODE must point at edk2-x86_64-code.fd.
+OVMF_CODE ?= $(shell find /opt/homebrew/Cellar/qemu /usr/share/qemu /usr/local/share/qemu -name 'edk2-x86_64-code.fd' 2>/dev/null | head -1)
+ifeq ($(CLASS),iommu_live)
+QEMU_FLAGS := -cdrom $(DEBUG_ISO) -m 256M \
+                -chardev stdio,id=dbg,mux=on \
+                -serial chardev:dbg -device isa-debugcon,chardev=dbg \
+                -mon chardev=dbg \
+                -machine q35 -cpu max \
+                -drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+                -device intel-iommu,intremap=off,dma-translation=on
+endif
+
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
 QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET) \
@@ -651,6 +668,8 @@ _do_execute_test:
 	_class_file=$(CLASS); \
 	[ "$${_class_file}" = "selftest" ] && _class_file=safe; \
 	printf '%s\n' "$${_class_file}" > initrd/tests/test-config.txt; \
+	if [ "$(CLASS)" = "iommu_live" ] && [ -z "$(OVMF_CODE)" ]; then \
+	    echo "ERROR: iommu_live requires OVMF_CODE (edk2-x86_64-code.fd)"; exit 1; fi; \
  	if [ "$(CLASS)" = "none" ]; then \
  	    if [ "$(BUILD)" = "release" ] && [ "$(ARCH)" = "x86_64" ] && \
  	       [ -f "$(RELEASE_ISO)" ] && [ -f "release/.baked-test-config" ] && \

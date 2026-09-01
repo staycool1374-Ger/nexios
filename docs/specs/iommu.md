@@ -1,6 +1,6 @@
 # IOMMU DMA Protection (VT-d / AMD-Vi / SMMU) — Spec
 
-**Status:** IMPLEMENTED (iteration-1, 2026-08-30, issue #4) — capability-gated
+**Status:** IMPLEMENTED (iteration-2, 2026-09-01, issues #4 + #9) — capability-gated
 translation-table infrastructure; live DMAR register programming is an
 explicit phase-2 sketch (§8).
 
@@ -125,18 +125,35 @@ needs a FrameCap).
 | Stale domain after test leak | S3 | tests assert `occupied_domains()==0`; ResourceTracker check at snapshot_restore |
 | probe() is a stub flag | S3 | live detection + DMAR programming documented phase-2 (§8) — no false sense of live protection |
 
-## 8. Phase-2 Sketch (NOT implemented — live VT-d)
+## 8. Phase-2 — Live VT-d enablement (IMPLEMENTED, issue #9)
 
-1. ACPI/DMAR table discovery (repo has no ACPI parser today) → DRHD units.
-2. `probe()` becomes real (DMAR register presence + CAP reg).
-3. Enable translation: GCMD.TES with IRTA/RTA programming + IOTLB flush
-   (register-level invalidation on every map/unmap).
-4. Fault-event handling (FRI → fault log → task kill, fail-closed).
-5. Kernel-DMA domain (AHCI/virtio buffers mapped instead of passthrough).
-6. QEMU integration: `-device intel-iommu` boot + live fault tests.
-7. AMD-Vi (IIOMMU) / SMMUv3 (aarch64) backends behind the same
-   `IoMmuManager` interface — the table model is deliberately VT-d-shaped
-   but the cap/syscall layer is backend-neutral.
+1. ACPI/DMAR table discovery — `src/kernel/arch/x86_64/acpi.{hpp,cpp}`:
+   minimal RSDP (multiboot2 tags 14/15) → RSDT/XSDT → DMAR → DRHD walker.
+   Every table access is page-mapped on demand and bounds-checked;
+   malformed/checksum-mismatched tables fail closed (`dmar::DmarInfo`).
+2. `probe()` is real: `probe_hardware()` reads VER_REG/CAP_REG of the
+   discovered unit and caches the result (boot-time scan; test isolation
+   rewinds low memory, so re-probes reuse the cache).
+3. Translation enablement: `enable_translation()` programs RTADDR to the
+   manager's static root table, gives every kernel-owned device (AHCI /
+   virtio) a T=0 passthrough context entry, then sets GCMD.TE last
+   (fail-closed: RTADDR + passthrough pre-pass BEFORE TE; any failure
+   leaves TE=0).  IOTLB / context-cache invalidation via the queued
+   invalidation interface after every map/unmap/attach when live.
+   Context-entry Translation Type (TT, bits 3:2 per spec §9.3): kernel
+   passthrough entries use TT=10b and user-domain translate entries use
+   TT=00b — the TT field is a two-bit type, NOT a single-bit translate flag.
+4. Fault handling (minimal): FECTL masks the fault-event interrupt and
+   FSTS is read-cleared; no fault-log walk, no task kill (follow-up).
+5. Kernel-DMA domain: kernel DMA stays passthrough (T=0) — routing kernel
+   buffers through a translation domain is a follow-up.
+6. QEMU integration: `make execute-test x86_64 debug iommu_live` boots the
+   q35 machine with OVMF (UEFI) + `-device intel-iommu,intremap=off,
+   dma-translation=on` and runs the disk-free `iommu_live` class (5 tests:
+   probe / enable-TES / map-unmap-flush / fault-read-clear / idempotent).
+7. AMD-Vi (IIOMMU) / SMMUv3 (aarch64) backends remain behind the same
+   `IoMmuManager` interface (not implemented) — the table model is
+   VT-d-shaped but the cap/syscall layer is backend-neutral.
 
 ## 9. Test Plan (implemented, class `cap_iommu`, 12)
 

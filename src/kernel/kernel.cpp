@@ -34,6 +34,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -914,6 +915,18 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+
+    // Phase-2 (issue #9): probe for a live VT-d remapping unit via the ACPI
+    // DMAR table.  Presence here only records the unit — DMA translation is
+    // NOT enabled at boot (enable_translation() is explicit), so kernel DMA
+    // (AHCI/virtio, raw physical) stays untouched on all boot paths.
+#if defined(CONFIG_ARCH_X86_64)
+    if (kernel::iommu::IoMmuManager::probe_hardware()) {
+        debug_write("[BOOT] VT-d IOMMU present (MMIO base ");
+        debug_write_hex(kernel::iommu::IoMmuManager::mmio_base());
+        debug_write(")\n");
+    }
+#endif
 
 #if CONFIG_IRQ_LATENCY_HISTOGRAM
     kernel::IrqLatencyHistogram::init();

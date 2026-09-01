@@ -593,6 +593,23 @@
 #define CONFIG_IOMMU_MAX_BUSES 8
 #endif
 
+/// Default VT-d MMIO register base (v0.4.2, issue #9).  QEMU's intel-iommu
+/// device places the remapping unit at 0xFED90000; real hardware DMAR
+/// DRHD discovery overrides this when the ACPI table is present.  Page-
+/// aligned; the 4 KiB MMIO page is mapped once by probe_hardware().
+#ifndef CONFIG_IOMMU_MMIO_BASE
+#define CONFIG_IOMMU_MMIO_BASE 0xFED90000ULL
+#endif
+
+/// Maximum number of kernel-owned devices given a T=0 passthrough context
+/// entry during live enablement (v0.4.2, issue #9).  Kernel DMA (AHCI/virtio
+/// buffers) is NOT routed through a translation domain in this issue — the
+/// passthrough pre-pass guarantees TE=1 never blocks kernel DMA.  Static
+/// bounded array, no dynamic allocation on real-time paths.
+#ifndef CONFIG_IOMMU_MAX_KERNEL_DEVICES
+#define CONFIG_IOMMU_MAX_KERNEL_DEVICES 16
+#endif
+
 // ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------

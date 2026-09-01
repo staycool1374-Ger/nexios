@@ -89,6 +89,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
     {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
+    {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip

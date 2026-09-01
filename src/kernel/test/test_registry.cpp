@@ -101,6 +101,7 @@ void register_cap_mmio_user_tests();
 void register_cap_irq_tests();
 void register_cap_irq_notify_tests();
 void register_cap_iommu_tests();
+void register_iommu_live_tests();
 void register_waitpid_tests();
 void register_buffer_pool_tests();
 void register_block_device_tests();
@@ -324,6 +325,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_irq", []() { register_cap_irq_tests(); }},
     {"cap_irq_notify", []() { register_cap_irq_notify_tests(); }},
     {"cap_iommu", []() { register_cap_iommu_tests(); }},
+    // Live VT-d enablement (issue #9).  NOT part of `all` — requires the
+    // q35+intel-iommu QEMU variant (`make execute-test x86_64 debug
+    // iommu_live`); on the default pc build there is no DMAR unit.
+    {"iommu_live", []() { register_iommu_live_tests(); }},
 
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},

@@ -17,20 +17,32 @@
  */
 
 /// @file iommu.cpp
-/// @brief IoMmuManager implementation (issue #4).  All state is static and
-/// bounded (.bss tables + per-domain PMM SL pages).  Single-owner page
+/// @brief IoMmuManager implementation (issues #4 + #9).  All state is static
+/// and bounded (.bss tables + per-domain PMM SL pages).  Single-owner page
 /// discipline: every SL page belongs to exactly one domain and is freed
 /// exactly once — either by cascade-free during unmap/rollback or by
 /// domain_destroy walking only still-occupied mapping records.  PMM returns
 /// unzeroed memory, so EVERY table page is memset(0) before use (a stale
 /// R/W entry would grant DMA to recycled frames).
+///
+/// Phase-2 (#9): the live path is gated on `g_live` (real DMAR unit).  When
+/// live, every map/unmap/destroy/attach that mutates SL or context entries
+/// issues a queue-invalidation (IOTLB / context-cache) flush before
+/// returning — a stale IOTLB translation would leak DMA across domains.
+/// Register programming is serialized under the same leaf `g_lock_` and
+/// never crosses a reschedule point.
 
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/iommu/vtd.hpp>
+#include <kernel/iommu/dmar.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/memory/vmm.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <constants.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/acpi.hpp>
+#endif
 
 namespace kernel::iommu {
 
@@ -40,6 +52,19 @@ namespace {
 
 SpinLock g_lock_{};
 bool g_present = false;
+bool g_live = false;
+uint64_t g_mmio_base = 0;
+bool g_translation_live = false;
+/// @brief Cached DMAR probe result.  The ACPI tables / multiboot2 tags live
+///        in low memory that test isolation rewinds, so a re-probe during a
+///        test must NOT re-walk them — it reuses the first (boot-time) scan.
+///        0 = never probed, 1 = hardware live, 2 = probed but absent.
+int g_probe_result = 0;
+
+/// @brief Static 4 KiB invalidation queue (phase-2, spec §6.5.1).  One
+///        static page — no dynamic allocation on real-time paths.  16-byte
+///        descriptors, head/tail managed by IQH/IQT registers.
+alignas(arch::PAGE_SIZE) uint8_t g_iq[arch::PAGE_SIZE];
 
 IoMmuDomain g_domains[CONFIG_IOMMU_MAX_DOMAINS];
 
@@ -50,9 +75,13 @@ struct Entry16 {
 };
 
 /// @brief Root table: 256 bus entries x 16 bytes = exactly one 4 KiB page.
-Entry16 g_root_table[256];
-/// @brief Per-bus context tables (256 device:function entries each).
-Entry16 g_ctx_tables[CONFIG_IOMMU_MAX_BUSES][256];
+///        Page-aligned so its physical address is a valid RTADDR (bits 11:0
+///        must be zero for the live path, phase-2).
+alignas(arch::PAGE_SIZE) Entry16 g_root_table[256];
+/// @brief Per-bus context tables (256 device:function entries each).  Each
+///        bus table is exactly one 4 KiB page; page-aligned so the CTP field
+///        (bits 51:12) is a valid context-table pointer.
+alignas(arch::PAGE_SIZE) Entry16 g_ctx_tables[CONFIG_IOMMU_MAX_BUSES][256];
 /// @brief Bus number served by each context-table slot (-1 = free).
 int16_t g_ctx_bus_ids[CONFIG_IOMMU_MAX_BUSES] = {
     -1, -1, -1, -1, -1, -1, -1, -1,
@@ -181,14 +210,327 @@ void clear_leaf(uint64_t root_phys, uint64_t iova) {
     cascade_free_empty(path, idx);
 }
 
+// ---------------------------------------------------------------------------
+// Live VT-d register access (phase-2, issue #9).  ALL access is gated on
+// g_live and serialized under g_lock_ (callers hold it).  The MMIO page is
+// mapped once by probe_hardware() at HHDM_OFFSET + base (APIC pattern).
+// ---------------------------------------------------------------------------
+
+/// @brief True when a live unit is present (MMIO page mapped, VER validated).
+bool live_active() {
+    return g_live && g_mmio_base != 0;
+}
+
+/// @brief Read a 32-bit MMIO register of the live unit.
+uint32_t mmio_read32(uint64_t off) {
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const volatile uint32_t *reg = reinterpret_cast<volatile uint32_t *>(
+        arch::HHDM_OFFSET + g_mmio_base + off);
+    return *reg;
+}
+
+/// @brief Write a 32-bit MMIO register of the live unit.
+void mmio_write32(uint64_t off, uint32_t val) {
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    volatile uint32_t *reg = reinterpret_cast<volatile uint32_t *>(
+        arch::HHDM_OFFSET + g_mmio_base + off);
+    *reg = val;
+}
+
+/// @brief Read a 64-bit MMIO register of the live unit.
+uint64_t mmio_read64(uint64_t off) {
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const volatile uint64_t *reg = reinterpret_cast<volatile uint64_t *>(
+        arch::HHDM_OFFSET + g_mmio_base + off);
+    return *reg;
+}
+
+/// @brief Write a 64-bit MMIO register of the live unit.
+void mmio_write64(uint64_t off, uint64_t val) {
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    volatile uint64_t *reg = reinterpret_cast<volatile uint64_t *>(
+        arch::HHDM_OFFSET + g_mmio_base + off);
+    *reg = val;
+}
+
+/// @brief Bounded spin on a GSTS status bit.  Returns true when the bit set
+///        within the retry budget; false on timeout (fail-closed — the
+///        caller must NOT proceed with a half-enabled unit).
+bool wait_gsts(uint32_t bit) {
+    constexpr uint32_t kRetries = 100000;
+    for (uint32_t i = 0; i < kRetries; ++i) {
+        if ((mmio_read32(vtd::mmio::kGsts) & bit) != 0)
+            return true;
+    }
+    return false;
+}
+
+/// @brief Submits a queue-invalidation descriptor of @p type (IOTLB / CTX)
+///        and waits for the hardware to consume it (IQH catches IQT).
+/// @return True when the invalidation completed; false on queue timeout.
+bool qi_submit(uint64_t type) {
+    if (!live_active())
+        return true; // no hardware — nothing to flush (software-only mode)
+    // The queue must be enabled first (GCMD.QIE, GSTS.QIES).
+    if ((mmio_read32(vtd::mmio::kGcmd) & vtd::mmio::kGcmdQie) == 0) {
+        uint64_t iq_phys = kva_to_phys(&g_iq[0]);
+        if ((iq_phys & (arch::PAGE_SIZE - 1)) != 0)
+            return false; // unaligned queue — never submit
+        __builtin_memset(g_iq, 0, sizeof(g_iq));
+        mmio_write64(vtd::mmio::kIqh, 0); // reset head to 0 before QEN
+        mmio_write64(vtd::mmio::kIqa, (iq_phys & vtd::mmio::kIqaAddrMask) |
+                                          vtd::mmio::kIqaQen);
+        mmio_write32(vtd::mmio::kGcmd,
+                     mmio_read32(vtd::mmio::kGcmd) | vtd::mmio::kGcmdQie);
+        if (!wait_gsts(vtd::mmio::kGstsQies))
+            return false;
+    }
+    // IQT/IQH hold the descriptor byte offset >> 4 (16-byte descriptors).
+    uint32_t tail = static_cast<uint32_t>(mmio_read64(vtd::mmio::kIqt) >> 4);
+    size_t idx = static_cast<size_t>(tail & 0xFF);
+    size_t off = idx * 16;
+    uint64_t *desc = reinterpret_cast<uint64_t *>(g_iq + off);
+    desc[0] = type | vtd::kQiGranGlobal;
+    desc[1] = 0;
+    // NOTE: the static g_iq buffer is write-back cached; QEMU's memory model
+    // is coherent so no explicit cache flush is needed here.  On real
+    // non-coherent hardware the descriptor would need a wbinvd/clflush before
+    // the IQT advance makes it visible to the IOMMU — documented follow-up.
+    // Advance the tail: write the new byte offset (index << 4).
+    uint32_t new_tail = (tail + 1) & 0xFF;
+    mmio_write64(vtd::mmio::kIqt, static_cast<uint64_t>(new_tail) << 4);
+    // Wait for IQH to reach the new tail (descriptor consumed).
+    constexpr uint32_t kRetries = 200000;
+    for (uint32_t i = 0; i < kRetries; ++i) {
+        if ((mmio_read64(vtd::mmio::kIqh) >> 4) == new_tail)
+            return true;
+    }
+    return false;
+}
+
+/// @brief Global IOTLB invalidation (after SL-table mutation).
+bool iotlb_invalidate() {
+    return qi_submit(vtd::kQiTypeIotlb);
+}
+
+/// @brief Global context-cache invalidation (after root/context mutation).
+bool ctx_cache_invalidate() {
+    return qi_submit(vtd::kQiTypeCtx);
+}
+
+/// @brief Enumerates PCI config space and programs a T=0 passthrough
+///        context entry for every kernel-owned device (AHCI class 0x0106,
+///        virtio vendor 0x1AF4).  Returns false (fail-closed, TE stays off)
+///        if the context-table pool exhausts or any BDF is unencodable.
+bool passthrough_kernel_devices() {
+    int n = 0;
+    // Scan the PCI buses that can host kernel DMA devices.  Bounded by the
+    // context-table pool (CONFIG_IOMMU_MAX_BUSES) — a bus beyond the pool
+    // cannot get a passthrough entry, so the pre-pass fails closed rather
+    // than leaving a DMA-capable kernel device without a context entry.
+    for (uint8_t bus = 0; bus < static_cast<uint8_t>(CONFIG_IOMMU_MAX_BUSES);
+         ++bus) {
+        for (uint8_t dev = 0; dev < 32; ++dev) {
+            for (uint8_t fn = 0; fn < 8; ++fn) {
+                arch::PciBdf bdf{bus, dev, fn};
+                uint64_t addr = arch::pci_make_addr(bdf, 0);
+                uint16_t vendor = arch::pci_config_readw(addr);
+                if (vendor == 0xFFFF || vendor == 0x0000)
+                    continue; // no device present at this BDF
+                // AHCI: class 0x0106 at config offset 0x0A (word).
+                uint16_t class_rev = arch::pci_config_readw(
+                    arch::pci_make_addr(bdf, 0x0A));
+                uint8_t base_class = static_cast<uint8_t>(class_rev >> 8);
+                uint8_t sub_class = static_cast<uint8_t>(class_rev & 0xFF);
+                bool is_ahci = (base_class == 0x01 && sub_class == 0x06);
+                bool is_virtio = (vendor == 0x1AF4);
+                if (!is_ahci && !is_virtio)
+                    continue; // not a kernel DMA device — leave to user
+                if (n >= static_cast<int>(CONFIG_IOMMU_MAX_KERNEL_DEVICES))
+                    return false;
+                // Find or claim a context-table slot for the bus.
+                int slot = -1;
+                for (size_t i = 0;
+                     i < static_cast<size_t>(CONFIG_IOMMU_MAX_BUSES); ++i) {
+                    if (g_ctx_bus_ids[i] == static_cast<int16_t>(bdf.bus)) {
+                        slot = static_cast<int>(i);
+                        break;
+                    }
+                }
+                if (slot < 0) {
+                    for (size_t i = 0;
+                         i < static_cast<size_t>(CONFIG_IOMMU_MAX_BUSES); ++i) {
+                        if (g_ctx_bus_ids[i] < 0) {
+                            g_ctx_bus_ids[i] = static_cast<int16_t>(bdf.bus);
+                            for (size_t e = 0; e < 256; ++e)
+                                g_ctx_tables[i][e] = Entry16{};
+                            slot = static_cast<int>(i);
+                            break;
+                        }
+                    }
+                }
+                if (slot < 0)
+                    return false; // context-table pool exhausted
+                uint64_t ctx_phys = kva_to_phys(&g_ctx_tables[slot][0]);
+                Entry16 *cte = &g_ctx_tables[slot][ctx_index(bdf)];
+                // A device already attached to a translation domain (T=1)
+                // must NOT be downgraded to T=0 passthrough — that would
+                // silently defeat its DMA isolation.  (attach_device re-points
+                // the entry later; this pre-pass only adds a T=0 fallback for
+                // kernel DMA.)
+                if ((cte->lo & vtd::kCtePresent) != 0 &&
+                    (cte->lo & vtd::kCteTtMask) != vtd::kCteTtPassthrough)
+                    continue;
+                Entry16 *re = &g_root_table[bdf.bus];
+                re->lo = vtd::kRootEntryPresent |
+                         (ctx_phys & vtd::kRootEntryCtpMask);
+                re->hi = 0;
+                // T=0 passthrough: Present + TT=10b (spec §9.3).
+                cte->lo = vtd::kCtePresent | vtd::kCteTtPassthrough;
+                cte->hi = 0;
+                ++n;
+            }
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 bool IoMmuManager::probe() {
-    return g_present;
+    return g_present || g_live;
 }
 
 void IoMmuManager::force_present(bool present) {
     g_present = present;
+    if (!present) {
+        // A software-only presence means no live unit authority.  Clearing
+        // g_live here keeps the cap_iommu "no hardware" tests deterministic
+        // even when a live unit was detected at boot (q35 variant): they
+        // force-absent the manager and expect probe()==false.  g_mmio_base
+        // is a pure hardware fact (persists; probe_hardware() restores the
+        // live authority from the cached result).
+        g_live = false;
+        g_translation_live = false;
+    }
+}
+
+bool IoMmuManager::probe_hardware() {
+#if defined(CONFIG_ARCH_X86_64)
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    // NOTE: the initial ACPI scan + MMIO map_page run under g_lock_.  This
+    // is safe because the scan path executes only at boot (single-threaded,
+    // before the scheduler spawns tasks) — the cached re-probe path used by
+    // tests (g_probe_result==1/2) never re-scans or re-maps.  Holding the
+    // lock here keeps the g_mmio_base/g_live write atomic with the scan.
+    // The DMAR scan reads multiboot2/ACPI tables in low memory.  Test
+    // isolation rewinds low memory between tests, so a re-probe during a
+    // test must reuse the cached boot-time result rather than re-walking
+    // (which would dereference a stale multiboot2 info pointer).
+    if (g_live)
+        return true; // already probed and live
+    if (g_probe_result == 1) {
+        // Probed at boot, unit live; force_present(false) dropped g_live.
+        // Restore the live authority from the cached result without
+        // re-scanning ACPI.
+        g_live = true;
+        g_present = true;
+        return true;
+    }
+    if (g_probe_result == 2)
+        return false; // probed earlier, unit absent — stable
+    dmar::DmarInfo info = acpi::scan_dmar();
+    if (!info.found || !info.unit.present) {
+        g_probe_result = 2;
+        return false; // no DMAR / no DRHD — software-only path
+    }
+    g_mmio_base = info.unit.base_phys;
+    // Map the remapping unit's MMIO page (APIC pattern).
+    kernel::VMM::map_page(arch::HHDM_OFFSET + g_mmio_base, g_mmio_base,
+                          false);
+    uint32_t ver = mmio_read32(vtd::mmio::kVerReg);
+    // VER_REG is non-zero on every VT-d unit; the encoding differs between
+    // QEMU (0x10) and real hardware (e.g. 0x100 = v1.0), so only reject an
+    // absent/zero unit (fail closed on a non-VT-d MMIO page).
+    if (ver == 0) {
+        g_mmio_base = 0;
+        g_probe_result = 2;
+        return false; // not a live VT-d unit — fail closed
+    }
+    g_live = true;
+    g_present = true;
+    g_probe_result = 1;
+    return true;
+#else
+    (void)0;
+    return false;
+#endif
+}
+
+bool IoMmuManager::enable_translation() {
+    if (!live_active())
+        return false;
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    // Never re-enable: if TE is already live, report success.
+    if ((mmio_read32(vtd::mmio::kGsts) & vtd::mmio::kGstsTes) != 0) {
+        g_translation_live = true;
+        return true;
+    }
+    // 1) RTADDR must point at the root table BEFORE TE.  Fail-closed: an
+    //    unaligned root table would be an invalid root-table pointer.
+    uint64_t root_phys = kva_to_phys(&g_root_table[0]);
+    if ((root_phys & (arch::PAGE_SIZE - 1)) != 0)
+        return false;
+    mmio_write64(vtd::mmio::kRtaddr, root_phys & vtd::mmio::kRtaddrAddrMask);
+    mmio_write32(vtd::mmio::kGcmd,
+                 mmio_read32(vtd::mmio::kGcmd) | vtd::mmio::kGcmdSrtp);
+    if (!wait_gsts(vtd::mmio::kGstsRtps))
+        return false; // RTADDR never took — do NOT enable TE
+    // 2) Passthrough pre-pass: kernel devices must have T=0 entries before
+    //    TE=1, otherwise kernel DMA is blocked (device hang).
+    if (!passthrough_kernel_devices())
+        return false;
+    if (!ctx_cache_invalidate())
+        return false;
+    // 3) TE last.
+    mmio_write32(vtd::mmio::kGcmd,
+                 mmio_read32(vtd::mmio::kGcmd) | vtd::mmio::kGcmdTe);
+    if (!wait_gsts(vtd::mmio::kGstsTes)) {
+        // Fail-closed: clear TE and drop live state so no half-enabled unit.
+        // g_mmio_base is a pure hardware fact — keep it so the cached
+        // re-probe (g_probe_result==1) can restore the live authority and a
+        // later enable_translation() retry can re-arm the unit.
+        mmio_write32(vtd::mmio::kGcmd,
+                     mmio_read32(vtd::mmio::kGcmd) & ~vtd::mmio::kGcmdTe);
+        g_live = false;
+        g_translation_live = false;
+        return false;
+    }
+    g_translation_live = true;
+    return true;
+}
+
+void IoMmuManager::read_clear_faults() {
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    if (!live_active())
+        return;
+    // FECTL: mask the fault-event interrupt (IM=1) so no spurious MSI;
+    // read-clear FSTS (writing the pending bits clears them).
+    mmio_write32(vtd::mmio::kFectl, vtd::mmio::kFectlIm |
+                                        mmio_read32(vtd::mmio::kFectl));
+    uint32_t fsts = mmio_read32(vtd::mmio::kFsts);
+    if (fsts != 0)
+        mmio_write32(vtd::mmio::kFsts, fsts);
+}
+
+uint64_t IoMmuManager::mmio_base() {
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    return g_mmio_base;
+}
+
+bool IoMmuManager::translation_live() {
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    return g_translation_live && live_active();
 }
 
 int16_t IoMmuManager::domain_create(uint32_t task_id) {
@@ -239,6 +581,9 @@ void IoMmuManager::domain_destroy(int16_t idx) {
     }
     d.owner_task_id = 0;
     d.occupied = false;
+    // Live path: flush the IOTLB so a cached translation cannot reach the
+    // now-freed SL pages (DMA into recycled frames would be a UAF).
+    iotlb_invalidate();
 }
 
 bool IoMmuManager::map_frame(int16_t idx, const cap::FrameCap &fc,
@@ -303,7 +648,11 @@ bool IoMmuManager::map_frame(int16_t idx, const cap::FrameCap &fc,
     d.maps[rec].pages = fc.count;
     d.maps[rec].sl_flags = sl_flags;
     d.maps[rec].occupied = true;
-    return true;
+    // Live path: flush the IOTLB so no stale translation for this IOVA
+    // survives (spec §6.5).  A flush failure leaves the mapping already
+    // programmed but reports false — the caller fails closed and tears the
+    // domain down (revoke) rather than trusting an unflushed mapping.
+    return iotlb_invalidate();
 }
 
 bool IoMmuManager::unmap_frame(int16_t idx, const cap::FrameCap &fc) {
@@ -332,7 +681,9 @@ bool IoMmuManager::unmap_frame(int16_t idx, const cap::FrameCap &fc) {
     d.maps[rec].phys = 0;
     d.maps[rec].pages = 0;
     d.maps[rec].sl_flags = 0;
-    return true;
+    // Live path: flush the IOTLB so the removed mapping cannot be reached
+    // through a cached translation.
+    return iotlb_invalidate();
 }
 
 bool IoMmuManager::attach_device(int16_t idx, arch::PciBdf bdf) {
@@ -375,10 +726,12 @@ bool IoMmuManager::attach_device(int16_t idx, arch::PciBdf bdf) {
     re->hi = 0;
 
     Entry16 *cte = &g_ctx_tables[slot][ctx_index(bdf)];
-    cte->lo = vtd::kCtePresent | vtd::kCteTranslate |
+    cte->lo = vtd::kCtePresent | vtd::kCteTtTranslate |
               (d.sl_root_phys & vtd::kCteAsrMask);
     cte->hi = 0;
-    return true;
+    // Live path: flush the context cache so the device immediately sees the
+    // new root (spec §6.5.2.2).
+    return ctx_cache_invalidate();
 }
 
 void IoMmuManager::clear_attachment(int16_t idx, arch::PciBdf bdf) {
@@ -401,6 +754,8 @@ void IoMmuManager::clear_attachment(int16_t idx, arch::PciBdf bdf) {
             break;
         }
     }
+    // Live path: flush the context cache so the removal is visible.
+    ctx_cache_invalidate();
 }
 
 uint64_t IoMmuManager::sl_root(int16_t idx) {
@@ -443,6 +798,21 @@ size_t IoMmuManager::mapping_count(int16_t idx) {
 bool IoMmuManager::root_entry_present(uint8_t bus) {
     SpinLockGuard<sync::SpinLock> guard(g_lock_);
     return (g_root_table[bus].lo & vtd::kRootEntryPresent) != 0;
+}
+
+uint64_t IoMmuManager::context_entry(arch::PciBdf bdf) {
+    if (!bdf_valid(bdf))
+        return 0; // unencodable BDF — never index out of bounds
+    SpinLockGuard<sync::SpinLock> guard(g_lock_);
+    for (size_t i = 0; i < static_cast<size_t>(CONFIG_IOMMU_MAX_BUSES); ++i) {
+        if (g_ctx_bus_ids[i] != static_cast<int16_t>(bdf.bus))
+            continue;
+        Entry16 *cte = &g_ctx_tables[i][ctx_index(bdf)];
+        if ((cte->lo & vtd::kCtePresent) == 0)
+            return 0;
+        return cte->lo;
+    }
+    return 0;
 }
 
 uint64_t IoMmuManager::context_asr(int16_t idx, arch::PciBdf bdf) {
