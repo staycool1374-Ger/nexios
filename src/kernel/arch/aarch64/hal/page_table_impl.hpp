@@ -143,6 +143,12 @@ class ArchPageTable {
     static constexpr uint64_t AP_RW = 0ULL;
     static constexpr uint64_t UXN = 1ULL << 54;
     static constexpr uint64_t PXN = 1ULL << 53;
+    // Physical-address field: bits [47:12].  A plain ~0xFFF mask is NOT enough
+    // — leaf descriptors carry UXN (bit 54) / PXN (bit 53) which sit above the
+    // address bits, and ~0xFFF would leak them into extracted physical
+    // addresses (breaking get_physical and free_page).
+    static constexpr uint64_t DESC_PHYS_MASK = ((1ULL << 48) - 1) & ~0xFFFULL;
+    static constexpr uint64_t DESC_BLOCK_MASK = ((1ULL << 48) - 1) & ~0x1FFFFFULL;
 
     /// @brief Get or create a page table entry at a given index.
     /// @param[in] table_base Physical address of the table.
@@ -168,12 +174,17 @@ class ArchPageTable {
 
 inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
                                           bool create) {
-    uint64_t *table = reinterpret_cast<uint64_t *>(table_base);
+    // Page-table pages are physical; access them through the HHDM direct-map
+    // alias so the walk is independent of the currently-active TTBR0 (which
+    // may be a user/private PML4 without the identity map).
+    uint64_t *table = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                   table_base);
     uint64_t entry = table[index];
 
     if (entry & DESC_VALID) {
         if (entry & DESC_TABLE) {
-            return reinterpret_cast<uint64_t *>(entry & ~0xFFF);
+            return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (entry & DESC_PHYS_MASK));
         }
         return nullptr;
     }
@@ -185,10 +196,11 @@ inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
     if (!new_page)
         return nullptr;
 
-    void *new_page_ptr = reinterpret_cast<void *>(new_page);
+    void *new_page_ptr =
+        reinterpret_cast<void *>(arch::HHDM_OFFSET + new_page);
     memset(new_page_ptr, 0, PAGE_SIZE);
     table[index] = new_page | DESC_VALID | DESC_TABLE;
-    return reinterpret_cast<uint64_t *>(new_page);
+    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
 }
 
 inline uint64_t ArchPageTable::attr_from_flags(uint64_t flags) {
@@ -200,7 +212,9 @@ inline uint64_t ArchPageTable::attr_from_flags(uint64_t flags) {
     else
         attr |= AP_RO;
     if (flags & kernel::PageFlags::USER) {
-        // User accessible
+        // User accessible; PXN (SMEP parity — EL1 must not execute user
+        // pages).  UXN left clear so EL0 may execute.
+        attr |= PXN;
     } else {
         attr |= UXN | PXN;
     }
@@ -241,14 +255,17 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
     uint64_t l3_idx = (virt >> L3_SHIFT) & TABLE_MASK;
 
     uint64_t l0_phys = current();
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     uint64_t *l1 = walk_l0(l0_phys, l0_idx, true);
     if (!l1)
         return kernel::Error::OOM;
+    uint64_t l1_phys = l0[l0_idx] & DESC_PHYS_MASK;
 
-    uint64_t *l2 = walk_l1(reinterpret_cast<uint64_t>(l1), l1_idx, true);
+    uint64_t *l2 = walk_l1(l1_phys, l1_idx, true);
     if (!l2)
         return kernel::Error::OOM;
+    uint64_t l2_phys = l1[l1_idx] & DESC_PHYS_MASK;
 
     uint64_t entry_flags = attr_from_flags(flags);
 
@@ -260,11 +277,11 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
         return {};
     }
 
-    uint64_t *l3 = walk_l2(reinterpret_cast<uint64_t>(l2), l2_idx, true);
+    uint64_t *l3 = walk_l2(l2_phys, l2_idx, true);
     if (!l3)
         return kernel::Error::OOM;
 
-    l3[l3_idx] = phys | entry_flags | DESC_BLOCK | (1ULL << 10);
+    l3[l3_idx] = phys | entry_flags | DESC_TABLE | (1ULL << 10);
     dsb_sy();
     isb();
     return {};
@@ -277,14 +294,16 @@ inline kernel::ErrorOr<void> ArchPageTable::unmap_page(uint64_t virt) {
     uint64_t l3_idx = (virt >> L3_SHIFT) & TABLE_MASK;
 
     uint64_t l0_phys = current();
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     if (!(l0[l0_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (l0[l0_idx] & DESC_PHYS_MASK));
     if (!(l1[l1_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+    uint64_t l2_phys = l1[l1_idx] & DESC_PHYS_MASK;
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
 
     if ((virt & ((1ULL << L2_SHIFT) - 1)) == 0 && (l2[l2_idx] & DESC_BLOCK)) {
         l2[l2_idx] = 0;
@@ -295,11 +314,47 @@ inline kernel::ErrorOr<void> ArchPageTable::unmap_page(uint64_t virt) {
 
     if (!(l2[l2_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
-    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
+    uint64_t l3_phys = l2[l2_idx] & DESC_PHYS_MASK;
+    uint64_t *l3 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l3_phys);
 
     if (!(l3[l3_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
     l3[l3_idx] = 0;
+    dsb_sy();
+    isb();
+    // The leaf translation for `virt` is gone; invalidate it so no stale TLB
+    // entry can keep resolving into a freed/reused table page.
+    arch_page_table_tlb_flush(virt);
+
+    // Reclaim intermediate tables once they become entirely empty.  Only
+    // map-allocated tables reach the empty state (the boot L1/L2 pages stay
+    // populated), so freeing them here never releases a boot-static page.
+    // Guard on DESC_TABLE: a 2 MiB block descriptor (bit[1]=0) at L2 must
+    // never be misinterpreted as an L3 table pointer and freed.
+    if ((l2[l2_idx] & DESC_TABLE) != 0) {
+        bool l3_empty = true;
+        for (size_t i = 0; i < ENTRIES; ++i) {
+            if (l3[i] != 0) {
+                l3_empty = false;
+                break;
+            }
+        }
+        if (l3_empty) {
+            l2[l2_idx] = 0;
+            kernel::PMM::free_page(l3_phys);
+            bool l2_empty = true;
+            for (size_t i = 0; i < ENTRIES; ++i) {
+                if (l2[i] != 0) {
+                    l2_empty = false;
+                    break;
+                }
+            }
+            if (l2_empty) {
+                l1[l1_idx] = 0;
+                kernel::PMM::free_page(l2_phys);
+            }
+        }
+    }
     dsb_sy();
     isb();
     return {};
@@ -312,26 +367,29 @@ inline uint64_t ArchPageTable::get_physical(uint64_t virt) {
     uint64_t l3_idx = (virt >> L3_SHIFT) & TABLE_MASK;
 
     uint64_t l0_phys = current();
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     if (!(l0[l0_idx] & DESC_VALID))
         return 0;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (l0[l0_idx] & DESC_PHYS_MASK));
     if (!(l1[l1_idx] & DESC_VALID))
         return 0;
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (l1[l1_idx] & DESC_PHYS_MASK));
 
     if ((virt & ((1ULL << L2_SHIFT) - 1)) == 0 && (l2[l2_idx] & DESC_BLOCK)) {
-        return (l2[l2_idx] & ~0x1FFFFF) | (virt & 0x1FFFFF);
+        return (l2[l2_idx] & DESC_BLOCK_MASK) | (virt & 0x1FFFFF);
     }
 
     if (!(l2[l2_idx] & DESC_VALID))
         return 0;
-    uint64_t *l3 = reinterpret_cast<uint64_t *>(l2[l2_idx] & ~0xFFF);
+    uint64_t *l3 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (l2[l2_idx] & DESC_PHYS_MASK));
     if (!(l3[l3_idx] & DESC_VALID))
         return 0;
 
-    return (l3[l3_idx] & ~0xFFF) | (virt & 0xFFF);
+    return (l3[l3_idx] & DESC_PHYS_MASK) | (virt & 0xFFF);
 }
 
 } // namespace arch

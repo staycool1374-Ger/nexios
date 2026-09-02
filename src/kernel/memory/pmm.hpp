@@ -45,12 +45,20 @@ class PMM {
     /// @param mem_size Total physical memory size in bytes.
     /// @param kernel_start Start of kernel image in physical memory.
     /// @param kernel_end End of kernel image in physical memory.
+    /// @param window_base Physical base of the allocatable RAM window
+    /// (min usable-region base; 0 on x86_64).  Must be covered by the
+    /// architecture's MMU higher-half mapping.
     static void init(uint64_t mem_size, uint64_t kernel_start,
-                     uint64_t kernel_end);
+                     uint64_t kernel_end, uint64_t window_base = 0);
     /// @brief Initialize with error code.
+    /// @param mem_size Total physical memory size in bytes.
+    /// @param kernel_start Start of kernel image in physical memory.
+    /// @param kernel_end End of kernel image in physical memory.
+    /// @param window_base Physical base of the allocatable RAM window.
     /// @return PmmError code.
     static errors::PmmError init_err(uint64_t mem_size, uint64_t kernel_start,
-                                     uint64_t kernel_end);
+                                     uint64_t kernel_end,
+                                     uint64_t window_base = 0);
 
     /// @brief Mark the PMM as fully initialized (post-boot).
     /// After this call, alloc_page() checks CONFIG_STATIC_POOLS_ONLY
@@ -105,6 +113,15 @@ class PMM {
     /// @return PmmError code.
     static errors::PmmError free_page_err(uint64_t phys_addr);
 
+    /// @brief Marks a physical page range [start_phys, end_phys) as allocated
+    ///        KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never
+    ///        be handed to an allocator).  Call right after init() before any
+    ///        allocation.  No-op on pages outside the allocatable window or
+    ///        already marked.
+    /// @param start_phys Inclusive first physical address.
+    /// @param end_phys   Exclusive end physical address.
+    static void reserve_range(uint64_t start_phys, uint64_t end_phys);
+
     /// @brief Returns true if a physical page is currently allocated.
     /// @param phys_addr Physical address to check.
     /// @return true if the allocation bit is set.
@@ -127,6 +144,44 @@ class PMM {
     /// @brief Return the total physical memory size in bytes.
     static uint64_t total_memory() noexcept {
         return total_pages_ * arch::PAGE_SIZE;
+    }
+
+    /// @brief Allocatable-window geometry in absolute page indices.
+    struct WindowPages {
+        uint64_t base_page; ///< First allocatable page index.
+        uint64_t end_page;  ///< One past the last allocatable page index.
+    };
+
+    /// @brief Compute the allocatable window for a memory layout (pure).
+    ///
+    /// The window is the first HHDM_WINDOW_SIZE bytes of RAM starting at
+    /// window_base, clamped to the bitmap span (mem_size).  base_page ==
+    /// end_page encodes an empty window (window_base beyond the span).
+    /// @param mem_size    Total span covered by the bitmap in bytes.
+    /// @param window_base Physical base of usable RAM.
+    /// @return Window page range [base_page, end_page).
+    static constexpr WindowPages
+    compute_window_pages(uint64_t mem_size, uint64_t window_base) {
+        uint64_t total = mem_size / PAGE_SIZE;
+        uint64_t base = window_base / PAGE_SIZE;
+        uint64_t end = base + arch::HHDM_WINDOW_SIZE / PAGE_SIZE;
+        if (end > total) {
+            end = total;
+        }
+        if (base > end) {
+            base = end;
+        }
+        return WindowPages{base, end};
+    }
+
+    /// @brief First allocatable physical page index (diagnostic/test only).
+    static uint64_t window_base_page() noexcept {
+        return window_base_page_;
+    }
+    /// @brief One past the last allocatable physical page index
+    /// (diagnostic/test only).
+    static uint64_t window_end_page() noexcept {
+        return window_end_page_;
     }
 
     /// @brief OOM handler type — called when allocation fails.
@@ -246,6 +301,11 @@ class PMM {
     static constinit uint64_t free_head_;
     /// @brief Head of the page-table-pool free list.
     static constinit uint64_t pool_free_head_;
+
+    /// @brief First allocatable page index (absolute; 0 on x86_64).
+    static constinit uint64_t window_base_page_;
+    /// @brief One past the last allocatable page index (absolute).
+    static constinit uint64_t window_end_page_;
 
     /// @brief Mark a page as allocated in the bitmap.
     /// @param index Page index.

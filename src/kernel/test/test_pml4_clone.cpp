@@ -28,6 +28,8 @@
 #include <constants.hpp>
 #include "test_sched_helpers.hpp"
 
+#if defined(CONFIG_ARCH_X86_64)
+
 using namespace kernel;
 
 // v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
@@ -510,12 +512,11 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
 
             for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
                 uint64_t p_ent = pv[i];
-                uint64_t c_ent = cv[i];
-                if (!(p_ent & PAGE_PRESENT)) {
-                    if (c_ent & PAGE_PRESENT)
-                        g_all_indep = 0;
+                // Only parent-present entries must have an independent child
+                // copy.  Child-only entries are expected (its own user stack).
+                if (!(p_ent & PAGE_PRESENT))
                     continue;
-                }
+                uint64_t c_ent = cv[i];
                 if (!(c_ent & PAGE_PRESENT) ||
                     (c_ent & ~0xFFFULL) == (p_ent & ~0xFFFULL)) {
                     g_all_indep = 0;
@@ -527,12 +528,9 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
                                                            (c_ent & ~0xFFFULL));
                 for (size_t j = 0; j < 512; ++j) {
                     uint64_t p_pd = ppdpt[j];
-                    uint64_t c_pd = cpdpt[j];
-                    if (!(p_pd & PAGE_PRESENT)) {
-                        if (c_pd & PAGE_PRESENT)
-                            g_all_indep = 0;
+                    if (!(p_pd & PAGE_PRESENT))
                         continue;
-                    }
+                    uint64_t c_pd = cpdpt[j];
                     if ((p_pd & PAGE_HUGE) || (c_pd & PAGE_HUGE)) {
                         if (!(c_pd & PAGE_PRESENT) ||
                             (c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
@@ -540,7 +538,8 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
                         }
                         continue;
                     }
-                    if ((c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
+                    if (!(c_pd & PAGE_PRESENT) ||
+                        (c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
                         g_all_indep = 0;
                         continue;
                     }
@@ -550,12 +549,9 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
                                                              (c_pd & ~0xFFFULL));
                     for (size_t k = 0; k < 512; ++k) {
                         uint64_t p_pt = ppd[k];
-                        uint64_t c_pt = cpd[k];
-                        if (!(p_pt & PAGE_PRESENT)) {
-                            if (c_pt & PAGE_PRESENT)
-                                g_all_indep = 0;
+                        if (!(p_pt & PAGE_PRESENT))
                             continue;
-                        }
+                        uint64_t c_pt = cpd[k];
                         if ((p_pt & PAGE_HUGE) || (c_pt & PAGE_HUGE)) {
                             if (!(c_pt & PAGE_PRESENT) ||
                                 (c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
@@ -563,7 +559,8 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
                             }
                             continue;
                         }
-                        if ((c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
+                        if (!(c_pt & PAGE_PRESENT) ||
+                            (c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
                             g_all_indep = 0;
                             continue;
                         }
@@ -573,12 +570,9 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
                             arch::HHDM_OFFSET + (c_pt & ~0xFFFULL));
                         for (size_t l = 0; l < 512; ++l) {
                             uint64_t p_leaf = ppt[l];
-                            uint64_t c_leaf = cpt[l];
-                            if (!(p_leaf & PAGE_PRESENT)) {
-                                if (c_leaf & PAGE_PRESENT)
-                                    g_all_indep = 0;
+                            if (!(p_leaf & PAGE_PRESENT))
                                 continue;
-                            }
+                            uint64_t c_leaf = cpt[l];
                             if (!(c_leaf & PAGE_PRESENT) ||
                                 (c_leaf & ~0xFFFULL) == (p_leaf & ~0xFFFULL)) {
                                 g_all_indep = 0;
@@ -806,3 +800,5 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(fork_free_user_pages_child_deepcopy);
     JARVIS_REGISTER_TEST(fork_page_table_shared_flag_absent);
 }
+
+#endif // CONFIG_ARCH_X86_64

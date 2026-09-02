@@ -1,0 +1,48 @@
+name: Feature Request
+description: New functionality or roadmap item for NexIOS
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain / Subsystem
+      options:
+        - scheduler
+        - memory
+        - ipc
+        - vfs
+        - process
+        - syscall
+        - arch
+        - device
+        - shell
+        - net
+        - security
+        - debug
+        - integration
+        - stress
+        - init
+        - build
+        - bench
+        - sporadic
+        - tooling/docs
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-paragraph description of the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Roadmap context
+      description: Which milestone (e.g. v0.5.0) or need drives this?
+  - type: checkboxes
+    id: sil3
+    attributes:
+      label: Safety relevance
+      options:
+        - label: This touches SIL 3 safety-relevant code paths (concurrency, PMM, IrqGuard, critical sections)

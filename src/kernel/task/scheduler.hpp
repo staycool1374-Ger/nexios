@@ -21,8 +21,6 @@
 /// @file scheduler.hpp
 /// @brief Rate-monotonic scheduler for task management and dispatching.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler_config.hpp>
@@ -421,6 +419,7 @@ class Scheduler {
         TaskControlBlock *runq_prev;
         bool in_ready_queue;
         uint64_t rq_priority;
+        uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
     };
     static uint64_t snapshot_task_fields_size() {
         return sizeof(TaskFields) * MAX_TASKS;
@@ -524,6 +523,9 @@ class Scheduler {
     static constexpr uint64_t ID_TABLE_SIZE =
         static_cast<uint64_t>(CONFIG_MAX_TASKS) * 2;
     static constexpr uint64_t ID_TABLE_MASK = ID_TABLE_SIZE - 1;
+
+    static_assert((ID_TABLE_SIZE & (ID_TABLE_SIZE - 1)) == 0,
+                  "ID_TABLE_SIZE must be a power of two (ID_TABLE_MASK)");
 
     /// @brief Sentinel value for a removed hash-table entry.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)

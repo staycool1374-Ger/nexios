@@ -74,6 +74,7 @@ static void pkd(const char *key, uint64_t v) {
 }
 
 /// @brief Print two hex key-value pairs.
+#if defined(CONFIG_ARCH_X86_64)
 static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
     L::raw_write("[DUMP]   ");
     L::raw_write(k1);
@@ -85,6 +86,7 @@ static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
     L::print_hex(v2);
     L::raw_write("\n");
 }
+#endif // CONFIG_ARCH_X86_64
 
 /// @brief Print two decimal key-value pairs.
 static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
@@ -100,6 +102,7 @@ static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
 }
 
 /// @brief Print three hex key-value pairs.
+#if defined(CONFIG_ARCH_X86_64)
 static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
                  const char *k3, uint64_t v3) {
     L::raw_write("[DUMP]   ");
@@ -116,6 +119,7 @@ static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
     L::print_hex(v3);
     L::raw_write("\n");
 }
+#endif // CONFIG_ARCH_X86_64
 
 /// @brief Dump scheduler indices, counts, flags, and deferred-switch globals.
 void dump_scheduler_info() {
@@ -310,16 +314,30 @@ void dump_task_info(uint64_t task_id) {
     pkv("kernel_stack_top", t->kernel_stack_top);
 
     // context registers (the ones that matter for the crash)
+#if defined(CONFIG_ARCH_X86_64)
     pkv("context.rsp", t->context.rsp);
     pkv("context.rip", t->context.rip);
     pkv2("context.cs", t->context.cs, "context.ss", t->context.ss);
     pkv("context.rflags", t->context.rflags);
+#elif defined(CONFIG_ARCH_AARCH64)
+    pkv("context.sp_el0", t->context.sp_el0);
+    pkv("context.elr_el1", t->context.elr_el1);
+    pkv("context.spsr_el1", t->context.spsr_el1);
+#endif
 
-    // check whether context.rsp is within its own kernel stack
+    // check whether the saved context stack pointer is within its own kernel
+    // stack (arch-specific field name)
     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
     uint64_t top = t->kernel_stack_top;
-    bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
-                         t->context.rsp <= top);
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t saved_sp = t->context.rsp;
+#elif defined(CONFIG_ARCH_AARCH64)
+    uint64_t saved_sp = t->context.sp_el0;
+#else
+    uint64_t saved_sp = t->context.sp;
+#endif
+    bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
+                         saved_sp <= top);
 
     L::raw_write("[DUMP]   rsp_in_stack: ");
     L::raw_write(rsp_in_stack ? "yes" : "NO (dangerous!)");
@@ -357,8 +375,17 @@ void dump_task_info(uint64_t task_id) {
 
     // show whether deferred-switch globals point to this task
     bool is_switch_target = false;
+#if defined(CONFIG_ARCH_X86_64)
     is_switch_target = is_switch_target ||
                        (save_to == reinterpret_cast<uint64_t>(&t->context.rsp));
+#elif defined(CONFIG_ARCH_AARCH64)
+    is_switch_target = is_switch_target ||
+                       (save_to ==
+                        reinterpret_cast<uint64_t>(&t->context.sp_el0));
+#else
+    is_switch_target = is_switch_target ||
+                       (save_to == reinterpret_cast<uint64_t>(&t->context.sp));
+#endif
     is_switch_target = is_switch_target || (next_id != 0 && next_id == t->id);
     L::raw_write("[DUMP]   deferred_switch_target: ");
     L::raw_write(is_switch_target ? "yes" : "no");
@@ -380,10 +407,17 @@ void dump_task_info(uint64_t task_id) {
         L::print_dec(rec.thread_id);
         L::raw_write(" ticks=");
         L::print_dec(rec.consumed_ticks);
+#if defined(CONFIG_ARCH_X86_64)
         L::raw_write(" ctx.rip=0x");
         L::print_hex(rec.regs.rip);
         L::raw_write(" ctx.rsp=0x");
         L::print_hex(rec.regs.rsp);
+#elif defined(CONFIG_ARCH_AARCH64)
+        L::raw_write(" ctx.elr=0x");
+        L::print_hex(rec.regs.elr_el1);
+        L::raw_write(" ctx.sp=0x");
+        L::print_hex(rec.regs.sp_el0);
+#endif
         L::raw_write("\n");
     }
 #endif
@@ -440,13 +474,28 @@ void dump_all_tasks() {
         pkd2("parent", t->parent_id, "children", t->num_children);
         pkd2("exec", t->executed_ticks, "rem", t->remaining_ticks);
 
+#if defined(CONFIG_ARCH_X86_64)
         pkv("ctx.rsp", t->context.rsp);
         pkv("ctx.rip", t->context.rip);
+#elif defined(CONFIG_ARCH_AARCH64)
+        pkv("ctx.sp", t->context.sp_el0);
+        pkv("ctx.elr", t->context.elr_el1);
+#else
+        pkv("ctx.sp", t->context.sp);
+        pkv("ctx.epc", t->context.sepc);
+#endif
 
         uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
         uint64_t top = t->kernel_stack_top;
-        bool rsp_in_stack = (base > 0 && top > base && t->context.rsp >= base &&
-                             t->context.rsp <= top);
+#if defined(CONFIG_ARCH_X86_64)
+        uint64_t saved_sp = t->context.rsp;
+#elif defined(CONFIG_ARCH_AARCH64)
+        uint64_t saved_sp = t->context.sp_el0;
+#else
+        uint64_t saved_sp = t->context.sp;
+#endif
+        bool rsp_in_stack = (base > 0 && top > base && saved_sp >= base &&
+                             saved_sp <= top);
 
         L::raw_write("[DUMP]   kstack=[0x");
         L::print_hex(base);
@@ -471,9 +520,19 @@ void dump_all_tasks() {
         L::raw_write("\n");
 
         // deferred-switch target detection
-        bool is_target =
-            (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
-            (next_id != 0 && next_id == t->id);
+        bool is_target = false;
+#if defined(CONFIG_ARCH_X86_64)
+        is_target = (save_to == reinterpret_cast<uint64_t>(&t->context.rsp)) ||
+                    (next_id != 0 && next_id == t->id);
+#elif defined(CONFIG_ARCH_AARCH64)
+        is_target = (save_to ==
+                     reinterpret_cast<uint64_t>(&t->context.sp_el0)) ||
+                    (next_id != 0 && next_id == t->id);
+#else
+        is_target = (save_to ==
+                     reinterpret_cast<uint64_t>(&t->context.sp)) ||
+                    (next_id != 0 && next_id == t->id);
+#endif
         L::raw_write("[DUMP]   deferred: ");
         L::raw_write(is_target ? "TARGET" : "no");
         L::raw_write("\n");

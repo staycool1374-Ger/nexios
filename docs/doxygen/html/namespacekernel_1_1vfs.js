@@ -34,8 +34,6 @@ var namespacekernel_1_1vfs =
     [ "unlink_err", "namespacekernel_1_1vfs.html#af555f6cb1ba4c592ec31fcf5902e367f", null ],
     [ "dev_fs", "namespacekernel_1_1vfs.html#ac37c50582b436a337d048c3039465d0b", null ],
     [ "fat32_fs", "namespacekernel_1_1vfs.html#adb50110880ce45345185d1204eaf4fef", null ],
-    [ "fat32_partition_instance", "namespacekernel_1_1vfs.html#ab80516fdc83a878a34cb7cf8a2baeb4f", null ],
-    [ "fat32_root_vnode", "namespacekernel_1_1vfs.html#a2275ccef078f68b2ae134a3340f0858a", null ],
     [ "initrd_fs", "namespacekernel_1_1vfs.html#a7ef3281549b66c34c3500a7b5156718b", null ],
     [ "proc_fs", "namespacekernel_1_1vfs.html#a8049afbb25873d95c723f015f6c61856", null ],
     [ "tmpfs_fs", "namespacekernel_1_1vfs.html#a2b378cb7928ca3f7781737c9987aa29d", null ]

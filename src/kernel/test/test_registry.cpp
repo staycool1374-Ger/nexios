@@ -56,6 +56,7 @@ void register_rlimit_tests();
 void register_init_tests();
 void register_syscall_tests();
 void register_sync_tests();
+void register_sync_block_pattern_tests();
 void register_spinlock_tests();
 void register_task_lifecycle_tests();
 void register_idle_task_tests();
@@ -84,11 +85,24 @@ void register_bench_irq_latency_tests();
 void register_apic_timer_tests();
 void register_jitter_tests();
 void register_idt_tests();
+void register_exc_table_tests();
 void register_pipe_tests();
 void register_gcov_tests();
 void register_debug_tests();
 void register_framebuffer_tests();
 void register_pml4_clone_tests();
+void register_cap_core_tests();
+void register_cap_lifecycle_tests();
+void register_cap_syscall_tests();
+void register_cap_ipc_tests();
+void register_cap_untyped_tests();
+void register_cap_mmio_tests();
+void register_cap_mmio_user_tests();
+void register_cap_irq_tests();
+void register_cap_irq_notify_tests();
+void register_cap_msix_tests();
+void register_cap_iommu_tests();
+void register_iommu_live_tests();
 void register_waitpid_tests();
 void register_buffer_pool_tests();
 void register_block_device_tests();
@@ -220,7 +234,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_spinlock_tests();
          register_spinlock_stress_tests();
      }},
-    {"synchronization_sync", []() { register_sync_tests(); }},
+    {"synchronization_sync",
+     []() {
+         register_sync_tests();
+         register_sync_block_pattern_tests();
+     }},
     {"synchronization_locking",
      []() {
          register_locking_tests();
@@ -297,6 +315,23 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"process_pml4_clone", []() { register_pml4_clone_tests(); }},
     {"process_secure_exec", []() { register_secure_exec_tests(); }},
 
+    // -- cap: capability-based access control (CSpace core engine) --
+    {"cap_core", []() { register_cap_core_tests(); }},
+    {"cap_lifecycle", []() { register_cap_lifecycle_tests(); }},
+    {"cap_syscall", []() { register_cap_syscall_tests(); }},
+    {"cap_ipc", []() { register_cap_ipc_tests(); }},
+    {"cap_untyped", []() { register_cap_untyped_tests(); }},
+    {"cap_mmio", []() { register_cap_mmio_tests(); }},
+    {"cap_mmio_user", []() { register_cap_mmio_user_tests(); }},
+    {"cap_irq", []() { register_cap_irq_tests(); }},
+    {"cap_irq_notify", []() { register_cap_irq_notify_tests(); }},
+    {"cap_msix", []() { register_cap_msix_tests(); }},
+    {"cap_iommu", []() { register_cap_iommu_tests(); }},
+    // Live VT-d enablement (issue #9).  NOT part of `all` — requires the
+    // q35+intel-iommu QEMU variant (`make execute-test x86_64 debug
+    // iommu_live`); on the default pc build there is no DMAR unit.
+    {"iommu_live", []() { register_iommu_live_tests(); }},
+
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
     {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
@@ -365,6 +400,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_core", []() { register_hal_tests(); }},
     {"hal_bits", []() { register_hal_bits_tests(); }},
     {"hal_idt", []() { register_idt_tests(); }},
+    {"exc_table", []() { register_exc_table_tests(); }},
     {"hal_timer", []() { register_timer_tests(); }},
     {"hal_apic", []() { register_apic_timer_tests(); }},
     {"hal_rtc", []() { register_rtc_tests(); }},
@@ -471,6 +507,7 @@ static void register_all_tests() {
     register_syscall_tests();
     register_syscall_fuzz_tests();
     register_sync_tests();
+    register_sync_block_pattern_tests();
     register_spinlock_tests();
     register_task_lifecycle_tests();
     register_idle_task_tests();
@@ -484,6 +521,7 @@ static void register_all_tests() {
     register_timing_tests();
     register_spsc_tests();
     register_idt_tests();
+    register_exc_table_tests();
     register_pipe_tests();
      register_gcov_tests();
      register_debug_tests();
@@ -510,6 +548,17 @@ static void register_all_tests() {
     register_queue_pip_tests();
     register_mutex_pcp_tests();
     register_pml4_clone_tests();
+    register_cap_core_tests();
+    register_cap_untyped_tests();
+    register_cap_mmio_tests();
+    register_cap_mmio_user_tests();
+    register_cap_irq_tests();
+    register_cap_irq_notify_tests();
+    register_cap_msix_tests();
+    register_cap_iommu_tests();
+    register_cap_ipc_tests();
+    register_cap_syscall_tests();
+    register_cap_lifecycle_tests();
     register_waitpid_tests();
     register_resource_exhaustion_tests();
     register_block_device_tests();
@@ -610,6 +659,7 @@ static void register_all_tests_first_half() {
     register_syscall_tests();
     register_syscall_fuzz_tests();
     register_sync_tests();
+    register_sync_block_pattern_tests();
     register_spinlock_tests();
     register_task_lifecycle_tests();
     register_idle_task_tests();
@@ -623,6 +673,7 @@ static void register_all_tests_first_half() {
     register_timing_tests();
     register_spsc_tests();
     register_idt_tests();
+    register_exc_table_tests();
     register_pipe_tests();
      register_gcov_tests();
      register_debug_tests();
@@ -649,6 +700,17 @@ static void register_all_tests_first_half() {
     register_queue_pip_tests();
     register_mutex_pcp_tests();
     register_pml4_clone_tests();
+    register_cap_core_tests();
+    register_cap_lifecycle_tests();
+    register_cap_syscall_tests();
+    register_cap_untyped_tests();
+    register_cap_mmio_tests();
+    register_cap_mmio_user_tests();
+    register_cap_irq_tests();
+    register_cap_irq_notify_tests();
+    register_cap_msix_tests();
+    register_cap_iommu_tests();
+    register_cap_ipc_tests();
     register_waitpid_tests();
     register_resource_exhaustion_tests();
     register_block_device_tests();

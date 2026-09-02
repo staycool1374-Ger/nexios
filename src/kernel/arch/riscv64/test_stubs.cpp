@@ -30,6 +30,12 @@ void register_pci_tests() {
         "Skipped: register_pci_tests (not supported on this arch)");
 }
 
+/// @brief Stub — PML4 page-table tests are x86_64-specific.
+void register_pml4_clone_tests() {
+    kernel::Logger::info(
+        "Skipped: register_pml4_clone_tests (not supported on this arch)");
+}
+
 /// @brief Stub — not supported on non-x86 architectures.
 void register_virtio_tests() {
     kernel::Logger::info(

@@ -77,6 +77,11 @@ struct rlimit {
 
 static inline long __syscall5(long num, long a0, long a1, long a2, long a3) {
     long ret;
+    // ABI contract (single source of truth):
+    //   x86_64: number in rax, args in rbx/rcx/rdx/rsi (int $0x80)
+    //   aarch64: number in x8, args in x0-x3 (Linux AArch64 convention)
+    //   riscv64: number in a7, args in a0-a3 (ecall)
+    // The arch syscall entry stubs must match these register choices.
 #if defined(__x86_64__)
     asm volatile(
         "int $0x80"
@@ -150,6 +155,10 @@ static inline long sys_sigreturn(void) {
 
 static inline long sys_pause(void) {
     return __syscall5(SYS_PAUSE, 0, 0, 0, 0);
+}
+
+static inline long sys_yield(void) {
+    return __syscall5(SYS_YIELD, 0, 0, 0, 0);
 }
 
 static inline long sys_reboot(void) {

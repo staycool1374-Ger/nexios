@@ -14,6 +14,18 @@
 ; You should have received a copy of the GNU General Public License
 ; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+; ============================================================================
+; DEAD CODE (P7, issue #6) — NOT ASSEMBLED on any architecture.
+;
+; The LSTAR/sysret fastpath was removed: MSR_KERNEL_GS_BASE was never written,
+; so the entry swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 —
+; a guaranteed kernel panic on any ring-3 `syscall` (0F 05).  The sole live
+; syscall path is `int $0x80` (trap gate isr_128, GS-free).  The fastpath
+; redesign lives in docs/specs/syscall-fastpath.md (v0.4.3).  This file is
+; retained as a commented historical artifact pending explicit approval to
+; delete (mk/rules.mk filters it out of SRC_ASM_GENERIC unconditionally).
+; ============================================================================
+
 extern syscall_handler
 
 global syscall_entry

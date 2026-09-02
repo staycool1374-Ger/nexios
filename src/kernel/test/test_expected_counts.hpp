@@ -17,10 +17,10 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                132,    0,       0      },  // curated TF_RELEASE subset
-    {"selftest",            132,    0,       0      },  // same as safe
+    {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+    {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                 886,    0,       0      },  // 869 + process(+3) + MP-4 SMAP(+3) + elf_loader(+7) + MP-7 named(+3); dump_class_counts verified
+    {"all",                1024,   0,       0      },  // 989 executed +35 filtered; cap_msix(+13,#10) → registered 1024
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -78,6 +78,20 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
+    // cap — capability-based access control (CSpace)
+    {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, handle decode, revoke
+    {"cap_lifecycle",         8,    0,       0      },  // grant/copy/revoke/mint + Endpoint/FrameCap objects
+    {"cap_syscall",           8,    0,       0      },  // SYS_CAP_GRANT/COPY/REVOKE/MINT dispatch
+    {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
+    {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
+    {"cap_mmio",              14,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
+    {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry (0.4.2 issue #8)
+    {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
+    {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
+    {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
+    {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
+    {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
+
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
@@ -101,7 +115,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
-    {"memory_pmm",            5,    0,       0      },  // PMM alloc/free unit tests (hosts 0-test delegate)
+    {"memory_pmm",            8,    0,       0      },  // PMM alloc/free unit tests + window geometry (hosts 0-test delegate)
     {"memory_mempool",        4,    0,       0      },  // MemPool allocator tests
     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
@@ -141,22 +155,23 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
+    {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
 
     // drivers
-    {"drivers_core",          6,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps
+    {"drivers_core",          8,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps + FLAW-08/10 bounded waits
     {"drivers_block",        11,    0,       0      },  // block device, ATA_PIO, AHCI
     {"drivers_pci",          16,    0,       0      },  // PCI enumeration/MSI/BARs (bounded-time test commented out)
-    {"drivers_virtio",        9,    0,       0      },  // VirtIO probe/feature/queue
-    {"drivers_dma",          12,    0,       0      },  // DMA buffer/SG/PRD
+    {"drivers_virtio",       11,    0,       0      },  // VirtIO probe/feature/queue + FLAW-03 net lock
+    {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
     {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
 
     // shell / ui
-    {"shell_interaction",    18,    0,       0      },  // shell commands
+    {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
@@ -177,7 +192,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,    0,       0      },
+    {"arch_aarch64",          0,   23,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,       0      },

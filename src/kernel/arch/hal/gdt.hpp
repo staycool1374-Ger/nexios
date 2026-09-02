@@ -68,6 +68,17 @@ struct TSS {
     uint16_t iopb_offset; ///< I/O Permission Bitmap offset.
 } __attribute__((packed));
 
+/// @brief TSS plus the I/O permission bitmap, in one contiguous block so the
+/// bitmap lies inside the TSS segment (hardware requirement: the bitmap is
+/// addressed relative to the TSS base via @c iopb_offset).
+struct TSSBlock {
+    TSS tss;
+    uint8_t iopb[8192];         ///< bit N of the bitmap gates port N
+                                ///< (bit=1 -> #GP at CPL3, 0 -> allowed).
+    uint8_t iopb_terminator;    ///< 0xFF sentinel marking the end of the
+                                ///< bitmap (Intel SDM requirement).
+};
+
 /// @brief x86-64 Global Descriptor Table manager.
 class GDT {
   public:
@@ -79,13 +90,30 @@ class GDT {
     /// @brief Update RSP0 in the TSS (used on syscall entry).
     /// @param rsp New kernel stack pointer for ring 0.
     static void set_tss_rsp0(uint64_t rsp);
+    /// @brief Load an 8 KiB I/O permission bitmap into the TSS.
+    /// @param bitmap Pointer to an 8192-byte bitmap (bit=1 denies the port).
+    static void iopb_load(const uint8_t *bitmap);
+    /// @brief Set the I/O permission bitmap to all-1s (default-deny).
+    static void iopb_mask_all();
+    /// @brief Pointer to the TSS I/O permission bitmap (test accessor).
+    /// @return Pointer to the 8192-byte bitmap inside the TSS block.
+    static uint8_t *iopb_bitmap();
+    /// @brief IOPB offset stored in the TSS (test accessor).
+    /// @return Offset of the bitmap from the TSS base.
+    static uint16_t tss_iopb_offset();
+    /// @brief TSS descriptor limit (test accessor).
+    /// @return Limit field of the TSS descriptor.
+    static uint16_t tss_descriptor_limit();
+    /// @brief Terminator byte after the I/O bitmap (test accessor).
+    /// @return 0xFF.
+    static uint8_t iopb_terminator();
 
   private:
     static constexpr size_t NUM_ENTRIES = 7;
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static GDTEntry entries_[NUM_ENTRIES];
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-    static TSS tss_;
+    static TSSBlock tss_block_;
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static GDTDescriptor desc_;
 };
@@ -111,6 +139,22 @@ class GDT {
     static inline void load() {
     }
     static inline void set_tss_rsp0(uint64_t) {
+    }
+    static inline void iopb_load(const uint8_t *) {
+    }
+    static inline void iopb_mask_all() {
+    }
+    static inline uint8_t *iopb_bitmap() {
+        return nullptr;
+    }
+    static inline uint16_t tss_iopb_offset() {
+        return 0;
+    }
+    static inline uint16_t tss_descriptor_limit() {
+        return 0;
+    }
+    static inline uint8_t iopb_terminator() {
+        return 0;
     }
 };
 

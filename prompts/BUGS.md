@@ -1,0 +1,21 @@
+# Open Issues
+
+## Kernel — ElfLoader (H2 deferred-switch family)
+- [x] **`elf_loader` class flake — RESOLVED (commit `b85ba27d`)**. Root cause (GDB-confirmed, 2026-08-15): the loader's `task_main` idle-block critical section acquired `ElfLoader::lock_` and set self BLOCKED + `dequeue_ready` WITHOUT an IrqGuard. A timer-ISR preemption could land between the lock acquire and release, leaving the loader BLOCKED while still holding `lock_` (`lock_.holder_=task_main`, loader state=BLOCKED). The harness's `reset()`/`request_load` then spun on `lock_` forever; the timer never re-dispatches a BLOCKED loader, so the lock was never released. Fix: wrap the critical section in `arch::IrqGuard` (lock is never held across a preemption; release + `reschedule()` stay outside). Validated (trace OFF): elf_loader 10/10 consecutive clean runs; full debug `all` gate 873/873 ×2 (was hung at test 191).
+
+## Kernel — VM / Page Table
+- [x] **pml4_clone test class crashes — RESOLVED (commits `d535a853` + `60d02e49`)**. Root cause (GDB-confirmed 2026-08-15): low-VA `map_page`/`unmap_page` (0x200000/0x400000, pml4_idx < PML4_USER_COUNT) split boot 2 MiB huge entries in the kernel identity PD (phys 0x3000) into pool PT pages; `snapshot_restore` restored only the higher-half PD (0x5000) gated on `hhdm_modified_` (never set by low-VA maps), so PD_IDENTITY dangled to rewound pool pages. Over ~485 cycles the stale entries were zeroed, clearing shared PD_HIGHER entries (incl. PD[5] covering the snapshot buffer at 10 MiB) — the harness's private PML4 (MP-1) faulted reading `g_snapshot` during snapshot_restore (test_isolate.cpp:817; CR3=0x7ff9000, PD_HIGHER[4..6]=0). Secondary: snapshot_create's guard-page map/unmap split PD_HIGHER[5] after the ResourceTracker/pool baseline capture, causing a +1 leak + dangling reference. Fixes: (1) `identity_modified_` flag + PD_IDENTITY save/restore in the snapshot; (2) vmm tests use scratch private PML4s (no kernel identity-PD splitting); (3) ResourceTracker + pool snapshot captured after the guard-page block. Validated: memory_vmm 10/10 ×4 (was leak+panic), debug `all` 873/873 (leaks 16→12; remaining are pre-existing MemPool[8] +1).
+
+# Resolved
+
+### H2 — deferred-switch race (Scheduler / IPC, `ipc_send_sync_roundtrip` hang)
+- [x] **RESOLVED (2026-08-13/15, commits `71b3a088` + `4bf751b4` + `b85ba27d`).** Three independent root causes: (1) `71b3a088` — stale-resume orphan re-enqueue: `next_task()` returned a terminated task's orphan ready-queue node and the deferred switch armed to it was never applied; (2) `4bf751b4` — `switch_to_task` owner-resolution self-switch no-op: owner-resolution could correct `current` to the physical runner after the entry `current==&next` check, publishing a SELF-switch that iretq'd the runner onto its own stale frame; (3) `b85ba27d` — elf_loader `task_main` held `ElfLoader::lock_` across a timer-ISR preemption (BLOCKED while still holding the lock), deadlocking the harness. Investigation also found + fixed a separate INV-2 `[WEDGE] blocked-in-runq` violation (`b7dce519`: gate the PI-boost `move_priority()` on `owner.in_ready_queue_`). Validated (trace OFF): ipc_core 20/20 + 5/5 clean; debug `all` 873/873 ×2; later gates 932/932 and 942/942. The 2026-08-12 re-open (testbed @ `a2750bd2`) is superseded — see `audits/deep-analysis-h2-ssdeadline-v0.3.9.md` and ROADMAP_done §v0.4.0.
+
+### #021 — all-1 GPF at IpcConcurrentSenders (test 80/745)
+- **Fix:** `PMM::is_allocated()` safety check in `VMM::get_table()` — before following a PAGE_PRESENT entry, verify the target page is allocated. If not, clear the entry and fall through. Tested: `IpcConcurrentSenders` passes, all-2 passes 133/133, all-1 reaches test 485 without GPF.
+- **Committed:** `210feb06` (stale-entry guard + HHDM limit + clear_pte_in_pml4)
+
+### #022 — PCP mutex retry budget exhaustion
+- **Root Cause:** Direct ownership transfer in unlock() was missing for the original wake_one()+restore_priority pattern. The lock-stealing race caused PCP retry budget exhaustion.
+- **Fix:** Direct ownership transfer in `unlock()`/`unlock_err()` prevents lock stealing. `restore_priority()` ordering fixed (move after waiter removal). 6 test classes migrated to `lock_err()`.
+- **Committed:** `52d19137`, `afdf3b84`, `8defb9af`

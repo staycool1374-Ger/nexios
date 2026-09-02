@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -122,25 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dir_a3ed1f5982
 Directory dependency graph for elf:</div>
 <div class="dyncontent">
 <div class="center"><img src="dir_a3ed1f598272af857136c72554a501e4_dep.png" border="0" usemap="#adir__a3ed1f598272af857136c72554a501e4__dep" loading="lazy" alt="src/kernel/elf"/></div>
-<map name="adir__a3ed1f598272af857136c72554a501e4__dep" id="adir__a3ed1f598272af857136c72554a501e4__dep">
-<area shape="rect" href="dir_507c9ec95be9a201f49444d5da26e8a6.html" title="task" alt="" coords="26,128,72,155"/>
-<area shape="rect" href="dir_76e3dd4d2fa719e8d3b096e9aa563982.html" title="arch" alt="" coords="97,128,143,155"/>
-<area shape="rect" href="dir_a74448e09a2c209561f74c876dd35689.html" title="vfs" alt="" coords="167,128,206,155"/>
-<area shape="rect" href="dir_cfddc3e4738eb751c9ecb1dcd81b4d56.html" title="memory" alt="" coords="230,128,298,155"/>
-<area shape="rect" href="dir_a3ed1f598272af857136c72554a501e4.html" title="elf" alt="" coords="167,53,206,80"/>
-<area shape="poly" href="dir_000003_000016.html" alt="" coords="166,81,88,123,85,118,168,76"/>
-<area shape="rect" href="dir_000003_000016.html" title="2" alt="" coords="90,119,97,135"/>
-<area shape="poly" href="dir_000003_000000.html" alt="" coords="177,79,143,119,140,115,173,82"/>
-<area shape="rect" href="dir_000003_000000.html" title="1" alt="" coords="146,112,153,128"/>
-<area shape="poly" href="dir_000003_000019.html" alt="" coords="188,78,189,114,184,111,185,83"/>
-<area shape="rect" href="dir_000003_000019.html" title="1" alt="" coords="192,101,199,117"/>
-<area shape="poly" href="dir_000003_000009.html" alt="" coords="201,78,242,117,237,117,199,83"/>
-<area shape="rect" href="dir_000003_000009.html" title="3" alt="" coords="240,101,247,117"/>
-<area shape="rect" href="dir_c85d3e3c5052e9ad9ce18c6863244a25.html" title="lib" alt="" coords="322,128,361,155"/>
-<area shape="poly" href="dir_000003_000007.html" alt="" coords="207,75,311,124,306,125,206,80"/>
-<area shape="rect" href="dir_000003_000007.html" title="4" alt="" coords="306,108,313,124"/>
-<area shape="rect" href="dir_cbd7f246bdf7dc0a50281a272327e6ed.html" title="kernel" alt="" coords="16,16,309,165"/>
-</map>
+<!-- MAP 0 -->
 </div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
@@ -149,6 +131,10 @@ Files</h2></td></tr>
 <tr class="memdesc:elf_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF64 loader implementation — header validation, segment loading, stack setup. <br /></td></tr>
 <tr class="memitem:elf_2Ehpp" id="r_elf_2Ehpp"><td class="memItemLeft"><a href="elf_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="elf_8hpp.html">elf.hpp</a></td></tr>
 <tr class="memdesc:elf_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ELF64 binary loader — validate, load, exec. <br /></td></tr>
+<tr class="memitem:elf_5Floader_2Ecpp" id="r_elf_5Floader_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="elf__loader_8cpp.html">elf_loader.cpp</a></td></tr>
+<tr class="memdesc:elf__loader_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Background, preemptible, cancellable ELF loader implementation. <br /></td></tr>
+<tr class="memitem:elf_5Floader_2Ehpp" id="r_elf_5Floader_2Ehpp"><td class="memItemLeft"><a href="elf__loader_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="elf__loader_8hpp.html">elf_loader.hpp</a></td></tr>
+<tr class="memdesc:elf__loader_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Background, preemptible, cancellable ELF loader (spec: docs/specs/elf-loader.md). <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

@@ -22,6 +22,7 @@
 #include <kernel/sync/eventgroup.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/io.hpp>
 #include <assert.hpp>
 
 namespace kernel {
@@ -149,24 +150,51 @@ void EventGroup::wake_matching() {
 }
 
 /// @brief Block until any of the requested bits are set.
+///
+/// H-1 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
+/// Scheduler::reschedule() — identical C-1 deadlock exposure as the semaphore.
+/// The waiter-table-full path must never ENSURE(added): reachable resource
+/// exhaustion is a retry condition, not an invariant violation.
 uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return bits_;
 
-    if ((bits_ & bits) == bits) {
-        if (clear_on_exit)
-            bits_ &= ~bits;
-        return bits_;
+    for (;;) {
+        bool added = false;
+        {
+            SpinLockGuard<SpinLock> guard(lock_);
+            if ((bits_ & bits) == bits) {
+                if (clear_on_exit)
+                    bits_ &= ~bits;
+                return bits_;
+            }
+            added = add_waiter(*task, bits, clear_on_exit);
+            if (added)
+                task->state = TaskState::BLOCKED;
+        }
+
+        if (!added) {
+            Scheduler::reschedule();
+            continue;
+        }
+        break;
     }
 
-    bool added = add_waiter(*task, bits, clear_on_exit);
-    ENSURE(added);
-
-    task->state = TaskState::BLOCKED;
+    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
+    // queue so a BLOCKED task is never physically queued (INV-2 desync).
+    Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+        return bits_;
+    }
+    remove_waiter(*task);
+    task->state = TaskState::RUNNING;
+    Scheduler::enqueue_ready(*task);
     return bits_;
 }
 
@@ -174,28 +202,47 @@ uint64_t EventGroup::wait_bits(uint64_t bits, bool clear_on_exit) {
 /// overload).
 errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
                                             uint64_t *out_bits) {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
 
-    if ((bits_ & bits) == bits) {
-        if (clear_on_exit)
-            bits_ &= ~bits;
-        if (out_bits)
-            *out_bits = bits_;
-        return errors::SYNC_ERR_OK;
+    bool added = false;
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if ((bits_ & bits) == bits) {
+            if (clear_on_exit)
+                bits_ &= ~bits;
+            if (out_bits)
+                *out_bits = bits_;
+            return errors::SYNC_ERR_OK;
+        }
+
+        if (wait_count_ >= MAX_WAITERS) {
+            return errors::SYNC_ERR_MAX_WAITERS;
+        }
+
+        added = add_waiter(*task, bits, clear_on_exit);
+        if (added)
+            task->state = TaskState::BLOCKED;
     }
 
-    if (wait_count_ >= MAX_WAITERS) {
+    if (!added) {
         return errors::SYNC_ERR_MAX_WAITERS;
     }
 
-    bool added = add_waiter(*task, bits, clear_on_exit);
-    (void)added;
-
-    task->state = TaskState::BLOCKED;
+    Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
+
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+    } else {
+        remove_waiter(*task);
+        task->state = TaskState::RUNNING;
+        Scheduler::enqueue_ready(*task);
+        return errors::SYNC_ERR_MAX_WAITERS;
+    }
 
     if (out_bits)
         *out_bits = bits_;
@@ -203,13 +250,18 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t bits, bool clear_on_exit,
 }
 
 /// @brief Check if bits are set without blocking.
+///
+/// M-6 serialization (audit-task-sync MEDIUM): read bits_ under the spinlock so
+/// a concurrent set/clear can't return a stale answer.
 bool EventGroup::try_wait_bits(uint64_t bits) {
+    SpinLockGuard<SpinLock> guard(lock_);
     return (bits_ & bits) == bits;
 }
 
 /// @brief Check if bits are set without blocking (error-returning overload).
 errors::SyncError EventGroup::try_wait_bits_err(uint64_t bits,
                                                 bool *out_result) {
+    SpinLockGuard<SpinLock> guard(lock_);
     bool result = (bits_ & bits) == bits;
     if (out_result)
         *out_result = result;

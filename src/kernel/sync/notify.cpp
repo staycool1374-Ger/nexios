@@ -30,9 +30,17 @@ namespace sync {
 Notify::~Notify() {
     SpinLockGuard<SpinLock> guard(lock_);
     if (waiter_) {
-        if (waiter_->state != TaskState::TERMINATED)
+        // H-2: a cleaned-up task is REAPED, not TERMINATED.  Never feed a
+        // freed TCB to set_task_ready (ready-queue corruption / UAF).  Also
+        // require the generation captured at wait time — a recycled TCB that
+        // now occupies the slot must not be woken.
+        if (waiter_->state != TaskState::TERMINATED &&
+            waiter_->state != TaskState::REAPED &&
+            waiter_->generation == waiter_gen_) {
             Scheduler::set_task_ready(*waiter_);
+        }
         waiter_ = nullptr;
+        waiter_gen_ = 0;
     }
     initialized_ = false;
 }
@@ -42,6 +50,7 @@ void Notify::init() {
     lock_.reset();
     notify_value_ = 0;
     waiter_ = nullptr;
+    waiter_gen_ = 0;
     initialized_ = true;
 }
 
@@ -52,6 +61,7 @@ errors::SyncError Notify::init_err() {
     }
     notify_value_ = 0;
     waiter_ = nullptr;
+    waiter_gen_ = 0;
     initialized_ = true;
     return errors::SYNC_ERR_OK;
 }
@@ -61,9 +71,13 @@ void Notify::notify(uint64_t value) {
     SpinLockGuard<SpinLock> guard(lock_);
     notify_value_ = value;
     if (waiter_) {
-        if (waiter_->state != TaskState::TERMINATED)
+        if (waiter_->state != TaskState::TERMINATED &&
+            waiter_->state != TaskState::REAPED &&
+            waiter_->generation == waiter_gen_) {
             Scheduler::set_task_ready(*waiter_);
+        }
         waiter_ = nullptr;
+        waiter_gen_ = 0;
     }
 }
 
@@ -72,9 +86,13 @@ errors::SyncError Notify::notify_err(uint64_t value) {
     SpinLockGuard<SpinLock> guard(lock_);
     notify_value_ = value;
     if (waiter_) {
-        if (waiter_->state != TaskState::TERMINATED)
+        if (waiter_->state != TaskState::TERMINATED &&
+            waiter_->state != TaskState::REAPED &&
+            waiter_->generation == waiter_gen_) {
             Scheduler::set_task_ready(*waiter_);
+        }
         waiter_ = nullptr;
+        waiter_gen_ = 0;
         return errors::SYNC_ERR_OK;
     }
     return errors::SYNC_ERR_NO_WAITER;
@@ -92,6 +110,7 @@ uint64_t Notify::wait() {
             return 0;
 
         waiter_ = task;
+        waiter_gen_ = task->generation;
         task->state = TaskState::BLOCKED;
     } // lock released BEFORE reschedule: never hold a spinlock across a
       // context switch.  reschedule() arms a deferred switch and re-enables
@@ -116,6 +135,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
             return errors::SYNC_ERR_ALREADY_WAITING;
 
         waiter_ = task;
+        waiter_gen_ = task->generation;
         task->state = TaskState::BLOCKED;
     } // lock released BEFORE reschedule (see wait())
 

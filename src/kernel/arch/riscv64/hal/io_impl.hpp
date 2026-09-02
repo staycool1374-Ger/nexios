@@ -101,6 +101,9 @@ inline void pause() {
     asm volatile("nop");
 }
 /// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
+/// @note MP-4.4 scope was aarch64-only.  The aarch64 PAN implementation
+/// (stac/clac via PSTATE.PAN in arch/aarch64/hal/io_impl.hpp + arch::pan_init
+/// in early_init.cpp) is the model for a future SSTATUS.SUM-based port.
 inline void stac() {}
 /// @brief Clear AC-equivalent — no-op (see stac()).
 inline void clac() {}

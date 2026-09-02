@@ -217,11 +217,14 @@ JARVIS_TEST(cross_context_init_stack, "PRE: none | POST: none") {
 #elif defined(CONFIG_ARCH_AARCH64)
     uint64_t test_psr = 0;
     uint64_t test_user_sp = arch::HHDM_OFFSET + 0x30000000ULL;
+    // By-ref init_stack: stack_top advances to the BOTTOM of the frame, so
+    // the written slots are stack_top[0..35] (entry at [32], user SP at
+    // [31]) rather than below the original top.
     arch::ArchContextManager::init_stack(stack_top, test_entry, 0, 0, test_psr,
                                          test_user_sp);
     bool written = false;
-    for (int i = 1; i <= 7; ++i) {
-        if (stack_top[-i] != 0) {
+    for (int i = 0; i <= 35; ++i) {
+        if (stack_top[i] != 0) {
             written = true;
             break;
         }

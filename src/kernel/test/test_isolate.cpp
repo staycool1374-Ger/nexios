@@ -22,6 +22,7 @@
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/core/global_state.hpp>
 #include <test.hpp>
+#include <assert.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/arch/timer.hpp>
@@ -37,6 +38,9 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/arch/gdt.hpp>
+#include <kernel/arch/hal/iopb.hpp>
+#include <kernel/cap/mmio.hpp>
+#include <kernel/cap/msix.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
 
@@ -59,9 +63,13 @@ static inline uint64_t current_sp() {
     uint64_t sp{};
     asm volatile("mov %%rsp, %0" : "=r"(sp));
     return sp;
-#elif defined(__aarch64__) || defined(__riscv)
+#elif defined(__aarch64__)
     uint64_t sp{};
     asm volatile("mov %0, sp" : "=r"(sp));
+    return sp;
+#elif defined(__riscv)
+    uint64_t sp{};
+    asm volatile("mv %0, sp" : "=r"(sp));
     return sp;
 #else
     return 0;
@@ -189,6 +197,7 @@ static size_t off_user_page_data() {
 
 static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
 static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
 
 static size_t off_kstack_header(size_t user_page_count) {
     return off_user_page_data() +
@@ -201,8 +210,12 @@ static size_t off_hhdm_pd(size_t user_page_count, uint64_t num_kstacks) {
     return off_kstack_header(user_page_count) + kstack_area;
 }
 
-static size_t off_pt_pool(size_t user_page_count, uint64_t num_kstacks) {
+static size_t off_ident_pd(size_t user_page_count, uint64_t num_kstacks) {
     return off_hhdm_pd(user_page_count, num_kstacks) + HHDM_PD_BYTES;
+}
+
+static size_t off_pt_pool(size_t user_page_count, uint64_t num_kstacks) {
+    return off_ident_pd(user_page_count, num_kstacks) + IDENTITY_PD_BYTES;
 }
 
 // v0.4.0 MP-6.3: kernel-stack window snapshot (8 PT page contents + slot
@@ -293,6 +306,13 @@ static void dump_pte_walk(uint64_t va) {
 
 bool snapshot_create() {
     arch::IrqGuard guard;
+#if defined(CONFIG_DEBUG)
+    // gs-base-swapgs-audit corrective #3 (issue #6): the snapshot window must
+    // run with IF=0 — no maskable interrupt may re-arm a deferred switch or
+    // touch GS mid-window.  The IrqGuard above guarantees it; ENSURE so a
+    // nested guard that silently re-enabled IRQs panics at the source.
+    ENSURE(!arch::interrupts_enabled());
+#endif
 
     // Count user-owned pages from the owner bitmap
     size_t user_page_count = 0;
@@ -413,10 +433,6 @@ bool snapshot_create() {
     BufferPool::capture_state(g_snapshot + off_bufpool(),
                               BufferPool::state_bytes());
 
-    // ---- Resource Counters ----
-    ResourceTracker::instance().capture(
-        *reinterpret_cast<ResourceCounters *>(g_snapshot + off_rsrc_counts()));
-
     // ---- User page content + canary guards ----
     {
         // Set canaries before and after nu to detect stray writes
@@ -486,12 +502,9 @@ bool snapshot_create() {
         }
     }
 
-    // ---- Page-table pool snapshot ----
-    {
-        auto *pool = reinterpret_cast<PtPoolSnapshot *>(
-            g_snapshot + off_pt_pool(user_page_count, task_count));
-        PMM::capture_pool_snapshot(*pool);
-    }
+    // ---- Kernel-stack window snapshot (v0.4.0 MP-6.3) ----
+    kernel::kslot_snapshot_capture(
+        g_snapshot + off_kslot_snapshot(user_page_count, task_count));
 
     // ---- Kernel-stack window snapshot (v0.4.0 MP-6.3) ----
     kernel::kslot_snapshot_capture(
@@ -519,6 +532,30 @@ bool snapshot_create() {
         }
     }
 
+    // ---- Identity PD save ----
+    // Save PML4[0]→PDPT[0]→PD (PD_IDENTITY phys 0x3000, 512 entries) so
+    // snapshot_restore can undo huge-page splits in the LOW identity map.
+    // Always captured (pristine boot state at class start); the restore is
+    // gated on identity_was_modified().
+    {
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            auto *pml4 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if (pml4[0] & 1) {
+                auto *pdpt = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
+                if (pdpt[0] & 1) {
+                    auto *pd = reinterpret_cast<uint64_t *>(
+                        arch::HHDM_OFFSET + (pdpt[0] & ~0xFFFULL));
+                    __builtin_memcpy(
+                        g_snapshot + off_ident_pd(user_page_count, task_count),
+                        pd, IDENTITY_PD_BYTES);
+                }
+            }
+        }
+    }
+
     // ---- Map-then-unmap guard pages (after PD save, so saved PD is clean) ----
     // Guard pages must be within HHDM window (phys < 128MB) and above reserved
     // kernel area (phys > 11MB).  If they're at the window edge, skip them.
@@ -536,6 +573,24 @@ bool snapshot_create() {
             VMM::map_page(ga_va, guard_after_phys, false);
             VMM::unmap_page(ga_va);
         }
+    }
+
+    // ---- Resource Counters + page-table pool snapshot ----
+    // Captured AFTER the guard-page map/unmap block above.  The guard block
+    // splits a PD_HIGHER huge entry (allocating a pool PT page) when the
+    // snapshot buffer tail crosses a 2 MiB boundary — capturing the counters
+    // and pool bitmap BEFORE that block would (a) attribute the guard PT page
+    // as a +1 leak to the first test, and (b) leave PD_HIGHER dangling to a
+    // pool page the restore marks free (the pml4_clone CR3-corruption cascade,
+    // BUGS.md).  Capturing after makes the guard PT part of the baseline AND
+    // of the pool snapshot, so the restore keeps it allocated.
+    {
+        ResourceTracker::instance().capture(
+            *reinterpret_cast<ResourceCounters *>(g_snapshot +
+                                                  off_rsrc_counts()));
+        auto *pool = reinterpret_cast<PtPoolSnapshot *>(
+            g_snapshot + off_pt_pool(user_page_count, task_count));
+        PMM::capture_pool_snapshot(*pool);
     }
 
     return true;
@@ -721,6 +776,44 @@ void snapshot_restore(const char *test_name) {
             }
         }
         VMM::clear_hhdm_modified();
+    }
+
+    // ---- Identity PD restore (before PMM restore) ----
+    // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
+    // PD_IDENTITY phys 0x3000).  Gated on identity_was_modified(): low-VA
+    // map_page/unmap_page (pml4_idx < PML4_USER_COUNT) never sets
+    // hhdm_modified_, so the HHDM-PD gate above cannot cover these splits.
+    // Split PT pages are reclaimed by the page-table pool restore that runs
+    // later (off_pt_pool), so this block only restores the PD entries.
+    if (VMM::identity_was_modified()) {
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            uint64_t nu_ident = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_user_page_count());
+            uint64_t nk_ident = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_kstack_header(nu_ident));
+            auto *saved_pd = reinterpret_cast<const uint64_t *>(
+                g_snapshot + off_ident_pd(nu_ident, nk_ident));
+            auto *pml4 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if (pml4[0] & 1) {
+                auto *pdpt = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (pml4[0] & ~0xFFFULL));
+                if (pdpt[0] & 1) {
+                    uint64_t pd_phys = pdpt[0] & ~0xFFFULL;
+                    // Sanity check: PDPT[0] must point to the boot identity
+                    // PD (phys 0x3000).  Any other address means corruption —
+                    // skip the restore rather than write to kernel data.
+                    if (pd_phys == 0x3000ULL) {
+                        auto *pd = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + pd_phys);
+                        __builtin_memcpy(pd, saved_pd,
+                                         512 * sizeof(uint64_t));
+                    }
+                }
+            }
+        }
+        VMM::clear_identity_modified();
     }
 
     // ---- PMM ----
@@ -1257,6 +1350,18 @@ void snapshot_restore(const char *test_name) {
         if (idle && idle->magic == TaskControlBlock::TCB_MAGIC) {
             arch::GDT::set_tss_rsp0(idle->kernel_stack_top);
         }
+        // Reset the I/O permission bitmap pool/owner state (issue #3) so a
+        // test that granted ports can never leak a permissive bitmap or a
+        // dangling owner across snapshot cycles.
+        arch::iopb_snapshot_reset();
+        // Reset the user MMIO map registry (issue #8) so a test that mapped
+        // device pages can never leak a stale registry slot or VA across
+        // snapshot cycles.
+        cap::MmioUserMap::snapshot_reset();
+        // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
+        // test that created an MsixCap never leaves a recycled (bdf, entry)
+        // un-claimable in the next cycle.
+        cap::MsixCap::snapshot_reset();
 #endif
     }
 

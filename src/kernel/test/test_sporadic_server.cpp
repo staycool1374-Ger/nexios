@@ -429,7 +429,9 @@ JARVIS_TEST(sporadic_server_granularity_clamp_zero, "PRE: none | POST: none") {
 // Testidea: Granularity with completion — verify replenishment amount
 //           equals consumed units, not raw ticks.
 // Expect: budget=5, granularity=3, consume 2 units (6 calls), complete.
-//         Replenishment amount = 2 (not 6).
+//         Replenishment amount = 2 (not 6).  M-8: the server completed (IDLE),
+//         so a replenishment restores budget WITHOUT forcing it ACTIVE — only
+//         an EXHAUSTED server may be re-activated by a replenishment.
 JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
     SporadicServer ss;
     ss.init(5, 100, 0, 3);
@@ -449,7 +451,9 @@ JARVIS_TEST(sporadic_server_granularity_completion, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(1ULL, ss.pending_count());
     // Replenishment amount should be consumed_since_active_ = 2, not 6
     ss.process_replenishments(110);
-    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
+    // M-8: IDLE server stays IDLE after a replenishment (budget restored, but
+    // no aperiodic work pending — forcing ACTIVE would delay the next job).
+    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
     // Budget was 3, replenished 2, capped at C=5
     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget());
     JARVIS_TEST_PASS();
@@ -560,7 +564,8 @@ JARVIS_TEST(sporadic_server_consume_already_exhausted,
 // Testidea: Replenishment after partial consumption restores only the
 //           consumed amount, capped at C.
 // Expect: Consume 2 of 5 budget, complete. Replenishment restores 2.
-//         Budget goes from 3 → 5 (capped).
+//         Budget goes from 3 → 5 (capped).  M-8: server completed (IDLE), so
+//         the replenishment must NOT force it ACTIVE.
 JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
     SporadicServer ss;
     ss.init(5, 50, 0);
@@ -575,7 +580,9 @@ JARVIS_TEST(sporadic_server_replenishment_partial, "PRE: none | POST: none") {
     // Fire replenishment
     ss.process_replenishments(60);
     JARVIS_ASSERT_EQ(5ULL, ss.remaining_budget()); // 3 + 2 = 5
-    JARVIS_ASSERT(ss.state() == SporadicServer::ACTIVE);
+    // M-8: IDLE stays IDLE (replenishment restores budget, never re-activates
+    // a server with no pending aperiodic work).
+    JARVIS_ASSERT(ss.state() == SporadicServer::IDLE);
     JARVIS_TEST_PASS();
 }
 

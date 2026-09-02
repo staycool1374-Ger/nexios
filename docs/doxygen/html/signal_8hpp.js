@@ -32,6 +32,5 @@ var signal_8hpp =
       [ "kernel::SignalAction::IGNORE", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749aa2e843feab94ef623fea888f07c28696", null ],
       [ "kernel::SignalAction::STOP", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111", null ],
       [ "kernel::SignalAction::CONT", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80", null ]
-    ] ],
-    [ "kernel::g_user_access_recover_ip", "namespacekernel.html#ac685742eaa07e592bff0bab7216c0253", null ]
+    ] ]
 ];

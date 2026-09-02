@@ -31,12 +31,12 @@
 /// QEMU virt aarch64 ECAM base address (PCIe configuration space)
 /// This is memory-mapped, not I/O port based like x86 CF8/CFC
 #ifndef CONFIG_PCI_ECAM_BASE
-#define CONFIG_PCI_ECAM_BASE 0x100000000ULL // 4GB default
+#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
 #endif
 
 constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
 constexpr uint64_t PCI_ECAM_SIZE =
-    0x100000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB
+    0x100000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB (ECAM window at 0x3f000000)
 
 /// @brief Build ECAM address from BDF + register offset.
 /// ECAM layout: base | (bus << 20) | (device << 15) | (function << 12) | reg

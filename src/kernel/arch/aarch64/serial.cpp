@@ -37,6 +37,11 @@ namespace arch {
 #define UART_IMSC 0x038
 #define UART_ICR 0x044
 
+/// @brief Number of characters written to the console since boot.
+/// The interactive shell snapshots this before drawing its prompt (see
+/// arch::Serial::write_count contract in arch/hal/serial.hpp).
+static volatile uint64_t s_serial_write_count = 0;
+
 /// @brief Initialise the PL011 UART at 115200 baud (default QEMU virt config).
 /// Disables UART, clears pending interrupts, sets baud rate, enables TX/RX.
 void Serial::init() {
@@ -63,6 +68,14 @@ void Serial::putchar(char c) {
     while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5))
         ;
     mmio_write32(UART_BASE + UART_DR / 4, c);
+    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
+}
+
+/// @brief Returns the number of characters written to the serial console
+///        since boot.
+/// @return Character write count.
+uint64_t Serial::write_count() noexcept {
+    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
 }
 
 /// @brief Read a single character from the serial port (blocking).

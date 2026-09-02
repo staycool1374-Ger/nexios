@@ -24,6 +24,11 @@
 
 namespace arch {
 
+/// @brief Number of characters written to the console since boot.
+/// The interactive shell snapshots this before drawing its prompt (see
+/// arch::Serial::write_count contract in arch/hal/serial.hpp).
+static volatile uint64_t s_serial_write_count = 0;
+
 /// @brief Initialize the serial port (no-op on RISC-V64; SBI handles it).
 void Serial::init() {
 }
@@ -39,6 +44,14 @@ void Serial::putchar(char c) {
                  :
                  : "r"(ch)
                  : "a0", "a7", "memory");
+    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
+}
+
+/// @brief Returns the number of characters written to the serial console
+///        since boot.
+/// @return Character write count.
+uint64_t Serial::write_count() noexcept {
+    return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
 }
 
 /// @brief Read a character from serial (stub — always returns NUL).

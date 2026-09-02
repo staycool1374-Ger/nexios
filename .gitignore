@@ -11,6 +11,7 @@ nexios-rtos.iso
 debug/
 release/
 jarvis/
+nexios/
 userspace/*.elf
 debug/
 release/
@@ -22,6 +23,9 @@ venv/
 .DS_Store
 initrd/tests/test-config.txt
 src/kernel/test/test_registry.gen.hpp
+mk/cpp-rules.*.gen.mk
+build/.arch-stamp
+build/.test-file-list-*
 bench_mandelbrot
 bench_mandelbrot.cpp
 tools/gdb/*.gdb

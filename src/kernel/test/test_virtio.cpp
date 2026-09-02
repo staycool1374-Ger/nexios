@@ -25,7 +25,9 @@
 #include <logger.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/driver/virtio_blk.hpp>
+#include <kernel/driver/virtio_net.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/test/resource_tracker.hpp>
 
 using namespace kernel;
 
@@ -212,6 +214,83 @@ JARVIS_TEST(virtio_guest_notify, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: FLAW-03 — probing the virtio-net device, exercising the locked
+//           RX poll path, then tearing down with zero ResourceTracker delta.
+// Input: virtio_net_probe(nic); virtio_net_poll (no frames -> false);
+//        virtio_net_destroy(); write VIRTIO_STATUS_RESET
+// Expect: probe true; poll false (no frames); teardown clean
+// Depends: kernel::net::virtio_net_probe/poll/destroy, arch::virtio
+JARVIS_TEST(virtio_net_probe_poll_and_teardown, "PRE: iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+
+    ::net::Nic nic;
+    bool ok = kernel::net::virtio_net_probe(nic);
+    JARVIS_ASSERT(ok);
+    uint8_t buf[::net::MAX_PACKET_SIZE];
+    size_t len = 0;
+    bool got = kernel::net::virtio_net_poll(buf, len);
+    JARVIS_ASSERT(!got); // no frames queued
+    kernel::net::virtio_net_destroy();
+
+    // Reset the device status so subsequent tests start clean.
+    arch::VirtioTransport transport;
+    if (arch::virtio_find_device(arch::VIRTIO_DEVICE_NET, transport)) {
+        arch::virtio_write_status(transport, arch::VIRTIO_STATUS_RESET);
+    }
+
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-03 — the TX path programs the descriptor under the lock,
+//           notifies the device, and the bounded completion poll succeeds.
+// Input: probe; nic.send_frame(frame, 64) twice; poll (no RX frames);
+//        destroy; reset status
+// Expect: both sends true; second send not rejected by tx_inflight_ after
+//         the first completes; teardown clean
+// Depends: kernel::net::virtio_net_probe/poll/destroy, net::Nic
+JARVIS_TEST(virtio_net_send_frame_completes, "PRE: iocd | POST: none") {
+    auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+
+    ::net::Nic nic;
+    bool ok = kernel::net::virtio_net_probe(nic);
+    JARVIS_ASSERT(ok);
+
+    uint8_t frame[64];
+    for (size_t i = 0; i < sizeof(frame); ++i)
+        frame[i] = static_cast<uint8_t>(i & 0xFF);
+    bool sent1 = nic.send_frame(frame, sizeof(frame));
+    JARVIS_ASSERT(sent1);
+    // The completion poll must have consumed the descriptor, so a second
+    // send is not rejected by tx_inflight_.
+    bool sent2 = nic.send_frame(frame, sizeof(frame));
+    JARVIS_ASSERT(sent2);
+
+    uint8_t buf[::net::MAX_PACKET_SIZE];
+    size_t len = 0;
+    JARVIS_ASSERT(!kernel::net::virtio_net_poll(buf, len));
+    kernel::net::virtio_net_destroy();
+
+    arch::VirtioTransport transport;
+    if (arch::virtio_find_device(arch::VIRTIO_DEVICE_NET, transport)) {
+        arch::virtio_write_status(transport, arch::VIRTIO_STATUS_RESET);
+    }
+
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.pmm_pages_used, after.pmm_pages_used);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all Virtio tests with the test framework.
 // Input: None
 // Expect: All Virtio tests are registered (no direct assertion, only logging)
@@ -227,6 +306,8 @@ void register_virtio_tests() {
     JARVIS_REGISTER_TEST(virtio_feature_negotiation);
     JARVIS_REGISTER_TEST(virtio_queue_configuration);
     JARVIS_REGISTER_TEST(virtio_guest_notify);
+    JARVIS_REGISTER_TEST(virtio_net_probe_poll_and_teardown);
+    JARVIS_REGISTER_TEST(virtio_net_send_frame_completes);
 }
 
 #endif // CONFIG_ARCH_X86_64

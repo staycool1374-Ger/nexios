@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -123,10 +123,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall_8cpp.h
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="syscall__helpers_8hpp_source.html">kernel/syscall/syscall_helpers.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="msr_8hpp_source.html">kernel/arch/msr.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for syscall.cpp:</div>
@@ -209,7 +211,7 @@ Functions</h2></td></tr>
 <tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f">kernel::syscall_task</a> ()</td></tr>
 <tr class="memdesc:aa7278439c20dc6234a77d3b08290701f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the currently running task from the scheduler.  <br /></td></tr>
 <tr class="memitem:a9bbea2daa70fd81363d98ce7b9c9f943" id="r_a9bbea2daa70fd81363d98ce7b9c9f943"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a9bbea2daa70fd81363d98ce7b9c9f943">kernel::syscall_is_user_task</a> ()</td></tr>
-<tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (has its own page table).  <br /></td></tr>
+<tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (is_user_ flag — MP-1: page_table_ != 0 no longer discriminates, every task owns a private kernel-half PML4).  <br /></td></tr>
 <tr class="memitem:afbcf504abb27c24da8a91380e1f73882" id="r_afbcf504abb27c24da8a91380e1f73882"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afbcf504abb27c24da8a91380e1f73882">kernel::syscall_task_open</a> (vfs::Vnode *vn, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
 <tr class="memdesc:afbcf504abb27c24da8a91380e1f73882"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open a vnode as a file descriptor in the current task's fd table.  <br /></td></tr>
 <tr class="memitem:a9799f9b32ab65aeb956ce8717fe91bc4" id="r_a9799f9b32ab65aeb956ce8717fe91bc4"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a9799f9b32ab65aeb956ce8717fe91bc4">kernel::syscall_path_open</a> (const char *path, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>

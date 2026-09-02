@@ -20,14 +20,18 @@
 /// @brief Virtio-net NIC driver implementation.
 
 #include <kernel/driver/virtio_net.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/sync/spinlock.hpp>
 #include <string.hpp>
 #include <logger.hpp>
 #include <lib/atomic.hpp>
 
 using namespace kernel;
 using namespace arch;
+using sync::IrqSpinLockGuard;
 
 namespace kernel::net {
 
@@ -41,14 +45,14 @@ VirtioNetDevice::~VirtioNetDevice() {
     auto pages_for = [](size_t bytes) {
         return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     };
-    size_t desc_pages =
-        pages_for(queue_size * sizeof(arch::VirtqDesc));
+    size_t desc_pages = pages_for(queue_size * sizeof(arch::VirtqDesc));
     size_t avail_pages =
         pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(uint16_t));
-    size_t used_pages =
-        pages_for(2 * sizeof(uint16_t) + queue_size * sizeof(arch::VirtqUsedElem));
+    size_t used_pages = pages_for(2 * sizeof(uint16_t) +
+                                  queue_size * sizeof(arch::VirtqUsedElem));
     auto free_pages = [](uint64_t base, size_t n) {
-        if (!base) return;
+        if (!base)
+            return;
         for (size_t i = 0; i < n; ++i)
             PMM::free_page(base + i * PAGE_SIZE);
     };
@@ -59,7 +63,8 @@ VirtioNetDevice::~VirtioNetDevice() {
     free_pages(tx_avail_phys, avail_pages);
     free_pages(tx_used_phys, used_pages);
     for (uint64_t phys : rx_bufs_phys)
-        if (phys) PMM::free_page(phys);
+        if (phys)
+            PMM::free_page(phys);
     if (tx_buf_phys)
         PMM::free_page(tx_buf_phys);
 }
@@ -101,9 +106,12 @@ static bool alloc_queue_pages(uint64_t &desc_phys, uint64_t &avail_phys,
     return true;
 }
 
-static void add_rx_buf(VirtioNetDevice &dev, int idx) {
-    uint16_t qi = static_cast<uint16_t>(idx);
-    dev.rx_desc[qi].addr = dev.rx_bufs_phys[idx];
+/// @brief Fills one RX descriptor + avail-ring entry.  Lock-free helper:
+///        callers must hold dev.lock_ (via IrqSpinLockGuard).  The
+///        atomic_fence ordering (descriptor -> avail entry -> fence ->
+///        idx++) is mandatory and must be preserved.
+static void rx_ring_fill_locked(VirtioNetDevice &dev, uint16_t qi) {
+    dev.rx_desc[qi].addr = dev.rx_bufs_phys[qi];
     dev.rx_desc[qi].len = MAX_PACKET_SIZE;
     dev.rx_desc[qi].flags = VIRTIO_DESC_F_WRITE;
     dev.rx_desc[qi].next = 0;
@@ -111,6 +119,11 @@ static void add_rx_buf(VirtioNetDevice &dev, int idx) {
     dev.rx_avail->ring[dev.rx_avail->idx % dev.queue_size] = qi;
     kernel::atomic_fence();
     dev.rx_avail->idx = static_cast<uint16_t>(dev.rx_avail->idx + 1);
+}
+
+static void add_rx_buf(VirtioNetDevice &dev, int idx) {
+    IrqSpinLockGuard guard(dev.lock_);
+    rx_ring_fill_locked(dev, static_cast<uint16_t>(idx));
 }
 
 bool virtio_net_probe(Nic &nic) {
@@ -147,7 +160,8 @@ bool virtio_net_probe(Nic &nic) {
 #pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
 #endif
     auto *dev_mem = kernel::MemPool::alloc(sizeof(VirtioNetDevice));
-    if (dev_mem == nullptr) return false;
+    if (dev_mem == nullptr)
+        return false;
     auto *dev = new (dev_mem) VirtioNetDevice();
 #ifndef __clang__
 #pragma GCC diagnostic pop
@@ -157,6 +171,7 @@ bool virtio_net_probe(Nic &nic) {
     dev->rx_avail_idx = 0;
     dev->tx_avail_idx = 0;
     dev->rx_last_seen_used = 0;
+    dev->tx_inflight_ = false;
 
     // Allocate queue memory
     if (!alloc_queue_pages(dev->rx_desc_phys, dev->rx_avail_phys,
@@ -165,7 +180,8 @@ bool virtio_net_probe(Nic &nic) {
         !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
                            dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
                            dev->tx_used, dev->queue_size)) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
 
@@ -176,7 +192,8 @@ bool virtio_net_probe(Nic &nic) {
         !arch::virtio_setup_queue(transport, VIRTIO_NET_QUEUE_TX,
                                   dev->queue_size, dev->tx_desc_phys,
                                   dev->tx_avail_phys, dev->tx_used_phys)) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
 
@@ -185,7 +202,8 @@ bool virtio_net_probe(Nic &nic) {
         uint64_t phys = PMM::alloc_page();
         if (!phys) {
             Logger::error("virtio-net: OOM for RX buffer %d", i);
-            dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+            dev->~VirtioNetDevice();
+            kernel::MemPool::free(dev);
             return false;
         }
         dev->rx_bufs_phys[i] = phys;
@@ -200,7 +218,8 @@ bool virtio_net_probe(Nic &nic) {
     // Allocate TX DMA buffer
     dev->tx_buf_phys = PMM::alloc_page();
     if (!dev->tx_buf_phys) {
-        dev->~VirtioNetDevice(); kernel::MemPool::free(dev);
+        dev->~VirtioNetDevice();
+        kernel::MemPool::free(dev);
         return false;
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -249,33 +268,54 @@ static bool virtio_net_send_frame(const uint8_t *data, size_t len) {
     if (len + VIRTIO_NET_HDR_SIZE > PAGE_SIZE)
         return false;
 
-    // Copy data into the TX buffer with virtio-net header prepended
-    auto *hdr = reinterpret_cast<VirtioNetHdr *>(dev.tx_buf);
-    memset(hdr, 0, VIRTIO_NET_HDR_SIZE);
-    memcpy(dev.tx_buf + VIRTIO_NET_HDR_SIZE, data, len);
+    // Program + notify under the lock.  The single TX buffer must not be
+    // overwritten while a previous descriptor is still in flight.  Capture
+    // the used-ring snapshot BEFORE the notify: if the device completes the
+    // descriptor before our post-notify read, the snapshot already reflects
+    // completion and the poll would spin forever.
+    uint16_t used_snapshot = 0;
+    {
+        IrqSpinLockGuard guard(dev.lock_);
+        if (dev.tx_inflight_)
+            return false; // previous send not yet consumed
 
-    uint16_t idx = dev.tx_avail_idx % dev.queue_size;
-    dev.tx_desc[idx].addr = dev.tx_buf_phys;
-    dev.tx_desc[idx].len = static_cast<uint32_t>(VIRTIO_NET_HDR_SIZE + len);
-    dev.tx_desc[idx].flags = 0;
-    dev.tx_desc[idx].next = 0;
+        used_snapshot = dev.tx_used->idx;
 
-    dev.tx_avail->ring[dev.tx_avail->idx % dev.queue_size] = idx;
-    kernel::atomic_fence();
-    dev.tx_avail->idx = static_cast<uint16_t>(dev.tx_avail->idx + 1);
-    kernel::atomic_fence();
+        auto *hdr = reinterpret_cast<VirtioNetHdr *>(dev.tx_buf);
+        memset(hdr, 0, VIRTIO_NET_HDR_SIZE);
+        memcpy(dev.tx_buf + VIRTIO_NET_HDR_SIZE, data, len);
 
-    arch::virtio_notify(dev.transport, VIRTIO_NET_QUEUE_TX);
+        uint16_t idx = dev.tx_avail_idx % dev.queue_size;
+        dev.tx_desc[idx].addr = dev.tx_buf_phys;
+        dev.tx_desc[idx].len = static_cast<uint32_t>(VIRTIO_NET_HDR_SIZE + len);
+        dev.tx_desc[idx].flags = 0;
+        dev.tx_desc[idx].next = 0;
 
-    // Poll for completion
-    uint16_t used_idx = dev.tx_used->idx;
-    int timeout = 100000;
-    while (dev.tx_used->idx == used_idx && --timeout > 0) {
+        dev.tx_avail->ring[dev.tx_avail->idx % dev.queue_size] = idx;
         kernel::atomic_fence();
+        dev.tx_avail->idx = static_cast<uint16_t>(dev.tx_avail->idx + 1);
+        kernel::atomic_fence();
+
+        arch::virtio_notify(dev.transport, VIRTIO_NET_QUEUE_TX);
+
+        dev.tx_avail_idx = static_cast<uint16_t>(dev.tx_avail_idx + 1);
+        dev.tx_inflight_ = true;
     }
 
-    dev.tx_avail_idx = static_cast<uint16_t>(dev.tx_avail_idx + 1);
-    return timeout > 0;
+    // Bounded completion poll OUTSIDE the lock (no cli across a spin loop).
+    // Bound matches the virtio-blk request path (FLAW-06 pattern).
+    int timeout = 1000000;
+    while (dev.tx_used->idx == used_snapshot && --timeout > 0) {
+        kernel::atomic_fence();
+        arch::pause();
+    }
+    bool ok = timeout > 0;
+
+    {
+        IrqSpinLockGuard guard(dev.lock_);
+        dev.tx_inflight_ = false;
+    }
+    return ok;
 }
 
 bool virtio_net_poll(uint8_t *buf, size_t &len) {
@@ -283,6 +323,9 @@ bool virtio_net_poll(uint8_t *buf, size_t &len) {
         return false;
     auto &dev = *g_virtio_net_dev;
 
+    // Consume + recycle + advance atomically so a buffer is never handed to
+    // the device twice nor to the producer while in use.
+    IrqSpinLockGuard guard(dev.lock_);
     kernel::atomic_fence();
     uint16_t used_idx = dev.rx_used->idx;
     if (used_idx == dev.rx_last_seen_used)
@@ -291,6 +334,16 @@ bool virtio_net_poll(uint8_t *buf, size_t &len) {
     uint16_t slot = dev.rx_last_seen_used % dev.queue_size;
     uint32_t desc_idx = dev.rx_used->ring[slot].id;
     uint32_t pkt_len = dev.rx_used->ring[slot].len;
+
+    // M-4 (audit-drivers-vfs-net-v0.4.2): desc_idx comes from the DEVICE and
+    // is used unchecked as an index into rx_bufs[].  A faulty/malicious device
+    // can cause an out-of-bounds read/write.  Bounds-check against queue_size
+    // and recycle the slot on an invalid id.
+    if (desc_idx >= dev.queue_size) {
+        dev.rx_last_seen_used =
+            static_cast<uint16_t>(dev.rx_last_seen_used + 1);
+        return false;
+    }
 
     if (pkt_len > VIRTIO_NET_HDR_SIZE) {
         size_t frame_len = pkt_len - VIRTIO_NET_HDR_SIZE;
@@ -302,9 +355,34 @@ bool virtio_net_poll(uint8_t *buf, size_t &len) {
         len = 0;
     }
 
-    add_rx_buf(dev, static_cast<int>(desc_idx));
+    rx_ring_fill_locked(dev, static_cast<uint16_t>(desc_idx));
     dev.rx_last_seen_used = static_cast<uint16_t>(dev.rx_last_seen_used + 1);
     return len > 0;
+}
+
+void virtio_net_destroy() {
+    if (!g_virtio_net_dev)
+        return;
+    auto *dev = g_virtio_net_dev;
+    g_virtio_net_dev = nullptr; // late poll/send null-check and return
+
+    // M-5 (audit-drivers-vfs-net-v0.4.2): a send_frame() may be mid-flight —
+    // it captured `dev` before our null (the local reference survives the
+    // g_virtio_net_dev = nullptr check) and polls tx_used OUTSIDE the lock.
+    // Drain tx_inflight_ (bounded) so no completion poll touches freed
+    // descriptors/memory after we destruct.
+    {
+        IrqSpinLockGuard guard(dev->lock_);
+        if (dev->tx_inflight_) {
+            // Completion poll for a concurrent sender: bounded, no alloc.
+            uint64_t t0 = arch::Timer::ticks();
+            while (dev->tx_inflight_ && arch::Timer::ticks() - t0 < 1000000)
+                arch::pause();
+        }
+    }
+
+    dev->~VirtioNetDevice();
+    MemPool::free(dev);
 }
 
 } // namespace kernel::net

@@ -31,6 +31,11 @@
 
 namespace kernel {
 
+namespace cap {
+class FrameCap;
+class MmioCap;
+}
+
 /// @brief Virtual memory manager — maps virtual to physical pages.
 /// @note Page-walk depth is fixed per architecture (4 levels for
 /// x86_64/aarch64,
@@ -110,7 +115,8 @@ class VMM {
     /// @param virt_addr Virtual address (page-aligned).
     /// @param phys_addr Physical address (page-aligned).
     /// @param user      If true, sets user-accessible flag.
-    /// @param executable If true, page is executable (NX clear); if false, NX set.
+    /// @param executable If true, page is executable (NX clear); if false, NX
+    /// set.
     /// @param pml4_phys Physical address of the target PML4.
     static void map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
                                  bool user, bool executable,
@@ -150,6 +156,43 @@ class VMM {
     /// @return VmmError code.
     static errors::VmmError free_user_pages_err(uint64_t pml4_phys);
 
+    /// @brief Maps the frame(s) owned by a FrameCap into @p pml4_phys.
+    ///        Refuses a revoked FrameCap (ROADMAP 0.4.1 CSpace) — mapping
+    ///        capability-gated memory requires a live, non-revoked cap.
+    /// @param fc        The FrameCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address (page-aligned).
+    /// @param user      If true, sets user-accessible flag.
+    /// @param pml4_phys Physical address of the target PML4.
+    /// @return true when every frame was mapped, false on a revoked cap or
+    ///         a zero frame.
+    static bool map_frame_from_cap(class cap::FrameCap *fc, uint64_t virt_addr,
+                                   bool user, uint64_t pml4_phys);
+
+    /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+    /// @param virt_addr Virtual address to unmap.
+    /// @param pml4_phys Physical address of the target PML4.
+    static void unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys);
+
+    /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys
+    ///        (v0.4.2, issue #3).  Refuses a revoked cap and IO-type ranges.
+    ///        Page-granular: the BAR tail is rounded up to a full page.
+    /// @param mmio      The MmioCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address (page-aligned).
+    /// @param user      If true, sets user-accessible flag.
+    /// @param pml4_phys Physical address of the target PML4.
+    /// @return true when every page was mapped, false on a revoked/IO-type
+    ///         cap or a zero range.
+    static bool map_mmio_from_cap(class cap::MmioCap *mmio, uint64_t virt_addr,
+                                  bool user, uint64_t pml4_phys);
+
+    /// @brief Unmaps an MmioCap's memory BAR range previously mapped via
+    ///        map_mmio_from_cap().
+    /// @param mmio      The MmioCap (must be pinned by the caller).
+    /// @param virt_addr Base virtual address the range was mapped at.
+    /// @param pml4_phys Physical address of the target PML4.
+    static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
+                                    uint64_t virt_addr, uint64_t pml4_phys);
+
     /// @brief Translates a virtual address to a physical address
     /// using a specific PML4.
     /// @param virt_addr Virtual address to translate.
@@ -173,17 +216,29 @@ class VMM {
 
 #if defined(CONFIG_ARCH_AARCH64)
     // aarch64 stage-1 page-table descriptor bit layout.
-    // Table descriptors (L0-L2) and page descriptors (L3): bits[1:0]=11.
-    // Block descriptors (L1-L2): bits[1:0]=01.
+    // Table descriptors (L0-L2): bits[1:0]=11 (V=1, bit1=1 → next-level
+    // table).  Block descriptors (L1-L2): bits[1:0]=01 (bit1=0).
+    // Page descriptors (L3): bits[1:0]=11 — bit1=0 at L3 is a
+    // block-at-invalid-level encoding and faults as a translation fault.
     // AP[1:0] in bits[7:6];  00=EL1-RW/EL0-*, 01=EL1-RW/EL0-RW,
     //   10=EL1-RO/EL0-*, 11=EL1-RO/EL0-RO.
-    // AF (Access Flag) must be 1 for stage-1 - bit 8 (NOT bit 10).
+    // AF (Access Flag) = bit 10 (stage-1); an AF=0 leaf faults on first
+    // access.  Bits 9:8 = SH (shareability).
     static constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
     static constexpr uint64_t PAGE_TABLE = 1ULL << 1;
-    static constexpr uint64_t PAGE_AF = 1ULL << 8; // Access Flag (stage-1)
+    static constexpr uint64_t PAGE_AF = 1ULL << 10; // Access Flag (stage-1)
     static constexpr uint64_t PAGE_AP_USER = 1ULL
                                              << 6;    // AP[0] - EL0 accessible
     static constexpr uint64_t PAGE_AP_RO = 1ULL << 7; // AP[1] - read-only (EL1)
+    // MP-4.4: PXN (bit 53) forbids EL1 execution; UXN (bit 54) forbids EL0
+    // execution.  Kernel data pages carry both; user pages carry PXN
+    // (SMEP parity) unless NX adds UXN.
+    static constexpr uint64_t PAGE_PXN = 1ULL << 53;
+    static constexpr uint64_t PAGE_UXN = 1ULL << 54;
+    /// @brief MAIR attribute index (bits[4:2]) for Normal cacheable memory.
+    /// boot.S programs MAIR: attr0=Device, attr1=Normal WB — leaves must
+    /// select index 1 (Device memory is never executable).
+    static constexpr uint64_t PAGE_ATTR_NORMAL = 1ULL << 2;
 
     // Compatibility aliases (used in flag-building expressions)
     static constexpr uint64_t PAGE_WRITE = 0; // no-op - writable by default
@@ -224,7 +279,7 @@ class VMM {
 
 #if defined(CONFIG_ARCH_AARCH64)
     // aarch64: physical frame bits [47:12] (48-bit PA).  Masks off flags,
-    // UXN (bit 54) and PXN (bit 55).
+    // UXN (bit 54) and PXN (bit 53).
     static constexpr uint64_t PAGE_FRAME_MASK = 0x0000FFFFFFFFF000ULL;
     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x0000FFFFFFE00000ULL;
 #elif defined(CONFIG_ARCH_RISCV64)
@@ -261,14 +316,32 @@ class VMM {
     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
     static bool hhdm_modified_;
 
+    /// @brief Set to true when a test modifies the LOW identity map
+    ///        (PD_IDENTITY, phys 0x3000 — VAs in PML4[0] below
+    ///        PML4_USER_COUNT).  Reset after PD restore in snapshot_restore.
+    static bool identity_modified_;
+
     /// @brief Returns true if any test has modified the HHDM page tables
     ///        since the last clear_hhdm_modified() call.
-    static bool hhdm_was_modified() { return hhdm_modified_; }
+    static bool hhdm_was_modified() {
+        return hhdm_modified_;
+    }
     /// @brief Reset the HHDM modification flag (called after PD restore).
-    static void clear_hhdm_modified() { hhdm_modified_ = false; }
+    static void clear_hhdm_modified() {
+        hhdm_modified_ = false;
+    }
+
+    /// @brief Returns true if any test has modified the low identity page
+    ///        tables since the last clear_identity_modified() call.
+    static bool identity_was_modified() {
+        return identity_modified_;
+    }
+    /// @brief Reset the identity modification flag (called after PD restore).
+    static void clear_identity_modified() {
+        identity_modified_ = false;
+    }
 
   private:
-
     /// @brief Walks or creates a page-table entry at the given level.
     /// @param table Pointer to the current-level page table.
     /// @param index Index into the table.

@@ -47,7 +47,7 @@ struct PciBdf {
 // ---------------------------------------------------------------------------
 // Architecture-specific PCI config space access
 //   x86_64: CF8/CFC port I/O (0xCF8 / 0xCFC)
-//   aarch64 / riscv64: ECAM memory-mapped (QEMU virt at 0x100000000)
+//   aarch64 / riscv64: ECAM memory-mapped (QEMU virt aarch64 at 0x3f000000)
 //
 // All access functions work on dword-aligned addresses internally, matching
 // the x86 CF8/CFC semantics where bits [1:0] of the register offset select
@@ -145,7 +145,11 @@ inline void pci_config_writeb(uint64_t addr, uint8_t val) {
 namespace arch {
 
 #ifndef CONFIG_PCI_ECAM_BASE
-#define CONFIG_PCI_ECAM_BASE 0x100000000ULL
+#if defined(CONFIG_ARCH_AARCH64)
+#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
+#else
+#define CONFIG_PCI_ECAM_BASE 0x100000000ULL // riscv64 fallback (per-platform)
+#endif
 #endif
 /// @brief ECAM base address for memory-mapped PCI config space.
 constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;

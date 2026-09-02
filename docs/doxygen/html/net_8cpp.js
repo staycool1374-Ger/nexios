@@ -9,6 +9,5 @@ var net_8cpp =
     [ "net::net_init", "namespacenet.html#a725cddfef06955893790c0d4337dfae3", null ],
     [ "net::net_poll", "namespacenet.html#a9b8dc944fd21a6ed2bf99a7174205fd7", null ],
     [ "net::net_send_icmp_echo", "namespacenet.html#adaaadf3f0bb219c1503e146aba00c4c4", null ],
-    [ "net::net_send_udp", "namespacenet.html#a1a57b9a29bb5404650605e8cf2d52cff", null ],
-    [ "net::g_nic", "namespacenet.html#a952961bd539959a2e0f7d4f581666e7f", null ]
+    [ "net::net_send_udp", "namespacenet.html#a1a57b9a29bb5404650605e8cf2d52cff", null ]
 ];

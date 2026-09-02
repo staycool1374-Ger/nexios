@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a kernel bug (replaces BUGS.md entries)
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: S1 = blocker (safety/correctness), S2 = major (likely defect), S3 = note
+      options:
+        - "S1"
+        - "S2"
+        - "S3"
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain / Subsystem
+      options:
+        - scheduler
+        - memory
+        - ipc
+        - vfs
+        - process
+        - syscall
+        - arch
+        - device
+        - shell
+        - net
+        - security
+        - debug
+        - integration
+        - stress
+        - init
+        - build
+        - bench
+        - sporadic
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happens vs. what should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduce
+      description: |
+        Exact commands, e.g.
+        `make execute-test x86_64 debug <class>` — repeat count, deterministic behavior, failing test name/number.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Serial trace excerpt, GDB findings (entry_addr / exit_rip / consumed_ticks), panic output.
+  - type: checkboxes
+    id: sil3
+    attributes:
+      label: Safety relevance
+      options:
+        - label: This touches SIL 3 safety-relevant code paths (concurrency, PMM, IrqGuard, critical sections)

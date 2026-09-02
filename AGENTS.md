@@ -1,21 +1,81 @@
 # Global Operating Rules (all roles, always active)
 
-# MANDATORY PIPELINE WORKFLOW
+Mandatory reading for every role and session: `prompts/CODING_STYLE.md` — all coding,
+safety, and error-handling rules defined there apply unconditionally.
+
+## MANDATORY PIPELINE WORKFLOW
 
 For any non-trivial code modification or user request, you MUST adhere strictly to the following 3-step execution pipeline:
 
 1. **PHASE 1: PLANNING (Implicit Mandatory Step)**
    - Do NOT write or edit code directly.
-   - Delegate the request first to the `planner` subagent.
+   - Every non-trivial task corresponds to a GitHub Issue (see "GitHub Issue
+     Tracking" below). If the user prompt has no issue yet, the developer files
+     one FIRST (via `.github/ISSUE_TEMPLATE/` schema) — the issue number anchors
+     all subsequent work.
+   - Delegate the request first to the `planner` subagent (see `PROMPT-planning.md`).
    - Wait for the plan and analyze the architecture requirements.
 
 2. **PHASE 2: IMPLEMENTATION**
    - Execute the code changes strictly adhering to the plan generated in Phase 1.
 
 3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step)**
-   - Invoke the `auditor` subagent (Nemotron) to review the modified files against safety rules.
+   - Invoke the `auditor` subagent (see `PROMPT-audit.md`) to review the modified files against safety rules.
    - Fix any rejected code immediately if the auditor finds flaws.
    - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
+   - After the final decision, post the audit evidence on the issue: report file
+     path (`audits/report-<ts>.md`) + `DECISION: APPROVED|REJECTED` as a comment.
+
+### Role Model (who triggers what)
+
+After `AGENTS.md` routes a session to a role, that role drives the pipeline:
+
+- The **developer** is the ORCHESTRATOR of the pipeline.
+  After loading `PROMPT-dev.md`, the developer triggers the full chain:
+  `planner → developer → auditor`.
+  1. Developer calls the `planner` subagent with the task (Phase 1).
+  2. Developer implements the plan itself (Phase 2).
+  3. Developer calls the `auditor` subagent on the resulting diff (Phase 3).
+- The planner and auditor are pure subagents: they never call each other and
+  never call the developer; they return their result to the developer only.
+
+## Workflow State Machine (explicit transitions, mechanically gated)
+
+Every issue-driven cycle moves through the following states. Transitions have
+hard entry/exit criteria; `scripts/gate.py` enforces the mechanical ones.
+Rules written here are descriptions; rules enforced by the gate are invariants.
+
+```
+ISSUE_OPEN -> PLANNED -> IN_PROGRESS -> AUDITED -> VERIFIED -> CLOSED -> FEEDBACK
+```
+
+| State | Exit criteria |
+|---|---|
+| ISSUE_OPEN | Issue filed via template, labeled, milestone set |
+| PLANNED | planner subagent returned a plan; architecture questions answered or raised as blocking comments on the issue |
+| IN_PROGRESS | code changes complete; diff builds (`make build` green) |
+| AUDITED | auditor subagent posted evidence on the issue: report path + `DECISION: APPROVED` |
+| VERIFIED | relevant test classes pass 0 failures; test-history.txt updated |
+| CLOSED | `scripts/gate.py check-close <issue>` passes; issue closed with `closes #<n>` in the merge commit |
+| FEEDBACK | knowledge refresh done — see below |
+
+### FEEDBACK transition (mandatory after every cycle)
+
+Closing an issue is NOT the end of the cycle. Before starting new work:
+
+1. **Adapt new background knowledge:** append an entry to
+   `prompts/LEARNINGS.md` (format documented there): what was learned,
+   where it is now anchored (spec/AGENTS.md/comment).
+2. **Refresh the knowledge base:** if the cycle invalidated anything in
+   `prompts/AGENTS-KERNEL-BRIEFING.md`, STATE.md, or existing specs, update
+   them now — stale docs are a defect.
+3. **Re-surface CODING_STYLE.md:** name the style rules that were relevant to
+   this cycle's changes in the LEARNINGS entry so they stay in active focus
+   for the next session.
+
+Gate: `scripts/gate.py check-feedback <issue>` verifies the LEARNINGS entry
+exists for the closed issue and fails otherwise.
+
 ## Branch Safeguard
 Before writing or modifying kernel tests, run `git branch --show-current`:
 - If `main` → production development
@@ -30,7 +90,34 @@ If the branch does not match the intended role, do not proceed.
 - If `developer`: read `PROMPT-dev.md` for full role instructions
 - If `quality engineer` (`testbed` branch): read `PROMPT-testdev.md` for full role instructions
 - If neither: halt
-- Also read `AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
+- Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
+- Read `prompts/CODING_STYLE.md` — mandatory for all code changes in every role
+- Current work state (objective, completed phases, next move): see `prompts/STATE.md`
+
+## GitHub Issue Tracking (source of truth for bugs & features)
+- Repo: `staycool1374-Ger/nexios` (use `gh` CLI; `export PATH="/opt/homebrew/bin:$PATH"` if `gh` is not found).
+- **Open bugs and feature work are tracked as GitHub Issues — NOT in prompts/BUGS.md.**
+  prompts/BUGS.md is a historical archive of resolved bugs only; never add new open items to it.
+- **Information acquisition (developer, before planning/implementing):**
+  - List open work: `gh issue list -R staycool1374-Ger/nexios --state open`
+  - Read the full issue before working on it: `gh issue view <n> -R staycool1374-Ger/nexios --comments`
+  - Check severity/subsystem labels to prioritize (`severity:S1` > `severity:S2` > `severity:S3`; critical S1/S2 bugs block feature work).
+- **Keeping state consistent (developer, during/after work):**
+  - When starting an issue, assign yourself and comment that work has begun (with branch name).
+  - Post progress notes on the issue (audit decision, test results with counts) instead of editing local files.
+  - Reference issues in commits: include `#<n>` in the commit message; `fixes #<n>` / `closes #<n>` auto-closes the issue on push to main.
+  - Only close an issue when: implementation done + audit APPROVED + relevant test classes pass 0 failures.
+- Labels taxonomy: `bug`, `feature`, `kernel:<subsystem>`, `severity:S1|S2|S3`, `sil3-relevant`.
+- Issue templates live in `.github/ISSUE_TEMPLATE/` — new bugs/features reported by the user are filed via these schemas.
+- **Roadmap handling:** `prompts/ROADMAP.md` contains pointers only (guardrails, issue
+  table, phase overview) — NEVER add or check off work items in it. Version
+  grouping happens via GitHub Milestones; completed milestone history is
+  appended to `prompts/ROADMAP_done.md` at release time only.
+- **Test-case design docs:** the `prompts/testcases-*.md` files are design documents
+  and stay in-repo; their PROGRESS is tracked as GitHub Issues "Test coverage:
+  <version>" (checklist per test module). See PROMPT-testdev.md §1.
+- Work selection order: severity:S1 bugs → severity:S2 bugs → Milestone issues
+  (current version) → feature backlog.
 
 ## Communication
 - Be concise: no conversational filler, greetings, or post-completion summaries
@@ -134,14 +221,14 @@ evidence-backed. Do not stack changes across steps.
 - Do not run the "all" class until every individual class shows 0 failures.
 
 ## Pre-Flight
-- Run `bash ~/jarvis/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
+- Run `bash ~/jarvis/scripts/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
 
 ## Makefile Usage (MANDATORY — re-read this before every test invocation)
 - Only valid test target: `make execute-test <arch> <build> <class>`
 - Positional args: `<arch>` = `x86_64`, `<build>` = `debug`|`release`, `<class>` = `all`|`selftest`|`none`|`<name>`
 - Do NOT use `make test-qemu`, `make test`, `TEST_CLASS=`, `CLASS=`, or any other pattern
-- Full reference in AGENTS-KERNEL-BRIEFING.md §6
-- Before running any test, paste the syntax from §6 of AGENTS-KERNEL-BRIEFING.md to verify
+- Full reference in prompts/AGENTS-KERNEL-BRIEFING.md §6
+- Before running any test, paste the syntax from §6 of prompts/AGENTS-KERNEL-BRIEFING.md to verify
 
 ## QEMU Validation Circuit Breaker
 - Max **3 consecutive fix attempts** if a test fails. If still failing on the 3rd attempt, halt and await human input.
@@ -153,11 +240,11 @@ evidence-backed. Do not stack changes across steps.
 
 ## Debugging Notes (historical)
 - **Release build gotchas:** framebuffer alpha channel (set byte 3 to 0xFF for bpp>24); serial deadlock from VFS daemon crash — use kernel shell as fallback; QWERTY scancodes are correct, AZERTY is QEMU-on-macOS host mapping
-- **Debug runtime issues:** use `make run-release` (not `make release`), build flags differ
+- **Debug runtime issues:** use the release build via `make execute-test x86_64 release <class>` — build flags differ from debug
 - **Crash reproduction:** simulate user input with `expect` scripts; strip components (test_fork, shell, release tests) to isolate
 - **Page-table fork bugs:** `clone()` shares PDPT/PD/PT pages — any `map_page_in_pml4` on child corrupts parent; fix: private PDPT copy for stack region
 - **Debug context-switch ring buffer** (`CONFIG_DEBUG`): each TCB has `debug_switch_ring[4]` — inspect via `p current->debug_switch_ring[current->debug_switch_idx % 4]`
-- **GDB debugging:** `make gdb` launches QEMU with GDB stub on `:1234`; connect with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
+- **GDB debugging:** use `make debug-test x86_64 debug all tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
 - **UART FIFO overflow:** 16-byte FIFO capacity; drain between write bursts; release tests use external expect scripting so only affects kernel self-test loopback
 
 ## Release Procedure
@@ -167,22 +254,18 @@ evidence-backed. Do not stack changes across steps.
   `[APPLY]` serial traces fire inside `reschedule()`/`on_tick()`/the
   context-switch epilogue on every invocation, polluting timing-sensitive
   tests and perturbing the scheduler.
-  **VERIFIED STATE (2026-08-01):** the *release* gate
+  **VERIFIED STATE:** the *release* gate
   (`make execute-test x86_64 release all`, 84/84) passes with the trace OFF.
-  The *debug* `all` class (881 tests) passes 881/881 with the trace **ON**;
-  with it OFF, the pre-existing H2 deferred-switch race
-  (`docs/specs/ipc.md` §4) becomes deterministic and hangs at
-  `ipc_send_sync_roundtrip` (~test 77/78).  Fix tracked in ROADMAP §v0.3.9.
-  The earlier claim that "`all` only passes 881/881 with the trace off" was
-  made in commit `4644d795` without ever running a full debug `all` in that
-  state — it is superseded by the above.
+  The H2 deferred-switch race (`docs/specs/ipc.md` §4) is **RESOLVED**
+  (2026-08-13/15, commits `71b3a088` + `4bf751b4` + `b85ba27d` — stale-resume
+  orphan re-enqueue, owner-resolution self-switch, elf_loader
+  lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
+  trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
 - Before running the release gate (`make execute-test x86_64 release all`),
   verify the macro is undefined:
   `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
   must show it commented out.  Re-enable only for targeted debug analysis,
-  then disable again before any release gate run.  For the *debug* `all`
-  development gate (boundary-audit stepwise runs), keep the trace **ON**
-  until the H2 race is fixed (ROADMAP §v0.3.9).
+  then disable again before any release gate run.
 - **Interactive release shell:** `make run-release-mode` MUST run with the
   trace OFF.  With it ON, the `[TICK]`/`[SW]`/`[APPLY]` serial spam on every
   timer tick and context switch makes the shell appear input-dead.  Verified

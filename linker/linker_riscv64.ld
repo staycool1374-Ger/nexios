@@ -88,8 +88,12 @@ SECTIONS
         *(.sbss*)
         *(.sbss.*)
         *(.scommon)
+        _stack_start = .;
+        KEEP(*(.marker.stack.before))
         *(.boot_stack)
         *(.boot_stack.*)
+        KEEP(*(.marker.stack.after))
+        _stack_end = .;
         *(.bss*)
         *(.bss.*)
         _bss_end = .;

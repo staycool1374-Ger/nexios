@@ -39,7 +39,7 @@ template <typename T, size_t N> class SPSCRing {
     /// @brief Push an item (discards if full).
     /// @return true on success.
     bool try_push(const T &item) {
-        size_t h = head_;
+        size_t h = kernel::atomic_load(&head_, __ATOMIC_RELAXED);
         size_t t = kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
         size_t next = (h + 1) & MASK;
         if (next == t)
@@ -52,7 +52,7 @@ template <typename T, size_t N> class SPSCRing {
     /// @brief Pop an item (no-op if empty).
     /// @return true on success.
     bool try_pop(T &item) {
-        size_t t = tail_;
+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
         size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
         if (t == h)
             return false;
@@ -67,7 +67,9 @@ template <typename T, size_t N> class SPSCRing {
                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
     }
 
-    /// @brief Reset to empty state.
+    /// @brief Reset to empty state.  M-5 (audit-task-sync-v0.4.2): QUIESCENT-
+    ///        ONLY — must not be called while either side is active (the
+    ///        head/tail pair is not published atomically together).
     void reset() {
         kernel::atomic_store(&head_, size_t{0}, __ATOMIC_RELEASE);
         kernel::atomic_store(&tail_, size_t{0}, __ATOMIC_RELAXED);

@@ -21,11 +21,20 @@
 /// access).
 
 #include <kernel/arch/pci.hpp>
+#include <kernel/memory/vmm.hpp>
+#include <kernel/memory/address.hpp>
 #include <logger.hpp>
 
 using namespace kernel;
 
 namespace {
+
+static uint64_t msix_page_align_down(uint64_t x) {
+    return x & ~0xFFFULL;
+}
+static uint64_t msix_page_align_up(uint64_t x) {
+    return (x + 0xFFF) & ~0xFFFULL;
+}
 
 /// Fixed-size buffer for discovered devices.
 arch::PciDeviceInfo g_devices[arch::PCI_MAX_DEVICES_FOUND];
@@ -296,6 +305,11 @@ size_t pci_scan_all() {
     g_device_count = 0;
     probe_bus(0);
     Logger::info("PCI: scanned, %d devices found", g_device_count);
+    // Pre-map MSI-X tables so their page-table pages are established at boot
+    // (before the test-isolation baseline) — a test-time MsixCap::create
+    // reuses the cached KVA instead of allocating fresh PT pages per test
+    // (ResourceTracker-clean, iommu probe-once pattern, issue #10).
+    pci_msix_premap_all();
 #ifdef CONFIG_DEBUG
     pci_dump_tree();
 #endif
@@ -520,6 +534,8 @@ static void init_vector_alloc() {
     for (int i = 32; i < 48; ++i)
         g_vector_used[i] = true; // PIC IRQs
     g_vector_used[0x80] = true;  // SYSCALL
+    g_vector_used[64] = true;    // xAPIC scheduler timer (APIC_TIMER_VECTOR)
+    g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
     g_vector_init = true;
 }
 
@@ -545,13 +561,27 @@ void pci_free_vector(uint8_t vec) {
 // --- Capability list walking ---
 
 uint8_t pci_find_capability(PciBdf bdf, uint8_t cap_id) {
+    // Phantom devices (no vendor) read back 0xFF/0xFFFF in config space,
+    // which can fake a CAP_LIST bit and a non-null CAP_PTR — the walk below
+    // would then loop forever (readb(0xFF+1) truncates to 0x00, reads 0xFF
+    // again).  Fail closed on a non-existent device (CODING_STYLE §6:
+    // fully bounded loops).
+    if (bdf.bus >= arch::PCI_MAX_BUSES || bdf.device >= arch::PCI_MAX_DEVICES ||
+        bdf.function >= arch::PCI_MAX_FUNCTIONS)
+        return 0;
+    if (!pci_device_exists(bdf))
+        return 0;
+
     // Check if the device supports capabilities
     uint16_t status = pci_config_readw(pci_make_addr(bdf, PCI_STATUS));
     if (!(status & PCI_STATUS_CAP_LIST))
         return 0;
 
     uint8_t offset = pci_config_readb(pci_make_addr(bdf, PCI_CAP_PTR));
-    while (offset != 0) {
+    // A capability list is a bounded chain (max 256 entries of 8-bit next
+    // pointers, and the standard guarantees acyclic, eventually-null walk).
+    // Still, guard against a hardware that mis-reports a cyclic pointer.
+    for (unsigned step = 0; offset != 0 && step < 256; ++step) {
         uint8_t id = pci_config_readb(pci_make_addr(bdf, offset));
         if (id == cap_id)
             return offset;
@@ -598,65 +628,190 @@ uint8_t pci_enable_msi(PciBdf bdf, uint8_t apic_id) {
     return vec;
 }
 
-// --- MSI-X enable ---
+// --- MSI-X ---
+
+/// @brief Cached MSI-X table info per device (probe-once, iommu pattern).
+///        The table pages are mapped at boot by pci_msix_premap_all() so a
+///        test-time create reuses the cached KVA — no per-test page-table
+///        allocation, ResourceTracker-clean (issue #10).
+namespace {
+constexpr size_t kMsixCacheSize = arch::PCI_MAX_DEVICES_FOUND;
+struct MsixCacheEntry {
+    bool valid = false;
+    arch::PciBdf bdf{};
+    arch::PciMsixTableInfo tbl{};
+};
+MsixCacheEntry g_msix_cache[kMsixCacheSize];
+} // namespace
+
+/// @brief Returns the cached table info for @p bdf, or nullptr.
+static const arch::PciMsixTableInfo *msix_cache_lookup(const arch::PciBdf &bdf) {
+    for (size_t i = 0; i < kMsixCacheSize; ++i) {
+        if (g_msix_cache[i].valid && g_msix_cache[i].bdf == bdf)
+            return &g_msix_cache[i].tbl;
+    }
+    return nullptr;
+}
+
+/// @brief Stores @p tbl for @p bdf in the cache (no-op when full).
+static void msix_cache_store(const arch::PciBdf &bdf,
+                             const arch::PciMsixTableInfo &tbl) {
+    // Dedupe by BDF: a repeated pci_scan_all() (test re-probe) must not grow
+    // duplicate cache entries for the same device.
+    for (size_t i = 0; i < kMsixCacheSize; ++i) {
+        if (g_msix_cache[i].valid && g_msix_cache[i].bdf == bdf)
+            return;
+    }
+    for (size_t i = 0; i < kMsixCacheSize; ++i) {
+        if (!g_msix_cache[i].valid) {
+            g_msix_cache[i].valid = true;
+            g_msix_cache[i].bdf = bdf;
+            g_msix_cache[i].tbl = tbl;
+            return;
+        }
+    }
+}
+
+void pci_msix_premap_all() {
+    for (size_t i = 0; i < g_device_count; ++i) {
+        arch::PciMsixTableInfo tbl{};
+        if (arch::pci_msix_table_info(g_devices[i].bdf, tbl))
+            msix_cache_store(g_devices[i].bdf, tbl);
+    }
+}
+
+bool pci_msix_table_info(PciBdf bdf, PciMsixTableInfo &out) {
+    out = PciMsixTableInfo{};
+    // Reuse the boot-time cached mapping when present (probe-once).
+    const arch::PciMsixTableInfo *cached = msix_cache_lookup(bdf);
+    if (cached) {
+        out = *cached;
+        return true;
+    }
+
+    uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSIX);
+    if (cap == 0)
+        return false;
+
+    // Message Control: TSIZE (bits 10:0) = number of entries - 1.
+    uint16_t ctrl = pci_config_readw(pci_make_addr(bdf, cap + 2));
+    uint16_t entry_count =
+        static_cast<uint16_t>((ctrl & PCI_MSIX_CTRL_TSIZE_MASK) + 1U);
+
+    // Table BIR/Offset (cap + 4): bits 2:0 = BAR index, rest = offset.
+    uint32_t tbl_reg = pci_config_readl(pci_make_addr(bdf, cap + 4));
+    uint8_t bir = static_cast<uint8_t>(tbl_reg & 0x7U);
+    uint64_t tbl_offset = static_cast<uint64_t>(tbl_reg & ~0x7U);
+
+    // BDF bounds + BAR validation (issue #4 gotcha: validate every indexing
+    // site).  The table must live in a memory BAR that fits its size.
+    if (bdf.bus >= arch::PCI_MAX_BUSES || bdf.device >= arch::PCI_MAX_DEVICES ||
+        bdf.function >= arch::PCI_MAX_FUNCTIONS || bir >= 6)
+        return false;
+
+    PciDeviceInfo info = pci_read_device_info(bdf);
+    if (info.bars[bir].address == 0 ||
+        info.bars[bir].type == PciBarType::IO)
+        return false;
+
+    uint64_t bar_phys = info.bars[bir].address;
+    uint64_t table_phys = bar_phys + tbl_offset;
+    uint64_t table_end =
+        table_phys + static_cast<uint64_t>(entry_count) * 16U;
+
+    // The whole table must fit inside the BAR.
+    if (tbl_offset >= info.bars[bir].size ||
+        table_end > bar_phys + info.bars[bir].size)
+        return false;
+
+    // Map every page the table spans into the kernel direct map (virtio_pci /
+    // iommu precedent) so entry access is a bounded KVA MMIO read/write, never
+    // a raw physical write (CODING_STYLE §4 — no primitive reinterpret_cast to
+    // a physical address).
+    uint64_t map_start = msix_page_align_down(table_phys);
+    uint64_t map_end = msix_page_align_up(table_end);
+    for (uint64_t page = map_start; page < map_end; page += arch::PAGE_SIZE) {
+        VMM::map_page(kernel::HHDM_OFFSET + page, page, /*user=*/false);
+    }
+
+    out.bir = bir;
+    out.entry_count = entry_count;
+    out.table_phys = table_phys;
+    out.table_kva = kernel::HHDM_OFFSET + table_phys;
+    out.bar_size = info.bars[bir].size;
+    return true;
+}
+
+bool pci_program_msix_entry(PciBdf bdf, const PciMsixTableInfo &tbl,
+                            uint16_t entry, uint8_t vector, uint8_t apic_id) {
+    if (bdf.bus >= arch::PCI_MAX_BUSES || bdf.device >= arch::PCI_MAX_DEVICES ||
+        bdf.function >= arch::PCI_MAX_FUNCTIONS)
+        return false;
+    if (tbl.table_kva == 0 || entry >= tbl.entry_count)
+        return false;
+
+    volatile arch::MsixTableEntry *e =
+        reinterpret_cast<volatile arch::MsixTableEntry *>(tbl.table_kva +
+                                                          static_cast<uint64_t>(entry) * 16U);
+    e->msg_addr_low = PCI_MSI_ADDR_BASE | (static_cast<uint32_t>(apic_id) << 12);
+    e->msg_addr_high = 0;
+    e->msg_data = static_cast<uint32_t>(PCI_MSI_DATA_FIXED | vector);
+    // Create-time fail-closed state: the entry stays masked until arming.
+    e->vector_control = MSIX_ENTRY_MASK_BIT;
+    return true;
+}
+
+bool pci_msix_entry_set_masked(const PciMsixTableInfo &tbl, uint16_t entry,
+                               bool masked) {
+    if (tbl.table_kva == 0 || entry >= tbl.entry_count)
+        return false;
+    volatile arch::MsixTableEntry *e =
+        reinterpret_cast<volatile arch::MsixTableEntry *>(tbl.table_kva +
+                                                          static_cast<uint64_t>(entry) * 16U);
+    if (masked) {
+        e->vector_control |= MSIX_ENTRY_MASK_BIT;
+    } else {
+        e->vector_control &= ~MSIX_ENTRY_MASK_BIT;
+    }
+    return true;
+}
+
+bool pci_msix_entry_masked(const PciMsixTableInfo &tbl, uint16_t entry) {
+    if (tbl.table_kva == 0 || entry >= tbl.entry_count)
+        return false;
+    const volatile arch::MsixTableEntry *e =
+        reinterpret_cast<const volatile arch::MsixTableEntry *>(
+            tbl.table_kva + static_cast<uint64_t>(entry) * 16U);
+    return (e->vector_control & MSIX_ENTRY_MASK_BIT) != 0;
+}
 
 uint8_t pci_enable_msix(PciBdf bdf, uint16_t entry, uint8_t apic_id) {
     uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSIX);
     if (cap == 0)
         return 0;
 
-    // Read table offset and BIR
-    uint32_t tbl_reg = pci_config_readl(pci_make_addr(bdf, cap + 4));
-    uint8_t bir = tbl_reg & 0x7;
-    uint32_t tbl_offset = tbl_reg & ~0x7;
-
-    // Read the device's BAR to get the MMIO base
-    PciDeviceInfo info = pci_read_device_info(bdf);
-    if (bir >= 6 || info.bars[bir].address == 0)
+    PciMsixTableInfo tbl{};
+    if (!pci_msix_table_info(bdf, tbl))
         return 0;
-    uint64_t mmio_base = info.bars[bir].address;
 
     uint8_t vec = pci_alloc_vector();
     if (vec == 0)
         return 0;
 
-    // MSI-X table entry layout in MMIO (each entry = 16 bytes):
-    //   +0: Message Address (lower 32 bits)
-    //   +4: Message Address (upper 32 bits)
-    //   +8: Message Data (lower 32 bits)
-    //   +12: Vector Control (32 bits, bit 0 = mask)
-    //
-    // NOTE: We write to the table via memory-mapped I/O. The PCI config
-    // space write helpers are for config space only; for MMIO we need
-    // a direct write to the mapped address.
-    uint64_t entry_addr =
-        mmio_base + tbl_offset + static_cast<uint64_t>(entry) * 16;
+    if (!pci_program_msix_entry(bdf, tbl, entry, vec, apic_id)) {
+        pci_free_vector(vec);
+        return 0;
+    }
 
-    // We have to map this MMIO region if not already mapped. For now,
-    // we assume the kernel has direct access via HHDM (identity mapping
-    // covering all physical memory starting at some base virtual addr).
-    //
-    // On this kernel, physical memory is mapped at HHDM_BASE.
-    // We use a simple volatile write through the physical address directly
-    // since QEMU's PC platform maps PCI MMIO in the physical address space
-    // below 4GB, and the kernel's page tables identity-map the first 4GB.
-    volatile uint32_t *tbl = reinterpret_cast<volatile uint32_t *>(entry_addr);
-
-    uint32_t addr_low =
-        PCI_MSI_ADDR_BASE | (static_cast<uint32_t>(apic_id) << 12);
-    uint32_t addr_high = 0;
-    uint32_t msg_data = PCI_MSI_DATA_FIXED | vec;
-
-    tbl[0] = addr_low;  // Message Address low
-    tbl[1] = addr_high; // Message Address high
-    tbl[2] = msg_data;  // Message Data
-    tbl[3] = 0;         // Vector Control (unmasked)
-
-    // Enable MSI-X and unmask function
+    // Enable MSI-X and unmask function (the table entry itself stays masked
+    // until a driver arms it).
     uint16_t ctrl = pci_config_readw(pci_make_addr(bdf, cap + 2));
     ctrl |= PCI_MSIX_CTRL_ENABLE;
     ctrl &= ~PCI_MSIX_CTRL_FUNCMASK;
     pci_config_writel(pci_make_addr(bdf, cap + 2), ctrl);
+    // Legacy contract: pci_enable_msix hands back a LIVE vector to the caller
+    // (raw kernel path, no arm step) — unmask the entry now so delivery works.
+    pci_msix_entry_set_masked(tbl, entry, false);
 
     Logger::info("MSI-X: enabled on %d:%d.%d entry=%d vector=%d", bdf.bus,
                  bdf.device, bdf.function, entry, vec);

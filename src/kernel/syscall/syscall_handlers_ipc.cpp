@@ -82,6 +82,10 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
         }
         cur->state = TaskState::BLOCKED;
         was_blocked = true;
+        // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must never be
+        // physically queued (INV-2/WEDGE invariant) — the block in ipc.cpp's
+        // send path declares this, and sys_receive was missing the dequeue.
+        Scheduler::dequeue_ready(*cur);
         Scheduler::reschedule();
         // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern;
         // key on is_user_ (every task now owns a PML4).

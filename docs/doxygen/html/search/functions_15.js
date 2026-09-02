@@ -5,5 +5,6 @@ var searchData=
   ['unlink_2',['unlink',['../namespacekernel_1_1vfs.html#ab8191b68620f64ca864fad18239e5bce',1,'kernel::vfs::unlink()'],['../unistd_8c.html#a28af9471bbdf262321af663e02899a47',1,'unlink(const char *path):&#160;unistd.c'],['../unistd_8h.html#a28af9471bbdf262321af663e02899a47',1,'unlink(const char *path):&#160;unistd.c']]],
   ['unlink_5ferr_3',['unlink_err',['../namespacekernel_1_1vfs.html#af555f6cb1ba4c592ec31fcf5902e367f',1,'kernel::vfs']]],
   ['unlock_4',['unlock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a2219ff078b9fd2f8759fc9b8adf9eabc',1,'kernel::sync::IrqSpinLockGuard::unlock()'],['../class_spin_lock_guard.html#a1ffb2994e0e021147d1c624246485813',1,'SpinLockGuard::unlock()']]],
-  ['update_5',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]]
+  ['update_5',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]],
+  ['user_5faccess_5frecover_5fip_6',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]]
 ];

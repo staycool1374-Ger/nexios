@@ -1,0 +1,39 @@
+var namespacekernel_1_1cap =
+[
+    [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
+    [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
+    [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
+    [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+    [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ],
+    [ "CapRights", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5", [
+      [ "CAP_RIGHT_READ", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c", null ],
+      [ "CAP_RIGHT_WRITE", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab512d4006cb9ec087a47d414741f8327", null ],
+      [ "CAP_RIGHT_GRANT", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5a25cb8d45a9e8d54082778c74d1c39fbb", null ],
+      [ "CAP_RIGHT_COPY", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5af0177bb4009a7a1acfdc5f6ee2ccd0f5", null ]
+    ] ],
+    [ "CapType", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99", [
+      [ "Null", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94", null ],
+      [ "Task", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99aeaeb30f9f18e0c50b178676f3eaef45f", null ],
+      [ "Endpoint", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a2a6ba72e93aa7fa676d07973ed2716bb", null ],
+      [ "Frame", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a", null ],
+      [ "CNode", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78", null ],
+      [ "Untyped", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9", null ]
+    ] ],
+    [ "cap_slot_bits", "namespacekernel_1_1cap.html#ade55928be04f23829263375da7b1cb45", null ],
+    [ "copy", "namespacekernel_1_1cap.html#a6c2aa3cc6cde9612df581d40ec198850", null ],
+    [ "do_copy_pinned", "namespacekernel_1_1cap.html#a35cb8af21e5c1811841afcf11fb2ec82", null ],
+    [ "encode_handle", "namespacekernel_1_1cap.html#ad0673cef188c336d042b38b4d31a68e4", null ],
+    [ "grant", "namespacekernel_1_1cap.html#a214794d432db019d5fcb737ad00e0965", null ],
+    [ "handle_cspace", "namespacekernel_1_1cap.html#af786fec3da41a870f0b445726bf6f325", null ],
+    [ "handle_gen", "namespacekernel_1_1cap.html#a216351b9a88c69e0bed5c69bcf1ff684", null ],
+    [ "handle_slot", "namespacekernel_1_1cap.html#a56523952ffab65cb3f5413884b5b2711", null ],
+    [ "lookup", "namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8", null ],
+    [ "mint", "namespacekernel_1_1cap.html#aa5ccfc6e8ee86054dfce95f356a56cd6", null ],
+    [ "occupied_count", "namespacekernel_1_1cap.html#a9a203e34fee2dd3bb9109e54e6b3a5f9", null ],
+    [ "retype", "namespacekernel_1_1cap.html#aa774f0b992b1d3ba975c5c91ff9690f6", null ],
+    [ "revoke", "namespacekernel_1_1cap.html#a4687c0de42566299b68cafc47996d1c6", null ],
+    [ "slot_index_valid", "namespacekernel_1_1cap.html#a99b54a36a27669393241210db540fd32", null ],
+    [ "CAP_HANDLE_IDBITS", "namespacekernel_1_1cap.html#ac4fe8699b791a6b4fe57cc57445051dd", null ],
+    [ "CAP_SLOT_BITS", "namespacekernel_1_1cap.html#ad3159420c406cc67e30d14a4fc90d61d", null ],
+    [ "CAP_SLOT_MASK", "namespacekernel_1_1cap.html#ad223db2771f468f1f8aafa2a49a2507b", null ]
+];

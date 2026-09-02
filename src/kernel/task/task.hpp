@@ -112,6 +112,10 @@ class SporadicServer;
 void dmesg_task_main();
 } // namespace task
 
+namespace cap {
+class CNode;
+} // namespace cap
+
 /// @brief States a task can be in during its lifecycle.
 enum class TaskState : uint8_t {
     READY,
@@ -210,28 +214,27 @@ struct TaskControlBlock {
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0),
-          stack_pdpt_phys_(0), user_stack_(0), user_stack_size_(0),
-          user_data(nullptr), is_user_(false),
+          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
+          user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
-          program_break_start(0), fd_table({}), cwd_vnode(nullptr),
+          program_break_start(0), kstack_low_water_(0), text_size_(0),
+          data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
-           in_ready_queue_(false), rq_priority_(0), all_bucket_(0), zombie_next_(nullptr),
-          waiting_child_pid(0),
+          in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
+          zombie_next_(nullptr), waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
-          alarm_armed(false), sporadic_server(nullptr), buf_list_head(0),
-          task_obj_head_(nullptr), task_obj_tail_(nullptr),
+          alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
+          iopb_slot_(IOPB_SLOT_NONE),
+          buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
-          waiting_on_mutex(nullptr),
-          waiting_on_semaphore(nullptr),
-          waiting_on_eventgroup(nullptr),
-          waiting_on_queue(nullptr),
-          held_ceiling_depth_(0), system_ceiling_(0),
-          first_child(nullptr), next_sibling(nullptr), prev_sibling(nullptr),
-          num_children(0), generation(0) {
+          waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+          waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+          held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
+          next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
+          generation(0) {
     }
 
     uint64_t magic;
@@ -313,6 +316,23 @@ struct TaskControlBlock {
     uint64_t program_break;
     uint64_t program_break_start;
 
+    /// @brief Lowest kernel-stack RSP observed for this task (stack low-water
+    ///        mark, grows downward from kernel_stack_top).  Sampled in the
+    ///        context-switch path.  0 until the task has been switched out at
+    ///        least once.  Used by the `tasks` command to report stack
+    ///        high-water (bytes consumed) / low-water (bytes remaining).
+    uint64_t kstack_low_water_;
+
+    /// @brief Loaded user-image segment sizes (bytes), captured at ELF load
+    ///        from the program-header table (PT_LOAD, memsz):
+    ///          text_size_  — executable (PF_X) segments
+    ///          data_size_  — writable (PF_W) segments
+    ///          bss_size_   — zero-filled tail (memsz - filesz), summed
+    ///        0 for kernel-only tasks (never elf::load'd).
+    uint64_t text_size_;
+    uint64_t data_size_;
+    uint64_t bss_size_;
+
     /// @brief Maximum pages this task may allocate from PMM.  0 = unlimited.
     uint64_t memory_budget_pages_;
     /// @brief Current pages charged to this task.
@@ -342,7 +362,8 @@ struct TaskControlBlock {
     bool in_ready_queue_;
     /// @brief Priority at which this task was enqueued in the ready queue.
     uint64_t rq_priority_;
-    /// @brief Priority bucket in AllTasksRegistry (set at append, never changes).
+    /// @brief Priority bucket in AllTasksRegistry (set at append, never
+    /// changes).
     uint64_t all_bucket_;
 
     /// @brief Singly-linked list pointer for the zombie list.
@@ -382,6 +403,21 @@ struct TaskControlBlock {
     /// pointer is an O(1) read cache kept in sync with the list by
     /// attach_object()/detach_object(); ownership lives in the list.
     task::SporadicServer *sporadic_server;
+
+    /// @brief This task's root CNode (its CSpace), lazily created on first
+    ///        capability use (cap::ensure_cspace).  nullptr for tasks that
+    ///        never touch capabilities.  Allocated from MemPool, pool-backed,
+    ///        and attached to the intrusive object list (task_obj_head_/
+    ///        task_obj_tail_); this pointer is an O(1) read cache kept in
+    ///        sync with the list by attach_object()/detach_object() — the
+    ///        same ownership model as sporadic_server.
+    cap::CNode *cspace_;
+
+    /// @brief I/O permission bitmap pool slot (x86_64, issue #3).  The task
+    /// must hold a slot to receive port-I/O grants via sys_ioport_grant.
+    /// Freed by cleanup() -> arch::iopb_release().  IOPB_SLOT_NONE = none.
+    static constexpr uint8_t IOPB_SLOT_NONE = 0xFF;
+    uint8_t iopb_slot_;
 
     /// @brief Head of doubly-linked list of buffer handles owned by
     /// this task. -1 means the list is empty. Used by the BufferPool
@@ -528,6 +564,14 @@ struct TaskControlBlock {
     static errors::TaskError clone_err(uint64_t *regs,
                                        TaskControlBlock *&out_tcb);
 
+    /// @brief Destroys a TCB and returns its MemPool block (H-5: single
+    ///        pool-aware teardown path replacing raw `delete` on RT error
+    ///        paths — CODING_STYLE §4 forbids new/delete on RT paths).
+    ///        State-aware: a REAPED TCB (cleanup already run) is only freed;
+    ///        otherwise cleanup() + remove_task() run first.  No-op on nullptr.
+    ///        Mirrors operator delete() semantics exactly.
+    static void destroy(TaskControlBlock *tcb) noexcept;
+
     /// @brief Save the current register context into this TCB.
     /// @param rsp Reference to current stack pointer (updated on save).
     void save_context(uint64_t &rsp) noexcept;
@@ -588,6 +632,18 @@ struct TaskControlBlock {
     task::SporadicServer *get_sporadic_server() const noexcept {
         return sporadic_server;
     }
+
+    /// @brief Returns this task's root CNode (CSpace), or nullptr if it has
+    ///        never touched capabilities.  O(1) read cache kept in sync with
+    ///        the intrusive object list; safe to call from ISR context.
+    cap::CNode *get_cspace() const noexcept {
+        return cspace_;
+    }
+
+    /// @brief Lazily creates and attaches this task's root CNode (CSpace).
+    ///        Idempotent: a second call with an existing CSpace is a no-op.
+    ///        Called from task context on first capability use.
+    void ensure_cspace() noexcept;
 
     /// @brief Adds a child to this task's process hierarchy.
     void add_child(TaskControlBlock *child) noexcept;

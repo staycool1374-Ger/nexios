@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -122,8 +122,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__net_8c
 <p>Virtio-net NIC driver implementation.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="virtio__net_8hpp_source.html">kernel/driver/virtio_net.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="atomic_8hpp_source.html">lib/atomic.hpp</a>&gt;</code><br />
@@ -143,10 +145,7 @@ Namespaces</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:ac79735cf719349d1a7d42f5c788b1406" id="r_ac79735cf719349d1a7d42f5c788b1406"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406">kernel::net::virtio_net_probe</a> (Nic &amp;nic)</td></tr>
 <tr class="memitem:ad963f2495bdf069ba09023e4b584c4b2" id="r_ad963f2495bdf069ba09023e4b584c4b2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2">kernel::net::virtio_net_poll</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> &amp;len)</td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:a142edc1532f5ec70f4bbd5014b31f638" id="r_a142edc1532f5ec70f4bbd5014b31f638"><td class="memItemLeft">VirtioNetDevice *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#a142edc1532f5ec70f4bbd5014b31f638">kernel::net::g_virtio_net_dev</a> = nullptr</td></tr>
+<tr class="memitem:af8019b1cd8dcf090045eb65e97779e2b" id="r_af8019b1cd8dcf090045eb65e97779e2b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html#af8019b1cd8dcf090045eb65e97779e2b">kernel::net::virtio_net_destroy</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio-net NIC driver implementation. </p>

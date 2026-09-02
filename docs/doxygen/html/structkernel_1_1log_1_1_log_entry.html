@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('structkernel_1
 </div><!--header-->
 <div class="contents">
 
+<p>A single dmesg log entry.  
+ <a href="#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">dmesg.hpp</a>&gt;</code></p>
 <div class="dynheader">
 Collaboration diagram for kernel::log::LogEntry:</div>
@@ -129,14 +132,26 @@ Collaboration diagram for kernel::log::LogEntry:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:aecfb27d27e37143855b838abd6eb92af" id="r_aecfb27d27e37143855b838abd6eb92af"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aecfb27d27e37143855b838abd6eb92af">timestamp</a></td></tr>
-<tr class="memitem:ae2fa3e80940fff140a4fe337641f2092" id="r_ae2fa3e80940fff140a4fe337641f2092"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae2fa3e80940fff140a4fe337641f2092">task_id</a></td></tr>
+<tr class="memitem:aecfb27d27e37143855b838abd6eb92af" id="r_aecfb27d27e37143855b838abd6eb92af"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aecfb27d27e37143855b838abd6eb92af">timestamp</a></td></tr>
+<tr class="memdesc:aecfb27d27e37143855b838abd6eb92af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tick count at log time.  <br /></td></tr>
+<tr class="memitem:ae2fa3e80940fff140a4fe337641f2092" id="r_ae2fa3e80940fff140a4fe337641f2092"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae2fa3e80940fff140a4fe337641f2092">task_id</a></td></tr>
+<tr class="memdesc:ae2fa3e80940fff140a4fe337641f2092"><td class="mdescLeft">&#160;</td><td class="mdescRight">ID of the task that logged the entry.  <br /></td></tr>
 <tr class="memitem:aa3e5aa4193e20451174665ffb603b1c8" id="r_aa3e5aa4193e20451174665ffb603b1c8"><td class="memItemLeft"><a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa3e5aa4193e20451174665ffb603b1c8">subsystem</a></td></tr>
-<tr class="memitem:a9dbc8a02bef01b71e3189a54ca25b872" id="r_a9dbc8a02bef01b71e3189a54ca25b872"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9dbc8a02bef01b71e3189a54ca25b872">error_code</a></td></tr>
-<tr class="memitem:aa40f5ec9579dd01cb69a34400b52bf5f" id="r_aa40f5ec9579dd01cb69a34400b52bf5f"><td class="memItemLeft"><a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa40f5ec9579dd01cb69a34400b52bf5f">context</a></td></tr>
-<tr class="memitem:ae2bba88a2cbbcfc7def4487dac726069" id="r_ae2bba88a2cbbcfc7def4487dac726069"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ae2bba88a2cbbcfc7def4487dac726069">message</a></td></tr>
+<tr class="memdesc:aa3e5aa4193e20451174665ffb603b1c8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Subsystem that generated the error.  <br /></td></tr>
+<tr class="memitem:a9dbc8a02bef01b71e3189a54ca25b872" id="r_a9dbc8a02bef01b71e3189a54ca25b872"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9dbc8a02bef01b71e3189a54ca25b872">error_code</a></td></tr>
+<tr class="memdesc:a9dbc8a02bef01b71e3189a54ca25b872"><td class="mdescLeft">&#160;</td><td class="mdescRight">Subsystem-specific error code.  <br /></td></tr>
+<tr class="memitem:aa40f5ec9579dd01cb69a34400b52bf5f" id="r_aa40f5ec9579dd01cb69a34400b52bf5f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa40f5ec9579dd01cb69a34400b52bf5f">context</a></td></tr>
+<tr class="memdesc:aa40f5ec9579dd01cb69a34400b52bf5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional context pointer (e.g. address involved).  <br /></td></tr>
+<tr class="memitem:a7de65030a9cc87603b93acc622f4678d" id="r_a7de65030a9cc87603b93acc622f4678d"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a7de65030a9cc87603b93acc622f4678d">message</a> [<a class="el" href="#a3660127b305fe861edcdfe0228ec9364">kMessageCap</a>]</td></tr>
+<tr class="memdesc:a7de65030a9cc87603b93acc622f4678d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Human-readable description (owned copy).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a3660127b305fe861edcdfe0228ec9364" id="r_a3660127b305fe861edcdfe0228ec9364"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3660127b305fe861edcdfe0228ec9364">kMessageCap</a> = 96</td></tr>
 </table>
-<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>A single dmesg log entry. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="aa40f5ec9579dd01cb69a34400b52bf5f" name="aa40f5ec9579dd01cb69a34400b52bf5f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa40f5ec9579dd01cb69a34400b52bf5f">&#9670;&#160;</a></span>context</h2>
 
@@ -144,10 +159,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8h.html#a83242de74310b4aec3fc506bc3644211">uintptr_t</a> kernel::log::LogEntry::context</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> kernel::log::LogEntry::context</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Optional context pointer (e.g. address involved). </p>
 
 </div>
 </div>
@@ -158,24 +175,50 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::log::LogEntry::error_code</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::log::LogEntry::error_code</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Subsystem-specific error code. </p>
+
 </div>
 </div>
-<a id="ae2bba88a2cbbcfc7def4487dac726069" name="ae2bba88a2cbbcfc7def4487dac726069"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae2bba88a2cbbcfc7def4487dac726069">&#9670;&#160;</a></span>message</h2>
+<a id="a3660127b305fe861edcdfe0228ec9364" name="a3660127b305fe861edcdfe0228ec9364"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3660127b305fe861edcdfe0228ec9364">&#9670;&#160;</a></span>kMessageCap</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::log::LogEntry::kMessageCap = 96</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7de65030a9cc87603b93acc622f4678d" name="a7de65030a9cc87603b93acc622f4678d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7de65030a9cc87603b93acc622f4678d">&#9670;&#160;</a></span>message</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char* kernel::log::LogEntry::message</td>
+          <td class="memname">char kernel::log::LogEntry::message[<a class="el" href="#a3660127b305fe861edcdfe0228ec9364">kMessageCap</a>]</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Human-readable description (owned copy). </p>
 
 </div>
 </div>
@@ -191,6 +234,8 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Subsystem that generated the error. </p>
+
 </div>
 </div>
 <a id="ae2fa3e80940fff140a4fe337641f2092" name="ae2fa3e80940fff140a4fe337641f2092"></a>
@@ -200,10 +245,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::log::LogEntry::task_id</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::log::LogEntry::task_id</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>ID of the task that logged the entry. </p>
 
 </div>
 </div>
@@ -214,10 +261,12 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::log::LogEntry::timestamp</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::log::LogEntry::timestamp</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Tick count at log time. </p>
 
 </div>
 </div>

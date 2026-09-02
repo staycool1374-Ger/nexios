@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -125,7 +125,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__pml4__cl
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
+<code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_pml4_clone.cpp:</div>
 <div class="dyncontent">
@@ -156,9 +159,18 @@ Functions</h2></td></tr>
 <tr class="memitem:a5580d3316b45f808f80a734c5f5d7da3" id="r_a5580d3316b45f808f80a734c5f5d7da3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5580d3316b45f808f80a734c5f5d7da3">JARVIS_TEST</a> (pml4_clone_kernel_entries_match, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ad1927355a0b862a79b8cc2e7095745fa" id="r_ad1927355a0b862a79b8cc2e7095745fa"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad1927355a0b862a79b8cc2e7095745fa">JARVIS_TEST</a> (pml4_fork_user_entries_match, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ad2c3e9e95eec0e30ccce7ec7b2f1d5bb" id="r_ad2c3e9e95eec0e30ccce7ec7b2f1d5bb"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad2c3e9e95eec0e30ccce7ec7b2f1d5bb">JARVIS_TEST</a> (pml4_fork_no_child_corrupt_parent, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a939d33a280e6054cf266cabf38b9a038" id="r_a939d33a280e6054cf266cabf38b9a038"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a939d33a280e6054cf266cabf38b9a038">JARVIS_TEST</a> (pml4_deep_copy_no_alias, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ad2a10f84d8104c88c39bba78f567c334" id="r_ad2a10f84d8104c88c39bba78f567c334"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad2a10f84d8104c88c39bba78f567c334">JARVIS_TEST</a> (pml4_free_user_pages_shared_safe, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a1682e1b109b861a4c86283c5a1380f92" id="r_a1682e1b109b861a4c86283c5a1380f92"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1682e1b109b861a4c86283c5a1380f92">JARVIS_TEST</a> (pml4_dump_no_user_entries, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a32e920f1e2ec96c8baf9f660b111338e" id="r_a32e920f1e2ec96c8baf9f660b111338e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a32e920f1e2ec96c8baf9f660b111338e">JARVIS_TEST</a> (fork_deep_copy_child_tables_independent, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a1cde1384b71323b79329e8efbcbe69f8" id="r_a1cde1384b71323b79329e8efbcbe69f8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1cde1384b71323b79329e8efbcbe69f8">JARVIS_TEST</a> (fork_free_user_pages_child_deepcopy, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:aa808db44680fb44b47c56fef1763706b" id="r_aa808db44680fb44b47c56fef1763706b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa808db44680fb44b47c56fef1763706b">JARVIS_TEST</a> (fork_page_table_shared_flag_absent, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a2b41d9f576be42172aedb0dc6f4743c4" id="r_a2b41d9f576be42172aedb0dc6f4743c4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2b41d9f576be42172aedb0dc6f4743c4">register_pml4_clone_tests</a> ()</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:adbef84a521b001ae676d8c44958aa4e4" id="r_adbef84a521b001ae676d8c44958aa4e4"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:adbef84a521b001ae676d8c44958aa4e4 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#adbef84a521b001ae676d8c44958aa4e4">has_page_table_shared_v</a> = requires(T *t) { t-&gt;page_table_shared_; }</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>PML4 page-table clone (fork) tests. </p>
@@ -189,8 +201,89 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a32e920f1e2ec96c8baf9f660b111338e" name="a32e920f1e2ec96c8baf9f660b111338e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32e920f1e2ec96c8baf9f660b111338e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/10]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_deep_copy_child_tables_independent</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a32e920f1e2ec96c8baf9f660b111338e_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a32e920f1e2ec96c8baf9f660b111338e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a1cde1384b71323b79329e8efbcbe69f8" name="a1cde1384b71323b79329e8efbcbe69f8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1cde1384b71323b79329e8efbcbe69f8">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/10]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_free_user_pages_child_deepcopy</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a1cde1384b71323b79329e8efbcbe69f8_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a1cde1384b71323b79329e8efbcbe69f8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="aa808db44680fb44b47c56fef1763706b" name="aa808db44680fb44b47c56fef1763706b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa808db44680fb44b47c56fef1763706b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/10]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_page_table_shared_flag_absent</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_aa808db44680fb44b47c56fef1763706b_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_aa808db44680fb44b47c56fef1763706b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
 <a id="ac86e9cf1f240da60284e23046e0b243e" name="ac86e9cf1f240da60284e23046e0b243e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac86e9cf1f240da60284e23046e0b243e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac86e9cf1f240da60284e23046e0b243e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -211,7 +304,7 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a id="a5580d3316b45f808f80a734c5f5d7da3" name="a5580d3316b45f808f80a734c5f5d7da3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5580d3316b45f808f80a734c5f5d7da3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5580d3316b45f808f80a734c5f5d7da3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -231,8 +324,29 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a939d33a280e6054cf266cabf38b9a038" name="a939d33a280e6054cf266cabf38b9a038"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a939d33a280e6054cf266cabf38b9a038">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/10]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_deep_copy_no_alias</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a1682e1b109b861a4c86283c5a1380f92" name="a1682e1b109b861a4c86283c5a1380f92"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1682e1b109b861a4c86283c5a1380f92">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a1682e1b109b861a4c86283c5a1380f92">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -253,13 +367,13 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__pml4__clone_8cpp_a1682e1b109b861a4c86283c5a1380f92_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a1682e1b109b861a4c86283c5a1380f92_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
 </div>
 <a id="ad2c3e9e95eec0e30ccce7ec7b2f1d5bb" name="ad2c3e9e95eec0e30ccce7ec7b2f1d5bb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad2c3e9e95eec0e30ccce7ec7b2f1d5bb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2c3e9e95eec0e30ccce7ec7b2f1d5bb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -280,7 +394,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ad1927355a0b862a79b8cc2e7095745fa" name="ad1927355a0b862a79b8cc2e7095745fa"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad1927355a0b862a79b8cc2e7095745fa">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1927355a0b862a79b8cc2e7095745fa">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -301,7 +415,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="ad2a10f84d8104c88c39bba78f567c334" name="ad2a10f84d8104c88c39bba78f567c334"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad2a10f84d8104c88c39bba78f567c334">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2a10f84d8104c88c39bba78f567c334">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/10]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -339,8 +453,33 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__pml4__clone_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 5 -->
 </div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="adbef84a521b001ae676d8c44958aa4e4" name="adbef84a521b001ae676d8c44958aa4e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adbef84a521b001ae676d8c44958aa4e4">&#9670;&#160;</a></span>has_page_table_shared_v</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool has_page_table_shared_v = requires(T *t) { t-&gt;page_table_shared_; }</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

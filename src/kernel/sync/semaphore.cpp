@@ -22,6 +22,7 @@
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/io.hpp>
 #include <assert.hpp>
 
 namespace kernel {
@@ -155,7 +156,7 @@ void Semaphore::restore_priority() {
         if (waiters_[i]->priority > max_remaining)
             max_remaining = waiters_[i]->priority;
     }
-    if (max_remaining >= holder_priority_) {
+    if (max_remaining > holder_priority_) {
         owner_->priority = max_remaining;
     } else {
         owner_->priority = holder_priority_;
@@ -165,55 +166,115 @@ void Semaphore::restore_priority() {
 }
 
 /// @brief Decrement the count, blocking if zero.
+///
+/// C-1/C-2 fix (audit-task-sync-v0.4.2): the spinlock must NOT be held across
+/// Scheduler::reschedule() — reschedule() arms a deferred switch (INV-4) and
+/// re-enables IRQs; a timer tick before this frame unwinds would save the task
+/// holding lock_, and the ISR-side post() would spin forever on it (the
+/// threaded-IRQ keyboard deadlock class documented by Notify::wait()).  The
+/// waiter-table-full path must also never ENSURE(added): reachable resource
+/// exhaustion is an error/retry condition, not an invariant violation.
 void Semaphore::wait() {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return;
 
-    if (count_ > 0) {
-        --count_;
-        if (count_ == 0) {
-            owner_ = task;
+    // Retry loop: add_waiter fails only when the waiter table is full.
+    // A void blocking API cannot report that; yield and retry (the table
+    // drains as waiters are woken by post()).
+    for (;;) {
+        bool added = false;
+        {
+            SpinLockGuard<SpinLock> guard(lock_);
+            if (count_ > 0) {
+                --count_;
+                if (count_ == 0) {
+                    owner_ = task;
+                }
+                return;
+            }
+            inherit_priority(*task);
+            added = add_waiter(*task);
+            if (added)
+                task->state = TaskState::BLOCKED;
+        }
+
+        if (!added) {
+            Scheduler::reschedule();
+            continue;
+        }
+        break;
+    }
+
+    // Block OUTSIDE the lock (Notify::wait() pattern).  Dequeue from the ready
+    // queue so a BLOCKED task is never physically queued (INV-2 desync —
+    // release-build live-lock if the deferred switch applies late).
+    Scheduler::dequeue_ready(*task);
+    Scheduler::reschedule();
+
+    // reschedule() is deferred (INV-4): the current task keeps running with
+    // state=BLOCKED until the timer ISR applies the switch and a post() wakes
+    // it.  Spin-wait (mirrors IPC::send).  If interrupts are off the ISR can't
+    // fire — roll back and leave without the semaphore.
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
         }
         return;
     }
-
-    inherit_priority(*task);
-
-    bool added = add_waiter(*task);
-    ENSURE(added);
-
-    task->state = TaskState::BLOCKED;
-    Scheduler::reschedule();
+    remove_waiter(*task);
+    task->state = TaskState::RUNNING;
+    Scheduler::enqueue_ready(*task);
 }
 
 /// @brief Decrement the count, blocking if zero (error-returning overload).
 errors::SyncError Semaphore::wait_err() {
-    SpinLockGuard<SpinLock> guard(lock_);
     auto *task = Scheduler::current_task();
     if (!task)
         return errors::SYNC_ERR_NO_TASK;
 
-    if (count_ > 0) {
-        --count_;
-        if (count_ == 0) {
-            owner_ = task;
+    bool added = false;
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (count_ > 0) {
+            --count_;
+            if (count_ == 0) {
+                owner_ = task;
+            }
+            return errors::SYNC_ERR_OK;
         }
-        return errors::SYNC_ERR_OK;
+
+        if (waiter_count_ >= MAX_WAITERS) {
+            return errors::SYNC_ERR_MAX_WAITERS;
+        }
+
+        inherit_priority(*task);
+
+        added = add_waiter(*task);
+        if (added)
+            task->state = TaskState::BLOCKED;
     }
 
-    if (waiter_count_ >= MAX_WAITERS) {
+    if (!added) {
+        // Table became full between the check and the add (same critical
+        // section, so unreachable) — defensive.
         return errors::SYNC_ERR_MAX_WAITERS;
     }
 
-    inherit_priority(*task);
-
-    add_waiter(*task);
-    task->state = TaskState::BLOCKED;
+    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
+    Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
-    return errors::SYNC_ERR_OK;
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+        return errors::SYNC_ERR_OK;
+    }
+    remove_waiter(*task);
+    task->state = TaskState::RUNNING;
+    Scheduler::enqueue_ready(*task);
+    return errors::SYNC_ERR_MAX_WAITERS;
 }
 
 /// @brief Decrement count without blocking.

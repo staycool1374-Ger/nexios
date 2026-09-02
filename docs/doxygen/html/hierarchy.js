@@ -11,10 +11,13 @@ var hierarchy =
     [ "initrd::CpioNewcHeader", "structinitrd_1_1_cpio_newc_header.html", null ],
     [ "kernel::CpuContext", "structkernel_1_1_cpu_context.html", null ],
     [ "kernel::CRC32", "classkernel_1_1_c_r_c32.html", null ],
+    [ "kernel::cap::CSlot", "structkernel_1_1cap_1_1_c_slot.html", null ],
     [ "kernel::DeadlineList", "classkernel_1_1_deadline_list.html", null ],
     [ "DefaultDeleter", "struct_default_deleter.html", null ],
     [ "kernel::vfs::DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", null ],
+    [ "kernel::log::DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", null ],
     [ "EarlyInitStub", "struct_early_init_stub.html", null ],
+    [ "kernel::elf::ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ],
     [ "kernel::ErrorOr&lt; T &gt;", "structkernel_1_1_error_or.html", null ],
     [ "kernel::ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", null ],
     [ "kernel::ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", null ],
@@ -45,12 +48,19 @@ var hierarchy =
       [ "is_same< T, T >", "structis__same_3_01_t_00_01_t_01_4.html", null ]
     ] ],
     [ "kernel::sync::IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", null ],
+    [ "kernel::KernelObject", "classkernel_1_1_kernel_object.html", [
+      [ "kernel::cap::CNode", "classkernel_1_1cap_1_1_c_node.html", null ],
+      [ "kernel::cap::Endpoint", "classkernel_1_1cap_1_1_endpoint.html", null ],
+      [ "kernel::cap::FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", null ],
+      [ "kernel::cap::UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", null ],
+      [ "kernel::vfs::PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", null ]
+    ] ],
+    [ "kernel::log::LogEntry", "structkernel_1_1log_1_1_log_entry.html", null ],
     [ "kernel::Logger", "classkernel_1_1_logger.html", null ],
     [ "kernel::vfs::MemInfoVnode", "structkernel_1_1vfs_1_1_mem_info_vnode.html", null ],
     [ "kernel::vfs::PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", null ],
     [ "kernel::vfs::PidDirVnode", "structkernel_1_1vfs_1_1_pid_dir_vnode.html", null ],
     [ "kernel::vfs::PidStatVnode", "structkernel_1_1vfs_1_1_pid_stat_vnode.html", null ],
-    [ "kernel::vfs::PipeBuffer", "structkernel_1_1vfs_1_1_pipe_buffer.html", null ],
     [ "PmmAllocHdr", "struct_pmm_alloc_hdr.html", null ],
     [ "kernel::PriorityMap", "classkernel_1_1_priority_map.html", null ],
     [ "service::ProgramRegistry::Program", "structservice_1_1_program_registry_1_1_program.html", null ],
@@ -70,6 +80,7 @@ var hierarchy =
     [ "rlimit", "structrlimit.html", null ],
     [ "kernel::SchedulerConfig", "structkernel_1_1_scheduler_config.html", null ],
     [ "kernel::test::ScopedCurrentTask", "classkernel_1_1test_1_1_scoped_current_task.html", null ],
+    [ "kernel::ScopedRef", "classkernel_1_1_scoped_ref.html", null ],
     [ "ScopeGuard&lt; Fn &gt;", "class_scope_guard.html", null ],
     [ "service::Shell", "classservice_1_1_shell.html", null ],
     [ "kernel::SignalFrame", "structkernel_1_1_signal_frame.html", null ],
@@ -96,5 +107,6 @@ var hierarchy =
     [ "kernel::Utsname", "structkernel_1_1_utsname.html", null ],
     [ "Utsname", "struct_utsname.html", null ],
     [ "utsname", "structutsname.html", null ],
-    [ "kernel::Version", "structkernel_1_1_version.html", null ]
+    [ "kernel::Version", "structkernel_1_1_version.html", null ],
+    [ "kernel::gs::WriteContext", "structkernel_1_1gs_1_1_write_context.html", null ]
 ];

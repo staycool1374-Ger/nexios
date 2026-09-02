@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2idt_8hpp_
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    VIRT_ERROR = 20,      </div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    TIMER = 32,           </div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    KEYBOARD = 33,        </div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    SYSCALL = 0x80,       </div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <a class="code hl_enumvalue" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b">SYSCALL</a> = 0x80,       </div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>};</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span></div>
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span><span class="keyword">using </span>ISRHandler = void (*)(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip);</div>
@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2idt_8hpp_
 <div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span><span class="keyword">enum class</span> InterruptVector : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
 <div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    TIMER = 0,    </div>
 <div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    KEYBOARD = 1, </div>
-<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    SYSCALL = 2,  </div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    <a class="code hl_enumvalue" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b">SYSCALL</a> = 2,  </div>
 <div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>};</div>
 <div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span></div>
 <div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span><span class="keyword">using </span>ISRHandler = void (*)(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip);</div>
@@ -245,7 +245,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2idt_8hpp_
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> gic.hpp:18</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
-<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:354</div></div>
+<div class="ttc" id="anamespacekernel_1_1elf_html_ae81746671637a90991ec1b98cef60dc4"><div class="ttname"><a href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a></div><div class="ttdeci">TaskControlBlock * load(const ELF64Header *hdr, const uint8_t *file_data, uint64_t file_size)</div><div class="ttdef"><b>Definition</b> elf.cpp:452</div></div>
+<div class="ttc" id="anamespacekernel_1_1log_html_a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b"><div class="ttname"><a href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b">kernel::log::ErrorSubsystem::SYSCALL</a></div><div class="ttdeci">@ SYSCALL</div><div class="ttdoc">System call interface.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:69</div></div>
 <div class="ttc" id="anamespacekernel_html_a608b4a9ee1c4d240362c930be12ae9f2adc30ec20708ef7b0f641ef78b7880a15"><div class="ttname"><a href="namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2adc30ec20708ef7b0f641ef78b7880a15">kernel::LogLevel::DEBUG</a></div><div class="ttdeci">@ DEBUG</div><div class="ttdef"><b>Definition</b> logger.hpp:37</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

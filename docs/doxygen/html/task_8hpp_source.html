@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -150,352 +150,422 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task_8hpp_sour
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">#include &lt;<a class="code" href="vfs_8hpp.html">kernel/vfs/vfs.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">#include &lt;<a class="code" href="notify_8hpp.html">kernel/sync/notify.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">#include &lt;<a class="code" href="eventgroup_8hpp.html">kernel/sync/eventgroup.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">#include &lt;<a class="code" href="signal_8hpp.html">signal.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="comment">// Forward declaration for init_task_common</span></div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>;</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a>(TaskControlBlock &amp;tcb);</div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span></div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_MAX_MSG_SIZE = <a class="code hl_define" href="nexios__config_8h.html#a428c0cbf9ea626d22920e29b3d0f1dd0">CONFIG_IPC_MAX_MSG_SIZE</a>;</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_MAX_QUEUE_MSG = <a class="code hl_define" href="nexios__config_8h.html#a338681951d97694dd0b4dc48373d879b">CONFIG_IPC_MAX_QUEUE_MSG</a>;</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_PRIORITY_LEVELS = <a class="code hl_define" href="nexios__config_8h.html#a00ddc4bdfc7fab2e08f3a292412ef50c">CONFIG_IPC_PRIORITY_LEVELS</a>;</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="keyword">struct </span>Message {</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sender_id;</div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> type;</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority;</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> data[IPC_MAX_MSG_SIZE];</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordtype">size_t</span> data_size;</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> buf_handle = 0;</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>};</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span></div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="keyword">struct </span>MessageQueue {</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    Message msgs[IPC_MAX_QUEUE_MSG];</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio_bitmap;</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">head</a>;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> tail;</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> count;</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span> </div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_senders_head;</div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_senders_tail;</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span> </div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *owner;</div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span> </div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    MessageQueue()</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>        : prio_bitmap(0), <a class="code hl_variable" href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">head</a>(0), tail(0), count(0),</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>          blocked_senders_head(nullptr), blocked_senders_tail(nullptr),</div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>          owner(nullptr) {</div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>    }</div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span> </div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    ~MessageQueue();</div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span> </div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    sync::SpinLock lock_;</div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span> </div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    <span class="keywordtype">bool</span> push(<span class="keyword">const</span> Message &amp;msg);</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <span class="keywordtype">bool</span> pop(Message &amp;msg);</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span> </div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordtype">bool</span> is_empty()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>        <span class="keywordflow">return</span> __atomic_load_n(&amp;count, __ATOMIC_RELAXED) == 0;</div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>    }</div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    <span class="keywordtype">bool</span> is_full()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>        <span class="keywordflow">return</span> __atomic_load_n(&amp;count, __ATOMIC_RELAXED) &gt;= IPC_MAX_QUEUE_MSG;</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>    }</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keywordtype">bool</span> is_full_locked() {</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>        SpinLockGuard&lt;sync::SpinLock&gt; guard(lock_);</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>        <span class="keywordflow">return</span> count &gt;= IPC_MAX_QUEUE_MSG;</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    }</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span> </div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="keywordtype">size_t</span> highest_priority() <span class="keyword">const</span>;</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>};</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span> </div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span><span class="keyword">class </span>Mutex;</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span><span class="keyword">class </span>Semaphore;</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span><span class="keyword">class </span>EventGroup;</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span><span class="keyword">class </span>Queue;</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>} <span class="comment">// namespace sync</span></div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span> </div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1task.html">task</a> {</div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span><span class="keyword">class </span>SporadicServer;</div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193">dmesg_task_main</a>();</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>} <span class="comment">// namespace task</span></div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span></div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span><span class="keyword">enum class</span> TaskState : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
-<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    READY,</div>
-<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>    RUNNING,</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    BLOCKED,</div>
-<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    WAITING,</div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    TERMINATED,</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    REAPED,</div>
-<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>};</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span></div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span><span class="keyword">struct </span>TaskContext {</div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rax, rbx, rcx, rdx;</div>
-<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsi, rdi, rbp;</div>
-<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> r8, r9, r10, r11, r12, r13, r14, r15;</div>
-<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, error_code;</div>
-<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, cs, rflags, rsp, ss;</div>
-<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>};</div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span><span class="preprocessor">#elif defined(CONFIG_ARCH_AARCH64)</span></div>
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span><span class="keyword">struct </span>TaskContext {</div>
-<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> x[31];      <span class="comment">// X0-X30</span></div>
-<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sp_el0;     <span class="comment">// SP_EL0 (user stack pointer)</span></div>
-<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> elr_el1;    <span class="comment">// ELR_EL1 (return address)</span></div>
-<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> spsr_el1;   <span class="comment">// SPSR_EL1 (processor state)</span></div>
-<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector;     <span class="comment">// exception vector number</span></div>
-<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code; <span class="comment">// exception error code</span></div>
-<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>};</div>
-<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span><span class="preprocessor">#elif defined(CONFIG_ARCH_RISCV64)</span></div>
-<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span><span class="keyword">struct </span>TaskContext {</div>
-<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ra, sp, gp, tp;</div>
-<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;</div>
-<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc;       <span class="comment">// exception return address</span></div>
-<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sstatus;    <span class="comment">// supervisor status register</span></div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stvec;      <span class="comment">// trap vector base</span></div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector;     <span class="comment">// exception vector number</span></div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code; <span class="comment">// exception error code</span></div>
-<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>};</div>
-<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span></div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> {</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacemem.html#a710467a64fb906235a4120c91987afab">STACK_SIZE</a> = <a class="code hl_define" href="nexios__config_8h.html#aa345b3c812d23b1ef0f9ae26d6005f64">CONFIG_STACK_SIZE</a>;</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> KERNEL_CS = 0x08;</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> KERNEL_SS = 0x10;</div>
-<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> USER_CS = 0x1B;</div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> USER_SS = 0x23;</div>
-<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> FLAGS_IF = 0x200;</div>
-<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> TCB_MAGIC = 0x5443424D41474943ULL;</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span></div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> NO_PERIOD = 0xFFFFFFFFULL;</div>
-<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span></div>
-<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">bool</span> is_valid(<span class="keyword">const</span> TaskControlBlock *t) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span>        <span class="keywordflow">if</span> (<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(t) &lt; 0xFFFF800000000000ULL)</div>
-<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>            <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>        <span class="keywordflow">return</span> t-&gt;magic == TCB_MAGIC;</div>
-<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>    }</div>
-<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>    <span class="keywordtype">char</span> name[<a class="code hl_define" href="nexios__config_8h.html#a8125ddc77bbb15588608c8b894dfd1f3">CONFIG_TASK_NAME_LEN</a>];</div>
-<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span> </div>
-<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span><span class="preprocessor">#ifdef CONFIG_DEBUG</span></div>
-<div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>    <span class="keyword">struct </span>DebugSwitchRecord {</div>
-<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_addr; </div>
-<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_rip;   </div>
-<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        TaskContext regs;    </div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> thread_id;  </div>
-<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> consumed_ticks; </div>
-<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>    };</div>
-<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> DEBUG_SWITCH_RING_SIZE = 4;</div>
-<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    DebugSwitchRecord debug_switch_ring[DEBUG_SWITCH_RING_SIZE];</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debug_switch_idx;</div>
-<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span> </div>
-<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>()</div>
-<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>        :</div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>#ifdef CONFIG_DEBUG</div>
-<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>          debug_switch_idx(0),</div>
-<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span>#endif</div>
-<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>          id(0), parent_id(0), state(TaskState::READY), priority(0),</div>
-<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>          base_priority(0), period_ticks(0), deadline_ticks(0),</div>
-<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>          deadline_missed(false), deadline_miss_count(0), executed_ticks(0),</div>
-<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>          remaining_ticks(0), wcet_ticks(0), wcet_overrun_fired(false),</div>
-<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>          ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),</div>
-<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>          exit_code(0), context({}), kernel_stack(<span class="keyword">nullptr</span>), kernel_stack_top(0),</div>
-<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>          stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),</div>
-<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>          page_table_(0), page_table_shared_(<span class="keyword">false</span>),</div>
-<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>          stack_pdpt_phys_(0), user_stack_(0), user_stack_size_(0),</div>
-<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>          user_data(<span class="keyword">nullptr</span>), fpu_used(<span class="keyword">false</span>), fpu_state{}, program_break(0),</div>
-<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span>          program_break_start(0), fd_table({}), cwd_vnode(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span>          runq_next_(<span class="keyword">nullptr</span>), runq_prev_(<span class="keyword">nullptr</span>), dl_next_(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>          dl_prev_(<span class="keyword">nullptr</span>), pri_next_(<span class="keyword">nullptr</span>), pri_prev_(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span>           in_ready_queue_(<span class="keyword">false</span>), rq_priority_(0), all_bucket_(0), zombie_next_(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span>          waiting_child_pid(0),</div>
-<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span>          waiting_child_status(<span class="keyword">nullptr</span>), pending_signals(0), alarm_ticks(0),</div>
-<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span>          alarm_armed(<span class="keyword">false</span>), sporadic_server(<span class="keyword">nullptr</span>), buf_list_head(0),</div>
-<div class="line"><a id="l00222" name="l00222"></a><span class="lineno">  222</span>          blocked_next(<span class="keyword">nullptr</span>), blocked_prev(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span>          blocked_on_queue(<span class="keyword">nullptr</span>), reply_wait(<span class="keyword">false</span>),</div>
-<div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span>          waiting_on_mutex(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span>          waiting_on_semaphore(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>          waiting_on_eventgroup(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>          waiting_on_queue(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span>          held_ceiling_depth_(0), system_ceiling_(0),</div>
-<div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span>          first_child(<span class="keyword">nullptr</span>), next_sibling(<span class="keyword">nullptr</span>), prev_sibling(<span class="keyword">nullptr</span>),</div>
-<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>          num_children(0), generation(0) {</div>
-<div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span>    }</div>
-<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span> </div>
-<div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> magic;</div>
-<div class="line"><a id="l00234" name="l00234"></a><span class="lineno">  234</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> id;</div>
-<div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> parent_id;</div>
-<div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span>    TaskState state;</div>
-<div class="line"><a id="l00237" name="l00237"></a><span class="lineno">  237</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority;</div>
-<div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> base_priority;</div>
-<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks;</div>
-<div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> deadline_ticks;</div>
-<div class="line"><a id="l00241" name="l00241"></a><span class="lineno">  241</span>    <span class="keywordtype">bool</span> deadline_missed;</div>
-<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> deadline_miss_count;</div>
-<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> executed_ticks;</div>
-<div class="line"><a id="l00244" name="l00244"></a><span class="lineno">  244</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> remaining_ticks;</div>
-<div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div>
-<div class="line"><a id="l00246" name="l00246"></a><span class="lineno">  246</span>        wcet_ticks; </div>
-<div class="line"><a id="l00247" name="l00247"></a><span class="lineno">  247</span>    <span class="keywordtype">bool</span> wcet_overrun_fired; </div>
-<div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> ss_state_on_deadline_miss; </div>
-<div class="line"><a id="l00250" name="l00250"></a><span class="lineno">  250</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ss_budget_on_deadline_miss; </div>
-<div class="line"><a id="l00252" name="l00252"></a><span class="lineno">  252</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_code;</div>
-<div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span> </div>
-<div class="line"><a id="l00254" name="l00254"></a><span class="lineno">  254</span>    TaskContext context;</div>
-<div class="line"><a id="l00255" name="l00255"></a><span class="lineno">  255</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *kernel_stack;</div>
-<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel_stack_top;</div>
-<div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stack_phys_;</div>
-<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span></div>
-<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kstack_slot_va_;</div>
-<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kstack_slot_size_;</div>
-<div class="line"><a id="l00264" name="l00264"></a><span class="lineno">  264</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_;</div>
-<div class="line"><a id="l00268" name="l00268"></a><span class="lineno">  268</span>    <span class="keywordtype">bool</span> page_table_shared_;</div>
-<div class="line"><a id="l00273" name="l00273"></a><span class="lineno">  273</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stack_pdpt_phys_;</div>
-<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_stack_;</div>
-<div class="line"><a id="l00275" name="l00275"></a><span class="lineno">  275</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_stack_size_;</div>
-<div class="line"><a id="l00276" name="l00276"></a><span class="lineno">  276</span>    <span class="keywordtype">void</span> *user_data;</div>
-<div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span></div>
-<div class="line"><a id="l00280" name="l00280"></a><span class="lineno">  280</span>    <span class="keywordtype">bool</span> fpu_used;</div>
-<div class="line"><a id="l00281" name="l00281"></a><span class="lineno">  281</span>    <span class="keyword">alignas</span>(16) <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> fpu_state[512];</div>
-<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span> </div>
-<div class="line"><a id="l00283" name="l00283"></a><span class="lineno">  283</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> program_break;</div>
-<div class="line"><a id="l00284" name="l00284"></a><span class="lineno">  284</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> program_break_start;</div>
-<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span></div>
-<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> memory_budget_pages_;</div>
-<div class="line"><a id="l00289" name="l00289"></a><span class="lineno">  289</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> memory_used_pages_;</div>
-<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span> </div>
-<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span>    vfs::FdTable fd_table;</div>
-<div class="line"><a id="l00292" name="l00292"></a><span class="lineno">  292</span>    <span class="keywordtype">char</span> cwd[<a class="code hl_define" href="nexios__config_8h.html#aab75aa8a7d758ce4e36fa6be7fbce78b">CONFIG_VFS_MAX_PATH</a>];</div>
-<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span>    vfs::Vnode *cwd_vnode;</div>
-<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span>    sync::SpinLock cwd_lock_;</div>
-<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span></div>
-<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *runq_next_;</div>
-<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *runq_prev_;</div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">#include &lt;<a class="code" href="kernel__object_8hpp.html">kernel/memory/kernel_object.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="preprocessor">#include &lt;<a class="code" href="signal_8hpp.html">signal.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel.html">kernel</a> {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span> </div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="comment">// Forward declaration for init_task_common</span></div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>;</div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a>(TaskControlBlock &amp;tcb);</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_MAX_MSG_SIZE = <a class="code hl_define" href="nexios__config_8h.html#a428c0cbf9ea626d22920e29b3d0f1dd0">CONFIG_IPC_MAX_MSG_SIZE</a>;</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_MAX_QUEUE_MSG = <a class="code hl_define" href="nexios__config_8h.html#a338681951d97694dd0b4dc48373d879b">CONFIG_IPC_MAX_QUEUE_MSG</a>;</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPC_PRIORITY_LEVELS = <a class="code hl_define" href="nexios__config_8h.html#a00ddc4bdfc7fab2e08f3a292412ef50c">CONFIG_IPC_PRIORITY_LEVELS</a>;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span></div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="keyword">struct </span>Message {</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sender_id;</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> type;</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority;</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> data[IPC_MAX_MSG_SIZE];</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    <span class="keywordtype">size_t</span> data_size;</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> buf_handle = 0;</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>};</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span></div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="keyword">struct </span>MessageQueue {</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    Message msgs[IPC_MAX_QUEUE_MSG];</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> prio_bitmap;</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">head</a>;</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> tail;</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>    <span class="keyword">volatile</span> <span class="keywordtype">size_t</span> count;</div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span> </div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_senders_head;</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_senders_tail;</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span> </div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *owner;</div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span> </div>
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    MessageQueue()</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        : prio_bitmap(0), <a class="code hl_variable" href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">head</a>(0), tail(0), count(0),</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>          blocked_senders_head(nullptr), blocked_senders_tail(nullptr),</div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>          owner(nullptr) {</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    }</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span> </div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    ~MessageQueue();</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span> </div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>    sync::SpinLock lock_;</div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span> </div>
+<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <span class="keywordtype">bool</span> push(<span class="keyword">const</span> Message &amp;msg);</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <span class="keywordtype">bool</span> pop(Message &amp;msg);</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span> </div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <span class="keywordtype">bool</span> is_empty()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        <span class="keywordflow">return</span> __atomic_load_n(&amp;count, __ATOMIC_RELAXED) == 0;</div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>    }</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keywordtype">bool</span> is_full()<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>        <span class="keywordflow">return</span> __atomic_load_n(&amp;count, __ATOMIC_RELAXED) &gt;= IPC_MAX_QUEUE_MSG;</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    }</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keywordtype">bool</span> is_full_locked() {</div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>        SpinLockGuard&lt;sync::SpinLock&gt; guard(lock_);</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>        <span class="keywordflow">return</span> count &gt;= IPC_MAX_QUEUE_MSG;</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    }</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span> </div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keywordtype">size_t</span> highest_priority() <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>};</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span> </div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a> {</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span><span class="keyword">class </span>Mutex;</div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span><span class="keyword">class </span>Semaphore;</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span><span class="keyword">class </span>EventGroup;</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span><span class="keyword">class </span>Queue;</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>} <span class="comment">// namespace sync</span></div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span> </div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1task.html">task</a> {</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span><span class="keyword">class </span>SporadicServer;</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193">dmesg_task_main</a>();</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>} <span class="comment">// namespace task</span></div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span> </div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1cap.html">cap</a> {</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span><span class="keyword">class </span><a class="code hl_class" href="classkernel_1_1cap_1_1_c_node.html">CNode</a>;</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>} <span class="comment">// namespace cap</span></div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span></div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span><span class="keyword">enum class</span> TaskState : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    READY,</div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    <a class="code hl_enumvalue" href="namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaa43491564ebcfd38568918efbd6e840fd">RUNNING</a>,</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    BLOCKED,</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    WAITING,</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    TERMINATED,</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>    REAPED,</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>};</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span></div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span><span class="keyword">struct </span>TaskContext {</div>
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rax, rbx, rcx, rdx;</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsi, rdi, rbp;</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> r8, r9, r10, r11, r12, r13, r14, r15;</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, error_code;</div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, cs, rflags, rsp, ss;</div>
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>};</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span><span class="preprocessor">#elif defined(CONFIG_ARCH_AARCH64)</span></div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span><span class="keyword">struct </span>TaskContext {</div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> x[31];      <span class="comment">// X0-X30</span></div>
+<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sp_el0;     <span class="comment">// SP_EL0 (user stack pointer)</span></div>
+<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> elr_el1;    <span class="comment">// ELR_EL1 (return address)</span></div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> spsr_el1;   <span class="comment">// SPSR_EL1 (processor state)</span></div>
+<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector;     <span class="comment">// exception vector number</span></div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno">  145</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code; <span class="comment">// exception error code</span></div>
+<div class="line"><a id="l00146" name="l00146"></a><span class="lineno">  146</span>};</div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span><span class="preprocessor">#elif defined(CONFIG_ARCH_RISCV64)</span></div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span><span class="keyword">struct </span>TaskContext {</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ra, sp, gp, tp;</div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc;       <span class="comment">// exception return address</span></div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sstatus;    <span class="comment">// supervisor status register</span></div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stvec;      <span class="comment">// trap vector base</span></div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector;     <span class="comment">// exception vector number</span></div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code; <span class="comment">// exception error code</span></div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>};</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span></div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span><span class="keyword">struct </span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> {</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="namespacemem.html#a710467a64fb906235a4120c91987afab">STACK_SIZE</a> = <a class="code hl_define" href="nexios__config_8h.html#aa345b3c812d23b1ef0f9ae26d6005f64">CONFIG_STACK_SIZE</a>;</div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> KERNEL_CS = 0x08;</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> KERNEL_SS = 0x10;</div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> USER_CS = 0x1B;</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> USER_SS = 0x23;</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> FLAGS_IF = 0x200;</div>
+<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> TCB_MAGIC = 0x5443424D41474943ULL;</div>
+<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span></div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> NO_PERIOD = 0xFFFFFFFFULL;</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span></div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">bool</span> is_valid(<span class="keyword">const</span> TaskControlBlock *t) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>        <span class="keywordflow">if</span> (<span class="keyword">reinterpret_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(t) &lt; 0xFFFF800000000000ULL)</div>
+<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>            <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>        <span class="keywordflow">return</span> t-&gt;magic == TCB_MAGIC;</div>
+<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>    }</div>
+<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>    <span class="keywordtype">char</span> name[<a class="code hl_define" href="nexios__config_8h.html#a8125ddc77bbb15588608c8b894dfd1f3">CONFIG_TASK_NAME_LEN</a>];</div>
+<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span> </div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span><span class="preprocessor">#ifdef CONFIG_DEBUG</span></div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    <span class="keyword">struct </span>DebugSwitchRecord {</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_addr; </div>
+<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_rip;   </div>
+<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>        TaskContext regs;    </div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> thread_id;  </div>
+<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> consumed_ticks; </div>
+<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span>    };</div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> DEBUG_SWITCH_RING_SIZE = 4;</div>
+<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>    DebugSwitchRecord debug_switch_ring[DEBUG_SWITCH_RING_SIZE];</div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debug_switch_idx;</div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span> </div>
+<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a>()</div>
+<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span>        :</div>
+<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span>#ifdef CONFIG_DEBUG</div>
+<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>          debug_switch_idx(0),</div>
+<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span>#endif</div>
+<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span>          id(0), parent_id(0), state(TaskState::READY), priority(0),</div>
+<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>          base_priority(0), period_ticks(0), deadline_ticks(0),</div>
+<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span>          deadline_missed(false), deadline_miss_count(0), executed_ticks(0),</div>
+<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span>          remaining_ticks(0), wcet_ticks(0), wcet_overrun_fired(false),</div>
+<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span>          ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),</div>
+<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span>          exit_code(0), context({}), kernel_stack(<span class="keyword">nullptr</span>), kernel_stack_top(0),</div>
+<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span>          stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),</div>
+<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span>          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),</div>
+<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span>          user_stack_size_(0), user_data(<span class="keyword">nullptr</span>), is_user_(<span class="keyword">false</span>),</div>
+<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span>          canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},</div>
+<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span>          canary_installed(0), fpu_used(<span class="keyword">false</span>), fpu_state{}, program_break(0),</div>
+<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span>          program_break_start(0), kstack_low_water_(0), text_size_(0),</div>
+<div class="line"><a id="l00222" name="l00222"></a><span class="lineno">  222</span>          data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span>          runq_next_(<span class="keyword">nullptr</span>), runq_prev_(<span class="keyword">nullptr</span>), dl_next_(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span>          dl_prev_(<span class="keyword">nullptr</span>), pri_next_(<span class="keyword">nullptr</span>), pri_prev_(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span>          in_ready_queue_(<span class="keyword">false</span>), rq_priority_(0), all_bucket_(0),</div>
+<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span>          zombie_next_(<span class="keyword">nullptr</span>), waiting_child_pid(0),</div>
+<div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span>          waiting_child_status(<span class="keyword">nullptr</span>), pending_signals(0), alarm_ticks(0),</div>
+<div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span>          alarm_armed(<span class="keyword">false</span>), sporadic_server(<span class="keyword">nullptr</span>), cspace_(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00229" name="l00229"></a><span class="lineno">  229</span>          buf_list_head(0), task_obj_head_(<span class="keyword">nullptr</span>), task_obj_tail_(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00230" name="l00230"></a><span class="lineno">  230</span>          blocked_next(<span class="keyword">nullptr</span>), blocked_prev(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span>          blocked_on_queue(<span class="keyword">nullptr</span>), reply_wait(<span class="keyword">false</span>),</div>
+<div class="line"><a id="l00232" name="l00232"></a><span class="lineno">  232</span>          waiting_on_mutex(<span class="keyword">nullptr</span>), waiting_on_semaphore(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span>          waiting_on_eventgroup(<span class="keyword">nullptr</span>), waiting_on_queue(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00234" name="l00234"></a><span class="lineno">  234</span>          held_ceiling_depth_(0), system_ceiling_(0), first_child(<span class="keyword">nullptr</span>),</div>
+<div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span>          next_sibling(<span class="keyword">nullptr</span>), prev_sibling(<span class="keyword">nullptr</span>), num_children(0),</div>
+<div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span>          generation(0) {</div>
+<div class="line"><a id="l00237" name="l00237"></a><span class="lineno">  237</span>    }</div>
+<div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span> </div>
+<div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> magic;</div>
+<div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> id;</div>
+<div class="line"><a id="l00241" name="l00241"></a><span class="lineno">  241</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> parent_id;</div>
+<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span>    TaskState state;</div>
+<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority;</div>
+<div class="line"><a id="l00244" name="l00244"></a><span class="lineno">  244</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> base_priority;</div>
+<div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks;</div>
+<div class="line"><a id="l00246" name="l00246"></a><span class="lineno">  246</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> deadline_ticks;</div>
+<div class="line"><a id="l00247" name="l00247"></a><span class="lineno">  247</span>    <span class="keywordtype">bool</span> deadline_missed;</div>
+<div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> deadline_miss_count;</div>
+<div class="line"><a id="l00249" name="l00249"></a><span class="lineno">  249</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> executed_ticks;</div>
+<div class="line"><a id="l00250" name="l00250"></a><span class="lineno">  250</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> remaining_ticks;</div>
+<div class="line"><a id="l00251" name="l00251"></a><span class="lineno">  251</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div>
+<div class="line"><a id="l00252" name="l00252"></a><span class="lineno">  252</span>        wcet_ticks; </div>
+<div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span>    <span class="keywordtype">bool</span> wcet_overrun_fired; </div>
+<div class="line"><a id="l00254" name="l00254"></a><span class="lineno">  254</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> ss_state_on_deadline_miss; </div>
+<div class="line"><a id="l00256" name="l00256"></a><span class="lineno">  256</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ss_budget_on_deadline_miss; </div>
+<div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_code;</div>
+<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span> </div>
+<div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>    TaskContext context;</div>
+<div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *kernel_stack;</div>
+<div class="line"><a id="l00262" name="l00262"></a><span class="lineno">  262</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel_stack_top;</div>
+<div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stack_phys_;</div>
+<div class="line"><a id="l00264" name="l00264"></a><span class="lineno">  264</span></div>
+<div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kstack_slot_va_;</div>
+<div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kstack_slot_size_;</div>
+<div class="line"><a id="l00270" name="l00270"></a><span class="lineno">  270</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_;</div>
+<div class="line"><a id="l00275" name="l00275"></a><span class="lineno">  275</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stack_pdpt_phys_;</div>
+<div class="line"><a id="l00276" name="l00276"></a><span class="lineno">  276</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_stack_;</div>
+<div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_stack_size_;</div>
+<div class="line"><a id="l00278" name="l00278"></a><span class="lineno">  278</span>    <span class="keywordtype">void</span> *user_data;</div>
+<div class="line"><a id="l00284" name="l00284"></a><span class="lineno">  284</span>    <span class="keywordtype">bool</span> is_user_;</div>
+<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span> </div>
+<div class="line"><a id="l00286" name="l00286"></a><span class="lineno">  286</span>    <span class="comment">// ------------------------------------------------------------------</span></div>
+<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>    <span class="comment">// Software sentinel canaries (v0.4.0 MP-3)</span></div>
+<div class="line"><a id="l00288" name="l00288"></a><span class="lineno">  288</span>    <span class="comment">// ------------------------------------------------------------------</span></div>
+<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> CANARY_MAGIC = 0x4E45584943414E59ULL;</div>
+<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span></div>
+<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span>    <span class="keyword">enum</span> CanarySegment : <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> {</div>
+<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span>        SEG_TEXT = 0,</div>
+<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span>        SEG_DATA = 1,</div>
+<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span>        SEG_HEAP = 2,</div>
+<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span>        SEG_STACK = 3,</div>
+<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span>        CANARY_SEGMENTS = 4,</div>
+<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span>    };</div>
 <div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span></div>
-<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *dl_next_;</div>
-<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *dl_prev_;</div>
-<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span></div>
-<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *pri_next_;</div>
-<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *pri_prev_;</div>
-<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>    <span class="keywordtype">bool</span> in_ready_queue_;</div>
-<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rq_priority_;</div>
-<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> all_bucket_;</div>
+<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> canary_before[CANARY_SEGMENTS];</div>
+<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> canary_after[CANARY_SEGMENTS];</div>
+<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> canary_installed;</div>
+<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span></div>
+<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>    <span class="keywordtype">bool</span> fpu_used;</div>
+<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span>    <span class="keyword">alignas</span>(16) <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> fpu_state[512];</div>
+<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span> </div>
+<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> program_break;</div>
+<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> program_break_start;</div>
 <div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span></div>
-<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *zombie_next_ = <span class="keyword">nullptr</span>;</div>
-<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span> </div>
-<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> waiting_child_pid;</div>
-<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *waiting_child_status;</div>
-<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span></div>
-<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span>    <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> signal_handlers[MAX_SIGNAL_HANDLERS];</div>
-<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span></div>
-<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pending_signals;</div>
-<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span></div>
-<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> alarm_ticks;</div>
-<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span></div>
-<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span>    <span class="keywordtype">bool</span> alarm_armed;</div>
-<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span></div>
-<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>    MessageQueue msg_queue;</div>
-<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span></div>
-<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span>    sync::Notify notify;</div>
-<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span></div>
-<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span>    sync::EventGroup event_group;</div>
-<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span></div>
-<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span>    task::SporadicServer *sporadic_server;</div>
-<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span></div>
-<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span>    <a class="code hl_typedef" href="types_8hpp.html#ab98e3fd00411dc43753c9fcd0f2fb845">int32_t</a> buf_list_head;</div>
-<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span></div>
-<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_next;</div>
-<div class="line"><a id="l00361" name="l00361"></a><span class="lineno">  361</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_prev;</div>
-<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span></div>
-<div class="line"><a id="l00368" name="l00368"></a><span class="lineno">  368</span>    MessageQueue *blocked_on_queue;</div>
-<div class="line"><a id="l00369" name="l00369"></a><span class="lineno">  369</span></div>
-<div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span>    <span class="keywordtype">bool</span> reply_wait;</div>
+<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kstack_low_water_;</div>
+<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span></div>
+<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> text_size_;</div>
+<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> data_size_;</div>
+<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bss_size_;</div>
+<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span></div>
+<div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> memory_budget_pages_;</div>
+<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> memory_used_pages_;</div>
+<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span> </div>
+<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>    vfs::FdTable fd_table;</div>
+<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span>    <span class="keywordtype">char</span> cwd[<a class="code hl_define" href="nexios__config_8h.html#aab75aa8a7d758ce4e36fa6be7fbce78b">CONFIG_VFS_MAX_PATH</a>];</div>
+<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span>    vfs::Vnode *cwd_vnode;</div>
+<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>    sync::SpinLock cwd_lock_;</div>
+<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span></div>
+<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *runq_next_;</div>
+<div class="line"><a id="l00348" name="l00348"></a><span class="lineno">  348</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *runq_prev_;</div>
+<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span></div>
+<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *dl_next_;</div>
+<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *dl_prev_;</div>
+<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span></div>
+<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *pri_next_;</div>
+<div class="line"><a id="l00358" name="l00358"></a><span class="lineno">  358</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *pri_prev_;</div>
+<div class="line"><a id="l00361" name="l00361"></a><span class="lineno">  361</span>    <span class="keywordtype">bool</span> in_ready_queue_;</div>
+<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rq_priority_;</div>
+<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> all_bucket_;</div>
+<div class="line"><a id="l00367" name="l00367"></a><span class="lineno">  367</span></div>
+<div class="line"><a id="l00371" name="l00371"></a><span class="lineno">  371</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *zombie_next_ = <span class="keyword">nullptr</span>;</div>
+<div class="line"><a id="l00372" name="l00372"></a><span class="lineno">  372</span> </div>
+<div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> waiting_child_pid;</div>
+<div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *waiting_child_status;</div>
 <div class="line"><a id="l00375" name="l00375"></a><span class="lineno">  375</span></div>
-<div class="line"><a id="l00380" name="l00380"></a><span class="lineno">  380</span>    sync::Mutex *waiting_on_mutex;</div>
-<div class="line"><a id="l00381" name="l00381"></a><span class="lineno">  381</span></div>
-<div class="line"><a id="l00388" name="l00388"></a><span class="lineno">  388</span>    sync::Semaphore *waiting_on_semaphore;</div>
-<div class="line"><a id="l00389" name="l00389"></a><span class="lineno">  389</span></div>
-<div class="line"><a id="l00396" name="l00396"></a><span class="lineno">  396</span>    sync::EventGroup *waiting_on_eventgroup;</div>
+<div class="line"><a id="l00378" name="l00378"></a><span class="lineno">  378</span>    <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> signal_handlers[MAX_SIGNAL_HANDLERS];</div>
+<div class="line"><a id="l00379" name="l00379"></a><span class="lineno">  379</span></div>
+<div class="line"><a id="l00381" name="l00381"></a><span class="lineno">  381</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pending_signals;</div>
+<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span></div>
+<div class="line"><a id="l00384" name="l00384"></a><span class="lineno">  384</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> alarm_ticks;</div>
+<div class="line"><a id="l00385" name="l00385"></a><span class="lineno">  385</span></div>
+<div class="line"><a id="l00387" name="l00387"></a><span class="lineno">  387</span>    <span class="keywordtype">bool</span> alarm_armed;</div>
+<div class="line"><a id="l00388" name="l00388"></a><span class="lineno">  388</span></div>
+<div class="line"><a id="l00390" name="l00390"></a><span class="lineno">  390</span>    MessageQueue msg_queue;</div>
+<div class="line"><a id="l00391" name="l00391"></a><span class="lineno">  391</span></div>
+<div class="line"><a id="l00393" name="l00393"></a><span class="lineno">  393</span>    sync::Notify notify;</div>
+<div class="line"><a id="l00394" name="l00394"></a><span class="lineno">  394</span></div>
+<div class="line"><a id="l00396" name="l00396"></a><span class="lineno">  396</span>    sync::EventGroup event_group;</div>
 <div class="line"><a id="l00397" name="l00397"></a><span class="lineno">  397</span></div>
-<div class="line"><a id="l00403" name="l00403"></a><span class="lineno">  403</span>    sync::Queue *waiting_on_queue;</div>
-<div class="line"><a id="l00404" name="l00404"></a><span class="lineno">  404</span></div>
-<div class="line"><a id="l00407" name="l00407"></a><span class="lineno">  407</span>    <span class="keywordtype">size_t</span> held_ceiling_depth_;</div>
-<div class="line"><a id="l00409" name="l00409"></a><span class="lineno">  409</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> held_ceilings_[<a class="code hl_define" href="nexios__config_8h.html#a9cd0e684a26b0270d442310ccd4330da">CONFIG_MAX_HELD_CEILINGS</a>];</div>
-<div class="line"><a id="l00412" name="l00412"></a><span class="lineno">  412</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> system_ceiling_;</div>
-<div class="line"><a id="l00413" name="l00413"></a><span class="lineno">  413</span></div>
-<div class="line"><a id="l00415" name="l00415"></a><span class="lineno">  415</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *first_child;</div>
-<div class="line"><a id="l00416" name="l00416"></a><span class="lineno">  416</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *next_sibling;</div>
-<div class="line"><a id="l00417" name="l00417"></a><span class="lineno">  417</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *prev_sibling;</div>
-<div class="line"><a id="l00418" name="l00418"></a><span class="lineno">  418</span></div>
-<div class="line"><a id="l00420" name="l00420"></a><span class="lineno">  420</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_children;</div>
-<div class="line"><a id="l00421" name="l00421"></a><span class="lineno">  421</span></div>
-<div class="line"><a id="l00425" name="l00425"></a><span class="lineno">  425</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> generation;</div>
-<div class="line"><a id="l00426" name="l00426"></a><span class="lineno">  426</span></div>
-<div class="line"><a id="l00428" name="l00428"></a><span class="lineno">  428</span>    <span class="keywordtype">bool</span> has_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00429" name="l00429"></a><span class="lineno">  429</span>        <span class="keywordflow">return</span> sig &lt; MAX_SIGNAL_HANDLERS &amp;&amp; signal_handlers[sig] != <span class="keyword">nullptr</span>;</div>
-<div class="line"><a id="l00430" name="l00430"></a><span class="lineno">  430</span>    }</div>
-<div class="line"><a id="l00431" name="l00431"></a><span class="lineno">  431</span></div>
-<div class="line"><a id="l00433" name="l00433"></a><span class="lineno">  433</span>    <span class="keywordtype">void</span> set_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig, <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> handler) {</div>
-<div class="line"><a id="l00434" name="l00434"></a><span class="lineno">  434</span>        <span class="keywordflow">if</span> (sig &lt; MAX_SIGNAL_HANDLERS)</div>
-<div class="line"><a id="l00435" name="l00435"></a><span class="lineno">  435</span>            signal_handlers[sig] = handler;</div>
-<div class="line"><a id="l00436" name="l00436"></a><span class="lineno">  436</span>    }</div>
-<div class="line"><a id="l00437" name="l00437"></a><span class="lineno">  437</span></div>
-<div class="line"><a id="l00439" name="l00439"></a><span class="lineno">  439</span>    <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> get_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00440" name="l00440"></a><span class="lineno">  440</span>        <span class="keywordflow">return</span> (sig &lt; MAX_SIGNAL_HANDLERS) ? signal_handlers[sig] : <span class="keyword">nullptr</span>;</div>
-<div class="line"><a id="l00441" name="l00441"></a><span class="lineno">  441</span>    }</div>
-<div class="line"><a id="l00442" name="l00442"></a><span class="lineno">  442</span></div>
-<div class="line"><a id="l00445" name="l00445"></a><span class="lineno">  445</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *<a class="code hl_function" href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">create</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
-<div class="line"><a id="l00446" name="l00446"></a><span class="lineno">  446</span>                                    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks);</div>
-<div class="line"><a id="l00453" name="l00453"></a><span class="lineno">  453</span>    <span class="keyword">static</span> errors::TaskError <a class="code hl_function" href="namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843">create_err</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
-<div class="line"><a id="l00454" name="l00454"></a><span class="lineno">  454</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
-<div class="line"><a id="l00455" name="l00455"></a><span class="lineno">  455</span>                                        TaskControlBlock *&amp;out_tcb);</div>
-<div class="line"><a id="l00456" name="l00456"></a><span class="lineno">  456</span></div>
-<div class="line"><a id="l00459" name="l00459"></a><span class="lineno">  459</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *create_user(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
-<div class="line"><a id="l00460" name="l00460"></a><span class="lineno">  460</span>                                         <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
-<div class="line"><a id="l00461" name="l00461"></a><span class="lineno">  461</span>                                         <span class="keywordtype">size_t</span> user_stack_size = 32_KiB);</div>
-<div class="line"><a id="l00469" name="l00469"></a><span class="lineno">  469</span>    <span class="keyword">static</span> errors::TaskError create_user_err(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
-<div class="line"><a id="l00470" name="l00470"></a><span class="lineno">  470</span>                                             <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
-<div class="line"><a id="l00471" name="l00471"></a><span class="lineno">  471</span>                                             <span class="keywordtype">size_t</span> user_stack_size,</div>
-<div class="line"><a id="l00472" name="l00472"></a><span class="lineno">  472</span>                                             TaskControlBlock *&amp;out_tcb);</div>
-<div class="line"><a id="l00473" name="l00473"></a><span class="lineno">  473</span></div>
-<div class="line"><a id="l00480" name="l00480"></a><span class="lineno">  480</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *clone(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs);</div>
-<div class="line"><a id="l00485" name="l00485"></a><span class="lineno">  485</span>    <span class="keyword">static</span> errors::TaskError clone_err(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs,</div>
-<div class="line"><a id="l00486" name="l00486"></a><span class="lineno">  486</span>                                       TaskControlBlock *&amp;out_tcb);</div>
-<div class="line"><a id="l00487" name="l00487"></a><span class="lineno">  487</span></div>
-<div class="line"><a id="l00490" name="l00490"></a><span class="lineno">  490</span>    <span class="keywordtype">void</span> save_context(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp) <span class="keyword">noexcept</span>;</div>
-<div class="line"><a id="l00493" name="l00493"></a><span class="lineno">  493</span>    <span class="keywordtype">void</span> restore_context(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp) <span class="keyword">noexcept</span>;</div>
-<div class="line"><a id="l00494" name="l00494"></a><span class="lineno">  494</span></div>
-<div class="line"><a id="l00497" name="l00497"></a><span class="lineno">  497</span>    <span class="keywordtype">void</span> cleanup() noexcept;</div>
+<div class="line"><a id="l00404" name="l00404"></a><span class="lineno">  404</span>    task::SporadicServer *sporadic_server;</div>
+<div class="line"><a id="l00405" name="l00405"></a><span class="lineno">  405</span></div>
+<div class="line"><a id="l00413" name="l00413"></a><span class="lineno">  413</span>    cap::CNode *cspace_;</div>
+<div class="line"><a id="l00414" name="l00414"></a><span class="lineno">  414</span></div>
+<div class="line"><a id="l00418" name="l00418"></a><span class="lineno">  418</span>    <a class="code hl_typedef" href="types_8hpp.html#ab98e3fd00411dc43753c9fcd0f2fb845">int32_t</a> buf_list_head;</div>
+<div class="line"><a id="l00419" name="l00419"></a><span class="lineno">  419</span></div>
+<div class="line"><a id="l00427" name="l00427"></a><span class="lineno">  427</span>    KernelObject *task_obj_head_;</div>
+<div class="line"><a id="l00428" name="l00428"></a><span class="lineno">  428</span>    KernelObject *task_obj_tail_;</div>
+<div class="line"><a id="l00429" name="l00429"></a><span class="lineno">  429</span></div>
+<div class="line"><a id="l00432" name="l00432"></a><span class="lineno">  432</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_next;</div>
+<div class="line"><a id="l00433" name="l00433"></a><span class="lineno">  433</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *blocked_prev;</div>
+<div class="line"><a id="l00434" name="l00434"></a><span class="lineno">  434</span></div>
+<div class="line"><a id="l00440" name="l00440"></a><span class="lineno">  440</span>    MessageQueue *blocked_on_queue;</div>
+<div class="line"><a id="l00441" name="l00441"></a><span class="lineno">  441</span></div>
+<div class="line"><a id="l00446" name="l00446"></a><span class="lineno">  446</span>    <span class="keywordtype">bool</span> reply_wait;</div>
+<div class="line"><a id="l00447" name="l00447"></a><span class="lineno">  447</span></div>
+<div class="line"><a id="l00452" name="l00452"></a><span class="lineno">  452</span>    sync::Mutex *waiting_on_mutex;</div>
+<div class="line"><a id="l00453" name="l00453"></a><span class="lineno">  453</span></div>
+<div class="line"><a id="l00460" name="l00460"></a><span class="lineno">  460</span>    sync::Semaphore *waiting_on_semaphore;</div>
+<div class="line"><a id="l00461" name="l00461"></a><span class="lineno">  461</span></div>
+<div class="line"><a id="l00468" name="l00468"></a><span class="lineno">  468</span>    sync::EventGroup *waiting_on_eventgroup;</div>
+<div class="line"><a id="l00469" name="l00469"></a><span class="lineno">  469</span></div>
+<div class="line"><a id="l00475" name="l00475"></a><span class="lineno">  475</span>    sync::Queue *waiting_on_queue;</div>
+<div class="line"><a id="l00476" name="l00476"></a><span class="lineno">  476</span></div>
+<div class="line"><a id="l00479" name="l00479"></a><span class="lineno">  479</span>    <span class="keywordtype">size_t</span> held_ceiling_depth_;</div>
+<div class="line"><a id="l00481" name="l00481"></a><span class="lineno">  481</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> held_ceilings_[<a class="code hl_define" href="nexios__config_8h.html#a9cd0e684a26b0270d442310ccd4330da">CONFIG_MAX_HELD_CEILINGS</a>];</div>
+<div class="line"><a id="l00484" name="l00484"></a><span class="lineno">  484</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> system_ceiling_;</div>
+<div class="line"><a id="l00485" name="l00485"></a><span class="lineno">  485</span></div>
+<div class="line"><a id="l00487" name="l00487"></a><span class="lineno">  487</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *first_child;</div>
+<div class="line"><a id="l00488" name="l00488"></a><span class="lineno">  488</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *next_sibling;</div>
+<div class="line"><a id="l00489" name="l00489"></a><span class="lineno">  489</span>    <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *prev_sibling;</div>
+<div class="line"><a id="l00490" name="l00490"></a><span class="lineno">  490</span></div>
+<div class="line"><a id="l00492" name="l00492"></a><span class="lineno">  492</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_children;</div>
+<div class="line"><a id="l00493" name="l00493"></a><span class="lineno">  493</span></div>
+<div class="line"><a id="l00497" name="l00497"></a><span class="lineno">  497</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> generation;</div>
 <div class="line"><a id="l00498" name="l00498"></a><span class="lineno">  498</span></div>
-<div class="line"><a id="l00504" name="l00504"></a><span class="lineno">  504</span>    <span class="keywordtype">void</span> operator delete(<span class="keywordtype">void</span> *ptr) noexcept;</div>
-<div class="line"><a id="l00505" name="l00505"></a><span class="lineno">  505</span></div>
-<div class="line"><a id="l00513" name="l00513"></a><span class="lineno">  513</span>    <span class="keywordtype">void</span> init_sporadic_server(</div>
-<div class="line"><a id="l00514" name="l00514"></a><span class="lineno">  514</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> budget_c, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_t, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bg_prio,</div>
-<div class="line"><a id="l00515" name="l00515"></a><span class="lineno">  515</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> budget_granularity =</div>
-<div class="line"><a id="l00516" name="l00516"></a><span class="lineno">  516</span>            <a class="code hl_define" href="nexios__config_8h.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>) noexcept;</div>
-<div class="line"><a id="l00517" name="l00517"></a><span class="lineno">  517</span></div>
-<div class="line"><a id="l00519" name="l00519"></a><span class="lineno">  519</span>    <span class="keywordtype">void</span> add_child(TaskControlBlock *child) noexcept;</div>
-<div class="line"><a id="l00520" name="l00520"></a><span class="lineno">  520</span></div>
-<div class="line"><a id="l00522" name="l00522"></a><span class="lineno">  522</span>    <span class="keywordtype">void</span> remove_child(TaskControlBlock *child) noexcept;</div>
-<div class="line"><a id="l00523" name="l00523"></a><span class="lineno">  523</span></div>
-<div class="line"><a id="l00525" name="l00525"></a><span class="lineno">  525</span>    TaskControlBlock *find_child(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pid) noexcept;</div>
-<div class="line"><a id="l00526" name="l00526"></a><span class="lineno">  526</span>};</div>
-<div class="line"><a id="l00527" name="l00527"></a><span class="lineno">  527</span> </div>
-<div class="line"><a id="l00528" name="l00528"></a><span class="lineno">  528</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00500" name="l00500"></a><span class="lineno">  500</span>    <span class="keywordtype">bool</span> has_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00501" name="l00501"></a><span class="lineno">  501</span>        <span class="keywordflow">return</span> sig &lt; MAX_SIGNAL_HANDLERS &amp;&amp; signal_handlers[sig] != <span class="keyword">nullptr</span>;</div>
+<div class="line"><a id="l00502" name="l00502"></a><span class="lineno">  502</span>    }</div>
+<div class="line"><a id="l00503" name="l00503"></a><span class="lineno">  503</span></div>
+<div class="line"><a id="l00505" name="l00505"></a><span class="lineno">  505</span>    <span class="keywordtype">void</span> set_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig, <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> handler) {</div>
+<div class="line"><a id="l00506" name="l00506"></a><span class="lineno">  506</span>        <span class="keywordflow">if</span> (sig &lt; MAX_SIGNAL_HANDLERS)</div>
+<div class="line"><a id="l00507" name="l00507"></a><span class="lineno">  507</span>            signal_handlers[sig] = handler;</div>
+<div class="line"><a id="l00508" name="l00508"></a><span class="lineno">  508</span>    }</div>
+<div class="line"><a id="l00509" name="l00509"></a><span class="lineno">  509</span></div>
+<div class="line"><a id="l00511" name="l00511"></a><span class="lineno">  511</span>    <a class="code hl_typedef" href="signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a">sighandler_t</a> get_signal_handler(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sig)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00512" name="l00512"></a><span class="lineno">  512</span>        <span class="keywordflow">return</span> (sig &lt; MAX_SIGNAL_HANDLERS) ? signal_handlers[sig] : <span class="keyword">nullptr</span>;</div>
+<div class="line"><a id="l00513" name="l00513"></a><span class="lineno">  513</span>    }</div>
+<div class="line"><a id="l00514" name="l00514"></a><span class="lineno">  514</span></div>
+<div class="line"><a id="l00517" name="l00517"></a><span class="lineno">  517</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *<a class="code hl_function" href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">create</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
+<div class="line"><a id="l00518" name="l00518"></a><span class="lineno">  518</span>                                    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks);</div>
+<div class="line"><a id="l00525" name="l00525"></a><span class="lineno">  525</span>    <span class="keyword">static</span> errors::TaskError <a class="code hl_function" href="namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843">create_err</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
+<div class="line"><a id="l00526" name="l00526"></a><span class="lineno">  526</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
+<div class="line"><a id="l00527" name="l00527"></a><span class="lineno">  527</span>                                        TaskControlBlock *&amp;out_tcb);</div>
+<div class="line"><a id="l00528" name="l00528"></a><span class="lineno">  528</span></div>
+<div class="line"><a id="l00531" name="l00531"></a><span class="lineno">  531</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *create_user(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
+<div class="line"><a id="l00532" name="l00532"></a><span class="lineno">  532</span>                                         <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
+<div class="line"><a id="l00533" name="l00533"></a><span class="lineno">  533</span>                                         <span class="keywordtype">size_t</span> user_stack_size = 32_KiB);</div>
+<div class="line"><a id="l00541" name="l00541"></a><span class="lineno">  541</span>    <span class="keyword">static</span> errors::TaskError create_user_err(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
+<div class="line"><a id="l00542" name="l00542"></a><span class="lineno">  542</span>                                             <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
+<div class="line"><a id="l00543" name="l00543"></a><span class="lineno">  543</span>                                             <span class="keywordtype">size_t</span> user_stack_size,</div>
+<div class="line"><a id="l00544" name="l00544"></a><span class="lineno">  544</span>                                             TaskControlBlock *&amp;out_tcb);</div>
+<div class="line"><a id="l00545" name="l00545"></a><span class="lineno">  545</span></div>
+<div class="line"><a id="l00552" name="l00552"></a><span class="lineno">  552</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *clone(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs);</div>
+<div class="line"><a id="l00557" name="l00557"></a><span class="lineno">  557</span>    <span class="keyword">static</span> errors::TaskError clone_err(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs,</div>
+<div class="line"><a id="l00558" name="l00558"></a><span class="lineno">  558</span>                                       TaskControlBlock *&amp;out_tcb);</div>
+<div class="line"><a id="l00559" name="l00559"></a><span class="lineno">  559</span></div>
+<div class="line"><a id="l00562" name="l00562"></a><span class="lineno">  562</span>    <span class="keywordtype">void</span> save_context(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00565" name="l00565"></a><span class="lineno">  565</span>    <span class="keywordtype">void</span> restore_context(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;rsp) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00566" name="l00566"></a><span class="lineno">  566</span></div>
+<div class="line"><a id="l00569" name="l00569"></a><span class="lineno">  569</span>    <span class="keywordtype">void</span> cleanup() noexcept;</div>
+<div class="line"><a id="l00570" name="l00570"></a><span class="lineno">  570</span></div>
+<div class="line"><a id="l00576" name="l00576"></a><span class="lineno">  576</span>    <span class="keywordtype">void</span> operator delete(<span class="keywordtype">void</span> *ptr) noexcept;</div>
+<div class="line"><a id="l00577" name="l00577"></a><span class="lineno">  577</span></div>
+<div class="line"><a id="l00585" name="l00585"></a><span class="lineno">  585</span>    <span class="keywordtype">void</span> init_sporadic_server(</div>
+<div class="line"><a id="l00586" name="l00586"></a><span class="lineno">  586</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> budget_c, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_t, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bg_prio,</div>
+<div class="line"><a id="l00587" name="l00587"></a><span class="lineno">  587</span>        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> budget_granularity =</div>
+<div class="line"><a id="l00588" name="l00588"></a><span class="lineno">  588</span>            <a class="code hl_define" href="nexios__config_8h.html#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>) noexcept;</div>
+<div class="line"><a id="l00589" name="l00589"></a><span class="lineno">  589</span></div>
+<div class="line"><a id="l00593" name="l00593"></a><span class="lineno">  593</span>    <span class="keywordtype">void</span> attach_object(KernelObject *obj) noexcept;</div>
+<div class="line"><a id="l00594" name="l00594"></a><span class="lineno">  594</span></div>
+<div class="line"><a id="l00599" name="l00599"></a><span class="lineno">  599</span>    <span class="keywordtype">void</span> detach_object(KernelObject *obj) noexcept;</div>
+<div class="line"><a id="l00600" name="l00600"></a><span class="lineno">  600</span></div>
+<div class="line"><a id="l00606" name="l00606"></a><span class="lineno">  606</span>    <span class="keywordtype">void</span> detach_all_objects() noexcept;</div>
+<div class="line"><a id="l00607" name="l00607"></a><span class="lineno">  607</span></div>
+<div class="line"><a id="l00612" name="l00612"></a><span class="lineno">  612</span>    <span class="keywordtype">void</span> release_all_objects() noexcept;</div>
+<div class="line"><a id="l00613" name="l00613"></a><span class="lineno">  613</span></div>
+<div class="line"><a id="l00617" name="l00617"></a><span class="lineno">  617</span>    task::SporadicServer *get_sporadic_server() const noexcept {</div>
+<div class="line"><a id="l00618" name="l00618"></a><span class="lineno">  618</span>        <span class="keywordflow">return</span> sporadic_server;</div>
+<div class="line"><a id="l00619" name="l00619"></a><span class="lineno">  619</span>    }</div>
+<div class="line"><a id="l00620" name="l00620"></a><span class="lineno">  620</span></div>
+<div class="line"><a id="l00624" name="l00624"></a><span class="lineno">  624</span>    cap::CNode *get_cspace() const noexcept {</div>
+<div class="line"><a id="l00625" name="l00625"></a><span class="lineno">  625</span>        <span class="keywordflow">return</span> cspace_;</div>
+<div class="line"><a id="l00626" name="l00626"></a><span class="lineno">  626</span>    }</div>
+<div class="line"><a id="l00627" name="l00627"></a><span class="lineno">  627</span></div>
+<div class="line"><a id="l00631" name="l00631"></a><span class="lineno">  631</span>    <span class="keywordtype">void</span> ensure_cspace() noexcept;</div>
+<div class="line"><a id="l00632" name="l00632"></a><span class="lineno">  632</span></div>
+<div class="line"><a id="l00634" name="l00634"></a><span class="lineno">  634</span>    <span class="keywordtype">void</span> add_child(TaskControlBlock *child) noexcept;</div>
+<div class="line"><a id="l00635" name="l00635"></a><span class="lineno">  635</span></div>
+<div class="line"><a id="l00637" name="l00637"></a><span class="lineno">  637</span>    <span class="keywordtype">void</span> remove_child(TaskControlBlock *child) noexcept;</div>
+<div class="line"><a id="l00638" name="l00638"></a><span class="lineno">  638</span></div>
+<div class="line"><a id="l00640" name="l00640"></a><span class="lineno">  640</span>    TaskControlBlock *find_child(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pid) noexcept;</div>
+<div class="line"><a id="l00641" name="l00641"></a><span class="lineno">  641</span>};</div>
+<div class="line"><a id="l00642" name="l00642"></a><span class="lineno">  642</span></div>
+<div class="line"><a id="l00646" name="l00646"></a><span class="lineno">  646</span><span class="keywordtype">size_t</span> kslot_snapshot_bytes();</div>
+<div class="line"><a id="l00647" name="l00647"></a><span class="lineno">  647</span></div>
+<div class="line"><a id="l00650" name="l00650"></a><span class="lineno">  650</span><span class="keywordtype">void</span> kslot_snapshot_capture(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst);</div>
+<div class="line"><a id="l00651" name="l00651"></a><span class="lineno">  651</span></div>
+<div class="line"><a id="l00654" name="l00654"></a><span class="lineno">  654</span><span class="keywordtype">void</span> kslot_snapshot_restore(const <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *src);</div>
+<div class="line"><a id="l00655" name="l00655"></a><span class="lineno">  655</span> </div>
+<div class="line"><a id="l00656" name="l00656"></a><span class="lineno">  656</span><span class="comment">// --- Software sentinel canaries (v0.4.0 MP-3) ---</span></div>
+<div class="line"><a id="l00658" name="l00658"></a><span class="lineno">  658</span><span class="keywordtype">void</span> canary_write_at(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4);</div>
+<div class="line"><a id="l00660" name="l00660"></a><span class="lineno">  660</span><span class="keywordtype">void</span> canary_install_user_segments(TaskControlBlock *t);</div>
+<div class="line"><a id="l00662" name="l00662"></a><span class="lineno">  662</span><span class="keywordtype">void</span> canary_install_kernel_stack(TaskControlBlock *t);</div>
+<div class="line"><a id="l00664" name="l00664"></a><span class="lineno">  664</span><span class="keywordtype">bool</span> canary_verify_user_segments(const TaskControlBlock *t,</div>
+<div class="line"><a id="l00665" name="l00665"></a><span class="lineno">  665</span>                                 <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> &amp;bad_segment, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;bad_va);</div>
+<div class="line"><a id="l00667" name="l00667"></a><span class="lineno">  667</span><span class="keywordtype">bool</span> canary_verify_kernel_stack(const TaskControlBlock *t);</div>
+<div class="line"><a id="l00668" name="l00668"></a><span class="lineno">  668</span> </div>
+<div class="line"><a id="l00669" name="l00669"></a><span class="lineno">  669</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="aclasskernel_1_1cap_1_1_c_node_html"><div class="ttname"><a href="classkernel_1_1cap_1_1_c_node.html">kernel::cap::CNode</a></div><div class="ttdoc">A capability node: a bounded table of slots. Itself a KernelObject (shared-heap class,...</div><div class="ttdef"><b>Definition</b> cap.hpp:47</div></div>
 <div class="ttc" id="aconstants_8hpp_html"><div class="ttname"><a href="constants_8hpp.html">constants.hpp</a></div><div class="ttdoc">Central hardware and memory-layout constants (no magic numbers).</div></div>
 <div class="ttc" id="aeventgroup_8hpp_html"><div class="ttname"><a href="eventgroup_8hpp.html">eventgroup.hpp</a></div><div class="ttdoc">Event group (bitmask) — wait on any/set/clear with per-waiter clear-on-exit.</div></div>
+<div class="ttc" id="akernel__object_8hpp_html"><div class="ttname"><a href="kernel__object_8hpp.html">kernel_object.hpp</a></div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
+<div class="ttc" id="anamespacekernel_1_1cap_html"><div class="ttname"><a href="namespacekernel_1_1cap.html">kernel::cap</a></div><div class="ttdef"><b>Definition</b> cap.cpp:35</div></div>
+<div class="ttc" id="anamespacekernel_1_1gs_html_a76856024b0a520a9012fad1026c4efaaa43491564ebcfd38568918efbd6e840fd"><div class="ttname"><a href="namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaa43491564ebcfd38568918efbd6e840fd">kernel::gs::StatePhase::RUNNING</a></div><div class="ttdeci">@ RUNNING</div><div class="ttdoc">Post-init, normal operation (daemons + user tasks).</div><div class="ttdef"><b>Definition</b> global_state.hpp:71</div></div>
 <div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_1_1task_html"><div class="ttname"><a href="namespacekernel_1_1task.html">kernel::task</a></div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:21</div></div>
-<div class="ttc" id="anamespacekernel_1_1task_html_ae7fc9a59f78d98d18c2d3c5a25ec2193"><div class="ttname"><a href="namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193">kernel::task::dmesg_task_main</a></div><div class="ttdeci">void dmesg_task_main()</div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:61</div></div>
+<div class="ttc" id="anamespacekernel_1_1task_html_ae7fc9a59f78d98d18c2d3c5a25ec2193"><div class="ttname"><a href="namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193">kernel::task::dmesg_task_main</a></div><div class="ttdeci">void dmesg_task_main()</div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:49</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a19093f8bf45bac4a87dc6818084e3843"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a19093f8bf45bac4a87dc6818084e3843">kernel::vfs::create_err</a></div><div class="ttdeci">VfsError create_err(const char *path, uint16_t mode)</div><div class="ttdoc">Create a regular file with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:521</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a94bddce0efe1b0b6a3dade264883f7ce"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">kernel::vfs::create</a></div><div class="ttdeci">int create(const char *path, uint16_t mode)</div><div class="ttdoc">Create a regular file at the given path.</div><div class="ttdef"><b>Definition</b> vfs.cpp:415</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
-<div class="ttc" id="anamespacekernel_html_abb9b26c8d76b814b9ed2a3c78bad290e"><div class="ttname"><a href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">kernel::init_task_common</a></div><div class="ttdeci">void init_task_common(TaskControlBlock &amp;tcb)</div><div class="ttdef"><b>Definition</b> task.cpp:130</div></div>
+<div class="ttc" id="anamespacekernel_html_abb9b26c8d76b814b9ed2a3c78bad290e"><div class="ttname"><a href="namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e">kernel::init_task_common</a></div><div class="ttdeci">void init_task_common(TaskControlBlock &amp;tcb)</div><div class="ttdef"><b>Definition</b> task.cpp:265</div></div>
 <div class="ttc" id="anamespacekernel_html_aec37532c2fb1a123d928e41e13297533"><div class="ttname"><a href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">kernel::head</a></div><div class="ttdeci">const TaskControlBlock * head</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:136</div></div>
 <div class="ttc" id="anamespacemem_html_a710467a64fb906235a4120c91987afab"><div class="ttname"><a href="namespacemem.html#a710467a64fb906235a4120c91987afab">mem::STACK_SIZE</a></div><div class="ttdeci">constexpr size_t STACK_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:115</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>

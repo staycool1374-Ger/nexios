@@ -24,6 +24,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/cap/mmio.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -489,6 +490,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     if (!tcb)
         return nullptr;
     memset(tcb, 0, sizeof(TaskControlBlock));
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = kernel::Scheduler::alloc_id();
     tcb->state = TaskState::READY;
@@ -560,7 +562,8 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     *--stack = 0;          // padding
     *--stack = 0;          // padding
-    *--stack = 0x10;       // SPSR_EL1: EL0t
+    *--stack = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) — bit 4 set
+                           // would eret into AArch32 EL0, not EL0t.
     *--stack = hdr->entry; // ELR_EL1
     *--stack = user_rsp;   // SP_EL0
     for (int j = 0; j < 31; ++j)
@@ -585,6 +588,32 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     // v0.4.0 MP-3: arm segment-boundary canaries (TEXT/DATA/STACK/HEAP +
     // kernel-stack) after the address space is fully mapped.
     install_segment_canaries(tcb, hdr, phdr_image, file_size);
+
+    // Capture user-image segment sizes (text/data/bss) for the `tasks`
+    // memory report.  Summed from the PT_LOAD program headers.
+    {
+        uint64_t text = 0, data = 0, bss = 0;
+        for (uint16_t i = 0; i < hdr->phnum; ++i) {
+            auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+                phdr_image + hdr->phoff +
+                static_cast<uint64_t>(i) * hdr->phentsize);
+            if (!phdr || phdr->type != PT_LOAD)
+                continue;
+            if (!validate_segment(phdr, file_size))
+                continue;
+            const uint64_t memsz = phdr->memsz;
+            const uint64_t filesz = phdr->filesz;
+            if (phdr->flags & PF_X)
+                text += memsz;
+            else if (phdr->flags & PF_W)
+                data += memsz;
+            if (memsz > filesz)
+                bss += memsz - filesz;
+        }
+        tcb->text_size_ = text;
+        tcb->data_size_ = data;
+        tcb->bss_size_ = bss;
+    }
 
     return tcb;
 }
@@ -684,6 +713,11 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // Free zero-copy buffers mapped into the OLD page table before swapping it
     // out
     BufferPool::unmap_all(*tcb);
+    // Issue #8: drain the task's user MMIO mappings from the OLD page table
+    // before it is freed - a stored slot pml4 must never dangle past exec
+    // (a later unmap/revoke/cleanup would write PTE entries into freed
+    // page-table memory).
+    cap::MmioUserMap::drain_task(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
     tcb->page_table_ = new_pml4;
@@ -729,7 +763,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
 #elif defined(CONFIG_ARCH_AARCH64)
     regs[0] = 0;           // X0 = 0
     regs[17] = hdr->entry; // ELR_EL1 (index 17)
-    regs[19] = 0x10;       // SPSR_EL1: EL0t (index 19)
+    regs[19] = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) (index 19)
     regs[20] = user_rsp;   // SP_EL0 (index 20)
 #elif defined(CONFIG_ARCH_RISCV64)
     (void)regs;

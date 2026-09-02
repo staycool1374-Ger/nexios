@@ -23,12 +23,22 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/sync/spinlock.hpp>
+#include <kernel/sync/spinlock_guard.hpp>
 #include <string.hpp>
 #include <logger.hpp>
 
 using namespace kernel;
 
 namespace net {
+
+// M-3 (audit-drivers-vfs-net-v0.4.2): the RX path (net_poll / net_handle_frame)
+// and the send/query paths (net_send_udp, net_arp_resolve) run in task context
+// on a single core, but they interleave through cooperative polling — guard
+// the shared mutable state with a module spinlock so a poll-driven RX can never
+// tear an ARP-cache update or the ICMP reply record mid-read/write.
+static sync::SpinLock g_net_lock{};
 
 static ArpCache g_arp_cache{};
 static uint16_t g_ip_ident = 0;
@@ -38,12 +48,14 @@ static IcmpEchoReply g_icmp_reply{};
 
 /// @brief Reset the ICMP echo reply record.
 void net_icmp_clear_reply() {
+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
     g_icmp_reply.received = false;
 }
 
 /// @brief Record an ICMP echo reply.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void net_icmp_set_reply(uint16_t ident, uint16_t seq, Ipv4Addr src) {
+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
     g_icmp_reply.received = true;
     g_icmp_reply.ident = ident;
     g_icmp_reply.seq = seq;
@@ -53,6 +65,9 @@ void net_icmp_set_reply(uint16_t ident, uint16_t seq, Ipv4Addr src) {
 
 /// @brief Return a pointer to the last received ICMP echo reply, or nullptr.
 const IcmpEchoReply *net_icmp_last_reply() {
+    // The caller uses the returned record immediately (poll-driven RX in the
+    // same task context); the lock orders the write before this read.
+    SpinLockGuard<sync::SpinLock> guard(g_net_lock);
     return g_icmp_reply.received ? &g_icmp_reply : nullptr;
 }
 
@@ -68,7 +83,10 @@ void net_init(Nic &nic, MacAddr mac, Ipv4Addr ip, Ipv4Addr subnet,
     nic.ip = ip;
     nic.subnet = subnet;
     nic.gateway = gateway;
-    g_arp_cache.clear();
+    {
+        SpinLockGuard<sync::SpinLock> guard(g_net_lock);
+        g_arp_cache.clear();
+    }
     kernel::gs::try_set_nic(&nic);
     Logger::info("net: initialized %d.%d.%d.%d", ip.addr[0], ip.addr[1],
                  ip.addr[2], ip.addr[3]);
@@ -121,6 +139,7 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
             }
         } else if (oper == ARP_OPER_REPLY) {
             // Update ARP cache
+            SpinLockGuard<sync::SpinLock> guard(g_net_lock);
             g_arp_cache.update(arp->spa, arp->sha);
         }
     } else if (type == ETH_TYPE_IPV4) {
@@ -145,6 +164,7 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
                 reinterpret_cast<const IcmpHeader *>(data + icmp_offset);
 
             if (icmp->type == ICMP_TYPE_ECHO_REPLY) {
+                SpinLockGuard<sync::SpinLock> guard(g_net_lock);
                 g_icmp_reply.received = true;
                 g_icmp_reply.ident = icmp->ident;
                 g_icmp_reply.seq = icmp->seq;
@@ -232,7 +252,10 @@ bool net_send_udp(Nic &nic, Ipv4Addr dst_ip, uint16_t dst_port,
     ip->ver_ihl = 0x45; // IPv4, 20-byte header
     ip->dscp_ecn = 0;
     ip->total_length = __builtin_bswap16(static_cast<uint16_t>(total_ip_len));
-    ip->ident = __builtin_bswap16(g_ip_ident++);
+    // M-3: atomic IP identification — the RX/send paths interleave through
+    // cooperative polling and a plain post-increment could duplicate values.
+    ip->ident = __builtin_bswap16(static_cast<uint16_t>(
+        __atomic_fetch_add(&g_ip_ident, 1U, __ATOMIC_RELAXED)));
     ip->flags_frag = __builtin_bswap16(0x4000); // Don't Fragment
     ip->ttl = 64;
     ip->protocol = IP_PROTO_UDP;
@@ -278,6 +301,7 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
                         const uint8_t *data, size_t data_len) {
     // Loopback / self-ping: reflect instantly
     if (dst_ip.as_u32() == 0x7F000001 || dst_ip.as_u32() == nic.ip.as_u32()) {
+        SpinLockGuard<sync::SpinLock> guard(g_net_lock);
         g_icmp_reply.received = true;
         g_icmp_reply.ident = id;
         g_icmp_reply.seq = seq;
@@ -314,7 +338,8 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
     ip->ver_ihl = 0x45;
     ip->dscp_ecn = 0;
     ip->total_length = __builtin_bswap16(static_cast<uint16_t>(ip_total));
-    ip->ident = __builtin_bswap16(g_ip_ident++);
+    ip->ident = __builtin_bswap16(static_cast<uint16_t>(
+        __atomic_fetch_add(&g_ip_ident, 1U, __ATOMIC_RELAXED)));
     ip->flags_frag = __builtin_bswap16(0x4000);
     ip->ttl = 64;
     ip->protocol = IP_PROTO_ICMP;

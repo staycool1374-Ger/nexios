@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -156,13 +156,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bootinfo_8hpp_
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keywordtype">int</span> num_mem_regions;     </div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> total_mem_size; </div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> dtb_ptr;        </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> multiboot_magic; </div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a>; </div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> multiboot_info;  </div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordtype">char</span> cmdline[256];        </div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    <span class="keywordtype">int</span> hart_id;              </div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> </div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    BootInfo()</div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        : num_mem_regions(0), total_mem_size(0), dtb_ptr(0), multiboot_magic(0),</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        : num_mem_regions(0), total_mem_size(0), dtb_ptr(0), <a class="code hl_variable" href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a>(0),</div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>          multiboot_info(0), hart_id(0) {</div>
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        cmdline[0] = <span class="charliteral">&#39;\0&#39;</span>;</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    }</div>
@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('bootinfo_8hpp_
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        }</div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    }</div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>};</div>
+<div class="ttc" id="aglobal__state_8cpp_html_a16fea7346fbc792334a098eb9b61c77a"><div class="ttname"><a href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a></div><div class="ttdeci">uint64_t multiboot_magic</div><div class="ttdef"><b>Definition</b> global_state.cpp:39</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>

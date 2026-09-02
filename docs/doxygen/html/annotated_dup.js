@@ -14,8 +14,25 @@ var annotated_dup =
       [ "InitrdFile", "structinitrd_1_1_initrd_file.html", "structinitrd_1_1_initrd_file" ]
     ] ],
     [ "kernel", "namespacekernel.html", [
+      [ "cap", "namespacekernel_1_1cap.html", [
+        [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
+        [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
+        [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
+        [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+        [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ]
+      ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
         [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ]
+      ] ],
+      [ "elf", "namespacekernel_1_1elf.html", [
+        [ "ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ]
+      ] ],
+      [ "gs", "namespacekernel_1_1gs.html", [
+        [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ]
+      ] ],
+      [ "log", "namespacekernel_1_1log.html", [
+        [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
+        [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ]
       ] ],
       [ "sync", "namespacekernel_1_1sync.html", [
         [ "IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", "classkernel_1_1sync_1_1_irq_spin_lock_guard" ]
@@ -50,12 +67,14 @@ var annotated_dup =
       [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
       [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
       [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+      [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
       [ "Logger", "classkernel_1_1_logger.html", null ],
       [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
       [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
       [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
       [ "Rlimit", "structkernel_1_1_rlimit.html", "structkernel_1_1_rlimit" ],
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
+      [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
       [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
       [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
       [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],

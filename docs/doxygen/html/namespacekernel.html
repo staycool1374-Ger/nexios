@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:block" id="r_block"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">block</a></td></tr>
+<tr class="memitem:cap" id="r_cap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">cap</a></td></tr>
 <tr class="memitem:daemon" id="r_daemon"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html">daemon</a></td></tr>
 <tr class="memitem:debug" id="r_debug"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html">debug</a></td></tr>
 <tr class="memitem:diag" id="r_diag"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1diag.html">diag</a></td></tr>
@@ -130,6 +131,7 @@ Namespaces</h2></td></tr>
 <tr class="memitem:errors" id="r_errors"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1errors.html">errors</a></td></tr>
 <tr class="memdesc:namespacekernel_1_1errors"><td class="mdescLeft">&#160;</td><td class="mdescRight">Primary template for per-module error-string lookup. Each module that defines error codes specialises this template (e.g. &lt;<a class="el" href="task__errors_8hpp.html" title="Task module error codes and string lookup.">kernel/task/task_errors.hpp</a>&gt;). <br /></td></tr>
 <tr class="memitem:fat32" id="r_fat32"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1fat32.html">fat32</a></td></tr>
+<tr class="memitem:gs" id="r_gs"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html">gs</a></td></tr>
 <tr class="memitem:integrity" id="r_integrity"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1integrity.html">integrity</a></td></tr>
 <tr class="memitem:iocd" id="r_iocd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a></td></tr>
 <tr class="memitem:ipc" id="r_ipc"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html">ipc</a></td></tr>
@@ -156,6 +158,8 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Specialization of <a class="el" href="structkernel_1_1_error_or.html" title="Wraps a value or an error (similar to Rust&#39;s Result).">ErrorOr</a> for void (error-only result).  <a href="structkernel_1_1_error_or_3_01void_01_4.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ExceptionSignalMap" id="r_ExceptionSignalMap"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_exception_signal_map.html">ExceptionSignalMap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a CPU exception vector to a signal number and action.  <a href="structkernel_1_1_exception_signal_map.html#details">More...</a><br /></td></tr>
+<tr class="memitem:KernelObject" id="r_KernelObject"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive shared-reference-counted base for kernel objects.  <a href="classkernel_1_1_kernel_object.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Logger" id="r_Logger"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_logger.html">Logger</a></td></tr>
 <tr class="memitem:PriorityMap" id="r_PriorityMap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_priority_map.html">PriorityMap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Two-level bitmap supporting O(1) highest-priority find. Supports up to 128 priority levels (0–127) as two 64-bit words.  <a href="classkernel_1_1_priority_map.html#details">More...</a><br /></td></tr>
@@ -166,6 +170,8 @@ Data Structures</h2></td></tr>
 <tr class="memitem:Rlimit" id="r_Rlimit"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_rlimit.html">Rlimit</a></td></tr>
 <tr class="memitem:SchedulerConfig" id="r_SchedulerConfig"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Boot-time scheduler configuration, injected from kernel_init.  <a href="structkernel_1_1_scheduler_config.html#details">More...</a><br /></td></tr>
+<tr class="memitem:ScopedRef" id="r_ScopedRef"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scoped_ref.html">ScopedRef</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII scoped reference guard for <a class="el" href="classkernel_1_1_kernel_object.html" title="Intrusive shared-reference-counted base for kernel objects.">KernelObject</a> objects.  <a href="classkernel_1_1_scoped_ref.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SignalFrame" id="r_SignalFrame"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_signal_frame.html">SignalFrame</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="#aab4cc62899bcb5fcce7228da55cd0e18" title="Standard POSIX-like signal numbers.">Signal</a> frame placed on the user stack when delivering a signal. The handler returns via SYS_SIGRETURN which restores this frame.  <a href="structkernel_1_1_signal_frame.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TaskQueue" id="r_TaskQueue"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_task_queue.html">TaskQueue</a></td></tr>
@@ -268,16 +274,31 @@ Functions</h2></td></tr>
 <tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
 <tr class="memdesc:aa7278439c20dc6234a77d3b08290701f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the currently running task from the scheduler.  <br /></td></tr>
 <tr class="memitem:a9bbea2daa70fd81363d98ce7b9c9f943" id="r_a9bbea2daa70fd81363d98ce7b9c9f943"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9bbea2daa70fd81363d98ce7b9c9f943">syscall_is_user_task</a> ()</td></tr>
-<tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (has its own page table).  <br /></td></tr>
+<tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (is_user_ flag — MP-1: page_table_ != 0 no longer discriminates, every task owns a private kernel-half PML4).  <br /></td></tr>
 <tr class="memitem:afbcf504abb27c24da8a91380e1f73882" id="r_afbcf504abb27c24da8a91380e1f73882"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afbcf504abb27c24da8a91380e1f73882">syscall_task_open</a> (vfs::Vnode *vn, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
 <tr class="memdesc:afbcf504abb27c24da8a91380e1f73882"><td class="mdescLeft">&#160;</td><td class="mdescRight">Open a vnode as a file descriptor in the current task's fd table.  <br /></td></tr>
 <tr class="memitem:a9799f9b32ab65aeb956ce8717fe91bc4" id="r_a9799f9b32ab65aeb956ce8717fe91bc4"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a9799f9b32ab65aeb956ce8717fe91bc4">syscall_path_open</a> (const char *path, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
+<tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
+<tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
 <tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bucket_of(const TaskControlBlock *t</td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
 <tr class="memitem:a1dae18e023980d3a17ebc183f9986bd3" id="r_a1dae18e023980d3a17ebc183f9986bd3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1dae18e023980d3a17ebc183f9986bd3">for</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> p=0;p&lt; num_priorities;++p)</td></tr>
 <tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a> (TaskControlBlock &amp;tcb)</td></tr>
+<tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895">kslot_snapshot_bytes</a> ()</td></tr>
+<tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5566867274b1950bc3ed7acc375508">kslot_snapshot_capture</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst)</td></tr>
+<tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a74d19182fedd131cc4450ebe5242359e">kslot_snapshot_restore</a> (const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *src)</td></tr>
+<tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1d1f72f7161fa8a1f32d2692b7c90d8c">canary_write_at</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4)</td></tr>
+<tr class="memdesc:a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present.  <br /></td></tr>
+<tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a772626334577fb34746dd85c3e6e3b9c">canary_install_user_segments</a> (TaskControlBlock *t)</td></tr>
+<tr class="memdesc:a772626334577fb34746dd85c3e6e3b9c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the user-stack and initial-heap canaries for <code class="param">t</code> (call after the user stack + heap are mapped and program_break set).  <br /></td></tr>
+<tr class="memitem:ac6fb6d864696d4527766d2ab81c2e3ce" id="r_ac6fb6d864696d4527766d2ab81c2e3ce"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac6fb6d864696d4527766d2ab81c2e3ce">canary_install_kernel_stack</a> (TaskControlBlock *t)</td></tr>
+<tr class="memdesc:ac6fb6d864696d4527766d2ab81c2e3ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Install the kernel-stack canary at kernel_stack[0..8).  <br /></td></tr>
+<tr class="memitem:a53fa9d70d7a01fd1f30b7746a449654d" id="r_a53fa9d70d7a01fd1f30b7746a449654d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a53fa9d70d7a01fd1f30b7746a449654d">canary_verify_user_segments</a> (const TaskControlBlock *t, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> &amp;bad_segment, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;bad_va)</td></tr>
+<tr class="memdesc:a53fa9d70d7a01fd1f30b7746a449654d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify all installed user-segment canaries of <code class="param">t</code> (pure reads).  <br /></td></tr>
+<tr class="memitem:ad3793a2cf2cf423d61fe25cf2ecb8ba4" id="r_ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad3793a2cf2cf423d61fe25cf2ecb8ba4">canary_verify_kernel_stack</a> (const TaskControlBlock *t)</td></tr>
+<tr class="memdesc:ad3793a2cf2cf423d61fe25cf2ecb8ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verify the kernel-stack canary of <code class="param">t</code> (pure read).  <br /></td></tr>
 <tr class="memitem:a71095cad3c5bc16f145256f5659bc4f5" id="r_a71095cad3c5bc16f145256f5659bc4f5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a71095cad3c5bc16f145256f5659bc4f5">atomic_fence</a> ()</td></tr>
 <tr class="memitem:a0a3c6d96045314e760c63011e9568f9b" id="r_a0a3c6d96045314e760c63011e9568f9b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0a3c6d96045314e760c63011e9568f9b">atomic_acquire_fence</a> ()</td></tr>
 <tr class="memitem:a694a81cf88aaa57b10bbb8850672ef0c" id="r_a694a81cf88aaa57b10bbb8850672ef0c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a694a81cf88aaa57b10bbb8850672ef0c">atomic_release_fence</a> ()</td></tr>
@@ -304,6 +325,11 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
+<tr class="memitem:a82642ef1de738764f4ab5b0e505b50ac" id="r_a82642ef1de738764f4ab5b0e505b50ac"><td class="memItemLeft">BootInfo&#160;</td><td class="memItemRight"><a class="el" href="#a82642ef1de738764f4ab5b0e505b50ac">g_boot_info</a> {}</td></tr>
+<tr class="memitem:a602102cf72c2d245437f6dfb539c71eb" id="r_a602102cf72c2d245437f6dfb539c71eb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a602102cf72c2d245437f6dfb539c71eb">g_boot_epoch</a> = 0</td></tr>
+<tr class="memitem:a9710cee4bf56525b356e96332529a5a7" id="r_a9710cee4bf56525b356e96332529a5a7"><td class="memItemLeft">CanaryTrip&#160;</td><td class="memItemRight"><a class="el" href="#a9710cee4bf56525b356e96332529a5a7">g_canary_trip</a> {}</td></tr>
+<tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a> = 0</td></tr>
+<tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
 <tr class="memitem:afdea84e7e6716009ab17af4b202b8271" id="r_afdea84e7e6716009ab17af4b202b8271"><td class="memItemLeft">const TaskControlBlock *const&#160;</td><td class="memItemRight"><a class="el" href="#afdea84e7e6716009ab17af4b202b8271">heads_</a> []</td></tr>
 <tr class="memitem:ac84f34d32e4683fb9c3f512c093068cf" id="r_ac84f34d32e4683fb9c3f512c093068cf"><td class="memItemLeft">const TaskControlBlock *const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_priorities&#160;</td><td class="memItemRight"><a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memitem:aec37532c2fb1a123d928e41e13297533" id="r_aec37532c2fb1a123d928e41e13297533"><td class="memItemLeft">const TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a> = t</td></tr>
@@ -350,8 +376,6 @@ Variables</h2></td></tr>
 <tr class="memitem:a863e6a5c2d82cdc71d146391ee86521c template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a863e6a5c2d82cdc71d146391ee86521c">_is_reference_v&lt; T &amp; &gt;</a> = true</td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645" id="r_a74cc18daff81587aac344bfc7b70f645"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a74cc18daff81587aac344bfc7b70f645">_is_reference_v&lt; T &amp;&amp; &gt;</a> = true</td></tr>
-<tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft">constinit <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a></td></tr>
-<tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
 </table>
 <a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
 <a id="ae89f8530616ba6e58eebc1f5104f6e5c" name="ae89f8530616ba6e58eebc1f5104f6e5c"></a>
@@ -988,6 +1012,126 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="ac6fb6d864696d4527766d2ab81c2e3ce" name="ac6fb6d864696d4527766d2ab81c2e3ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6fb6d864696d4527766d2ab81c2e3ce">&#9670;&#160;</a></span>canary_install_kernel_stack()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::canary_install_kernel_stack </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Install the kernel-stack canary at kernel_stack[0..8). </p>
+
+</div>
+</div>
+<a id="a772626334577fb34746dd85c3e6e3b9c" name="a772626334577fb34746dd85c3e6e3b9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a772626334577fb34746dd85c3e6e3b9c">&#9670;&#160;</a></span>canary_install_user_segments()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::canary_install_user_segments </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Install the user-stack and initial-heap canaries for <code class="param">t</code> (call after the user stack + heap are mapped and program_break set). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="ad3793a2cf2cf423d61fe25cf2ecb8ba4" name="ad3793a2cf2cf423d61fe25cf2ecb8ba4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad3793a2cf2cf423d61fe25cf2ecb8ba4">&#9670;&#160;</a></span>canary_verify_kernel_stack()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::canary_verify_kernel_stack </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Verify the kernel-stack canary of <code class="param">t</code> (pure read). </p>
+
+</div>
+</div>
+<a id="a53fa9d70d7a01fd1f30b7746a449654d" name="a53fa9d70d7a01fd1f30b7746a449654d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53fa9d70d7a01fd1f30b7746a449654d">&#9670;&#160;</a></span>canary_verify_user_segments()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::canary_verify_user_segments </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_segment</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>bad_va</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Verify all installed user-segment canaries of <code class="param">t</code> (pure reads). </p>
+<dl class="section return"><dt>Returns</dt><dd>true when intact; on mismatch sets <code class="param">bad_segment</code> / <code class="param">bad_va</code>. </dd></dl>
+
+</div>
+</div>
+<a id="a1d1f72f7161fa8a1f32d2692b7c90d8c" name="a1d1f72f7161fa8a1f32d2692b7c90d8c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1d1f72f7161fa8a1f32d2692b7c90d8c">&#9670;&#160;</a></span>canary_write_at()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::canary_write_at </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>value</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present. </p>
+
+</div>
+</div>
 <a id="a777bca6dec383faa735ebe34c5bdf749" name="a777bca6dec383faa735ebe34c5bdf749"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a777bca6dec383faa735ebe34c5bdf749">&#9670;&#160;</a></span>current_cpu()</h2>
 
@@ -1013,6 +1157,25 @@ template&lt;typename T&gt; </div>
 
 <p>Returns the current CPU's execution context. </p>
 <p>Single-core today: a single static instance. Phase 8 threads this through the per-CPU GS base (x86_64) / TPIDR (aarch64) / tp (riscv64). </p>
+
+</div>
+</div>
+<a id="a0ecf34d3e30ff218069c96a3645cf261" name="a0ecf34d3e30ff218069c96a3645cf261"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ecf34d3e30ff218069c96a3645cf261">&#9670;&#160;</a></span>current_cspace()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> * kernel::current_cspace </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion). </p>
 
 </div>
 </div>
@@ -1051,8 +1214,59 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="a25626431fd5ef9ee4a6698a65b1f0895" name="a25626431fd5ef9ee4a6698a65b1f0895"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25626431fd5ef9ee4a6698a65b1f0895">&#9670;&#160;</a></span>kslot_snapshot_bytes()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::kslot_snapshot_bytes </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afa5566867274b1950bc3ed7acc375508" name="afa5566867274b1950bc3ed7acc375508"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afa5566867274b1950bc3ed7acc375508">&#9670;&#160;</a></span>kslot_snapshot_capture()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::kslot_snapshot_capture </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>dst</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a74d19182fedd131cc4450ebe5242359e" name="a74d19182fedd131cc4450ebe5242359e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74d19182fedd131cc4450ebe5242359e">&#9670;&#160;</a></span>kslot_snapshot_restore()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::kslot_snapshot_restore </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>src</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -1078,7 +1292,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -1115,12 +1329,12 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Check if the current task is a user-space task (has its own page table). </p>
+<p>Check if the current task is a user-space task (is_user_ flag — MP-1: page_table_ != 0 no longer discriminates, every task owns a private kernel-half PML4). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -1149,7 +1363,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -1197,7 +1411,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -1648,6 +1862,48 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="a602102cf72c2d245437f6dfb539c71eb" name="a602102cf72c2d245437f6dfb539c71eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a602102cf72c2d245437f6dfb539c71eb">&#9670;&#160;</a></span>g_boot_epoch</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::g_boot_epoch = 0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a82642ef1de738764f4ab5b0e505b50ac" name="a82642ef1de738764f4ab5b0e505b50ac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82642ef1de738764f4ab5b0e505b50ac">&#9670;&#160;</a></span>g_boot_info</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">BootInfo kernel::g_boot_info {}</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9710cee4bf56525b356e96332529a5a7" name="a9710cee4bf56525b356e96332529a5a7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9710cee4bf56525b356e96332529a5a7">&#9670;&#160;</a></span>g_canary_trip</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">CanaryTrip kernel::g_canary_trip {}</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ac685742eaa07e592bff0bab7216c0253" name="ac685742eaa07e592bff0bab7216c0253"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac685742eaa07e592bff0bab7216c0253">&#9670;&#160;</a></span>g_user_access_recover_ip</h2>
 
@@ -1658,7 +1914,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::g_user_access_recover_ip</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::g_user_access_recover_ip = 0</td>
         </tr>
       </table>
   </td>

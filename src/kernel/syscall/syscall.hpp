@@ -80,7 +80,19 @@ enum class SyscallNumber : uint8_t {
     KLOG = 48,
     REBOOT = 49,
     HALT = 50,
-    MAX_SYSCALL = 51,
+    CAP_GRANT = 51,
+    CAP_COPY = 52,
+    CAP_REVOKE = 53,
+    CAP_MINT = 54,
+    IOPORT_GRANT = 55, ///< x86_64 fine-grained I/O delegation (issue #3)
+    CAP_RETYPE = 56,   ///< Untyped sub-range carve + child remainder (issue #1)
+    IRQ_REGISTER = 57, ///< arm user-space IRQ delivery for an IrqCap (issue #2); arg1 = delivery mode: 0 = WAIT (blocking sys_irq_wait), 1 = NOTIFY (IPC notification on the task's Notify, issue #7)
+    IRQ_WAIT = 58,     ///< block until the registered IRQ fires (issue #2); refuses NOTIFY-armed slots (issue #7)
+    IOMMU_MAP = 59,    ///< map an owned frame into the IOMMU DMA domain (issue #4)
+    IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
+    MMIO_MAP = 61,     ///< map an MmioCap memory BAR into the caller's user VA window (issue #8)
+    MMIO_UNMAP = 62,   ///< unmap a user MMIO mapping by VA (issue #8)
+    MAX_SYSCALL = 63,
 };
 
 /// @brief System call handler function signature.
@@ -212,6 +224,30 @@ class Syscall {
                                uint64_t *);
     static uint64_t sys_halt(uint64_t, uint64_t, uint64_t, uint64_t,
                              uint64_t *);
+    static uint64_t sys_cap_grant(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_cap_copy(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_cap_revoke(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
+    static uint64_t sys_cap_mint(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_ioport_grant(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_cap_retype(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
+    static uint64_t sys_irq_register(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_irq_wait(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_iommu_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_iommu_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_mmio_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
+    static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -266,6 +302,18 @@ class Syscall {
             &Syscall::sys_klog,
             &Syscall::sys_reboot,
             &Syscall::sys_halt,
+            &Syscall::sys_cap_grant,
+            &Syscall::sys_cap_copy,
+            &Syscall::sys_cap_revoke,
+            &Syscall::sys_cap_mint,
+            &Syscall::sys_ioport_grant,
+            &Syscall::sys_cap_retype,
+            &Syscall::sys_irq_register,
+            &Syscall::sys_irq_wait,
+            &Syscall::sys_iommu_map,
+            &Syscall::sys_iommu_unmap,
+            &Syscall::sys_mmio_map,
+            &Syscall::sys_mmio_unmap,
     };
 };
 

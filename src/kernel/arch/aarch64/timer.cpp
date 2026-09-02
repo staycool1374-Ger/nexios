@@ -27,8 +27,9 @@
 
 namespace arch {
 
-volatile uint64_t Timer::ticks_ = 0;
+constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::counter_freq_hz_ = 0;
+uint32_t Timer::tick_interval_ = 0;
 
 /// @brief Initialise the timer with a given tick frequency and register the IRQ
 /// handler.
@@ -50,6 +51,7 @@ void Timer::set_frequency(uint32_t frequency_hz) {
     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
     counter_freq_hz_ = freq;
     uint64_t interval = freq / frequency_hz;
+    tick_interval_ = static_cast<uint32_t>(interval);
     asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
@@ -74,9 +76,15 @@ uint64_t Timer::ns() {
 }
 
 /// @brief Handle a timer interrupt: increment tick count and re-arm the timer.
-/// Re-writes CNTP_CTL_EL0 to clear the interrupt status.
+/// The compare value must be pushed into the future again, otherwise the
+/// level-asserted interrupt re-pends immediately after EOI (IRQ storm).
 void Timer::handle_irq() {
     ticks_ = ticks_ + 1;
+    uint64_t interval = tick_interval_;
+    if (interval == 0) {
+        interval = 1;
+    }
+    asm volatile("msr cntp_tval_el0, %0" : : "r"(interval));
     asm volatile("msr cntp_ctl_el0, %0" : : "r"(1UL));
     isb();
 }

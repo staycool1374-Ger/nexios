@@ -14,15 +14,19 @@ comma := ,
 # ------------------------------------------------------------------------------
 SRC_CXX_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.cpp' -print)
 SRC_ASM_GENERIC := $(shell find src -path '*/kernel/arch' -prune -o -name '*.asm' -print)
+# P7 (issue #6): syscall_entry.asm is DEAD on all arches — the LSTAR/sysret
+# path was removed (MSR_KERNEL_GS_BASE never written; the sole live syscall
+# path is int $0x80 via isr_128).  Unassemble it unconditionally; it is kept
+# as a commented historical artifact pending deletion (see syscall_entry.asm).
+SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
 # Exclude x86-specific NASM files for non-x86 architectures
 ifneq ($(ARCH),x86_64)
-SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_GENERIC))
 SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
 endif
-# Exclude x86_64 FPU/SSE test files that fail to compile with GCC 16
-ifeq ($(ARCH),x86_64)
+# Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
+# (they are x86_64 SSE-specific and not portable; register symbols are covered
+# by weak stubs in test_weak_stubs.cpp).
 SRC_CXX_GENERIC := $(filter-out src/kernel/test/test_fpu.cpp src/kernel/test/test_fpu_clone.cpp src/kernel/test/test_fpu_multi.cpp src/kernel/test/test_fpu_sse.cpp src/kernel/test/test_fpu_xmm_all.cpp, $(SRC_CXX_GENERIC))
-endif
 
 # External test suite support
 # When EXTERNAL_TEST_DIR is set:
@@ -120,7 +124,7 @@ FAT32_OBJ      := build/fat32/fat32_img.o
 # workaround is to emit explicit per-file rules into a generated makefile via
 # a shell loop and `-include` it.  .asm/.S objects have single-extension
 # names (`isr_stubs.o`) so their pattern rules are fine.
-GEN_CPP_RULES := mk/cpp-rules.gen.mk
+GEN_CPP_RULES := mk/cpp-rules.$(ARCH).gen.mk
 -include $(GEN_CPP_RULES)
 
 $(GEN_CPP_RULES): mk/rules.mk Makefile
@@ -128,7 +132,7 @@ $(GEN_CPP_RULES): mk/rules.mk Makefile
 	@printf '' > $@
 	@for f in $(SRC_CXX); do \
 	    stem=$${f#src/}; stem=$${stem%.cpp}; \
-	    printf 'build/%s.o: %s\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
+	    printf 'build/%s.o: %s | check-arch\n\t@mkdir -p $$(dir $$@)\n\t@printf "  %%s %%s\\n" CC $$@\n\t$$(CXX) $$(CXXFLAGS) -c -o $$@ $$<\n' "$$stem" "$$f" >> $@; \
 	done
 
 
@@ -218,19 +222,14 @@ $(FAT32_OBJ): $(FAT32_IMG)
 # Both debug and release use the same LDFLAGS and same .o files.  The
 # difference in build type is driven entirely by CXXFLAGS on the .o files.
 # ------------------------------------------------------------------------------
-ARCH_STAMP := build/.arch-stamp
-
-# .PHONY check that triggers clean when ARCH changes
+# .PHONY check that guarantees the arch stamp matches the target arch.
+# The actual arch-switch clean is performed at PARSE TIME in the Makefile
+# (before .d files are -included), so this target only persists the stamp.
+# It runs as an order-only prerequisite of every emitted compile rule (see
+# GEN_CPP_RULES above), which is now a cheap no-op safety net.
 .PHONY: check-arch
 check-arch:
-	@stamp_arch=$$(cat $(ARCH_STAMP) 2>/dev/null); \
-	if [ "$$stamp_arch" != "$(ARCH)" ] && [ -n "$$stamp_arch" ]; then \
-	    printf '  %-7s %s\n' 'CLEAN' "Architecture changed ($$stamp_arch -> $(ARCH))"; \
-	    $(MAKE) clean >/dev/null 2>&1; \
-	    $(MAKE) $(MAKECMDGOALS) >/dev/null 2>&1; \
-	    exit $$?; \
-	fi; \
-	mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
+	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
 
 $(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)

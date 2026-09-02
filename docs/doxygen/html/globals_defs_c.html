@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_c
 <li>CLOCKS_PER_SEC&#160;:&#160;<a class="el" href="time_8h.html#a3d9fc3c745d0880902fe3ea3d5d5f71e">time.h</a></li>
 <li>CONFIG_ASSERT&#160;:&#160;<a class="el" href="nexios__config_8h.html#af7dbe515e22f94aa374530a637f8418c">nexios_config.h</a></li>
 <li>CONFIG_BUFFER_POOL_PAGES&#160;:&#160;<a class="el" href="nexios__config_8h.html#a4bb3575fefad83e2c4c0679539f0e1b1">nexios_config.h</a></li>
+<li>CONFIG_CANARY_GUARD&#160;:&#160;<a class="el" href="nexios__config_8h.html#ad0e38363c716013f000005b049f48338">nexios_config.h</a></li>
+<li>CONFIG_CAP_MAX_DEPTH&#160;:&#160;<a class="el" href="nexios__config_8h.html#abfb6b2ca517d4c58ad5d095d0f2fc66d">nexios_config.h</a></li>
+<li>CONFIG_CAP_MAX_UNTYPED&#160;:&#160;<a class="el" href="nexios__config_8h.html#ac78ec7ca9369e6f83fcf17effcd9103c">nexios_config.h</a></li>
+<li>CONFIG_CSLOT_COUNT&#160;:&#160;<a class="el" href="nexios__config_8h.html#ab545c44f329445003c7b23cb29d0a0e1">nexios_config.h</a></li>
 <li>CONFIG_DEADLINE_ACTION&#160;:&#160;<a class="el" href="nexios__config_8h.html#a515a1e55a71216c50a7d94659c372998">nexios_config.h</a></li>
 <li>CONFIG_DEADLINE_MISS_DETECTION&#160;:&#160;<a class="el" href="nexios__config_8h.html#ad7f0edb3b1228f6361d92c6cfa81fc30">nexios_config.h</a></li>
 <li>CONFIG_DEADLINE_MONITOR_PID&#160;:&#160;<a class="el" href="nexios__config_8h.html#adbfd2982bfd8abcdb392578155755823">nexios_config.h</a></li>
@@ -176,6 +180,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_c
 <li>CONFIG_IPC_SHMEM_MAX_PAGES&#160;:&#160;<a class="el" href="nexios__config_8h.html#aece4b6a42c3c42a95b209e6fa873970f">nexios_config.h</a></li>
 <li>CONFIG_IRQ_LATENCY_HISTOGRAM&#160;:&#160;<a class="el" href="nexios__config_8h.html#aac30e89938cc6eef8d1516f75c2c3fc7">nexios_config.h</a></li>
 <li>CONFIG_IRQ_LATENCY_MAX_NS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a40b63eab36f99de494ff321df05721a4">nexios_config.h</a></li>
+<li>CONFIG_KERNEL_PRIV_DATA_BASE&#160;:&#160;<a class="el" href="nexios__config_8h.html#a2526193a2bf2cb59e84e1d640af1a29f">nexios_config.h</a></li>
 <li>CONFIG_KSTACK_WINDOW_BASE&#160;:&#160;<a class="el" href="nexios__config_8h.html#a5412009bb80bc2aac94e2a2121f9a02f">nexios_config.h</a></li>
 <li>CONFIG_KSTACK_WINDOW_SIZE&#160;:&#160;<a class="el" href="nexios__config_8h.html#a0bef3e0da616c80c28e1f7671b03401d">nexios_config.h</a></li>
 <li>CONFIG_MAX_DAEMONS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a2c580044f067f2f953c3bdd1471189c6">nexios_config.h</a></li>
@@ -183,6 +188,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_c
 <li>CONFIG_MAX_FDS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a6522d992928275f4e75859915cec5b84">nexios_config.h</a></li>
 <li>CONFIG_MAX_HELD_CEILINGS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a9cd0e684a26b0270d442310ccd4330da">nexios_config.h</a></li>
 <li>CONFIG_MAX_MOUNTS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a941c94e5b716a5c776a30efc5e030724">nexios_config.h</a></li>
+<li>CONFIG_MAX_PER_TASK_OBJECTS&#160;:&#160;<a class="el" href="nexios__config_8h.html#ab7f91f26b4b36eff22a2b15ea5405621">nexios_config.h</a></li>
 <li>CONFIG_MAX_PRIORITY&#160;:&#160;<a class="el" href="nexios__config_8h.html#adae856c7e79cb395586e5ae9ddb5b0cc">nexios_config.h</a></li>
 <li>CONFIG_MAX_PROCESS_PAGES&#160;:&#160;<a class="el" href="nexios__config_8h.html#a30115622457b1386f44b9b48cd2cb8f8">nexios_config.h</a></li>
 <li>CONFIG_MAX_PROGRAMS&#160;:&#160;<a class="el" href="nexios__config_8h.html#a0c3cfd9ed7438076d36385368e245b04">nexios_config.h</a></li>
@@ -205,6 +211,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_c
 <li>CONFIG_PRIORITY_CEILING_PROTOCOL&#160;:&#160;<a class="el" href="nexios__config_8h.html#aac781da257db7b6183fac86fc89095c5">nexios_config.h</a></li>
 <li>CONFIG_QUEUE_PIP&#160;:&#160;<a class="el" href="nexios__config_8h.html#a08b1decd478ffc1359ac5e6385741d61">nexios_config.h</a></li>
 <li>CONFIG_SEMAPHORE_PIP&#160;:&#160;<a class="el" href="nexios__config_8h.html#a7cf9db7fcc2c0bf9b1bb475b2bad3d93">nexios_config.h</a></li>
+<li>CONFIG_SMAP&#160;:&#160;<a class="el" href="nexios__config_8h.html#a0416a4b1c68b556f00af37b87fdd0742">nexios_config.h</a></li>
+<li>CONFIG_SMEP&#160;:&#160;<a class="el" href="nexios__config_8h.html#a90a087504d57cc28a18745a08011e315">nexios_config.h</a></li>
 <li>CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY&#160;:&#160;<a class="el" href="nexios__config_8h.html#a31b2fca43fed672f65115a92304475a2">nexios_config.h</a></li>
 <li>CONFIG_SPORADIC_SERVER_DEADLINE_HOOK&#160;:&#160;<a class="el" href="nexios__config_8h.html#afd4dfde1bb949f7e03c90dea7fe274f9">nexios_config.h</a></li>
 <li>CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE&#160;:&#160;<a class="el" href="nexios__config_8h.html#afa71e737433cca1a4223e904afcf0a9c">nexios_config.h</a></li>

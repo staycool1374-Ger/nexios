@@ -27,7 +27,7 @@
 
 namespace arch {
 
-volatile uint64_t Timer::ticks_ = 0;
+constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::timer_freq_hz_ = 0;
 
 /// @brief Initialize the timer, set frequency, and register the IRQ handler.
@@ -90,6 +90,12 @@ void Timer::handle_irq() {
 /// @param value New tick counter value.
 void Timer::set_ticks_for_test(uint64_t value) {
     ticks_ = value;
+}
+
+/// @brief Return the calibrated timer counter frequency in Hz (x86 TSC alias).
+/// @return Timer frequency in Hz.
+uint64_t Timer::tsc_freq_hz() {
+    return timer_freq_hz_;
 }
 
 /// @brief Arm a one-shot timer via SBI.

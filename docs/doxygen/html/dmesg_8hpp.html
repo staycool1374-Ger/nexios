@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -119,19 +119,357 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8hpp.htm
 </div><!--header-->
 <div class="contents">
 
-<p>Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, macros, error-string helpers.  
+<p>Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton, error-string helpers.  
 <a href="#details">More...</a></p>
-<div class="textblock"><div class="dynheader">
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="error_8hpp_source.html">lib/error.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="utils_8hpp_source.html">lib/utils.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="sync__errors_8hpp_source.html">kernel/sync/sync_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vfs__errors_8hpp_source.html">kernel/vfs/vfs_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mempool__errors_8hpp_source.html">kernel/memory/mempool_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler__errors_8hpp_source.html">kernel/task/scheduler_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ipc__errors_8hpp_source.html">kernel/ipc/ipc_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="syscall__errors_8hpp_source.html">kernel/syscall/syscall_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="atomic_8hpp_source.html">lib/atomic.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for dmesg.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="dmesg_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2log_2dmesg_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
 <div class="dyncontent">
 <div class="center"><img src="dmesg_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2log_2dmesg_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 </div>
 <p><a href="dmesg_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Alog_3A_3ALogEntry" id="r_kernel_3A_3Alog_3A_3ALogEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1log_1_1_log_entry.html">kernel::log::LogEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single dmesg log entry.  <a href="structkernel_1_1log_1_1_log_entry.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3Alog_3A_3ADmesgService" id="r_kernel_3A_3Alog_3A_3ADmesgService"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1log_1_1_dmesg_service.html">kernel::log::DmesgService</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sole owner of the kernel dmesg ring.  <a href="classkernel_1_1log_1_1_dmesg_service.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memitem:kernel_3A_3Alog" id="r_kernel_3A_3Alog"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">kernel::log</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a0a15565ea32d9d5ddb218c71e3f3c44a" id="r_a0a15565ea32d9d5ddb218c71e3f3c44a"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">kernel::log::ErrorSubsystem</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aae7b1a5c82772e0e055096008cb9883ef">kernel::log::BASE</a> = 0
+, <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3">kernel::log::SYNC</a> = 1
+, <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa296c58c4afa6e6c1d159f7d0d6cc864c">kernel::log::VFS</a> = 2
+, <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa9bb9239ff286274c8363021f3d82b782">kernel::log::MEMPOOL</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa4e6ea598d35449adb3c246bf97f5a71c">kernel::log::SCHED</a> = 4
+, <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aac8660c6d72e7323867ec800d6bb953df">kernel::log::IPC</a> = 5
+, <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b">kernel::log::SYSCALL</a> = 6
+<br />
+ }</td></tr>
+<tr class="memdesc:a0a15565ea32d9d5ddb218c71e3f3c44a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Subsystem identifier used in dmesg entries (maps to per-subsystem error_string).  <a href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a341b4bf8cc7098fbf5f762915cf152a3" id="r_a341b4bf8cc7098fbf5f762915cf152a3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a341b4bf8cc7098fbf5f762915cf152a3">test_dmesg_initially_empty</a> ()</td></tr>
+<tr class="memitem:a5c633b36c5b65175919e4164307d1c9c" id="r_a5c633b36c5b65175919e4164307d1c9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5c633b36c5b65175919e4164307d1c9c">test_dmesg_push_once</a> ()</td></tr>
+<tr class="memitem:a4ef544db8ad3e61ad02e04719ceb534b" id="r_a4ef544db8ad3e61ad02e04719ceb534b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4ef544db8ad3e61ad02e04719ceb534b">test_dmesg_push_and_pop</a> ()</td></tr>
+<tr class="memitem:a8afc3b3e214d5f6c06c2cba66613d9e4" id="r_a8afc3b3e214d5f6c06c2cba66613d9e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8afc3b3e214d5f6c06c2cba66613d9e4">test_dmesg_push_multiple_fifo</a> ()</td></tr>
+<tr class="memitem:a5d37920042d5f918f3bc60e712281638" id="r_a5d37920042d5f918f3bc60e712281638"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5d37920042d5f918f3bc60e712281638">test_dmesg_pop_empty</a> ()</td></tr>
+<tr class="memitem:a73ed911051079d8759073e8250c394d8" id="r_a73ed911051079d8759073e8250c394d8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a73ed911051079d8759073e8250c394d8">test_dmesg_clear</a> ()</td></tr>
+<tr class="memitem:a27a1dd0b2068543ef3379de9a91ec4f5" id="r_a27a1dd0b2068543ef3379de9a91ec4f5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a27a1dd0b2068543ef3379de9a91ec4f5">test_dmesg_for_each</a> ()</td></tr>
+<tr class="memitem:a457ba9108e33a64a554496ca24979a4f" id="r_a457ba9108e33a64a554496ca24979a4f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a457ba9108e33a64a554496ca24979a4f">test_dmesg_for_each_empty</a> ()</td></tr>
+<tr class="memitem:aefaf39b2a7ba218044f030a5904046aa" id="r_aefaf39b2a7ba218044f030a5904046aa"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aefaf39b2a7ba218044f030a5904046aa">test_dmesg_head_tail_indices</a> ()</td></tr>
+<tr class="memitem:a9a6feaa81e79d995e2131028c3eb8d22" id="r_a9a6feaa81e79d995e2131028c3eb8d22"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9a6feaa81e79d995e2131028c3eb8d22">test_dmesg_overflow</a> ()</td></tr>
+<tr class="memitem:ae2e303f10e65947337d142eb2b2dd0b9" id="r_ae2e303f10e65947337d142eb2b2dd0b9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae2e303f10e65947337d142eb2b2dd0b9">test_dmesg_subsystem_names</a> ()</td></tr>
+<tr class="memitem:a3b0a7969e4e380f2e94993ad5ddfca1f" id="r_a3b0a7969e4e380f2e94993ad5ddfca1f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3b0a7969e4e380f2e94993ad5ddfca1f">test_dmesg_base_error_strings</a> ()</td></tr>
+<tr class="memitem:a2e98c23d0cd1336b65478007f38cee40" id="r_a2e98c23d0cd1336b65478007f38cee40"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2e98c23d0cd1336b65478007f38cee40">test_dmesg_error_string_dispatch</a> ()</td></tr>
+<tr class="memitem:af607959553d62fd21bd8eb6ca194f744" id="r_af607959553d62fd21bd8eb6ca194f744"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af607959553d62fd21bd8eb6ca194f744">test_dmesg_suppression_toggle</a> ()</td></tr>
+<tr class="memitem:afb19dc2d9af33a7ea0d1b04c8488c06f" id="r_afb19dc2d9af33a7ea0d1b04c8488c06f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afb19dc2d9af33a7ea0d1b04c8488c06f">test_dmesg_timestamp_and_task_id</a> ()</td></tr>
+<tr class="memitem:a8c0fd69e4ea93d857e2b6176911b7e5e" id="r_a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a8c0fd69e4ea93d857e2b6176911b7e5e">kernel::log::dmesg_push</a> (<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> err, const char *msg, <a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a8c0fd69e4ea93d857e2b6176911b7e5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push an entry to the kernel dmesg service.  <br /></td></tr>
+<tr class="memitem:a93f6fccfccf70fcdc90f93e630521488" id="r_a93f6fccfccf70fcdc90f93e630521488"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a93f6fccfccf70fcdc90f93e630521488">kernel::log::dmesg_push_base</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> err, const char *msg, <a class="el" href="types_8hpp.html#a5b7cbd695e4ef11023a4088e5ebe9612">uintptr_t</a> ctx=0) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a93f6fccfccf70fcdc90f93e630521488"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shorthand: push a base-subsystem error to the kernel dmesg service.  <br /></td></tr>
+<tr class="memitem:a771448233b6c088624a937e135ed0016" id="r_a771448233b6c088624a937e135ed0016"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a771448233b6c088624a937e135ed0016">kernel::log::base_code_is_info</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
+<tr class="memdesc:a771448233b6c088624a937e135ed0016"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a base-subsystem code is an informational event rather than a fault: daemon lifecycle (0xDA00-0xDAFF) and background ELF loader (0xDB00-0xDBFF) ranges. Used by the dmesg renderers to print INFO= instead of ERR=.  <br /></td></tr>
+<tr class="memitem:a509eca06210bff9bda33ad707d235262" id="r_a509eca06210bff9bda33ad707d235262"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a509eca06210bff9bda33ad707d235262">kernel::log::base_error_string</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
+<tr class="memdesc:a509eca06210bff9bda33ad707d235262"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a human-readable string for a base-subsystem error code. The code space is split into <a class="el" href="namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106" title="Kernel error codes returned by various operations.">kernel::Error</a> values (0–9) and a custom range for event codes: 0xDA00 – 0xDAFF daemon lifecycle events 0xDB00 – 0xDBFF background ELF loader events.  <br /></td></tr>
+<tr class="memitem:ad82063e29ea0c8f5de69a0748c72621f" id="r_ad82063e29ea0c8f5de69a0748c72621f"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#ad82063e29ea0c8f5de69a0748c72621f">kernel::log::subsystem_name</a> (<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> s)</td></tr>
+<tr class="memdesc:ad82063e29ea0c8f5de69a0748c72621f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a short name for an <a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a" title="Subsystem identifier used in dmesg entries (maps to per-subsystem error_string).">ErrorSubsystem</a>.  <br /></td></tr>
+<tr class="memitem:a3d54be80d65b536f19f6aabdb6878bd5" id="r_a3d54be80d65b536f19f6aabdb6878bd5"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a3d54be80d65b536f19f6aabdb6878bd5">kernel::log::error_string</a> (<a class="el" href="namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44a">ErrorSubsystem</a> subsys, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> code)</td></tr>
+<tr class="memdesc:a3d54be80d65b536f19f6aabdb6878bd5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch an error code to the correct subsystem's error_string.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a7873f3246fdc21af9b32fe43eb3e6435" id="r_a7873f3246fdc21af9b32fe43eb3e6435"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html#a7873f3246fdc21af9b32fe43eb3e6435">kernel::log::DMESG_CAPACITY</a> = <a class="el" href="nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></td></tr>
+<tr class="memdesc:a7873f3246fdc21af9b32fe43eb3e6435"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capacity of the kernel dmesg ring buffer (from Kconfig).  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, macros, error-string helpers. </p>
-</div></div><!-- contents -->
+<div class="textblock"><p>Lock-free SPSC structured kernel log (dmesg) — LogEntry, DmesgBuffer, DmesgService singleton, error-string helpers. </p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a3b0a7969e4e380f2e94993ad5ddfca1f" name="a3b0a7969e4e380f2e94993ad5ddfca1f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b0a7969e4e380f2e94993ad5ddfca1f">&#9670;&#160;</a></span>test_dmesg_base_error_strings()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_base_error_strings </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a73ed911051079d8759073e8250c394d8" name="a73ed911051079d8759073e8250c394d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73ed911051079d8759073e8250c394d8">&#9670;&#160;</a></span>test_dmesg_clear()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_clear </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2e98c23d0cd1336b65478007f38cee40" name="a2e98c23d0cd1336b65478007f38cee40"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e98c23d0cd1336b65478007f38cee40">&#9670;&#160;</a></span>test_dmesg_error_string_dispatch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_error_string_dispatch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a27a1dd0b2068543ef3379de9a91ec4f5" name="a27a1dd0b2068543ef3379de9a91ec4f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a27a1dd0b2068543ef3379de9a91ec4f5">&#9670;&#160;</a></span>test_dmesg_for_each()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_for_each </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a457ba9108e33a64a554496ca24979a4f" name="a457ba9108e33a64a554496ca24979a4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a457ba9108e33a64a554496ca24979a4f">&#9670;&#160;</a></span>test_dmesg_for_each_empty()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_for_each_empty </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aefaf39b2a7ba218044f030a5904046aa" name="aefaf39b2a7ba218044f030a5904046aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefaf39b2a7ba218044f030a5904046aa">&#9670;&#160;</a></span>test_dmesg_head_tail_indices()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_head_tail_indices </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a341b4bf8cc7098fbf5f762915cf152a3" name="a341b4bf8cc7098fbf5f762915cf152a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a341b4bf8cc7098fbf5f762915cf152a3">&#9670;&#160;</a></span>test_dmesg_initially_empty()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_initially_empty </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a6feaa81e79d995e2131028c3eb8d22" name="a9a6feaa81e79d995e2131028c3eb8d22"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a6feaa81e79d995e2131028c3eb8d22">&#9670;&#160;</a></span>test_dmesg_overflow()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_overflow </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5d37920042d5f918f3bc60e712281638" name="a5d37920042d5f918f3bc60e712281638"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5d37920042d5f918f3bc60e712281638">&#9670;&#160;</a></span>test_dmesg_pop_empty()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_pop_empty </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4ef544db8ad3e61ad02e04719ceb534b" name="a4ef544db8ad3e61ad02e04719ceb534b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ef544db8ad3e61ad02e04719ceb534b">&#9670;&#160;</a></span>test_dmesg_push_and_pop()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_push_and_pop </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8afc3b3e214d5f6c06c2cba66613d9e4" name="a8afc3b3e214d5f6c06c2cba66613d9e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8afc3b3e214d5f6c06c2cba66613d9e4">&#9670;&#160;</a></span>test_dmesg_push_multiple_fifo()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_push_multiple_fifo </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c633b36c5b65175919e4164307d1c9c" name="a5c633b36c5b65175919e4164307d1c9c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c633b36c5b65175919e4164307d1c9c">&#9670;&#160;</a></span>test_dmesg_push_once()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_push_once </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae2e303f10e65947337d142eb2b2dd0b9" name="ae2e303f10e65947337d142eb2b2dd0b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2e303f10e65947337d142eb2b2dd0b9">&#9670;&#160;</a></span>test_dmesg_subsystem_names()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_subsystem_names </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af607959553d62fd21bd8eb6ca194f744" name="af607959553d62fd21bd8eb6ca194f744"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af607959553d62fd21bd8eb6ca194f744">&#9670;&#160;</a></span>test_dmesg_suppression_toggle()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_suppression_toggle </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afb19dc2d9af33a7ea0d1b04c8488c06f" name="afb19dc2d9af33a7ea0d1b04c8488c06f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb19dc2d9af33a7ea0d1b04c8488c06f">&#9670;&#160;</a></span>test_dmesg_timestamp_and_task_id()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_dmesg_timestamp_and_task_id </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

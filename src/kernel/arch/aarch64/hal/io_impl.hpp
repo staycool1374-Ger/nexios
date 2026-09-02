@@ -112,14 +112,47 @@ inline void hlt() {
 inline void pause() {
     asm volatile("yield");
 }
-/// @brief Set AC-equivalent (PAN clear) — no-op until aarch64 PAN/PXN
-///        enforcement lands (ROADMAP MP-4.4).  Shared with x86_64 SMAP code.
-inline void stac() {}
-/// @brief Clear AC-equivalent — no-op (see stac()).
-inline void clac() {}
-/// @brief Read the AC-equivalent PSTATE bit — no-op placeholder.
+/// @brief Whether aarch64 PAN (FEAT_PAN) is available and enabled.  Written
+/// once by arch::pan_init() during BOOT (single CPU, IRQs masked); read-only
+/// thereafter from any context (incl. IRQ epilogue) — plain read is safe.
+extern bool g_pan_supported;
+
+/// @brief Detect FEAT_PAN (ID_AA64MMFR1_EL1.PAN[23:20] != 0), enable PAN via
+/// SCTLR_EL1.PAN (bit 23), and default PSTATE.PAN to deny (clac).  Called
+/// once from higherhalf_entry on the boot CPU.
+/// @return true if PAN was enabled.
+bool pan_init();
+
+/// @brief Set AC-equivalent (PAN clear) — permit kernel access to EL0 data.
+/// Toggles PSTATE.PAN (bit 22 of the PAN sysreg S3_0_C4_C2_4) to 0.
+/// No-op when PAN is unsupported (degraded mode matches the old stub).
+inline void stac() {
+    if (!g_pan_supported)
+        return;
+    uint64_t pan{};
+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
+    pan &= ~(1ULL << 22);
+    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
+}
+/// @brief Clear AC-equivalent (PAN set) — default-deny; further kernel deref
+/// of EL0-accessible pages faults.  Toggles PSTATE.PAN to 1.
+inline void clac() {
+    if (!g_pan_supported)
+        return;
+    uint64_t pan{};
+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
+    pan |= (1ULL << 22);
+    asm volatile("msr s3_0_c4_c2_4, %0" : : "r"(pan) : "memory");
+}
+/// @brief Read the AC-equivalent PSTATE bit, normalized to the x86_64
+/// contract: bit 18 set means "user-access override active" (PAN clear).
+/// Raw PSTATE.PAN is bit 22 of the PAN sysreg with inverted polarity.
 inline uint64_t read_rflags() {
-    return 0;
+    if (!g_pan_supported)
+        return 0;
+    uint64_t pan{};
+    asm volatile("mrs %0, s3_0_c4_c2_4" : "=r"(pan));
+    return (pan & (1ULL << 22)) == 0 ? (1ULL << 18) : 0;
 }
 /// @brief Disable IRQ interrupts (set DAIF bit).
 inline void cli() {

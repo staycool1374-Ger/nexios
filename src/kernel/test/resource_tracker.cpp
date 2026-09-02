@@ -100,6 +100,10 @@ static bool any_leak(const ResourceCounters &baseline,
         return true;
     if (current.open_fds > baseline.open_fds)
         return true;
+    if (current.cap_objects > baseline.cap_objects)
+        return true;
+    if (current.cap_slots > baseline.cap_slots)
+        return true;
     return false;
 }
 
@@ -218,6 +222,8 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
     print_row("PipeBuffers", baseline.pipe_buffers, counters_.pipe_buffers);
     print_row("Vnodes", baseline.vnodes, counters_.vnodes);
     print_row("Open FDs", baseline.open_fds, counters_.open_fds);
+    print_row("Cap objects", baseline.cap_objects, counters_.cap_objects);
+    print_row("Cap slots", baseline.cap_slots, counters_.cap_slots);
 
     print_backtrace();
     return false;

@@ -24,6 +24,8 @@
 #include <string.hpp>
 #include <kernel/driver/driver.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/arch/serial.hpp>
+#include <kernel/arch/keyboard.hpp>
 
 using namespace kernel;
 
@@ -107,9 +109,40 @@ JARVIS_TEST(driver_server_mmio_via_caps, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: FLAW-08 — Serial::puts/putchar return promptly on a live COM1
+//           (the bounded THRE polls must not hang and must emit).
+// Input: Serial::puts with newline + mixed case + digits
+// Expect: returns without hanging
+// Depends: arch::Serial
+JARVIS_TEST(serial_putchar_bounded_ok, "PRE: iocd | POST: none") {
+    arch::Serial::puts("test-driver\n");
+    arch::Serial::puts("ABCabc0129\n");
+    arch::Serial::putchar('X');
+    arch::Serial::putchar('\n');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: FLAW-10 — Keyboard::init() must return (bounded PS/2 drain) and
+//           leave the ring empty with modifiers cleared.
+// Input: Keyboard::init(); getchar into a buffer; check mods
+// Expect: returns; ring empty (getchar false); mods cleared
+// Depends: arch::Keyboard
+JARVIS_TEST(keyboard_init_bounded_drain, "PRE: iocd | POST: none") {
+    arch::Keyboard::init();
+    char c;
+    bool got = arch::Keyboard::getchar(c);
+    JARVIS_ASSERT(!got); // ring drained by init
+    JARVIS_ASSERT(!arch::Keyboard::is_shifted());
+    JARVIS_ASSERT(!arch::Keyboard::is_ctrl());
+    JARVIS_ASSERT(!arch::Keyboard::is_alt());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all driver tests with the test framework
 // Input: None
-// Expect: All six driver tests are registered (no direct assertion, only
+// Expect: All driver tests are registered (no direct assertion, only
 // logging)
 // Depends: Test framework, Logger, Scheduler, DriverRegistry
 void register_driver_tests() {
@@ -120,4 +153,6 @@ void register_driver_tests() {
     JARVIS_REGISTER_TEST(keyboard_driver_in_iocd);
     JARVIS_REGISTER_TEST(serial_driver_in_iocd);
     JARVIS_REGISTER_TEST(driver_server_mmio_via_caps);
+    JARVIS_REGISTER_TEST(serial_putchar_bounded_ok);
+    JARVIS_REGISTER_TEST(keyboard_init_bounded_drain);
 }

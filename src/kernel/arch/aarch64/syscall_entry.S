@@ -1,11 +1,16 @@
 .section .text
 .globl syscall_entry
 .type syscall_entry, @function
+.extern scheduler_save_rsp_to
+.extern irq_context_switch_common
+.extern debug_write
+.extern debug_write_hex
 
 // AArch64 syscall entry via SVC #0 from EL0
-// On entry:
-//   x0 = syscall number
-//   x1-x4 = arguments
+// On entry (user ABI, see src/libc/syscall.h __syscall5):
+//   x8 = syscall number
+//   x0-x3 = arguments
+//   x4 = 0
 //   SP_EL1 = kernel stack, SP_EL0 = user stack
 //   ELR_EL1 = return address (user PC)
 //   SPSR_EL1 = saved processor state
@@ -46,14 +51,35 @@ syscall_entry:
     str     x7, [sp, #264]
 
     // syscall_handler(number, arg0, arg1, arg2, arg3, regs)
-    ldp     x0, x1, [sp, #0]
-    ldp     x2, x3, [sp, #16]
-    ldr     x4, [sp, #32]
+    // User ABI: number rides in x8 (saved @ sp+64); x0-x3 are the args.
+    ldr     x0, [sp, #64]      // number = saved user x8
+    ldp     x1, x2, [sp, #0]   // arg0, arg1 = saved user x0, x1
+    ldp     x3, x4, [sp, #16]  // arg2, arg3 = saved user x2, x3
     mov     x5, sp
     bl      syscall_handler
 
     str     x0, [sp, #272]
+    // The deferred-switch resume path (vectors.S restore_all) loads x0
+    // from the frame's slot 0 — the aarch64 analogue of the x86 iret-frame
+    // rax slot filled by handle_interrupt_c (regs[0] = syscall_handler).
+    // Publish the return value there before applying the switch, or the
+    // resumed task erets with the syscall number in x0 instead of the
+    // result.  The no-switch epilogue overwrites x0 from +272 unchanged.
+    str     x0, [sp, #0]
 
+    // A blocking syscall (IPC receive/send_sync, IRQ wait, exit, ...) arms
+    // the deferred switch (scheduler_save_rsp_to) before returning.  If the
+    // arm is set, do NOT return into the (now BLOCKED) task — apply the
+    // switch instead: the new task's context is restored and this task's
+    // frame (including the syscall return value at +272) is saved into its
+    // own context for later resumption.  Mirrors the x86_64 isr_stubs
+    // syscall epilogue (isr_stubs.asm).
+    adrp    x0, scheduler_save_rsp_to
+    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
+    cbz     x0, .sys_no_switch
+    b       irq_context_switch_common
+
+.sys_no_switch:
     ldp     x5, x6, [sp, #248]
     msr     sp_el0, x5
     msr     elr_el1, x6

@@ -29,6 +29,9 @@
 #include <kernel/sync/spinlock_guard.hpp>
 
 namespace kernel {
+namespace cap {
+class Endpoint;
+}
 
 /// @brief Flags for IPC::send().
 // NOLINTNEXTLINE(performance-enum-size)
@@ -56,6 +59,19 @@ class IPC {
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);
+
+    /// @brief Sends a message through a capability-gated endpoint (ROADMAP
+    ///        0.4.1 CSpace).  The endpoint holds the receiver binding; no
+    ///        task-ID ambient authority is used.  Blocks on a full endpoint
+    ///        queue unless IPC_NONBLOCK.  @p ep must be pinned (a live
+    ///        capability lookup result).
+    static bool send_via_cap(cap::Endpoint *ep, const Message &msg,
+                             uint64_t flags = 0);
+
+    /// @brief Receives a message from a capability-gated endpoint into the
+    ///        calling task's own queue.  Returns false if the endpoint queue
+    ///        is empty.
+    static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
 
     /// @brief Blocks the current task on a full queue
     ///        (may boost owner priority).

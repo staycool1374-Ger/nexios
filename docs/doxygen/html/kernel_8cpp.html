@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="kernel_8hpp_source.html">kernel/kernel.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="gdt_8hpp_source.html">kernel/arch/gdt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="idt_8hpp_source.html">kernel/arch/idt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
@@ -145,6 +146,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 <code>#include &lt;<a class="el" href="sync_8hpp_source.html">kernel/sync/sync.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="multiboot2_8hpp_source.html">kernel/multiboot2.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="elf_8hpp_source.html">kernel/elf/elf.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf__loader_8hpp_source.html">kernel/elf/elf_loader.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfsd_8hpp_source.html">kernel/vfs/vfsd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
@@ -189,6 +191,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ae54e1bcf3fe5f14443fdc8ddadfbb615" id="r_ae54e1bcf3fe5f14443fdc8ddadfbb615"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae54e1bcf3fe5f14443fdc8ddadfbb615">higherhalf_entry</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> magic, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mb_info)</td></tr>
 <tr class="memitem:ae22655ba6f328217f1ebd6248ed82727" id="r_ae22655ba6f328217f1ebd6248ed82727"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae22655ba6f328217f1ebd6248ed82727">panic</a> (const char *msg)</td></tr>
 <tr class="memdesc:ae22655ba6f328217f1ebd6248ed82727"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
+<tr class="memitem:ae2bf43943abd1cc6ac00d36b17a973c3" id="r_ae2bf43943abd1cc6ac00d36b17a973c3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae2bf43943abd1cc6ac00d36b17a973c3">__attribute__</a> ((weak)) void <a class="el" href="test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a>(<a class="el" href="namespacekernel.html">kernel</a></td></tr>
 <tr class="memitem:a05b6e6675cd9f2f3cb2fd0aa3bc812a3" id="r_a05b6e6675cd9f2f3cb2fd0aa3bc812a3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05b6e6675cd9f2f3cb2fd0aa3bc812a3">syscall_handler</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> number, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg0, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg1, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg2, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg3, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:a61e633c8acb5cb45303ce5b45599b872" id="r_a61e633c8acb5cb45303ce5b45599b872"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a61e633c8acb5cb45303ce5b45599b872">handle_interrupt_c</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_tsc)</td></tr>
 <tr class="memitem:a6758dbad75005fb55338b477c2e5204a" id="r_a6758dbad75005fb55338b477c2e5204a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6758dbad75005fb55338b477c2e5204a">format_datetime</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> wall_ns)</td></tr>
@@ -197,33 +200,13 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:aa7ffada5937bf60f2ad11eb7c57a9dcc" id="r_aa7ffada5937bf60f2ad11eb7c57a9dcc"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa7ffada5937bf60f2ad11eb7c57a9dcc">scheduler_save_rsp_to</a> = nullptr</td></tr>
-<tr class="memitem:a0bfda50437b4177036ebf965a8ae9735" id="r_a0bfda50437b4177036ebf965a8ae9735"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0bfda50437b4177036ebf965a8ae9735">scheduler_load_rsp_from</a> = 0</td></tr>
-<tr class="memitem:a267d71f6467066b1a2df5d1c390f014a" id="r_a267d71f6467066b1a2df5d1c390f014a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a267d71f6467066b1a2df5d1c390f014a">scheduler_load_cr3_from</a> = 0</td></tr>
-<tr class="memitem:ac624c3223df92f059074d6001ef70e60" id="r_ac624c3223df92f059074d6001ef70e60"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac624c3223df92f059074d6001ef70e60">scheduler_next_task_id</a> = <a class="el" href="constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db">UINT64_MAX</a></td></tr>
-<tr class="memitem:a026faf3c3debae610cdbc4ebbc41295d" id="r_a026faf3c3debae610cdbc4ebbc41295d"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a026faf3c3debae610cdbc4ebbc41295d">scheduler_load_kstack_base</a> = 0</td></tr>
-<tr class="memdesc:a026faf3c3debae610cdbc4ebbc41295d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq, refusing to dispatch a task onto a foreign RSP (the H2 harness-displacement race).  <br /></td></tr>
-<tr class="memitem:a44b5cc49c445a145e3b4d20712ec2360" id="r_a44b5cc49c445a145e3b4d20712ec2360"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a44b5cc49c445a145e3b4d20712ec2360">scheduler_load_kstack_top</a> = 0</td></tr>
-<tr class="memitem:a358324b930c3d48b8613572314e94320" id="r_a358324b930c3d48b8613572314e94320"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a358324b930c3d48b8613572314e94320">scheduler_switch_generation</a> = 0</td></tr>
-<tr class="memdesc:a358324b930c3d48b8613572314e94320"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generation sequence counter for the deferred-switch pair (load_rsp_from / load_cr3_from). A publisher bumps it after writing the pair and before arming save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair.  <br /></td></tr>
-<tr class="memitem:acf3d43b7766a9a34a8eb7c6020ca4be8" id="r_acf3d43b7766a9a34a8eb7c6020ca4be8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acf3d43b7766a9a34a8eb7c6020ca4be8">scheduler_kernel_cr3</a> = 0</td></tr>
-<tr class="memdesc:acf3d43b7766a9a34a8eb7c6020ca4be8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context, so the harness never resumes on a stale user CR3. Initialised in Scheduler::init from VMM::get_kernel_pml4().  <br /></td></tr>
-<tr class="memitem:a0cd8a9e394bdaa6d815168f5208a85fa" id="r_a0cd8a9e394bdaa6d815168f5208a85fa"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cd8a9e394bdaa6d815168f5208a85fa">scheduler_need_resched</a> = false</td></tr>
-<tr class="memitem:a749dfb81c6c748a8fe63fae0d81f2926" id="r_a749dfb81c6c748a8fe63fae0d81f2926"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a749dfb81c6c748a8fe63fae0d81f2926">isr_nesting_depth</a> = 0</td></tr>
-<tr class="memitem:aeb543e504861746afd26a43391444494" id="r_aeb543e504861746afd26a43391444494"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb543e504861746afd26a43391444494">irq_entry_tsc</a> = 0</td></tr>
-<tr class="memitem:a0f9de4949789f8c2d559e134c0bca614" id="r_a0f9de4949789f8c2d559e134c0bca614"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0f9de4949789f8c2d559e134c0bca614">scheduler_corruption_count</a> = 0</td></tr>
-<tr class="memitem:a836cef767155acb24511242c71a483c2" id="r_a836cef767155acb24511242c71a483c2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a836cef767155acb24511242c71a483c2">deadline_detection_integrity</a> = 0</td></tr>
-<tr class="memitem:a9cb0eb86a3c6ddd3eff34b67b4a9d525" id="r_a9cb0eb86a3c6ddd3eff34b67b4a9d525"><td class="memItemLeft">kernel::TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a9cb0eb86a3c6ddd3eff34b67b4a9d525">fpu_owner</a> = nullptr</td></tr>
 <tr class="memitem:acf393da2fe85b8d9fa8cd83ff83a6a0c" id="r_acf393da2fe85b8d9fa8cd83ff83a6a0c"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#acf393da2fe85b8d9fa8cd83ff83a6a0c">kernel_virt_end</a> []</td></tr>
 <tr class="memitem:a53b789d98a238ce07c0629d6ba055cff" id="r_a53b789d98a238ce07c0629d6ba055cff"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a53b789d98a238ce07c0629d6ba055cff">_binary_initrd_cpio_start</a> []</td></tr>
 <tr class="memitem:a2c38eb4c3a51bab012a31eb7f42d54c0" id="r_a2c38eb4c3a51bab012a31eb7f42d54c0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2c38eb4c3a51bab012a31eb7f42d54c0">_binary_initrd_cpio_end</a> []</td></tr>
-<tr class="memitem:a80bb39a5269fd76f151c9193535e2e9e" id="r_a80bb39a5269fd76f151c9193535e2e9e"><td class="memItemLeft">BootInfo&#160;</td><td class="memItemRight"><a class="el" href="#a80bb39a5269fd76f151c9193535e2e9e">g_boot_info</a> {}</td></tr>
-<tr class="memitem:ac7f9c893466fd32303ae509ec07ec04d" id="r_ac7f9c893466fd32303ae509ec07ec04d"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac7f9c893466fd32303ae509ec07ec04d">g_boot_epoch</a> = 0</td></tr>
-<tr class="memitem:adc22452ac7aad7c19ba0d606a54c817f" id="r_adc22452ac7aad7c19ba0d606a54c817f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc22452ac7aad7c19ba0d606a54c817f">g_boot_ns</a> = 0</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a6773415358edda571fb1be7fb810a2c2" name="a6773415358edda571fb1be7fb810a2c2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6773415358edda571fb1be7fb810a2c2">&#9670;&#160;</a></span>__attribute__()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a6773415358edda571fb1be7fb810a2c2">&#9670;&#160;</a></span>__attribute__() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -236,6 +219,29 @@ Variables</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae2bf43943abd1cc6ac00d36b17a973c3" name="ae2bf43943abd1cc6ac00d36b17a973c3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2bf43943abd1cc6ac00d36b17a973c3">&#9670;&#160;</a></span>__attribute__() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(weak)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="kernel_8cpp_ae2bf43943abd1cc6ac00d36b17a973c3_cgraph.png" border="0" usemap="#akernel_8cpp_ae2bf43943abd1cc6ac00d36b17a973c3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
 
 </div>
 </div>
@@ -313,7 +319,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_ac9b08212c79ab5465098caa93a4188bd_cgraph.png" border="0" usemap="#akernel_8cpp_ac9b08212c79ab5465098caa93a4188bd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -336,7 +342,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph.png" border="0" usemap="#akernel_8cpp_afc833d2926e5dca3c9fbed32f7a7656a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -414,7 +420,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_a61e633c8acb5cb45303ce5b45599b872_cgraph.png" border="0" usemap="#akernel_8cpp_a61e633c8acb5cb45303ce5b45599b872_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -576,7 +582,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph.png" border="0" usemap="#akernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -699,104 +705,6 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a836cef767155acb24511242c71a483c2" name="a836cef767155acb24511242c71a483c2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a836cef767155acb24511242c71a483c2">&#9670;&#160;</a></span>deadline_detection_integrity</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> deadline_detection_integrity = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a9cb0eb86a3c6ddd3eff34b67b4a9d525" name="a9cb0eb86a3c6ddd3eff34b67b4a9d525"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9cb0eb86a3c6ddd3eff34b67b4a9d525">&#9670;&#160;</a></span>fpu_owner</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">kernel::TaskControlBlock* fpu_owner = nullptr</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="ac7f9c893466fd32303ae509ec07ec04d" name="ac7f9c893466fd32303ae509ec07ec04d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac7f9c893466fd32303ae509ec07ec04d">&#9670;&#160;</a></span>g_boot_epoch</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> g_boot_epoch = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a80bb39a5269fd76f151c9193535e2e9e" name="a80bb39a5269fd76f151c9193535e2e9e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a80bb39a5269fd76f151c9193535e2e9e">&#9670;&#160;</a></span>g_boot_info</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">BootInfo g_boot_info {}</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="adc22452ac7aad7c19ba0d606a54c817f" name="adc22452ac7aad7c19ba0d606a54c817f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adc22452ac7aad7c19ba0d606a54c817f">&#9670;&#160;</a></span>g_boot_ns</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> g_boot_ns = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="aeb543e504861746afd26a43391444494" name="aeb543e504861746afd26a43391444494"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aeb543e504861746afd26a43391444494">&#9670;&#160;</a></span>irq_entry_tsc</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> irq_entry_tsc = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a749dfb81c6c748a8fe63fae0d81f2926" name="a749dfb81c6c748a8fe63fae0d81f2926"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a749dfb81c6c748a8fe63fae0d81f2926">&#9670;&#160;</a></span>isr_nesting_depth</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> isr_nesting_depth = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="acf393da2fe85b8d9fa8cd83ff83a6a0c" name="acf393da2fe85b8d9fa8cd83ff83a6a0c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acf393da2fe85b8d9fa8cd83ff83a6a0c">&#9670;&#160;</a></span>kernel_virt_end</h2>
 
@@ -816,152 +724,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-
-</div>
-</div>
-<a id="a0f9de4949789f8c2d559e134c0bca614" name="a0f9de4949789f8c2d559e134c0bca614"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0f9de4949789f8c2d559e134c0bca614">&#9670;&#160;</a></span>scheduler_corruption_count</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_corruption_count = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="acf3d43b7766a9a34a8eb7c6020ca4be8" name="acf3d43b7766a9a34a8eb7c6020ca4be8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acf3d43b7766a9a34a8eb7c6020ca4be8">&#9670;&#160;</a></span>scheduler_kernel_cr3</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_kernel_cr3 = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context, so the harness never resumes on a stale user CR3. Initialised in Scheduler::init from VMM::get_kernel_pml4(). </p>
-
-</div>
-</div>
-<a id="a267d71f6467066b1a2df5d1c390f014a" name="a267d71f6467066b1a2df5d1c390f014a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a267d71f6467066b1a2df5d1c390f014a">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_cr3_from = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a026faf3c3debae610cdbc4ebbc41295d" name="a026faf3c3debae610cdbc4ebbc41295d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a026faf3c3debae610cdbc4ebbc41295d">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_base = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq, refusing to dispatch a task onto a foreign RSP (the H2 harness-displacement race). </p>
-
-</div>
-</div>
-<a id="a44b5cc49c445a145e3b4d20712ec2360" name="a44b5cc49c445a145e3b4d20712ec2360"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a44b5cc49c445a145e3b4d20712ec2360">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_top = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a0bfda50437b4177036ebf965a8ae9735" name="a0bfda50437b4177036ebf965a8ae9735"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0bfda50437b4177036ebf965a8ae9735">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_rsp_from = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a0cd8a9e394bdaa6d815168f5208a85fa" name="a0cd8a9e394bdaa6d815168f5208a85fa"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0cd8a9e394bdaa6d815168f5208a85fa">&#9670;&#160;</a></span>scheduler_need_resched</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">bool scheduler_need_resched = false</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="ac624c3223df92f059074d6001ef70e60" name="ac624c3223df92f059074d6001ef70e60"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac624c3223df92f059074d6001ef70e60">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_next_task_id = <a class="el" href="constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db">UINT64_MAX</a></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="aa7ffada5937bf60f2ad11eb7c57a9dcc" name="aa7ffada5937bf60f2ad11eb7c57a9dcc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa7ffada5937bf60f2ad11eb7c57a9dcc">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* scheduler_save_rsp_to = nullptr</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a358324b930c3d48b8613572314e94320" name="a358324b930c3d48b8613572314e94320"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a358324b930c3d48b8613572314e94320">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_switch_generation = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Generation sequence counter for the deferred-switch pair (load_rsp_from / load_cr3_from). A publisher bumps it after writing the pair and before arming save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair. </p>
 
 </div>
 </div>

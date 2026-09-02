@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -141,10 +141,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9b8dc944fd21a6ed2bf99a7174205fd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Poll the NIC for an incoming frame and dispatch it (non-blocking).  <br /></td></tr>
 <tr class="memitem:adaaadf3f0bb219c1503e146aba00c4c4" id="r_adaaadf3f0bb219c1503e146aba00c4c4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#adaaadf3f0bb219c1503e146aba00c4c4">net_send_icmp_echo</a> (Nic &amp;nic, Ipv4Addr dst_ip, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> id, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> seq, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> data_len)</td></tr>
 <tr class="memdesc:adaaadf3f0bb219c1503e146aba00c4c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build and send an ICMP Echo Request (with self-ping loopback).  <br /></td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
-Variables</h2></td></tr>
-<tr class="memitem:a952961bd539959a2e0f7d4f581666e7f" id="r_a952961bd539959a2e0f7d4f581666e7f"><td class="memItemLeft">constinit Nic *&#160;</td><td class="memItemRight"><a class="el" href="#a952961bd539959a2e0f7d4f581666e7f">g_nic</a> = nullptr</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="ac3d2624085f7a02e0560fff0dc457add" name="ac3d2624085f7a02e0560fff0dc457add"></a>
@@ -163,12 +159,6 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Return a reference to the global ARP cache. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacenet_ac3d2624085f7a02e0560fff0dc457add_cgraph.png" border="0" usemap="#anamespacenet_ac3d2624085f7a02e0560fff0dc457add_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
-</div>
 
 </div>
 </div>
@@ -201,7 +191,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacenet_a4942279d89399531882a47a9a44c063b_cgraph.png" border="0" usemap="#anamespacenet_a4942279d89399531882a47a9a44c063b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 0 -->
 </div>
 
 </div>
@@ -231,12 +221,6 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Handle an incoming Ethernet frame: dispatch ARP / IPv4 / ICMP. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacenet_abf47b87159dccdad00ced31edeec5b94_cgraph.png" border="0" usemap="#anamespacenet_abf47b87159dccdad00ced31edeec5b94_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
-</div>
 
 </div>
 </div>
@@ -256,12 +240,6 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Reset the ICMP echo reply record. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacenet_a79a8aca148db07658e53ac5cd940c827_cgraph.png" border="0" usemap="#anamespacenet_a79a8aca148db07658e53ac5cd940c827_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
 
 </div>
 </div>
@@ -281,12 +259,6 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Return a pointer to the last received ICMP echo reply, or nullptr. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacenet_ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a_cgraph.png" border="0" usemap="#anamespacenet_ad3ff6ca04a6c3b9a4c21fa4ce5bf1c8a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
 
 </div>
 </div>
@@ -315,12 +287,6 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Record an ICMP echo reply. </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacenet_abb83793f177148ca1edb88ee4cea247a_cgraph.png" border="0" usemap="#anamespacenet_abb83793f177148ca1edb88ee4cea247a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
-</div>
 
 </div>
 </div>
@@ -363,7 +329,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacenet_a725cddfef06955893790c0d4337dfae3_cgraph.png" border="0" usemap="#anamespacenet_a725cddfef06955893790c0d4337dfae3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -388,7 +354,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacenet_a9b8dc944fd21a6ed2bf99a7174205fd7_cgraph.png" border="0" usemap="#anamespacenet_a9b8dc944fd21a6ed2bf99a7174205fd7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -437,7 +403,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacenet_adaaadf3f0bb219c1503e146aba00c4c4_cgraph.png" border="0" usemap="#anamespacenet_adaaadf3f0bb219c1503e146aba00c4c4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -486,31 +452,8 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacenet_a1a57b9a29bb5404650605e8cf2d52cff_cgraph.png" border="0" usemap="#anamespacenet_a1a57b9a29bb5404650605e8cf2d52cff_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 4 -->
 </div>
-
-</div>
-</div>
-<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
-<a id="a952961bd539959a2e0f7d4f581666e7f" name="a952961bd539959a2e0f7d4f581666e7f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a952961bd539959a2e0f7d4f581666e7f">&#9670;&#160;</a></span>g_nic</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">Nic* net::g_nic = nullptr</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel constinit">constinit</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -227,6 +227,10 @@ Macros</h2></td></tr>
 <tr class="memitem:a835305cb9a116e1c539f8f2a6b880848" id="r_a835305cb9a116e1c539f8f2a6b880848"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a835305cb9a116e1c539f8f2a6b880848">CONFIG_HAS_HPET</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:aac781da257db7b6183fac86fc89095c5" id="r_aac781da257db7b6183fac86fc89095c5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aac781da257db7b6183fac86fc89095c5">CONFIG_PRIORITY_CEILING_PROTOCOL</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a9cd0e684a26b0270d442310ccd4330da" id="r_a9cd0e684a26b0270d442310ccd4330da"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cd0e684a26b0270d442310ccd4330da">CONFIG_MAX_HELD_CEILINGS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:ab7f91f26b4b36eff22a2b15ea5405621" id="r_ab7f91f26b4b36eff22a2b15ea5405621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab7f91f26b4b36eff22a2b15ea5405621">CONFIG_MAX_PER_TASK_OBJECTS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:ab545c44f329445003c7b23cb29d0a0e1" id="r_ab545c44f329445003c7b23cb29d0a0e1"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab545c44f329445003c7b23cb29d0a0e1">CONFIG_CSLOT_COUNT</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memitem:abfb6b2ca517d4c58ad5d095d0f2fc66d" id="r_abfb6b2ca517d4c58ad5d095d0f2fc66d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abfb6b2ca517d4c58ad5d095d0f2fc66d">CONFIG_CAP_MAX_DEPTH</a>&#160;&#160;&#160;8</td></tr>
+<tr class="memitem:ac78ec7ca9369e6f83fcf17effcd9103c" id="r_ac78ec7ca9369e6f83fcf17effcd9103c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac78ec7ca9369e6f83fcf17effcd9103c">CONFIG_CAP_MAX_UNTYPED</a>&#160;&#160;&#160;16</td></tr>
 <tr class="memitem:ad16f6b64a36d83cce633b6c7784a82df" id="r_ad16f6b64a36d83cce633b6c7784a82df"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad16f6b64a36d83cce633b6c7784a82df">CONFIG_MUTEX_PIP</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a7cf9db7fcc2c0bf9b1bb475b2bad3d93" id="r_a7cf9db7fcc2c0bf9b1bb475b2bad3d93"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7cf9db7fcc2c0bf9b1bb475b2bad3d93">CONFIG_SEMAPHORE_PIP</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a08b1decd478ffc1359ac5e6385741d61" id="r_a08b1decd478ffc1359ac5e6385741d61"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a08b1decd478ffc1359ac5e6385741d61">CONFIG_QUEUE_PIP</a>&#160;&#160;&#160;1</td></tr>
@@ -235,7 +239,8 @@ Macros</h2></td></tr>
 <tr class="memdesc:a5412009bb80bc2aac94e2a2121f9a02f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Base virtual address of the kernel-stack window (guard page capable).  <br /></td></tr>
 <tr class="memitem:a0bef3e0da616c80c28e1f7671b03401d" id="r_a0bef3e0da616c80c28e1f7671b03401d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0bef3e0da616c80c28e1f7671b03401d">CONFIG_KSTACK_WINDOW_SIZE</a>&#160;&#160;&#160;0x1000000ULL</td></tr>
 <tr class="memdesc:a0bef3e0da616c80c28e1f7671b03401d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total VA space reserved for kernel stacks.  <br /></td></tr>
-<tr class="memitem:ac1f84c6931f570beff33eb70e30cbe4e" id="r_ac1f84c6931f570beff33eb70e30cbe4e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac1f84c6931f570beff33eb70e30cbe4e">CONFIG_STACK_SIZE_TABLE</a>&#160;&#160;&#160;{ 65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536 }</td></tr>
+<tr class="memitem:a2526193a2bf2cb59e84e1d640af1a29f" id="r_a2526193a2bf2cb59e84e1d640af1a29f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2526193a2bf2cb59e84e1d640af1a29f">CONFIG_KERNEL_PRIV_DATA_BASE</a>&#160;&#160;&#160;0xFFFFA00000000000ULL</td></tr>
+<tr class="memitem:ac1f84c6931f570beff33eb70e30cbe4e" id="r_ac1f84c6931f570beff33eb70e30cbe4e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac1f84c6931f570beff33eb70e30cbe4e">CONFIG_STACK_SIZE_TABLE</a>&#160;&#160;&#160;{65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}</td></tr>
 <tr class="memdesc:ac1f84c6931f570beff33eb70e30cbe4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel stack sizes per priority tier (bytes). Indexed by priority.  <br /></td></tr>
 <tr class="memitem:ab44671d00a3c95ec864336d0fd40979d" id="r_ab44671d00a3c95ec864336d0fd40979d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab44671d00a3c95ec864336d0fd40979d">CONFIG_ZOMBIE_STARVATION_LIMIT</a>&#160;&#160;&#160;32</td></tr>
 <tr class="memitem:aac30e89938cc6eef8d1516f75c2c3fc7" id="r_aac30e89938cc6eef8d1516f75c2c3fc7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aac30e89938cc6eef8d1516f75c2c3fc7">CONFIG_IRQ_LATENCY_HISTOGRAM</a>&#160;&#160;&#160;1</td></tr>
@@ -248,8 +253,10 @@ Macros</h2></td></tr>
 <tr class="memdesc:af9d0f7c02c48d8057773b2045f011981"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol idle_hook() called each idle iteration.  <br /></td></tr>
 <tr class="memitem:a836435ca7dbe895d16b9f942e7a00b43" id="r_a836435ca7dbe895d16b9f942e7a00b43"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a836435ca7dbe895d16b9f942e7a00b43">CONFIG_TICK_HOOK</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memdesc:a836435ca7dbe895d16b9f942e7a00b43"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol tick_hook(uint64_t ticks) called on tick.  <br /></td></tr>
-<tr class="memitem:a5ed865b603ba7ee04437c1cc28ce89fa" id="r_a5ed865b603ba7ee04437c1cc28ce89fa"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5ed865b603ba7ee04437c1cc28ce89fa">CONFIG_STACK_OVERFLOW_HOOK</a>&#160;&#160;&#160;0</td></tr>
-<tr class="memdesc:a5ed865b603ba7ee04437c1cc28ce89fa"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*).  <br /></td></tr>
+<tr class="memitem:a5ed865b603ba7ee04437c1cc28ce89fa" id="r_a5ed865b603ba7ee04437c1cc28ce89fa"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5ed865b603ba7ee04437c1cc28ce89fa">CONFIG_STACK_OVERFLOW_HOOK</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ad0e38363c716013f000005b049f48338" id="r_ad0e38363c716013f000005b049f48338"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad0e38363c716013f000005b049f48338">CONFIG_CANARY_GUARD</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a90a087504d57cc28a18745a08011e315" id="r_a90a087504d57cc28a18745a08011e315"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a90a087504d57cc28a18745a08011e315">CONFIG_SMEP</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a0416a4b1c68b556f00af37b87fdd0742" id="r_a0416a4b1c68b556f00af37b87fdd0742"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0416a4b1c68b556f00af37b87fdd0742">CONFIG_SMAP</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:aaa67bf023e8838df96aa8ec37674ee90" id="r_aaa67bf023e8838df96aa8ec37674ee90"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aaa67bf023e8838df96aa8ec37674ee90">CONFIG_OOM_HOOK</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memdesc:aaa67bf023e8838df96aa8ec37674ee90"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol oom_hook(size_t requested_size).  <br /></td></tr>
 <tr class="memitem:aed09cfec33d0062ef3e3e9b872f17cc2" id="r_aed09cfec33d0062ef3e3e9b872f17cc2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aed09cfec33d0062ef3e3e9b872f17cc2">CONFIG_OOM_POLICY</a>&#160;&#160;&#160;0</td></tr>
@@ -312,6 +319,66 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Number of physical pages pre-allocated for the zero-copy BufferPool. Each page is 4096 bytes. Boot-time PMM reservation; no dynamic alloc after init. Must be &gt;= max expected concurrent buffers. </p>
+
+</div>
+</div>
+<a id="ad0e38363c716013f000005b049f48338" name="ad0e38363c716013f000005b049f48338"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad0e38363c716013f000005b049f48338">&#9670;&#160;</a></span>CONFIG_CANARY_GUARD</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CANARY_GUARD&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>If non-zero, the kernel verifies per-task software sentinel canaries (v0.4.0 MP-3) on syscall entry (user segments) and on context switch (kernel-stack canary). Mismatch → controlled panic (or test latch). </p>
+
+</div>
+</div>
+<a id="abfb6b2ca517d4c58ad5d095d0f2fc66d" name="abfb6b2ca517d4c58ad5d095d0f2fc66d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abfb6b2ca517d4c58ad5d095d0f2fc66d">&#9670;&#160;</a></span>CONFIG_CAP_MAX_DEPTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_DEPTH&#160;&#160;&#160;8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum cascade-revoke depth. Revoking a CNode recursively revokes every capability reachable through it; the walk is iterative (explicit work list), bounded by this depth. </p>
+
+</div>
+</div>
+<a id="ac78ec7ca9369e6f83fcf17effcd9103c" name="ac78ec7ca9369e6f83fcf17effcd9103c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac78ec7ca9369e6f83fcf17effcd9103c">&#9670;&#160;</a></span>CONFIG_CAP_MAX_UNTYPED</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CAP_MAX_UNTYPED&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3). Enforced by a TU-local live counter in <a class="el" href="untyped_8cpp.html" title="Untyped memory object implementation (ROADMAP 0.4.1 item 3).">untyped.cpp</a>. </p>
+
+</div>
+</div>
+<a id="ab545c44f329445003c7b23cb29d0a0e1" name="ab545c44f329445003c7b23cb29d0a0e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab545c44f329445003c7b23cb29d0a0e1">&#9670;&#160;</a></span>CONFIG_CSLOT_COUNT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_CSLOT_COUNT&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Number of slots in each capability node (CNode). The task's root CNode is its CSpace. Slot index bits are carved from the capability handle, so a power of two is preferred. </p>
 
 </div>
 </div>
@@ -1066,6 +1133,21 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a2526193a2bf2cb59e84e1d640af1a29f" name="a2526193a2bf2cb59e84e1d640af1a29f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2526193a2bf2cb59e84e1d640af1a29f">&#9670;&#160;</a></span>CONFIG_KERNEL_PRIV_DATA_BASE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_KERNEL_PRIV_DATA_BASE&#160;&#160;&#160;0xFFFFA00000000000ULL</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Base virtual address of the per-kernel-task private-data window (v0.4.0 MP-1.5). Tests map one private page here in a task's PML4 and prove cross-task isolation. The PML4 index must NOT be present in the boot kernel PML4 (kernel_init asserts this). </p>
+
+</div>
+</div>
 <a id="a5412009bb80bc2aac94e2a2121f9a02f" name="a5412009bb80bc2aac94e2a2121f9a02f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a5412009bb80bc2aac94e2a2121f9a02f">&#9670;&#160;</a></span>CONFIG_KSTACK_WINDOW_BASE</h2>
 
@@ -1174,6 +1256,21 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Maximum number of mount points. </p>
+
+</div>
+</div>
+<a id="ab7f91f26b4b36eff22a2b15ea5405621" name="ab7f91f26b4b36eff22a2b15ea5405621"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7f91f26b4b36eff22a2b15ea5405621">&#9670;&#160;</a></span>CONFIG_MAX_PER_TASK_OBJECTS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_MAX_PER_TASK_OBJECTS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum number of heap-allocated, KernelObject objects a single task may own (attached to its intrusive per-task object list). Bounds the teardown and snapshot-restore walks. One SporadicServer per daemon is the common case. </p>
 
 </div>
 </div>
@@ -1513,6 +1610,36 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a0416a4b1c68b556f00af37b87fdd0742" name="a0416a4b1c68b556f00af37b87fdd0742"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0416a4b1c68b556f00af37b87fdd0742">&#9670;&#160;</a></span>CONFIG_SMAP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SMAP&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>v0.4.0 MP-4: SMAP (supervisor-mode access prevention) — CR4 bit 21. On x86_64 the boot path sets it when CPUID leaf 7 EBX[20] is supported. Every kernel-&gt;user deref is stac/clac-wrapped (<a class="el" href="checked__ptr_8hpp.html">checked_ptr.hpp</a> + syscall handlers) so enabling this is safe. </p>
+
+</div>
+</div>
+<a id="a90a087504d57cc28a18745a08011e315" name="a90a087504d57cc28a18745a08011e315"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90a087504d57cc28a18745a08011e315">&#9670;&#160;</a></span>CONFIG_SMEP</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_SMEP&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>v0.4.0 MP-4: SMEP (supervisor-mode execution prevention) — CR4 bit 20. On x86_64 the boot path sets it when CPUID leaf 7 EBX[7] is supported. </p>
+
+</div>
+</div>
 <a id="a31b2fca43fed672f65115a92304475a2" name="a31b2fca43fed672f65115a92304475a2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a31b2fca43fed672f65115a92304475a2">&#9670;&#160;</a></span>CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</h2>
 
@@ -1581,12 +1708,11 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define CONFIG_STACK_OVERFLOW_HOOK&#160;&#160;&#160;0</td>
+          <td class="memname">#define CONFIG_STACK_OVERFLOW_HOOK&#160;&#160;&#160;1</td>
         </tr>
       </table>
 </div><div class="memdoc">
-
-<p>If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*). </p>
+<p>If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*). v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page #PF before the fatal panic (belt-and-braces; tests override it strongly). </p>
 
 </div>
 </div>
@@ -1612,7 +1738,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define CONFIG_STACK_SIZE_TABLE&#160;&#160;&#160;{ 65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536 }</td>
+          <td class="memname">#define CONFIG_STACK_SIZE_TABLE&#160;&#160;&#160;{65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1865,9 +1991,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">((<a class="code hl_define" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a> &lt;&lt; 16) | \</div>
-<div class="line">(<a class="code hl_define" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a> &lt;&lt; 8) |  \</div>
-<div class="line"><a class="code hl_define" href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>)</div>
+<b>Value:</b><div class="fragment"><div class="line">((<a class="code hl_define" href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a> &lt;&lt; 16) | (<a class="code hl_define" href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a> &lt;&lt; 8) |              \</div>
+<div class="line"> <a class="code hl_define" href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a>)</div>
 <div class="ttc" id="anexios__config_8h_html_aa1a69b49aa134e3a3c303489bccca599"><div class="ttname"><a href="#aa1a69b49aa134e3a3c303489bccca599">CONFIG_VERSION_MAJOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MAJOR</div><div class="ttdef"><b>Definition</b> nexios_config.h:19</div></div>
 <div class="ttc" id="anexios__config_8h_html_acd02978616d37355da2ade116edf7bde"><div class="ttname"><a href="#acd02978616d37355da2ade116edf7bde">CONFIG_VERSION_MINOR</a></div><div class="ttdeci">#define CONFIG_VERSION_MINOR</div><div class="ttdef"><b>Definition</b> nexios_config.h:20</div></div>
 <div class="ttc" id="anexios__config_8h_html_ad5dc4c87864bde8898026a5c2e00cb59"><div class="ttname"><a href="#ad5dc4c87864bde8898026a5c2e00cb59">CONFIG_VERSION_PATCH</a></div><div class="ttdeci">#define CONFIG_VERSION_PATCH</div><div class="ttdef"><b>Definition</b> nexios_config.h:21</div></div>

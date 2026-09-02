@@ -23,6 +23,12 @@
 #include <kernel/arch/gdt.hpp>
 #include <types.hpp>
 
+// Freestanding build has no <cstddef>; provide offsetof via the compiler
+// builtin (same pattern as tcb_write_log.hpp).
+#ifndef offsetof
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#endif
+
 namespace arch {
 
 /// @brief Dedicated 4 KiB stack for the double-fault handler (IST1).
@@ -32,8 +38,9 @@ static uint8_t df_stack[4096] __attribute__((aligned(16)));
 
 /// @brief GDT entry table.
 GDTEntry GDT::entries_[NUM_ENTRIES] = {};
-/// @brief Task State Segment — stores RSP0 and IST pointers.
-TSS GDT::tss_ = {};
+/// @brief Task State Segment plus I/O permission bitmap (single global block;
+/// per-task bitmap content is swapped by arch::iopb_*).
+TSSBlock GDT::tss_block_ = {};
 /// @brief GDT pseudo-descriptor (base + limit) loaded by LGDT.
 GDTDescriptor GDT::desc_ = {};
 
@@ -67,8 +74,8 @@ void GDT::init() {
     entries_[GDT_USER_CODE / 8] = make_entry(0, 0, 0xFA, 0x20);
     entries_[GDT_USER_DATA / 8] = make_entry(0, 0, 0xF2, 0x00);
 
-    uint64_t tss_base = reinterpret_cast<uint64_t>(&tss_);
-    uint32_t tss_limit = sizeof(TSS) - 1;
+    uint64_t tss_base = reinterpret_cast<uint64_t>(&tss_block_);
+    uint32_t tss_limit = sizeof(TSSBlock) - 1;
 
     GDTEntry tss_low = {};
     tss_low.limit_low = tss_limit & 0xFFFF;
@@ -87,7 +94,16 @@ void GDT::init() {
     desc_.base = reinterpret_cast<uint64_t>(entries_);
 
     // Set up IST1 for double-fault handler (vector 8)
-    tss_.ist1 = reinterpret_cast<uint64_t>(df_stack + sizeof(df_stack));
+    tss_block_.tss.ist1 = reinterpret_cast<uint64_t>(df_stack + sizeof(df_stack));
+
+    // I/O permission bitmap: default-deny (all-1s) + 0xFF terminator.
+    // The bitmap lives inside the TSS segment, so the descriptor limit is
+    // sizeof(TSSBlock)-1 and iopb_offset is the bitmap's position.
+    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
+        tss_block_.iopb[i] = 0xFF;
+    tss_block_.iopb_terminator = 0xFF;
+    tss_block_.tss.iopb_offset =
+        static_cast<uint16_t>(offsetof(TSSBlock, iopb));
 }
 
 /// @brief Load the GDT and TSS into the CPU.
@@ -110,7 +126,42 @@ void GDT::load() {
 /// @param rsp The stack pointer to use when transitioning from ring-3 to
 /// ring-0.
 void GDT::set_tss_rsp0(uint64_t rsp) {
-    tss_.rsp0 = rsp;
+    tss_block_.tss.rsp0 = rsp;
+}
+
+/// @brief Load an 8 KiB I/O permission bitmap into the TSS.
+void GDT::iopb_load(const uint8_t *bitmap) {
+    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
+        tss_block_.iopb[i] = bitmap[i];
+}
+
+/// @brief Set the I/O permission bitmap to all-1s (default-deny).
+void GDT::iopb_mask_all() {
+    for (size_t i = 0; i < sizeof(tss_block_.iopb); ++i)
+        tss_block_.iopb[i] = 0xFF;
+}
+
+/// @brief Pointer to the TSS I/O permission bitmap.
+uint8_t *GDT::iopb_bitmap() {
+    return tss_block_.iopb;
+}
+
+/// @brief IOPB offset stored in the TSS.
+uint16_t GDT::tss_iopb_offset() {
+    return tss_block_.tss.iopb_offset;
+}
+
+/// @brief TSS descriptor limit (reconstructed from the GDT entry).
+uint16_t GDT::tss_descriptor_limit() {
+    const GDTEntry &e = entries_[GDT_TSS / 8];
+    return static_cast<uint16_t>(e.limit_low |
+                                 (static_cast<uint16_t>(e.granularity & 0x0F)
+                                  << 16));
+}
+
+/// @brief Terminator byte after the I/O bitmap.
+uint8_t GDT::iopb_terminator() {
+    return tss_block_.iopb_terminator;
 }
 
 } // namespace arch

@@ -30,23 +30,21 @@
 #include <kernel/arch/io.hpp>
 #include <constants.hpp>
 
-extern "C" void syscall_entry();
-
 namespace kernel {
 
-/// @brief Initialise the syscall interface (MSR setup, syscall-table built at
-/// compile time).
+/// @brief Initialise the syscall interface (syscall-table built at compile
+/// time).
 void Syscall::init() {
 #if defined(CONFIG_ARCH_X86_64)
-    uint64_t star_val = (static_cast<uint64_t>(arch::SEG_KERNEL_CODE) << 32) |
-                        (static_cast<uint64_t>(arch::SEG_USER_CODE) << 48);
-    arch::wrmsr(arch::IA32_STAR, star_val);
-    arch::wrmsr(arch::IA32_LSTAR, reinterpret_cast<uint64_t>(syscall_entry));
-    arch::wrmsr(arch::IA32_FMASK, 0x200);
+    // P7 / gs-base-swapgs-audit F-1 (issue #6): the LSTAR/sysret path is
+    // REMOVED.  MSR_KERNEL_GS_BASE was never written, so syscall_entry's
+    // swapgs left GS base 0 and `mov [gs:0],rsp` faulted on phys 0 — a
+    // guaranteed panic on any ring-3 `syscall` (0F 05).  The sole live syscall
+    // path is `int $0x80` (isr_128 trap gate, GS-free).  The fastpath redesign
+    // lives in docs/specs/syscall-fastpath.md (v0.4.3).
 #elif defined(CONFIG_ARCH_AARCH64)
     // AArch64 syscalls use SVC #0; VBAR_EL1 entry point handles dispatch.
     // No MSR-based syscall setup needed.
-    (void)syscall_entry;
 #endif
 }
 

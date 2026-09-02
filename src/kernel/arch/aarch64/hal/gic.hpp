@@ -1,6 +1,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 /// @brief AArch64 GICv2/v3 register definitions and accessors.
@@ -53,6 +54,13 @@ inline constexpr uint32_t GICC_PMR  = 0x0004;
 inline constexpr uint32_t GICC_IAR  = 0x000C;
 inline constexpr uint32_t GICC_EOIR = 0x0010;
 
+/// @brief GICC_CTLR enable bits (QEMU GICv2 with security extensions).
+inline constexpr uint32_t GICC_CTLR_ENABLE     = 1U << 0;  ///< Group 0 / common enable
+inline constexpr uint32_t GICC_CTLR_ENABLE_GRP1 = 1U << 1; ///< Group 1 delivery
+/// @brief GICD_CTLR enable bits (NS view with security extensions).
+inline constexpr uint32_t GICD_CTLR_ENABLE      = 1U << 0;
+inline constexpr uint32_t GICD_CTLR_ENABLE_GRP1 = 1U << 1;
+
 // ─── GICv3 system register accessors (ICC_*_EL1) ─────────────────────────
 inline void gic_v3_write_eoir(uint64_t intid) {
     asm volatile("msr ICC_EOIR1_EL1, %0" : : "r"(intid) : "memory");
@@ -81,20 +89,28 @@ inline void gic_v3_set_sre(bool enable) {
 }
 
 // ─── MMIO accessors ──────────────────────────────────────────────────────
+// All GIC access goes through the TTBR1 higher-half window (boot.S maps the
+// 0x08000000 2MiB block at HHDM_OFFSET + 0x08000000).  Raw-physical access
+// would depend on the boot identity map, which does not exist in user page
+// tables — the first GIC read under a user TTBR0 would fault.
 inline volatile uint32_t *gicd_reg(uint32_t offset) {
-    return reinterpret_cast<volatile uint32_t *>(GICD_BASE + offset);
+    return reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                 GICD_BASE + offset);
 }
 
 inline volatile uint32_t *gicc_reg(uint32_t offset) {
-    return reinterpret_cast<volatile uint32_t *>(GICC_BASE + offset);
+    return reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                 GICC_BASE + offset);
 }
 
 inline volatile uint32_t *gicr_rd_reg(uint32_t offset) {
-    return reinterpret_cast<volatile uint32_t *>(GICR_RD_BASE + offset);
+    return reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                 GICR_RD_BASE + offset);
 }
 
 inline volatile uint32_t *gicr_sgi_reg(uint32_t offset) {
-    return reinterpret_cast<volatile uint32_t *>(GICR_SGI_BASE + offset);
+    return reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                 GICR_SGI_BASE + offset);
 }
 
 // ─── QEMU virt INTID map (SPI range) ─────────────────────────────────────

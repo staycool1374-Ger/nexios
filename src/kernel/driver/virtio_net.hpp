@@ -26,6 +26,7 @@
 #include <types.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/net/net.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 
 namespace kernel::net {
 using ::net::Ipv4Addr;
@@ -80,6 +81,14 @@ struct VirtioNetDevice {
     uint16_t tx_avail_idx;
     uint16_t rx_last_seen_used;
 
+    /// @brief Serializes ring access (add_rx_buf / poll / send_frame) —
+    ///        FLAW-03 fix.  Taken via IrqSpinLockGuard (cli + lock).
+    sync::SpinLock lock_;
+    /// @brief True while a TX descriptor is in flight.  The single TX buffer
+    ///        must not be overwritten by a second send before the device
+    ///        consumed the previous descriptor (FLAW-03).
+    bool tx_inflight_ = false;
+
     ~VirtioNetDevice();
 
     Nic *nic; // back-pointer to the NIC abstraction
@@ -96,5 +105,9 @@ bool virtio_net_probe(Nic &nic);
 /// @param len  On success, set to the number of bytes written.
 /// @return true if a frame was received.
 bool virtio_net_poll(uint8_t *buf, size_t &len);
+
+/// Destroy a probed Virtio-net device: clears the global before freeing so
+/// late poll/send calls null-check and never dereference freed memory.
+void virtio_net_destroy();
 
 } // namespace kernel::net

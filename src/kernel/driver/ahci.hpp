@@ -28,6 +28,7 @@
 #include <kernel/driver/block_device.hpp>
 #include <kernel/driver/ahci_protocol.hpp>
 #include <kernel/driver/dma.hpp>
+#include <kernel/sync/mutex.hpp>
 
 namespace kernel::block {
 
@@ -100,6 +101,12 @@ class AhciDriver final : public BlockDevice {
 
     // DMA data buffers per slot
     dma::DmaBuffer data_bufs_[AHCI_MAX_PORTS][ahci::AHCI_MAX_CMDS] = {};
+
+    // H-1 (audit-drivers-vfs-net-v0.4.2): serializes alloc_slot → start_cmd →
+    // wait_cmd per port.  Without it two concurrent read_sector/write_sector
+    // calls can acquire the same slot and the same data_bufs_ DMA buffer →
+    // data corruption; start_cmd/wait_cmd are likewise unsynchronized.
+    sync::Mutex cmd_lock_[AHCI_MAX_PORTS] = {};
 };
 
 } // namespace kernel::block

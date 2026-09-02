@@ -226,10 +226,13 @@ DmaEngine::DmaEngine(DmaChannel &channel)
 
 bool DmaEngine::start_transfer(PrdTable &prd, Direction dir, DmaCallback cb,
                                uint64_t ctx) {
+    sync::IrqSpinLockGuard guard(lock_);
     if (active_)
         return false;
     if (!channel_.start(prd, dir))
         return false;
+    // cli (held by the guard) guarantees the completion IRQ cannot fire
+    // between channel_.start() and active_ = true.
     active_ = true;
     callback_ = cb;
     callback_ctx_ = ctx;
@@ -237,6 +240,7 @@ bool DmaEngine::start_transfer(PrdTable &prd, Direction dir, DmaCallback cb,
 }
 
 bool DmaEngine::is_busy() {
+    sync::IrqSpinLockGuard guard(lock_);
     if (!active_)
         return false;
     if (!channel_.is_busy()) {
@@ -247,18 +251,32 @@ bool DmaEngine::is_busy() {
 }
 
 bool DmaEngine::handle_irq() {
-    if (!active_)
-        return false;
-    bool success = channel_.handle_irq();
-    active_ = false;
-    if (callback_) {
-        callback_(callback_ctx_, success);
+    DmaCallback cb = nullptr;
+    uint64_t ctx = 0;
+    bool success = false;
+    {
+        sync::IrqSpinLockGuard guard(lock_);
+        if (!active_)
+            return false;
+        success = channel_.handle_irq();
+        // Capture the callback into stack locals, clear the engine state,
+        // then release the lock before invoking the callback (the callback
+        // runs in IRQ context and must never fire under a spinlock).
+        cb = callback_;
+        ctx = callback_ctx_;
+        active_ = false;
+        callback_ = nullptr;
+        callback_ctx_ = 0;
+    }
+    if (cb) {
+        cb(ctx, success);
     }
     return true;
 }
 
 void DmaEngine::abort() {
-    channel_.abort();
+    sync::IrqSpinLockGuard guard(lock_);
+    channel_.abort(); // stop HW first -> no completion IRQ can fire
     active_ = false;
     callback_ = nullptr;
     callback_ctx_ = 0;
@@ -280,20 +298,27 @@ bool PingPongDma::init() {
         shutdown();
         return false;
     }
-    prepare_idx_ = 0;
-    xfer_idx_ = 1;
-    active_ = false;
-    completed_ = 0;
+    {
+        sync::IrqSpinLockGuard guard(lock_);
+        prepare_idx_ = 0;
+        xfer_idx_ = 1;
+        active_ = false;
+        completed_ = 0;
+        chain_cb_ = nullptr;
+        chain_ctx_ = 0;
+    }
     Logger::info("dma: PingPongDma init bufs at 0x%lx/0x%lx",
                  bufs_[0].phys_addr, bufs_[1].phys_addr);
     return true;
 }
 
 DmaBuffer *PingPongDma::prepare_buf() {
+    sync::IrqSpinLockGuard guard(lock_);
     return active_ ? &bufs_[prepare_idx_] : &bufs_[0];
 }
 
 DmaBuffer *PingPongDma::xfer_buf() {
+    sync::IrqSpinLockGuard guard(lock_);
     return active_ ? &bufs_[xfer_idx_] : &bufs_[1];
 }
 
@@ -304,11 +329,15 @@ static void pingpong_completion_cb(uint64_t ctx, bool success) {
 }
 
 bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
+    sync::IrqSpinLockGuard guard(lock_);
     if (active_)
         return false;
 
+    // Resolve the transfer buffer directly (do NOT call xfer_buf(): the
+    // SpinLock is non-recursive and xfer_buf() would self-deadlock).
+    DmaBuffer *xfer = active_ ? &bufs_[xfer_idx_] : &bufs_[1];
+
     // Build SG/PRD for the transfer buffer
-    DmaBuffer *xfer = xfer_buf();
     SgList sg{};
     sg_reset(sg);
     if (!sg_from_buffer(sg, *xfer))
@@ -325,6 +354,9 @@ bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
     chain_cb_ = cb;
     chain_ctx_ = ctx;
 
+    // Nested engine lock (fixed order: PingPongDma::lock_ -> DmaEngine::
+    // lock_).  The engine's handle_irq releases the engine lock before
+    // invoking on_completion, so the reverse order never occurs.
     if (!engine_.start_transfer(prd, dir, pingpong_completion_cb,
                                 reinterpret_cast<uint64_t>(this))) {
         // Swap back on failure
@@ -341,23 +373,39 @@ bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
 }
 
 void PingPongDma::on_completion(uint64_t, bool success) {
-    active_ = false;
-    ++completed_;
-    if (chain_cb_) {
-        chain_cb_(chain_ctx_, &bufs_[xfer_idx_], success);
+    ChainCallback cb = nullptr;
+    uint64_t ctx = 0;
+    DmaBuffer *buf = nullptr;
+    {
+        sync::IrqSpinLockGuard guard(lock_);
+        active_ = false;
+        ++completed_;
+        cb = chain_cb_;
+        ctx = chain_ctx_;
+        buf = &bufs_[xfer_idx_];
+    }
+    // Invoke the chain callback outside the lock (it may re-enter the
+    // driver / touch driver state).
+    if (cb) {
+        cb(ctx, buf, success);
     }
     Logger::info("dma: PingPongDma complete #%lu success=%d", completed_,
                  success);
 }
 
 void PingPongDma::shutdown() {
-    engine_.abort();
+    {
+        sync::IrqSpinLockGuard guard(lock_);
+        engine_.abort(); // stop HW -> no late on_completion
+        active_ = false;
+        completed_ = 0;
+        chain_cb_ = nullptr; // close the late-completion race
+        chain_ctx_ = 0;
+    }
     free_buffer(bufs_[0]);
     free_buffer(bufs_[1]);
     bufs_[0] = {};
     bufs_[1] = {};
-    active_ = false;
-    completed_ = 0;
 }
 
 } // namespace kernel::dma

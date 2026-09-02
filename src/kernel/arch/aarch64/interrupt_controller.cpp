@@ -2,6 +2,7 @@
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/aarch64/hal/gic.hpp>
+#include <kernel/arch/timer.hpp>
 
 namespace arch {
 
@@ -19,13 +20,17 @@ void ArchInterruptController::init() {
     gic_is_v3 = ((typer >> 11) & 0x1F) >= 3;
 
     // === Distributor init ===
+    // NOTE: QEMU boots the kernel at Secure EL1, so every IAR read is a
+    // secure access and Group 1 interrupts are hidden unless AckCtl is set
+    // (GICC_IAR then returns 1022).  Tag ALL interrupts Group 0 — the
+    // kernel's own group — and do not enable Group 1 delivery.
     d[GICD_CTLR / 4] = 0;
     dsb_sy();
     d[GICD_ICENABLER / 4] = 0xFFFFFFFF;
     d[GICD_ICENABLER / 4 + 1] = 0xFFFFFFFF;
     dsb_sy();
-    d[GICD_IGROUPR / 4] = 0xFFFFFFFF;
-    d[GICD_IGROUPR / 4 + 1] = 0xFFFFFFFF;
+    d[GICD_IGROUPR / 4] = 0;
+    d[GICD_IGROUPR / 4 + 1] = 0;
     dsb_sy();
 
     if (gic_is_v3) {
@@ -60,10 +65,10 @@ void ArchInterruptController::init() {
         dsb_sy();
     }
 
-    d[GICD_CTLR / 4] = 1;
+    d[GICD_CTLR / 4] = GICD_CTLR_ENABLE;
     dsb_sy();
     if (!gic_is_v3) {
-        c[GICC_CTLR / 4] = 1;
+        c[GICC_CTLR / 4] = GICC_CTLR_ENABLE;
         dsb_sy();
     }
     isb();
@@ -117,13 +122,17 @@ extern "C" void handle_gic_irq(void) {
     uint64_t intid = gic_is_v3 ? gic_v3_read_iar()
                                : gicc_reg(GICC_IAR)[0];
 
-    if (intid >= 1023)
-        goto ack;  // spurious
+    // >= 1020: spurious (1023) or the GICv2/GICv3 "no interrupt available
+    // for the enabled groups" special values (1020-1022).  EOI and return —
+    // never dispatch or fall through to the ack path below.
+    if (intid >= 1020)
+        goto ack;  // spurious / group-disabled
 
     if (intid == 30) {
         uint64_t elr{};
         asm volatile("mrs %0, elr_el1" : "=r"(elr));
-        IDT::handle_interrupt(static_cast<uint64_t>(InterruptVector::TIMER), 0, elr);
+        IDT::handle_interrupt(static_cast<uint64_t>(InterruptVector::TIMER), 0,
+                              elr);
     } else if (intid >= 32 && intid < 64) {
         // SPI / PPI: use INTID directly as vector (IDT has 64 slots)
         uint64_t elr{};

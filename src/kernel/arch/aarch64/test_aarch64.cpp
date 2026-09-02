@@ -26,12 +26,14 @@
 #include <kernel/arch/page_table.hpp>
 #include <kernel/arch/context.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/arch/aarch64/hal/gic.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/cpuid.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/memory/vmm.hpp>
 #include <lib/string.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <fdt/libfdt.h>
@@ -47,8 +49,11 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT(ttbr1 != 0, "TTBR1_EL1 must be non-zero, got 0x%lx",
                       ttbr1);
 
+    // Page-table pages are physical; dereference through the HHDM direct-map
+    // alias so the walk is independent of the currently-active TTBR0 (which
+    // may be a user/private PML4 without the identity map).
     uint64_t l0_phys = ttbr1;
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     constexpr uint64_t L0_SHIFT = 39;
     constexpr uint64_t L1_SHIFT = 30;
@@ -71,7 +76,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT((l1_phys & 0xFFF) == 0,
                       "L1 table not page-aligned: 0x%lx", l1_phys);
 
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l1_phys);
+    uint64_t *l1 =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
     size_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
     uint64_t l1_entry = l1[l1_idx];
     JARVIS_ASSERT_FMT(l1_entry & DESC_VALID, "L1 entry %zu not valid: 0x%lx",
@@ -82,7 +88,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
     JARVIS_ASSERT_FMT((l2_phys & 0xFFF) == 0,
                       "L2 table not page-aligned: 0x%lx", l2_phys);
 
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l2_phys);
+    uint64_t *l2 =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
     size_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
     uint64_t l2_entry = l2[l2_idx];
     JARVIS_ASSERT_FMT(l2_entry & DESC_VALID, "L2 entry %zu not valid: 0x%lx",
@@ -92,7 +99,8 @@ JARVIS_TEST(aarch64_page_table_4level_walk) {
         JARVIS_ASSERT_FMT((l3_phys & 0xFFF) == 0,
                           "L3 table not page-aligned: 0x%lx", l3_phys);
 
-        uint64_t *l3 = reinterpret_cast<uint64_t *>(l3_phys);
+        uint64_t *l3 =
+            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l3_phys);
         size_t l3_idx = (virt >> L3_SHIFT) & TABLE_MASK;
         uint64_t l3_entry = l3[l3_idx];
         JARVIS_ASSERT_FMT(l3_entry & DESC_VALID,
@@ -113,7 +121,7 @@ JARVIS_TEST(aarch64_page_table_map_leaf) {
     uint64_t phys_page = PMM::alloc_page();
     JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
 
-    constexpr uint64_t TEST_VA = 0xFFFF80004000F000ULL;
+    constexpr uint64_t TEST_VA = 0xFFFF800090001000ULL;
     constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
 
     auto map_result =
@@ -227,10 +235,8 @@ JARVIS_TEST(aarch64_context_init_stack) {
 JARVIS_TEST(aarch64_gic_init) {
     arch::ArchInterruptController::init();
 
-    volatile uint32_t *gicd =
-        reinterpret_cast<volatile uint32_t *>(0x8000000ULL);
-    volatile uint32_t *gicc =
-        reinterpret_cast<volatile uint32_t *>(0x8010000ULL);
+    volatile uint32_t *gicd = arch::gicd_reg(0);
+    volatile uint32_t *gicc = arch::gicc_reg(0);
 
     uint32_t gicd_ctlr = gicd[0];
     JARVIS_ASSERT_FMT(gicd_ctlr & 1, "GICD_CTLR Enable not set: 0x%x",
@@ -250,22 +256,28 @@ JARVIS_TEST(aarch64_gic_init) {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Mask and unmask IRQ 64, verify ICENABLER and ISENABLER registers.
+/// @brief Mask and unmask IRQ 64, verify the ISENABLER enable state.
+/// ICENABLER is a write-to-disable bank whose read-back is unreliable on
+/// QEMU virt GICv2; the enabled state is authoritative in ISENABLER.
 JARVIS_TEST(aarch64_gic_mask_unmask) {
-    arch::ArchInterruptController::mask(64);
+    volatile uint32_t *gicd = arch::gicd_reg(0);
 
-    volatile uint32_t *gicd =
-        reinterpret_cast<volatile uint32_t *>(0x8000000ULL);
-    uint32_t icenabler = gicd[0x180 / 4 + 2];
-    JARVIS_ASSERT_FMT(icenabler & (1U << 0),
-                      "GICD_ICENABLER bit 0 not set for IRQ 64: 0x%x",
-                      icenabler);
-
+    // Enable IRQ 64 (SPI, ISENABLER bank 2, bit 0).
     arch::ArchInterruptController::unmask(64);
     uint32_t isenabler = gicd[0x100 / 4 + 2];
     JARVIS_ASSERT_FMT(isenabler & (1U << 0),
-                      "GICD_ISENABLER bit 0 not set for IRQ 64: 0x%x",
+                      "GICD_ISENABLER bit 0 not set after unmask IRQ 64: 0x%x",
                       isenabler);
+
+    // Mask IRQ 64 — the enable bit must clear.
+    arch::ArchInterruptController::mask(64);
+    isenabler = gicd[0x100 / 4 + 2];
+    JARVIS_ASSERT_FMT((isenabler & (1U << 0)) == 0,
+                      "GICD_ISENABLER bit 0 still set after mask IRQ 64: 0x%x",
+                      isenabler);
+
+    // Restore the enabled state.
+    arch::ArchInterruptController::unmask(64);
 
     JARVIS_TEST_PASS();
 }
@@ -405,30 +417,46 @@ JARVIS_TEST(aarch64_rtc_read) {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Verify the DTB pointer from boot info is valid, correctly aligned,
-/// and has a valid FDT header.
+/// @brief Verify the DTB pointer from boot info, when provided, is valid,
+/// correctly aligned, and has a valid FDT header; and that the kernel has a
+/// correct memory configuration either way.
+///
+/// QEMU `-machine virt` `-kernel` boots only hand the DTB to Linux-style
+/// images (ARM64 boot-header magic).  This kernel is booted as a generic ELF
+/// (no header), so the DTB is absent and memory comes from the platform
+/// fallback — both are valid configurations the boot must tolerate.
 JARVIS_TEST(aarch64_boot_dtb_pointer) {
-    JARVIS_ASSERT_FMT(kernel::gs::boot_info().dtb_ptr != 0, "DTB pointer is zero");
+    uintptr_t dtb_addr =
+        static_cast<uintptr_t>(kernel::gs::boot_info().dtb_ptr);
 
-    uintptr_t dtb_addr = static_cast<uintptr_t>(kernel::gs::boot_info().dtb_ptr);
-    JARVIS_ASSERT_FMT(
-        dtb_addr >= 0x40000000ULL && dtb_addr <= 0x50000000ULL,
-        "DTB pointer 0x%lx not in expected RAM range (0x40000000-0x50000000)",
-        dtb_addr);
+    if (dtb_addr != 0) {
+        JARVIS_ASSERT_FMT(
+            dtb_addr >= 0x40000000ULL && dtb_addr <= 0x50000000ULL,
+            "DTB pointer 0x%lx not in expected RAM range (0x40000000-0x50000000)",
+            dtb_addr);
 
-    void *dtb = reinterpret_cast<void *>(kernel::gs::boot_info().dtb_ptr);
-    JARVIS_ASSERT_FMT(fdt_check_header(dtb) == 0,
-                      "FDT header validation failed");
+        // Page-table pages are physical; dereference through the HHDM
+        // direct-map alias (raw phys VAs resolve through the active TTBR0).
+        void *dtb = reinterpret_cast<void *>(arch::HHDM_OFFSET + dtb_addr);
+        JARVIS_ASSERT_FMT(fdt_check_header(dtb) == 0,
+                          "FDT header validation failed");
 
-    uint32_t magic = *static_cast<const uint32_t *>(dtb);
-    magic = __builtin_bswap32(magic);
-    JARVIS_ASSERT_FMT(magic == 0xD00DFEED,
-                      "DTB magic mismatch: 0x%x (expected 0xD00DFEED)", magic);
+        uint32_t magic = *static_cast<const uint32_t *>(dtb);
+        magic = __builtin_bswap32(magic);
+        JARVIS_ASSERT_FMT(magic == 0xD00DFEED,
+                          "DTB magic mismatch: 0x%x (expected 0xD00DFEED)",
+                          magic);
 
-    JARVIS_ASSERT_FMT(kernel::gs::boot_info().num_mem_regions > 0,
-                      "No memory regions parsed from DTB");
+        JARVIS_ASSERT_FMT(kernel::gs::boot_info().num_mem_regions > 0,
+                          "No memory regions parsed from DTB");
+        JARVIS_ASSERT_FMT(kernel::gs::boot_info().total_mem_size > 0,
+                          "Total memory size is zero after DTB parsing");
+    }
+
+    // Either source (DTB or platform fallback) must yield a usable memory
+    // configuration — the kernel must not boot with zero memory.
     JARVIS_ASSERT_FMT(kernel::gs::boot_info().total_mem_size > 0,
-                      "Total memory size is zero after DTB parsing");
+                      "No memory configured (DTB absent and fallback empty)");
 
     JARVIS_TEST_PASS();
 }
@@ -458,6 +486,252 @@ JARVIS_TEST(aarch64_exception_vector_installed) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Walk TTBR1_EL1 to the leaf descriptor for a higher-half VA.
+/// Mirrors the L0->L1->L2->L3 index math of aarch64_page_table_4level_walk.
+/// @param[in] va Higher-half virtual address (4K-aligned).
+/// @return Leaf descriptor bits, or 0 if any level is invalid.
+static uint64_t walk_leaf_descriptor(uint64_t va) {
+    constexpr uint64_t L0_SHIFT = 39;
+    constexpr uint64_t L1_SHIFT = 30;
+    constexpr uint64_t L2_SHIFT = 21;
+    constexpr uint64_t TABLE_MASK = 0x1FF;
+    constexpr uint64_t DESC_VALID = 1ULL << 0;
+    constexpr uint64_t DESC_TABLE = 1ULL << 1;
+
+    uint64_t l0_phys = arch::read_ttbr1_el1();
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
+    size_t l0_idx = (va >> L0_SHIFT) & TABLE_MASK;
+    if (!(l0[l0_idx] & DESC_VALID))
+        return 0;
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l0[l0_idx] & ~0xFFF));
+    size_t l1_idx = (va >> L1_SHIFT) & TABLE_MASK;
+    if (!(l1[l1_idx] & DESC_VALID))
+        return 0;
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l1[l1_idx] & ~0xFFF));
+    size_t l2_idx = (va >> L2_SHIFT) & TABLE_MASK;
+    if (!(l2[l2_idx] & DESC_VALID))
+        return 0;
+    if (!(l2[l2_idx] & DESC_TABLE))
+        return l2[l2_idx];
+    uint64_t *l3 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (l2[l2_idx] & ~0xFFF));
+    size_t l3_idx = (va >> 12) & TABLE_MASK;
+    return (l3[l3_idx] & DESC_VALID) ? l3[l3_idx] : 0;
+}
+
+/// @brief Verify SCTLR_EL1.PAN (bit 23) matches FEAT_PAN detection, and
+/// degraded mode (unsupported) keeps read_rflags() == 0.
+JARVIS_TEST(aarch64_pan_sctlr_bit_set) {
+    uint64_t sctlr{};
+    asm volatile("mrs %0, sctlr_el1" : "=r"(sctlr));
+    if (arch::g_pan_supported) {
+        JARVIS_ASSERT_FMT(sctlr & (1ULL << 23),
+                          "SCTLR_EL1.PAN not set: sctlr=0x%lx", sctlr);
+    } else {
+        JARVIS_ASSERT_FMT((sctlr & (1ULL << 23)) == 0,
+                          "SCTLR_EL1.PAN set but unsupported: sctlr=0x%lx",
+                          sctlr);
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+    }
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Verify stac/clac toggle the normalized AC-equivalent (bit 18)
+/// contract and end in default-deny (PAN set) state.
+JARVIS_TEST(aarch64_pan_stac_clac_roundtrip) {
+    if (arch::g_pan_supported) {
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
+        arch::stac();
+        JARVIS_ASSERT_FMT(arch::read_rflags() & (1ULL << 18),
+                          "stac did not set AC-equivalent bit");
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags() & (1ULL << 18));
+    } else {
+        arch::stac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+        arch::clac();
+        JARVIS_ASSERT_EQ(0ULL, arch::read_rflags());
+    }
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a kernel (non-USER) page; verify UXN (bit 54) and PXN
+/// (bit 53) are both set on the leaf descriptor.
+JARVIS_TEST(aarch64_pte_kernel_page_uxn_pxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090002000ULL;
+    constexpr uint64_t RW_FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "kernel PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "kernel PTE UXN not set: 0x%lx",
+                      leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a USER page; verify PXN (bit 53) is set (SMEP parity — EL1
+/// may not execute user pages) and UXN (bit 54) is clear (EL0 may execute).
+JARVIS_TEST(aarch64_pte_user_page_pxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090003000ULL;
+    constexpr uint64_t RW_FLAGS =
+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT((leaf & (1ULL << 54)) == 0,
+                      "user PTE UXN set (EL0 exec blocked): 0x%lx", leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Map a USER|NX page; verify both UXN (bit 54) and PXN (bit 53)
+/// are set.
+JARVIS_TEST(aarch64_pte_user_nx_uxn) {
+    uint64_t phys_page = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(phys_page != 0, "PMM::alloc_page() returned 0");
+
+    constexpr uint64_t TEST_VA = 0xFFFF800090004000ULL;
+    constexpr uint64_t RW_FLAGS =
+        PageFlags::PRESENT | PageFlags::WRITE | PageFlags::USER |
+        PageFlags::NX;
+
+    auto map_result =
+        arch::ArchPageTable::map_page(TEST_VA, phys_page, RW_FLAGS);
+    JARVIS_ASSERT(map_result.ok());
+
+    uint64_t leaf = walk_leaf_descriptor(TEST_VA);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 53), "user NX PTE PXN not set: 0x%lx",
+                      leaf);
+    JARVIS_ASSERT_FMT(leaf & (1ULL << 54), "user NX PTE UXN not set: 0x%lx",
+                      leaf);
+
+    auto unmap_result = arch::ArchPageTable::unmap_page(TEST_VA);
+    JARVIS_ASSERT(unmap_result.ok());
+    PMM::free_page(phys_page);
+
+    JARVIS_TEST_PASS();
+}
+
+/// @brief Issue #103: VMM::deep_copy_user_pages must build VALID aarch64
+///        table descriptors (bits[1:0]=11) at every level of the copied
+///        child hierarchy.  The pre-fix build emitted bits[1:0]=01 at L0/L1/L2
+///        (PAGE_WRITE=0, PAGE_USER=1<<6 on aarch64) — a reserved/invalid
+///        table-descriptor encoding that translation-faults on the first MMU
+///        walk of a forked address space.  The copied L3 leaf inherits AF and
+///        AttrIndx verbatim from the source (bits[11:2] are RES0/ignored in
+///        table descriptors, so the minimal PAGE_PRESENT|PAGE_TABLE is the
+///        correct table-pointer form).
+JARVIS_TEST(aarch64_deep_copy_user_descriptors_valid) {
+    uint64_t parent_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(child_pml4 != 0);
+
+    // Typical ELF base; map_page_in_pml4(user=true) builds USER-owned
+    // table pages + leaf so free_user_pages reclaims them (MP-7).
+    constexpr uint64_t TEST_VA = 0x400000;
+    uint64_t user_page = PMM::alloc_user_page();
+    JARVIS_ASSERT(user_page != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + user_page) = 0x5A;
+    VMM::map_page_in_pml4(TEST_VA, user_page, true, parent_pml4);
+
+    // MP-7 fork semantics: deep copy, never shared tables.
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+
+    size_t pml4_idx = arch::ArchPageTable::pml4_index(TEST_VA);
+    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(TEST_VA);
+    size_t pd_idx = arch::ArchPageTable::pd_index(TEST_VA);
+    size_t pt_idx = arch::ArchPageTable::pt_index(TEST_VA);
+    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
+
+    auto *p4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (parent_pml4 & ~0xFFFULL));
+    auto *c4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (child_pml4 & ~0xFFFULL));
+
+    // L0 (PML4 → PDPT) table descriptor: bits[1:0]=11, distinct table page.
+    JARVIS_ASSERT((c4[pml4_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c4[pml4_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c4[pml4_idx] & ~0xFFFULL) != (p4[pml4_idx] & ~0xFFFULL));
+
+    // L1 (PDPT → PD): bits[1:0]=11, distinct table page.
+    auto *c_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (c4[pml4_idx] & ~0xFFFULL));
+    auto *p_pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                (p4[pml4_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pdpt[pdpt_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pdpt[pdpt_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c_pdpt[pdpt_idx] & ~0xFFFULL) !=
+                  (p_pdpt[pdpt_idx] & ~0xFFFULL));
+
+    // L2 (PD → PT): bits[1:0]=11, distinct table page.
+    auto *c_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (c_pdpt[pdpt_idx] & ~0xFFFULL));
+    auto *p_pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (p_pdpt[pdpt_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pd[pd_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pd[pd_idx] & (1ULL << 1));
+    JARVIS_ASSERT((c_pd[pd_idx] & ~0xFFFULL) != (p_pd[pd_idx] & ~0xFFFULL));
+
+    // L3 leaf: bits[1:0]=11, AF inherited, distinct phys, deep-copied content.
+    auto *c_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (c_pd[pd_idx] & ~0xFFFULL));
+    auto *p_pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (p_pd[pd_idx] & ~0xFFFULL));
+    JARVIS_ASSERT((c_pt[pt_idx] & 0x3) == 0x3);
+    JARVIS_ASSERT(c_pt[pt_idx] & (1ULL << 10));
+    uint64_t child_leaf = c_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
+    uint64_t parent_leaf = p_pt[pt_idx] & 0x0000FFFFFFFFF000ULL;
+    JARVIS_ASSERT(child_leaf != 0);
+    JARVIS_ASSERT(child_leaf != parent_leaf);
+    JARVIS_ASSERT(child_leaf == VMM::virt_to_phys_in_pml4(TEST_VA, child_pml4));
+
+    // Content copied + no-alias: write through the child frame, parent stays.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) ==
+                  0x5A);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    *reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + child_leaf) = 0xA5;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    JARVIS_ASSERT(*reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + parent_leaf) ==
+                  0x5A);
+
+    VMM::free_user_pages(child_pml4);
+    PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
+    PMM::free_page(parent_pml4);
+
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all AArch64 architecture test cases.
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -479,6 +753,12 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_rtc_read);
     JARVIS_REGISTER_TEST(aarch64_boot_dtb_pointer);
     JARVIS_REGISTER_TEST(aarch64_exception_vector_installed);
+    JARVIS_REGISTER_TEST(aarch64_pan_sctlr_bit_set);
+    JARVIS_REGISTER_TEST(aarch64_pan_stac_clac_roundtrip);
+    JARVIS_REGISTER_TEST(aarch64_pte_kernel_page_uxn_pxn);
+    JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
+    JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
+    JARVIS_REGISTER_TEST(aarch64_deep_copy_user_descriptors_valid);
 }
 
 #endif

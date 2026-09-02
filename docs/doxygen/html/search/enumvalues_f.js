@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['warn_0',['WARN',['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2a32bd8a1db2275458673903bdb84cb277',1,'kernel']]]
+  ['untyped_0',['Untyped',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9',1,'kernel::cap']]]
 ];

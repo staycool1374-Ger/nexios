@@ -38,6 +38,8 @@ struct ResourceCounters {
     size_t pipe_buffers;
     size_t vnodes;
     size_t open_fds;
+    size_t cap_objects;
+    size_t cap_slots;
 };
 
 #ifdef CONFIG_DEBUG
@@ -129,6 +131,20 @@ class ResourceTracker {
         if (counters_.open_fds > 0)
             --counters_.open_fds;
     }
+    void track_cap_object_add() {
+        ++counters_.cap_objects;
+    }
+    void track_cap_object_remove() {
+        if (counters_.cap_objects > 0)
+            --counters_.cap_objects;
+    }
+    void track_cap_slot_add() {
+        ++counters_.cap_slots;
+    }
+    void track_cap_slot_remove() {
+        if (counters_.cap_slots > 0)
+            --counters_.cap_slots;
+    }
 
     void capture(ResourceCounters &out) const {
         out = counters_;
@@ -195,6 +211,14 @@ class ResourceTracker {
     void track_fd_add() {
     }
     void track_fd_remove() {
+    }
+    void track_cap_object_add() {
+    }
+    void track_cap_object_remove() {
+    }
+    void track_cap_slot_add() {
+    }
+    void track_cap_slot_remove() {
     }
     void capture(ResourceCounters &) const {
     }

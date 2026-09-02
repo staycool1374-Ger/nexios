@@ -28,6 +28,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/rtc.hpp>
+#include <kernel/arch/serial.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -357,7 +358,31 @@ void Shell::execute(const char* cmd) {
 
 static void update_status_bar();
 
-static bool readline(char* buf, size_t max_len) {
+/// @brief Draws the interactive prompt (exit-status glyph, cwd, "$ ").
+///        Extracted so readline can redraw it on a fresh line when a
+///        background task wrote async output to the console.
+static void draw_prompt(int exit_code) {
+    auto* task = kernel::Scheduler::current_task();
+    const char* cwd = task ? task->cwd : "/";
+
+    // Exit status indicator: green checkmark for 0, red X for non-zero
+    if (exit_code == 0) {
+        Terminal::set_fg(COLOR_SUCCESS);
+        Terminal::write("✓ ");
+    } else {
+        Terminal::set_fg(COLOR_WARN);
+        Terminal::write("✗ ");
+    }
+
+    // Current directory in blue
+    Terminal::set_fg(COLOR_DIR);
+    Terminal::write(cwd);
+    Terminal::write(" ");
+    Terminal::set_fg(COLOR_DEFAULT);
+    Terminal::write("$ ");
+}
+
+static bool readline(char* buf, size_t max_len, int exit_code) {
     size_t pos = 0;
     static uint64_t last_blink = 0;
     static bool cursor_on = false;
@@ -366,6 +391,12 @@ static bool readline(char* buf, size_t max_len) {
         cursor_on = on;
         Terminal::set_cursor_visible(on);
     };
+
+    // Snapshot the serial write count right after the prompt was drawn.  If a
+    // background task (e.g. the ELF loader) writes to the console while we
+    // wait for input, the count advances; we then end the async line and
+    // redraw the prompt on a fresh line so its output does not glue onto it.
+    uint64_t prompt_serial = arch::Serial::write_count();
 
     for (;;) {
         uint64_t now = arch::Timer::ticks();
@@ -390,6 +421,15 @@ static bool readline(char* buf, size_t max_len) {
         }
 
         if (!got_char) {
+            // Async background output arrived?  Move to a fresh line and
+            // redraw the prompt + any input typed so far.
+            if (arch::Serial::write_count() != prompt_serial) {
+                Terminal::putchar('\n');
+                draw_prompt(exit_code);
+                for (size_t i = 0; i < pos; ++i)
+                    Terminal::putchar(buf[i]);
+                prompt_serial = arch::Serial::write_count();
+            }
             arch::pause();
             continue;
         }
@@ -522,27 +562,10 @@ void Shell::shell_task_main() {
     while (true) {
         update_status_bar();
 
-        auto* task = kernel::Scheduler::current_task();
-        const char* cwd = task ? task->cwd : "/";
-
-        // Exit status indicator: green checkmark for 0, red X for non-zero
-        if (last_exit_code_ == 0) {
-            Terminal::set_fg(COLOR_SUCCESS);
-            Terminal::write("✓ ");
-        } else {
-            Terminal::set_fg(COLOR_WARN);
-            Terminal::write("✗ ");
-        }
-
-        // Current directory in blue
-        Terminal::set_fg(COLOR_DIR);
-        Terminal::write(cwd);
-        Terminal::write(" ");
-        Terminal::set_fg(COLOR_DEFAULT);
-        Terminal::write("$ ");
+        draw_prompt(last_exit_code_);
 
         arch::Keyboard::flush();
-        if (readline(line, BUF_SIZE)) {
+        if (readline(line, BUF_SIZE, last_exit_code_)) {
             last_exit_code_ = parse_and_exec(line);
             update_status_bar();
         }
@@ -619,18 +642,6 @@ static void print_uint(uint64_t n) {
 /// @note A naive `while (v >= 10) { --pad; v /= 10; }` underflows when a
 ///       field holds a value with 10+ digits (e.g. the idle task's priority
 ///       0xFFFFFFFF), making the following `for` loop print 2^64 spaces.
-static uint64_t right_pad(uint64_t width, uint64_t value) {
-    uint64_t digits = 1;
-    uint64_t v = value;
-    while (v >= 10 && digits < width) {
-        v /= 10;
-        ++digits;
-    }
-    if (digits > width)
-        return 0;
-    return width - digits;
-}
-
 static const char *state_name(kernel::TaskState s) {
     using namespace kernel;
     switch (s) {
@@ -645,8 +656,70 @@ static const char *state_name(kernel::TaskState s) {
 }
 
 void Shell::cmd_tasks(int, const char**) {
-    Terminal::write("ID  NAME             STATE      PRIO  PERIOD   MEM_PG STACK_KiB CPU_TIME  CURRENT\n");
-    Terminal::write("--- ---------------- ---------- ----- ------- ------- --------- --------- -------\n");
+    // Condensed memory report.  Column widths are fixed so the sub-header,
+    // header and every row align exactly.  Group labels: /STACK covers the
+    // SIZE USED FREE triple; /TEXT /DATA /BSS /HEAP cover their SIZE columns.
+    //
+    // Layout (width, alignment):
+    //   ID(3,r) NAME(11,l) STATE(8,l) PRIO(5,r) PERIOD(7,r) MEM_PG(6,r)
+    //   |--- STACK group: SIZE(5,r) USED(5,r) FREE(5,r) ---|
+    //   TEXT(5,r) DATA(5,r) BSS(5,r) HEAP(5,r)
+    //   CPU_TIME(8,l) CURRENT(7,l)
+    auto field = [](const char *s, int width, bool right) {
+        int len = 0;
+        while (s[len] && len < width) ++len;
+        if (right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        for (int i = 0; i < len; ++i) Terminal::putchar(s[i]);
+        if (!right) {
+            for (int i = len; i < width; ++i) Terminal::putchar(' ');
+        }
+        Terminal::putchar(' ');
+    };
+
+    // Sub-header: group labels aligned over their columns.
+    {
+        for (int i = 0; i < 46; ++i) Terminal::putchar(' '); // ID..MEM_PG
+        // Each header/data column is `width+1` chars (width + trailing space).
+        // The stack group = 3 cols x 6 = 18; a label that fills N columns of
+        // width W+1 must itself be written at width N*(W+1)-1 so that
+        // field()'s trailing space closes the group exactly.
+        field("/STACK", 17, false); // 17 + 1 = 18 == 3 stack columns
+        field("/TEXT",  5, false);  //  5 + 1 =  6 == 1 column
+        field("/DATA",  5, false);
+        field("/BSS",   5, false);
+        field("/HEAP",  5, false);
+        Terminal::write("\n");
+    }
+
+    // Header row.
+    field("ID",     3, true);
+    field("NAME",  11, false);
+    field("STATE",  8, false);
+    field("PRIO",   5, true);
+    field("PERIOD", 7, true);
+    field("MEM_PG", 6, true);
+    field("SIZE",   5, true);
+    field("USED",   5, true);
+    field("FREE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("SIZE",   5, true);
+    field("CPU_TIME", 8, false);
+    field("CURRENT", 7, false);
+    Terminal::write("\n");
+
+    // Separator row (same widths, '-' fill).
+    auto dashes = [](int width) {
+        for (int i = 0; i < width; ++i) Terminal::putchar('-');
+        Terminal::putchar(' ');
+    };
+    dashes(3); dashes(11); dashes(8); dashes(5); dashes(7); dashes(6);
+    dashes(5); dashes(5); dashes(5); dashes(5); dashes(5); dashes(5); dashes(5);
+    dashes(8); dashes(7);
+    Terminal::write("\n");
 
     auto *cur = kernel::Scheduler::current_task();
     auto count = kernel::Scheduler::task_count();
@@ -673,55 +746,59 @@ void Shell::cmd_tasks(int, const char**) {
     for (size_t i = 0; i < n; ++i) {
         auto *t = sorted[i];
 
-        // ID (right-aligned, 3 chars)
-        if (t->id < 100) Terminal::putchar(' ');
-        if (t->id < 10)  Terminal::putchar(' ');
-        print_uint(t->id);
-        Terminal::putchar(' ');
+        // Local value-to-string helpers (print_uint writes to the terminal
+        // directly, so render into a scratch buffer for the field() padding).
+        char numbuf[24];
+        auto num = [&numbuf](uint64_t v) {
+            char rev[24];
+            int r = 0;
+            if (v == 0) rev[r++] = '0';
+            while (v > 0 && r < 23) {
+                rev[r++] = static_cast<char>('0' + (v % 10));
+                v /= 10;
+            }
+            int p = 0;
+            while (r > 0) numbuf[p++] = rev[--r];
+            numbuf[p] = '\0';
+            return numbuf;
+        };
 
-        // Name (left-aligned, 16 chars)
-        for (int c = 0; c < 15; ++c) {
-            if (t->name[c])
-                Terminal::putchar(t->name[c]);
-            else
-                Terminal::putchar(' ');
-        }
-        Terminal::putchar(' ');
+        field(num(t->id), 3, true);
+        field(t->name, 11, false);
+        field(state_name(t->state), 8, false);
+        field(num(t->priority), 5, true);
+        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD)
+            field("-", 7, true);
+        else
+            field(num(t->period_ticks), 7, true);
+        field(num(t->memory_used_pages_), 6, true);
 
-        // State (9 chars)
-        Terminal::write(state_name(t->state));
-        Terminal::putchar(' ');
-
-        // Priority (right-aligned, 5 chars)
-        for (uint64_t p = 1; p <= right_pad(5, t->priority); ++p)
-            Terminal::putchar(' ');
-        print_uint(t->priority);
-        Terminal::putchar(' ');
-
-        // Period (right-aligned, 7 chars) — aperiodic tasks (NO_PERIOD)
-        // have no period, display '-'.
-        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD) {
-            for (int p = 0; p < 6; ++p) Terminal::putchar(' ');
-            Terminal::putchar('-');
-        } else {
-            for (uint64_t p = 1; p <= right_pad(7, t->period_ticks); ++p)
-                Terminal::putchar(' ');
-            print_uint(t->period_ticks);
-        }
-        Terminal::putchar(' ');
-
-        // Memory used pages (right-aligned, 7 chars)
-        for (uint64_t p = 1; p <= right_pad(7, t->memory_used_pages_); ++p)
-            Terminal::putchar(' ');
-        print_uint(t->memory_used_pages_);
-        Terminal::putchar(' ');
-
-        // Stack size in KiB (right-aligned, 9 chars)
+        // Stack: total size / high-water used / low-water free (KiB).
         uint64_t stack_kib = kernel::TaskControlBlock::STACK_SIZE / 1024;
-        for (uint64_t p = 1; p <= right_pad(9, stack_kib); ++p)
-            Terminal::putchar(' ');
-        print_uint(stack_kib);
-        Terminal::putchar(' ');
+        uint64_t kbase = reinterpret_cast<uint64_t>(t->kernel_stack);
+        uint64_t ktop = t->kernel_stack_top;
+        uint64_t stack_used = 0;
+        uint64_t stack_free = 0;
+        if (t->kstack_low_water_ != 0 && kbase != 0 && ktop > kbase &&
+            t->kstack_low_water_ >= kbase && t->kstack_low_water_ <= ktop) {
+            stack_used = (ktop - t->kstack_low_water_) / 1024;
+            stack_free = (t->kstack_low_water_ - kbase) / 1024;
+        }
+        field(num(stack_kib), 5, true);
+        field(num(stack_used), 5, true);
+        field(num(stack_free), 5, true);
+
+        // Loaded image segments (text/data/bss) and heap in KiB.
+        auto seg_kib = [](uint64_t bytes) {
+            return (bytes + 1023) / 1024;
+        };
+        field(num(seg_kib(t->text_size_)), 5, true);
+        field(num(seg_kib(t->data_size_)), 5, true);
+        field(num(seg_kib(t->bss_size_)), 5, true);
+        uint64_t heap_kib = 0;
+        if (t->program_break > t->program_break_start)
+            heap_kib = (t->program_break - t->program_break_start) / 1024;
+        field(num(heap_kib), 5, true);
 
         // CPU time as hh:mm:ss (ticks at 1000 Hz = 1 ms per tick)
         {
@@ -731,22 +808,24 @@ void Shell::cmd_tasks(int, const char**) {
             uint64_t mm = total_ms / 60000;
             total_ms %= 60000;
             uint64_t ss = total_ms / 1000;
-
-            if (hh < 100) Terminal::putchar(' ');
-            if (hh < 10)  Terminal::putchar(' ');
-            print_uint(hh);
-            Terminal::putchar(':');
-            if (mm < 10) Terminal::putchar('0');
-            print_uint(mm);
-            Terminal::putchar(':');
-            if (ss < 10) Terminal::putchar('0');
-            print_uint(ss);
+            char timebuf[16];
+            int tp = 0;
+            char hh_s[4]; int hp = 0;
+            if (hh == 0) hh_s[hp++] = '0';
+            while (hh > 0 && hp < 3) { hh_s[hp++] = static_cast<char>('0' + (hh % 10)); hh /= 10; }
+            for (int k = hp - 1; k >= 0; --k) timebuf[tp++] = hh_s[k];
+            timebuf[tp++] = ':';
+            timebuf[tp++] = static_cast<char>('0' + mm / 10);
+            timebuf[tp++] = static_cast<char>('0' + mm % 10);
+            timebuf[tp++] = ':';
+            timebuf[tp++] = static_cast<char>('0' + ss / 10);
+            timebuf[tp++] = static_cast<char>('0' + ss % 10);
+            timebuf[tp] = '\0';
+            field(timebuf, 8, false);
         }
-        Terminal::putchar(' ');
 
         // Current marker
-        if (t == cur)
-            Terminal::write("<-");
+        field(t == cur ? "<-" : "", 7, false);
         Terminal::write("\n");
     }
 
@@ -1170,11 +1249,9 @@ void Shell::cmd_load(int argc, const char** argv) {
     auto result = kernel::elf::ElfLoader::request_load(path);
     switch (result) {
     case kernel::elf::LoadResult::OK:
-        // request_load already posted the "started" event (loader prints the
-        // start line + dmesg).  Return immediately.
-        Terminal::write("loading ");
-        Terminal::write(path);
-        Terminal::write(" started\n");
+        // The loader task posts the "loading <path> started at <sec>" line to
+        // console + dmesg when it begins (post_event 0xDB01).  Do NOT print a
+        // second "started" here — it would interleave with the async line.
         return;
     case kernel::elf::LoadResult::ALREADY_LOADING:
         shell_error_path("load", path, "already loading");
@@ -2513,24 +2590,15 @@ void Shell::cmd_dmesg(int argc, const char** argv) {
         for (int i = 0; i < tidlen && p < end; ++i) *p++ = tidbuf[i];
         *p++ = ' ';
 
-        const char* err_s = "ERR=";
+        const char* err_s =
+            kernel::log::base_code_is_info(e.error_code) ? "INFO=" : "ERR=";
         while (*err_s && p < end) *p++ = *err_s++;
         const char* sub = kernel::log::subsystem_name(e.subsystem);
         while (*sub && p < end) *p++ = *sub++;
         *p++ = ':';
         const char* err_name = kernel::log::error_string(e.subsystem, e.error_code);
         while (*err_name && p < end) *p++ = *err_name++;
-        *p++ = ' ';
-
-        const char* ctx_s = "CTX=";
-        while (*ctx_s && p < end) *p++ = *ctx_s++;
-        uintptr_t ctx = e.context;
-        *p++ = '0'; *p++ = 'x';
-        for (int i = (sizeof(uintptr_t)*2)-1; i >= 0 && p < end; --i) {
-            uint8_t nib = (ctx >> (i*4)) & 0xF;
-            *p++ = static_cast<char>(nib < 10 ? '0' + nib : 'a' + (nib - 10));
-        }
-        *p++ = ':'; *p++ = ' ';
+         *p++ = ' ';
 
         const char *msg = e.message; // owned char array, never null
         while (*msg && p < end) *p++ = *msg++;

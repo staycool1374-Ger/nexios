@@ -19,9 +19,9 @@
 #define CONFIG_VERSION_MAJOR 0
 #define CONFIG_VERSION_MINOR 3
 #define CONFIG_VERSION_PATCH 10
-#define CONFIG_VERSION_NUM ((CONFIG_VERSION_MAJOR << 16) | \
-                            (CONFIG_VERSION_MINOR << 8) |  \
-                            CONFIG_VERSION_PATCH)
+#define CONFIG_VERSION_NUM                                                     \
+    ((CONFIG_VERSION_MAJOR << 16) | (CONFIG_VERSION_MINOR << 8) |              \
+     CONFIG_VERSION_PATCH)
 
 // ---------------------------------------------------------------------------
 // Architecture Detection (set by Makefile ARCH variable)
@@ -492,6 +492,134 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// Capability (CSpace) Configuration
+// ---------------------------------------------------------------------------
+/// Number of slots in each capability node (CNode).  The task's root CNode is
+/// its CSpace.  Slot index bits are carved from the capability handle, so a
+/// power of two is preferred.
+#ifndef CONFIG_CSLOT_COUNT
+#define CONFIG_CSLOT_COUNT 64
+#endif
+
+/// Maximum cascade-revoke depth.  Revoking a CNode recursively revokes every
+/// capability reachable through it; the walk is iterative (explicit work
+/// list), bounded by this depth.
+#ifndef CONFIG_CAP_MAX_DEPTH
+#define CONFIG_CAP_MAX_DEPTH 8
+#endif
+
+/// Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3).
+/// Enforced by a TU-local live counter in untyped.cpp.
+#ifndef CONFIG_CAP_MAX_UNTYPED
+#define CONFIG_CAP_MAX_UNTYPED 16
+#endif
+
+/// Maximum number of live MmioCap objects (v0.4.2, issue #3).  Enforced by a
+/// TU-local live counter in mmio.cpp.
+#ifndef CONFIG_CAP_MAX_MMIO
+#define CONFIG_CAP_MAX_MMIO 16
+#endif
+
+/// Maximum number of live IrqCap objects and IRQ delivery-table entries
+/// (v0.4.2, issue #2).  The delivery table is a static bounded array — no
+/// dynamic allocation on real-time paths.  Enforced by a TU-local live
+/// counter in irq.cpp.
+#ifndef CONFIG_CAP_MAX_IRQ
+#define CONFIG_CAP_MAX_IRQ 16
+#endif
+
+/// Maximum number of live MsixCap objects (v0.4.2, issue #10).  Enforced by a
+/// TU-local live counter in cap/msix.cpp.  Each MsixCap wraps one MSI-X vector
+/// on a PCI device and shares the IRQ delivery table with IrqCap — the table
+/// is the real bound (CONFIG_CAP_MAX_IRQ slots), this counter bounds the
+/// MsixCap objects themselves (mmio.cpp pattern).
+#ifndef CONFIG_CAP_MAX_MSIX
+#define CONFIG_CAP_MAX_MSIX 8
+#endif
+
+/// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
+/// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
+/// static pool.  Bounded so the pool is a fixed .bss allocation — no
+/// dynamic allocation on real-time paths.
+#ifndef CONFIG_IOPB_MAX_TASKS
+#define CONFIG_IOPB_MAX_TASKS 4
+#endif
+
+/// Maximum number of concurrent IOPB grant-ledger entries (issue #8).  The
+/// ledger tracks which capability-backed grants are live so revoking/disposing
+/// an IO MmioCap retroactively clears the granted port bits in a live task's
+/// bitmap (closing the #3 revocation gap).  Static bounded array — no dynamic
+/// allocation on real-time paths.
+#ifndef CONFIG_IOPB_MAX_GRANTS
+#define CONFIG_IOPB_MAX_GRANTS 8
+#endif
+
+/// Maximum number of concurrent user-space MMIO page-frame mappings per
+/// registry (issue #8).  Each entry reserves one slot in a fixed user VA
+/// window (CONFIG_USER_MMIO_VA_BASE + slot*CONFIG_USER_MMIO_REGION_SIZE).
+/// Static bounded array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_MMIO_MAPS
+#define CONFIG_CAP_MAX_MMIO_MAPS 8
+#endif
+
+/// Base of the fixed user-space MMIO mapping window (issue #8).  Lies below
+/// mem::STACK_VADDR (0x70000000) and above the heap (mem::HEAP_VADDR +
+/// mem::HEAP_SIZE = 0x60100000), clear of ELF segments (which must end below
+/// mem::HEAP_VADDR).  A static_assert in cap/mmio.cpp pins the window bounds.
+#ifndef CONFIG_USER_MMIO_VA_BASE
+#define CONFIG_USER_MMIO_VA_BASE 0x61000000ULL
+#endif
+
+/// Size of one user MMIO mapping region (issue #8).  Each registry slot maps
+/// its device BAR range into this many bytes of the user VA window.
+#ifndef CONFIG_USER_MMIO_REGION_SIZE
+#define CONFIG_USER_MMIO_REGION_SIZE 0x200000ULL // 2 MiB
+#endif
+
+/// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
+/// by a TU-local live counter in cap/iommu.cpp.
+#ifndef CONFIG_CAP_MAX_IOMMU
+#define CONFIG_CAP_MAX_IOMMU 16
+#endif
+
+/// Maximum number of concurrent IOMMU DMA protection domains (v0.4.2, issue
+/// #4).  The domain table is a static bounded array — no dynamic allocation
+/// on real-time paths.  Each domain owns one PMM page-table root page.
+#ifndef CONFIG_IOMMU_MAX_DOMAINS
+#define CONFIG_IOMMU_MAX_DOMAINS 8
+#endif
+
+/// Maximum number of outstanding DMA mappings per IOMMU domain (v0.4.2,
+/// issue #4).  Bounded per-domain record table; exhausting it fails closed.
+#ifndef CONFIG_IOMMU_MAX_MAPPINGS
+#define CONFIG_IOMMU_MAX_MAPPINGS 32
+#endif
+
+/// Maximum number of PCI buses with a static IOMMU context table (v0.4.2,
+/// issue #4).  Each bus table is a fixed .bss allocation (256 x 16-byte
+/// context entries) — no dynamic allocation on real-time paths.
+#ifndef CONFIG_IOMMU_MAX_BUSES
+#define CONFIG_IOMMU_MAX_BUSES 8
+#endif
+
+/// Default VT-d MMIO register base (v0.4.2, issue #9).  QEMU's intel-iommu
+/// device places the remapping unit at 0xFED90000; real hardware DMAR
+/// DRHD discovery overrides this when the ACPI table is present.  Page-
+/// aligned; the 4 KiB MMIO page is mapped once by probe_hardware().
+#ifndef CONFIG_IOMMU_MMIO_BASE
+#define CONFIG_IOMMU_MMIO_BASE 0xFED90000ULL
+#endif
+
+/// Maximum number of kernel-owned devices given a T=0 passthrough context
+/// entry during live enablement (v0.4.2, issue #9).  Kernel DMA (AHCI/virtio
+/// buffers) is NOT routed through a translation domain in this issue — the
+/// passthrough pre-pass guarantees TE=1 never blocks kernel DMA.  Static
+/// bounded array, no dynamic allocation on real-time paths.
+#ifndef CONFIG_IOMMU_MAX_KERNEL_DEVICES
+#define CONFIG_IOMMU_MAX_KERNEL_DEVICES 16
+#endif
+
+// ---------------------------------------------------------------------------
 // Priority Inheritance Protocol Configuration
 // ---------------------------------------------------------------------------
 /// Enable Priority Inheritance Protocol for Mutex.
@@ -536,7 +664,7 @@
 
 /// Total VA space reserved for kernel stacks.
 #ifndef CONFIG_KSTACK_WINDOW_SIZE
-#define CONFIG_KSTACK_WINDOW_SIZE 0x1000000ULL  // 16 MiB
+#define CONFIG_KSTACK_WINDOW_SIZE 0x1000000ULL // 16 MiB
 #endif
 
 /// Base virtual address of the per-kernel-task private-data window
@@ -549,8 +677,8 @@
 
 /// Kernel stack sizes per priority tier (bytes).  Indexed by priority.
 #ifndef CONFIG_STACK_SIZE_TABLE
-#define CONFIG_STACK_SIZE_TABLE \
-    { 65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536 }
+#define CONFIG_STACK_SIZE_TABLE                                                \
+    {65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}
 #endif
 
 /// Maximum number of zombies in the zombie list before the on_tick watchdog
@@ -570,7 +698,8 @@
 
 /// Maximum allowed IRQ latency in nanoseconds (debug assert).
 /// When > 0 and CONFIG_IRQ_LATENCY_HISTOGRAM is enabled, the interrupt
-/// handler panics if any single IRQ exceeds this threshold. Set to 0 to disable.
+/// handler panics if any single IRQ exceeds this threshold. Set to 0 to
+/// disable.
 #ifndef CONFIG_IRQ_LATENCY_MAX_NS
 #define CONFIG_IRQ_LATENCY_MAX_NS 0
 #endif
@@ -643,6 +772,18 @@
 #define CONFIG_SMAP 1
 #else
 #define CONFIG_SMAP 0
+#endif
+#endif
+
+/// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
+/// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
+/// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
+/// stac/clac (mirror of x86_64 SMAP).  Runtime-gated by arch::g_pan_supported.
+#ifndef CONFIG_PAN
+#if defined(CONFIG_ARCH_AARCH64)
+#define CONFIG_PAN 1
+#else
+#define CONFIG_PAN 0
 #endif
 #endif
 

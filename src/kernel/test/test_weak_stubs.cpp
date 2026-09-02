@@ -24,6 +24,7 @@ __attribute__((weak)) void register_rlimit_tests() {}
 __attribute__((weak)) void register_init_tests() {}
 __attribute__((weak)) void register_syscall_tests() {}
 __attribute__((weak)) void register_sync_tests() {}
+__attribute__((weak)) void register_sync_block_pattern_tests() {}
 __attribute__((weak)) void register_spinlock_tests() {}
 __attribute__((weak)) void register_capability_tests() {}
 __attribute__((weak)) void register_task_lifecycle_tests() {}
@@ -49,6 +50,7 @@ __attribute__((weak)) void register_bench_syscall_latency_tests() {}
 __attribute__((weak)) void register_bench_irq_latency_tests() {}
 __attribute__((weak)) void register_gdt_tests() {}
 __attribute__((weak)) void register_idt_tests() {}
+__attribute__((weak)) void register_exc_table_tests() {}
 __attribute__((weak)) void register_bootparams_tests() {}
 __attribute__((weak)) void register_multiboot_tests() {}
 __attribute__((weak)) void register_address_tests() {}

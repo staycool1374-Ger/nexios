@@ -68,6 +68,91 @@ JARVIS_TEST(pmm_alloc_page_table, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: PMM allocatable-window geometry helper computes the clamped
+//           [base,end) page range for synthetic memory layouts.
+// Input: compute_window_pages on x86-style (base 0) and DTB-style
+//        (base 0x40000000) layouts, including end-clamped and degenerate
+//        layouts.
+// Expect: x86 base 0 with a 64 MiB span -> {0, 16384}; aarch64 virt layout
+//         (base 0x40000000, RAM up to 0x50000000) -> {262144, 294912};
+//         small RAM clamps end to total pages; base beyond the span yields
+//         an empty (base == end) window.
+// Depends: kernel/memory/pmm.hpp
+JARVIS_TEST(pmm_window_geometry, "PRE: none | POST: none") {
+    // x86 layout: RAM at 0, 64 MiB bitmap span -> window clamped to 16384
+    // pages (span smaller than the 128 MiB window).
+    PMM::WindowPages x86 = PMM::compute_window_pages(64_MiB, 0);
+    JARVIS_ASSERT_EQ(x86.base_page, 0u);
+    JARVIS_ASSERT_EQ(x86.end_page, 16384u);
+    // aarch64 QEMU virt layout: RAM [0x40000000, 0x50000000), full 128 MiB
+    // window fits inside the span.
+    PMM::WindowPages virt =
+        PMM::compute_window_pages(0x50000000ULL, 0x40000000ULL);
+    JARVIS_ASSERT_EQ(virt.base_page, 262144u);
+    JARVIS_ASSERT_EQ(virt.end_page, 294912u);
+    // End clamped when RAM ends inside the window.
+    PMM::WindowPages small =
+        PMM::compute_window_pages(0x44000000ULL, 0x40000000ULL);
+    JARVIS_ASSERT_EQ(small.base_page, 262144u);
+    JARVIS_ASSERT_EQ(small.end_page, 278528u);
+    // Degenerate: window base beyond the bitmap span -> empty window.
+    PMM::WindowPages empty = PMM::compute_window_pages(0x1000ULL, 0x40000000ULL);
+    JARVIS_ASSERT_EQ(empty.base_page, empty.end_page);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Live PMM window state matches the running architecture's MMU-
+//           mapped RAM (guards the arch-specific window base at runtime).
+// Input: PMM::window_base_page()/window_end_page() after PMM init.
+// Expect: window non-empty; x86_64 base_page == 0 and end == min(window,
+//         total - base) pages; x86_64 base_page == 0; aarch64
+//         base_page == 0x40000000 / PAGE_SIZE.
+// Depends: kernel/memory/pmm.hpp, constants.hpp
+JARVIS_TEST(pmm_window_live_state, "PRE: PMM init | POST: none") {
+    uint64_t win_base = PMM::window_base_page();
+    uint64_t win_end = PMM::window_end_page();
+    JARVIS_ASSERT(win_end > win_base);
+    uint64_t total_pages = PMM::total_memory() / arch::PAGE_SIZE;
+    uint64_t window_pages = arch::HHDM_WINDOW_SIZE / arch::PAGE_SIZE;
+    uint64_t want_end =
+        win_base + ((window_pages < total_pages - win_base)
+                        ? window_pages
+                        : (total_pages - win_base));
+    JARVIS_ASSERT_EQ(win_end, want_end);
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_ASSERT_EQ(win_base, 0u);
+#elif defined(CONFIG_ARCH_AARCH64)
+    JARVIS_ASSERT_EQ(win_base, 0x40000000ULL / arch::PAGE_SIZE);
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Every page the PMM hands out lies inside the allocatable window.
+// Input: alloc_page() and alloc_contiguous(4) after PMM init.
+// Expect: single page and 4-page block both within [window_base,
+//         window_end) physical bounds; everything freed again (net-zero
+//         PMM delta).
+// Depends: kernel/memory/pmm.hpp
+JARVIS_TEST(pmm_alloc_within_window, "PRE: none | POST: none") {
+    uint64_t base_pa = PMM::window_base_page() * arch::PAGE_SIZE;
+    uint64_t end_pa = PMM::window_end_page() * arch::PAGE_SIZE;
+    uint64_t page = PMM::alloc_page();
+    JARVIS_ASSERT(page != 0);
+    JARVIS_ASSERT(page >= base_pa);
+    JARVIS_ASSERT(page < end_pa);
+    uint64_t block = PMM::alloc_contiguous(4);
+    JARVIS_ASSERT(block != 0);
+    JARVIS_ASSERT(block >= base_pa);
+    JARVIS_ASSERT(block + 4 * arch::PAGE_SIZE <= end_pa);
+    PMM::free_page(page);
+    for (size_t idx = 0; idx < 4; ++idx)
+        PMM::free_page(block + idx * arch::PAGE_SIZE);
+    JARVIS_TEST_PASS();
+}
+
 void register_pmm_tests() {
     Logger::info("Registering PMM tests");
     JARVIS_REGISTER_TEST(pmm_alloc_free);
@@ -75,4 +160,7 @@ void register_pmm_tests() {
     JARVIS_REGISTER_TEST(pmm_user_alloc);
     JARVIS_REGISTER_TEST(pmm_total_memory);
     JARVIS_REGISTER_TEST(pmm_alloc_page_table);
+    JARVIS_REGISTER_TEST(pmm_window_geometry);
+    JARVIS_REGISTER_TEST(pmm_window_live_state);
+    JARVIS_REGISTER_TEST(pmm_alloc_within_window);
 }

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -192,8 +192,6 @@ Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:ac37c50582b436a337d048c3039465d0b" id="r_ac37c50582b436a337d048c3039465d0b"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#ac37c50582b436a337d048c3039465d0b">dev_fs</a></td></tr>
-<tr class="memitem:ab80516fdc83a878a34cb7cf8a2baeb4f" id="r_ab80516fdc83a878a34cb7cf8a2baeb4f"><td class="memItemLeft">constinit fat32::Fat32Partition *&#160;</td><td class="memItemRight"><a class="el" href="#ab80516fdc83a878a34cb7cf8a2baeb4f">fat32_partition_instance</a> = nullptr</td></tr>
-<tr class="memitem:a2275ccef078f68b2ae134a3340f0858a" id="r_a2275ccef078f68b2ae134a3340f0858a"><td class="memItemLeft">Vnode&#160;</td><td class="memItemRight"><a class="el" href="#a2275ccef078f68b2ae134a3340f0858a">fat32_root_vnode</a> = {}</td></tr>
 <tr class="memitem:adb50110880ce45345185d1204eaf4fef" id="r_adb50110880ce45345185d1204eaf4fef"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#adb50110880ce45345185d1204eaf4fef">fat32_fs</a></td></tr>
 <tr class="memitem:a7ef3281549b66c34c3500a7b5156718b" id="r_a7ef3281549b66c34c3500a7b5156718b"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a7ef3281549b66c34c3500a7b5156718b">initrd_fs</a></td></tr>
 <tr class="memitem:a8049afbb25873d95c723f015f6c61856" id="r_a8049afbb25873d95c723f015f6c61856"><td class="memItemLeft">Filesystem&#160;</td><td class="memItemRight"><a class="el" href="#a8049afbb25873d95c723f015f6c61856">proc_fs</a></td></tr>
@@ -276,7 +274,16 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Create a pair of connected pipe file descriptors. </p>
-<dl class="section return"><dt>Returns</dt><dd>0 on success, VFS_INVALID on failure. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, VFS_INVALID on failure.</dd></dl>
+<p>Refcount handoff (creator-ref -&gt; two-end-refs):</p><ol type="1">
+<li>alloc + placement-new: refcount=1 (creator), mark_pool_backed.</li>
+<li>alloc rnode/wnode — failure -&gt; pb-&gt;release() (1-&gt;0 -&gt; dispose).</li>
+<li>alloc rfd/wfd — failure -&gt; pb-&gt;release() (creator) + free vnodes/fds.</li>
+<li>set vnode fields incl. private_data = pb (NOT published yet).</li>
+<li>pb-&gt;acquire() for read end, pb-&gt;acquire() for write end -&gt; refcount 3.</li>
+<li>publish both vnodes into the fd_table slots.</li>
+<li>pb-&gt;release() (creator drop) -&gt; refcount 2 (one per endpoint). Every error path is a single symmetric release of the references taken so far; no path can double-free or leak the block. </li>
+</ol>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -840,42 +847,6 @@ Here is the call graph for this function:</div>
 <div class="line">    fat32_get_root,</div>
 <div class="line">}</div>
 </div><!-- fragment -->
-</div>
-</div>
-<a id="ab80516fdc83a878a34cb7cf8a2baeb4f" name="ab80516fdc83a878a34cb7cf8a2baeb4f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab80516fdc83a878a34cb7cf8a2baeb4f">&#9670;&#160;</a></span>fat32_partition_instance</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">fat32::Fat32Partition* kernel::vfs::fat32_partition_instance = nullptr</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel constinit">constinit</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a2275ccef078f68b2ae134a3340f0858a" name="a2275ccef078f68b2ae134a3340f0858a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2275ccef078f68b2ae134a3340f0858a">&#9670;&#160;</a></span>fat32_root_vnode</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">Vnode kernel::vfs::fat32_root_vnode = {}</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
 </div>
 </div>
 <a id="a7ef3281549b66c34c3500a7b5156718b" name="a7ef3281549b66c34c3500a7b5156718b"></a>

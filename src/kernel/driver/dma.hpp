@@ -29,6 +29,7 @@
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/arch/pci.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 
 namespace kernel::dma {
 
@@ -215,6 +216,11 @@ class DmaEngine {
     bool active_;
     DmaCallback callback_;
     uint64_t callback_ctx_;
+    /// @brief Serializes ISR (handle_irq) vs task (start_transfer/abort/
+    ///        is_busy) access.  Always taken via IrqSpinLockGuard (cli +
+    ///        lock): the ISR runs on the same core, so a plain SpinLockGuard
+    ///        would self-deadlock when the ISR preempts the lock holder.
+    mutable sync::SpinLock lock_;
 };
 
 // --- Ping-Pong Double-Buffer ---
@@ -262,11 +268,13 @@ class PingPongDma {
 
     /// Check if a transfer is in progress.
     bool busy() const {
+        sync::IrqSpinLockGuard g(lock_);
         return active_;
     }
 
     /// Get the number of completed transfers.
     uint64_t completed_count() const {
+        sync::IrqSpinLockGuard g(lock_);
         return completed_;
     }
 
@@ -280,6 +288,11 @@ class PingPongDma {
     uint64_t completed_;
     ChainCallback chain_cb_;
     uint64_t chain_ctx_;
+    /// @brief Serializes task (start_next/prepare_buf/xfer_buf/shutdown) vs
+    ///        IRQ (on_completion) access.  IrqSpinLockGuard (cli + lock).
+    ///        Lock order: PingPongDma::lock_ -> DmaEngine::lock_ (nested in
+    ///        start_next); never reversed.
+    mutable sync::SpinLock lock_;
 };
 
 } // namespace kernel::dma

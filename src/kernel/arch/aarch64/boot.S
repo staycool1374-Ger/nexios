@@ -64,9 +64,9 @@ _start:
     mov     w1, #0x301
     str     w1, [x0]
 
-    // === Identity page tables at 0x40000000 ===
-    // L0 at 0x40000000, L1 at 0x40001000, L2 (x4) at 0x40002000-0x40005000
-    mov     x9, #0x40000000         // x9 = L0 base
+    // === Identity page tables at 0x40020000 ===
+    // L0 at 0x40020000, L1 at 0x40021000, L2 (x4) at 0x40022000-0x40025000
+    mov     x9, #0x40020000         // x9 = L0 base
 
     // Clear L0[0..3]
     str     xzr, [x9]
@@ -74,32 +74,32 @@ _start:
     str     xzr, [x9, #0x10]
     str     xzr, [x9, #0x18]
 
-    // L1 at 0x40001000
-    ldr     x10, =0x40001000
+    // L1 at 0x40021000
+    ldr     x10, =0x40021000
     str     xzr, [x10]
     str     xzr, [x10, #8]
     str     xzr, [x10, #0x10]
     str     xzr, [x10, #0x18]
 
     // L0[0] = L1
-    ldr     x12, =0x40001000
+    ldr     x12, =0x40021000
     orr     x12, x12, #3
     str     x12, [x9]
 
     // L1[0..3] = L2 tables
-    ldr     x12, =0x40002000
+    ldr     x12, =0x40022000
     orr     x12, x12, #3
     str     x12, [x10]
 
-    ldr     x12, =0x40003000
+    ldr     x12, =0x40023000
     orr     x12, x12, #3
     str     x12, [x10, #8]
 
-    ldr     x12, =0x40004000
+    ldr     x12, =0x40024000
     orr     x12, x12, #3
     str     x12, [x10, #0x10]
 
-    ldr     x12, =0x40005000
+    ldr     x12, =0x40025000
     orr     x12, x12, #3
     str     x12, [x10, #0x18]
 
@@ -107,7 +107,7 @@ _start:
     // Entries 0-511 (0-1GB): Device (AttrIdx=0) = 0x421
     // Entries 512-639 (1GB-1.25GB): Normal (AttrIdx=1) = 0x725 (DRAM)
     // Entries 640-2047 (1.25GB-4GB): Device (AttrIdx=0) = 0x421
-    ldr     x12, =0x40002000
+    ldr     x12, =0x40022000
     mov     x11, #2048
     ldr     x14, =0x421     // Device: Valid|Block|NS=1|AF=1 = 0x421
     ldr     x15, =0x725     // Normal: Valid|Block|NS=1|SH=Inner|AF=1|AttrIdx=1 = 0x725
@@ -129,52 +129,60 @@ _start:
     //   bits 38:30 = 1   → L1[1]
     //   bits 29:21 = 0   → L2[0] (2MB block, 0x40080000)
     //   bits 29:21 = 1   → L2[1] (2MB block, 0x40280000)
-    // L0[256] → L1 at 0x40006000 → L2 at 0x40007000
+    // L0[256] → L1 at 0x40026000 → L2 at 0x40027000
 
-    // L1 table at 0x40006000 - clear 4 entries
-    ldr     x12, =0x40006000
+    // L1 table at 0x40026000 - clear 4 entries
+    ldr     x12, =0x40026000
     stp     xzr, xzr, [x12]
     stp     xzr, xzr, [x12, #0x10]
 
-    // L2 table at 0x40007000 - clear all 512 entries
-    ldr     x13, =0x40007000
+    // L2 table at 0x40027000 - clear all 512 entries
+    ldr     x13, =0x40027000
     mov     x14, #512
 201:
     sub     x14, x14, #1
     str     xzr, [x13, x14, lsl #3]
     cbnz    x14, 201b
 
-    // L0[256] = L1 table at 0x40006000
-    ldr     x12, =0x40006000
+    // L0[256] = L1 table at 0x40026000
+    ldr     x12, =0x40026000
     orr     x12, x12, #3      // table descriptor
     str     x12, [x9, #256*8]
 
-    // L1[0] = L2 table at 0x40008000 (VA 0xFFFF800000000000-0xFFFF80003FFFFFFF)
+    // L1[0] = L2 table at 0x40028000 (VA 0xFFFF800000000000-0xFFFF80003FFFFFFF)
     // Clear all 512 entries, then populate needed MMIO mappings
-    ldr     x14, =0x40008000
+    ldr     x14, =0x40028000
     mov     x15, #512
 205:
     sub     x15, x15, #1
     str     xzr, [x14, x15, lsl #3]
     cbnz    x15, 205b
     // Map UART at VA 0xFFFF800009000000 (PA 0x9000000), L2 index 72
-    ldr     x14, =0x40008000
+    ldr     x14, =0x40028000
     ldr     x12, =0x9000421       // 0x9000000 | Device: Valid|Block|NS|AF
     str     x12, [x14, #72*8]
-    ldr     x12, =0x40008000
+    // Map GICv2 MMIO at VA 0xFFFF800008000000 (PA 0x08000000), L2 index 64.
+    // One 2MiB Device block covers GICD (0x08000000), GICC (0x08010000) and
+    // GICH/GICV (0x08020000/0x08030000).  The GIC must be reachable through
+    // the TTBR1 kernel window: the TTBR0 identity map does not exist in user
+    // page tables, so raw-physical GIC access faults once a user table is
+    // loaded (silent sync-exception loop in the IRQ path).
+    ldr     x12, =0x8000421       // 0x8000000 | Device: Valid|Block|NS|AF
+    str     x12, [x14, #64*8]
+    ldr     x12, =0x40028000
     orr     x12, x12, #3
-    ldr     x13, =0x40006000  // L1 base
+    ldr     x13, =0x40026000  // L1 base
     str     x12, [x13]        // L1[0]
 
-    // L1[1] = L2 table at 0x40007000 (kernel at VA 0xFFFF800040000000)
-    ldr     x12, =0x40007000
+    // L1[1] = L2 table at 0x40027000 (kernel at VA 0xFFFF800040000000)
+    ldr     x12, =0x40027000
     orr     x12, x12, #3      // table descriptor
-    ldr     x13, =0x40006008  // L1[1]
+    ldr     x13, =0x40026008  // L1[1]
     str     x12, [x13]
 
     // Fill L2 entries 0-127 (256MB of RAM at PA 0x40000000-0x4FFFFFFF)
     // Each entry is a 2MB block at 0x725 (Normal WB WA, NS|AF|SH=Inner)
-    ldr     x12, =0x40007000  // L2 base
+    ldr     x12, =0x40027000  // L2 base
     ldr     x14, =0x725       // NS|AF|SH=11|Attr=1|Table/Block
     ldr     x15, =0x40000000  // current PA (2MB-aligned)
     mov     x16, #128         // counter
@@ -198,8 +206,8 @@ _start:
     dsb     sy
     isb
 
-    // Clean page table pages (0x40000000-0x40008FFF) and invalidate TLBI
-    mov     x11, #0x40000000
+    // Clean page table pages (0x40020000-0x40028FFF) and invalidate TLBI
+    mov     x11, #0x40020000
     mov     x15, #9
 202:
     dc      cvac, x11

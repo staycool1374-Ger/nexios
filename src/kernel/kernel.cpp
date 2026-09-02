@@ -24,6 +24,7 @@
 #include <kernel/arch/apic.hpp>
 #include <kernel/arch/irq_latency_histogram.hpp>
 #include <kernel/irq_thread.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/io.hpp>
@@ -33,6 +34,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -580,6 +582,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::IDT::init();
     arch::IDT::load();
 
+#if defined(CONFIG_ARCH_AARCH64) && CONFIG_PAN
+    // v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1.PAN.
+    // When FEAT_PAN is present, stac/clac become real PSTATE.PAN toggles
+    // (mirror of x86_64 SMAP); every kernel->user deref stays wrapped.
+    if (arch::pan_init()) {
+        debug_write("[BOOT] PAN enabled (SCTLR_EL1.PAN)\n");
+    } else {
+        debug_write("[BOOT] PAN not supported by CPU — leaving off\n");
+    }
+#endif
+
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
     arch::ArchInterruptController::init();
 
@@ -642,26 +655,54 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     uint64_t kend =
         reinterpret_cast<uint64_t>(kernel_virt_end) - arch::HHDM_OFFSET;
     uint64_t mem_size = 0;
+    // Allocatable-window base: min usable RAM base from the firmware map.
+    // arch::RAM_BASE_FALLBACK is 0 on x86_64 (window byte-identical to the
+    // pre-window-base behavior) and the QEMU virt RAM base for
+    // aarch64/riscv64.
+    uint64_t ram_base = arch::RAM_BASE_FALLBACK;
     if (kernel::gs::boot_info().num_mem_regions > 0) {
         for (int i = 0; i < kernel::gs::boot_info().num_mem_regions; ++i) {
-            uint64_t end = kernel::gs::boot_info().mem_regions[i].base +
-                           kernel::gs::boot_info().mem_regions[i].size;
-            if (end > mem_size)
-                mem_size = end;
+            const auto &region = kernel::gs::boot_info().mem_regions[i];
+            uint64_t region_end = region.base + region.size;
+            if (region_end > mem_size)
+                mem_size = region_end;
+            if (region.type == 1 && region.base < ram_base)
+                ram_base = region.base;
         }
     } else {
 #if defined(CONFIG_ARCH_X86_64)
         mem_size = 64_MiB;
 #elif defined(CONFIG_ARCH_AARCH64)
-        mem_size = 0x40000000 + 256_MiB;
+        mem_size = arch::RAM_BASE_FALLBACK + 256_MiB;
+        // Record the fallback RAM span so boot_info() carries a usable
+        // memory configuration even when no DTB/firmware map is provided.
+        kernel::gs::boot_info().add_region(
+            arch::RAM_BASE_FALLBACK,
+            mem_size - arch::RAM_BASE_FALLBACK, 1);
 #elif defined(CONFIG_ARCH_RISCV64)
-        mem_size = 0x80000000 + 128_MiB;
+        mem_size = arch::RAM_BASE_FALLBACK + 128_MiB;
+        kernel::gs::boot_info().add_region(
+            arch::RAM_BASE_FALLBACK,
+            mem_size - arch::RAM_BASE_FALLBACK, 1);
 
 #endif
 
     }
-    kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend);
+    kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
     kernel::VMM::init();
+
+    // Reserve the Multiboot2 info structure GRUB placed above the kernel
+    // image (issue #10: a larger kernel shifts GRUB's info placement into the
+    // PMM free range; an early allocation would overwrite total_size/framebuffer
+    // tag before Framebuffer::init reads them).  GRUB's info is boot-time data
+    // that must never be handed to an allocator.
+    if (kernel::gs::get_multiboot_magic() == 0x36D76289) {
+        uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
+        if (info_ptr != 0) {
+            auto *info = reinterpret_cast<Multiboot2Info *>(info_ptr);
+            kernel::PMM::reserve_range(info_ptr, info_ptr + info->total_size);
+        }
+    }
 
     // v0.4.0 MP-1.5: the per-kernel-task private-data window must not overlap
     // anything the boot kernel PML4 maps — a task that maps a page there gets
@@ -675,11 +716,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             panic("CONFIG_KERNEL_PRIV_DATA_BASE overlaps kernel PML4 entry");
     }
 
-    // Map APIC MMIO pages and initialise the local/I/O APIC.
+    // Map APIC MMIO pages and initialise the local/I/O APIC (x86_64 only;
+    // AArch64/RISC-V use their interrupt controllers, initialised elsewhere).
+#if defined(CONFIG_ARCH_X86_64)
     if (arch::APIC::is_apic_supported()) {
         arch::APIC::map_mmio();
         arch::APIC::init();
     }
+#endif // CONFIG_ARCH_X86_64
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
     }
@@ -884,6 +928,18 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+
+    // Phase-2 (issue #9): probe for a live VT-d remapping unit via the ACPI
+    // DMAR table.  Presence here only records the unit — DMA translation is
+    // NOT enabled at boot (enable_translation() is explicit), so kernel DMA
+    // (AHCI/virtio, raw physical) stays untouched on all boot paths.
+#if defined(CONFIG_ARCH_X86_64)
+    if (kernel::iommu::IoMmuManager::probe_hardware()) {
+        debug_write("[BOOT] VT-d IOMMU present (MMIO base ");
+        debug_write_hex(kernel::iommu::IoMmuManager::mmio_base());
+        debug_write(")\n");
+    }
+#endif
 
 #if CONFIG_IRQ_LATENCY_HISTOGRAM
     kernel::IrqLatencyHistogram::init();
@@ -1105,6 +1161,32 @@ __attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
 }
 #endif // CONFIG_STACK_OVERFLOW_HOOK
 
+// exception-table-audit.md §3.3/§3.4 (issue #91): weak hooks mirroring the
+// stack_overflow_hook pattern.  The production defaults preserve exact
+// behavior (probe = no-op, reserved = fail-stop panic); strong test overrides
+// latch instead of firing, and only when explicitly armed.
+__attribute__((weak)) bool exception_dispatch_probe(uint64_t vector,
+                                                    uint64_t error_code,
+                                                    uint64_t rip,
+                                                    uint64_t *regs) {
+    (void)vector;
+    (void)error_code;
+    (void)rip;
+    (void)regs;
+    return false;
+}
+
+__attribute__((weak)) void reserved_exception_hook(uint64_t vector,
+                                                   uint64_t error_code,
+                                                   uint64_t rip,
+                                                   uint64_t *regs) {
+    (void)vector;
+    (void)error_code;
+    (void)rip;
+    (void)regs;
+    panic("reserved exception");
+}
+
 static const char *exception_name(uint64_t vector) __attribute__((unused));
 static const char *exception_name(uint64_t vector) {
 #if defined(CONFIG_ARCH_X86_64)
@@ -1145,6 +1227,14 @@ static const char *exception_name(uint64_t vector) {
         return "Machine Check";
     case 19:
         return "SIMD FP Exception";
+    case 20:
+        return "SIMD FP Exception (#XM)";
+    case 21:
+        return "Control Protection (#CP/#VE)";
+    case 28:
+        return "Hypervisor Injection (#HV)";
+    case 29:
+        return "VMM Communication";
     case 30:
         return "Security Exception";
     default:
@@ -1355,6 +1445,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
         return;
     }
+
+    // exception-table-audit.md §4.2 (issue #91): test-mode dispatch probe.
+    // Weak default returns false (production no-op); the exc_table strong
+    // override latches synthetic frames and returns true only when armed.
+    if (exception_dispatch_probe(vector, error_code, rip, regs)) {
+        return;
+    }
 #endif
 
 #if defined(CONFIG_ARCH_X86_64)
@@ -1369,6 +1466,20 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     if (kernel::g_user_access_recover_ip && regs) {
         regs[17] = kernel::g_user_access_recover_ip;
         kernel::g_user_access_recover_ip = 0;
+        return;
+    }
+
+    // exception-table-audit.md §3.4 (issue #91): reserved/vendor-specific
+    // vectors (15, 22-26, 29, 31) must never reach generic user-recover or
+    // signal handling — firing at all means something is deeply wrong, so
+    // route them to a named fail-stop hook.  Weak default panics; test
+    // overrides latch.  Excludes 14 (#PF guard page) and every other
+    // user-recoverable vector.
+    if (vector == 15 || (vector >= 22 && vector <= 26) || vector == 29 ||
+        vector == 31) {
+        kernel::Logger::fatal("RESERVED EXCEPTION: %s (vector=%x err=%x rip=%x)",
+                              exception_name(vector), vector, error_code, rip);
+        reserved_exception_hook(vector, error_code, rip, regs);
         return;
     }
 
@@ -1496,6 +1607,15 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
         return;
     }
+
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_CAP_MAX_IRQ
+    // User-space IRQ delivery (issue #2): an armed IrqCap slot consumes the
+    // vector — EOI + pending-record + waiter wake — and returns early so the
+    // tail EOI below does not double-fire.  Unarmed vectors fall through to
+    // the generic handler.
+    if (kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(vector)))
+        return;
+#endif
 
 #if CONFIG_THREADED_IRQS
     // Threaded IRQ dispatch: if this vector has an IrqThread, let the

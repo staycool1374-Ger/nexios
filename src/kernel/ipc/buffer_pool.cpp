@@ -24,6 +24,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/arch/hal/page_table.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <assert.hpp>
 #include <string.hpp>
@@ -38,6 +39,12 @@ constinit size_t BufferPool::pool_count_ = 0;
 
 /// @brief Clear a single page-table entry for @p virt_addr in the given PML4.
 /// Handles x86_64, AArch64, and RISC-V page-table hierarchies.
+///
+/// H-4 (audit-ipc-cap-syscalls-v0.4.2): after clearing the PTE, flush the TLB
+/// for @p virt_addr when @p pml4_phys is the ACTIVE page table — a stale TLB
+/// entry would keep granting access to the freed/recycled page until random
+/// eviction.  Foreign PML4s need no flush here: their stale entries are
+/// covered by the per-task CR3 reload at switch time.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
@@ -114,6 +121,13 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
         pt[pt_idx] = 0;
     }
 #endif
+
+    // H-4: flush the TLB for this VA when the cleared PML4 is the active one.
+    // A stale TLB entry would keep granting access to the freed/recycled page
+    // until random eviction.  Foreign PML4 staleness is covered by the
+    // per-task CR3 reload at switch time.
+    if (pml4_phys == VMM::current_pml4())
+        arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
 /// @brief BUGS.md#020 red-zone guard (defined in full below validate()).
@@ -363,13 +377,30 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) {
 }
 
 /// @brief Map an existing (transferred) buffer at virtual address @p va.
+///
+/// H-2/M-6 (audit-ipc-cap-syscalls-v0.4.2): reject unless the caller owns the
+/// buffer (map() must never take over another task's buffer), require a
+/// page-aligned VA within USER_SPACE_LIMIT, and refuse to map over an already
+/// populated PTE (mapping the same VA twice silently overwrites PTEs and a
+/// later free() deletes another buffer's PTE).
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) {
     bp_check_guard();
     int32_t idx = validate(handle);
     if (idx < 0)
         return false;
+    // H-2: only the owning task may map (map() is called on a transferred
+    // buffer whose owner is the task; a foreign handle must be rejected, not
+    // silently re-owned).
+    if (entries[idx].owner_task != static_cast<uint32_t>(task.id))
+        return false;
+    // M-6: VA must be page-aligned, within user space, and not already mapped
+    // (no PTE collision — the kUserYieldStubVa overwrite class).
+    if ((va & (CONFIG_PAGE_SIZE - 1)) != 0)
+        return false;
     if (va >= USER_SPACE_LIMIT)
+        return false;
+    if (VMM::virt_to_phys_in_pml4(va, task.page_table_) != 0)
         return false;
 
     VMM::map_page_in_pml4(va, entries[idx].phys_addr, true, task.page_table_);

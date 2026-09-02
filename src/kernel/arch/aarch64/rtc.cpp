@@ -17,24 +17,24 @@
  */
 
 /// @file rtc.cpp
-/// @brief AArch64 RTC driver using the system generic timer (CNTPCT_EL0).
+/// @brief AArch64 RTC driver using the PL031 wall-clock RTC (QEMU virt).
 
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/hal/io.hpp>
+#include <constants.hpp>
 
 namespace arch {
 
-/// @brief Read the system timer counter and convert to seconds since epoch.
-/// @return Seconds since 1970-01-01 (Unix epoch), or 0 if frequency is unknown.
-/// @note Uses CNTPCT_EL0 for the counter and CNTFRQ_EL0 for the tick rate.
+// QEMU virt PL031 RTC (inside the boot-mapped 0x09000000 2 MiB Device block).
+inline constexpr uint64_t PL031_BASE = 0x09010000ULL;
+inline constexpr uint32_t PL031_DATA = 0x0000; ///< Current time (Unix secs)
+
+/// @brief Read the wall-clock time in seconds since the Unix epoch.
+/// @return Seconds since 1970-01-01 (Unix epoch).
 uint64_t RTC::read_seconds() {
-    uint64_t cnt{};
-    asm volatile("mrs %0, cntpct_el0" : "=r"(cnt));
-    uint64_t freq{};
-    asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-    if (freq == 0)
-        return 0;
-    return cnt / freq;
+    auto *rtc = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                      PL031_BASE);
+    return static_cast<uint64_t>(rtc[PL031_DATA / 4]);
 }
 
 /// @brief Read and decompose the current time into a tm structure.

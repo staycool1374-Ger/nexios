@@ -95,6 +95,28 @@ constexpr uint16_t PCI_MSIX_CTRL_ENABLE = 1 << 15;
 constexpr uint16_t PCI_MSIX_CTRL_FUNCMASK = 1 << 14;
 constexpr uint16_t PCI_MSIX_CTRL_TSIZE_MASK = 0x7FF;
 
+/// MSI-X table entry vector-control mask bit (bit 0 of the 4th dword).
+constexpr uint32_t MSIX_ENTRY_MASK_BIT = 1U << 0;
+
+/// One 16-byte MSI-X table entry (TableOffset + entry*16).  Accessed through
+/// the mapped table KVA only (never a raw physical write — CODING_STYLE §4).
+struct MsixTableEntry {
+    uint32_t msg_addr_low = 0;   ///< Message Address low (bits 31:0)
+    uint32_t msg_addr_high = 0;  ///< Message Address high (bits 63:32)
+    uint32_t msg_data = 0;       ///< Message Data (vector etc.)
+    uint32_t vector_control = 0; ///< bit 0 = mask; 1 = masked
+};
+
+/// Parsed MSI-X table location (from the capability's Table BIR/Offset and
+/// Message Control TSIZE field).
+struct PciMsixTableInfo {
+    uint8_t bir = 0;          ///< BAR index holding the table
+    uint16_t entry_count = 0; ///< number of entries (TSIZE+1)
+    uint64_t table_phys = 0;  ///< physical address of the table start
+    uint64_t table_kva = 0;   ///< kernel virtual address (HHDM alias) of table
+    uint64_t bar_size = 0;    ///< size of the backing BAR (bounds check)
+};
+
 /// MSI address: xAPIC base (must be written to device's Message Address reg)
 constexpr uint32_t PCI_MSI_ADDR_BASE = 0xFEE00000U;
 
@@ -181,6 +203,44 @@ uint8_t pci_enable_msi(PciBdf bdf, uint8_t apic_id);
 /// @param apic_id    Destination APIC ID (0 for BSP)
 /// @return           The allocated vector number, or 0 on failure.
 uint8_t pci_enable_msix(PciBdf bdf, uint16_t entry, uint8_t apic_id);
+
+/// @brief Locates and maps the MSI-X table of @p bdf.
+/// @param bdf   Device BDF (MSI-X capability required).
+/// @param out   Filled with the parsed table info on success.
+/// @return true when the device has an MSI-X capability, the table lies in a
+///         memory BAR that fits the BAR size, and the table pages are mapped
+///         at a kernel VA (out.table_kva).
+bool pci_msix_table_info(PciBdf bdf, PciMsixTableInfo &out);
+
+/// @brief Pre-maps the MSI-X tables of every scanned MSI-X-capable device and
+///        caches the result (iommu probe-once pattern, issue #10).  Called
+///        from pci_scan_all() so the mapping pages are established at boot,
+///        BEFORE the test-isolation baseline — a test-time MsixCap::create
+///        then reuses the cached KVA instead of allocating a fresh page-table
+///        page (ResourceTracker-clean).  Idempotent.
+void pci_msix_premap_all();
+
+/// @brief Programs one MSI-X table entry: message address/data + vector
+///        control.  The entry is left MASKED (create-time fail-closed state);
+///        the caller unmasks via pci_msix_entry_set_masked when arming.
+/// @param bdf     Device BDF (validated against @p tbl.bir/@p tbl.entry_count).
+/// @param tbl     Parsed table info (from pci_msix_table_info).
+/// @param entry   Entry index (< tbl.entry_count).
+/// @param vector  Allocated MSI-X vector (48–255, != 0x80).
+/// @param apic_id Destination APIC ID (0 for BSP).
+/// @return true on success.
+bool pci_program_msix_entry(PciBdf bdf, const PciMsixTableInfo &tbl,
+                            uint16_t entry, uint8_t vector, uint8_t apic_id);
+
+/// @brief Sets/clears the mask bit of one MSI-X table entry (MMIO write to
+///        the mapped table KVA).  @p masked = true blocks delivery.
+/// @return true on success (table mapped, entry in range).
+bool pci_msix_entry_set_masked(const PciMsixTableInfo &tbl, uint16_t entry,
+                               bool masked);
+
+/// @brief Reads the mask state of one MSI-X table entry.
+/// @return true when the entry is currently masked.
+bool pci_msix_entry_masked(const PciMsixTableInfo &tbl, uint16_t entry);
 
 /// Allocate a free interrupt vector for MSI/MSI-X use.
 /// @return Vector number (48-0xFF, excluding 0x80), or 0 if none free.

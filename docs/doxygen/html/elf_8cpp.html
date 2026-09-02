@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf_8cpp.html'
 <code>#include &lt;<a class="el" href="buffer__pool_8hpp_source.html">kernel/ipc/buffer_pool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">kernel/memory/checked_ptr.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
@@ -194,7 +195,13 @@ Namespaces</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:a53980ddec04e380da13a0325a465a554" id="r_a53980ddec04e380da13a0325a465a554"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a53980ddec04e380da13a0325a465a554">kernel::elf::validate_header</a> (const ELF64Header *hdr)</td></tr>
 <tr class="memdesc:a53980ddec04e380da13a0325a465a554"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate an ELF64 header (magic, class, endianness, machine, bounds).  <br /></td></tr>
+<tr class="memitem:a4c7c051d91c678ffce1d1a2e2b60c4f5" id="r_a4c7c051d91c678ffce1d1a2e2b60c4f5"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a4c7c051d91c678ffce1d1a2e2b60c4f5">kernel::elf::validate_segment</a> (const ELF64ProgramHeader *phdr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memdesc:a4c7c051d91c678ffce1d1a2e2b60c4f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate a single program header segment. Checks bounds, permissions (W^X), size limits, and overflow safety.  <br /></td></tr>
+<tr class="memitem:af0f8dea59eb8cf69559d9199d5b78d10" id="r_af0f8dea59eb8cf69559d9199d5b78d10"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#af0f8dea59eb8cf69559d9199d5b78d10">kernel::elf::alloc_user_stack_and_heap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *out_ustack_phys)</td></tr>
+<tr class="memdesc:af0f8dea59eb8cf69559d9199d5b78d10"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate and map the user stack (guard page + pages) and the initial heap into <code class="param">pml4</code>. Extracted from load_segments_and_stack for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader) which maps segments itself and only needs the stack + heap tail.  <br /></td></tr>
 <tr class="memitem:ae81746671637a90991ec1b98cef60dc4" id="r_ae81746671637a90991ec1b98cef60dc4"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">kernel::elf::load</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *file_data, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memitem:a4a78f2b4b292d565c901908fddd7b0a4" id="r_a4a78f2b4b292d565c901908fddd7b0a4"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a4a78f2b4b292d565c901908fddd7b0a4">kernel::elf::finalize_loaded_task</a> (const ELF64Header *hdr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ustack_phys, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *phdr_image, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
+<tr class="memdesc:a4a78f2b4b292d565c901908fddd7b0a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish a partially-built load: allocate the TCB, kernel stack, adopt <code class="param">pml4</code> as page_table_, wire std fds, setup the user stack frame and install segment canaries. Extracted from <a class="el" href="namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4">elf::load</a> for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader).  <br /></td></tr>
 <tr class="memitem:a8587c966825c28717e2e90c6c754b87c" id="r_a8587c966825c28717e2e90c6c754b87c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1elf.html#a8587c966825c28717e2e90c6c754b87c">kernel::elf::exec_into_current</a> (const ELF64Header *hdr, const <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data, const char *const *argv, const char *const *envp, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> file_size)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>

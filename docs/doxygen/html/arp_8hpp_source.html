@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('arp_8hpp_sourc
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>  <span class="keyword">public</span>:</div>
 <div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    ArpCache();</div>
 <div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span></div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keywordtype">bool</span> lookup(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ip, MacAddr &amp;mac) <span class="keyword">const</span>;</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8">lookup</a>(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ip, MacAddr &amp;mac) <span class="keyword">const</span>;</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span></div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>    <span class="keywordtype">void</span> update(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ip, MacAddr mac);</div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span></div>
@@ -197,7 +197,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('arp_8hpp_sourc
 <div class="ttc" id="aether_8hpp_html"><div class="ttname"><a href="ether_8hpp.html">ether.hpp</a></div><div class="ttdoc">Ethernet frame types and constants.</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a08db2dcf48cc3117394e849a12e1fc19"><div class="ttname"><a href="namespaceinitrd.html#a08db2dcf48cc3117394e849a12e1fc19">initrd::find</a></div><div class="ttdeci">InitrdFile find(const char *path)</div><div class="ttdef"><b>Definition</b> initrd.cpp:72</div></div>
-<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> arp.cpp:25</div></div>
+<div class="ttc" id="anamespacekernel_1_1cap_html_af858a03da6c7b9cd2bcce101005847c8"><div class="ttname"><a href="namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8">kernel::cap::lookup</a></div><div class="ttdeci">KernelObject * lookup(CNode *cspace, uint64_t handle, CapType want, uint32_t need_rights) noexcept</div><div class="ttdoc">Looks up handle in cspace and returns a PREFIX-reference (target-&gt;acquire() already taken) if the slo...</div><div class="ttdef"><b>Definition</b> cap.cpp:160</div></div>
+<div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>

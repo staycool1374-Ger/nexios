@@ -120,7 +120,7 @@ class ArchContextManager {
     /// @param entry Entry point function.
     /// @param psr Saved Processor State Register (SPSR).
     /// @param user_rsp Initial user-mode SP_EL0.
-    static inline void init_stack(uint64_t *stack_top, void (*entry)(),
+    static inline void init_stack(uint64_t *&stack_top, void (*entry)(),
                                   uint64_t /*cs*/, uint64_t /*ss*/,
                                   uint64_t psr, uint64_t user_rsp) {
         *--stack_top = 0;

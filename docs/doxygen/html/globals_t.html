@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.12</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
    </div>
   </td>
  </tr>
@@ -203,14 +203,23 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_buildsystem_debug_flags()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adfc7f31e88a65a9775b6e5262d2ff427">test_registry.gen.hpp</a></li>
 <li>teardown_buildsystem_default_arch_x86_64()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a361ef5c9139f2cb2d87eb884bff1f62d">test_registry.gen.hpp</a></li>
 <li>teardown_buildsystem_invalid_arch_error()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae4c642b71a68e63a50a6ff831ce86301">test_registry.gen.hpp</a></li>
+<li>teardown_canary_installed_at_segment_boundaries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6b5f839965e09938fa9214145e77f6a4">test_registry.gen.hpp</a></li>
+<li>teardown_canary_intact_after_normal_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa8574e323d56bd8a4936101f0ac91ecc">test_registry.gen.hpp</a></li>
+<li>teardown_canary_tamper_detected_on_syscall()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7b44590d3522a77f39bfcbf5592a2bd5">test_registry.gen.hpp</a></li>
 <li>teardown_checked_ptr_is_user_range()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac4940e5004c8f13b37e37649dbf280f6">test_registry.gen.hpp</a></li>
 <li>teardown_checked_ptr_is_user_string()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8a31d9d160cc51ffac11fa7987d591bb">test_registry.gen.hpp</a></li>
 <li>teardown_checked_ptr_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a42b2ab2df42a3a31159f6e800de8d556">test_registry.gen.hpp</a></li>
+<li>teardown_cnode_cascade_revoke_marks_children()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad3cbdb8275afba103dd8dcdc5db0763b">test_registry.gen.hpp</a></li>
+<li>teardown_cnode_dispose_frees_pool_block()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a67cacd61ca84e8ce246076bde8758fad">test_registry.gen.hpp</a></li>
+<li>teardown_cnode_install_acquires_ref()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a38de9b88959485be734f2f9e44a0fc7f">test_registry.gen.hpp</a></li>
+<li>teardown_cnode_release_drops_ref()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e05a2d996315c3e8655ebf66fdc7851">test_registry.gen.hpp</a></li>
+<li>teardown_cnode_revoke_refuses_acquire()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a04f959f5be9f1e9a5d9079d5ee03ba20">test_registry.gen.hpp</a></li>
 <li>teardown_config_ceiling_ge_max_prio()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab59a8c3a7bbf1598299f7fff3f2a3f80">test_registry.gen.hpp</a></li>
 <li>teardown_config_hard_rt_dependents()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0f201910c19ba9011502a64592b3cc07">test_registry.gen.hpp</a></li>
 <li>teardown_config_sporadic_budget_le_period()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a08743f855bbee4c045a81616c850a3ff">test_registry.gen.hpp</a></li>
 <li>teardown_config_stack_size_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8c785bfc43987a6f553524ac8605401a">test_registry.gen.hpp</a></li>
 <li>teardown_config_tick_hz_sane()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a40e80d89f1ceeb992ffceb1b37eee2c7">test_registry.gen.hpp</a></li>
+<li>teardown_copy_shares_refcount()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a97889070274b67a60f722888a1096bbc">test_registry.gen.hpp</a></li>
 <li>teardown_core_text_utilities()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2b04d773b44333368e49b8c103f9f1ff">test_registry.gen.hpp</a></li>
 <li>teardown_cpu_load_counter_wrap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af67391dfe11ed7f3d6923b6469dd1ecd">test_registry.gen.hpp</a></li>
 <li>teardown_cpu_load_idle_priority()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a506be4817f37af4bdaa1000339d65679">test_registry.gen.hpp</a></li>
@@ -228,11 +237,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_cross_page_table_constants()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2d33b1c4bdcf772487a4c8cab4b35200">test_registry.gen.hpp</a></li>
 <li>teardown_cross_page_table_map_unmap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a493ea38f1625bd9327585d99efb07615">test_registry.gen.hpp</a></li>
 <li>teardown_cross_page_table_unmapped_returns_zero()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a856bbb50595db1f8e6a4de7936b24e79">test_registry.gen.hpp</a></li>
+<li>teardown_cross_task_page_fault_isolated()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4fef4e58ac7a5acabe85f267a2031ef5">test_registry.gen.hpp</a></li>
 <li>teardown_cross_timer_irq_handler()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7b38f9c6d67f17dd2c1454065e7b230b">test_registry.gen.hpp</a></li>
 <li>teardown_cross_timer_ns_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1f2e96550d7c4ec60c3bc5cd307447c7">test_registry.gen.hpp</a></li>
 <li>teardown_cross_timer_ticks_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac6798c1e7025364b78ea99de095748d6">test_registry.gen.hpp</a></li>
 <li>teardown_cross_vfs_resolve_nonexistent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2535838d9767dd8c24d5902736c5eac8">test_registry.gen.hpp</a></li>
 <li>teardown_cross_vfs_resolve_root()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a63cb53bc512257055661772921ae0a11">test_registry.gen.hpp</a></li>
+<li>teardown_cslot_init_empty()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8fd06d6e8df49f592bf8221fd33869f7">test_registry.gen.hpp</a></li>
 <li>teardown_deadline_list_capacity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6b407be4128bcdf7992b4d6ff18e238f">test_registry.gen.hpp</a></li>
 <li>teardown_deadline_list_empty_and_clear()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9e673692dc51d9820e3d9af8645db48a">test_registry.gen.hpp</a></li>
 <li>teardown_deadline_list_pop_expired()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab52a1f681f8e3339e33f156535fd339d">test_registry.gen.hpp</a></li>
@@ -250,6 +261,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_dma_bus_master_host_bridge()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a86f3c909438a8f3cca2c6ea46f908f25">test_registry.gen.hpp</a></li>
 <li>teardown_dma_completion_interrupt()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af9ce00c4a400f022eee8e201c87cb9cb">test_registry.gen.hpp</a></li>
 <li>teardown_dma_double_buffered_transfer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afadc36569c5a0aee2b81b849b5e28b28">test_registry.gen.hpp</a></li>
+<li>teardown_dma_engine_abort_suppresses_callback()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3141d68b0a29c6ed8b26389f55268477">test_registry.gen.hpp</a></li>
+<li>teardown_dma_engine_irqguard_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a46ff005829eb952f6d6cf6d7477b5f8a">test_registry.gen.hpp</a></li>
+<li>teardown_dma_engine_no_double_callback()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a173bd677552d1ec707a0dfe3f5190701">test_registry.gen.hpp</a></li>
+<li>teardown_dma_engine_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abbe39d884efba4f01ee93a12964cee8b">test_registry.gen.hpp</a></li>
 <li>teardown_dma_free_empty_buffer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8c7b5746487f16bddd2e805dfb3aab24">test_registry.gen.hpp</a></li>
 <li>teardown_dma_prd_from_sg()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6a5117da3f2907bff5a0fa56f10bd538">test_registry.gen.hpp</a></li>
 <li>teardown_dma_prd_reset()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9dcaee8bb7d719c0059478f0e9adc479">test_registry.gen.hpp</a></li>
@@ -286,6 +301,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_elf_validate_header_excessive_phnum()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af7e8e753168088d2b5c1b7db7a97bde6">test_registry.gen.hpp</a></li>
 <li>teardown_elf_validate_header_magic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a890a5dcb4cf0d51d3726583e081fe96f">test_registry.gen.hpp</a></li>
 <li>teardown_elf_validate_header_null()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a28a0dcefc83a204b07ef963a8bcc47a3">test_registry.gen.hpp</a></li>
+<li>teardown_endpoint_cap_release_disposes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0870fd9237fe6a1890047a130d6cf360">test_registry.gen.hpp</a></li>
+<li>teardown_endpoint_revoked_send_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4f67367c3e8d321284f0bb93f0c01ee1">test_registry.gen.hpp</a></li>
+<li>teardown_endpoint_send_recv_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3cbfec55ae78cfde1fc8d82140493e84">test_registry.gen.hpp</a></li>
+<li>teardown_endpoint_teardown_no_leak()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abf76d7811c646479635881cb289bfe1a">test_registry.gen.hpp</a></li>
 <li>teardown_error_or_basic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa6041e8b3b2d4880061998e31f2f28bf">test_registry.gen.hpp</a></li>
 <li>teardown_error_or_errors()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a78a8c85720d027ecb5e5f89f33e3f2ef">test_registry.gen.hpp</a></li>
 <li>teardown_eventgroup_waiter_teardown_on_terminate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3a09508e33069ad5e5974e2f6d38b54e">test_registry.gen.hpp</a></li>
@@ -334,6 +353,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_fb_putpixel_in_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaa78c82d8dc2c47f956710461f635155">test_registry.gen.hpp</a></li>
 <li>teardown_fb_putpixel_out_of_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa4fb2bd2356a18eaba8dc997e6536846">test_registry.gen.hpp</a></li>
 <li>teardown_fb_scroll_up()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af892eceb2479453bdfea8fccd7ed4527">test_registry.gen.hpp</a></li>
+<li>teardown_fork_deep_copy_child_tables_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a42bead1390c8dbe20f39dc181197dc2a">test_registry.gen.hpp</a></li>
+<li>teardown_fork_free_user_pages_child_deepcopy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a400dee18e87f154cff1ba207357f0700">test_registry.gen.hpp</a></li>
+<li>teardown_fork_page_table_shared_flag_absent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab97fbee8d402c589f5599f67297b6a2f">test_registry.gen.hpp</a></li>
+<li>teardown_frame_cap_map_unmap_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af1bbded4a4aac289b4ad0dc2c1efb541">test_registry.gen.hpp</a></li>
+<li>teardown_frame_cap_release_frees_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2c207cf862b06cadbac71420d4e448bf">test_registry.gen.hpp</a></li>
+<li>teardown_frame_cap_revoke_denies_map()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a05bbee27038ec06facf1a05880f87891">test_registry.gen.hpp</a></li>
 <li>teardown_freelist_no_double_alloc_general_pool()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7bcbc563b17c6b1fdc99ca6a4935783b">test_registry.gen.hpp</a></li>
 <li>teardown_freelist_pool_page_not_double_alloced()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aeaa4dafd9f16dc1c7fb6eff80cb8ec67">test_registry.gen.hpp</a></li>
 <li>teardown_freelist_task_double_cleanup_safe()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac197197f497b9314f52e0dcce9eb88f8">test_registry.gen.hpp</a></li>
@@ -345,6 +370,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_gcov_flush_outputs_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aee7e4fcef497fc34607551536c47a3bf">test_registry.gen.hpp</a></li>
 <li>teardown_gcov_handler_initialized()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aed50333308161466005e81c842286a51">test_registry.gen.hpp</a></li>
 <li>teardown_gcov_instrument_updates_bitmask()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acf7dc6ba6dab020c09afc0afc68d1571">test_registry.gen.hpp</a></li>
+<li>teardown_grant_creates_slot_in_dest()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa9679a143bc5702d6bd601d54734bf27">test_registry.gen.hpp</a></li>
+<li>teardown_guard_page_fault_not_kernel_fatal()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a79a0b0d7dbeb908889027fff220f96bf">test_registry.gen.hpp</a></li>
 <li>teardown_hal_bits_find_highest_all()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88ee6fe6f49af12edc06a8cde88788ce">test_registry.gen.hpp</a></li>
 <li>teardown_hal_bits_find_highest_low_64()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7fd8c83e641bcbfa5ef4200dc5a82c5f">test_registry.gen.hpp</a></li>
 <li>teardown_hal_bits_find_highest_lsb()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adb007916b51e3baa9f4acc2462b9cb73">test_registry.gen.hpp</a></li>
@@ -373,6 +400,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_hal_timer_oneshot()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a21dba719f0151a9a1b68465fcac17478">test_registry.gen.hpp</a></li>
 <li>teardown_hal_timer_periodic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a46af01b4365872ae90ad7a079a656581">test_registry.gen.hpp</a></li>
 <li>teardown_hal_timer_remaining()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2da936506f2f13526d1914ef10423670">test_registry.gen.hpp</a></li>
+<li>teardown_handle_decode_out_of_range_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3974c1a97a3c578c46040637a55b5a1b">test_registry.gen.hpp</a></li>
+<li>teardown_handle_decode_stale_gen_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a04fa0e012e6b97d0c73596057939c67e">test_registry.gen.hpp</a></li>
+<li>teardown_handle_decode_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a83be1bdda71502c118be29a849c4cb4d">test_registry.gen.hpp</a></li>
 <li>teardown_harness_blocked_sender_wakes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a48887b7ae05c0440df070310e4177802">test_registry.gen.hpp</a></li>
 <li>teardown_harness_buffer_unmap_stale_safe()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a38979e859b1f27115cc274e4c3b2eafc">test_registry.gen.hpp</a></li>
 <li>teardown_harness_expected_panic_handling()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a96679a0c0e711b0d741cd55614e9c3eb">test_registry.gen.hpp</a></li>
@@ -388,6 +418,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_health_privileged_only()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a668a0fb7499f9d5368f779a03ae51302">test_registry.gen.hpp</a></li>
 <li>teardown_health_proc_filesystem()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a054dab0d89473f99338600e29907c038">test_registry.gen.hpp</a></li>
 <li>teardown_health_syscall_returns_metrics()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac5de83d0659db08f434157a5721952a0">test_registry.gen.hpp</a></li>
+<li>teardown_hhdm_kernel_reads_user_page()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a572a508d276c3683147c80d52d847d03">test_registry.gen.hpp</a></li>
 <li>teardown_idle_cleanup_no_deadline_impact()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad887ac5b42b39170a1f772d1816962ba">test_registry.gen.hpp</a></li>
 <li>teardown_idle_task_calls_pause_syscall()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5641980ca4f202479b840e8852ae2dc1">test_registry.gen.hpp</a></li>
 <li>teardown_idle_task_created_at_boot()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a543d65eee12e8857f574a4bbe654a42b">test_registry.gen.hpp</a></li>
@@ -470,7 +501,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_jitter_under_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae1134adf9d0a1ca3a770395c117ad355">test_registry.gen.hpp</a></li>
 <li>teardown_jitter_under_load()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a451664cdabe8cc0f85ce95fbeb9a0b1c">test_registry.gen.hpp</a></li>
 <li>teardown_kernel_hlt_idle_still_exists()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a69b0fb8b1fc8e2f4555af5f070ca9fc1">test_registry.gen.hpp</a></li>
+<li>teardown_kernel_priv_cr3_switch_on_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a175fdeccdfa30981ddb796348e666f3f">test_registry.gen.hpp</a></li>
+<li>teardown_kernel_priv_cross_task_data_isolation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3aab089949356561569fb19125e9c58b">test_registry.gen.hpp</a></li>
+<li>teardown_kernel_priv_pml4_clone_kernel_half_present()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a90f06bfb6e19dd723888c2f545d0c0c1">test_registry.gen.hpp</a></li>
+<li>teardown_kernel_priv_teardown_frees_pml4_stack()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5919f94944111d02b72c3a0697094f0b">test_registry.gen.hpp</a></li>
+<li>teardown_kernel_red_zone_between_stack_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8c60e63ae9b8f541a7591bc338f3b732">test_registry.gen.hpp</a></li>
 <li>teardown_keyboard_driver_in_iocd()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a08a66ccc2556c7f0dad60bbcf3c90072">test_registry.gen.hpp</a></li>
+<li>teardown_keyboard_init_bounded_drain()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae5b764b85565b48f6b079bffa3077566">test_registry.gen.hpp</a></li>
 <li>teardown_klog_clear()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3c32c9689ccb119e6d116a76a7adeb4a">test_registry.gen.hpp</a></li>
 <li>teardown_klog_concurrent_readers()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa20f8795db04cf3bd024f3cbd0be9baa">test_registry.gen.hpp</a></li>
 <li>teardown_klog_empty_read()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a94e2edb968f5f9a3d19959875a00d556">test_registry.gen.hpp</a></li>
@@ -479,6 +516,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_klog_read_partial()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac8b27b0a83b76afbbf61a2991d3b364e">test_registry.gen.hpp</a></li>
 <li>teardown_klog_ringbuffer_wrap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a51ce244051480615130548011bccadc0">test_registry.gen.hpp</a></li>
 <li>teardown_lifecycle_zombie_no_waker()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a47dd20b7a315a5d7df1db61efe30f2c2">test_registry.gen.hpp</a></li>
+<li>teardown_loader_already_loading()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a13d85a4bd12c2ea17e96557424a4354e">test_registry.gen.hpp</a></li>
+<li>teardown_loader_cancel_mid_load()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a16d7a65f1d92bdbc0f77d56fc240b397">test_registry.gen.hpp</a></li>
+<li>teardown_loader_cancel_not_loading()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a54314b98c1896a8b9b42772d8df3efa7">test_registry.gen.hpp</a></li>
+<li>teardown_loader_load_invalid_elf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad7aa606b997a46efff830b5fd584848f">test_registry.gen.hpp</a></li>
+<li>teardown_loader_load_success()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aca59243a8841baaee25722bedecda322">test_registry.gen.hpp</a></li>
+<li>teardown_loader_lost_wakeup_race()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a47797ebfd4fed444bb1925ab86b896">test_registry.gen.hpp</a></li>
+<li>teardown_loader_multiple_cycles()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adc722c562a40f593f5150ebf7f9e52eb">test_registry.gen.hpp</a></li>
+<li>teardown_loader_preemption_yield()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7af06909595b2d8bd5a58cee9c1cf9d5">test_registry.gen.hpp</a></li>
 <li>teardown_lock_order_consistent_nesting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab5f7e2dcfee20521872850311d41ee8a">test_registry.gen.hpp</a></li>
 <li>teardown_lock_order_mutex_nesting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad0d225e43db67c45b5786f9d3d2bf8d2">test_registry.gen.hpp</a></li>
 <li>teardown_lock_order_reverse_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afb8e0eb00950cf0581da1b02549d8b6c">test_registry.gen.hpp</a></li>
@@ -500,6 +545,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_mempool_fragmentation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac40b58a71b17929ec0e403af9f66076d">test_registry.gen.hpp</a></li>
 <li>teardown_mempool_large_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa111acc74671f2a33fe0f0146e54c1ef">test_registry.gen.hpp</a></li>
 <li>teardown_mempool_reuse()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab5362fcd711c30c7dc39f0a942ea1cf1">test_registry.gen.hpp</a></li>
+<li>teardown_mint_reduces_rights()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac1f0a6ba96a10d2dde7b172037a944b7">test_registry.gen.hpp</a></li>
 <li>teardown_multiple_idle_tasks_prevented()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad9cfc4350a644bc3107e25097ac902e4">test_registry.gen.hpp</a></li>
 <li>teardown_mutex_double_lock_same_owner()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad72749c2e1e07bdfb10b91f639007106">test_registry.gen.hpp</a></li>
 <li>teardown_mutex_double_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac94bffaeb993d7a14a3cd1e69f033164">test_registry.gen.hpp</a></li>
@@ -543,7 +589,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_page_tables_alloc_from_pool()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88cbe6f39f33a9eb5da3d63faf765144">test_registry.gen.hpp</a></li>
 <li>teardown_page_tables_free_pages_on_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a18e5085f91dd7090283a6757cc411d5c">test_registry.gen.hpp</a></li>
 <li>teardown_page_tables_isolation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#affefe4a3e1c3b6e4df0baf9c66f14e44">test_registry.gen.hpp</a></li>
-<li>teardown_page_tables_kernel_task_no_page_table()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a461f8685183c5bb025ea8d260f1c3b5e">test_registry.gen.hpp</a></li>
+<li>teardown_page_tables_kernel_task_private_pml4()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a620ac6defe0eaa15964a012ebf11e079">test_registry.gen.hpp</a></li>
 <li>teardown_page_tables_max_process_pages_config()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaaf1e21488f0490bd7af56387860a590">test_registry.gen.hpp</a></li>
 <li>teardown_page_tables_pool_exhaustion()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0e6af1f480e0d4c3452e21deb5b76cfe">test_registry.gen.hpp</a></li>
 <li>teardown_page_tables_pool_multiple_allocs()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a18b3b9bec539a6c052ef0f013cd5dc5f">test_registry.gen.hpp</a></li>
@@ -570,6 +616,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_pcp_mutex_spinlock_nest()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4fe2dba52d3dc1bb02a4d0d95df0ec56">test_registry.gen.hpp</a></li>
 <li>teardown_pcp_try_lock_held()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5edc7f0acdec29f9dfcebab851dd49aa">test_registry.gen.hpp</a></li>
 <li>teardown_pcp_two_mutexes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6b2ac0ce4576dd5fad50e1ff95b0e85d">test_registry.gen.hpp</a></li>
+<li>teardown_pingpong_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adb64e18514d2328926b7fb33ab4e639c">test_registry.gen.hpp</a></li>
+<li>teardown_pingpong_shutdown_clears_state()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a335ee39339c1da4eb219b91cee9a221c">test_registry.gen.hpp</a></li>
+<li>teardown_pingpong_xfer_buf_while_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac5dbd0199c4bea00768629981de1e63b">test_registry.gen.hpp</a></li>
 <li>teardown_pip_mutex_init_state()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a83695606ade39a713dee346379ead207">test_registry.gen.hpp</a></li>
 <li>teardown_pip_mutex_lock_owner()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad2be60f4f135aa9aa3132925172e3d54">test_registry.gen.hpp</a></li>
 <li>teardown_pip_mutex_relock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a40163767b2fb9d0e1c74d71e48b396aa">test_registry.gen.hpp</a></li>
@@ -590,6 +639,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_pit_ticks_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a116989224b04d7a35af55c882d8cdc57">test_registry.gen.hpp</a></li>
 <li>teardown_pml4_clone_clears_user_entries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a658b8f2885477f6381ea25c35b9dc619">test_registry.gen.hpp</a></li>
 <li>teardown_pml4_clone_kernel_entries_match()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6c354ae4547eb3c150c4377e5db0b9b9">test_registry.gen.hpp</a></li>
+<li>teardown_pml4_deep_copy_no_alias()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ada0af50b7924c8b83ac58e1d7e0e4217">test_registry.gen.hpp</a></li>
 <li>teardown_pml4_dump_no_user_entries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5b01e593db982b4333dfba47d8424285">test_registry.gen.hpp</a></li>
 <li>teardown_pml4_fork_no_child_corrupt_parent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a430a0385b69d57275ece708a4a3b9fd5">test_registry.gen.hpp</a></li>
 <li>teardown_pml4_fork_user_entries_match()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afc72cc7a31570a87bc9037849c3f21c5">test_registry.gen.hpp</a></li>
@@ -614,8 +664,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_process_add_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a811df1d6297113142162e28dde639365">test_registry.gen.hpp</a></li>
 <li>teardown_process_cleanup_removes_from_parent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8a98c366ee51201e84208b7afe011b7d">test_registry.gen.hpp</a></li>
 <li>teardown_process_clone_adds_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a44ec59e9197418bbde23398e3e6d870c">test_registry.gen.hpp</a></li>
+<li>teardown_process_clone_child_table_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4d50e0142397516998425eab7afb3e89">test_registry.gen.hpp</a></li>
+<li>teardown_process_clone_pipe_fd_refcount()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a78678810816416abe4a60c36ac0e585b">test_registry.gen.hpp</a></li>
+<li>teardown_process_clone_teardown_zero_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a438e105f4ab9e00ae5a6ce8159d6a812">test_registry.gen.hpp</a></li>
 <li>teardown_process_find_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a64b0c90d33c7e2ec2d1902ea5b97661a">test_registry.gen.hpp</a></li>
 <li>teardown_process_find_child_multiple()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adeaf654bd17b38337476341b4d4d6ee4">test_registry.gen.hpp</a></li>
+<li>teardown_process_kernel_half_private()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac14b27619807e96924a59ff110296679">test_registry.gen.hpp</a></li>
 <li>teardown_process_num_children_count()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a37a1a51118b6531b1d8bd825e93b2493">test_registry.gen.hpp</a></li>
 <li>teardown_process_remove_child_clears_parent_id()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0c5056dab760baa5b4360108778da39a">test_registry.gen.hpp</a></li>
 <li>teardown_process_remove_child_non_child_no_underflow()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a23850798b1a529ce49ae21f678bd43fe">test_registry.gen.hpp</a></li>
@@ -641,6 +695,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_random_u64_not_constant()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a81dc01f9d95328c5a387f504b837141f">test_registry.gen.hpp</a></li>
 <li>teardown_random_zero_length()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0d990ff401f288b622b45353035ebc2e">test_registry.gen.hpp</a></li>
 <li>teardown_rdtsc_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a82b5f6ecd2df2d4ec3768c5f63ae7fa1">test_registry.gen.hpp</a></li>
+<li>teardown_retype_frame_exact_size_end_to_end()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a162273b3af09b56b13c70a7495086e36">test_registry.gen.hpp</a></li>
+<li>teardown_retype_requires_write_right()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a11d8f7821bbd37b151c3bc45ed197073">test_registry.gen.hpp</a></li>
+<li>teardown_retype_revoked_untyped_fails_single_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8cb14cfc68460620d007c285cdefa316">test_registry.gen.hpp</a></li>
+<li>teardown_retype_twice_fails_no_double_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4a23f80eb9d5890ca504ff444b5b6979">test_registry.gen.hpp</a></li>
+<li>teardown_retype_wrong_size_fails_keeps_untyped()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a137fc7fb4bfcdcc5029163e0df8d7684">test_registry.gen.hpp</a></li>
+<li>teardown_retype_wrong_target_type_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5e3d415c9625627f292dc9fddabb5570">test_registry.gen.hpp</a></li>
+<li>teardown_revoke_removes_slot_and_releases()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af20b69c8b2d37f40e2897d847deb5c00">test_registry.gen.hpp</a></li>
+<li>teardown_revoke_twice_idempotent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac8cb0de8d57a86bae15593cbc30adddb">test_registry.gen.hpp</a></li>
+<li>teardown_revoke_while_scopedref_pinned_delays_dispose()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab28ab09a010875b9932a91cfdcef93b8">test_registry.gen.hpp</a></li>
+<li>teardown_root_cnode_attached_to_task_teardown_frees()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a72e08babf353b907060132c135c54b43">test_registry.gen.hpp</a></li>
 <li>teardown_rtc_bcd_conversion()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a73588e5ee239c766cc5f818c5dd6d689">test_registry.gen.hpp</a></li>
 <li>teardown_rtc_read_seconds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a288e3bac0b293260dd480376e072ef13">test_registry.gen.hpp</a></li>
 <li>teardown_scheduler_add_duplicate_id()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3f91b6b4e0e5c06d33b0e42fb62f81ed">test_registry.gen.hpp</a></li>
@@ -674,7 +738,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_semaphore_wait_post()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a51df30b41c1b186290fc0fde71e26023">test_registry.gen.hpp</a></li>
 <li>teardown_semaphore_wait_priority_order()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac65d5be40375dad27ef8cbe9a6f816a8">test_registry.gen.hpp</a></li>
 <li>teardown_semaphore_waiter_teardown_on_terminate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab2779c57e1a0b929d2c0f286d43c5c26">test_registry.gen.hpp</a></li>
+<li>teardown_send_without_endpoint_cap_denied()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a45c2f8dbf431314f8ea77bc0e81ba719">test_registry.gen.hpp</a></li>
 <li>teardown_serial_driver_in_iocd()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a778f2cfbdfc6102e04e049feb599adcd">test_registry.gen.hpp</a></li>
+<li>teardown_serial_putchar_bounded_ok()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a304080d3c1dec6574d240a4f3979cf78">test_registry.gen.hpp</a></li>
 <li>teardown_shell_clear_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af6614bae383ff9fec4038c14936bf1c9">test_registry.gen.hpp</a></li>
 <li>teardown_shell_echo_and_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8c64313d5639560828ce7337d2d5afe0">test_registry.gen.hpp</a></li>
 <li>teardown_shell_echo_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac907e211fb5f3ca8f18dea77cc6a578a">test_registry.gen.hpp</a></li>
@@ -691,6 +757,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_shell_redirect_to_devnull()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a399d9e6a1ffee3ac5f8d851b802a2e75">test_registry.gen.hpp</a></li>
 <li>teardown_shell_simple_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a22196ba6dfd03181f8b7ed35c93e4048">test_registry.gen.hpp</a></li>
 <li>teardown_shell_sleep_zero()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8dd60f2ce64c763dab4e8604f4a8f4bf">test_registry.gen.hpp</a></li>
+<li>teardown_shell_tasks_memory_columns()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a580f54673b6289dcde9b6e211f25126b">test_registry.gen.hpp</a></li>
 <li>teardown_shell_terminal_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaaa692ac9eb2fe2914383683ece525bb">test_registry.gen.hpp</a></li>
 <li>teardown_shell_uptime_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e4bee210718926f72fc9df80daaaf6f">test_registry.gen.hpp</a></li>
 <li>teardown_shell_which_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a62e19112d9aee62f73b2e257ccf8f6f7">test_registry.gen.hpp</a></li>
@@ -710,6 +777,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_slab_reclaim_pages_returned()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a83093b35ac6fbbf3d8e366d55a28d101">test_registry.gen.hpp</a></li>
 <li>teardown_slab_reclaim_partial_not_touched()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9d9a72f52d2cba5ebe4f3f441f1468a4">test_registry.gen.hpp</a></li>
 <li>teardown_slab_reclaim_reallocate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a281ff377896a44f6d33d7d87eaee54c0">test_registry.gen.hpp</a></li>
+<li>teardown_smap_cr4_bit_set()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8dc94a62de8fe6179cce1e285ede5c73">test_registry.gen.hpp</a></li>
+<li>teardown_smap_kernel_deref_user_va_without_ac_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2fa622ebd7392d298a13784ed6f16476">test_registry.gen.hpp</a></li>
+<li>teardown_smap_stac_clac_roundtrip_ok()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a854e5d7f32f0ddd357926857e7f3a6cd">test_registry.gen.hpp</a></li>
 <li>teardown_spinlock_basic_lock_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5050c052d26ea2104d1007fcffcd52c8">test_registry.gen.hpp</a></li>
 <li>teardown_spinlock_contention()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a832c00fd155cf489d465b2b4f8e81c27">test_registry.gen.hpp</a></li>
 <li>teardown_spinlock_cxx_contract()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a98aad07e4feca439492e375f2ac82cc2">test_registry.gen.hpp</a></li>
@@ -758,8 +828,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_stack_alloc_overflow_hook_weak_symbol()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa287ff0e70ce34b1c22629556cb5a94c">test_registry.gen.hpp</a></li>
 <li>teardown_stack_alloc_stack_alignment()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae95086f9abe942650571b1724a3614b5">test_registry.gen.hpp</a></li>
 <li>teardown_stack_alloc_task_has_stack_phys()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aabce6c86fe5f14dc10cf731e9f1f979d">test_registry.gen.hpp</a></li>
-<li>teardown_stack_alloc_user_stack_phys_freed_on_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a98b8cd2ea55fde3a03aa723c8624bca5">test_registry.gen.hpp</a></li>
-<li>teardown_stack_alloc_user_stack_size_in_config()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3605746cf529e3ddf28b84314163bf8b">test_registry.gen.hpp</a></li>
 <li>teardown_stack_alloc_user_task_has_guard_page()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a04647d4e171ab75e337ff4f8b6cff345">test_registry.gen.hpp</a></li>
 <li>teardown_stack_profiler_context_rsp_in_range()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ace4feb706f7be3c1fe3ce7c247339a7d">test_registry.gen.hpp</a></li>
 <li>teardown_stack_profiler_current_task_stack_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5994c76d6990589a9661af2e5f9176d1">test_registry.gen.hpp</a></li>
@@ -782,6 +850,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_sync_queue_send_blocks_when_full()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3d3d137cb8ec06cd8565d96b21a4c927">test_registry.gen.hpp</a></li>
 <li>teardown_sync_queue_wake_sender_on_receive()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8dec63b5e332f794feece69da946840f">test_registry.gen.hpp</a></li>
 <li>teardown_sys_brk_query()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6a6acc71a513b1046704dd08d72b714a">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_bad_handle_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad1c676abb8da3ab7ad10e6424630adb3">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_copy_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1c5b51b126488faf05f3e14a1af60b9f">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_grant_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a206a8e04f081aa5044ab8b7b40a1f870">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_mint_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1178c0e5db5097be3d1274fea97284c2">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_revoke_cleanup_zero_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0c3d073052e9db8456a27dafb0b32dc9">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_revoke_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4cc54795b7f115db6c69ab3a6a3face9">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_rights_denied_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac070715be48c52106852f38548c335e5">test_registry.gen.hpp</a></li>
+<li>teardown_sys_cap_wrong_type_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8b5495c1dd63e0bc19a9d60e0e8992b8">test_registry.gen.hpp</a></li>
 <li>teardown_sys_getrlimit_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9e60106b23c7f6fcfae19ec5beb2b7ce">test_registry.gen.hpp</a></li>
 <li>teardown_sys_getrlimit_invalid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab89ab2e85d2a30a18711ad28d54ccc8c">test_registry.gen.hpp</a></li>
 <li>teardown_sys_getrlimit_nofile()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa84a5575c2ce577c395cbcc8929fd872">test_registry.gen.hpp</a></li>
@@ -841,6 +917,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_tmpfs_unlink_dir()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad5523b823dd29820b20a29c4a321b42a">test_registry.gen.hpp</a></li>
 <li>teardown_tmpfs_unlink_file()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a5298e4c0354039368ebea745b54bd3">test_registry.gen.hpp</a></li>
 <li>teardown_tmpfs_unmount_unsupported()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0cc8242c2c59edea2b6ea7384cfbedb1">test_registry.gen.hpp</a></li>
+<li>teardown_untyped_cap_copy_shares_object()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4e22709473a1dfd751b883964f7d86cf">test_registry.gen.hpp</a></li>
+<li>teardown_untyped_create_allocates_contiguous_region()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3335e33f431e1494946812de61ce8ee7">test_registry.gen.hpp</a></li>
+<li>teardown_untyped_dispose_returns_region_to_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1b038fd5ae611d8a870a10a45674c13c">test_registry.gen.hpp</a></li>
+<li>teardown_user_red_zone_heap_overflow_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a47ea59ddce74b14fe8559fb16bfd94e6">test_registry.gen.hpp</a></li>
+<li>teardown_user_red_zone_stack_overflow_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8ca0e9ac9080976834d62a1b8557adde">test_registry.gen.hpp</a></li>
 <li>teardown_utils_align_down()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6d10c37120ba0a65f50a5db38939f9c7">test_registry.gen.hpp</a></li>
 <li>teardown_utils_align_up()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aef21f2f2b55393f3e8d024ac7105cb76">test_registry.gen.hpp</a></li>
 <li>teardown_utils_type_traits()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3569c670537e35fcc39abeb58ffd0c30">test_registry.gen.hpp</a></li>
@@ -910,6 +991,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_virtio_guest_notify()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7a891244259f00e19317c6b9e23da83b">test_registry.gen.hpp</a></li>
 <li>teardown_virtio_init_transport_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adbc57ced0c963321e94691f9c1e81527">test_registry.gen.hpp</a></li>
 <li>teardown_virtio_map_mmio_invalid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a618cbfab1bf0e0fc357c7194cb37ba6c">test_registry.gen.hpp</a></li>
+<li>teardown_virtio_net_probe_poll_and_teardown()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac4e066d9f6a5d133502c31a04b53081e">test_registry.gen.hpp</a></li>
+<li>teardown_virtio_net_send_frame_completes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa32c9990bdb4475b7789eaf47746f92c">test_registry.gen.hpp</a></li>
 <li>teardown_virtio_no_device_found()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9729cb4c6a7edd3ae28046f904b9427a">test_registry.gen.hpp</a></li>
 <li>teardown_virtio_not_virtio_device()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae85e2ef97742d5dd433bbbe29095e325">test_registry.gen.hpp</a></li>
 <li>teardown_virtio_queue_configuration()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aef0e1998499020a928c55d173dc4dd09">test_registry.gen.hpp</a></li>
@@ -1012,18 +1095,27 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_buildsystem_debug_flags()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a996da7116c764566a0b080b162644473">test_registry.gen.hpp</a></li>
 <li>test_buildsystem_default_arch_x86_64()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa182e36abf8355f081c216f82b9ac671">test_registry.gen.hpp</a></li>
 <li>test_buildsystem_invalid_arch_error()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9d80cc8403ce0e6666cb659077fc1213">test_registry.gen.hpp</a></li>
+<li>test_canary_installed_at_segment_boundaries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac8ff63a805e62aa15123e8b93b2686c5">test_registry.gen.hpp</a></li>
+<li>test_canary_intact_after_normal_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1c0849fb8fc666e0f95793d0a4c57ef8">test_registry.gen.hpp</a></li>
+<li>test_canary_tamper_detected_on_syscall()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5fdadc6c7a44b0c4e7d6d8842db16caf">test_registry.gen.hpp</a></li>
 <li>test_checked_ptr_is_user_range()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aec78051b3181692c723817ab26f086cc">test_registry.gen.hpp</a></li>
 <li>test_checked_ptr_is_user_string()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5567e2ea5b86acb99de611ef3d795fb9">test_registry.gen.hpp</a></li>
 <li>test_checked_ptr_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a982aeca1207dd6bbd5459a4c2b6448aa">test_registry.gen.hpp</a></li>
-<li>TEST_CLASS&#160;:&#160;<a class="el" href="test_8hpp.html#a90a8db2c8cb10c09750f1f73a0bbf01c">test.hpp</a>, <a class="el" href="test__deadline__action_8cpp.html#a0210991cfadf65206282b1f38821c7b1">test_deadline_action.cpp</a>, <a class="el" href="test__deadline__miss_8cpp.html#a30e90d04e26214f4d537fc30c31fcb47">test_deadline_miss.cpp</a>, <a class="el" href="test__deadline__recovery_8cpp.html#a8a2abd5d9ea747b69855d2dd02741d53">test_deadline_recovery.cpp</a>, <a class="el" href="test__ipc__robustness_8cpp.html#afc4dc39ac62cfba110864842245cc9dd">test_ipc_robustness.cpp</a>, <a class="el" href="test__microkernel__transition_8cpp.html#a96d68cbb239bae1bd769b2d64b715bde">test_microkernel_transition.cpp</a>, <a class="el" href="test__mutex__pcp_8cpp.html#aead782a5467779149e8814b6c5d321c5">test_mutex_pcp.cpp</a>, <a class="el" href="test__priority__inheritance_8cpp.html#a94c7fd2ccb1ca445978cba2983640e73">test_priority_inheritance.cpp</a>, <a class="el" href="test__resource__exhaustion_8cpp.html#a1d88966dd046249872a60ceafcfadcf0">test_resource_exhaustion.cpp</a>, <a class="el" href="test__starvation__deadlock_8cpp.html#a409a2eafb0ab679b34313a853fc06fdf">test_starvation_deadlock.cpp</a>, <a class="el" href="test__syscall__fuzz_8cpp.html#a5e911435915c00883a26e62bbe736599">test_syscall_fuzz.cpp</a>, <a class="el" href="test__wcet__overrun_8cpp.html#a8b5331109523e18c1dd8e67ba60e7b4f">test_wcet_overrun.cpp</a></li>
+<li>TEST_CLASS&#160;:&#160;<a class="el" href="test_8hpp.html#a90a8db2c8cb10c09750f1f73a0bbf01c">test.hpp</a>, <a class="el" href="test__deadline__action_8cpp.html#a0210991cfadf65206282b1f38821c7b1">test_deadline_action.cpp</a>, <a class="el" href="test__deadline__miss_8cpp.html#a30e90d04e26214f4d537fc30c31fcb47">test_deadline_miss.cpp</a>, <a class="el" href="test__deadline__recovery_8cpp.html#a8a2abd5d9ea747b69855d2dd02741d53">test_deadline_recovery.cpp</a>, <a class="el" href="test__ipc__robustness_8cpp.html#afc4dc39ac62cfba110864842245cc9dd">test_ipc_robustness.cpp</a>, <a class="el" href="test__microkernel__transition_8cpp.html#a96d68cbb239bae1bd769b2d64b715bde">test_microkernel_transition.cpp</a>, <a class="el" href="test__mutex__pcp_8cpp.html#aead782a5467779149e8814b6c5d321c5">test_mutex_pcp.cpp</a>, <a class="el" href="test__priority__inheritance_8cpp.html#a94c7fd2ccb1ca445978cba2983640e73">test_priority_inheritance.cpp</a>, <a class="el" href="test__resource__exhaustion_8cpp.html#a1d88966dd046249872a60ceafcfadcf0">test_resource_exhaustion.cpp</a>, <a class="el" href="test__ss__deadline_8cpp.html#ab6357055f4e8cef46e05f362711c2b43">test_ss_deadline.cpp</a>, <a class="el" href="test__starvation__deadlock_8cpp.html#a409a2eafb0ab679b34313a853fc06fdf">test_starvation_deadlock.cpp</a>, <a class="el" href="test__syscall__fuzz_8cpp.html#a5e911435915c00883a26e62bbe736599">test_syscall_fuzz.cpp</a>, <a class="el" href="test__wcet__overrun_8cpp.html#a8b5331109523e18c1dd8e67ba60e7b4f">test_wcet_overrun.cpp</a></li>
 <li>TEST_CLASS_DIAG_IGNORE&#160;:&#160;<a class="el" href="test_8hpp.html#a63090b98936c40fe36959666f20e9b5a">test.hpp</a></li>
 <li>TEST_CLASS_DIAG_POP&#160;:&#160;<a class="el" href="test_8hpp.html#a150303e01ba93eb38c6b6fe25a02ca17">test.hpp</a></li>
 <li>TEST_CLASS_DIAG_PUSH&#160;:&#160;<a class="el" href="test_8hpp.html#aad8a8d3a88163a9f5bc99478d042d6d9">test.hpp</a></li>
+<li>test_cnode_cascade_revoke_marks_children()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac4635cb3eceb5ca42647e43bcaf9751b">test_registry.gen.hpp</a></li>
+<li>test_cnode_dispose_frees_pool_block()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a966345ad354bf8a1c77dc3b4f204aab0">test_registry.gen.hpp</a></li>
+<li>test_cnode_install_acquires_ref()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5853e7102e71c0f374197df453774192">test_registry.gen.hpp</a></li>
+<li>test_cnode_release_drops_ref()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad5ba098488a101afe7ba537389282c28">test_registry.gen.hpp</a></li>
+<li>test_cnode_revoke_refuses_acquire()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2c7437a5d9178ce68320ce0d8fcc2fad">test_registry.gen.hpp</a></li>
 <li>test_config_ceiling_ge_max_prio()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a69c8e7de201ac709adbe13c571f8683c">test_registry.gen.hpp</a></li>
 <li>test_config_hard_rt_dependents()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9eb9dfcd3c3ce4ea5dd75e64056155c4">test_registry.gen.hpp</a></li>
 <li>test_config_sporadic_budget_le_period()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0775fe798d27c6039102273294b20611">test_registry.gen.hpp</a></li>
 <li>test_config_stack_size_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a271a01d21a2a9fa0e33a138d550a3e28">test_registry.gen.hpp</a></li>
 <li>test_config_tick_hz_sane()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7920378f2eb0f1156dc556a31690013e">test_registry.gen.hpp</a></li>
+<li>test_copy_shares_refcount()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a63c0654f6f724b40ce9e1f2312d3154a">test_registry.gen.hpp</a></li>
 <li>test_core_text_utilities()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa16fedb0f74a14daa17fa082308e1d8f">test_registry.gen.hpp</a></li>
 <li>test_cpu_load_counter_wrap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa7e15c4d308ae1982a61871bb2b01226">test_registry.gen.hpp</a></li>
 <li>test_cpu_load_idle_priority()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a373f3570a14a5e3beed5fca2b9613e64">test_registry.gen.hpp</a></li>
@@ -1041,11 +1133,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_cross_page_table_constants()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af90832686cec9ce174024ab3330cfc91">test_registry.gen.hpp</a></li>
 <li>test_cross_page_table_map_unmap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3e475ed17f3d4a63d6895c5146649d41">test_registry.gen.hpp</a></li>
 <li>test_cross_page_table_unmapped_returns_zero()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a64ed8aca1a474054fb9c7bba01dd7982">test_registry.gen.hpp</a></li>
+<li>test_cross_task_page_fault_isolated()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acfbfbf3e1dab1c9c7fafa4be61527f81">test_registry.gen.hpp</a></li>
 <li>test_cross_timer_irq_handler()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a22c09353d25165db0c5a9bca5e4ab776">test_registry.gen.hpp</a></li>
 <li>test_cross_timer_ns_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a67c1111ff04234fe16e372ffa0588047">test_registry.gen.hpp</a></li>
 <li>test_cross_timer_ticks_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7ebfcc7af64585fca527663d96346681">test_registry.gen.hpp</a></li>
 <li>test_cross_vfs_resolve_nonexistent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2aa26747acdc996c98b896abf9a6dafb">test_registry.gen.hpp</a></li>
 <li>test_cross_vfs_resolve_root()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abbccfd1fae440cd46c7b2e0a5555b6a1">test_registry.gen.hpp</a></li>
+<li>test_cslot_init_empty()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa83ab609427142068c0659e5a10eced3">test_registry.gen.hpp</a></li>
 <li>test_deadline_list_capacity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a420b4b7a8aa7f67f69aca9e73bc1b932">test_registry.gen.hpp</a></li>
 <li>test_deadline_list_empty_and_clear()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a033d58a5d51a01c994f33884fadd237e">test_registry.gen.hpp</a></li>
 <li>test_deadline_list_pop_expired()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6efbd92f60b607c634517e9c20cccb0d">test_registry.gen.hpp</a></li>
@@ -1063,6 +1157,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_dma_bus_master_host_bridge()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aca7fb30b359054766a9572fd12659010">test_registry.gen.hpp</a></li>
 <li>test_dma_completion_interrupt()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad93975117cb130c4ede02c940a8f2609">test_registry.gen.hpp</a></li>
 <li>test_dma_double_buffered_transfer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a794fffc9bed9ca57c72ac0e9a8fc0aff">test_registry.gen.hpp</a></li>
+<li>test_dma_engine_abort_suppresses_callback()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9125b1fa058a6b3d56ab9148f1d2f4b6">test_registry.gen.hpp</a></li>
+<li>test_dma_engine_irqguard_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae5a92ad9f44c67b0c8a57e448a487a1d">test_registry.gen.hpp</a></li>
+<li>test_dma_engine_no_double_callback()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a471740776f4524c0e0f064053346ac37">test_registry.gen.hpp</a></li>
+<li>test_dma_engine_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abeb3c03af7e2159cdfd91124d391df50">test_registry.gen.hpp</a></li>
 <li>test_dma_free_empty_buffer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2ca8c6917129577798ddb7f0f1eac312">test_registry.gen.hpp</a></li>
 <li>test_dma_prd_from_sg()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a82d31d24988e51380d6a894ee86b443a">test_registry.gen.hpp</a></li>
 <li>test_dma_prd_reset()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa908c85c9e7129f639c3a6ed42338ce5">test_registry.gen.hpp</a></li>
@@ -1070,22 +1168,22 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_dma_sg_non_contiguous_prd()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afa3d7c97368e46ba64e20d8e331d0147">test_registry.gen.hpp</a></li>
 <li>test_dma_sg_reset()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a383c978094935ee28da402bcdbd39142">test_registry.gen.hpp</a></li>
 <li>test_dma_zero_length_buffer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a04c1058a96233a8496435ec4c38c95fd">test_registry.gen.hpp</a></li>
-<li>test_dmesg_base_error_strings()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3b0a7969e4e380f2e94993ad5ddfca1f">test_registry.gen.hpp</a></li>
-<li>test_dmesg_clear()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a73ed911051079d8759073e8250c394d8">test_registry.gen.hpp</a></li>
-<li>test_dmesg_error_string_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e98c23d0cd1336b65478007f38cee40">test_registry.gen.hpp</a></li>
-<li>test_dmesg_for_each()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a27a1dd0b2068543ef3379de9a91ec4f5">test_registry.gen.hpp</a></li>
-<li>test_dmesg_for_each_empty()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a457ba9108e33a64a554496ca24979a4f">test_registry.gen.hpp</a></li>
-<li>test_dmesg_head_tail_indices()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aefaf39b2a7ba218044f030a5904046aa">test_registry.gen.hpp</a></li>
-<li>test_dmesg_initially_empty()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a341b4bf8cc7098fbf5f762915cf152a3">test_registry.gen.hpp</a></li>
-<li>test_dmesg_overflow()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9a6feaa81e79d995e2131028c3eb8d22">test_registry.gen.hpp</a></li>
-<li>test_dmesg_pop_empty()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5d37920042d5f918f3bc60e712281638">test_registry.gen.hpp</a></li>
+<li>test_dmesg_base_error_strings()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a3b0a7969e4e380f2e94993ad5ddfca1f">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a3b0a7969e4e380f2e94993ad5ddfca1f">test_registry.gen.hpp</a></li>
+<li>test_dmesg_clear()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a73ed911051079d8759073e8250c394d8">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a73ed911051079d8759073e8250c394d8">test_registry.gen.hpp</a></li>
+<li>test_dmesg_error_string_dispatch()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a2e98c23d0cd1336b65478007f38cee40">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a2e98c23d0cd1336b65478007f38cee40">test_registry.gen.hpp</a></li>
+<li>test_dmesg_for_each()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a27a1dd0b2068543ef3379de9a91ec4f5">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a27a1dd0b2068543ef3379de9a91ec4f5">test_registry.gen.hpp</a></li>
+<li>test_dmesg_for_each_empty()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a457ba9108e33a64a554496ca24979a4f">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a457ba9108e33a64a554496ca24979a4f">test_registry.gen.hpp</a></li>
+<li>test_dmesg_head_tail_indices()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#aefaf39b2a7ba218044f030a5904046aa">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#aefaf39b2a7ba218044f030a5904046aa">test_registry.gen.hpp</a></li>
+<li>test_dmesg_initially_empty()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a341b4bf8cc7098fbf5f762915cf152a3">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a341b4bf8cc7098fbf5f762915cf152a3">test_registry.gen.hpp</a></li>
+<li>test_dmesg_overflow()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a9a6feaa81e79d995e2131028c3eb8d22">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a9a6feaa81e79d995e2131028c3eb8d22">test_registry.gen.hpp</a></li>
+<li>test_dmesg_pop_empty()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a5d37920042d5f918f3bc60e712281638">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a5d37920042d5f918f3bc60e712281638">test_registry.gen.hpp</a></li>
 <li>test_dmesg_prints_kernel_log()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0cd1cde96f538ef1c6218aa320a5ee71">test_registry.gen.hpp</a></li>
-<li>test_dmesg_push_and_pop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4ef544db8ad3e61ad02e04719ceb534b">test_registry.gen.hpp</a></li>
-<li>test_dmesg_push_multiple_fifo()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8afc3b3e214d5f6c06c2cba66613d9e4">test_registry.gen.hpp</a></li>
-<li>test_dmesg_push_once()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5c633b36c5b65175919e4164307d1c9c">test_registry.gen.hpp</a></li>
-<li>test_dmesg_subsystem_names()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae2e303f10e65947337d142eb2b2dd0b9">test_registry.gen.hpp</a></li>
-<li>test_dmesg_suppression_toggle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af607959553d62fd21bd8eb6ca194f744">test_registry.gen.hpp</a></li>
-<li>test_dmesg_timestamp_and_task_id()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afb19dc2d9af33a7ea0d1b04c8488c06f">test_registry.gen.hpp</a></li>
+<li>test_dmesg_push_and_pop()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a4ef544db8ad3e61ad02e04719ceb534b">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a4ef544db8ad3e61ad02e04719ceb534b">test_registry.gen.hpp</a></li>
+<li>test_dmesg_push_multiple_fifo()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a8afc3b3e214d5f6c06c2cba66613d9e4">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a8afc3b3e214d5f6c06c2cba66613d9e4">test_registry.gen.hpp</a></li>
+<li>test_dmesg_push_once()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#a5c633b36c5b65175919e4164307d1c9c">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#a5c633b36c5b65175919e4164307d1c9c">test_registry.gen.hpp</a></li>
+<li>test_dmesg_subsystem_names()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#ae2e303f10e65947337d142eb2b2dd0b9">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#ae2e303f10e65947337d142eb2b2dd0b9">test_registry.gen.hpp</a></li>
+<li>test_dmesg_suppression_toggle()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#af607959553d62fd21bd8eb6ca194f744">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#af607959553d62fd21bd8eb6ca194f744">test_registry.gen.hpp</a></li>
+<li>test_dmesg_timestamp_and_task_id()&#160;:&#160;<a class="el" href="dmesg_8hpp.html#afb19dc2d9af33a7ea0d1b04c8488c06f">dmesg.hpp</a>, <a class="el" href="test__registry_8gen_8hpp.html#afb19dc2d9af33a7ea0d1b04c8488c06f">test_registry.gen.hpp</a></li>
 <li>test_driver_registry_count()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6401402404732eff0a0007c2e0fe5917">test_registry.gen.hpp</a></li>
 <li>test_driver_registry_find()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adbf46f9a84cd4e80cba90b4d79ca5abb">test_registry.gen.hpp</a></li>
 <li>test_driver_server_mmio_via_caps()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae3ec32f68fe4eae46f49f882844bdc87">test_registry.gen.hpp</a></li>
@@ -1099,6 +1197,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_elf_validate_header_excessive_phnum()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a02beded2479f61e5cc90034ca7c7f1b3">test_registry.gen.hpp</a></li>
 <li>test_elf_validate_header_magic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0df5ae317dd3e690dcd3391442776f17">test_registry.gen.hpp</a></li>
 <li>test_elf_validate_header_null()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acd0bea77a2c3920a3c0fd64c319df13c">test_registry.gen.hpp</a></li>
+<li>test_endpoint_cap_release_disposes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aac793de005a98ac47ec14ae26a80c8dc">test_registry.gen.hpp</a></li>
+<li>test_endpoint_revoked_send_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab1b4ca1e169efe05518537822b761efb">test_registry.gen.hpp</a></li>
+<li>test_endpoint_send_recv_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a11a9763b5e6b840e1023424847936857">test_registry.gen.hpp</a></li>
+<li>test_endpoint_teardown_no_leak()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9b4c791eb72518bc95a927657f1881d2">test_registry.gen.hpp</a></li>
 <li>test_error_or_basic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acd88cb71af4d9f79d32ed340c34e5df8">test_registry.gen.hpp</a></li>
 <li>test_error_or_errors()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a47a69155aadd5b58d037a0b3f08ac21e">test_registry.gen.hpp</a></li>
 <li>test_eventgroup_waiter_teardown_on_terminate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aeee2e64e3f5ec08d3c08ab8d9139e47c">test_registry.gen.hpp</a></li>
@@ -1147,6 +1249,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_fb_putpixel_in_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88289545f8b9bb1b57bae35af8cf3ad9">test_registry.gen.hpp</a></li>
 <li>test_fb_putpixel_out_of_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af2f5df362a526510332a67f6dd4af874">test_registry.gen.hpp</a></li>
 <li>test_fb_scroll_up()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad4b8889c32e33b1b19576b68548af577">test_registry.gen.hpp</a></li>
+<li>test_fork_deep_copy_child_tables_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab9a5129eeff5d22ef1c0e4061988fc39">test_registry.gen.hpp</a></li>
+<li>test_fork_free_user_pages_child_deepcopy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac1a5b37f921d3bbaf3e576f785fa24dc">test_registry.gen.hpp</a></li>
+<li>test_fork_page_table_shared_flag_absent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4f3c69e3c14ad428146f50d649c4dea0">test_registry.gen.hpp</a></li>
+<li>test_frame_cap_map_unmap_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad754ae8f47b5151dc8f9973ea5f39dfa">test_registry.gen.hpp</a></li>
+<li>test_frame_cap_release_frees_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a61c9d6f3b59c07971801824cd274a6d3">test_registry.gen.hpp</a></li>
+<li>test_frame_cap_revoke_denies_map()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1fe185b15afc69b0af248f761b0ca3cc">test_registry.gen.hpp</a></li>
 <li>test_freelist_no_double_alloc_general_pool()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5aaecf36e0d9a2f43b6569cce2efab21">test_registry.gen.hpp</a></li>
 <li>test_freelist_pool_page_not_double_alloced()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6ad86163a083651eea1bb0293c6c4d14">test_registry.gen.hpp</a></li>
 <li>test_freelist_task_double_cleanup_safe()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af8dbf6d4bc7daf680b34ce011673dab3">test_registry.gen.hpp</a></li>
@@ -1158,6 +1266,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_gcov_flush_outputs_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a107d88ce56e233a605b677e5003d4465">test_registry.gen.hpp</a></li>
 <li>test_gcov_handler_initialized()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7e0edfca65f241da87b03055ecfc3167">test_registry.gen.hpp</a></li>
 <li>test_gcov_instrument_updates_bitmask()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a38516ef2eb888b7e8b2c3d06f91dbb22">test_registry.gen.hpp</a></li>
+<li>test_grant_creates_slot_in_dest()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae364355b70e111af68d53802b8c3ba32">test_registry.gen.hpp</a></li>
+<li>test_guard_page_fault_not_kernel_fatal()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac7613f200b4102e1939212cf22c07c15">test_registry.gen.hpp</a></li>
 <li>test_hal_bits_find_highest_all()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a814af1f7c3a955728888351bffb41f07">test_registry.gen.hpp</a></li>
 <li>test_hal_bits_find_highest_low_64()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac6a496ca3c71fe2720e957c07b3ccb55">test_registry.gen.hpp</a></li>
 <li>test_hal_bits_find_highest_lsb()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aeabaa4d76220d315b9c52730ac64aa30">test_registry.gen.hpp</a></li>
@@ -1186,6 +1296,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_hal_timer_oneshot()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a392c32680c9f43893c12fe68abbe8efc">test_registry.gen.hpp</a></li>
 <li>test_hal_timer_periodic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afb1446bc4db8bc1dfd29e8a88a36a5d5">test_registry.gen.hpp</a></li>
 <li>test_hal_timer_remaining()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad0fe8cf5f4407e15365faacc27ab2e1d">test_registry.gen.hpp</a></li>
+<li>test_handle_decode_out_of_range_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adcbf18868ba5f79cfdf64518b7f390e0">test_registry.gen.hpp</a></li>
+<li>test_handle_decode_stale_gen_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6666ffd23478a855bfd9ecfd1279e65d">test_registry.gen.hpp</a></li>
+<li>test_handle_decode_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0da66a1ed769ac5c0125e9c473cd41d4">test_registry.gen.hpp</a></li>
 <li>test_harness_blocked_sender_wakes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7c5be226aa606a437ff2e1fd43310bba">test_registry.gen.hpp</a></li>
 <li>test_harness_buffer_unmap_stale_safe()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac132c3812fface72cbc8e6d6084e361b">test_registry.gen.hpp</a></li>
 <li>test_harness_expected_panic_handling()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1810d03f831cb651430968bb5f970c80">test_registry.gen.hpp</a>, <a class="el" href="test__testrunner_8cpp.html#a1810d03f831cb651430968bb5f970c80">test_testrunner.cpp</a></li>
@@ -1201,6 +1314,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_health_privileged_only()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a211d167d34ccdbd21d4bc938e1b42a16">test_registry.gen.hpp</a></li>
 <li>test_health_proc_filesystem()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a874598463b324830a822d7abec36612c">test_registry.gen.hpp</a></li>
 <li>test_health_syscall_returns_metrics()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a70d2d5bb0c202b369cc31348ea75f9f6">test_registry.gen.hpp</a></li>
+<li>test_hhdm_kernel_reads_user_page()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad86c7162f454de3ec2a4be1bb0f03cac">test_registry.gen.hpp</a></li>
 <li>test_idle_cleanup_no_deadline_impact()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a92a2ce7a367e0453fb4778e8b9f87e55">test_registry.gen.hpp</a></li>
 <li>test_idle_task_calls_pause_syscall()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa26e18b0ef43de7b0f45984e7f224775">test_registry.gen.hpp</a></li>
 <li>test_idle_task_created_at_boot()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afe88038d2eae110b64550640ff396050">test_registry.gen.hpp</a></li>
@@ -1283,7 +1397,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_jitter_under_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa766dacadeb18a37b8b2e13d347a8818">test_registry.gen.hpp</a></li>
 <li>test_jitter_under_load()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8e9eda72104af547b4d791aaa2cf2c95">test_registry.gen.hpp</a></li>
 <li>test_kernel_hlt_idle_still_exists()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab0dfb2868ea76c6134e2ff650ea1c746">test_registry.gen.hpp</a></li>
+<li>test_kernel_priv_cr3_switch_on_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad71fb66abefd69fa27068e3f8c7b49e8">test_registry.gen.hpp</a></li>
+<li>test_kernel_priv_cross_task_data_isolation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e4a1ffda4674b6e881fc2bd9b774a38">test_registry.gen.hpp</a></li>
+<li>test_kernel_priv_pml4_clone_kernel_half_present()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a25b11bb411fd6528f612238af4f978bf">test_registry.gen.hpp</a></li>
+<li>test_kernel_priv_teardown_frees_pml4_stack()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a94980649d83344f4fb655895d7751403">test_registry.gen.hpp</a></li>
+<li>test_kernel_red_zone_between_stack_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a58e1883a34549817e14e0234100486fd">test_registry.gen.hpp</a></li>
 <li>test_keyboard_driver_in_iocd()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aecbebb15abbd6ab4adafaa67e43764dc">test_registry.gen.hpp</a></li>
+<li>test_keyboard_init_bounded_drain()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adfa99c2917bfaaf0976c2a7eb0cdb6f4">test_registry.gen.hpp</a></li>
 <li>test_klog_clear()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8125bbc3de03fedc2a06e72555218928">test_registry.gen.hpp</a></li>
 <li>test_klog_concurrent_readers()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a580ce5b51cc194c8811ba43b5e9864a7">test_registry.gen.hpp</a></li>
 <li>test_klog_empty_read()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaa01df9c9efdb9f49414c88e85936b2c">test_registry.gen.hpp</a></li>
@@ -1292,6 +1412,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_klog_read_partial()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88c434f2b875d9d6c181c06cc6241f50">test_registry.gen.hpp</a></li>
 <li>test_klog_ringbuffer_wrap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a584c0c1cef7fa6bda001709230382d6a">test_registry.gen.hpp</a></li>
 <li>test_lifecycle_zombie_no_waker()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af2ab9feb02785a7ca5fe10d63a00ba96">test_registry.gen.hpp</a></li>
+<li>test_loader_already_loading()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a76423a2737e9909425a5616881f3fdc2">test_registry.gen.hpp</a></li>
+<li>test_loader_cancel_mid_load()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aea3a6c2adaeb778b3a5704373c56d287">test_registry.gen.hpp</a></li>
+<li>test_loader_cancel_not_loading()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8ec7423a6bdf09690cc10433d6ea8603">test_registry.gen.hpp</a></li>
+<li>test_loader_load_invalid_elf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad891fab7a19a819591b73806959706cb">test_registry.gen.hpp</a></li>
+<li>test_loader_load_success()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0229b734a542b79c59d783c0623e4337">test_registry.gen.hpp</a></li>
+<li>test_loader_lost_wakeup_race()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af6d8b138170461017398c5aec6b3835b">test_registry.gen.hpp</a></li>
+<li>test_loader_multiple_cycles()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a18626751caa39fbeae65f7f640fd16b3">test_registry.gen.hpp</a></li>
+<li>test_loader_preemption_yield()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad2062a972995976db708ded010a28cc4">test_registry.gen.hpp</a></li>
 <li>test_lock_order_consistent_nesting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a63298fe1842649d69ef5dfc0f698362e">test_registry.gen.hpp</a></li>
 <li>test_lock_order_mutex_nesting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5822051d941b7074851718d3314064aa">test_registry.gen.hpp</a></li>
 <li>test_lock_order_reverse_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aba5da8cdc7690c0501b76ab233d58b60">test_registry.gen.hpp</a></li>
@@ -1313,6 +1441,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_mempool_fragmentation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8da23576fcaca4a2d305eecd28d1b80e">test_registry.gen.hpp</a></li>
 <li>test_mempool_large_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1a3aab2f5538964d11cc62255cb04fd6">test_registry.gen.hpp</a></li>
 <li>test_mempool_reuse()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac37f53955dc871cfd961706f38a8bdc3">test_registry.gen.hpp</a></li>
+<li>test_mint_reduces_rights()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab8bfa15793c7a6620aba15fd7d698825">test_registry.gen.hpp</a></li>
 <li>test_multiple_idle_tasks_prevented()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abb62a905a6b6c5ff5b38eb3917cb2433">test_registry.gen.hpp</a></li>
 <li>test_mutex_double_lock_same_owner()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a47227455188075d2c9c7009af8d1d100">test_registry.gen.hpp</a></li>
 <li>test_mutex_double_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a56d29cc0b5801592c032a6afd78efbbf">test_registry.gen.hpp</a></li>
@@ -1356,7 +1485,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_page_tables_alloc_from_pool()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae50cb15afe7cb70d1fc92a5d4649b89a">test_registry.gen.hpp</a></li>
 <li>test_page_tables_free_pages_on_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaabb8c0efc12e8895a96fc43fcd32e0e">test_registry.gen.hpp</a></li>
 <li>test_page_tables_isolation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a12c40d5d97493dc25f6c34e8dd821714">test_registry.gen.hpp</a></li>
-<li>test_page_tables_kernel_task_no_page_table()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae748efca01b7b6f8816384445b2ac79c">test_registry.gen.hpp</a></li>
+<li>test_page_tables_kernel_task_private_pml4()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7ecd6c513e3ca51950ef15c5d0957257">test_registry.gen.hpp</a></li>
 <li>test_page_tables_max_process_pages_config()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a222908a51f0f9594161174c4d879d2e0">test_registry.gen.hpp</a></li>
 <li>test_page_tables_pool_exhaustion()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2c82704380807a49de92cb52dec6290c">test_registry.gen.hpp</a></li>
 <li>test_page_tables_pool_multiple_allocs()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6ec3fa8f4cdc4edd2a942c307443b95c">test_registry.gen.hpp</a></li>
@@ -1383,6 +1512,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_pcp_mutex_spinlock_nest()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af3e864100778d3ba6e881899edff3ab3">test_registry.gen.hpp</a></li>
 <li>test_pcp_try_lock_held()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8bce0c645ae9a9fbabe61c4aec8a7179">test_registry.gen.hpp</a></li>
 <li>test_pcp_two_mutexes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af57bbad7379d4677195d11f21f99803e">test_registry.gen.hpp</a></li>
+<li>test_pingpong_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a89027cbb224d5357f8e37b07139ce85c">test_registry.gen.hpp</a></li>
+<li>test_pingpong_shutdown_clears_state()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a41481b4fcf3b0d314fd918a648d5bb58">test_registry.gen.hpp</a></li>
+<li>test_pingpong_xfer_buf_while_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aeb0fbad84f2f537e9e1b1d11aeef571f">test_registry.gen.hpp</a></li>
 <li>test_pip_mutex_init_state()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acfedce2baed89dfc68565187db0fa2f3">test_registry.gen.hpp</a></li>
 <li>test_pip_mutex_lock_owner()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2c055db9aee52344f88358a3a09bc2e4">test_registry.gen.hpp</a></li>
 <li>test_pip_mutex_relock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7610b018977c8a5ed74fe6d32ebbad96">test_registry.gen.hpp</a></li>
@@ -1403,6 +1535,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_pit_ticks_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7f266e1f8ece6d2ca03a509e916d44bd">test_registry.gen.hpp</a></li>
 <li>test_pml4_clone_clears_user_entries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa4c278891798ca8adce548bfe7a59cfb">test_registry.gen.hpp</a></li>
 <li>test_pml4_clone_kernel_entries_match()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8d54ab9b3f5d864e412175fdc2ba52f3">test_registry.gen.hpp</a></li>
+<li>test_pml4_deep_copy_no_alias()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac39db627b4a905d9caa7f9d47820b206">test_registry.gen.hpp</a></li>
 <li>test_pml4_dump_no_user_entries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad9acc844df3e8f68a732a341b20cd0e6">test_registry.gen.hpp</a></li>
 <li>test_pml4_fork_no_child_corrupt_parent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa5813229deca8c71085e8d46d5c30e76">test_registry.gen.hpp</a></li>
 <li>test_pml4_fork_user_entries_match()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3485ab4cadcbafb5a02e57041b9ebf38">test_registry.gen.hpp</a></li>
@@ -1427,8 +1560,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_process_add_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a801254774b90f34bf8528c3e82da90ef">test_registry.gen.hpp</a></li>
 <li>test_process_cleanup_removes_from_parent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab1b655e9bca4a2afac38944de57741c6">test_registry.gen.hpp</a></li>
 <li>test_process_clone_adds_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab6d0286f5ea116135dd850189450b79c">test_registry.gen.hpp</a></li>
+<li>test_process_clone_child_table_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6aa91185dcbf4e46382ea7b8142f7d51">test_registry.gen.hpp</a></li>
+<li>test_process_clone_pipe_fd_refcount()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5687395be88d6877b48f5ddbf6493578">test_registry.gen.hpp</a></li>
+<li>test_process_clone_teardown_zero_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a27f01af4586d9b5e9cc1d9a35acdc2ed">test_registry.gen.hpp</a></li>
 <li>test_process_find_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a61237c81e275ffa5abcfeab98b05105f">test_registry.gen.hpp</a></li>
 <li>test_process_find_child_multiple()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a858072b0345ec1f42143e55cf365513d">test_registry.gen.hpp</a></li>
+<li>test_process_kernel_half_private()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aafd13ce200b05574c92dfb6d7026ff6d">test_registry.gen.hpp</a></li>
 <li>test_process_num_children_count()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3896a149c81ac9c17c5a7d811a086e51">test_registry.gen.hpp</a></li>
 <li>test_process_remove_child_clears_parent_id()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1e0bb6d3159d4b58fe83cd4dad3ab911">test_registry.gen.hpp</a></li>
 <li>test_process_remove_child_non_child_no_underflow()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a90b169c3b46c138d73ff6a511febde6f">test_registry.gen.hpp</a></li>
@@ -1454,6 +1591,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_random_u64_not_constant()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab39d15d171f763fb68107b97ee2c2d5f">test_registry.gen.hpp</a></li>
 <li>test_random_zero_length()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7721e6370480df7811ef0457189fdb90">test_registry.gen.hpp</a></li>
 <li>test_rdtsc_monotonic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aafc724e221805e2fbd7745347b070cfc">test_registry.gen.hpp</a></li>
+<li>test_retype_frame_exact_size_end_to_end()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9cbd10c3dddaf1bae6da311a7842aeaa">test_registry.gen.hpp</a></li>
+<li>test_retype_requires_write_right()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abdd9e07c492f1fd0790fc02e2f1e231f">test_registry.gen.hpp</a></li>
+<li>test_retype_revoked_untyped_fails_single_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad99ef4d5e021e60a76c5be5c1190da0f">test_registry.gen.hpp</a></li>
+<li>test_retype_twice_fails_no_double_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a359fce0d94f52da11dc0936ba7563a91">test_registry.gen.hpp</a></li>
+<li>test_retype_wrong_size_fails_keeps_untyped()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac7637a6252dd08355acb69d7184f2f0f">test_registry.gen.hpp</a></li>
+<li>test_retype_wrong_target_type_fails()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7b5f5f5cba16acb54662abe3f461aca8">test_registry.gen.hpp</a></li>
+<li>test_revoke_removes_slot_and_releases()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1f74fb94df5ae2c3a4d450acc71781cb">test_registry.gen.hpp</a></li>
+<li>test_revoke_twice_idempotent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0d2188264bd77cbf2e26dadf63862613">test_registry.gen.hpp</a></li>
+<li>test_revoke_while_scopedref_pinned_delays_dispose()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7d65f00752496a26500cb04dc05b9ba5">test_registry.gen.hpp</a></li>
+<li>test_root_cnode_attached_to_task_teardown_frees()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae25c4b9e3ba34c5956a7c9002a27c2c9">test_registry.gen.hpp</a></li>
 <li>test_rtc_bcd_conversion()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af3f831ec1967e085b881eaf62381e968">test_registry.gen.hpp</a></li>
 <li>test_rtc_read_seconds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abe6a6e1a6012c33864ac1bd6b7247956">test_registry.gen.hpp</a></li>
 <li>test_scheduler_add_duplicate_id()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0c1a63e6107c18e48fac19ecc97d3c68">test_registry.gen.hpp</a></li>
@@ -1487,7 +1634,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_semaphore_wait_post()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7d51208bf247542622598cd65fc4550a">test_registry.gen.hpp</a></li>
 <li>test_semaphore_wait_priority_order()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6285a43f9d040e4dd5cf811a331c6cba">test_registry.gen.hpp</a></li>
 <li>test_semaphore_waiter_teardown_on_terminate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a60a98210ac3291177d609d9bdd946bdc">test_registry.gen.hpp</a></li>
+<li>test_send_without_endpoint_cap_denied()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7c8addda26ff8f16f89148ebfad800e7">test_registry.gen.hpp</a></li>
 <li>test_serial_driver_in_iocd()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1e9a6917a36e4996dd2f3b2eafda83ba">test_registry.gen.hpp</a></li>
+<li>test_serial_putchar_bounded_ok()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a658728fb74539d318d27ed8a922c5eaa">test_registry.gen.hpp</a></li>
 <li>test_shell_clear_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae5afff98eba40ef2575ca8c1f2806bd9">test_registry.gen.hpp</a></li>
 <li>test_shell_echo_and_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3fe6563481fd876229508afd96760e6b">test_registry.gen.hpp</a></li>
 <li>test_shell_echo_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad6c464c6129ae84c0c1e962019796e92">test_registry.gen.hpp</a></li>
@@ -1504,6 +1653,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_shell_redirect_to_devnull()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9d2ced26a10efb24c9f2d69e748abdd5">test_registry.gen.hpp</a></li>
 <li>test_shell_simple_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7ffd7654b68f0e2987cafcedc6dc91b9">test_registry.gen.hpp</a></li>
 <li>test_shell_sleep_zero()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab65ce8d0db1937907c4bfb6c509ab573">test_registry.gen.hpp</a></li>
+<li>test_shell_tasks_memory_columns()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7dd145955f774ae9df9f588cc61fcd0e">test_registry.gen.hpp</a></li>
 <li>test_shell_terminal_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a895f5438ab23496f68d275ea8fb226b7">test_registry.gen.hpp</a></li>
 <li>test_shell_uptime_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8e86249ad121f6de38e6236da3f1a423">test_registry.gen.hpp</a></li>
 <li>test_shell_which_command()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adf34de3caee3a29eff3faa3c77adf8b1">test_registry.gen.hpp</a></li>
@@ -1523,6 +1673,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_slab_reclaim_pages_returned()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a396dc07b7919a9ebe384fe22ec91fe44">test_registry.gen.hpp</a></li>
 <li>test_slab_reclaim_partial_not_touched()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aea8df2f59a47c45bcbada6e098f4c658">test_registry.gen.hpp</a></li>
 <li>test_slab_reclaim_reallocate()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a16f7d5b6a4879580bfb67264d185c4fb">test_registry.gen.hpp</a></li>
+<li>test_smap_cr4_bit_set()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abb2bb73a614d1458062ff1a6113cd88f">test_registry.gen.hpp</a></li>
+<li>test_smap_kernel_deref_user_va_without_ac_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa9bca5b6129e0a7873d1f5e017817d04">test_registry.gen.hpp</a></li>
+<li>test_smap_stac_clac_roundtrip_ok()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abefc3fe1c27d18bcb3ee78512e11ac63">test_registry.gen.hpp</a></li>
 <li>test_spinlock_basic_lock_unlock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9595cd393382288ab1ba187a13d3b039">test_registry.gen.hpp</a></li>
 <li>test_spinlock_contention()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7af87954eac6a6178f3855335492ae7e">test_registry.gen.hpp</a></li>
 <li>test_spinlock_cxx_contract()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7eb522bbb1d8fb8b8cdbae804096425e">test_registry.gen.hpp</a></li>
@@ -1571,8 +1724,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_stack_alloc_overflow_hook_weak_symbol()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2711b456a95436d0732b93c286e2ecfa">test_registry.gen.hpp</a></li>
 <li>test_stack_alloc_stack_alignment()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2bc0238eb42caa2e5cd6d5f697226f9e">test_registry.gen.hpp</a></li>
 <li>test_stack_alloc_task_has_stack_phys()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a08700d58e6d8633c22453860af23f0e3">test_registry.gen.hpp</a></li>
-<li>test_stack_alloc_user_stack_phys_freed_on_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a088ff19c96c14637faa51c26c3cf3869">test_registry.gen.hpp</a></li>
-<li>test_stack_alloc_user_stack_size_in_config()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a391d83ce8fe13ba623c7c46453565220">test_registry.gen.hpp</a></li>
 <li>test_stack_alloc_user_task_has_guard_page()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a25431c494ac7e00f6f97f7dec7edc536">test_registry.gen.hpp</a></li>
 <li>test_stack_profiler_context_rsp_in_range()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac8b98476e2fd8fd9c8b3839cc01a3a43">test_registry.gen.hpp</a></li>
 <li>test_stack_profiler_current_task_stack_valid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae1209964cfdf251d8a5b0f020d712c18">test_registry.gen.hpp</a></li>
@@ -1595,6 +1746,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_sync_queue_send_blocks_when_full()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6e6ae2a5903ec0849a1b2cbd7fdc2986">test_registry.gen.hpp</a></li>
 <li>test_sync_queue_wake_sender_on_receive()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2fe99bfc6d0528e11da50972faca77a7">test_registry.gen.hpp</a></li>
 <li>test_sys_brk_query()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a198023ef579bc6e716e1029a9f4b96e7">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_bad_handle_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a285e1d53c1e99568c8a0499430bf9d2d">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_copy_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1e914660d5a3ce4189776cfe15fe8a67">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_grant_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a08b467084ac592f4787e5a1aee4bf843">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_mint_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a94c5b87677f4f0a0996a6fe76fdc847b">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_revoke_cleanup_zero_delta()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a8d24ab47c1b268255682933a867ddc">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_revoke_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a24baf8d56d1f63511b5576483d3510c5">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_rights_denied_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aba49db2fd8e37e62274b4f7308477aae">test_registry.gen.hpp</a></li>
+<li>test_sys_cap_wrong_type_returns_minus1()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#abdc018107b7c928c35a2390b123f6492">test_registry.gen.hpp</a></li>
 <li>test_sys_getrlimit_data()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a03f329ac5d798c008394fdf1116e09fe">test_registry.gen.hpp</a></li>
 <li>test_sys_getrlimit_invalid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a22462a16abca48b1039491ce41c8277e">test_registry.gen.hpp</a></li>
 <li>test_sys_getrlimit_nofile()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a79425c78a76f3eecbac34c6e11f9ac6a">test_registry.gen.hpp</a></li>
@@ -1654,6 +1813,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_tmpfs_unlink_dir()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab96acb92da6ed5b36cee3979c77496aa">test_registry.gen.hpp</a></li>
 <li>test_tmpfs_unlink_file()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7988a65471e1bcfb1f1b08f7945fa2d0">test_registry.gen.hpp</a></li>
 <li>test_tmpfs_unmount_unsupported()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaee764e88619a7b9cf64222290d42c0e">test_registry.gen.hpp</a></li>
+<li>test_untyped_cap_copy_shares_object()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad48b31dcb236455bfc119447913f4c6e">test_registry.gen.hpp</a></li>
+<li>test_untyped_create_allocates_contiguous_region()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2f46e6fc94fcbba5c74ec913f204c756">test_registry.gen.hpp</a></li>
+<li>test_untyped_dispose_returns_region_to_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a326e161fba3d1f8bce4ea25c6ad39123">test_registry.gen.hpp</a></li>
+<li>test_user_red_zone_heap_overflow_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4fed9a83dcb37a0e2962a13531924685">test_registry.gen.hpp</a></li>
+<li>test_user_red_zone_stack_overflow_pf()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5873a33eb5b5dbcab1cafdba7b543f5b">test_registry.gen.hpp</a></li>
 <li>test_utils_align_down()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a732b4a56f6ec7e98350e17e076fce9d4">test_registry.gen.hpp</a></li>
 <li>test_utils_align_up()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af1950d6e9624fab267038793c5480ea3">test_registry.gen.hpp</a></li>
 <li>test_utils_type_traits()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9a5ff41cb1bdc9b15a124f76566a5e5d">test_registry.gen.hpp</a></li>
@@ -1723,6 +1887,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_virtio_guest_notify()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af33127f96cf064680d688c582573da59">test_registry.gen.hpp</a></li>
 <li>test_virtio_init_transport_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a87fd933b5a57c752509d84ee161072d9">test_registry.gen.hpp</a></li>
 <li>test_virtio_map_mmio_invalid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a227689790e4e53c8784648e6f64e8751">test_registry.gen.hpp</a></li>
+<li>test_virtio_net_probe_poll_and_teardown()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a56ba04fed1c4d602e36514146dd19431">test_registry.gen.hpp</a></li>
+<li>test_virtio_net_send_frame_completes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1b395347bf1e1661bf6586535a477b78">test_registry.gen.hpp</a></li>
 <li>test_virtio_no_device_found()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a28720932d9cec24bd38bfa552ad878d8">test_registry.gen.hpp</a></li>
 <li>test_virtio_not_virtio_device()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af02e164abaf65907406cac1566d89a8e">test_registry.gen.hpp</a></li>
 <li>test_virtio_queue_configuration()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a52af8c7e7ebf668b63bb8eb76394dd50">test_registry.gen.hpp</a></li>
