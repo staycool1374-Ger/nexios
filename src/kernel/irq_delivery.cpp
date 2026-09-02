@@ -29,6 +29,7 @@
 
 #include <kernel/irq_delivery.hpp>
 #include <kernel/cap/irq.hpp>
+#include <kernel/cap/msix.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/interrupt_controller.hpp>
@@ -50,10 +51,14 @@ namespace kernel {
 constexpr uint8_t IRQ_VECTOR_MIN = 33;
 constexpr uint8_t IRQ_VECTOR_MAX = 47;
 
+/// @brief MSI-X vector window upper bound (x86_64: 0xFF is the highest vector).
+///        MSI-X vectors live in 48–255, excluding the syscall vector 0x80.
+constexpr uint8_t MSIX_VECTOR_MAX = 255;
+
 /// @brief Value signalled to a NOTIFY-mode recipient's Notify when its slot
 ///        is released (revoke/dispose/drain): the waker-owns-wakeup contract
 ///        (CODING_STYLE §12.3).  0 is sync::NOTIFY_INVALID — outside the
-///        vector range (33–47) and distinguishable from a real delivery.
+///        vector range (33–255) and distinguishable from a real delivery.
 constexpr uint64_t kIrqNotifyRevoked = 0;
 
 /// @brief Static delivery table (no dynamic allocation on RT paths).
@@ -68,7 +73,11 @@ IrqRegistration *IrqDelivery::slot(int16_t idx) {
 /// @brief Restores the PIC line to its pre-arm mask state (or masks it when
 ///        @p force_mask — used on revoke/disarm where the line must never be
 ///        left delivering).  Mirrors the caller holding the slot lock.
+///        PIC-kind only (issue #10): a MSI-X vector must never run the
+///        `vector - 32` line arithmetic — it would mask a wrong PIC line.
 static void restore_line_mask(IrqRegistration &r, bool force_mask) {
+    if (r.kind != IrqSlotKind::PIC)
+        return;
 #if defined(CONFIG_ARCH_X86_64)
     uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
     if (force_mask || r.line_was_masked) {
@@ -95,12 +104,26 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
     // uniprocessor an IrqGuard is sufficient to make the find->claim window
     // un-interleavable (same discipline as drain_zombie_list).
     arch::IrqGuard irq_guard{};
-    // Vector window (fail closed): only user-deliverable hardware vectors.
-    if (vector < IRQ_VECTOR_MIN || vector > IRQ_VECTOR_MAX)
+    // Vector window (fail closed): PIC lines (33–47) and MSI-X vectors
+    // (48–255), issue #10.
+    if (vector < IRQ_VECTOR_MIN)
+        return -1;
+    if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
+        return -1; // 0x80 — software syscall vector, never an IRQ source
+    if (vector > MSIX_VECTOR_MAX)
         return -1;
     // Timer vector must never be claimed.
     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
         return -1;
+#if defined(CONFIG_ARCH_X86_64)
+    // Kernel-reserved vectors inside the MSI-X window (issue #10): the xAPIC
+    // timer (64) drives the scheduler tick and 0xFF is the APIC spurious
+    // vector — a user slot must never claim either (it would swallow the
+    // scheduler tick / mis-route a spurious delivery).
+    if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
+        vector == 0xFF) // arch::APIC::SPURIOUS_VECTOR (private member)
+        return -1;
+#endif
     // Reject vectors claimed by the threaded-IRQ path (single-owner).
     if (IrqThread::for_vector(vector) != nullptr)
         return -1;
@@ -114,6 +137,8 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
         IrqRegistration &r = g_irq_regs[i];
         if (!r.occupied) {
             r.vector = vector;
+            r.kind = (vector <= IRQ_VECTOR_MAX) ? IrqSlotKind::PIC
+                                                : IrqSlotKind::MSIX;
             r.occupied = true;
             r.armed = false;
             r.line_was_masked = true;
@@ -130,7 +155,7 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
     return -1; // table full — reachable exhaustion, fail closed
 }
 
-void IrqDelivery::set_slot_owner(int16_t idx, cap::IrqCap *owner) {
+void IrqDelivery::set_slot_owner(int16_t idx, KernelObject *owner) {
     IrqRegistration *r = slot(idx);
     if (!r)
         return;
@@ -140,7 +165,7 @@ void IrqDelivery::set_slot_owner(int16_t idx, cap::IrqCap *owner) {
     r->owner = owner;
 }
 
-bool IrqDelivery::arm(int16_t reg_idx, cap::IrqCap &owner,
+bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
                       TaskControlBlock &recipient,
                       IrqDeliveryMode delivery_mode) {
     IrqRegistration *r = slot(reg_idx);
@@ -152,8 +177,7 @@ bool IrqDelivery::arm(int16_t reg_idx, cap::IrqCap &owner,
     // vector.  The slot_belongs_to->arm check and the arming decision must be
     // one atomic critical section (issue #2, cross-vector hijack).
     SpinLockGuard<sync::SpinLock> guard(r->lock_);
-    if (!r->occupied || r->armed || r->owner != &owner ||
-        r->vector != owner.vector)
+    if (!r->occupied || r->armed || r->owner != &owner || r->vector != vector)
         return false;
     // Unknown delivery mode fails closed (issue #7): a mode must never be
     // stored that the ISR cannot dispatch on.
@@ -165,15 +189,24 @@ bool IrqDelivery::arm(int16_t reg_idx, cap::IrqCap &owner,
     r->recipient_gen = recipient.generation;
     r->armed = true;
 #if defined(CONFIG_ARCH_X86_64)
-    // Capture the line's current PIC mask so release restores the prior state
-    // exactly (the boot PIC init unmasks all lines — an unconditional re-mask
-    // on release would diverge from the pre-arm state).
-    uint8_t irq_line = static_cast<uint8_t>(r->vector - 32U);
-    arch::IrqState cur = arch::ArchInterruptController::snapshot();
-    uint8_t bit = static_cast<uint8_t>(1u << (irq_line & 7u));
-    uint16_t m = (irq_line < 8) ? cur.pic1_mask : cur.pic2_mask;
-    r->line_was_masked = (m & bit) != 0;
-    arch::ArchInterruptController::unmask(irq_line);
+    if (r->kind == IrqSlotKind::PIC) {
+        // Capture the line's current PIC mask so release restores the prior
+        // state exactly (the boot PIC init unmasks all lines — an
+        // unconditional re-mask on release would diverge from the pre-arm
+        // state).
+        uint8_t irq_line = static_cast<uint8_t>(r->vector - 32U);
+        arch::IrqState cur = arch::ArchInterruptController::snapshot();
+        uint8_t bit = static_cast<uint8_t>(1u << (irq_line & 7u));
+        uint16_t m = (irq_line < 8) ? cur.pic1_mask : cur.pic2_mask;
+        r->line_was_masked = (m & bit) != 0;
+        arch::ArchInterruptController::unmask(irq_line);
+    } else {
+        // MSI-X: unmask the table entry so the vector can deliver to the
+        // recipient (issue #10).  The owner is the MsixCap that programmed
+        // the entry; only arming unmasks it (create leaves it masked).
+        auto *msix = static_cast<cap::MsixCap *>(&owner);
+        msix->set_entry_masked(false);
+    }
 #endif
     return true;
 }
@@ -238,7 +271,7 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
 }
 
 bool IrqDelivery::release_slot_idx(int16_t reg_idx,
-                                   const cap::IrqCap *owner) {
+                                   const KernelObject *owner) {
     IrqRegistration *r = slot(reg_idx);
     if (!r)
         return false;
@@ -251,9 +284,14 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
     if (!r->occupied || (owner != nullptr && r->owner != owner))
         return false;
 
-    // Disarm and restore the line's prior mask state.
+    // Disarm and restore the prior mask state: re-mask the MSI-X table entry
+    // (issue #10, kind-gated) or restore the PIC line mask.
     if (r->armed) {
         r->armed = false;
+        if (r->kind == IrqSlotKind::MSIX) {
+            auto *msix = static_cast<cap::MsixCap *>(r->owner);
+            msix->set_entry_masked(true);
+        }
         restore_line_mask(*r, false);
     }
 
@@ -316,6 +354,10 @@ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
 
         if (r.armed) {
             r.armed = false;
+            if (r.kind == IrqSlotKind::MSIX) {
+                auto *msix = static_cast<cap::MsixCap *>(r.owner);
+                msix->set_entry_masked(true);
+            }
             restore_line_mask(r, false);
         }
         r.recipient = nullptr;

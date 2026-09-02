@@ -32,6 +32,7 @@
 
 #include <types.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/memory/kernel_object.hpp>
 #include <kernel/sync/spinlock.hpp>
 
 namespace kernel {
@@ -40,6 +41,7 @@ struct TaskControlBlock;
 
 namespace cap {
 class IrqCap;
+class MsixCap;
 }
 
 /// @brief Delivery mode of an armed IRQ slot (issue #7).  Bound atomically at
@@ -50,14 +52,25 @@ enum class IrqDeliveryMode : uint8_t {
                ///< Notify (issue #7) — no pending/waiter bookkeeping
 };
 
+/// @brief Source kind of a claimed delivery slot (issue #10).  The PIC
+/// (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore
+/// state; MSI-X vectors (48–255) mask/unmask their table entry instead.  All
+/// mask logic is gated on this kind — a MSI-X vector must never run the
+/// PIC `vector - 32` line arithmetic (would mask the wrong IRQ line).
+enum class IrqSlotKind : uint8_t {
+    PIC = 0,  ///< legacy PIC line (vectors 33–47)
+    MSIX = 1  ///< MSI-X table entry (vectors 48–255, != 0x80)
+};
+
 /// @brief One armed IRQ delivery registration.
 struct IrqRegistration {
-    uint8_t vector = 0;        ///< hardware vector (x86_64 PIC window 32–47)
+    uint8_t vector = 0;        ///< hardware vector (PIC 33–47 or MSI-X 48–255)
+    IrqSlotKind kind = IrqSlotKind::PIC; ///< PIC vs MSI-X (kind-gated masks)
     bool occupied = false;     ///< slot in use
     bool armed = false;        ///< vector unmasked + delivering to recipient
     bool line_was_masked = true; ///< PIC mask state of this line before arm
     IrqDeliveryMode delivery_mode = IrqDeliveryMode::WAIT; ///< arm-time mode
-    cap::IrqCap *owner = nullptr; ///< the cap that claimed this slot (issue #2)
+    KernelObject *owner = nullptr; ///< the cap that claimed this slot
     TaskControlBlock *recipient = nullptr; ///< task armed to receive
     uint64_t recipient_gen = 0;            ///< TCB generation at arm time
     uint32_t pending = 0;      ///< undelivered IRQ count (never lost)
@@ -84,24 +97,28 @@ class IrqDelivery {
     static int16_t claim_slot(uint8_t vector);
 
     /// @brief Binds the owning cap to the slot at @p idx (called by
-    ///        IrqCap::create after the cap object is constructed).  Guards
-    ///        slot-reuse safety: a slot can only be released/armed by the cap
-    ///        that owns it.
-    static void set_slot_owner(int16_t idx, cap::IrqCap *owner);
+    ///        IrqCap/MsixCap::create after the cap object is constructed).
+    ///        Guards slot-reuse safety: a slot can only be released/armed by
+    ///        the cap that owns it.
+    static void set_slot_owner(int16_t idx, KernelObject *owner);
 
     /// @brief Arms delivery of @p owner's vector to @p recipient (unmasks the
-    ///        PIC line).  Fails if the vector is already armed, claimed by a
+    ///        PIC line for PIC slots, unmasks the MSI-X table entry for MSIX
+    ///        slots).  Fails if the vector is already armed, claimed by a
     ///        threaded-IRQ handler, or the slot no longer belongs to @p owner
     ///        (slot-reuse safety: the ownership + arming decision is ONE atomic
     ///        critical section — issue #2).
     /// @param reg_idx Slot index from claim_slot().
     /// @param owner   The cap that must own the slot (revalidated under lock).
+    /// @param vector  The vector the owning cap claims (revalidated under lock
+    ///                against the slot — issue #2 cross-vector hijack; used for
+    ///                MSI-X entry unmask, issue #10).
     /// @param recipient The task armed to receive delivery.
     /// @param delivery_mode Delivery mode (issue #7); unknown modes are
     ///        rejected (fail closed).  Bound at arm time, immutable until
     ///        release.
     /// @return true on success.
-    static bool arm(int16_t reg_idx, cap::IrqCap &owner,
+    static bool arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
                     TaskControlBlock &recipient,
                     IrqDeliveryMode delivery_mode = IrqDeliveryMode::WAIT);
 
@@ -114,16 +131,16 @@ class IrqDelivery {
     ///         caller must NOT continue to the generic handler path).
     static bool isr_entry(uint8_t vector);
 
-    /// @brief Disarms the slot at @p reg_idx (re-masks the line) and wakes any
-    ///        blocked waiter with -1 (WAIT mode) or signals the recipient's
-    ///        Notify with the revoked sentinel (NOTIFY mode, issue #7).  Called
-    ///        from IrqCap::dispose/revoke via the cap's stored reg_idx_.
-    ///        Revalidates ownership under the lock (issue #2): a slot
-    ///        drained-and-reused between an outer check and this call is NOT
-    ///        released.  @p owner == nullptr releases an ownerless claimed slot
-    ///        (create()'s alloc-failure path).
+    /// @brief Disarms the slot at @p reg_idx (re-masks the line / MSI-X entry)
+    ///        and wakes any blocked waiter with -1 (WAIT mode) or signals the
+    ///        recipient's Notify with the revoked sentinel (NOTIFY mode, issue
+    ///        #7).  Called from IrqCap/MsixCap::dispose/revoke via the cap's
+    ///        stored reg_idx_.  Revalidates ownership under the lock (issue
+    ///        #2): a slot drained-and-reused between an outer check and this
+    ///        call is NOT released.  @p owner == nullptr releases an ownerless
+    ///        claimed slot (create()'s alloc-failure path).
     /// @return true when the slot was actually released.
-    static bool release_slot_idx(int16_t reg_idx, const cap::IrqCap *owner);
+    static bool release_slot_idx(int16_t reg_idx, const KernelObject *owner);
 
     /// @brief Drains every slot whose recipient or waiter is @p tcb.  Called
     ///        from TaskControlBlock::cleanup() so a dying task can never leave

@@ -528,6 +528,15 @@
 #define CONFIG_CAP_MAX_IRQ 16
 #endif
 
+/// Maximum number of live MsixCap objects (v0.4.2, issue #10).  Enforced by a
+/// TU-local live counter in cap/msix.cpp.  Each MsixCap wraps one MSI-X vector
+/// on a PCI device and shares the IRQ delivery table with IrqCap — the table
+/// is the real bound (CONFIG_CAP_MAX_IRQ slots), this counter bounds the
+/// MsixCap objects themselves (mmio.cpp pattern).
+#ifndef CONFIG_CAP_MAX_MSIX
+#define CONFIG_CAP_MAX_MSIX 8
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no

@@ -39,6 +39,7 @@ enum class CapType : uint8_t {
     Mmio = 6,    ///< MMIO BAR range (v0.4.2, issue #3)
     Irq = 7,     ///< hardware IRQ vector (v0.4.2, issue #2)
     IoMmuDma = 8, ///< IOMMU DMA protection domain (v0.4.2, issue #4)
+    Msix = 9,     ///< per-vector MSI-X entry on a PCI device (v0.4.2, issue #10)
 };
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.

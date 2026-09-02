@@ -34,6 +34,7 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/irq.hpp>
+#include <kernel/cap/msix.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 
@@ -42,6 +43,49 @@ namespace kernel {
 // Shared with syscall_handlers_cap.cpp (same TU-visible helper).
 cap::CNode *current_cspace();
 
+namespace {
+
+/// @brief Looks up an IrqCap OR MsixCap in @p src (issue #10).  Both wrap a
+///        hardware vector that the delivery table can arm for user-space
+///        delivery via the same SYS_IRQ_REGISTER/SYS_IRQ_WAIT machinery.  No
+///        RTTI — the concrete type is remembered in @p is_msix so the caller
+///        extracts reg_idx_/vector via the correct static type.  Returns the
+///        released KernelObject on success, nullptr on failure.
+KernelObject *lookup_irq_like(cap::CNode *src, uint64_t cap_handle,
+                              cap::CapRights rights, bool &is_msix) {
+    KernelObject *obj =
+        cap::lookup(src, cap_handle, cap::CapType::Irq, rights);
+    if (obj) {
+        is_msix = false;
+        return obj;
+    }
+    obj = cap::lookup(src, cap_handle, cap::CapType::Msix, rights);
+    if (obj) {
+        is_msix = true;
+        return obj;
+    }
+    return nullptr;
+}
+
+/// @brief Extracts the delivery-table index and vector from either cap type.
+///        The slot index is the ownership anchor (issue #2); the vector is
+///        the delivery-table key and MSI-X entry unmask target (issue #10).
+bool irq_like_fields(KernelObject *obj, bool is_msix, int16_t &reg_idx,
+                     uint8_t &vector) {
+    if (is_msix) {
+        auto *msix = static_cast<cap::MsixCap *>(obj);
+        reg_idx = msix->reg_idx_;
+        vector = msix->vector;
+    } else {
+        auto *irq = static_cast<cap::IrqCap *>(obj);
+        reg_idx = irq->reg_idx_;
+        vector = irq->vector;
+    }
+    return reg_idx >= 0;
+}
+
+} // namespace
+
 uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
                                    uint64_t, uint64_t, uint64_t *) {
 #if defined(CONFIG_ARCH_X86_64)
@@ -49,15 +93,18 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     if (!src)
         return static_cast<uint64_t>(-1);
 
-    // The caller must hold an IrqCap with WRITE (the right to arm delivery).
+    // The caller must hold an IrqCap OR MsixCap with WRITE (the right to arm
+    // delivery).
+    bool is_msix = false;
     KernelObject *obj =
-        cap::lookup(src, cap_handle, cap::CapType::Irq, cap::CAP_RIGHT_WRITE);
+        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_WRITE, is_msix);
     if (!obj)
         return static_cast<uint64_t>(-1);
-    auto *irq = static_cast<cap::IrqCap *>(obj);
 
     auto *t = Scheduler::current_task();
-    if (!t || irq->reg_idx_ < 0) {
+    int16_t reg_idx = -1;
+    uint8_t vector = 0;
+    if (!t || !irq_like_fields(obj, is_msix, reg_idx, vector)) {
         obj->release();
         return static_cast<uint64_t>(-1);
     }
@@ -82,8 +129,7 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     // one atomic critical section, closing the slot_belongs_to->arm TOCTOU
     // (arming a different cap's slot would hijack its vector and starve its
     // legitimate owner; fail closed, never ENSURE).
-    if (!IrqDelivery::arm(static_cast<int16_t>(irq->reg_idx_), *irq, *t,
-                          mode)) {
+    if (!IrqDelivery::arm(reg_idx, *obj, vector, *t, mode)) {
         obj->release();
         return static_cast<uint64_t>(-1);
     }
@@ -105,18 +151,19 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         return static_cast<uint64_t>(-1);
 
     // READ is the right to observe (wait on) the IRQ delivery.
+    bool is_msix = false;
     KernelObject *obj =
-        cap::lookup(src, cap_handle, cap::CapType::Irq, cap::CAP_RIGHT_READ);
+        lookup_irq_like(src, cap_handle, cap::CAP_RIGHT_READ, is_msix);
     if (!obj)
         return static_cast<uint64_t>(-1);
-    auto *irq = static_cast<cap::IrqCap *>(obj);
 
     auto *t = Scheduler::current_task();
-    if (!t || irq->reg_idx_ < 0) {
+    int16_t reg_idx = -1;
+    uint8_t vector = 0;
+    if (!t || !irq_like_fields(obj, is_msix, reg_idx, vector)) {
         obj->release();
         return static_cast<uint64_t>(-1);
     }
-    uint8_t vector = irq->vector;
     IrqRegistration *r = IrqDelivery::find(vector);
     if (!r || r->recipient != t) {
         // Not armed for this task — the recipient must match the waiter.
@@ -140,7 +187,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         // us consume or register against a foreign slot).  NOTIFY-armed slots
         // are refused in BOTH lock scopes: their delivery path bypasses
         // pending/waiter entirely (issue #7), so a WAIT would never wake.
-        if (!r->occupied || r->vector != vector || r->owner != irq ||
+        if (!r->occupied || r->vector != vector || r->owner != obj ||
             r->recipient != t ||
             r->delivery_mode != IrqDeliveryMode::WAIT) {
             obj->release();
@@ -194,7 +241,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     uint64_t result = static_cast<uint64_t>(-1);
     {
         SpinLockGuard<sync::SpinLock> guard(r->lock_);
-        if (r->occupied && r->vector == vector && r->owner == irq &&
+        if (r->occupied && r->vector == vector && r->owner == obj &&
             r->recipient == t &&
             r->delivery_mode == IrqDeliveryMode::WAIT) {
             if (r->pending > 0 && r->armed) {

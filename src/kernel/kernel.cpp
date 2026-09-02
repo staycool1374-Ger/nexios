@@ -691,6 +691,19 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
     kernel::VMM::init();
 
+    // Reserve the Multiboot2 info structure GRUB placed above the kernel
+    // image (issue #10: a larger kernel shifts GRUB's info placement into the
+    // PMM free range; an early allocation would overwrite total_size/framebuffer
+    // tag before Framebuffer::init reads them).  GRUB's info is boot-time data
+    // that must never be handed to an allocator.
+    if (kernel::gs::get_multiboot_magic() == 0x36D76289) {
+        uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
+        if (info_ptr != 0) {
+            auto *info = reinterpret_cast<Multiboot2Info *>(info_ptr);
+            kernel::PMM::reserve_range(info_ptr, info_ptr + info->total_size);
+        }
+    }
+
     // v0.4.0 MP-1.5: the per-kernel-task private-data window must not overlap
     // anything the boot kernel PML4 maps — a task that maps a page there gets
     // TRUE cross-task isolation, not an aliased kernel mapping.

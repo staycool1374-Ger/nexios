@@ -100,6 +100,7 @@ void register_cap_mmio_tests();
 void register_cap_mmio_user_tests();
 void register_cap_irq_tests();
 void register_cap_irq_notify_tests();
+void register_cap_msix_tests();
 void register_cap_iommu_tests();
 void register_iommu_live_tests();
 void register_waitpid_tests();
@@ -324,6 +325,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_mmio_user", []() { register_cap_mmio_user_tests(); }},
     {"cap_irq", []() { register_cap_irq_tests(); }},
     {"cap_irq_notify", []() { register_cap_irq_notify_tests(); }},
+    {"cap_msix", []() { register_cap_msix_tests(); }},
     {"cap_iommu", []() { register_cap_iommu_tests(); }},
     // Live VT-d enablement (issue #9).  NOT part of `all` — requires the
     // q35+intel-iommu QEMU variant (`make execute-test x86_64 debug
@@ -552,6 +554,7 @@ static void register_all_tests() {
     register_cap_mmio_user_tests();
     register_cap_irq_tests();
     register_cap_irq_notify_tests();
+    register_cap_msix_tests();
     register_cap_iommu_tests();
     register_cap_ipc_tests();
     register_cap_syscall_tests();
@@ -705,6 +708,7 @@ static void register_all_tests_first_half() {
     register_cap_mmio_user_tests();
     register_cap_irq_tests();
     register_cap_irq_notify_tests();
+    register_cap_msix_tests();
     register_cap_iommu_tests();
     register_cap_ipc_tests();
     register_waitpid_tests();

@@ -39,6 +39,14 @@ namespace kernel::cap {
 static uint32_t g_live_irqs = 0;
 
 IrqCap *IrqCap::create(uint8_t vector) {
+    // IrqCap wraps legacy PIC vectors ONLY (issue #2): vectors 48-255 are the
+    // MSI-X window claimed by MsixCap (issue #10).  claim_slot() now accepts
+    // both windows (PIC + MSI-X share the single-owner delivery table), so
+    // the PIC-window contract is enforced here — an IrqCap must never wrap an
+    // MSI-X vector.
+    if (vector < 33 || vector > 47)
+        return nullptr;
+
     if (__atomic_load_n(&g_live_irqs, __ATOMIC_RELAXED) >=
         static_cast<uint32_t>(CONFIG_CAP_MAX_IRQ))
         return nullptr;

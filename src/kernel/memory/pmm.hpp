@@ -113,6 +113,15 @@ class PMM {
     /// @return PmmError code.
     static errors::PmmError free_page_err(uint64_t phys_addr);
 
+    /// @brief Marks a physical page range [start_phys, end_phys) as allocated
+    ///        KERNEL-owned (boot-time data: GRUB's Multiboot2 info must never
+    ///        be handed to an allocator).  Call right after init() before any
+    ///        allocation.  No-op on pages outside the allocatable window or
+    ///        already marked.
+    /// @param start_phys Inclusive first physical address.
+    /// @param end_phys   Exclusive end physical address.
+    static void reserve_range(uint64_t start_phys, uint64_t end_phys);
+
     /// @brief Returns true if a physical page is currently allocated.
     /// @param phys_addr Physical address to check.
     /// @return true if the allocation bit is set.

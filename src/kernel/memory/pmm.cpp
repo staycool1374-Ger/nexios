@@ -530,6 +530,29 @@ bool PMM::is_user_page(uint64_t phys_addr) {
     return owner_test(index);
 }
 
+/// @brief Marks a physical page range as allocated KERNEL-owned.  Used for
+/// boot-time data (GRUB's Multiboot2 info) that must never be handed to an
+/// allocator — a larger kernel can shift GRUB's info placement into the PMM
+/// free range, and the first allocation would overwrite it (issue #10).
+void PMM::reserve_range(uint64_t start_phys, uint64_t end_phys) {
+    if (start_phys >= end_phys)
+        return;
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    uint64_t start_idx = start_phys / PAGE_SIZE;
+    uint64_t end_idx = (end_phys + PAGE_SIZE - 1) / PAGE_SIZE;
+    if (start_idx < window_base_page_)
+        start_idx = window_base_page_;
+    if (end_idx > window_end_page_)
+        end_idx = window_end_page_;
+    for (uint64_t idx = start_idx; idx < end_idx; ++idx) {
+        if (bitmap_test(idx))
+            continue;
+        bitmap_set(idx);
+        owner_set_kernel(idx);
+        --free_pages_;
+    }
+}
+
 /// @brief Set the allocation bit for a page index.
 /// @param index Page index.
 void PMM::bitmap_set(size_t index) {

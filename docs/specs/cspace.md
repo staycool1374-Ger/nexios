@@ -216,6 +216,25 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
   phase-2 (live DMAR/GCMD/IOTLB, AMD-Vi/SMMU backends): `docs/specs/iommu.md`.  aarch64/riscv64:
   handlers return -1.
 - **Multi-level CNodes (0.7.x):** CNode-of-CNodes; the handle decode gains a radix walk.
+- **MSI-X vector caps (0.4.2):** `MsixCap : KernelObject` wrapping one MSI-X vector/entry on a
+  PCI device → capability-backed user-space delivery via the SAME `sys_irq_register`/
+  `sys_irq_wait` machinery (generalized to accept both `IrqCap` and `MsixCap`).
+  **IMPLEMENTED (2026-09-02, issue #10):** `CapType::Msix`, `src/kernel/cap/msix.{hpp,cpp}`
+  (kernel-internal `create`; `CONFIG_CAP_MAX_MSIX`; BDF bounds + MSI-X capability presence +
+  memory-BAR + entry bounds validated; single-owner per (BDF, entry) — a second live cap on the
+  same table entry fails closed; the table entry is programmed MASKED at create and unmasks only
+  while armed).  The delivery table `IrqDelivery` is widened to both windows: `IrqSlotKind`
+  {PIC 33–47, MSIX 48–255} with kind-gated mask hooks (PIC line snapshot/restore only for PIC
+  slots; MSI-X entries re-masked on release/drain — an MSI-X vector must never run `vector-32`
+  PIC line arithmetic).  `IrqCap::create` enforces its own PIC-window contract (33–47).  New
+  `arch::pci_msix_*` helpers program the table through the VMM-mapped KVA (typed
+  `MsixTableEntry`, no raw physical writes); `pci_scan_all` pre-maps MSI-X tables at boot
+  (probe-once, iommu pattern — test-time creates reuse the cached KVA, ResourceTracker-clean);
+  `pci_find_capability` now bounds its capability-list walk and rejects phantom devices (fixes
+  an unbounded-walk hang).  VT-d interrupt remapping is explicitly out of scope (no IR — MSI-X
+  messages go straight to the xAPIC, correct for single-BSP).  A user-facing PCI-delegation
+  create syscall (SYS_MSIX_CREATE) is future work; the delivery path is exactly what user
+  drivers will use.  Class `cap_msix` (12 tests); `all` registered 1028.
 
 ### 2.7 Configuration additions (`src/kernel/nexios_config.h`)
 

@@ -1,39 +1,66 @@
-# AUDIT ITERATION 2 CORRECTIVE PATCH (report-2026-08-30T20-40-06Z)
-# Fix: VMM::map_page aarch64 2MiB-huge-split — the third leaf-emission site
-# missed by the iteration-1 fix. Emits L3 page leaves with bits[1:0]=01
-# (block-at-invalid-level -> translation fault) and no AttrIndx (Device
-# instead of Normal WB); also drops the RES0 AF bit from the table descriptor.
-# Apply from repo root:  git apply audits/rejected_patch.diff
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -319,16 +319,28 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-         uint64_t huge_base = pd[pd_idx] & ~0x1FFFFFULL;
- #if defined(CONFIG_ARCH_AARCH64)
-         uint64_t base_flags =
--            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN);
-+            pd[pd_idx] & (PAGE_PRESENT | PAGE_AF | PAGE_UXN | PAGE_PXN |
-+                          PAGE_ATTR_NORMAL);
- #else
-         uint64_t base_flags =
-             pd[pd_idx] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
- #endif
-         for (size_t i = 0; i < 512; ++i) {
-+#if defined(CONFIG_ARCH_AARCH64)
-+            // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
-+            // is a block-at-invalid-level encoding and faults as a
-+            // translation fault.  AttrIndx=1 = Normal WB (see the leaf-flags
-+            // note in map_page / map_page_in_pml4).
-+            new_pt[i] = (huge_base + i * 0x1000) | base_flags |
-+                        PAGE_TABLE | PAGE_ATTR_NORMAL;
-+#else
-             new_pt[i] = (huge_base + i * 0x1000) | base_flags;
-+#endif
+diff --git a/src/kernel/arch/pci.cpp b/src/kernel/arch/pci.cpp
+--- a/src/kernel/arch/pci.cpp
++++ b/src/kernel/arch/pci.cpp
+@@ -529,10 +529,12 @@
+ static void init_vector_alloc() {
+     if (g_vector_init)
+         return;
+     for (int i = 0; i < 32; ++i)
+         g_vector_used[i] = true; // CPU exceptions
+     for (int i = 32; i < 48; ++i)
+         g_vector_used[i] = true; // PIC IRQs
+     g_vector_used[0x80] = true;  // SYSCALL
++    g_vector_used[64] = true;    // xAPIC scheduler timer (APIC_TIMER_VECTOR)
++    g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
+     g_vector_init = true;
+ }
+@@ -655,11 +655,17 @@
+ static void msix_cache_store(const arch::PciBdf &bdf,
+                              const arch::PciMsixTableInfo &tbl) {
++    // Dedupe by BDF: a repeated pci_scan_all() (test re-probe) must not grow
++    // duplicate cache entries for the same device.
++    for (size_t i = 0; i < kMsixCacheSize; ++i) {
++        if (g_msix_cache[i].valid && g_msix_cache[i].bdf == bdf)
++            return;
++    }
+     for (size_t i = 0; i < kMsixCacheSize; ++i) {
+         if (!g_msix_cache[i].valid) {
+             g_msix_cache[i].valid = true;
+             g_msix_cache[i].bdf = bdf;
+             g_msix_cache[i].tbl = tbl;
+             return;
          }
- #if defined(CONFIG_ARCH_AARCH64)
--        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE | PAGE_AF;
-+        // Table descriptor: bits[1:0]=11 only — AF (bit 10) is a block/page
-+        // attribute and RES0 in table descriptors.
-+        pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_TABLE;
- #else
-         pd[pd_idx] = new_pt_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
- #endif
+     }
+ }
+@@ -798,9 +798,12 @@
+     // Enable MSI-X and unmask function (the table entry itself stays masked
+     // until a driver arms it).
+     uint16_t ctrl = pci_config_readw(pci_make_addr(bdf, cap + 2));
+     ctrl |= PCI_MSIX_CTRL_ENABLE;
+     ctrl &= ~PCI_MSIX_CTRL_FUNCMASK;
+     pci_config_writel(pci_make_addr(bdf, cap + 2), ctrl);
++    // Legacy contract: pci_enable_msix hands back a LIVE vector to the caller
++    // (raw kernel path, no arm step) — unmask the entry now so delivery works.
++    pci_msix_entry_set_masked(tbl, entry, false);
+ 
+     Logger::info("MSI-X: enabled on %d:%d.%d entry=%d vector=%d", bdf.bus,
+                  bdf.device, bdf.function, entry, vec);
+diff --git a/src/kernel/irq_delivery.cpp b/src/kernel/irq_delivery.cpp
+--- a/src/kernel/irq_delivery.cpp
++++ b/src/kernel/irq_delivery.cpp
+@@ -115,6 +115,15 @@
+     // Timer vector must never be claimed.
+     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
+         return -1;
++#if defined(CONFIG_ARCH_X86_64)
++    // Kernel-reserved vectors inside the MSI-X window (issue #10): the xAPIC
++    // timer (64) drives the scheduler tick and 0xFF is the APIC spurious
++    // vector — a user slot must never claim either (it would swallow the
++    // scheduler tick / mis-route a spurious delivery).
++    if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
++        vector == static_cast<uint8_t>(arch::APIC::SPURIOUS_VECTOR))
++        return -1;
++#endif
+     // Reject vectors claimed by the threaded-IRQ path (single-owner).
+     if (IrqThread::for_vector(vector) != nullptr)
+         return -1;

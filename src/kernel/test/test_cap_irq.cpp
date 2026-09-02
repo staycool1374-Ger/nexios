@@ -636,7 +636,7 @@ JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {
     auto *irq = cap::IrqCap::create(kTestVector);
     JARVIS_ASSERT(irq != nullptr);
     JARVIS_ASSERT(IrqDelivery::arm(static_cast<int16_t>(irq->reg_idx_), *irq,
-                                   *Scheduler::current_task()));
+                                   irq->vector, *Scheduler::current_task()));
 
     JARVIS_ASSERT(IrqDelivery::isr_entry(kTestVector));
 
