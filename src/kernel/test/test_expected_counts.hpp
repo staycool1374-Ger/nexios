@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1040,   0,       0      },  // measured: 1035 + syscall_fastpath(+5,#92) → 1040
+    {"all",                1044,   0,       0      },  // measured: 1040 + fpu_invariants(+4,#93) → 1044
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -64,6 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
     {"task_init",             3,    0,       0      },  // init task exists/reparents
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
+    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
 
     // syscall
     {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)

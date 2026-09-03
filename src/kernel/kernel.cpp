@@ -1420,16 +1420,37 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             panic("#NM with no current task");
         }
 
+        // Issue #93 INV-FPU2: the owner-swap must be non-interruptible.  #NM
+        // enters via an interrupt gate (IF cleared by hardware) and the kernel
+        // is -mgeneral-regs-only (kernel code can never raise #NM inside an
+        // ISR), but the explicit cli makes the invariant SMP-proof and pins
+        // it against a future trap-gate change.  iret restores the interrupted
+        // RFLAGS, so no sti is needed.
+        arch::cli();
+
         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
         uint64_t cr0 = arch::read_cr0();
         cr0 &= ~(1ULL << 3);
         arch::write_cr0(cr0);
 
-        // Save previous owner's FPU state
+        // Save previous owner's FPU state (only when it differs from current).
+        // Issue #93 stale-restore fix: when prev == current, the registers
+        // already hold current's LIVE state (TS was set by a published-but-
+        // not-yet-applied deferred switch arm); fxrstor here would clobber
+        // live registers with stale/zero TCB state.  Leave the registers
+        // untouched and return.
         auto *prev_fpu_owner =
             __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
         if (prev_fpu_owner && prev_fpu_owner != current) {
             arch::fxsave(prev_fpu_owner->fpu_state);
+            ++prev_fpu_owner->fpu_state_gen;
+        }
+        if (prev_fpu_owner == current) {
+            __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
+            uint64_t depth = kernel::isr_nesting_depth;
+            if (depth > kernel::fpu_nm_depth_max)
+                kernel::fpu_nm_depth_max = depth;
+            return;
         }
 
         // Restore or initialize for current task
@@ -1443,6 +1464,9 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
 
         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
+        uint64_t depth = kernel::isr_nesting_depth;
+        if (depth > kernel::fpu_nm_depth_max)
+            kernel::fpu_nm_depth_max = depth;
         return;
     }
 

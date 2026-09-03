@@ -660,6 +660,12 @@ extern uint64_t scheduler_corruption_count;
 ///        corruption panic aborted the scan.
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t deadline_detection_integrity;
+/// @brief Highest isr_nesting_depth observed inside the #NM handler (issue
+///        #93, INV-FPU2 pin).  Reset in test_isolate restore; a #NM storm
+///        must keep it <= baseline + 1 (interrupt-gate #NM can never nest a
+///        timer ISR inside the owner-swap).
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+extern uint64_t fpu_nm_depth_max;
 /// @brief Tracks which task's FPU state is currently in the registers.
 ///        nullptr means no task has used FPU since boot.
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)

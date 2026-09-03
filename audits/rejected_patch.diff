@@ -1,22 +1,29 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index a63a39c1..3af9b698 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -720,6 +720,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     cap::MmioUserMap::drain_task(*tcb);
+diff --git a/src/kernel/test/test_fpu_inv.cpp b/src/kernel/test/test_fpu_inv.cpp
+index 000000000000..000000000000 100644
+--- a/src/kernel/test/test_fpu_inv.cpp
++++ b/src/kernel/test/test_fpu_inv.cpp
+@@ -49,6 +49,7 @@
+ // IEEE 754 double 2.71828 ≈ 0x4005BF0A8B145769ULL
+ static constexpr uint64_t FPU_EULER_BITS = 0x4005BF0A8B145769ULL;
  
-     uint64_t old_pml4 = tcb->page_table_;
-+    // Issue #92 canary relocation: the scheduler now samples user-task segment
-+    // canaries at every context switch and on a bounded tick cadence
-+    // (canary_check_in_scheduler_hooks).  Between the page_table_ swap below
-+    // and install_segment_canaries() at the tail of this function, the TCB's
-+    // canary_before/canary_after/canary_installed still describe the OLD image
-+    // while page_table_ is the NEW pml4 — a tick/context-switch sample landing
-+    // in this window would walk stale canary VAs against the new pml4 and
-+    // false-trip (spurious production panic / test-mode latch).  Clear
-+    // canary_installed so the verify loop is a no-op until the new canaries are
-+    // armed below (install_segment_canaries re-ORs the bits).
-+    tcb->canary_installed = 0;
-     tcb->page_table_ = new_pml4;
-     tcb->is_user_ = true;
-     tcb->user_stack_ = ustack_phys;
++#if defined(CONFIG_ARCH_X86_64)
+ namespace {
+ 
+ /// @brief Forces a #NM by setting CR0.TS and executing an x87 instruction.
+@@ -192,11 +193,14 @@
+     asm volatile("finit" ::: "memory");
+     JARVIS_TEST_PASS();
+ }
++#endif  // CONFIG_ARCH_X86_64
+ 
+ void register_fpu_inv_tests() {
+     Logger::info("Registering fpu_invariants tests");
++#if defined(CONFIG_ARCH_X86_64)
+     JARVIS_REGISTER_TEST(fpu_nm_no_alloc);
+     JARVIS_REGISTER_TEST(fpu_nm_nesting_impossible);
+     JARVIS_REGISTER_TEST(fpu_save_area_alignment);
+     JARVIS_REGISTER_TEST(fpu_nm_own_arm_no_clobber);
+-}
++#endif  // CONFIG_ARCH_X86_64
++}
+

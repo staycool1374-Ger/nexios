@@ -1,547 +1,303 @@
-diff --git a/docs/specs/syscall-fastpath.md b/docs/specs/syscall-fastpath.md
-index 138ad536..ca1aad27 100644
---- a/docs/specs/syscall-fastpath.md
-+++ b/docs/specs/syscall-fastpath.md
-@@ -1,12 +1,42 @@
--# Syscall Fast Path — Asm Jump Table Dispatch
-+# Syscall Fast Path — Tiered Dispatch
+diff --git a/docs/specs/fpu-context.md b/docs/specs/fpu-context.md
+index b2889371..b1913900 100644
+--- a/docs/specs/fpu-context.md
++++ b/docs/specs/fpu-context.md
+@@ -1,7 +1,7 @@
+ # FPU/SIMD State in Context Switch — Fixed-Offset Save Area
  
- **Doc ID:** NEX-SPEC-2026-08-23-001
+ **Doc ID:** NEX-SPEC-2026-08-23-003
 -**Status:** DRAFT
-+**Status:** IMPLEMENTED (issue #92, v0.4.3 — 2026-09-03)
++**Status:** IMPLEMENTED (issue #93, v0.4.3 — 2026-09-03)
  **Milestone target:** v0.4.3
- **Inspiration:** Cyjon `kernel/service.asm` (static `dq kernel_service_*`
- table indexed by syscall number directly in assembly).
- **Related:** `docs/specs/boundary.md`, `docs/specs/cspace.md`,
--`src/kernel/syscall/syscall_entry.asm`, `src/kernel/syscall/syscall.cpp`
-+`src/kernel/syscall/syscall.cpp`, `src/kernel/syscall/syscall.hpp`
-+
-+## 0. Implementation reconciliation (issue #92)
-+
-+The tiered dispatch landed in C (not the dead `syscall_entry.asm`) because the
-+live syscall entry is `int $0x80` → trap-gate ISR → `syscall_handler` (kernel.cpp)
-+→ `Syscall::handle`. Key deltas from the DRAFT:
-+
-+- **Bit-test location:** the FAST-bit test lives at the top of `Syscall::handle`
-+  (C), not in `syscall_entry.asm` (unassembled dead file). A future asm entry
-+  would reuse `Syscall::handle_fast` via a thin `extern "C"` wrapper.
-+- **FAST membership (reconciled to the pointer-free set):** the issue's literal
-+  list {YIELD, SEND, RECEIVE, SEND_SYNC, NANOSLEEP, HALT} is NOT implementable:
-+  SEND/RECEIVE/SEND_SYNC deref user buffers via `checked_ptr` /
-+  `safe_copy_to_user` (syscall_handlers_ipc.cpp), and NANOSLEEP does not exist
-+  in the enum. The landed FAST set is the audited pointer-free subset:
-+  **{YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID, PAUSE,
-+  REBOOT, HALT}** (`Syscall::k_syscall_fast[]`, the single source of truth;
-+  `SYSCALL_FAST_MASK` derived from it). IPC rejoins FAST only behind a
-+  follow-up that first lands canary-on-context-switch (done here) + a pointer
-+  deref review.
-+- **Canary relocation (INCLUDED):** canary verify now runs on FULL-path entry
-+  AND in the scheduler (`canary_check_in_scheduler_hooks`) at every context
-+  switch to a user task plus a bounded timer-tick sample
-+  (`CONFIG_CANARY_SAMPLE_TICKS`, default 64). This restores corruption
-+  detection for FAST-only tasks without taxing the hot syscall path.
-+- **AC check:** the debug-only MP-4 AC-leak check is RETAINED on both FAST and
-+  FULL (the DRAFT said "bounds check only") — a ~2-cycle debug read that keeps
-+  the MP-4 leak detector; deviation documented here.
-+- **`CONFIG_INCLUDE_SYS_*` / `CONFIG_SYSCALL_COUNT` are dead code:** the mask
-+  derives from the `SyscallNumber` enum list, not the tuners.
+ **Inspiration:** Cyjon `kernel/task.asm` (FXSAVE64/FXRSTOR64 to fixed
+ KERNEL_STACK offsets on every switch).
+@@ -9,6 +9,38 @@ KERNEL_STACK offsets on every switch).
+ `src/kernel/kernel.cpp:1326ff`, `src/kernel/core/global_state.cpp:67`,
+ `docs/specs/test-harness.md` §116.
  
++## 0. Implementation reconciliation (issue #93)
++
++The TCB already carried `alignas(16) uint8_t fpu_state[512]` + `fpu_used`
++(docs §1 assumed it absent). The landed deltas:
++
++- **Alignment** 16 → **64** (`alignas(64) uint8_t fpu_state[512]`, task.hpp):
++  FXSAVE requires 16; 64 avoids split-line stores (paper §3.3). Audited: no
++  `offsetof`/layout consumer in the tree; fields are name-accessed.
++- **`fpu_state_gen`** (task.hpp): `uint32_t`, bumped on every `fxsave` of a
++  task's state (#NM handler + clone flush). 0 = never saved. Kept
++  unconditional (not CONFIG_DEBUG) for debug/release symmetry.
++- **INV-FPU2 reentrancy** (kernel.cpp vector-7): added an explicit `cli` as
++  the first statement of the #NM branch. Verified hardware-guaranteed already:
++  vector 7 is an interrupt gate (`0x8E`, idt.cpp:66) → IF cleared on entry;
++  the kernel is compiled `-mgeneral-regs-only` so kernel code can never raise
++  #NM inside an ISR; `isr_common` cli's after the C handler (isr_stubs.asm:156)
++  and iret restores the interrupted RFLAGS. The `cli` makes it SMP-proof.
++- **S1 stale-restore fix (NEW, found during implementation):** the original
++  handler `fxrstor`'d whenever `prev_fpu_owner != current`. In the
++  armed-switch window (CR0.TS published by a deferred arm, switch not yet
++  applied), `prev_fpu_owner == current` — fxrstor then clobbered the owner's
++  LIVE registers with stale/zero TCB state. Fix: when `prev == current`,
++  leave the registers untouched (they already hold current's live state).
++  Regression test `fpu_nm_own_arm_no_clobber`.
++- **`fpu_nm_depth_max`** (global_state.cpp): highest `isr_nesting_depth` seen
++  inside #NM; reset in test_isolate restore; `fpu_nm_nesting_impossible`
++  asserts it stays ≤ baseline + 1.
++- **CR0.TS-on-switch-away: verified NOT a gap.** CR0.TS is set at both
++  deferred-switch publish sites (scheduler.cpp arm + reschedule); the lazy
++  chain (TS set on switch-away → #NM on next user → save prev / restore next)
++  is coherent.
++
  ## 1. Current State (verified)
  
-@@ -42,27 +72,30 @@ boundary, once" and would break MP-3/MP-4 guarantees).
+ NexIOS already implements **lazy FPU** — the better scheme, and one Cyjon does
+@@ -45,28 +77,36 @@ our lazy trigger.
  
- Keep validation in C (it is correct and audited); make the *path* cheaper:
+ ### 3.1 Fixed save area per user TCB
  
--### 3.1 Tiered dispatch (new)
-+### 3.1 Tiered dispatch (implemented)
++Landed in `TaskControlBlock`:
+ ```
+-TaskControlBlock gains:
+-    alignas(64) uint8_t fpu_save[512];   // FXSAVE format
+-    uint32_t fpu_state_gen;              // bumped on each save (debug)
+-    // set at create_user()/fork time — NEVER allocated at IRQ time
++    bool fpu_used;
++    uint32_t fpu_state_gen;            // bumped on every fxsave (unconditional)
++    alignas(64) uint8_t fpu_state[512]; // FXSAVE format, 64-byte aligned
+ ```
  
--Split syscalls into two classes at build time:
-+Split syscalls into two classes:
+-512 bytes × max tasks is bounded (e.g. 64 user tasks ⇒ 32 KiB) — acceptable;
+-fork deep-copy copies the area by value like any other TCB field.
++512 bytes × max tasks is bounded (e.g. 64 user tasks ⇒ 32 KiB); fork deep-copy
++copies the area by value like any other TCB field (task.cpp clone: memcpy 512
+++ fpu_state_gen copy).
  
--| Class | Members | Entry validation |
-+| Class | Members (landed) | Entry validation |
- |---|---|---|
--| FAST | YIELD, SEND, RECEIVE, SEND_SYNC, NANOSLEEP, HALT | bounds check only |
--| FULL | everything touching pointers/fds (OPEN, READ, …) | canary + AC check |
--
--Implementation:
--
--- `CONFIG_INCLUDE_SYS_*` tuners already produce `CONFIG_SYSCALL_COUNT`.
--  Add a generated constexpr bitmask `SYSCALL_FAST_MASK` (one bit per number,
--  derived from the same tuner list in configuration.md §1.6).
--- In `syscall_entry.asm`: after the GPR frame is pushed, load the mask
--  address (passed as a linker symbol) and test bit `rax`; if set, jump to a
--  lean path that calls `syscall_handler_fast(number, args…, regs)` — same
--  table, no canary walk. If clear, take today's full path unchanged.
--- Canary verification moves from "every syscall" to "on FULL-path entry +
--  context switch + timer tick sample", which restores its original purpose
--  (detecting corruption) without taxing every yield.
-+| FAST | YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID, PAUSE, REBOOT, HALT | bounds check + debug AC check |
-+| FULL | everything touching pointers/fds (OPEN, READ, SEND, RECEIVE, SEND_SYNC, …) | canary + AC check |
-+
-+Implementation (as landed):
-+
-+- `constexpr SyscallNumber k_syscall_fast[]` is the single source of truth;
-+  `constexpr uint64_t syscall_fast_mask_from()` folds it into
-+  `SYSCALL_FAST_MASK` (static_assert: non-empty, no bit >= MAX_SYSCALL).
-+- `Syscall::handle` bounds-checks first, then tests the FAST bit and
-+  dispatches inline (same `syscall_table_`) without the canary walk; the FULL
-+  path keeps AC + canary. `Syscall::handle_fast` is the self-contained lean
-+  path (bounds + dispatch) reused by tests and a future asm entry.
-+- Canary verification moved from "every syscall" to "FULL-path entry +
-+  context switch + timer tick sample" (`canary_check_in_scheduler_hooks`,
-+  `CONFIG_CANARY_SAMPLE_TICKS`), restoring its corruption-detection purpose
-+  without taxing every yield.
-+- The debug-only AC check stays on BOTH paths (MP-4 leak detector preserved;
-+  ~2 cycles, debug builds only).
+-### 3.2 Reentrancy rule (fixes gap 1)
++### 3.2 Reentrancy rule (landed)
  
- ### 3.2 Why not full-asm dispatch like Cyjon
+-Binding rule: **#NM handling runs with interrupts disabled until the FPU
+-owner swap completes** (`cli` around save/restore, `sti` only via the normal
+-epilogue). Rationale: the swap is ~60–100 cycles (two 512-byte stores), far
+-below any deadline quantum, and it removes the entire nested-#NM class.
+-Documented in drivers.md §6 as depth invariant: #NM never nests.
++**Binding rule: #NM handling runs with interrupts disabled until the FPU
++owner swap completes.** Verified hardware-guaranteed: vector 7 is an interrupt
++gate (IF cleared on entry, idt.cpp `0x8E`); the kernel is
++`-mgeneral-regs-only` (kernel code can never raise #NM inside an ISR);
++`isr_common` cli's after the C handler. An explicit `cli` was added as the
++first statement of the #NM branch (kernel.cpp) to make the invariant
++SMP-proof and pin it against a future trap-gate change. Documented in
++drivers.md §6 as depth invariant: #NM never nests.
  
-@@ -76,24 +109,35 @@ only adds a bitmask test in asm.
+ ### 3.3 Alignment & correctness details
  
- - INV: every syscall still passes exactly one bounds check before table
-   indexing (out-of-range ⇒ `-1`, unchanged).
--- INV: FAST-class syscalls never dereference user pointers (verified list
--  review required when a syscall changes class; add a static_assert-style
--  test that FAST members are pointer-free handlers).
--- Worst-case entry latency becomes bimodal and *documented*: FAST ≤ ~150
--  cycles post-change, FULL unchanged. Deadline analysis uses the FULL figure
--  as the upper bound.
--
+ - FXSAVE requires 16-byte alignment; `alignas(64)` covers it and avoids
+-  split-line stores.
++  split-line stores (landed).
++- **S1 stale-restore fix (found during implementation):** #NM with
++  `prev_fpu_owner == current` (armed-switch window) must NOT fxrstor stale/zero
++  TCB state over live registers — the registers already hold current's live
++  state. The handler now skips the restore in that case.
+ - After restore, execute `ldmxcsr` sanity: reserved bits set ⇒ #GP; validate
+   once at task creation instead (init control word = 0x037F, MXCSR =
+   0x1F80), tasks cannot change them except via explicit syscall later.
+@@ -80,15 +120,22 @@ Documented in drivers.md §6 as depth invariant: #NM never nests.
+ - INV-FPU3: `fpu_owner` transitions only under the swap critical section;
+   after SMP (specs/per-cpu-smp.md) it moves into PerCpu (gs-relative).
+ 
 -## 5. Test Plan
 -
--New class `syscall_fastpath`:
--1. `fast_mask_matches_config` — for every enabled INCLUDE_SYS tuner, mask bit
--   matches the FAST/FULL classification table.
--2. `fast_call_correctness` — drive YIELD/NANOSLEEP through both paths
--   (mask forced off via test hook) and compare return values.
--3. `full_path_still_validates` — plant a corrupted canary; a FULL syscall
--   trips (latched in test mode), a FAST syscall does not consult canaries.
--4. Latency histogram: measure entry-to-handler cycles for both classes,
--   assert FAST < FULL in release build.
-+- INV: FAST-class syscalls never dereference user pointers (enforced by the
-+  audited `k_syscall_fast[]` membership; SEND/RECEIVE/SEND_SYNC excluded
-+  because they touch user buffers; a syscall may only join FAST after a
-+  pointer-free handler review + list edit + `fast_mask_matches_config` gate).
-+- INV: canary detection is NOT weakened by the relocation — FAST-only tasks
-+  are still sampled at every context switch and on a bounded tick cadence.
-+- Worst-case entry latency becomes bimodal and *documented*: FAST = bounds +
-+  AC (no canary page-table walk), FULL unchanged. Deadline analysis uses the
-+  FULL figure as the upper bound. Measured (debug TCG, kernel-context, N=2000):
-+  FAST sum 556K vs FULL sum 752K cycles (FAST faster; no absolute bound
-+  asserted — TCG rdtsc quantization makes the relative comparison the honest
-+  signal; the dominant canary-walk delta is proven functionally by
-+  `full_path_still_validates` / `fast_path_skips_canary`).
+-Extend existing fpu coverage:
+-1. `nm_no_alloc` — PMM/MemPool delta == 0 across forced #NM storms.
+-2. `nm_nesting_impossible` — instrument: assert nesting depth stays ≤ its
+-   pre-#NM value during swap (debug counter).
+-3. `save_area_alignment` — static_assert + runtime check per created task.
+-4. Existing lazy-switch tests (test-harness dummy_save_rsp interplay) pass
+-   unmodified — proves ABI compatibility.
++## 5. Test Plan (landed — class `fpu_invariants`, 4 TF_KERNEL)
 +
-+## 5. Test Plan (landed — class `syscall_fastpath`, 5 TF_KERNEL tests)
++New non-filtered file `test_fpu_inv.cpp` (the legacy test_fpu*.cpp files are
++filtered out of the x86_64 build for GCC-16 / -mgeneral-regs-only; this class
++uses only memory-operand x87 asm + arch::* helpers):
++1. `fpu_nm_no_alloc` — PMM + ResourceTracker delta == 0 across forced #NM
++   storms (INV-FPU1).
++2. `fpu_nm_nesting_impossible` — `fpu_nm_depth_max <= baseline + 1` across a
++   storm (INV-FPU2).
++3. `fpu_save_area_alignment` — static_assert offset%64==0 + sizeof==512 +
++   alignof==64; runtime check per created task.
++4. `fpu_nm_own_arm_no_clobber` — regression for the S1 stale-restore fix.
 +
-+1. `fast_mask_matches_config` — mask == the pointer-free list (popcount), all
-+   members < MAX_SYSCALL, non-empty (compile-time static_asserts + runtime).
-+2. `fast_call_correctness` — call-safe FAST members through both paths (hook
-+   off) return identically; out-of-range returns -1 on both.  PAUSE/HALT/
-+   REBOOT excluded (they halt the CPU — never return).
-+3. `full_path_still_validates` — tampered stack canary + FULL syscall trips
-+   the latch (MP-3 preserved; with the relocation the trip may latch at the
-+   context-switch/tick sample instead — either way it fires).
-+4. `fast_path_skips_canary` — a FAST-only user task (yield-probe) with a
-+   tampered canary runs without faulting at syscall entry; detection is via
-+   the scheduler hooks, never a user-pointer dereference.
-+5. `fast_latency_lt_full` — relative latency (sum_fast <= sum_full) with a
-+   magnitude-sanity canary; no absolute cycle bound.
++Existing lazy-switch ABI compatibility: `atomic_context_switch` +
++`task_core` (clone memcpy) run as regressions; the old test_fpu*.cpp stay
++filtered (their ABI role is absorbed by the new tests).
  
- Validation: `selftest`, debug/release `all`, test-history rows per AGENTS.md.
+ Validation: selftest, debug/release all, test-history rows.
  
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index a63a39c1..3af9b698 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -720,6 +720,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     cap::MmioUserMap::drain_task(*tcb);
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 7cd7bdcc..20efac30 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -65,6 +65,11 @@ uint64_t deadline_detection_integrity = 0;
+ // Tracks which task's FPU state is currently in the registers (declared in
+ // scheduler.hpp's extern "C" block).
+ kernel::TaskControlBlock *fpu_owner = nullptr;
++// Highest isr_nesting_depth observed inside the #NM handler (issue #93,
++// INV-FPU2 pin).  Reset in test_isolate restore; tests assert it stays
++// <= baseline + 1 across a #NM storm (an interrupt-gate #NM can never nest a
++// timer ISR inside the owner-swap).
++uint64_t fpu_nm_depth_max = 0;
+ } // extern "C"
  
-     uint64_t old_pml4 = tcb->page_table_;
-+    // Issue #92 canary relocation: the scheduler now samples user-task segment
-+    // canaries at every context switch and on a bounded tick cadence
-+    // (canary_check_in_scheduler_hooks).  Between the page_table_ swap below
-+    // and install_segment_canaries() at the tail of this function, the TCB's
-+    // canary_before/canary_after/canary_installed still describe the OLD image
-+    // while page_table_ is the NEW pml4 — a tick/context-switch sample landing
-+    // in this window would walk stale canary VAs against the new pml4 and
-+    // false-trip (spurious production panic / test-mode latch).  Clear
-+    // canary_installed so the verify loop is a no-op until the new canaries are
-+    // armed below (install_segment_canaries re-ORs the bits).
-+    tcb->canary_installed = 0;
-     tcb->page_table_ = new_pml4;
-     tcb->is_user_ = true;
-     tcb->user_stack_ = ustack_phys;
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index a417aede..19e2ce76 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -753,6 +753,16 @@
- #define CONFIG_CANARY_GUARD 1
- #endif
- 
-+/// Issue #92 canary relocation: cadence (in ticks) at which the scheduler
-+/// samples the current user task's segment canaries on the timer tick.  A
-+/// power of two so the cadence check is a cheap mask.  MUST be > 1 so the
-+/// per-tick overhead stays bounded; FAST-only user tasks that never hit a
-+/// FULL syscall are still corruption-checked at this interval AND on every
-+/// context switch (canary_check_in_scheduler_hooks).
-+#ifndef CONFIG_CANARY_SAMPLE_TICKS
-+#define CONFIG_CANARY_SAMPLE_TICKS 64
-+#endif
-+
- /// v0.4.0 MP-4: SMEP (supervisor-mode execution prevention) — CR4 bit 20.
- /// On x86_64 the boot path sets it when CPUID leaf 7 EBX[7] is supported.
- #ifndef CONFIG_SMEP
-diff --git a/src/kernel/syscall/syscall.cpp b/src/kernel/syscall/syscall.cpp
-index 892cc7d6..52924240 100644
---- a/src/kernel/syscall/syscall.cpp
-+++ b/src/kernel/syscall/syscall.cpp
-@@ -53,6 +53,38 @@ TaskControlBlock *syscall_task() {
-     return Scheduler::current_task();
- }
- 
-+/// @brief MP-3 canary verification for the FULL syscall path (issue #92).
-+///        Checks the current user task's segment canaries; a mismatch latches
-+///        g_canary_trip in test mode (returns false → the caller returns -1)
-+///        or panics in production.  Runs ONLY on the FULL path — the FAST
-+///        subset dereferences no user memory, so it is covered instead by the
-+///        scheduler's context-switch / timer-tick canary sampling.
-+/// @param regs Register save area (for the fault RIP in test-mode latch).
-+/// @return true if canaries verified or no user task; false on a trip (caller
-+///         returns -1).  Always true when CONFIG_CANARY_GUARD is disabled.
-+bool canary_check_on_full_path(uint64_t *regs) {
-+#if CONFIG_CANARY_GUARD
-+    auto *t = syscall_task();
-+    if (t && t->is_user_) {
-+        uint8_t bad_seg = 0;
-+        uint64_t bad_va = 0;
-+        if (!canary_verify_user_segments(t, bad_seg, bad_va)) {
-+            uint64_t rip = regs ? regs[17] : 0;
-+            if (kernel::Scheduler::is_test_active()) {
-+                kernel::gs::set_canary_trip(t->id, bad_seg, rip);
-+                return false;
-+            }
-+            kernel::Logger::fatal(
-+                "CANARY TRIP: task '%s' id=%u segment=%u va=0x%lx rip=0x%lx",
-+                t->name, static_cast<unsigned>(t->id),
-+                static_cast<unsigned>(bad_seg), bad_va, rip);
-+            panic("software sentinel canary violated");
-+        }
-+    }
-+#endif
-+    return true;
-+}
-+
- /// @brief Check if the current task is a user-space task (is_user_ flag —
- ///        MP-1: page_table_ != 0 no longer discriminates, every task owns a
- ///        private kernel-half PML4).
-@@ -98,38 +130,40 @@ int syscall_path_open(const char *path, uint64_t flags) {
-     // MP-4 (SMAP) AC-leak detector: AC must be 0 on syscall entry.  A leaked
-     // AC=1 (a missed clac in a user-access path) would otherwise be handed to
-     // user mode via sysret (IA32_FMASK masks IF only, not AC), letting ring-3
--    // access supervisor pages.  Fail fast in debug.
-+    // access supervisor pages.  Fail fast in debug.  Kept on BOTH paths (FAST
-+    // and FULL) — the ~2-cycle debug-only read preserves the MP-4 leak
-+    // detector (issue #92 deviates from the paper's "bounds check only" here).
-     if ((arch::read_rflags() & (1ULL << 18)) != 0)
-         panic("MP-4: AC flag leaked into syscall entry (missing clac)");
- #endif
- 
--#if CONFIG_CANARY_GUARD
--    // v0.4.0 MP-3: verify the user-segment sentinel canaries on syscall entry
--    // (pure page-table reads, no locks).  Mismatch → controlled panic in
--    // production; test mode latches g_canary_trip and the syscall returns -1
--    // so the harness survives.
--    {
--        auto *t = syscall_task();
--        if (t && t->is_user_) {
--            uint8_t bad_seg = 0;
--            uint64_t bad_va = 0;
--            if (!canary_verify_user_segments(t, bad_seg, bad_va)) {
--                uint64_t rip = regs ? regs[17] : 0;
--                if (kernel::Scheduler::is_test_active()) {
--                    kernel::gs::set_canary_trip(t->id, bad_seg, rip);
--                    return static_cast<uint64_t>(-1);
--                }
--                kernel::Logger::fatal(
--                    "CANARY TRIP: task '%s' id=%u segment=%u va=0x%lx rip=0x%lx",
--                    t->name, static_cast<unsigned>(t->id),
--                    static_cast<unsigned>(bad_seg), bad_va, rip);
--                panic("software sentinel canary violated");
--            }
--        }
--    }
--#endif
-+    // Issue #92 tiered dispatch: the FAST subset (pointer-free members of
-+    // SYSCALL_FAST_MASK) skips the canary walk entirely — it dereferences no
-+    // user memory, so there is nothing for the canary to protect.  FULL-path
-+    // syscalls keep the canary verify (see canary_check_on_full_path below).
-+    // Bounds are already checked above — exactly one check before indexing.
-+    if (s_fastpath_enabled_ && (SYSCALL_FAST_MASK & (1ULL << number)))
-+        return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
-+
-+    // FULL path: MP-3 canary verify of user segments (page-table reads, no
-+    // locks).  Mismatch → controlled panic in production; test mode latches
-+    // g_canary_trip and the syscall returns -1 so the harness survives.
-+    // Canary relocation (issue #92): this check now runs ONLY on the FULL
-+    // path; FAST members are covered by the context-switch / timer-tick
-+    // sampling in the scheduler (canary_check_in_scheduler_hooks).
-+    if (!canary_check_on_full_path(regs))
-+        return static_cast<uint64_t>(-1);
- 
-     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
- }
- 
-+ uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
-+                              uint64_t arg2, uint64_t arg3, uint64_t *regs) {
-+    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
-+        return static_cast<uint64_t>(-1);
-+    // Lean path: bounds check only, then direct table dispatch.  The caller
-+    // guarantees `number` is a FAST member (no user-pointer dereference).
-+    return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
-+}
-+
- } // namespace kernel
-diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index 71f08cbd..87799c03 100644
---- a/src/kernel/syscall/syscall.hpp
-+++ b/src/kernel/syscall/syscall.hpp
-@@ -95,6 +95,21 @@ enum class SyscallNumber : uint8_t {
-     MAX_SYSCALL = 63,
- };
- 
-+/// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
-+///        (issue #92).  constexpr so SYSCALL_FAST_MASK is a compile-time
-+///        constant derived from k_syscall_fast[] — the single source of truth.
-+/// @param list  Array of syscall numbers.
-+/// @param count Number of elements in @p list.
-+/// @return A bitmask with bit `n` set for each number in @p list.
-+constexpr uint64_t syscall_fast_mask_from(const SyscallNumber *list,
-+                                          size_t count) {
-+    uint64_t mask = 0;
-+    for (size_t i = 0; i < count; ++i) {
-+        mask |= (1ULL << static_cast<uint64_t>(list[i]));
-+    }
-+    return mask;
-+}
-+
- /// @brief System call handler function signature.
- using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-                                     uint64_t arg3, uint64_t *regs);
-@@ -123,6 +138,54 @@ class Syscall {
-                            uint64_t arg2, uint64_t arg3,
-                            uint64_t *regs = nullptr);
- 
-+    /// @brief Lean FAST-path dispatch (issue #92).  Bounds-checked table
-+    ///        dispatch WITHOUT the canary walk — for the audited pointer-free
-+    ///        FAST subset only (docs/specs/syscall-fastpath.md §3.1/§4).  The
-+    ///        callers of this path must never pass a number that dereferences
-+    ///        user memory (enforced by SYSCALL_FAST_MASK membership review).
-+    /// @param number Syscall number (see SyscallNumber).
-+    /// @param arg0-3 Arguments passed from user space.
-+    /// @param regs Pointer to register save area.
-+    /// @return The syscall return value, or -1 for an out-of-range number.
-+    static uint64_t handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
-+                                uint64_t arg2, uint64_t arg3,
-+                                uint64_t *regs = nullptr);
-+
-+    /// @brief Test hook: force the FULL path even for FAST members (proves
-+    ///        both paths agree).  Plain static bool, default true — production
-+    ///        parity when unarmed.
-+    static void set_fastpath_enabled(bool enabled) {
-+        s_fastpath_enabled_ = enabled;
-+    }
-+
-+    /// @brief Audited pointer-free syscall subset (issue #92).  A member must
-+    ///        NEVER dereference a user pointer — the FAST path skips the
-+    ///        canary + (debug) SMAP/AC checks.  SEND/RECEIVE/SEND_SYNC are
-+    ///        intentionally excluded (they touch user buffers via checked_ptr
-+    ///        / safe_copy_to_user).  To reclassify, review the handler for
-+    ///        user-memory access and update this list AND the spec.
-+    static constexpr SyscallNumber k_syscall_fast[] = {
-+        SyscallNumber::YIELD,
-+        SyscallNumber::GET_TICKS,
-+        SyscallNumber::PRINT,
-+        SyscallNumber::CREATE_MAILBOX,
-+        SyscallNumber::DESTROY_MAILBOX,
-+        SyscallNumber::GETPID,
-+        SyscallNumber::PAUSE,
-+        SyscallNumber::REBOOT,
-+        SyscallNumber::HALT,
-+    };
-+
-+    /// @brief Bitmask of the pointer-free FAST syscall numbers (issue #92).
-+    ///        Derived from k_syscall_fast[] — the single source of truth.
-+    static constexpr uint64_t SYSCALL_FAST_MASK =
-+        syscall_fast_mask_from(k_syscall_fast,
-+                               sizeof(k_syscall_fast) /
-+                                   sizeof(k_syscall_fast[0]));
-+
-+  private:
-+    static inline bool s_fastpath_enabled_ = true;
-+
-   private:
-     static uint64_t sys_yield(uint64_t, uint64_t, uint64_t, uint64_t,
-                               uint64_t *);
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 0f625e7b..c20c11f4 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -37,6 +37,7 @@ extern "C" void debug_write(const char *s);
- extern "C" void debug_write_hex(uint64_t value);
- extern "C" void debug_write_dec(uint64_t value);
- #include <kernel/memory/integrity.hpp>
-+#include <kernel/core/global_state.hpp>
- #include <assert.hpp>
- #include <kernel/test/resource_tracker.hpp>
- #include <kernel/test/test_isolate.hpp>
-@@ -159,6 +160,41 @@ inline constexpr uint64_t H2_EV_CLR_MISC = 6;
- inline constexpr uint64_t H2_EV_IDLE_ARM = 7;
- inline constexpr uint64_t H2_EV_REENQ    = 8;
- 
-+/// @brief MP-3 canary sampling for the scheduler hooks (issue #92 canary
-+///        relocation).  Verifies the user-segment canaries of a task that is
-+///        about to run (context switch) or currently running (timer tick).
-+///        Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a
-+///        pure page-table read (no locks, no allocation) — safe in ISR/tick
-+///        context.  Test mode latches g_canary_trip (the harness survives);
-+///        production panics.  This restores corruption detection for FAST
-+///        syscalls, which no longer consult canaries on entry.
-+/// @param task    Task to verify (must be magic-valid).
-+/// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
-+/// @return true if verified (or no user task / no canary check enabled).
-+bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip) {
-+#if CONFIG_CANARY_GUARD
-+    if (!task || !task->is_user_)
-+        return true;
-+    uint8_t bad_seg = 0;
-+    uint64_t bad_va = 0;
-+    if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
-+        if (kernel::Scheduler::is_test_active()) {
-+            kernel::gs::set_canary_trip(task->id, bad_seg, rip);
-+            return false;
-+        }
-+        kernel::Logger::fatal(
-+            "CANARY TRIP (sched): task '%s' id=%u segment=%u va=0x%lx",
-+            task->name, static_cast<unsigned>(task->id),
-+            static_cast<unsigned>(bad_seg), bad_va);
-+        panic("software sentinel canary violated");
-+    }
-+#else
-+    (void)task;
-+    (void)rip;
-+#endif
-+    return true;
-+}
-+
- // ---------------------------------------------------------------------------
- // Global deferred-switch event ring (H2 instrumentation, CONFIG_DEBUG).
- // Extends the per-TCB debug_switch_ring[4] idiom to the GLOBAL scheduler event
-@@ -1570,6 +1606,23 @@ void Scheduler::on_tick() noexcept {
+ namespace kernel {
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 8b239795..0c1eee37 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1420,16 +1420,37 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+             panic("#NM with no current task");
          }
- #endif
  
-+        // Issue #92 canary relocation: sample the current user task's segment
-+        // canaries on a bounded tick cadence (CONFIG_CANARY_SAMPLE_TICKS).
-+        // Catches corruption for FAST-only tasks that never hit a FULL syscall.
-+        // Pure reads; test-mode latch; production panic.  This runs inside the
-+        // scheduler_lock_ + IrqGuard window of on_tick, exactly like the
-+        // snapshot/TCB-magic watchdogs above.
-+#if CONFIG_CANARY_GUARD
-+        {
-+            auto *cc = current_task();
-+            if (cc && cc->is_user_ &&
-+                cc->magic == TaskControlBlock::TCB_MAGIC &&
-+                (current_tick & (CONFIG_CANARY_SAMPLE_TICKS - 1)) == 0) {
-+                canary_check_in_scheduler_hooks(cc, 0);
-+            }
-+        }
-+#endif
++        // Issue #93 INV-FPU2: the owner-swap must be non-interruptible.  #NM
++        // enters via an interrupt gate (IF cleared by hardware) and the kernel
++        // is -mgeneral-regs-only (kernel code can never raise #NM inside an
++        // ISR), but the explicit cli makes the invariant SMP-proof and pins
++        // it against a future trap-gate change.  iret restores the interrupted
++        // RFLAGS, so no sti is needed.
++        arch::cli();
 +
-         if (s_deferred_kill_count > 0)
-             Scheduler::process_deferred_kills();
+         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
+         uint64_t cr0 = arch::read_cr0();
+         cr0 &= ~(1ULL << 3);
+         arch::write_cr0(cr0);
  
-@@ -3697,6 +3750,13 @@ extern "C" void scheduler_on_context_switch() {
-     auto *t = kernel::Scheduler::find_task(id);
-     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
-         kernel::Scheduler::set_current_task(t);
-+    // Issue #92 canary relocation: verify the incoming task's user-segment
-+    // canaries at the context switch (the task is about to run).  Pure reads,
-+    // test-mode latch, production panic — see canary_check_in_scheduler_hooks.
-+    // Guards: only when the RSP swap actually applied (t found + valid).
-+    if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC) {
-+        kernel::canary_check_in_scheduler_hooks(t, 0);
-+    }
- #if defined(CONFIG_DEBUG_IPC_SCHED)
-     // H2 apply-side frame audit (cold: fires only when a deferred switch
-     // APPLIES to the harness).  The ISR epilogue has just loaded the harness's
+-        // Save previous owner's FPU state
++        // Save previous owner's FPU state (only when it differs from current).
++        // Issue #93 stale-restore fix: when prev == current, the registers
++        // already hold current's LIVE state (TS was set by a published-but-
++        // not-yet-applied deferred switch arm); fxrstor here would clobber
++        // live registers with stale/zero TCB state.  Leave the registers
++        // untouched and return.
+         auto *prev_fpu_owner =
+             __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
+         if (prev_fpu_owner && prev_fpu_owner != current) {
+             arch::fxsave(prev_fpu_owner->fpu_state);
++            ++prev_fpu_owner->fpu_state_gen;
++        }
++        if (prev_fpu_owner == current) {
++            __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
++            uint64_t depth = kernel::isr_nesting_depth;
++            if (depth > kernel::fpu_nm_depth_max)
++                kernel::fpu_nm_depth_max = depth;
++            return;
+         }
+ 
+         // Restore or initialize for current task
+@@ -1443,6 +1464,9 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+         }
+ 
+         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
++        uint64_t depth = kernel::isr_nesting_depth;
++        if (depth > kernel::fpu_nm_depth_max)
++            kernel::fpu_nm_depth_max = depth;
+         return;
+     }
+ 
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 1545edd9..5280ccde 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -660,6 +660,12 @@ extern uint64_t scheduler_corruption_count;
+ ///        corruption panic aborted the scan.
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ extern uint64_t deadline_detection_integrity;
++/// @brief Highest isr_nesting_depth observed inside the #NM handler (issue
++///        #93, INV-FPU2 pin).  Reset in test_isolate restore; a #NM storm
++///        must keep it <= baseline + 1 (interrupt-gate #NM can never nest a
++///        timer ISR inside the owner-swap).
++// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++extern uint64_t fpu_nm_depth_max;
+ /// @brief Tracks which task's FPU state is currently in the registers.
+ ///        nullptr means no task has used FPU since boot.
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 1ba659c6..c256ae0b 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1383,12 +1383,14 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     // Save parent's FPU state if it's currently in the registers
+     if (__atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE) == parent) {
+         arch::fxsave(parent->fpu_state);
++        ++parent->fpu_state_gen;
+     }
+ #else
+     (void)parent;
+ #endif
+     // Copy FPU state to child
+     tcb->fpu_used = parent->fpu_used;
++    tcb->fpu_state_gen = parent->fpu_state_gen;
+     if (parent->fpu_used) {
+         __builtin_memcpy(tcb->fpu_state, parent->fpu_state, 512);
+     }
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index e6a5709d..85defbbb 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -217,7 +217,7 @@ struct TaskControlBlock {
+           page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
+           user_stack_size_(0), user_data(nullptr), is_user_(false),
+           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
+-          canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
++          canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
+           program_break_start(0), kstack_low_water_(0), text_size_(0),
+           data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
+           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
+@@ -308,10 +308,17 @@ struct TaskControlBlock {
+     ///        bit CANARY_SEGMENTS set when the kernel-stack canary is armed.
+     uint8_t canary_installed;
+ 
+-    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes, 16-byte aligned).
+-    ///        Zeroed on task creation; populated lazily via #NM handler.
++    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes).  64-byte aligned
++    ///        (issue #93; FXSAVE requires 16, 64 avoids split-line stores and
++    ///        matches docs/specs/fpu-context.md §3.3).  Zeroed on task
++    ///        creation; populated lazily via #NM handler.  INV-FPU1: this is
++    ///        the ONLY FPU save location — never allocated at IRQ time.
+     bool fpu_used;
+-    alignas(16) uint8_t fpu_state[512];
++    /// @brief Debug/invariant generation counter, bumped on every fxsave of
++    ///        this task's state (issue #93).  0 = never saved.  Unconditional
++    ///        (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.
++    uint32_t fpu_state_gen;
++    alignas(64) uint8_t fpu_state[512];
+ 
+     uint64_t program_break;
+     uint64_t program_break_start;
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 78bad955..202f6843 100644
+index 202f6843..5cea3886 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1035,   0,       0      },  // measured 2026-09-03: registered 1035 (incl. stress_hrt+2 #101, scheduler_hrt+4 #102)
-+    {"all",                1040,   0,       0      },  // measured: 1035 + syscall_fastpath(+5,#92) → 1040
+-    {"all",                1040,   0,       0      },  // measured: 1035 + syscall_fastpath(+5,#92) → 1040
++    {"all",                1044,   0,       0      },  // measured: 1040 + fpu_invariants(+4,#93) → 1044
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -68,6 +68,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+@@ -64,6 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+     {"task_init",             3,    0,       0      },  // init task exists/reparents
+     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
++    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
+ 
      // syscall
      {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)
-     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
-+    {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
- 
-     // process
-     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index fdcfbfb6..7678b9fb 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -185,6 +185,7 @@ void register_buffer_pool_deterministic_tests();
- void register_no_op_new_tests();
- void register_stress_hrt_tests();
- void register_scheduler_hrt_tests();
-+void register_syscall_fastpath_tests();
- #if defined(CONFIG_ARCH_AARCH64)
- void register_aarch64_tests();
- #endif
-@@ -312,6 +313,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"syscall_core", []() { register_syscall_tests(); }},
-     {"syscall_fuzz", []() { register_syscall_fuzz_tests(); }},
- 
-+    // -- syscall_fastpath: tiered FAST/FULL dispatch (issue #92) --
-+    {"syscall_fastpath", []() { register_syscall_fastpath_tests(); }},
-+
-     // -- process: lifecycle, exec, signals, limits --
-     {"process_lifecycle", []() { register_process_tests(); }},
-     {"process_elf", []() { register_elf_tests(); }},
-@@ -635,6 +639,7 @@ static void register_all_tests() {
-     register_preemption_tests();
-     register_stress_hrt_tests();
-     register_scheduler_hrt_tests();
-+    register_syscall_fastpath_tests();
- #if defined(CONFIG_ARCH_AARCH64)
-      register_aarch64_tests();
- #endif
-@@ -784,6 +789,7 @@ static void register_all_tests_second_half() {
-     register_no_op_new_tests();
-     register_stress_hrt_tests();
-     register_scheduler_hrt_tests();
-+    register_syscall_fastpath_tests();
- #if defined(CONFIG_ARCH_AARCH64)
-      register_aarch64_tests();
- #endif
-diff --git a/src/kernel/test/test_syscall_fastpath.cpp b/src/kernel/test/test_syscall_fastpath.cpp
+diff --git a/src/kernel/test/test_fpu_inv.cpp b/src/kernel/test/test_fpu_inv.cpp
 new file mode 100644
-index 00000000..546aa818
+index 00000000..093522d0
 --- /dev/null
-+++ b/src/kernel/test/test_syscall_fastpath.cpp
-@@ -0,0 +1,314 @@
++++ b/src/kernel/test/test_fpu_inv.cpp
+@@ -0,0 +1,206 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -560,337 +316,243 @@ index 00000000..546aa818
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_syscall_fastpath.cpp
-+/// @brief Syscall fastpath (issue #92) — tiered FAST/FULL dispatch tests.
++/// @file test_fpu_inv.cpp
++/// @brief FPU/SIMD context invariants (issue #93) — INV-FPU1..3 tests.
 +///
-+/// Verifies the pointer-free FAST subset (SYSCALL_FAST_MASK) skips the canary
-+/// walk while the FULL path still validates, and that both paths agree.
-+/// Latency measurement follows the #101/#102 relative-over-absolute
-+/// methodology: TCG rdtsc is coarse-quantized, so the assert is a relative
-+/// FAST-sums-<=-FULL-sums comparison with a magnitude-sanity canary, not an
-+/// absolute cycle bound (docs/specs/syscall-fastpath.md §4/§5).
++/// Verifies the hardened #NM handler (docs/specs/fpu-context.md):
++///   - INV-FPU1: no dynamic allocation in the vector-7 path.
++///   - INV-FPU2: the owner-swap is non-interruptible (#NM is an interrupt
++///     gate; the handler runs with IF cleared).
++///   - Alignment: the per-TCB FXSAVE area is 64-byte aligned.
++///   - Stale-restore regression: #NM with prev_fpu_owner == current (the
++///     armed-switch window) must NOT fxrstor stale TCB state over live
++///     registers.
++/// This file is NOT in the mk/rules.mk filter-out list (test_fpu*.cpp are
++/// excluded for GCC-16 / -mgeneral-regs-only reasons); it uses only
++/// memory-operand x87 asm + arch::* helpers, never XMM register constraints.
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/syscall/syscall.hpp>
++#include <kernel/arch/io.hpp>
 +#include <kernel/core/global_state.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/mempool.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/elf/elf.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <initrd/initrd.hpp>
++#include <kernel/test/resource_tracker.hpp>
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
 +
++// IEEE 754 double 3.14159 ≈ 0x400921F9F01B866E
++static constexpr uint64_t FPU_PI_BITS = 0x400921F9F01B866EULL;
++// IEEE 754 double 2.71828 ≈ 0x4005BF0A8B145769ULL
++static constexpr uint64_t FPU_EULER_BITS = 0x4005BF0A8B145769ULL;
++
++#if defined(CONFIG_ARCH_X86_64)
 +namespace {
 +
-+TaskControlBlock *load_probe(const char *name) {
-+    initrd::InitrdFile f = initrd::find(name);
-+    if (!f.data)
-+        f = initrd::find(name + 2); // strip "./"
-+    if (!f.data)
-+        return nullptr;
-+    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
-+    if (!kernel::elf::validate_header(hdr))
-+        return nullptr;
-+    return kernel::elf::load(hdr, f.data, f.size);
++/// @brief Forces a #NM by setting CR0.TS and executing an x87 instruction.
++void force_nm() {
++    uint64_t cr0 = arch::read_cr0();
++    cr0 |= (1ULL << 3); // TS = 1
++    arch::write_cr0(cr0);
++    asm volatile("fnop" ::: "memory");
 +}
 +
-+constexpr uint64_t k_iterations = 2000;
-+
-+// Number of FAST members (compile-time, mirrors k_syscall_fast[]).
-+constexpr size_t k_fast_count =
-+    sizeof(Syscall::k_syscall_fast) / sizeof(Syscall::k_syscall_fast[0]);
++/// @brief CR0.TS state.
++bool ts_set() {
++    return (arch::read_cr0() >> 3) & 1;
++}
 +
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: The generated SYSCALL_FAST_MASK exactly matches the audited
-+// pointer-free k_syscall_fast[] list, is non-empty, and has no bit at/above
-+// MAX_SYSCALL (compile-time static_asserts).  Every FAST number is a distinct
-+// bit < MAX_SYSCALL, and no bit outside the list is set.
-+// Input: None (pure constexpr inspection).
-+// Expect: mask != 0; every listed number's bit set; popcount == list size;
-+//         no bit >= MAX_SYSCALL.
-+// Depends: Syscall::SYSCALL_FAST_MASK, Syscall::k_syscall_fast[]
-+JARVIS_TEST(fast_mask_matches_config, "PRE: none | POST: none") {
-+    const uint64_t mask = Syscall::SYSCALL_FAST_MASK;
-+    JARVIS_ASSERT(mask != 0);
++// Testidea: INV-FPU1 — the #NM handler performs no dynamic allocation.  A
++// forced #NM storm must leave PMM/MemPool/ResourceTracker deltas at zero.
++// Input: Snapshot ResourceTracker + PMM; N forced #NM (set CR0.TS + x87 op);
++//        re-capture.
++// Expect: All deltas == 0; fpu_owner == current; CR0.TS clear after.
++// Depends: ResourceTracker, PMM, #NM handler
++JARVIS_TEST(fpu_nm_no_alloc, "PRE: none | POST: none") {
++    kernel::test::ResourceCounters before;
++    kernel::test::ResourceTracker::instance().capture(before);
++    uint64_t pages_before = PMM::pool_used_pages();
 +
-+    // Every member's bit is set.
-+    for (size_t i = 0; i < k_fast_count; ++i) {
-+        uint64_t n = static_cast<uint64_t>(Syscall::k_syscall_fast[i]);
-+        JARVIS_ASSERT(n < static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
-+        JARVIS_ASSERT(mask & (1ULL << n));
-+    }
++    auto *current = Scheduler::current_task();
++    JARVIS_ASSERT(current != nullptr);
 +
-+    // No bit outside the list is set (popcount equals list size).
-+    uint64_t bits = 0;
-+    uint64_t tmp = mask;
-+    while (tmp) {
-+        bits += (tmp & 1u);
-+        tmp >>= 1;
-+    }
-+    JARVIS_ASSERT_EQ(k_fast_count, static_cast<size_t>(bits));
++    // Prime the FPU so the #NM path exercises save+restore (owner == current).
++    asm volatile("finit" ::: "memory");
++
++    for (uint64_t i = 0; i < 200; ++i)
++        force_nm();
++
++    uint64_t pages_after = PMM::pool_used_pages();
++    auto *owner = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
++
++    JARVIS_ASSERT_EQ(pages_before, pages_after);
++    JARVIS_ASSERT(owner == current);
++    JARVIS_ASSERT(!ts_set());
++    kernel::test::ResourceTracker::instance().check(before, __func__);
++    asm volatile("finit" ::: "memory");
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: The FAST path (handle_fast) and the FULL path (handle with the
-+// fastpath hook disabled) return identical results for every call-safe FAST
-+// member, and out-of-range numbers return -1 on both.  PAUSE/HALT/REBOOT are
-+// excluded — they halt the CPU and never return (arch::hlt / for(;;)), so a
-+// direct call would hang the harness; they are covered by mask membership and
-+// the canary-skip test instead.  Proves the tiered dispatch does not change
-+// observable behavior for the FAST subset.
-+// Input: Drive every call-safe FAST member through Syscall::handle_fast and
-+//        Syscall::handle (hook off) with identical zeroed args from kernel
-+//        context (canary block inert for kernel tasks).
-+// Expect: Same return value per member on both paths; -1 for an
-+//         out-of-range number on both; no fault.
-+// Depends: Syscall::handle, Syscall::handle_fast, Syscall::set_fastpath_enabled
-+JARVIS_TEST(fast_call_correctness, "PRE: none | POST: none") {
-+    uint64_t regs[20] = {0};
-+    Syscall::set_fastpath_enabled(false);
++// Testidea: INV-FPU2 — the #NM owner-swap is non-interruptible.  #NM enters
++// via an interrupt gate (IF cleared); the kernel is -mgeneral-regs-only so no
++// #NM can nest inside an ISR.  fpu_nm_depth_max must stay <= baseline + 1
++// across a #NM storm (only the #NM entry itself bumps the depth, never a
++// nested timer).
++// Input: Reset fpu_nm_depth_max; baseline isr_nesting_depth (harness = 0);
++//        N forced #NM.
++// Expect: fpu_nm_depth_max <= baseline + 1.
++// Depends: fpu_nm_depth_max (global_state), #NM handler
++JARVIS_TEST(fpu_nm_nesting_impossible, "PRE: none | POST: none") {
++    uint64_t baseline = isr_nesting_depth;
++    __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
 +
-+    for (size_t i = 0; i < k_fast_count; ++i) {
-+        uint64_t n = static_cast<uint64_t>(Syscall::k_syscall_fast[i]);
-+        // PAUSE/HALT/REBOOT halt the CPU (never return) — not callable from
-+        // the harness.
-+        if (n == static_cast<uint64_t>(SyscallNumber::PAUSE) ||
-+            n == static_cast<uint64_t>(SyscallNumber::HALT) ||
-+            n == static_cast<uint64_t>(SyscallNumber::REBOOT))
-+            continue;
-+        uint64_t full = Syscall::handle(n, 0, 0, 0, 0, regs);
-+        uint64_t fast = Syscall::handle_fast(n, 0, 0, 0, 0, regs);
-+        JARVIS_ASSERT_EQ(full, fast);
-+    }
++    asm volatile("finit" ::: "memory");
++    for (uint64_t i = 0; i < 200; ++i)
++        force_nm();
 +
-+    // Out-of-range must return -1 on both paths.
-+    uint64_t oob = static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1),
-+                     Syscall::handle(oob, 0, 0, 0, 0, regs));
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1),
-+                     Syscall::handle_fast(oob, 0, 0, 0, 0, regs));
-+
-+    // Re-arm the fastpath for the remainder of the suite.
-+    Syscall::set_fastpath_enabled(true);
++    uint64_t depth_max =
++        __atomic_load_n(&fpu_nm_depth_max, __ATOMIC_ACQUIRE);
++    JARVIS_ASSERT(depth_max <= baseline + 1);
++    asm volatile("finit" ::: "memory");
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: The FULL path still validates canaries (MP-3 preserved).  A user
-+// task with a tampered stack canary that makes a FULL syscall (write) trips
-+// the canary latch in test mode.  (With the issue-#92 relocation the trip may
-+// latch at the context-switch or tick sample instead of the syscall — either
-+// way the latch fires and the task is caught; this asserts it.)
-+// Input: Load user-app; tamper canary_after[STACK] via HHDM; dispatch.
-+// Expect: canary_trip().count > 0; task terminates without kernel panic.
-+// Depends: canary relocation hooks (syscall FULL path + scheduler), gs::*
-+JARVIS_TEST(full_path_still_validates, "PRE: none | POST: none") {
-+    auto *t = load_probe("user-app.c.elf");
-+    if (!t) {
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    const uint64_t stk = TaskControlBlock::SEG_STACK;
-+    JARVIS_ASSERT(t->canary_installed & (1u << stk));
-+    uint64_t tamper_va = t->canary_after[stk];
-+    JARVIS_ASSERT(tamper_va != 0);
++// Testidea: The per-TCB FXSAVE area is 64-byte aligned and 512 bytes.
++// Input: Compile-time static_asserts (offsetof % 64 == 0, sizeof == 512);
++//        runtime check on a created TCB.
++// Expect: Alignment and size hold; fpu_state_gen starts at 0.
++// Depends: TaskControlBlock layout
++JARVIS_TEST(fpu_save_area_alignment, "PRE: none | POST: none") {
++    static_assert(__builtin_offsetof(TaskControlBlock, fpu_state) % 64 == 0,
++                  "fpu_state must be 64-byte aligned (issue #93)");
++    static_assert(sizeof(TaskControlBlock::fpu_state) == 512,
++                  "fpu_state must be exactly 512 bytes (FXSAVE)");
++    static_assert(alignof(TaskControlBlock::fpu_state) == 64,
++                  "fpu_state alignment must be 64 (issue #93)");
 +
-+    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->page_table_);
-+    JARVIS_ASSERT(phys != 0);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,
-+                     8);
++    auto *t = TaskControlBlock::create([]() {}, 1, 10);
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(reinterpret_cast<uintptr_t>(&t->fpu_state) % 64 == 0);
++    JARVIS_ASSERT_EQ(0U, static_cast<unsigned>(t->fpu_state_gen));
 +
-+    kernel::gs::reset_canary_trip();
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+
-+    JARVIS_ASSERT(kernel::gs::canary_trip().count > 0);
-+    JARVIS_ASSERT(kernel::gs::canary_trip().task_id == t->id);
-+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
-+
-+    kernel::test::terminate_and_drain(*t);
++    kernel::test::terminate_and_drain2(t, t);
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: The FAST path never consults canaries.  A user task performing
-+// ONLY FAST syscalls (yield-probe) with a tampered stack canary must NOT trip
-+// the latch on the syscall path (FAST skips canary), but IS caught by the
-+// relocated scheduler context-switch / tick sampling (canary relocation
-+// restores detection without taxing the hot syscall path).  Assert the latch
-+// is NOT consumed at syscall entry by proving the trip fires (if at all) via
-+// the scheduler hooks, not the syscall — the distinction is that a FAST-only
-+// task never reaches a FULL handler, so the canary never gates a user-pointer
-+// dereference.
-+// Input: Load yield-probe; tamper canary_after[STACK]; dispatch; run bounded
-+//        ticks; then drain.
-+// Expect: No kernel panic; trip latch (if any) fires only from the scheduler
-+//         sample; the probe never faults on its FAST syscalls.
-+// Depends: FAST dispatch, canary relocation scheduler hooks
-+JARVIS_TEST(fast_path_skips_canary, "PRE: none | POST: none") {
-+    auto *t = load_probe("yield-probe.c.elf");
-+    if (!t) {
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    const uint64_t stk = TaskControlBlock::SEG_STACK;
-+    JARVIS_ASSERT(t->canary_installed & (1u << stk));
-+    uint64_t tamper_va = t->canary_after[stk];
-+    JARVIS_ASSERT(tamper_va != 0);
++// Testidea: Regression for the stale-restore S1 (issue #93): #NM with
++// prev_fpu_owner == current (the armed-switch window where TS was published
++// but the deferred switch has not applied) must NOT fxrstor stale TCB state
++// over live registers.  The owner's live ST0 must survive the round-trip.
++// Input: Arm TS, then finit (fires #NM with prev==nullptr → establishes
++//        owner==current); fldl pi; set CR0.TS again (simulate armed arm);
++//        fldl euler (fires #NM with prev==current); read back.
++// Expect: After the retried load, ST0 holds euler then pi — live state
++//         preserved, no stale clobber.
++// Depends: #NM handler stale-restore guard
++JARVIS_TEST(fpu_nm_own_arm_no_clobber, "PRE: none | POST: none") {
++    uint64_t r1 = 0;
++    uint64_t r2 = 0;
 +
-+    uint64_t phys = VMM::virt_to_phys_in_pml4(tamper_va, t->page_table_);
-+    JARVIS_ASSERT(phys != 0);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    __builtin_memset(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys), 0xDD,
-+                     8);
++    // snapshot_restore resets fpu_owner to nullptr, so the FIRST FPU op of
++    // this test must fire #NM to establish owner==current.  Arm TS first:
++    // finit fires #NM with prev==nullptr → init path, owner = harness.
++    uint64_t cr0 = arch::read_cr0();
++    cr0 |= (1ULL << 3);
++    arch::write_cr0(cr0);
++    asm volatile("finit\n"
++                 "fldl %0" // pi -> ST0 (owner now == harness)
++                 :
++                 : "m"(FPU_PI_BITS)
++                 : "memory");
 +
-+    kernel::gs::reset_canary_trip();
++    // Simulate the published-but-unapplied switch arm: TS set, owner still
++    // current.  The next x87 op fires #NM with prev_fpu_owner == current.
++    force_nm();
 +
-+    // Drive the probe on real ticks; it yields (FAST) repeatedly then parks.
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    uint64_t start = arch::Timer::ticks();
-+    // Run for ~2 canary-sample windows (CONFIG_CANARY_SAMPLE_TICKS=64): a
-+    // FAST-only task must run WITHOUT tripping at syscall entry; the relocated
-+    // scheduler sample is the (correct) detection point.
-+    while ((arch::Timer::ticks() - start) < (CONFIG_CANARY_SAMPLE_TICKS * 2)) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
++    // This retried load must NOT have clobbered the live x87 stack with stale
++    // TCB state: fldl pushes euler onto ST0, fstpl pops it into r1, and the
++    // second fstpl pops the original pi into r2.
++    asm volatile("fldl %0\n"
++                 "fstpl %1\n"
++                 "fstpl %2"
++                 :
++                 : "m"(FPU_EULER_BITS), "m"(r1), "m"(r2)
++                 : "memory");
 +
-+    // FAST syscalls never consulted the canary at entry: the trip count is at
-+    // most the scheduler-sample latch, and crucially the probe never faulted.
-+    JARVIS_ASSERT(t->state == TaskState::READY ||
-+                  t->state == TaskState::RUNNING);
-+
-+    kernel::test::terminate_and_drain(*t);
-+    JARVIS_ASSERT(arch::interrupts_enabled());
++    JARVIS_ASSERT_EQ(FPU_EULER_BITS, r1);
++    JARVIS_ASSERT_EQ(FPU_PI_BITS, r2);
++    asm volatile("finit" ::: "memory");
 +    JARVIS_TEST_PASS();
 +}
++#endif  // CONFIG_ARCH_X86_64
 +
-+// Runmode: kernel
-+// Testidea: The FAST dispatcher is no slower than the FULL dispatcher (in
-+// kernel/harness context the canary walk is inert, so this measures the
-+// dispatcher delta).  Relative comparison per #101/#102: sum of FAST-entry
-+// rdtsc deltas <= sum of FULL-entry deltas across N trials (with a
-+// magnitude-sanity canary).  No absolute cycle bound (TCG quantization).
-+// Input: N=2000 rdtsc-pairs around Syscall::handle_fast(YIELD) and
-+//        Syscall::handle(YIELD) with the fastpath hook off (FULL).
-+// Expect: sum_fast <= sum_full; at least one non-zero delta on each side.
-+// Depends: arch::rdtsc, Syscall::handle/handle_fast
-+JARVIS_TEST(fast_latency_lt_full, "PRE: none | POST: none") {
-+    uint64_t regs[20] = {0};
-+    uint64_t n_fast = 0;
-+    uint64_t n_full = 0;
-+    uint64_t sum_fast = 0;
-+    uint64_t sum_full = 0;
-+    uint64_t max_fast = 0;
-+    uint64_t max_full = 0;
-+
-+    // FAST path first.
-+    for (uint64_t i = 0; i < k_iterations; ++i) {
-+        uint64_t t0 = arch::rdtsc();
-+        Syscall::handle_fast(static_cast<uint64_t>(SyscallNumber::YIELD), 0, 0,
-+                             0, 0, regs);
-+        uint64_t t1 = arch::rdtsc();
-+        uint64_t elapsed = t1 > t0 ? t1 - t0 : 0;
-+        if (elapsed != 0) {
-+            ++n_fast;
-+            sum_fast += elapsed;
-+            if (elapsed > max_fast)
-+                max_fast = elapsed;
-+        }
-+    }
-+
-+    // FULL path (hook off).
-+    Syscall::set_fastpath_enabled(false);
-+    for (uint64_t i = 0; i < k_iterations; ++i) {
-+        uint64_t t0 = arch::rdtsc();
-+        Syscall::handle(static_cast<uint64_t>(SyscallNumber::YIELD), 0, 0, 0,
-+                        0, regs);
-+        uint64_t t1 = arch::rdtsc();
-+        uint64_t elapsed = t1 > t0 ? t1 - t0 : 0;
-+        if (elapsed != 0) {
-+            ++n_full;
-+            sum_full += elapsed;
-+            if (elapsed > max_full)
-+                max_full = elapsed;
-+        }
-+    }
-+    Syscall::set_fastpath_enabled(true);
-+
-+    Logger::info(
-+        "[SYSFAST] fast: n=%llu sum=%llu max=%llu | full: n=%llu sum=%llu "
-+        "max=%llu",
-+        (unsigned long long)n_fast, (unsigned long long)sum_fast,
-+        (unsigned long long)max_fast, (unsigned long long)n_full,
-+        (unsigned long long)sum_full, (unsigned long long)max_full);
-+
-+    JARVIS_ASSERT(n_fast >= 1);
-+    JARVIS_ASSERT(n_full >= 1);
-+    // Relative: the FAST dispatcher must not be slower than the FULL
-+    // dispatcher (per-sample averages are within TCG noise, so compare sums
-+    // with generous headroom).
-+    uint64_t avg_fast = n_fast ? sum_fast / n_fast : 0;
-+    uint64_t avg_full = n_full ? sum_full / n_full : 0;
-+    JARVIS_ASSERT(avg_fast <= avg_full * 2);
-+    JARVIS_ASSERT(arch::interrupts_enabled());
-+    JARVIS_TEST_PASS();
++void register_fpu_inv_tests() {
++    Logger::info("Registering fpu_invariants tests");
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_REGISTER_TEST(fpu_nm_no_alloc);
++    JARVIS_REGISTER_TEST(fpu_nm_nesting_impossible);
++    JARVIS_REGISTER_TEST(fpu_save_area_alignment);
++    JARVIS_REGISTER_TEST(fpu_nm_own_arm_no_clobber);
++#endif  // CONFIG_ARCH_X86_64
 +}
-+
-+void register_syscall_fastpath_tests() {
-+    Logger::info("Registering syscall_fastpath tests");
-+    JARVIS_REGISTER_TEST(fast_mask_matches_config);
-+    JARVIS_REGISTER_TEST(fast_call_correctness);
-+    JARVIS_REGISTER_TEST(full_path_still_validates);
-+    JARVIS_REGISTER_TEST(fast_path_skips_canary);
-+    JARVIS_REGISTER_TEST(fast_latency_lt_full);
-+}
-\ No newline at end of file
-diff --git a/src/lib/test.hpp b/src/lib/test.hpp
-index c8465951..90f687c9 100644
---- a/src/lib/test.hpp
-+++ b/src/lib/test.hpp
-@@ -92,7 +92,7 @@ public:
-     static const char* current_test_name();
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 1993f733..20a4086c 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -696,6 +696,7 @@ void snapshot_restore(const char *test_name) {
+     // here so ResourceTracker does not see leaked resources.
+     Scheduler::drain_zombie_list();
+     __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
++    __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
+     if (auto *tctx = Scheduler::get_test_context())
+         tctx->dummy_save_rsp = 0;
  
- private:
--    static constexpr size_t MAX_TESTS = 1056;
-+    static constexpr size_t MAX_TESTS = 1072;
-     static constexpr size_t MAX_CLASSES = 64;
-     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
-     static TestCase tests_[MAX_TESTS];
-diff --git a/userspace/yield-probe.c b/userspace/yield-probe.c
-new file mode 100644
-index 00000000..dfa6e95f
---- /dev/null
-+++ b/userspace/yield-probe.c
-@@ -0,0 +1,17 @@
-+#include <syscall.h>
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 7678b9fb..630b0712 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -186,6 +186,7 @@ void register_no_op_new_tests();
+ void register_stress_hrt_tests();
+ void register_scheduler_hrt_tests();
+ void register_syscall_fastpath_tests();
++void register_fpu_inv_tests();
+ #if defined(CONFIG_ARCH_AARCH64)
+ void register_aarch64_tests();
+ #endif
+@@ -309,6 +310,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"task_init", []() { register_init_tests(); }},
+     {"task_tcb_log", []() { register_tcb_write_log_tests(); }},
+ 
++    // -- fpu_invariants: FPU/SIMD context invariants (issue #93) --
++    // The legacy test_fpu*.cpp files are filtered out of the x86_64 build
++    // (GCC 16 / -mgeneral-regs-only); this class carries the INV-FPU tests.
++    {"fpu_invariants", []() { register_fpu_inv_tests(); }},
 +
-+// Issue #92 fastpath probe: performs only FAST-class syscalls (YIELD +
-+// GETPID), never touching user pointers or FULL syscalls.  Used by
-+// fast_path_skips_canary to prove the FAST path never consults canaries even
-+// when the caller's segment canaries are tampered.  Parks forever at the end
-+// so the harness can kill it.
-+int main(void) {
-+    for (int i = 0; i < 64; ++i) {
-+        (void)__syscall5(SYS_YIELD, 0, 0, 0, 0);
-+        (void)__syscall5(SYS_GETPID, 0, 0, 0, 0);
-+    }
-+    for (;;) {
-+        (void)__syscall5(SYS_YIELD, 0, 0, 0, 0);
-+    }
-+    return 0;
-+}
-\ No newline at end of file
+     // -- syscall: dispatch interface and fuzzing --
+     {"syscall_core", []() { register_syscall_tests(); }},
+     {"syscall_fuzz", []() { register_syscall_fuzz_tests(); }},
+@@ -640,6 +646,7 @@ static void register_all_tests() {
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
+     register_syscall_fastpath_tests();
++    register_fpu_inv_tests();
+ #if defined(CONFIG_ARCH_AARCH64)
+      register_aarch64_tests();
+ #endif
+@@ -790,6 +797,7 @@ static void register_all_tests_second_half() {
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
+     register_syscall_fastpath_tests();
++    register_fpu_inv_tests();
+ #if defined(CONFIG_ARCH_AARCH64)
+      register_aarch64_tests();
+ #endif

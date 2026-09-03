@@ -696,6 +696,7 @@ void snapshot_restore(const char *test_name) {
     // here so ResourceTracker does not see leaked resources.
     Scheduler::drain_zombie_list();
     __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
     if (auto *tctx = Scheduler::get_test_context())
         tctx->dummy_save_rsp = 0;
 

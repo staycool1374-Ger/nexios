@@ -217,7 +217,7 @@ struct TaskControlBlock {
           page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
           user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
-          canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
+          canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
           program_break_start(0), kstack_low_water_(0), text_size_(0),
           data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
@@ -308,10 +308,17 @@ struct TaskControlBlock {
     ///        bit CANARY_SEGMENTS set when the kernel-stack canary is armed.
     uint8_t canary_installed;
 
-    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes, 16-byte aligned).
-    ///        Zeroed on task creation; populated lazily via #NM handler.
+    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes).  64-byte aligned
+    ///        (issue #93; FXSAVE requires 16, 64 avoids split-line stores and
+    ///        matches docs/specs/fpu-context.md §3.3).  Zeroed on task
+    ///        creation; populated lazily via #NM handler.  INV-FPU1: this is
+    ///        the ONLY FPU save location — never allocated at IRQ time.
     bool fpu_used;
-    alignas(16) uint8_t fpu_state[512];
+    /// @brief Debug/invariant generation counter, bumped on every fxsave of
+    ///        this task's state (issue #93).  0 = never saved.  Unconditional
+    ///        (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.
+    uint32_t fpu_state_gen;
+    alignas(64) uint8_t fpu_state[512];
 
     uint64_t program_break;
     uint64_t program_break_start;

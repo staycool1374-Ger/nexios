@@ -186,6 +186,7 @@ void register_no_op_new_tests();
 void register_stress_hrt_tests();
 void register_scheduler_hrt_tests();
 void register_syscall_fastpath_tests();
+void register_fpu_inv_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -308,6 +309,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      }},
     {"task_init", []() { register_init_tests(); }},
     {"task_tcb_log", []() { register_tcb_write_log_tests(); }},
+
+    // -- fpu_invariants: FPU/SIMD context invariants (issue #93) --
+    // The legacy test_fpu*.cpp files are filtered out of the x86_64 build
+    // (GCC 16 / -mgeneral-regs-only); this class carries the INV-FPU tests.
+    {"fpu_invariants", []() { register_fpu_inv_tests(); }},
 
     // -- syscall: dispatch interface and fuzzing --
     {"syscall_core", []() { register_syscall_tests(); }},
@@ -640,6 +646,7 @@ static void register_all_tests() {
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
     register_syscall_fastpath_tests();
+    register_fpu_inv_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -790,6 +797,7 @@ static void register_all_tests_second_half() {
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
     register_syscall_fastpath_tests();
+    register_fpu_inv_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
