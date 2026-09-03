@@ -576,6 +576,28 @@
 #define CONFIG_USER_MMIO_REGION_SIZE 0x200000ULL // 2 MiB
 #endif
 
+/// Maximum number of concurrent user-space frame (shared-memory) mappings per
+/// registry (issue #106 Part B).  Each entry reserves one slot in a fixed
+/// user VA window (CONFIG_USER_SHM_VA_BASE + slot*CONFIG_USER_SHM_REGION_SIZE).
+/// Static bounded array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_FRAME_MAPS
+#define CONFIG_CAP_MAX_FRAME_MAPS 8
+#endif
+
+/// Base of the fixed user-space shared-memory mapping window (issue #106
+/// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
+/// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window
+/// (0x61000000 + 8*2MiB = 0x61100000).  A static_assert in cap/frame_map.cpp
+/// pins the window bounds.
+#ifndef CONFIG_USER_SHM_VA_BASE
+#define CONFIG_USER_SHM_VA_BASE 0x62000000ULL
+#endif
+
+/// Size of one user shared-memory mapping region (issue #106 Part B).
+#ifndef CONFIG_USER_SHM_REGION_SIZE
+#define CONFIG_USER_SHM_REGION_SIZE 0x200000ULL // 2 MiB
+#endif
+
 /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
 /// by a TU-local live counter in cap/iommu.cpp.
 #ifndef CONFIG_CAP_MAX_IOMMU

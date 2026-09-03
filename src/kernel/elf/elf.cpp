@@ -25,6 +25,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -718,6 +719,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // (a later unmap/revoke/cleanup would write PTE entries into freed
     // page-table memory).
     cap::MmioUserMap::drain_task(*tcb);
+    cap::FrameUserMap::drain_task(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
     // Issue #92 canary relocation: the scheduler now samples user-task segment

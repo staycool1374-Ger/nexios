@@ -40,8 +40,13 @@ class FrameCap : public KernelObject {
     static FrameCap *create(uint64_t phys, size_t count, bool is_user);
 
     /// @brief Final teardown: returns every wrapped frame to the PMM and the
-    ///        block to the MemPool.
+    ///        block to the MemPool.  Also retroactively removes this cap's
+    ///        user frame mappings (issue #106 revocation closure).
     void dispose() noexcept override;
+
+    /// @brief Marks the cap revoked; retroactively removes this cap's user
+    ///        frame mappings (issue #106).  Called by cap::revoke.
+    void revoke() noexcept override;
 
     /// @brief Genuinely shared (referenced by capability slots).
     bool is_shared() const noexcept override {

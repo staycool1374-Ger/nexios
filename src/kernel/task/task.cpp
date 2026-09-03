@@ -46,6 +46,7 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
 
@@ -1847,6 +1848,7 @@ void TaskControlBlock::cleanup() noexcept {
         // drain was added to prevent (iter-2 S1).  Runs while the mapping's
         // cap reference is still valid (before release_all_objects).
         cap::MmioUserMap::drain_task(*this);
+        cap::FrameUserMap::drain_task(*this);
 
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot

@@ -40,6 +40,7 @@
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/cap/msix.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
@@ -1355,6 +1356,7 @@ void snapshot_restore(const char *test_name) {
         // device pages can never leak a stale registry slot or VA across
         // snapshot cycles.
         cap::MmioUserMap::snapshot_reset();
+        cap::FrameUserMap::snapshot_reset();
         // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
         // test that created an MsixCap never leaves a recycled (bdf, entry)
         // un-claimable in the next cycle.

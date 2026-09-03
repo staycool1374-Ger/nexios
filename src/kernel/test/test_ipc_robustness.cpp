@@ -50,6 +50,26 @@ struct IpcRctx {
     uint64_t out_;
 };
 
+// IpcPriorityOrderedWake shared state (issue #106 Part A): sender wake flags
+// indexed by priority bucket + the receiver task id senders target.
+uint64_t s_wake_flags[3] = {0, 0, 0};
+uint64_t s_recv_id = 0;
+
+/// @brief Sender entry for IpcPriorityOrderedWake: send to the shared receiver
+///        id, then flag completion.  Context passed via user_data (capture-less
+///        entry function requirement of TaskControlBlock::create).
+void ipc_prio_sender_entry() {
+    auto *self = Scheduler::current_task();
+    auto *flag = reinterpret_cast<uint64_t *>(self->user_data);
+    Message msg{};
+    msg.sender_id = self->id;
+    msg.type = 1;
+    msg.priority = 0;
+    msg.data_size = 0;
+    IPC::send(s_recv_id, msg, 0);
+    __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
+}
+
 } // namespace
 
 TEST_CLASS(IpcMisformedMessages) {
@@ -478,6 +498,126 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
     JARVIS_ASSERT_EQ(0ULL, send_result);
 };
 
+TEST_CLASS(IpcPriorityOrderedWake) {
+    // Issue #106 Part A (subsumes #15): verifies blocked-sender wakeup is
+    // PRIORITY-ORDERED (highest priority first).  block_sender inserts
+    // descending by priority (ipc.cpp:506-512) and wake_sender pops the head
+    // (ipc.cpp:543-559) — this test proves the ordering through the REAL
+    // wake path (IPC::recv → wake_sender), not just list inspection.
+    //
+    // Pattern mirrors IpcBlockedSenderOnReceiverCleanup (above): the receiver
+    // is the test task itself, fills its own queue so senders genuinely
+    // block, registers 3 senders under one IrqGuard, drains one slot, and
+    // asserts the highest-priority sender is woken first.
+    auto *self = Scheduler::current_task();
+    JARVIS_ASSERT(self != nullptr);
+    s_recv_id = self->id;
+    s_wake_flags[0] = 0;
+    s_wake_flags[1] = 0;
+    s_wake_flags[2] = 0;
+
+    // Fill this task's own queue so real senders block (full queue).
+    Message fill{};
+    fill.sender_id = 0;
+    fill.type = 99;
+    fill.priority = 0;
+    fill.data_size = 0;
+    for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i)
+        self->msg_queue.push(fill);
+
+    // 3 senders at distinct priorities (higher number = more urgent).
+    auto *hi = TaskControlBlock::create(ipc_prio_sender_entry, 16, 10);
+    auto *mid = TaskControlBlock::create(ipc_prio_sender_entry, 14, 10);
+    auto *lo = TaskControlBlock::create(ipc_prio_sender_entry, 12, 10);
+    JARVIS_ASSERT(hi != nullptr);
+    JARVIS_ASSERT(mid != nullptr);
+    JARVIS_ASSERT(lo != nullptr);
+    hi->user_data = &s_wake_flags[0];
+    mid->user_data = &s_wake_flags[1];
+    lo->user_data = &s_wake_flags[2];
+
+    {
+        arch::IrqGuard _guard;
+        Scheduler::add_task(*hi);
+        Scheduler::add_task(*mid);
+        Scheduler::add_task(*lo);
+    }
+
+    // Drive until all three are genuinely BLOCKED on the full queue.
+    Scheduler::reschedule();
+    for (int i = 0; i < 1000 && !(hi->state == TaskState::BLOCKED &&
+                                  mid->state == TaskState::BLOCKED &&
+                                  lo->state == TaskState::BLOCKED);
+         ++i) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    JARVIS_ASSERT(hi->state == TaskState::BLOCKED);
+    JARVIS_ASSERT(mid->state == TaskState::BLOCKED);
+    JARVIS_ASSERT(lo->state == TaskState::BLOCKED);
+
+    // List must be sorted descending (highest at head) — proves insert
+    // ordering.  Inspect under the queue lock.
+    {
+        SpinLockGuard<sync::SpinLock> guard(self->msg_queue.lock_);
+        JARVIS_ASSERT(self->msg_queue.blocked_senders_head == hi);
+        JARVIS_ASSERT(hi->blocked_next == mid);
+        JARVIS_ASSERT(mid->blocked_next == lo);
+        JARVIS_ASSERT(lo->blocked_next == nullptr);
+    }
+
+    // Drain one slot via the REAL recv path → wake_sender pops the head.
+    Message out;
+    JARVIS_ASSERT(IPC::recv(out));
+
+    // The highest-priority sender is woken first (hi prio 16 preempts the
+    // prio-14/12 on the next tick).  Wait until hi has actually RUN (its
+    // flag is set — proves it completed its send + terminated), while
+    // mid/lo must still be BLOCKED (never woken).
+    for (int i = 0; i < 1000 && !(__atomic_load_n(&s_wake_flags[0], __ATOMIC_ACQUIRE) == 1); ++i) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[0]);
+    JARVIS_ASSERT_EQ(0ULL, s_wake_flags[1]);
+    JARVIS_ASSERT_EQ(0ULL, s_wake_flags[2]);
+    JARVIS_ASSERT(mid->state == TaskState::BLOCKED);
+    JARVIS_ASSERT(lo->state == TaskState::BLOCKED);
+
+    // Drain the rest — each pop wakes the next head (mid, then lo).  The
+    // woken senders re-push one message then terminate.  Drain a bounded
+    // count = original fill + 3 re-pushes (fixed, no unsynchronized list read).
+    Message extra;
+    for (uint64_t i = 0; i < IPC_MAX_QUEUE_MSG + 3; ++i) {
+        if (!IPC::recv(extra))
+            break;
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+
+    // Give every woken sender a chance to run + re-push + self-terminate.
+    for (int i = 0; i < 1000 && !(hi->state == TaskState::TERMINATED &&
+                                  mid->state == TaskState::TERMINATED &&
+                                  lo->state == TaskState::TERMINATED);
+         ++i) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+
+    // Cleanup BEFORE asserts (cookbook Rule 5): force-terminate any straggler
+    // and reclaim all zombies exactly once.
+    kernel::test::terminate_and_drain3(hi, mid, lo);
+
+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[0]);
+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[1]);
+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[2]);
+    {
+        SpinLockGuard<sync::SpinLock> guard(self->msg_queue.lock_);
+        JARVIS_ASSERT(self->msg_queue.blocked_senders_head == nullptr);
+    }
+    JARVIS_TEST_PASS();
+};
+
 void register_ipc_robustness_tests() {
     Logger::info("Registering IPC robustness tests");
     REGISTER_CLASS(IpcMisformedMessages);
@@ -488,6 +628,7 @@ void register_ipc_robustness_tests() {
 #endif
     REGISTER_CLASS(IpcBidirectionalSendSync);
     REGISTER_CLASS(IpcBlockedSenderOnReceiverCleanup);
+    REGISTER_CLASS(IpcPriorityOrderedWake);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

@@ -92,7 +92,10 @@ enum class SyscallNumber : uint8_t {
     IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
     MMIO_MAP = 61,     ///< map an MmioCap memory BAR into the caller's user VA window (issue #8)
     MMIO_UNMAP = 62,   ///< unmap a user MMIO mapping by VA (issue #8)
-    MAX_SYSCALL = 63,
+    FRAME_CREATE = 63, ///< get contiguous user frames into a FrameCap in the caller's CSpace (issue #106 Part B)
+    FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
+    FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
+    MAX_SYSCALL = 66,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
@@ -311,6 +314,12 @@ class Syscall {
                                  uint64_t *);
     static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
                                    uint64_t *);
+    static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -377,6 +386,9 @@ class Syscall {
             &Syscall::sys_iommu_unmap,
             &Syscall::sys_mmio_map,
             &Syscall::sys_mmio_unmap,
+            &Syscall::sys_frame_create,
+            &Syscall::sys_frame_map,
+            &Syscall::sys_frame_unmap,
     };
 };
 

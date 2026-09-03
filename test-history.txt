@@ -631,3 +631,20 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-03 18:59:41 fpu_invariants PASSED: 4 FAILED: 0 TIME: 217ms (issue #93 auditor-fix re-run)
 2026-09-03 19:05:30 all PASSED: 1029 FAILED: 0 TIME: 78048ms (issue #93 debug gate, registered 1044)
 2026-09-03 19:06:11 release_all PASSED: 85 FAILED: 0 TIME: 16628ms (issue #93 release gate, trace OFF)
+2026-09-03 21:38:36 ipc_robustness PASSED: 7 FAILED: 0 TIME: 2052ms (issue #106 Part A: priority-ordered wake verification)
+2026-09-03 21:48:51 cap_shm PASSED: 5 FAILED: 0 TIME: 282ms (issue #106 Part B first green run)
+2026-09-03 21:49:20 cap_ipc PASSED: 6 FAILED: 0 TIME: 1375ms (issue #106 regression)
+2026-09-03 21:49:40 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 1508ms (issue #106 regression)
+2026-09-03 21:50:00 cap_core PASSED: 10 FAILED: 0 TIME: 985ms (issue #106 regression)
+2026-09-03 21:50:20 cap_syscall PASSED: 8 FAILED: 0 TIME: 1527ms (issue #106 regression)
+2026-09-03 21:50:40 syscall_core PASSED: 15 FAILED: 0 TIME: 559ms (issue #106 regression)
+2026-09-03 21:51:00 ipc_extended PASSED: 9 FAILED: 0 TIME: 364ms (issue #106 regression)
+2026-09-03 21:57:34 cap_shm PASSED: 5 FAILED: 0 TIME: 297ms (issue #106 auditor-fix re-run)
+2026-09-03 22:03:07 cap_shm PASSED: 5 FAILED: 0 TIME: 1181ms (issue #106 multi-page-closure fix re-run)
+2026-09-03 20:11:07 cap_shm PASSED: 5 FAILED: 0 TIME: 1166ms
+2026-09-03 20:11:07 cap_mmio PASSED: 14 FAILED: 0 TIME: 499ms
+2026-09-03 20:11:07 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 360ms
+2026-09-03 20:11:07 ipc_robustness PASSED: 7 FAILED: 0 TIME: 488ms
+2026-09-03 20:11:07 cap_shm PASSED: 0 FAILED: 0 TIME: 0ms STATUS: RELEASE-TF_KERNEL-EXCLUDED
+2026-09-03 22:14:21 all PASSED: 1035 FAILED: 0 TIME: 96117ms (issue #106 debug gate, registered 1050)
+2026-09-03 22:14:42 release_all PASSED: 85 FAILED: 0 TIME: 17573ms (issue #106 release gate, trace OFF)

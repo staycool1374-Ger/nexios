@@ -20,6 +20,7 @@
 /// @brief Capability-wrapped physical memory frame implementation.
 
 #include <kernel/cap/frame.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/test/resource_tracker.hpp>
@@ -45,10 +46,23 @@ FrameCap *FrameCap::create(uint64_t phys, size_t count, bool is_user) {
 }
 
 void FrameCap::dispose() noexcept {
+    // Issue #106 Part B revocation closure: before the cap block is freed,
+    // retroactively remove this cap's user frame mappings so a live task's
+    // mapped shared frames cannot outlive the capability.  The cap pointer is
+    // non-owning (equality-match only) in the map registry — never
+    // dereferenced after this point.
+    FrameUserMap::invalidate_cap(this);
     for (size_t i = 0; i < count; ++i)
         PMM::free_page(phys + i * arch::PAGE_SIZE);
     kernel::test::ResourceTracker::instance().track_cap_object_remove();
     MemPool::free(this);
+}
+
+void FrameCap::revoke() noexcept {
+    // Issue #106 Part B: same closure as dispose — a revoked capability must
+    // not leave stale frame mappings behind (fail-closed, MMIO parity).
+    FrameUserMap::invalidate_cap(this);
+    KernelObject::revoke();
 }
 
 } // namespace kernel::cap

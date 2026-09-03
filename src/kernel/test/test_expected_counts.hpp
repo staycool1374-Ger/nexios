@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1044,   0,       0      },  // measured: 1040 + fpu_invariants(+4,#93) → 1044
+    {"all",                1050,   0,       0      },  // measured: 1045 + cap_shm(+5,#106 Part B) → 1050
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -94,13 +94,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
+    {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
     {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
-    {"ipc_robustness",        6,    0,       0      },  // misformed/wraparound/concurrent/cleanup
+    {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
 
     // vfs
