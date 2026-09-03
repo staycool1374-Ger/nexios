@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -132,33 +132,39 @@ Collaboration diagram for kernel::Scheduler::TaskFields:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:ae0442901731eb7f5df2d376feafd0788" id="r_ae0442901731eb7f5df2d376feafd0788"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae0442901731eb7f5df2d376feafd0788">magic</a></td></tr>
+<tr class="memitem:ae0442901731eb7f5df2d376feafd0788" id="r_ae0442901731eb7f5df2d376feafd0788"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae0442901731eb7f5df2d376feafd0788">magic</a></td></tr>
 <tr class="memdesc:ae0442901731eb7f5df2d376feafd0788"><td class="mdescLeft">&#160;</td><td class="mdescRight">TCB_MAGIC for validity check.  <br /></td></tr>
-<tr class="memitem:a07e1d4833f77b1a0063ff8052e7643a3" id="r_a07e1d4833f77b1a0063ff8052e7643a3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a07e1d4833f77b1a0063ff8052e7643a3">id</a></td></tr>
+<tr class="memitem:a07e1d4833f77b1a0063ff8052e7643a3" id="r_a07e1d4833f77b1a0063ff8052e7643a3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a07e1d4833f77b1a0063ff8052e7643a3">id</a></td></tr>
 <tr class="memdesc:a07e1d4833f77b1a0063ff8052e7643a3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID for matching on restore.  <br /></td></tr>
-<tr class="memitem:a1deddb6c37eebb39eb479ef0bd2095b7" id="r_a1deddb6c37eebb39eb479ef0bd2095b7"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1deddb6c37eebb39eb479ef0bd2095b7">parent_id</a></td></tr>
-<tr class="memitem:a01bde2d9b3887ac260ba8d6e8b1cbd2c" id="r_a01bde2d9b3887ac260ba8d6e8b1cbd2c"><td class="memItemLeft"><a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">TaskState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01bde2d9b3887ac260ba8d6e8b1cbd2c">state</a></td></tr>
-<tr class="memitem:a06613a61eb8e6bf0b9a70d68163af9f3" id="r_a06613a61eb8e6bf0b9a70d68163af9f3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a06613a61eb8e6bf0b9a70d68163af9f3">priority</a></td></tr>
-<tr class="memitem:a97ae0ecfb669f8f11d73315c2d128390" id="r_a97ae0ecfb669f8f11d73315c2d128390"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a97ae0ecfb669f8f11d73315c2d128390">base_priority</a></td></tr>
-<tr class="memitem:aaacdfbcd2ceec6cccdfca7ab10cc66f0" id="r_aaacdfbcd2ceec6cccdfca7ab10cc66f0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aaacdfbcd2ceec6cccdfca7ab10cc66f0">period_ticks</a></td></tr>
-<tr class="memitem:af342e08b29409d1cca26c72b5ecba7bb" id="r_af342e08b29409d1cca26c72b5ecba7bb"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#af342e08b29409d1cca26c72b5ecba7bb">deadline_ticks</a></td></tr>
-<tr class="memitem:a64ac58a847682a5727b3182b7060de3b" id="r_a64ac58a847682a5727b3182b7060de3b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a64ac58a847682a5727b3182b7060de3b">executed_ticks</a></td></tr>
-<tr class="memitem:a5220916172caf562cc65cb8143cc48d0" id="r_a5220916172caf562cc65cb8143cc48d0"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5220916172caf562cc65cb8143cc48d0">remaining_ticks</a></td></tr>
-<tr class="memitem:ac06af7f69711aa38a8eacdf18402b41a" id="r_ac06af7f69711aa38a8eacdf18402b41a"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ac06af7f69711aa38a8eacdf18402b41a">exit_code</a></td></tr>
+<tr class="memitem:a1deddb6c37eebb39eb479ef0bd2095b7" id="r_a1deddb6c37eebb39eb479ef0bd2095b7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1deddb6c37eebb39eb479ef0bd2095b7">parent_id</a></td></tr>
+<tr class="memitem:a01bde2d9b3887ac260ba8d6e8b1cbd2c" id="r_a01bde2d9b3887ac260ba8d6e8b1cbd2c"><td class="memItemLeft">TaskState&#160;</td><td class="memItemRight"><a class="el" href="#a01bde2d9b3887ac260ba8d6e8b1cbd2c">state</a></td></tr>
+<tr class="memitem:a06613a61eb8e6bf0b9a70d68163af9f3" id="r_a06613a61eb8e6bf0b9a70d68163af9f3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a06613a61eb8e6bf0b9a70d68163af9f3">priority</a></td></tr>
+<tr class="memitem:a97ae0ecfb669f8f11d73315c2d128390" id="r_a97ae0ecfb669f8f11d73315c2d128390"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a97ae0ecfb669f8f11d73315c2d128390">base_priority</a></td></tr>
+<tr class="memitem:aaacdfbcd2ceec6cccdfca7ab10cc66f0" id="r_aaacdfbcd2ceec6cccdfca7ab10cc66f0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaacdfbcd2ceec6cccdfca7ab10cc66f0">period_ticks</a></td></tr>
+<tr class="memitem:af342e08b29409d1cca26c72b5ecba7bb" id="r_af342e08b29409d1cca26c72b5ecba7bb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af342e08b29409d1cca26c72b5ecba7bb">deadline_ticks</a></td></tr>
+<tr class="memitem:aa9502cbe1536e5fdfb0304fccd2229e6" id="r_aa9502cbe1536e5fdfb0304fccd2229e6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9502cbe1536e5fdfb0304fccd2229e6">deadline_missed</a></td></tr>
+<tr class="memitem:a40d4650306ca6e046b2191e7e6b00bf8" id="r_a40d4650306ca6e046b2191e7e6b00bf8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a40d4650306ca6e046b2191e7e6b00bf8">deadline_miss_count</a></td></tr>
+<tr class="memitem:a64ac58a847682a5727b3182b7060de3b" id="r_a64ac58a847682a5727b3182b7060de3b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a64ac58a847682a5727b3182b7060de3b">executed_ticks</a></td></tr>
+<tr class="memitem:a5220916172caf562cc65cb8143cc48d0" id="r_a5220916172caf562cc65cb8143cc48d0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5220916172caf562cc65cb8143cc48d0">remaining_ticks</a></td></tr>
+<tr class="memitem:ac06af7f69711aa38a8eacdf18402b41a" id="r_ac06af7f69711aa38a8eacdf18402b41a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac06af7f69711aa38a8eacdf18402b41a">exit_code</a></td></tr>
 <tr class="memitem:acc617a3c02f77a652a45be6ccb81a0a6" id="r_acc617a3c02f77a652a45be6ccb81a0a6"><td class="memItemLeft">TaskContext&#160;</td><td class="memItemRight"><a class="el" href="#acc617a3c02f77a652a45be6ccb81a0a6">context</a></td></tr>
 <tr class="memdesc:acc617a3c02f77a652a45be6ccb81a0a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Full register context (critical: rsp).  <br /></td></tr>
-<tr class="memitem:aedaae8e855558d9bb64b9be482051bf9" id="r_aedaae8e855558d9bb64b9be482051bf9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aedaae8e855558d9bb64b9be482051bf9">kernel_stack_top</a></td></tr>
+<tr class="memitem:a543aa91c75af55445f7be6646a4947ef" id="r_a543aa91c75af55445f7be6646a4947ef"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a543aa91c75af55445f7be6646a4947ef">kernel_stack</a></td></tr>
+<tr class="memdesc:a543aa91c75af55445f7be6646a4947ef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel stack base pointer.  <br /></td></tr>
+<tr class="memitem:aedaae8e855558d9bb64b9be482051bf9" id="r_aedaae8e855558d9bb64b9be482051bf9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aedaae8e855558d9bb64b9be482051bf9">kernel_stack_top</a></td></tr>
 <tr class="memdesc:aedaae8e855558d9bb64b9be482051bf9"><td class="mdescLeft">&#160;</td><td class="mdescRight">For RSP-range validation.  <br /></td></tr>
-<tr class="memitem:a7f67f7194f39c7f8417c1839bf46c44c" id="r_a7f67f7194f39c7f8417c1839bf46c44c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7f67f7194f39c7f8417c1839bf46c44c">waiting_child_pid</a></td></tr>
-<tr class="memitem:abea76adbdcd55bcde7d4ef877d045a84" id="r_abea76adbdcd55bcde7d4ef877d045a84"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abea76adbdcd55bcde7d4ef877d045a84">waiting_child_status</a></td></tr>
-<tr class="memitem:a3a8da7e0197955ddbcf5c91d5e2886bc" id="r_a3a8da7e0197955ddbcf5c91d5e2886bc"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3a8da7e0197955ddbcf5c91d5e2886bc">pending_signals</a></td></tr>
-<tr class="memitem:a27309f0e9bc19f99776057140c067efe" id="r_a27309f0e9bc19f99776057140c067efe"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a27309f0e9bc19f99776057140c067efe">alarm_ticks</a></td></tr>
+<tr class="memitem:a7f67f7194f39c7f8417c1839bf46c44c" id="r_a7f67f7194f39c7f8417c1839bf46c44c"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7f67f7194f39c7f8417c1839bf46c44c">waiting_child_pid</a></td></tr>
+<tr class="memitem:abea76adbdcd55bcde7d4ef877d045a84" id="r_abea76adbdcd55bcde7d4ef877d045a84"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abea76adbdcd55bcde7d4ef877d045a84">waiting_child_status</a></td></tr>
+<tr class="memitem:a3a8da7e0197955ddbcf5c91d5e2886bc" id="r_a3a8da7e0197955ddbcf5c91d5e2886bc"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3a8da7e0197955ddbcf5c91d5e2886bc">pending_signals</a></td></tr>
+<tr class="memitem:a27309f0e9bc19f99776057140c067efe" id="r_a27309f0e9bc19f99776057140c067efe"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a27309f0e9bc19f99776057140c067efe">alarm_ticks</a></td></tr>
 <tr class="memitem:a19746974d73ea97c73607c45ffd757db" id="r_a19746974d73ea97c73607c45ffd757db"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a19746974d73ea97c73607c45ffd757db">alarm_armed</a></td></tr>
-<tr class="memitem:ac73ae1af5ef6915c916d0c3b1f1850ad" id="r_ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac73ae1af5ef6915c916d0c3b1f1850ad">runq_next</a></td></tr>
+<tr class="memitem:ac73ae1af5ef6915c916d0c3b1f1850ad" id="r_ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ac73ae1af5ef6915c916d0c3b1f1850ad">runq_next</a></td></tr>
 <tr class="memdesc:ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ready-queue intrusive list pointers (POD copy). These form doubly-linked lists; TCBs are in-place across snapshot cycles so pointer values remain valid.  <br /></td></tr>
-<tr class="memitem:a79d3a773fa7cb12eb78681ed6fc4cdb6" id="r_a79d3a773fa7cb12eb78681ed6fc4cdb6"><td class="memItemLeft"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a79d3a773fa7cb12eb78681ed6fc4cdb6">runq_prev</a></td></tr>
+<tr class="memitem:a79d3a773fa7cb12eb78681ed6fc4cdb6" id="r_a79d3a773fa7cb12eb78681ed6fc4cdb6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a79d3a773fa7cb12eb78681ed6fc4cdb6">runq_prev</a></td></tr>
 <tr class="memitem:a60135de4e18f5dd456e5ed869e5df9e2" id="r_a60135de4e18f5dd456e5ed869e5df9e2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a60135de4e18f5dd456e5ed869e5df9e2">in_ready_queue</a></td></tr>
-<tr class="memitem:a619ff100b5e520327d028414753a1bb6" id="r_a619ff100b5e520327d028414753a1bb6"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a619ff100b5e520327d028414753a1bb6">rq_priority</a></td></tr>
+<tr class="memitem:a619ff100b5e520327d028414753a1bb6" id="r_a619ff100b5e520327d028414753a1bb6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a619ff100b5e520327d028414753a1bb6">rq_priority</a></td></tr>
+<tr class="memitem:af3b53e828391b6112b1484dca370cb69" id="r_af3b53e828391b6112b1484dca370cb69"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3b53e828391b6112b1484dca370cb69">iopb_slot</a></td></tr>
+<tr class="memdesc:af3b53e828391b6112b1484dca370cb69"><td class="mdescLeft">&#160;</td><td class="mdescRight">I/O permission bitmap pool slot (issue #3).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Per-task plain fields that are deep-copied into the snapshot. Pointers to heap sub-objects (kernel_stack, page_table_, msg_queue, etc.) are NOT included — they survive via the pointer array restore and MemPool/PMM restoration. </p>
@@ -184,7 +190,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::alarm_ticks</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::alarm_ticks</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -198,7 +204,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::base_priority</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::base_priority</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -221,6 +227,34 @@ Data Fields</h2></td></tr>
 
 </div>
 </div>
+<a id="a40d4650306ca6e046b2191e7e6b00bf8" name="a40d4650306ca6e046b2191e7e6b00bf8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a40d4650306ca6e046b2191e7e6b00bf8">&#9670;&#160;</a></span>deadline_miss_count</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::deadline_miss_count</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa9502cbe1536e5fdfb0304fccd2229e6" name="aa9502cbe1536e5fdfb0304fccd2229e6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9502cbe1536e5fdfb0304fccd2229e6">&#9670;&#160;</a></span>deadline_missed</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::deadline_missed</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="af342e08b29409d1cca26c72b5ecba7bb" name="af342e08b29409d1cca26c72b5ecba7bb"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af342e08b29409d1cca26c72b5ecba7bb">&#9670;&#160;</a></span>deadline_ticks</h2>
 
@@ -228,7 +262,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::deadline_ticks</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::deadline_ticks</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -242,7 +276,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::executed_ticks</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::executed_ticks</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -256,7 +290,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::exit_code</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::exit_code</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -270,7 +304,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::id</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::id</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -293,6 +327,38 @@ Data Fields</h2></td></tr>
 
 </div>
 </div>
+<a id="af3b53e828391b6112b1484dca370cb69" name="af3b53e828391b6112b1484dca370cb69"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3b53e828391b6112b1484dca370cb69">&#9670;&#160;</a></span>iopb_slot</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::Scheduler::TaskFields::iopb_slot</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>I/O permission bitmap pool slot (issue #3). </p>
+
+</div>
+</div>
+<a id="a543aa91c75af55445f7be6646a4947ef" name="a543aa91c75af55445f7be6646a4947ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a543aa91c75af55445f7be6646a4947ef">&#9670;&#160;</a></span>kernel_stack</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::kernel_stack</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Kernel stack base pointer. </p>
+
+</div>
+</div>
 <a id="aedaae8e855558d9bb64b9be482051bf9" name="aedaae8e855558d9bb64b9be482051bf9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aedaae8e855558d9bb64b9be482051bf9">&#9670;&#160;</a></span>kernel_stack_top</h2>
 
@@ -300,7 +366,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::kernel_stack_top</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::kernel_stack_top</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -316,7 +382,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::magic</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::magic</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -332,7 +398,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::parent_id</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::parent_id</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -346,7 +412,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::pending_signals</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::pending_signals</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -360,7 +426,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::period_ticks</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::period_ticks</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -374,7 +440,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::priority</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::priority</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -388,7 +454,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::remaining_ticks</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::remaining_ticks</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -402,7 +468,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::rq_priority</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::rq_priority</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -416,7 +482,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::Scheduler::TaskFields::runq_next</td>
+          <td class="memname">TaskControlBlock* kernel::Scheduler::TaskFields::runq_next</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -432,7 +498,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a>* kernel::Scheduler::TaskFields::runq_prev</td>
+          <td class="memname">TaskControlBlock* kernel::Scheduler::TaskFields::runq_prev</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -446,7 +512,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="namespacekernel.html#aca8cb7bebc5bfc2d27dcb0c95fc18c3c">TaskState</a> kernel::Scheduler::TaskFields::state</td>
+          <td class="memname">TaskState kernel::Scheduler::TaskFields::state</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -460,7 +526,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::waiting_child_pid</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::waiting_child_pid</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -474,7 +540,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::TaskFields::waiting_child_status</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::waiting_child_status</td>
         </tr>
       </table>
 </div><div class="memdoc">

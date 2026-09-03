@@ -10,7 +10,7 @@ var dir_507c9ec95be9a201f49444d5da26e8a6 =
     [ "ready_queue_manager.cpp", "ready__queue__manager_8cpp.html", "ready__queue__manager_8cpp" ],
     [ "ready_queue_manager.hpp", "ready__queue__manager_8hpp.html", "ready__queue__manager_8hpp" ],
     [ "scheduler.cpp", "scheduler_8cpp.html", "scheduler_8cpp" ],
-    [ "scheduler.hpp", "scheduler_8hpp.html", null ],
+    [ "scheduler.hpp", "scheduler_8hpp.html", "scheduler_8hpp" ],
     [ "scheduler_config.hpp", "scheduler__config_8hpp.html", "scheduler__config_8hpp" ],
     [ "scheduler_errors.hpp", "scheduler__errors_8hpp.html", null ],
     [ "sporadic_server.cpp", "sporadic__server_8cpp.html", null ],

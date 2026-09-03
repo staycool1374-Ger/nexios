@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.3.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('classkernel_1_
 </div><!--header-->
 <div class="contents">
 
-<p>Preemptive, rate-monotonic scheduler managing up to MAX_TASKS tasks.  
+<p>Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0).  
  <a href="#details">More...</a></p>
 
 <p><code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">scheduler.hpp</a>&gt;</code></p>
@@ -133,100 +133,159 @@ Collaboration diagram for kernel::Scheduler:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:TaskIter" id="r_TaskIter"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_1_1_task_iter.html">TaskIter</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lightweight forward iterator over valid tasks in the array.  <a href="structkernel_1_1_scheduler_1_1_task_iter.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lightweight forward iterator over all tasks in the registry. Iterates by priority (highest to lowest), then insertion order within each priority.  <a href="structkernel_1_1_scheduler_1_1_task_iter.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TaskFields" id="r_TaskFields"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html">TaskFields</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task plain fields that are deep-copied into the snapshot. Pointers to heap sub-objects (kernel_stack, page_table_, msg_queue, etc.) are NOT included — they survive via the pointer array restore and MemPool/PMM restoration.  <a href="structkernel_1_1_scheduler_1_1_task_fields.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a6421e44dae2dd343f7f0e7064a89ad97" id="r_a6421e44dae2dd343f7f0e7064a89ad97"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6421e44dae2dd343f7f0e7064a89ad97">init</a> ()</td></tr>
-<tr class="memdesc:a6421e44dae2dd343f7f0e7064a89ad97"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the scheduler and creates the idle task.  <br /></td></tr>
-<tr class="memitem:a72a9265e4e4721353cbcee6ecc293fdc" id="r_a72a9265e4e4721353cbcee6ecc293fdc"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">errors::SchedulerError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a72a9265e4e4721353cbcee6ecc293fdc">init_err</a> ()</td></tr>
-<tr class="memdesc:a72a9265e4e4721353cbcee6ecc293fdc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Error-returning overload for <a class="el" href="#a6421e44dae2dd343f7f0e7064a89ad97" title="Initialises the scheduler and creates the idle task.">init()</a>.  <br /></td></tr>
-<tr class="memitem:adbf15b7eb697f6c14bcf76c438895b18" id="r_adbf15b7eb697f6c14bcf76c438895b18"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#adbf15b7eb697f6c14bcf76c438895b18">find_task</a> (uint64_t id) noexcept</td></tr>
+<tr class="memitem:a1c8102c5c49bfeec7ddf89804d9b5bf3" id="r_a1c8102c5c49bfeec7ddf89804d9b5bf3"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1c8102c5c49bfeec7ddf89804d9b5bf3">init</a> (const <a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a> &amp;cfg=<a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a>{})</td></tr>
+<tr class="memdesc:a1c8102c5c49bfeec7ddf89804d9b5bf3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialises the scheduler and creates the idle task.  <br /></td></tr>
+<tr class="memitem:ae95c16cf7d774deef2e4957ac374a77f" id="r_ae95c16cf7d774deef2e4957ac374a77f"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#ae95c16cf7d774deef2e4957ac374a77f">init_err</a> (const <a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a> &amp;cfg=<a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a>{})</td></tr>
+<tr class="memdesc:ae95c16cf7d774deef2e4957ac374a77f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Error-returning overload for <a class="el" href="#a1c8102c5c49bfeec7ddf89804d9b5bf3" title="Initialises the scheduler and creates the idle task.">init()</a>.  <br /></td></tr>
+<tr class="memitem:a244ba672064743d1c96a1d05cd94a851" id="r_a244ba672064743d1c96a1d05cd94a851"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a244ba672064743d1c96a1d05cd94a851">set_test_context</a> (<a class="el" href="structkernel_1_1_test_context.html">TestContext</a> *ctx) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a244ba672064743d1c96a1d05cd94a851"><td class="mdescLeft">&#160;</td><td class="mdescRight">Injects the test-runner context (PfA-A). Production keeps nullptr so all test flags resolve to false; the harness sets it for the duration of a test cycle and clears it afterwards.  <br /></td></tr>
+<tr class="memitem:a9276d18a6cae34b677e7d36f39dc0bae" id="r_a9276d18a6cae34b677e7d36f39dc0bae"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_test_context.html">TestContext</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a9276d18a6cae34b677e7d36f39dc0bae">get_test_context</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9276d18a6cae34b677e7d36f39dc0bae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the injected test context, or nullptr.  <br /></td></tr>
+<tr class="memitem:adbf15b7eb697f6c14bcf76c438895b18" id="r_adbf15b7eb697f6c14bcf76c438895b18"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#adbf15b7eb697f6c14bcf76c438895b18">find_task</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> id) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:adbf15b7eb697f6c14bcf76c438895b18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finds a task by its ID (hash table, O(1) amortized).  <br /></td></tr>
-<tr class="memitem:a392525912608998bc99fa1a3d4816538" id="r_a392525912608998bc99fa1a3d4816538"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a392525912608998bc99fa1a3d4816538">add_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memitem:a090f79eb27f051efff2c746fa009416a" id="r_a090f79eb27f051efff2c746fa009416a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a090f79eb27f051efff2c746fa009416a">register_task</a> (TaskControlBlock &amp;task)</td></tr>
+<tr class="memdesc:a090f79eb27f051efff2c746fa009416a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Register a task in scheduler tables without making it runnable. Registers in all_tasks_, deadline_list_, and id_table_ so the task is findable via <a class="el" href="#adbf15b7eb697f6c14bcf76c438895b18" title="Finds a task by its ID (hash table, O(1) amortized).">find_task()</a>, but does NOT enqueue in the ready queue. The task's state must NOT be READY — use for test tasks that need setup before they can run.  <br /></td></tr>
+<tr class="memitem:a392525912608998bc99fa1a3d4816538" id="r_a392525912608998bc99fa1a3d4816538"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a392525912608998bc99fa1a3d4816538">add_task</a> (TaskControlBlock &amp;task)</td></tr>
 <tr class="memdesc:a392525912608998bc99fa1a3d4816538"><td class="mdescLeft">&#160;</td><td class="mdescRight">Adds a task to the scheduler's run queue.  <br /></td></tr>
-<tr class="memitem:abe771365aff3aee22925d9339f9a5d9d" id="r_abe771365aff3aee22925d9339f9a5d9d"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">errors::SchedulerError</a>&#160;</td><td class="memItemRight"><a class="el" href="#abe771365aff3aee22925d9339f9a5d9d">add_task_err</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memitem:abe771365aff3aee22925d9339f9a5d9d" id="r_abe771365aff3aee22925d9339f9a5d9d"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#abe771365aff3aee22925d9339f9a5d9d">add_task_err</a> (TaskControlBlock &amp;task)</td></tr>
 <tr class="memdesc:abe771365aff3aee22925d9339f9a5d9d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Error-returning overload for <a class="el" href="#a392525912608998bc99fa1a3d4816538" title="Adds a task to the scheduler&#39;s run queue.">add_task()</a>.  <br /></td></tr>
-<tr class="memitem:a1faa60d8cbc8f5827b9e81f7fe135205" id="r_a1faa60d8cbc8f5827b9e81f7fe135205"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1faa60d8cbc8f5827b9e81f7fe135205">remove_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memitem:a1faa60d8cbc8f5827b9e81f7fe135205" id="r_a1faa60d8cbc8f5827b9e81f7fe135205"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1faa60d8cbc8f5827b9e81f7fe135205">remove_task</a> (TaskControlBlock &amp;task)</td></tr>
 <tr class="memdesc:a1faa60d8cbc8f5827b9e81f7fe135205"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes a task from the scheduler's run queue.  <br /></td></tr>
-<tr class="memitem:a7e36233fc7325aab8561e55c8e07e594" id="r_a7e36233fc7325aab8561e55c8e07e594"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">errors::SchedulerError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7e36233fc7325aab8561e55c8e07e594">remove_task_err</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task)</td></tr>
+<tr class="memitem:a8ff081fb1988f881f037ef8ed51901a9" id="r_a8ff081fb1988f881f037ef8ed51901a9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8ff081fb1988f881f037ef8ed51901a9">unregister_task</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a8ff081fb1988f881f037ef8ed51901a9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Best-effort unregister of a TCB from the scheduler's live tables. Used by TaskControlBlock::cleanup() so that every free path (delete, MemPool::free, reaper) unregisters — preventing dangling tasks_[]/id_table_ entries that alias a later allocation (use-after-free in add_task). Uses try_lock: if the scheduler lock is already held by the current context (e.g. reap_orphans, which unregisters manually), this returns false and does nothing. Callers should disable IRQs around this so the timer ISR (on_tick) cannot transiently hold the lock and cause a skip.  <br /></td></tr>
+<tr class="memitem:a7e36233fc7325aab8561e55c8e07e594" id="r_a7e36233fc7325aab8561e55c8e07e594"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#a7e36233fc7325aab8561e55c8e07e594">remove_task_err</a> (TaskControlBlock &amp;task)</td></tr>
 <tr class="memdesc:a7e36233fc7325aab8561e55c8e07e594"><td class="mdescLeft">&#160;</td><td class="mdescRight">Error-returning overload for <a class="el" href="#a1faa60d8cbc8f5827b9e81f7fe135205" title="Removes a task from the scheduler&#39;s run queue.">remove_task()</a>.  <br /></td></tr>
-<tr class="memitem:ac094d7e0ec9c48c58637e36fce587be2" id="r_ac094d7e0ec9c48c58637e36fce587be2"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac094d7e0ec9c48c58637e36fce587be2">current_task</a> () noexcept</td></tr>
-<tr class="memdesc:ac094d7e0ec9c48c58637e36fce587be2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the currently running task.  <br /></td></tr>
-<tr class="memitem:a2cd9411be2c691fcec97a6ddfaa465f6" id="r_a2cd9411be2c691fcec97a6ddfaa465f6"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2cd9411be2c691fcec97a6ddfaa465f6">task_count</a> () noexcept</td></tr>
+<tr class="memitem:ac094d7e0ec9c48c58637e36fce587be2" id="r_ac094d7e0ec9c48c58637e36fce587be2"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ac094d7e0ec9c48c58637e36fce587be2">current_task</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ac094d7e0ec9c48c58637e36fce587be2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the currently running task (RSP-authoritative).  <br /></td></tr>
+<tr class="memitem:a2cd9411be2c691fcec97a6ddfaa465f6" id="r_a2cd9411be2c691fcec97a6ddfaa465f6"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2cd9411be2c691fcec97a6ddfaa465f6">task_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a2cd9411be2c691fcec97a6ddfaa465f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the total number of managed tasks.  <br /></td></tr>
-<tr class="memitem:a77133baf25c2e9530f2b1709d881d1dc" id="r_a77133baf25c2e9530f2b1709d881d1dc"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a77133baf25c2e9530f2b1709d881d1dc">task_at</a> (uint64_t index) noexcept</td></tr>
+<tr class="memitem:a77133baf25c2e9530f2b1709d881d1dc" id="r_a77133baf25c2e9530f2b1709d881d1dc"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a77133baf25c2e9530f2b1709d881d1dc">task_at</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> index) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a77133baf25c2e9530f2b1709d881d1dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the task at a given index in the task array.  <br /></td></tr>
-<tr class="memitem:abde09e0c1b73175a95f3e78104e437fd" id="r_abde09e0c1b73175a95f3e78104e437fd"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abde09e0c1b73175a95f3e78104e437fd">on_tick</a> () noexcept</td></tr>
+<tr class="memitem:a1f0522a97f2382ccf8347162cefe2104" id="r_a1f0522a97f2382ccf8347162cefe2104"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a1f0522a97f2382ccf8347162cefe2104">debug_id_table_references</a> (void *block) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a1f0522a97f2382ccf8347162cefe2104"><td class="mdescLeft">&#160;</td><td class="mdescRight">DEBUG-only (#019/#020): returns true if the given block address is still referenced by the scheduler's id_table_ (a stale entry pointing at a freed TCB). Used by TaskControlBlock::create() to catch TCB-blocks being reused while still aliased by the id table.  <br /></td></tr>
+<tr class="memitem:abde09e0c1b73175a95f3e78104e437fd" id="r_abde09e0c1b73175a95f3e78104e437fd"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abde09e0c1b73175a95f3e78104e437fd">on_tick</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:abde09e0c1b73175a95f3e78104e437fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Called on each timer tick; updates scheduling state.  <br /></td></tr>
-<tr class="memitem:ac92ab8abdaaf924f98d66fd5f8ab2a50" id="r_ac92ab8abdaaf924f98d66fd5f8ab2a50"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ac92ab8abdaaf924f98d66fd5f8ab2a50">reschedule</a> () noexcept</td></tr>
+<tr class="memitem:ac92ab8abdaaf924f98d66fd5f8ab2a50" id="r_ac92ab8abdaaf924f98d66fd5f8ab2a50"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ac92ab8abdaaf924f98d66fd5f8ab2a50">reschedule</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ac92ab8abdaaf924f98d66fd5f8ab2a50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Forces a reschedule — selects the next task and sets up context switch.  <br /></td></tr>
-<tr class="memitem:a0d595ec39367db2ce160fb1d72c23fab" id="r_a0d595ec39367db2ce160fb1d72c23fab"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0d595ec39367db2ce160fb1d72c23fab">reap_orphans</a> () noexcept</td></tr>
+<tr class="memitem:a460f3e4e082b3a13c6966a350b270d23" id="r_a460f3e4e082b3a13c6966a350b270d23"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a460f3e4e082b3a13c6966a350b270d23">set_priority</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> new_prio) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a460f3e4e082b3a13c6966a350b270d23"><td class="mdescLeft">&#160;</td><td class="mdescRight">Change a task's scheduling priority at runtime. Re-buckets the task in the O(1) ready queue (if queued) so the change takes effect on the next tick, and updates base_priority. Safe to call from task context; IRQs are disabled around the move so the timer ISR cannot read a half-updated bucket.  <br /></td></tr>
+<tr class="memitem:a0d595ec39367db2ce160fb1d72c23fab" id="r_a0d595ec39367db2ce160fb1d72c23fab"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0d595ec39367db2ce160fb1d72c23fab">reap_orphans</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a0d595ec39367db2ce160fb1d72c23fab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reaps orphan TERMINATED tasks (no parent to WAITPID them). Single-pass scan: identifies all eligible tasks, destroys them without compaction, then compacts the task array once at the end. If the idle task is reaped it is immediately recreated and placed at index 0 of the compacted array.  <br /></td></tr>
-<tr class="memitem:a6cb4f7ab4207b34c9e4a278492fe8efc" id="r_a6cb4f7ab4207b34c9e4a278492fe8efc"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6cb4f7ab4207b34c9e4a278492fe8efc">cleanup_test_tasks</a> () noexcept</td></tr>
+<tr class="memitem:a6cb4f7ab4207b34c9e4a278492fe8efc" id="r_a6cb4f7ab4207b34c9e4a278492fe8efc"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6cb4f7ab4207b34c9e4a278492fe8efc">cleanup_test_tasks</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a6cb4f7ab4207b34c9e4a278492fe8efc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminates and removes all non-idle tasks from the scheduler. Called after the boot-time test suite to clean up test leftovers before production tasks (shell, idle) are created.  <br /></td></tr>
-<tr class="memitem:a73f226e2fca1b403063e72db60d7a3f5" id="r_a73f226e2fca1b403063e72db60d7a3f5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a73f226e2fca1b403063e72db60d7a3f5">cleanup_zombies</a> () noexcept</td></tr>
-<tr class="memdesc:a73f226e2fca1b403063e72db60d7a3f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes all tasks from the scheduler that have invalid magic (freed-and-reused TCBs) without touching the TCB memory. Also removes tasks with valid magic that are not the idle task, the current task, or known daemons.  <br /></td></tr>
-<tr class="memitem:a940a027ee35b641fd1c7fc73f9235c65" id="r_a940a027ee35b641fd1c7fc73f9235c65"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a940a027ee35b641fd1c7fc73f9235c65">set_shell_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *task) noexcept</td></tr>
-<tr class="memdesc:a940a027ee35b641fd1c7fc73f9235c65"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stores a pointer to the shell task so cleanup_zombies can identify it.  <br /></td></tr>
-<tr class="memitem:ad94b6ec65c80ce9cb02db417b9324d13" id="r_ad94b6ec65c80ce9cb02db417b9324d13"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad94b6ec65c80ce9cb02db417b9324d13">inc_sporadic_count</a> () noexcept</td></tr>
+<tr class="memitem:a940a027ee35b641fd1c7fc73f9235c65" id="r_a940a027ee35b641fd1c7fc73f9235c65"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a940a027ee35b641fd1c7fc73f9235c65">set_shell_task</a> (TaskControlBlock *task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a940a027ee35b641fd1c7fc73f9235c65"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stores a pointer to the shell task.  <br /></td></tr>
+<tr class="memitem:abe47dcde6076815882bb4051c2146467" id="r_abe47dcde6076815882bb4051c2146467"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abe47dcde6076815882bb4051c2146467">set_harness_task</a> (TaskControlBlock *task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:abe47dcde6076815882bb4051c2146467"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stores a pointer to the harness (init_task, PID 1) — the task that runs the test-cycling code. Used by rate_monotonic_schedule to exempt the harness from preemption during the test cycle (BUGS.md#021), while still allowing it to yield voluntarily.  <br /></td></tr>
+<tr class="memitem:af5b305024ca5def7df9d16843d92a0c5" id="r_af5b305024ca5def7df9d16843d92a0c5"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#af5b305024ca5def7df9d16843d92a0c5">get_harness_task</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:af5b305024ca5def7df9d16843d92a0c5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the harness (init_task) TCB, or nullptr if not set.  <br /></td></tr>
+<tr class="memitem:aca1f956c7e183393301034d90657e0f5" id="r_aca1f956c7e183393301034d90657e0f5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aca1f956c7e183393301034d90657e0f5">set_suppress_terminated_log</a> (bool v) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aca1f956c7e183393301034d90657e0f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Suppress or re-enable the "task terminated" log message. Used by reboot_from_table() during intentional teardown.  <br /></td></tr>
+<tr class="memitem:ad94b6ec65c80ce9cb02db417b9324d13" id="r_ad94b6ec65c80ce9cb02db417b9324d13"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad94b6ec65c80ce9cb02db417b9324d13">inc_sporadic_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ad94b6ec65c80ce9cb02db417b9324d13"><td class="mdescLeft">&#160;</td><td class="mdescRight">Increments the sporadic server task counter (called from init_sporadic_server).  <br /></td></tr>
-<tr class="memitem:a3b8de3815e34ac1f72bc2645849662e4" id="r_a3b8de3815e34ac1f72bc2645849662e4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a3b8de3815e34ac1f72bc2645849662e4">dec_sporadic_count</a> () noexcept</td></tr>
+<tr class="memitem:a3b8de3815e34ac1f72bc2645849662e4" id="r_a3b8de3815e34ac1f72bc2645849662e4"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a3b8de3815e34ac1f72bc2645849662e4">dec_sporadic_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a3b8de3815e34ac1f72bc2645849662e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Decrements the sporadic server task counter (called from cleanup).  <br /></td></tr>
-<tr class="memitem:a902ff9913bdb3c981b9665c46f08a530" id="r_a902ff9913bdb3c981b9665c46f08a530"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a902ff9913bdb3c981b9665c46f08a530">sporadic_count</a> () noexcept</td></tr>
+<tr class="memitem:a902ff9913bdb3c981b9665c46f08a530" id="r_a902ff9913bdb3c981b9665c46f08a530"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a902ff9913bdb3c981b9665c46f08a530">sporadic_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a902ff9913bdb3c981b9665c46f08a530"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current sporadic server task count.  <br /></td></tr>
-<tr class="memitem:a23ee01af257a861430a00f4f426c6cbd" id="r_a23ee01af257a861430a00f4f426c6cbd"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a23ee01af257a861430a00f4f426c6cbd">set_task_ready</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) noexcept</td></tr>
+<tr class="memitem:a23ee01af257a861430a00f4f426c6cbd" id="r_a23ee01af257a861430a00f4f426c6cbd"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a23ee01af257a861430a00f4f426c6cbd">set_task_ready</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a23ee01af257a861430a00f4f426c6cbd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks a task as READY and adds it to the O(1) ready queue. Call this instead of directly setting <span class="tt">task.state = READY</span> to keep the ready-queue bitmap in sync.  <br /></td></tr>
-<tr class="memitem:a8c46258f8feca3ec4f56691ca491df8d" id="r_a8c46258f8feca3ec4f56691ca491df8d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8c46258f8feca3ec4f56691ca491df8d">needs_switch</a> () noexcept</td></tr>
+<tr class="memitem:aabd465f67eed45ec2c20877a6f7398b8" id="r_aabd465f67eed45ec2c20877a6f7398b8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aabd465f67eed45ec2c20877a6f7398b8">scan_deadlines</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aabd465f67eed45ec2c20877a6f7398b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detection logic as the inline scan in <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> but can hold scheduler_lock_ and perform inline KILL cleanup. Guarded by #if CONFIG_DEADLINE_MONITOR_TASK.  <br /></td></tr>
+<tr class="memitem:a913928f9814cd7cb9dd5241133e3fcdd" id="r_a913928f9814cd7cb9dd5241133e3fcdd"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a913928f9814cd7cb9dd5241133e3fcdd">ensure_monitor</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a913928f9814cd7cb9dd5241133e3fcdd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ensures the deadline-monitor task exists and is valid. Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks during snapshot restore). Safe to call multiple times.  <br /></td></tr>
+<tr class="memitem:a6c0f3b2bd32b59b696f200f5ad323910" id="r_a6c0f3b2bd32b59b696f200f5ad323910"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6c0f3b2bd32b59b696f200f5ad323910">clear_switch_globals</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a6c0f3b2bd32b59b696f200f5ad323910"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clears assembly-level context-switch globals (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.). Safe to call multiple times. Used after <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> in test context to prevent a later timer ISR from consuming stale globals and performing an unintended context switch.  <br /></td></tr>
+<tr class="memitem:a9b47f39412b4ffc881beb1d44368661d" id="r_a9b47f39412b4ffc881beb1d44368661d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a9b47f39412b4ffc881beb1d44368661d">rebuild_all_tasks</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9b47f39412b4ffc881beb1d44368661d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> per-priority linked lists using each task's current priority. Called after test-isolation snapshot restore to fix stale priority-grouping.  <br /></td></tr>
+<tr class="memitem:a79305bfd1ec5dc31b569e5d2ecfdf544" id="r_a79305bfd1ec5dc31b569e5d2ecfdf544"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a79305bfd1ec5dc31b569e5d2ecfdf544">terminate</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_code) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a79305bfd1ec5dc31b569e5d2ecfdf544"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of directly setting <span class="tt">task.state = TERMINATED</span> to keep the ready queue consistent.  <br /></td></tr>
+<tr class="memitem:a5c115dae407624bae7db3b31baa29a14" id="r_a5c115dae407624bae7db3b31baa29a14"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5c115dae407624bae7db3b31baa29a14">monitor_task_entry</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a5c115dae407624bae7db3b31baa29a14"><td class="mdescLeft">&#160;</td><td class="mdescRight">Entry point for the deadline-monitor task (priority 127). Waits on an atomic handoff flag, calls <a class="el" href="#aabd465f67eed45ec2c20877a6f7398b8" title="Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detec...">scan_deadlines()</a> when woken by <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a>. Only compiled when CONFIG_DEADLINE_MONITOR_TASK &gt; 0.  <br /></td></tr>
+<tr class="memitem:a8c46258f8feca3ec4f56691ca491df8d" id="r_a8c46258f8feca3ec4f56691ca491df8d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8c46258f8feca3ec4f56691ca491df8d">needs_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a8c46258f8feca3ec4f56691ca491df8d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checks if a context switch is needed (reschedule flag).  <br /></td></tr>
-<tr class="memitem:a852663edfb9d43d51ca280727c2295a3" id="r_a852663edfb9d43d51ca280727c2295a3"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a852663edfb9d43d51ca280727c2295a3">next_task</a> () noexcept</td></tr>
+<tr class="memitem:a852663edfb9d43d51ca280727c2295a3" id="r_a852663edfb9d43d51ca280727c2295a3"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a852663edfb9d43d51ca280727c2295a3">next_task</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a852663edfb9d43d51ca280727c2295a3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Selects the next task to run according to RM policy.  <br /></td></tr>
-<tr class="memitem:a5a2b494bb6c3b184c9374e85be368804" id="r_a5a2b494bb6c3b184c9374e85be368804"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5a2b494bb6c3b184c9374e85be368804">set_current</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) noexcept</td></tr>
+<tr class="memitem:a5a2b494bb6c3b184c9374e85be368804" id="r_a5a2b494bb6c3b184c9374e85be368804"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5a2b494bb6c3b184c9374e85be368804">set_current</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a5a2b494bb6c3b184c9374e85be368804"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the current running task.  <br /></td></tr>
-<tr class="memitem:a8617d4e396bb6ba95ec19401fa1f5f62" id="r_a8617d4e396bb6ba95ec19401fa1f5f62"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8617d4e396bb6ba95ec19401fa1f5f62">set_current_by_id</a> (uint64_t id) noexcept</td></tr>
-<tr class="memdesc:a8617d4e396bb6ba95ec19401fa1f5f62"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sets the current running task by ID (used after context switch).  <br /></td></tr>
-<tr class="memitem:ab34fba0f4de02e992d07e7ece93985ee" id="r_ab34fba0f4de02e992d07e7ece93985ee"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab34fba0f4de02e992d07e7ece93985ee">alloc_id</a> () noexcept</td></tr>
+<tr class="memitem:a6ce74ebd0c568fc4dbd19bc24c1d4f8c" id="r_a6ce74ebd0c568fc4dbd19bc24c1d4f8c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a6ce74ebd0c568fc4dbd19bc24c1d4f8c">charge_task_memory</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pages)</td></tr>
+<tr class="memdesc:a6ce74ebd0c568fc4dbd19bc24c1d4f8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Charge <code class="param">pages</code> to the current task's memory budget. Returns false if charging would exceed the task's budget cap. When budget_pages_ == 0 (unlimited), charging always succeeds.  <br /></td></tr>
+<tr class="memitem:a09892078dd5b82b04d527059650aaa3f" id="r_a09892078dd5b82b04d527059650aaa3f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a09892078dd5b82b04d527059650aaa3f">credit_task_memory</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pages)</td></tr>
+<tr class="memdesc:a09892078dd5b82b04d527059650aaa3f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Credit <code class="param">pages</code> back to the current task's memory usage.  <br /></td></tr>
+<tr class="memitem:a5a5da40795060d45b9fa143b26805e42" id="r_a5a5da40795060d45b9fa143b26805e42"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5a5da40795060d45b9fa143b26805e42">switch_away_from_terminating</a> (TaskControlBlock &amp;exiting) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a5a5da40795060d45b9fa143b26805e42"><td class="mdescLeft">&#160;</td><td class="mdescRight">Safely switches the CPU off a task that is being terminated while it is the current task, WITHOUT calling switch_to_task (which resolves the live RSP owner and corrupts contexts when invoked from ISR context, e.g. sys_exit). Publishes the deferred-switch slot directly: the save target is the exiting task's own <span class="tt">context.rsp</span> (a dead slot — the task never resumes, so the ISR epilogue's <span class="tt">mov [save], rsp</span> landing there is harmless), and the load target is the next runnable task's <span class="tt">context.rsp</span>. The next ISR epilogue applies the switch. Caller must hold no scheduler lock; this takes scheduler_lock_ internally.  <br /></td></tr>
+<tr class="memitem:ab34fba0f4de02e992d07e7ece93985ee" id="r_ab34fba0f4de02e992d07e7ece93985ee"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab34fba0f4de02e992d07e7ece93985ee">alloc_id</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ab34fba0f4de02e992d07e7ece93985ee"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a unique task ID from the ID table.  <br /></td></tr>
-<tr class="memitem:afd4d3fa549d043821c690659b334caf1" id="r_afd4d3fa549d043821c690659b334caf1"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">errors::SchedulerError</a>&#160;</td><td class="memItemRight"><a class="el" href="#afd4d3fa549d043821c690659b334caf1">alloc_id_err</a> (uint64_t &amp;out_id)</td></tr>
+<tr class="memitem:afd4d3fa549d043821c690659b334caf1" id="r_afd4d3fa549d043821c690659b334caf1"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#afd4d3fa549d043821c690659b334caf1">alloc_id_err</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;out_id)</td></tr>
 <tr class="memdesc:afd4d3fa549d043821c690659b334caf1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Error-returning overload for <a class="el" href="#ab34fba0f4de02e992d07e7ece93985ee" title="Allocate a unique task ID from the ID table.">alloc_id()</a>.  <br /></td></tr>
-<tr class="memitem:a31616072aafcff4b1c7872028e9de957" id="r_a31616072aafcff4b1c7872028e9de957"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a31616072aafcff4b1c7872028e9de957">current_index</a> () noexcept</td></tr>
-<tr class="memitem:a713edf58866177c06b37b7efa89a4f13" id="r_a713edf58866177c06b37b7efa89a4f13"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a713edf58866177c06b37b7efa89a4f13">set_current_index</a> (uint64_t idx) noexcept</td></tr>
-<tr class="memitem:ab3d622e0c4309eade918101d6fdd060a" id="r_ab3d622e0c4309eade918101d6fdd060a"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ab3d622e0c4309eade918101d6fdd060a">get_idle_task</a> () noexcept</td></tr>
-<tr class="memitem:a55de97d6b8215734d5095458bea24260" id="r_a55de97d6b8215734d5095458bea24260"><td class="memItemLeft">static <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a55de97d6b8215734d5095458bea24260">get_shell_task</a> () noexcept</td></tr>
-<tr class="memitem:a7ed00d22c2b04a213ee0f4af683059e6" id="r_a7ed00d22c2b04a213ee0f4af683059e6"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7ed00d22c2b04a213ee0f4af683059e6">is_preemptible</a> () noexcept</td></tr>
+<tr class="memitem:a6ec2aee2d32d08a9b747a4ef076e0257" id="r_a6ec2aee2d32d08a9b747a4ef076e0257"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6ec2aee2d32d08a9b747a4ef076e0257">current_index</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a6ec2aee2d32d08a9b747a4ef076e0257"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the index of the current task (computed from pointer, O(n) for snapshot compatibility; prefer <a class="el" href="#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task (RSP-authoritative).">current_task()</a> directly).  <br /></td></tr>
+<tr class="memitem:a3c89637a429ed31290338b912cc8695d" id="r_a3c89637a429ed31290338b912cc8695d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a3c89637a429ed31290338b912cc8695d">set_current_index</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> idx) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a6c327d25c2a2293e83682bbdc0db5dcf" id="r_a6c327d25c2a2293e83682bbdc0db5dcf"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6c327d25c2a2293e83682bbdc0db5dcf">set_current_task</a> (TaskControlBlock *t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a6c327d25c2a2293e83682bbdc0db5dcf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the current task directly by pointer (unambiguous; avoids the index-convention mismatch between <a class="el" href="#a6ec2aee2d32d08a9b747a4ef076e0257" title="Returns the index of the current task (computed from pointer, O(n) for snapshot compatibility; prefer...">current_index()</a>/set_current_index() (raw <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> order) and <a class="el" href="#a77133baf25c2e9530f2b1709d881d1dc" title="Returns the task at a given index in the task array.">task_at()</a> (idle-reserved)).  <br /></td></tr>
+<tr class="memitem:ab3d622e0c4309eade918101d6fdd060a" id="r_ab3d622e0c4309eade918101d6fdd060a"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ab3d622e0c4309eade918101d6fdd060a">get_idle_task</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:abe005618da247e2567e4ec2c40aeb176" id="r_abe005618da247e2567e4ec2c40aeb176"><td class="memItemLeft">static const <a class="el" href="classkernel_1_1_all_tasks_registry.html">AllTasksRegistry</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#abe005618da247e2567e4ec2c40aeb176">all_tasks</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a55de97d6b8215734d5095458bea24260" id="r_a55de97d6b8215734d5095458bea24260"><td class="memItemLeft">static TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a55de97d6b8215734d5095458bea24260">get_shell_task</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a7ed00d22c2b04a213ee0f4af683059e6" id="r_a7ed00d22c2b04a213ee0f4af683059e6"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7ed00d22c2b04a213ee0f4af683059e6">is_preemptible</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a7ed00d22c2b04a213ee0f4af683059e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns whether the scheduler can be preempted.  <br /></td></tr>
-<tr class="memitem:a4c1ed78d8d8325dc44743510045c8f19" id="r_a4c1ed78d8d8325dc44743510045c8f19"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c1ed78d8d8325dc44743510045c8f19">set_preemptible</a> (bool en) noexcept</td></tr>
+<tr class="memitem:a4c1ed78d8d8325dc44743510045c8f19" id="r_a4c1ed78d8d8325dc44743510045c8f19"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c1ed78d8d8325dc44743510045c8f19">set_preemptible</a> (bool en) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a4c1ed78d8d8325dc44743510045c8f19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enables or disables preemption.  <br /></td></tr>
-<tr class="memitem:a75c863b2589f150169806297ba76cf7c" id="r_a75c863b2589f150169806297ba76cf7c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a75c863b2589f150169806297ba76cf7c">enqueue_ready</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) noexcept</td></tr>
+<tr class="memitem:a114ccea984c24a46114648d5f51e0e0a" id="r_a114ccea984c24a46114648d5f51e0e0a"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a114ccea984c24a46114648d5f51e0e0a">effective_priority</a> (const TaskControlBlock *t) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a114ccea984c24a46114648d5f51e0e0a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the effective scheduling priority, accounting for sporadic-server budget state.  <br /></td></tr>
+<tr class="memitem:a75c863b2589f150169806297ba76cf7c" id="r_a75c863b2589f150169806297ba76cf7c"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a75c863b2589f150169806297ba76cf7c">enqueue_ready</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a75c863b2589f150169806297ba76cf7c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enqueues a task into the O(1) ready queue at its effective priority.  <br /></td></tr>
-<tr class="memitem:afe8481a5993e14cbd94b81c4f64bd7d0" id="r_afe8481a5993e14cbd94b81c4f64bd7d0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afe8481a5993e14cbd94b81c4f64bd7d0">dequeue_ready</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;task) noexcept</td></tr>
+<tr class="memitem:afe8481a5993e14cbd94b81c4f64bd7d0" id="r_afe8481a5993e14cbd94b81c4f64bd7d0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afe8481a5993e14cbd94b81c4f64bd7d0">dequeue_ready</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:afe8481a5993e14cbd94b81c4f64bd7d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes a task from the O(1) ready queue.  <br /></td></tr>
+<tr class="memitem:ae543d07405d0c21a092c2561cbfe6735" id="r_ae543d07405d0c21a092c2561cbfe6735"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae543d07405d0c21a092c2561cbfe6735">move_priority</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> old_prio, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> new_prio) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae543d07405d0c21a092c2561cbfe6735"><td class="mdescLeft">&#160;</td><td class="mdescRight">Moves a task from one priority queue to another (re-index).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
 Test-isolation helpers</h2></td></tr>
-<tr class="memitem:a87db2c94d70b94cdc81de27fd519f71c" id="r_a87db2c94d70b94cdc81de27fd519f71c"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a87db2c94d70b94cdc81de27fd519f71c">snapshot_max_tasks</a> ()</td></tr>
-<tr class="memitem:aab329dc8044aa9af0f574cfeebf9863f" id="r_aab329dc8044aa9af0f574cfeebf9863f"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aab329dc8044aa9af0f574cfeebf9863f">snapshot_id_size</a> ()</td></tr>
-<tr class="memitem:a4625d7361b1e39ef0b913b698d797ece" id="r_a4625d7361b1e39ef0b913b698d797ece"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4625d7361b1e39ef0b913b698d797ece">snapshot_task_fields_size</a> ()</td></tr>
+<tr class="memitem:a87db2c94d70b94cdc81de27fd519f71c" id="r_a87db2c94d70b94cdc81de27fd519f71c"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a87db2c94d70b94cdc81de27fd519f71c">snapshot_max_tasks</a> ()</td></tr>
+<tr class="memitem:aab329dc8044aa9af0f574cfeebf9863f" id="r_aab329dc8044aa9af0f574cfeebf9863f"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aab329dc8044aa9af0f574cfeebf9863f">snapshot_id_size</a> ()</td></tr>
+<tr class="memitem:a4625d7361b1e39ef0b913b698d797ece" id="r_a4625d7361b1e39ef0b913b698d797ece"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4625d7361b1e39ef0b913b698d797ece">snapshot_task_fields_size</a> ()</td></tr>
 <tr class="memitem:a0df71d0030a6ba02919b2c810fd72861" id="r_a0df71d0030a6ba02919b2c810fd72861"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0df71d0030a6ba02919b2c810fd72861">capture_task_fields</a> (<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html">TaskFields</a> *out)</td></tr>
 <tr class="memdesc:a0df71d0030a6ba02919b2c810fd72861"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture per-task plain fields into the snapshot buffer. Called from test_isolate's snapshot_create.  <br /></td></tr>
 <tr class="memitem:a8c7a0865a998b02ebf986bd029fa8202" id="r_a8c7a0865a998b02ebf986bd029fa8202"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8c7a0865a998b02ebf986bd029fa8202">restore_task_fields</a> (const <a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html">TaskFields</a> *saved)</td></tr>
 <tr class="memdesc:a8c7a0865a998b02ebf986bd029fa8202"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore per-task plain fields from the snapshot buffer onto existing task objects (matched by ID). Called from test_isolate's snapshot_restore after <a class="el" href="#abbb4bed7e15b38e61e5d7aeb584d0090">restore_state()</a>.  <br /></td></tr>
-<tr class="memitem:a8378abad25413cddf0c6b92b2489dfcb" id="r_a8378abad25413cddf0c6b92b2489dfcb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8378abad25413cddf0c6b92b2489dfcb">capture_state</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **tasks_out, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **id_table_out, uint64_t &amp;task_count_out, uint64_t &amp;current_idx_out, uint64_t &amp;next_id_out, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;idle_out, bool &amp;preempt_out, uint64_t *rq_bitmap_hi=nullptr, uint64_t *rq_bitmap_lo=nullptr, uint64_t *sporadic_count_out=nullptr)</td></tr>
-<tr class="memitem:abbb4bed7e15b38e61e5d7aeb584d0090" id="r_abbb4bed7e15b38e61e5d7aeb584d0090"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abbb4bed7e15b38e61e5d7aeb584d0090">restore_state</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *tasks_in, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *id_table_in, uint64_t task_count_in, uint64_t current_idx_in, uint64_t next_id_in, <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *idle_in, bool preempt_in, uint64_t rq_bitmap_hi=0, uint64_t rq_bitmap_lo=0, uint64_t sporadic_count_in=0)</td></tr>
-<tr class="memitem:a2cf97b86839c5e0f8cbb6b22eb300651" id="r_a2cf97b86839c5e0f8cbb6b22eb300651"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2cf97b86839c5e0f8cbb6b22eb300651">capture_rqpod</a> (<a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a> &amp;out) noexcept</td></tr>
-<tr class="memdesc:a2cf97b86839c5e0f8cbb6b22eb300651"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the full <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> POD into <code class="param">out</code>.  <br /></td></tr>
-<tr class="memitem:a0c529a4f5d4844899061a70de3853e68" id="r_a0c529a4f5d4844899061a70de3853e68"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0c529a4f5d4844899061a70de3853e68">restore_rqpod</a> (const <a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a> &amp;src) noexcept</td></tr>
-<tr class="memdesc:a0c529a4f5d4844899061a70de3853e68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the full <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> POD from <code class="param">src</code>.  <br /></td></tr>
-<tr class="memitem:affd53a2cbc20336577d0b87d63714252" id="r_affd53a2cbc20336577d0b87d63714252"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#affd53a2cbc20336577d0b87d63714252">reset_ready_queue</a> () noexcept</td></tr>
+<tr class="memitem:a8378abad25413cddf0c6b92b2489dfcb" id="r_a8378abad25413cddf0c6b92b2489dfcb"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8378abad25413cddf0c6b92b2489dfcb">capture_state</a> (TaskControlBlock **tasks_out, TaskControlBlock **id_table_out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;task_count_out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;current_idx_out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;next_id_out, TaskControlBlock *&amp;idle_out, bool &amp;preempt_out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *rq_bitmap_hi=nullptr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *rq_bitmap_lo=nullptr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *sporadic_count_out=nullptr)</td></tr>
+<tr class="memitem:abbb4bed7e15b38e61e5d7aeb584d0090" id="r_abbb4bed7e15b38e61e5d7aeb584d0090"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abbb4bed7e15b38e61e5d7aeb584d0090">restore_state</a> (TaskControlBlock *const *tasks_in, TaskControlBlock *const *id_table_in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> task_count_in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> current_idx_in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> next_id_in, TaskControlBlock *idle_in, bool preempt_in, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rq_bitmap_hi=0, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rq_bitmap_lo=0, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sporadic_count_in=0)</td></tr>
+<tr class="memitem:a2cf97b86839c5e0f8cbb6b22eb300651" id="r_a2cf97b86839c5e0f8cbb6b22eb300651"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2cf97b86839c5e0f8cbb6b22eb300651">capture_rqpod</a> (<a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a> &amp;out) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a2cf97b86839c5e0f8cbb6b22eb300651"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> POD into <code class="param">out</code>.  <br /></td></tr>
+<tr class="memitem:a0c529a4f5d4844899061a70de3853e68" id="r_a0c529a4f5d4844899061a70de3853e68"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0c529a4f5d4844899061a70de3853e68">restore_rqpod</a> (const <a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a> &amp;src) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a0c529a4f5d4844899061a70de3853e68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> POD from <code class="param">src</code>.  <br /></td></tr>
+<tr class="memitem:affd53a2cbc20336577d0b87d63714252" id="r_affd53a2cbc20336577d0b87d63714252"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#affd53a2cbc20336577d0b87d63714252">reset_ready_queue</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:affd53a2cbc20336577d0b87d63714252"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear all ready-queue entries. Called after <a class="el" href="#a0d595ec39367db2ce160fb1d72c23fab" title="Reaps orphan TERMINATED tasks (no parent to WAITPID them). Single-pass scan: identifies all eligible ...">reap_orphans()</a> in reload_daemon_tasks() to remove any stale TCB pointers before restarting daemons.  <br /></td></tr>
-<tr class="memitem:ab060fbcd590e46e4e1c3ab07f5fe354d" id="r_ab060fbcd590e46e4e1c3ab07f5fe354d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab060fbcd590e46e4e1c3ab07f5fe354d">rebuild_ready_queue</a> () noexcept</td></tr>
+<tr class="memitem:ab060fbcd590e46e4e1c3ab07f5fe354d" id="r_ab060fbcd590e46e4e1c3ab07f5fe354d"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab060fbcd590e46e4e1c3ab07f5fe354d">rebuild_ready_queue</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ab060fbcd590e46e4e1c3ab07f5fe354d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild the ready queue from tasks_[], enqueuing all tasks with state == READY. Used after <a class="el" href="#a0c529a4f5d4844899061a70de3853e68" title="Restore the full ReadyQueueManager POD from src.">restore_rqpod()</a> to ensure in_ready_queue_ flags match the actual queue.  <br /></td></tr>
+<tr class="memitem:a7093e9361600d4f12c22adeb2168ac41" id="r_a7093e9361600d4f12c22adeb2168ac41"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7093e9361600d4f12c22adeb2168ac41">reset_next_task_id</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> id) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a7093e9361600d4f12c22adeb2168ac41"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset the task-ID counter (used by reboot_from_table() so init gets PID 1 after the test suite finishes).  <br /></td></tr>
+<tr class="memitem:a4179a8e67889d0c46eaa1d401762112a" id="r_a4179a8e67889d0c46eaa1d401762112a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4179a8e67889d0c46eaa1d401762112a">release_zombie</a> (TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a4179a8e67889d0c46eaa1d401762112a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release a terminated task into the zombie list for deferred cleanup by the idle task. Removes from all scheduler tables (all_tasks_, deadline_list_, id_table_) but does NOT free resources — that happens in <a class="el" href="#a0dd60567b314b96f16c4ba03a2ddecf9" title="Idle-task cleanup step: pop one zombie from the list and free its resources. Called from the idle mai...">cleanup_step()</a>. Caller must hold scheduler_lock_. Precondition: task.state == TERMINATED, task NOT in ready queue.  <br /></td></tr>
+<tr class="memitem:a7ea9fb9eb997735769deb6fdcc70f178" id="r_a7ea9fb9eb997735769deb6fdcc70f178"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7ea9fb9eb997735769deb6fdcc70f178">cancel_pending_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a7ea9fb9eb997735769deb6fdcc70f178"><td class="mdescLeft">&#160;</td><td class="mdescRight">Invalidate the pending deferred-switch arm (clear all switch atoms + bump the switch generation). Used by the apply-side liveness re-check (scheduler_validate_pending_switch) and by release_zombie/reap_orphans when the armed target is removed.  <br /></td></tr>
+<tr class="memitem:a43f0e681276d4db5f24a11e5e23d958e" id="r_a43f0e681276d4db5f24a11e5e23d958e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a43f0e681276d4db5f24a11e5e23d958e">flush_zombies</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> max_flush) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a43f0e681276d4db5f24a11e5e23d958e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drain up to <code class="param">max_flush</code> zombies from the zombie list, calling cleanup() + MemPool::free() on each. Used by the on_tick watchdog when zombie_count_ exceeds the starvation limit, and by <a class="el" href="#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">drain_zombie_list()</a>. Caller must hold scheduler_lock_ or have IRQs disabled.  <br /></td></tr>
+<tr class="memitem:ad026a249da546e4b265cf8774b3013cf" id="r_ad026a249da546e4b265cf8774b3013cf"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad026a249da546e4b265cf8774b3013cf">drain_zombie_list</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ad026a249da546e4b265cf8774b3013cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.  <br /></td></tr>
+<tr class="memitem:a0dd60567b314b96f16c4ba03a2ddecf9" id="r_a0dd60567b314b96f16c4ba03a2ddecf9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0dd60567b314b96f16c4ba03a2ddecf9">cleanup_step</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a0dd60567b314b96f16c4ba03a2ddecf9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task cleanup step: pop one zombie from the list and free its resources. Called from the idle main loop once per iteration. Safe to call with IRQs enabled — the pop is IRQ-guarded internally.  <br /></td></tr>
+<tr class="memitem:a12d6760a23050c89d2d65bc86ac5e032" id="r_a12d6760a23050c89d2d65bc86ac5e032"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a12d6760a23050c89d2d65bc86ac5e032">zombie_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a12d6760a23050c89d2d65bc86ac5e032"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the zombie list (used by snapshot_restore to prevent dangling pointers after MemPool restoration).  <br /></td></tr>
+<tr class="memitem:a1b3612d8eada548ee8dd2621baf78cc5" id="r_a1b3612d8eada548ee8dd2621baf78cc5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1b3612d8eada548ee8dd2621baf78cc5">reset_zombie_list</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:af386d3e6be031ea8e376b068d97b0e19" id="r_af386d3e6be031ea8e376b068d97b0e19"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af386d3e6be031ea8e376b068d97b0e19">defer_kill</a> (TaskControlBlock *task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:af386d3e6be031ea8e376b068d97b0e19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deferred-kill: add a task to the deferred kill list for safe cleanup outside the try_lock critical section.  <br /></td></tr>
+<tr class="memitem:ac2ebbf950ac51a2d7700333fb0c4ba8e" id="r_ac2ebbf950ac51a2d7700333fb0c4ba8e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ac2ebbf950ac51a2d7700333fb0c4ba8e">process_deferred_kills</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ac2ebbf950ac51a2d7700333fb0c4ba8e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process all deferred kills: remove_task, cleanup, free. Called from <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> after the deadline scan lock is released.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Preemptive, rate-monotonic scheduler managing up to MAX_TASKS tasks. </p>
-<dl class="section note"><dt>Note</dt><dd><a class="el" href="classkernel_1_1_scheduler.html" title="Preemptive, rate-monotonic scheduler managing up to MAX_TASKS tasks.">Scheduler</a> is tick-driven and supports periodic and aperiodic tasks. </dd></dl>
+<div class="textblock"><p>Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0). </p>
+<p>Preemptive, rate-monotonic scheduler managing up to MAX_TASKS tasks. </p><dl class="section note"><dt>Note</dt><dd><a class="el" href="classkernel_1_1_scheduler.html" title="Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (d...">Scheduler</a> is tick-driven and supports periodic and aperiodic tasks. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a392525912608998bc99fa1a3d4816538" name="a392525912608998bc99fa1a3d4816538"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a392525912608998bc99fa1a3d4816538">&#9670;&#160;</a></span>add_task()</h2>
@@ -240,7 +299,7 @@ Test-isolation helpers</h2></td></tr>
         <tr>
           <td class="memname">void kernel::Scheduler::add_task </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -277,9 +336,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> kernel::Scheduler::add_task_err </td>
+          <td class="memname">SchedulerError kernel::Scheduler::add_task_err </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -301,6 +360,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="abe005618da247e2567e4ec2c40aeb176" name="abe005618da247e2567e4ec2c40aeb176"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe005618da247e2567e4ec2c40aeb176">&#9670;&#160;</a></span>all_tasks()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const <a class="el" href="classkernel_1_1_all_tasks_registry.html">AllTasksRegistry</a> &amp; kernel::Scheduler::all_tasks </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ab34fba0f4de02e992d07e7ece93985ee" name="ab34fba0f4de02e992d07e7ece93985ee"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab34fba0f4de02e992d07e7ece93985ee">&#9670;&#160;</a></span>alloc_id()</h2>
 
@@ -311,7 +395,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::alloc_id </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::alloc_id </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -339,9 +423,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> kernel::Scheduler::alloc_id_err </td>
+          <td class="memname">SchedulerError kernel::Scheduler::alloc_id_err </td>
           <td>(</td>
-          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_id</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out_id</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -360,6 +444,34 @@ Here is the call graph for this function:</div>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if ID table is full. </dd></dl>
+
+</div>
+</div>
+<a id="a7ea9fb9eb997735769deb6fdcc70f178" name="a7ea9fb9eb997735769deb6fdcc70f178"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ea9fb9eb997735769deb6fdcc70f178">&#9670;&#160;</a></span>cancel_pending_switch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::cancel_pending_switch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Invalidate the pending deferred-switch arm (clear all switch atoms + bump the switch generation). Used by the apply-side liveness re-check (scheduler_validate_pending_switch) and by release_zombie/reap_orphans when the armed target is removed. </p>
+<p>Clear every deferred-switch atom and bump the switch generation. Any ISR that captured the pre-clear generation fails its re-check (isr_stubs.asm jne .restore); any ISR entering after sees save_rsp_to==0. Called from the apply-side liveness re-check and from task removal paths. </p>
 
 </div>
 </div>
@@ -386,7 +498,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Capture the full <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> POD into <code class="param">out</code>. </p>
+<p>Capture the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> POD into <code class="param">out</code>. </p>
 
 </div>
 </div>
@@ -402,32 +514,32 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::capture_state </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **</td>          <td class="paramname"><span class="paramname"><em>tasks_out</em></span>, </td>
+          <td class="paramtype">TaskControlBlock **</td>          <td class="paramname"><span class="paramname"><em>tasks_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> **</td>          <td class="paramname"><span class="paramname"><em>id_table_out</em></span>, </td>
+          <td class="paramtype">TaskControlBlock **</td>          <td class="paramname"><span class="paramname"><em>id_table_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>task_count_out</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task_count_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>current_idx_out</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>current_idx_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t &amp;</td>          <td class="paramname"><span class="paramname"><em>next_id_out</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>next_id_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&amp;</td>          <td class="paramname"><span class="paramname"><em>idle_out</em></span>, </td>
+          <td class="paramtype">TaskControlBlock *&amp;</td>          <td class="paramname"><span class="paramname"><em>idle_out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -437,17 +549,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_hi</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_hi</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_lo</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_lo</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t *</td>          <td class="paramname"><span class="paramname"><em>sporadic_count_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>sporadic_count_out</em></span><span class="paramdefsep"> = </span><span class="paramdefval">nullptr</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -456,6 +568,12 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a8378abad25413cddf0c6b92b2489dfcb_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8378abad25413cddf0c6b92b2489dfcb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -483,6 +601,72 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Capture per-task plain fields into the snapshot buffer. Called from test_isolate's snapshot_create. </p>
+
+</div>
+</div>
+<a id="a6ce74ebd0c568fc4dbd19bc24c1d4f8c" name="a6ce74ebd0c568fc4dbd19bc24c1d4f8c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ce74ebd0c568fc4dbd19bc24c1d4f8c">&#9670;&#160;</a></span>charge_task_memory()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::charge_task_memory </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pages</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Charge <code class="param">pages</code> to the current task's memory budget. Returns false if charging would exceed the task's budget cap. When budget_pages_ == 0 (unlimited), charging always succeeds. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a6ce74ebd0c568fc4dbd19bc24c1d4f8c_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6ce74ebd0c568fc4dbd19bc24c1d4f8c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a0dd60567b314b96f16c4ba03a2ddecf9" name="a0dd60567b314b96f16c4ba03a2ddecf9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0dd60567b314b96f16c4ba03a2ddecf9">&#9670;&#160;</a></span>cleanup_step()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::cleanup_step </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Idle-task cleanup step: pop one zombie from the list and free its resources. Called from the idle main loop once per iteration. Safe to call with IRQs enabled — the pop is IRQ-guarded internally. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a0dd60567b314b96f16c4ba03a2ddecf9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a0dd60567b314b96f16c4ba03a2ddecf9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
 
 </div>
 </div>
@@ -514,13 +698,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a6cb4f7ab4207b34c9e4a278492fe8efc_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6cb4f7ab4207b34c9e4a278492fe8efc_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
 </div>
-<a id="a73f226e2fca1b403063e72db60d7a3f5" name="a73f226e2fca1b403063e72db60d7a3f5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a73f226e2fca1b403063e72db60d7a3f5">&#9670;&#160;</a></span>cleanup_zombies()</h2>
+<a id="a6c0f3b2bd32b59b696f200f5ad323910" name="a6c0f3b2bd32b59b696f200f5ad323910"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c0f3b2bd32b59b696f200f5ad323910">&#9670;&#160;</a></span>clear_switch_globals()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -529,7 +713,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void kernel::Scheduler::cleanup_zombies </td>
+          <td class="memname">void kernel::Scheduler::clear_switch_globals </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -542,24 +726,12 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Removes all tasks from the scheduler that have invalid magic (freed-and-reused TCBs) without touching the TCB memory. Also removes tasks with valid magic that are not the idle task, the current task, or known daemons. </p>
-<p>Iterates at most CONFIG_MAX_TASKS entries in the task array (defensive bound against a corrupted task_count_). Tasks to keep are compacted to the front of the array; task_count_ is updated accordingly. </p><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">shell_task</td><td>Pointer to the shell task (use <a class="el" href="#a940a027ee35b641fd1c7fc73f9235c65" title="Stores a pointer to the shell task so cleanup_zombies can identify it.">set_shell_task()</a> beforehand). </td></tr>
-  </table>
-  </dd>
-</dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_scheduler_a73f226e2fca1b403063e72db60d7a3f5_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a73f226e2fca1b403063e72db60d7a3f5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
+<p>Clears assembly-level context-switch globals (scheduler_save_rsp_to, scheduler_load_rsp_from, etc.). Safe to call multiple times. Used after <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> in test context to prevent a later timer ISR from consuming stale globals and performing an unintended context switch. </p>
 
 </div>
 </div>
-<a id="a31616072aafcff4b1c7872028e9de957" name="a31616072aafcff4b1c7872028e9de957"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a31616072aafcff4b1c7872028e9de957">&#9670;&#160;</a></span>current_index()</h2>
+<a id="a09892078dd5b82b04d527059650aaa3f" name="a09892078dd5b82b04d527059650aaa3f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09892078dd5b82b04d527059650aaa3f">&#9670;&#160;</a></span>credit_task_memory()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -568,7 +740,40 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::current_index </td>
+          <td class="memname">void kernel::Scheduler::credit_task_memory </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pages</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Credit <code class="param">pages</code> back to the current task's memory usage. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a09892078dd5b82b04d527059650aaa3f_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a09892078dd5b82b04d527059650aaa3f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a6ec2aee2d32d08a9b747a4ef076e0257" name="a6ec2aee2d32d08a9b747a4ef076e0257"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ec2aee2d32d08a9b747a4ef076e0257">&#9670;&#160;</a></span>current_index()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::current_index </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -576,15 +781,17 @@ Here is the call graph for this function:</div>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Returns the index of the current task (computed from pointer, O(n) for snapshot compatibility; prefer <a class="el" href="#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task (RSP-authoritative).">current_task()</a> directly). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_scheduler_a31616072aafcff4b1c7872028e9de957_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a31616072aafcff4b1c7872028e9de957_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<div class="center"><img src="classkernel_1_1_scheduler_a6ec2aee2d32d08a9b747a4ef076e0257_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6ec2aee2d32d08a9b747a4ef076e0257_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -599,7 +806,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::current_task </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::current_task </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -612,8 +819,41 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Returns the currently running task. </p>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the current <a class="el" href="structkernel_1_1_task_control_block.html" title="CPU register save area for context switching.">TaskControlBlock</a>. </dd></dl>
+<p>Returns the currently running task (RSP-authoritative). </p>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the current TaskControlBlock. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_ac094d7e0ec9c48c58637e36fce587be2_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac094d7e0ec9c48c58637e36fce587be2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a1f0522a97f2382ccf8347162cefe2104" name="a1f0522a97f2382ccf8347162cefe2104"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f0522a97f2382ccf8347162cefe2104">&#9670;&#160;</a></span>debug_id_table_references()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::debug_id_table_references </td>
+          <td>(</td>
+          <td class="paramtype">void *</td>          <td class="paramname"><span class="paramname"><em>block</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>DEBUG-only (#019/#020): returns true if the given block address is still referenced by the scheduler's id_table_ (a stale entry pointing at a freed TCB). Used by TaskControlBlock::create() to catch TCB-blocks being reused while still aliased by the id table. </p>
 
 </div>
 </div>
@@ -644,6 +884,39 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="af386d3e6be031ea8e376b068d97b0e19" name="af386d3e6be031ea8e376b068d97b0e19"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af386d3e6be031ea8e376b068d97b0e19">&#9670;&#160;</a></span>defer_kill()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::defer_kill </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Deferred-kill: add a task to the deferred kill list for safe cleanup outside the try_lock critical section. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_af386d3e6be031ea8e376b068d97b0e19_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_af386d3e6be031ea8e376b068d97b0e19_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
 <a id="afe8481a5993e14cbd94b81c4f64bd7d0" name="afe8481a5993e14cbd94b81c4f64bd7d0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#afe8481a5993e14cbd94b81c4f64bd7d0">&#9670;&#160;</a></span>dequeue_ready()</h2>
 
@@ -656,7 +929,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::dequeue_ready </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -668,6 +941,72 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Removes a task from the O(1) ready queue. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_afe8481a5993e14cbd94b81c4f64bd7d0_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_afe8481a5993e14cbd94b81c4f64bd7d0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="ad026a249da546e4b265cf8774b3013cf" name="ad026a249da546e4b265cf8774b3013cf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad026a249da546e4b265cf8774b3013cf">&#9670;&#160;</a></span>drain_zombie_list()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::drain_zombie_list </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_ad026a249da546e4b265cf8774b3013cf_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ad026a249da546e4b265cf8774b3013cf_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a114ccea984c24a46114648d5f51e0e0a" name="a114ccea984c24a46114648d5f51e0e0a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a114ccea984c24a46114648d5f51e0e0a">&#9670;&#160;</a></span>effective_priority()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::effective_priority </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the effective scheduling priority, accounting for sporadic-server budget state. </p>
 
 </div>
 </div>
@@ -683,7 +1022,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::enqueue_ready </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -695,6 +1034,45 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Enqueues a task into the O(1) ready queue at its effective priority. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a75c863b2589f150169806297ba76cf7c_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a75c863b2589f150169806297ba76cf7c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
+
+</div>
+</div>
+<a id="a913928f9814cd7cb9dd5241133e3fcdd" name="a913928f9814cd7cb9dd5241133e3fcdd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a913928f9814cd7cb9dd5241133e3fcdd">&#9670;&#160;</a></span>ensure_monitor()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::ensure_monitor </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Ensures the deadline-monitor task exists and is valid. Re-spawns it if the TCB was killed (e.g. by reload_daemon_tasks during snapshot restore). Safe to call multiple times. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a913928f9814cd7cb9dd5241133e3fcdd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a913928f9814cd7cb9dd5241133e3fcdd_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 14 -->
+</div>
 
 </div>
 </div>
@@ -708,9 +1086,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::find_task </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::find_task </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>id</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>id</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -728,7 +1106,67 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the <a class="el" href="structkernel_1_1_task_control_block.html" title="CPU register save area for context switching.">TaskControlBlock</a>, or nullptr. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the TaskControlBlock, or nullptr. </dd></dl>
+
+</div>
+</div>
+<a id="a43f0e681276d4db5f24a11e5e23d958e" name="a43f0e681276d4db5f24a11e5e23d958e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43f0e681276d4db5f24a11e5e23d958e">&#9670;&#160;</a></span>flush_zombies()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::flush_zombies </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>max_flush</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Drain up to <code class="param">max_flush</code> zombies from the zombie list, calling cleanup() + MemPool::free() on each. Used by the on_tick watchdog when zombie_count_ exceeds the starvation limit, and by <a class="el" href="#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">drain_zombie_list()</a>. Caller must hold scheduler_lock_ or have IRQs disabled. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a43f0e681276d4db5f24a11e5e23d958e_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a43f0e681276d4db5f24a11e5e23d958e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="af5b305024ca5def7df9d16843d92a0c5" name="af5b305024ca5def7df9d16843d92a0c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5b305024ca5def7df9d16843d92a0c5">&#9670;&#160;</a></span>get_harness_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::get_harness_task </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the harness (init_task) TCB, or nullptr if not set. </p>
 
 </div>
 </div>
@@ -742,7 +1180,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::get_idle_task </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::get_idle_task </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -754,6 +1192,12 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_ab3d622e0c4309eade918101d6fdd060a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ab3d622e0c4309eade918101d6fdd060a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
 
 </div>
 </div>
@@ -767,7 +1211,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::get_shell_task </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::get_shell_task </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -779,6 +1223,33 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9276d18a6cae34b677e7d36f39dc0bae" name="a9276d18a6cae34b677e7d36f39dc0bae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9276d18a6cae34b677e7d36f39dc0bae">&#9670;&#160;</a></span>get_test_context()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_test_context.html">TestContext</a> * kernel::Scheduler::get_test_context </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the injected test context, or nullptr. </p>
 
 </div>
 </div>
@@ -809,8 +1280,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a6421e44dae2dd343f7f0e7064a89ad97" name="a6421e44dae2dd343f7f0e7064a89ad97"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6421e44dae2dd343f7f0e7064a89ad97">&#9670;&#160;</a></span>init()</h2>
+<a id="a1c8102c5c49bfeec7ddf89804d9b5bf3" name="a1c8102c5c49bfeec7ddf89804d9b5bf3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1c8102c5c49bfeec7ddf89804d9b5bf3">&#9670;&#160;</a></span>init()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -821,7 +1292,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::init </td>
           <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cfg</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a>{}</span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -833,17 +1304,23 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Initialises the scheduler and creates the idle task. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cfg</td><td>Boot-time configuration injected from kernel_init (PfA-A). Defaults match the pre-refactor behaviour. </td></tr>
+  </table>
+  </dd>
+</dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_scheduler_a6421e44dae2dd343f7f0e7064a89ad97_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6421e44dae2dd343f7f0e7064a89ad97_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<div class="center"><img src="classkernel_1_1_scheduler_a1c8102c5c49bfeec7ddf89804d9b5bf3_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a1c8102c5c49bfeec7ddf89804d9b5bf3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
 </div>
 
 </div>
 </div>
-<a id="a72a9265e4e4721353cbcee6ecc293fdc" name="a72a9265e4e4721353cbcee6ecc293fdc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a72a9265e4e4721353cbcee6ecc293fdc">&#9670;&#160;</a></span>init_err()</h2>
+<a id="ae95c16cf7d774deef2e4957ac374a77f" name="ae95c16cf7d774deef2e4957ac374a77f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae95c16cf7d774deef2e4957ac374a77f">&#9670;&#160;</a></span>init_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -852,9 +1329,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> kernel::Scheduler::init_err </td>
+          <td class="memname">SchedulerError kernel::Scheduler::init_err </td>
           <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>cfg</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a>{}</span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -865,12 +1342,12 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Error-returning overload for <a class="el" href="#a6421e44dae2dd343f7f0e7064a89ad97" title="Initialises the scheduler and creates the idle task.">init()</a>. </p>
+<p>Error-returning overload for <a class="el" href="#a1c8102c5c49bfeec7ddf89804d9b5bf3" title="Initialises the scheduler and creates the idle task.">init()</a>. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="classkernel_1_1_scheduler_a72a9265e4e4721353cbcee6ecc293fdc_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a72a9265e4e4721353cbcee6ecc293fdc_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<div class="center"><img src="classkernel_1_1_scheduler_ae95c16cf7d774deef2e4957ac374a77f_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ae95c16cf7d774deef2e4957ac374a77f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -903,6 +1380,75 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a5c115dae407624bae7db3b31baa29a14" name="a5c115dae407624bae7db3b31baa29a14"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c115dae407624bae7db3b31baa29a14">&#9670;&#160;</a></span>monitor_task_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::monitor_task_entry </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Entry point for the deadline-monitor task (priority 127). Waits on an atomic handoff flag, calls <a class="el" href="#aabd465f67eed45ec2c20877a6f7398b8" title="Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detec...">scan_deadlines()</a> when woken by <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a>. Only compiled when CONFIG_DEADLINE_MONITOR_TASK &gt; 0. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a5c115dae407624bae7db3b31baa29a14_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5c115dae407624bae7db3b31baa29a14_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
+<a id="ae543d07405d0c21a092c2561cbfe6735" name="ae543d07405d0c21a092c2561cbfe6735"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae543d07405d0c21a092c2561cbfe6735">&#9670;&#160;</a></span>move_priority()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::move_priority </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>old_prio</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>new_prio</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Moves a task from one priority queue to another (re-index). </p>
+
+</div>
+</div>
 <a id="a8c46258f8feca3ec4f56691ca491df8d" name="a8c46258f8feca3ec4f56691ca491df8d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8c46258f8feca3ec4f56691ca491df8d">&#9670;&#160;</a></span>needs_switch()</h2>
 
@@ -928,6 +1474,12 @@ Here is the call graph for this function:</div>
 
 <p>Checks if a context switch is needed (reschedule flag). </p>
 <dl class="section return"><dt>Returns</dt><dd>True if a switch is pending. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a8c46258f8feca3ec4f56691ca491df8d_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8c46258f8feca3ec4f56691ca491df8d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
+</div>
 
 </div>
 </div>
@@ -941,7 +1493,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::next_task </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::next_task </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -955,12 +1507,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Selects the next task to run according to RM policy. </p>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the next <a class="el" href="structkernel_1_1_task_control_block.html" title="CPU register save area for context switching.">TaskControlBlock</a>. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the next TaskControlBlock. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a852663edfb9d43d51ca280727c2295a3_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a852663edfb9d43d51ca280727c2295a3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -993,7 +1545,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_abde09e0c1b73175a95f3e78104e437fd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_abde09e0c1b73175a95f3e78104e437fd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 22 -->
+</div>
+
+</div>
+</div>
+<a id="ac2ebbf950ac51a2d7700333fb0c4ba8e" name="ac2ebbf950ac51a2d7700333fb0c4ba8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2ebbf950ac51a2d7700333fb0c4ba8e">&#9670;&#160;</a></span>process_deferred_kills()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::process_deferred_kills </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Process all deferred kills: remove_task, cleanup, free. Called from <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> after the deadline scan lock is released. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_ac2ebbf950ac51a2d7700333fb0c4ba8e_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac2ebbf950ac51a2d7700333fb0c4ba8e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1026,8 +1611,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a0d595ec39367db2ce160fb1d72c23fab_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a0d595ec39367db2ce160fb1d72c23fab_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 24 -->
 </div>
+
+</div>
+</div>
+<a id="a9b47f39412b4ffc881beb1d44368661d" name="a9b47f39412b4ffc881beb1d44368661d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9b47f39412b4ffc881beb1d44368661d">&#9670;&#160;</a></span>rebuild_all_tasks()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::rebuild_all_tasks </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Rebuild <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> per-priority linked lists using each task's current priority. Called after test-isolation snapshot restore to fix stale priority-grouping. </p>
 
 </div>
 </div>
@@ -1055,6 +1667,72 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Rebuild the ready queue from tasks_[], enqueuing all tasks with state == READY. Used after <a class="el" href="#a0c529a4f5d4844899061a70de3853e68" title="Restore the full ReadyQueueManager POD from src.">restore_rqpod()</a> to ensure in_ready_queue_ flags match the actual queue. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_ab060fbcd590e46e4e1c3ab07f5fe354d_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ab060fbcd590e46e4e1c3ab07f5fe354d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 25 -->
+</div>
+
+</div>
+</div>
+<a id="a090f79eb27f051efff2c746fa009416a" name="a090f79eb27f051efff2c746fa009416a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a090f79eb27f051efff2c746fa009416a">&#9670;&#160;</a></span>register_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::register_task </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Register a task in scheduler tables without making it runnable. Registers in all_tasks_, deadline_list_, and id_table_ so the task is findable via <a class="el" href="#adbf15b7eb697f6c14bcf76c438895b18" title="Finds a task by its ID (hash table, O(1) amortized).">find_task()</a>, but does NOT enqueue in the ready queue. The task's state must NOT be READY — use for test tasks that need setup before they can run. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a090f79eb27f051efff2c746fa009416a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a090f79eb27f051efff2c746fa009416a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 26 -->
+</div>
+
+</div>
+</div>
+<a id="a4179a8e67889d0c46eaa1d401762112a" name="a4179a8e67889d0c46eaa1d401762112a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4179a8e67889d0c46eaa1d401762112a">&#9670;&#160;</a></span>release_zombie()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::release_zombie </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Release a terminated task into the zombie list for deferred cleanup by the idle task. Removes from all scheduler tables (all_tasks_, deadline_list_, id_table_) but does NOT free resources — that happens in <a class="el" href="#a0dd60567b314b96f16c4ba03a2ddecf9" title="Idle-task cleanup step: pop one zombie from the list and free its resources. Called from the idle mai...">cleanup_step()</a>. Caller must hold scheduler_lock_. Precondition: task.state == TERMINATED, task NOT in ready queue. </p>
 
 </div>
 </div>
@@ -1070,7 +1748,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::remove_task </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1092,7 +1770,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a1faa60d8cbc8f5827b9e81f7fe135205_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a1faa60d8cbc8f5827b9e81f7fe135205_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -1107,9 +1785,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="namespacekernel_1_1errors.html#ae886175cc5c137dd98ed440d4a46c203">SchedulerError</a> kernel::Scheduler::remove_task_err </td>
+          <td class="memname">SchedulerError kernel::Scheduler::remove_task_err </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1126,7 +1804,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a7e36233fc7325aab8561e55c8e07e594_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a7e36233fc7325aab8561e55c8e07e594_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -1159,8 +1837,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ac92ab8abdaaf924f98d66fd5f8ab2a50_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac92ab8abdaaf924f98d66fd5f8ab2a50_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 29 -->
 </div>
+
+</div>
+</div>
+<a id="a7093e9361600d4f12c22adeb2168ac41" name="a7093e9361600d4f12c22adeb2168ac41"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7093e9361600d4f12c22adeb2168ac41">&#9670;&#160;</a></span>reset_next_task_id()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::reset_next_task_id </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reset the task-ID counter (used by reboot_from_table() so init gets PID 1 after the test suite finishes). </p>
 
 </div>
 </div>
@@ -1191,6 +1896,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a1b3612d8eada548ee8dd2621baf78cc5" name="a1b3612d8eada548ee8dd2621baf78cc5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b3612d8eada548ee8dd2621baf78cc5">&#9670;&#160;</a></span>reset_zombie_list()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::reset_zombie_list </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a0c529a4f5d4844899061a70de3853e68" name="a0c529a4f5d4844899061a70de3853e68"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0c529a4f5d4844899061a70de3853e68">&#9670;&#160;</a></span>restore_rqpod()</h2>
 
@@ -1214,7 +1944,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Restore the full <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> POD from <code class="param">src</code>. </p>
+<p>Restore the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> POD from <code class="param">src</code>. </p>
 
 </div>
 </div>
@@ -1230,32 +1960,32 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::restore_state </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *</td>          <td class="paramname"><span class="paramname"><em>tasks_in</em></span>, </td>
+          <td class="paramtype">TaskControlBlock *const *</td>          <td class="paramname"><span class="paramname"><em>tasks_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *const *</td>          <td class="paramname"><span class="paramname"><em>id_table_in</em></span>, </td>
+          <td class="paramtype">TaskControlBlock *const *</td>          <td class="paramname"><span class="paramname"><em>id_table_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>task_count_in</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>task_count_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>current_idx_in</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>current_idx_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>next_id_in</em></span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>next_id_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>idle_in</em></span>, </td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>idle_in</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1265,17 +1995,17 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_hi</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_hi</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_lo</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>, </td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rq_bitmap_lo</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>sporadic_count_in</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>sporadic_count_in</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0</span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -1284,6 +2014,12 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_abbb4bed7e15b38e61e5d7aeb584d0090_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_abbb4bed7e15b38e61e5d7aeb584d0090_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 30 -->
+</div>
 
 </div>
 </div>
@@ -1311,6 +2047,39 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Restore per-task plain fields from the snapshot buffer onto existing task objects (matched by ID). Called from test_isolate's snapshot_restore after <a class="el" href="#abbb4bed7e15b38e61e5d7aeb584d0090">restore_state()</a>. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a8c7a0865a998b02ebf986bd029fa8202_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8c7a0865a998b02ebf986bd029fa8202_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 31 -->
+</div>
+
+</div>
+</div>
+<a id="aabd465f67eed45ec2c20877a6f7398b8" name="aabd465f67eed45ec2c20877a6f7398b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabd465f67eed45ec2c20877a6f7398b8">&#9670;&#160;</a></span>scan_deadlines()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::scan_deadlines </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detection logic as the inline scan in <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a> but can hold scheduler_lock_ and perform inline KILL cleanup. Guarded by #if CONFIG_DEADLINE_MONITOR_TASK. </p>
 
 </div>
 </div>
@@ -1326,7 +2095,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::set_current </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1344,44 +2113,17 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a5a2b494bb6c3b184c9374e85be368804_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a2b494bb6c3b184c9374e85be368804_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 32 -->
+</div>
 
 </div>
 </div>
-<a id="a8617d4e396bb6ba95ec19401fa1f5f62" name="a8617d4e396bb6ba95ec19401fa1f5f62"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8617d4e396bb6ba95ec19401fa1f5f62">&#9670;&#160;</a></span>set_current_by_id()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">void kernel::Scheduler::set_current_by_id </td>
-          <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>id</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Sets the current running task by ID (used after context switch). </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">id</td><td>Task ID to set as current. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a713edf58866177c06b37b7efa89a4f13" name="a713edf58866177c06b37b7efa89a4f13"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a713edf58866177c06b37b7efa89a4f13">&#9670;&#160;</a></span>set_current_index()</h2>
+<a id="a3c89637a429ed31290338b912cc8695d" name="a3c89637a429ed31290338b912cc8695d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c89637a429ed31290338b912cc8695d">&#9670;&#160;</a></span>set_current_index()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1392,7 +2134,59 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::set_current_index </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>idx</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6c327d25c2a2293e83682bbdc0db5dcf" name="a6c327d25c2a2293e83682bbdc0db5dcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c327d25c2a2293e83682bbdc0db5dcf">&#9670;&#160;</a></span>set_current_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::set_current_task </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>t</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the current task directly by pointer (unambiguous; avoids the index-convention mismatch between <a class="el" href="#a6ec2aee2d32d08a9b747a4ef076e0257" title="Returns the index of the current task (computed from pointer, O(n) for snapshot compatibility; prefer...">current_index()</a>/set_current_index() (raw <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> order) and <a class="el" href="#a77133baf25c2e9530f2b1709d881d1dc" title="Returns the task at a given index in the task array.">task_at()</a> (idle-reserved)). </p>
+
+</div>
+</div>
+<a id="abe47dcde6076815882bb4051c2146467" name="abe47dcde6076815882bb4051c2146467"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe47dcde6076815882bb4051c2146467">&#9670;&#160;</a></span>set_harness_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::set_harness_task </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1402,6 +2196,8 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Stores a pointer to the harness (init_task, PID 1) — the task that runs the test-cycling code. Used by rate_monotonic_schedule to exempt the harness from preemption during the test cycle (BUGS.md#021), while still allowing it to yield voluntarily. </p>
 
 </div>
 </div>
@@ -1438,6 +2234,50 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a460f3e4e082b3a13c6966a350b270d23" name="a460f3e4e082b3a13c6966a350b270d23"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a460f3e4e082b3a13c6966a350b270d23">&#9670;&#160;</a></span>set_priority()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::set_priority </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>new_prio</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Change a task's scheduling priority at runtime. Re-buckets the task in the O(1) ready queue (if queued) so the change takes effect on the next tick, and updates base_priority. Safe to call from task context; IRQs are disabled around the move so the timer ISR cannot read a half-updated bucket. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">task</td><td>Target TCB. </td></tr>
+    <tr><td class="paramname">new_prio</td><td>New scheduling priority. </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 33 -->
+</div>
+
+</div>
+</div>
 <a id="a940a027ee35b641fd1c7fc73f9235c65" name="a940a027ee35b641fd1c7fc73f9235c65"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a940a027ee35b641fd1c7fc73f9235c65">&#9670;&#160;</a></span>set_shell_task()</h2>
 
@@ -1450,7 +2290,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::set_shell_task </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1461,7 +2301,40 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Stores a pointer to the shell task so cleanup_zombies can identify it. </p>
+<p>Stores a pointer to the shell task. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 34 -->
+</div>
+
+</div>
+</div>
+<a id="aca1f956c7e183393301034d90657e0f5" name="aca1f956c7e183393301034d90657e0f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca1f956c7e183393301034d90657e0f5">&#9670;&#160;</a></span>set_suppress_terminated_log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::set_suppress_terminated_log </td>
+          <td>(</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>v</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Suppress or re-enable the "task terminated" log message. Used by reboot_from_table() during intentional teardown. </p>
 
 </div>
 </div>
@@ -1477,7 +2350,7 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void kernel::Scheduler::set_task_ready </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1493,8 +2366,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 35 -->
 </div>
+
+</div>
+</div>
+<a id="a244ba672064743d1c96a1d05cd94a851" name="a244ba672064743d1c96a1d05cd94a851"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a244ba672064743d1c96a1d05cd94a851">&#9670;&#160;</a></span>set_test_context()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::set_test_context </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_test_context.html">TestContext</a> *</td>          <td class="paramname"><span class="paramname"><em>ctx</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Injects the test-runner context (PfA-A). Production keeps nullptr so all test flags resolve to false; the harness sets it for the duration of a test cycle and clears it afterwards. </p>
 
 </div>
 </div>
@@ -1508,7 +2408,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::snapshot_id_size </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::snapshot_id_size </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1533,7 +2433,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::snapshot_max_tasks </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::snapshot_max_tasks </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1558,7 +2458,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::snapshot_task_fields_size </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::snapshot_task_fields_size </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1583,7 +2483,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::sporadic_count </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::sporadic_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1600,6 +2500,39 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a5a5da40795060d45b9fa143b26805e42" name="a5a5da40795060d45b9fa143b26805e42"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a5da40795060d45b9fa143b26805e42">&#9670;&#160;</a></span>switch_away_from_terminating()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::switch_away_from_terminating </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>exiting</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Safely switches the CPU off a task that is being terminated while it is the current task, WITHOUT calling switch_to_task (which resolves the live RSP owner and corrupts contexts when invoked from ISR context, e.g. sys_exit). Publishes the deferred-switch slot directly: the save target is the exiting task's own <span class="tt">context.rsp</span> (a dead slot — the task never resumes, so the ISR epilogue's <span class="tt">mov [save], rsp</span> landing there is harmless), and the load target is the next runnable task's <span class="tt">context.rsp</span>. The next ISR epilogue applies the switch. Caller must hold no scheduler lock; this takes scheduler_lock_ internally. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 36 -->
+</div>
+
+</div>
+</div>
 <a id="a77133baf25c2e9530f2b1709d881d1dc" name="a77133baf25c2e9530f2b1709d881d1dc"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a77133baf25c2e9530f2b1709d881d1dc">&#9670;&#160;</a></span>task_at()</h2>
 
@@ -1610,9 +2543,9 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> * kernel::Scheduler::task_at </td>
+          <td class="memname">TaskControlBlock * kernel::Scheduler::task_at </td>
           <td>(</td>
-          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>index</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>index</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -1630,7 +2563,7 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the <a class="el" href="structkernel_1_1_task_control_block.html" title="CPU register save area for context switching.">TaskControlBlock</a>, or nullptr. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the TaskControlBlock, or nullptr. </dd></dl>
 
 </div>
 </div>
@@ -1644,7 +2577,7 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">uint64_t kernel::Scheduler::task_count </td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::task_count </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -1659,6 +2592,111 @@ Here is the call graph for this function:</div>
 
 <p>Returns the total number of managed tasks. </p>
 <dl class="section return"><dt>Returns</dt><dd>Task count. </dd></dl>
+
+</div>
+</div>
+<a id="a79305bfd1ec5dc31b569e5d2ecfdf544" name="a79305bfd1ec5dc31b569e5d2ecfdf544"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79305bfd1ec5dc31b569e5d2ecfdf544">&#9670;&#160;</a></span>terminate()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::terminate </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>exit_code</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of directly setting <span class="tt">task.state = TERMINATED</span> to keep the ready queue consistent. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 37 -->
+</div>
+
+</div>
+</div>
+<a id="a8ff081fb1988f881f037ef8ed51901a9" name="a8ff081fb1988f881f037ef8ed51901a9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ff081fb1988f881f037ef8ed51901a9">&#9670;&#160;</a></span>unregister_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::unregister_task </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Best-effort unregister of a TCB from the scheduler's live tables. Used by TaskControlBlock::cleanup() so that every free path (delete, MemPool::free, reaper) unregisters — preventing dangling tasks_[]/id_table_ entries that alias a later allocation (use-after-free in add_task). Uses try_lock: if the scheduler lock is already held by the current context (e.g. reap_orphans, which unregisters manually), this returns false and does nothing. Callers should disable IRQs around this so the timer ISR (on_tick) cannot transiently hold the lock and cause a skip. </p>
+<dl class="section return"><dt>Returns</dt><dd>true if the lock was taken (and removal attempted), false if it was already held by the current context. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 38 -->
+</div>
+
+</div>
+</div>
+<a id="a12d6760a23050c89d2d65bc86ac5e032" name="a12d6760a23050c89d2d65bc86ac5e032"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a12d6760a23050c89d2d65bc86ac5e032">&#9670;&#160;</a></span>zombie_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::zombie_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear the zombie list (used by snapshot_restore to prevent dangling pointers after MemPool restoration). </p>
+<p>Return the current zombie count (for tests). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 39 -->
+</div>
 
 </div>
 </div>

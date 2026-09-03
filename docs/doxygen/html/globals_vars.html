@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 
 <div class="contents">
 <div class="textblock">Here is a list of all variables with links to the files they belong to:</div><br/>
-<div class="qindex"><a class="qindex" href="#index_a">A</a><div class="alphasepar"></div><a class="qindex" href="#index_c">C</a><div class="alphasepar"></div><a class="qindex" href="#index_d">D</a><div class="alphasepar"></div><a class="qindex" href="#index_e">E</a><div class="alphasepar"></div><a class="qindex" href="#index_f">F</a><div class="alphasepar"></div><a class="qindex" href="#index_g">G</a><div class="alphasepar"></div><a class="qindex" href="#index_h">H</a><div class="alphasepar"></div><a class="qindex" href="#index_i">I</a><div class="alphasepar"></div><a class="qindex" href="#index_k">K</a><div class="alphasepar"></div><a class="qindex" href="#index_m">M</a><div class="alphasepar"></div><a class="qindex" href="#index_s">S</a><div class="alphasepar"></div><a class="qindex" href="#index_u">U</a><div class="alphasepar"></div><a class="qindex" href="#index__">_</a></div>
+<div class="qindex"><a class="qindex" href="#index_a">A</a><div class="alphasepar"></div><a class="qindex" href="#index_c">C</a><div class="alphasepar"></div><a class="qindex" href="#index_d">D</a><div class="alphasepar"></div><a class="qindex" href="#index_e">E</a><div class="alphasepar"></div><a class="qindex" href="#index_f">F</a><div class="alphasepar"></div><a class="qindex" href="#index_g">G</a><div class="alphasepar"></div><a class="qindex" href="#index_i">I</a><div class="alphasepar"></div><a class="qindex" href="#index_k">K</a><div class="alphasepar"></div><a class="qindex" href="#index_m">M</a><div class="alphasepar"></div><a class="qindex" href="#index_r">R</a><div class="alphasepar"></div><a class="qindex" href="#index_s">S</a><div class="alphasepar"></div><a class="qindex" href="#index_u">U</a><div class="alphasepar"></div><a class="qindex" href="#index__">_</a></div>
 
 
 <h3 class="doxsection"><a id="index__5F" name="index__5F"></a>- _ -</h3><ul>
@@ -124,6 +124,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <li>_binary_build_fat32_img_start&#160;:&#160;<a class="el" href="test__fat32_8cpp.html#af0dadebcbfb328170184e327e268aec3">test_fat32.cpp</a>, <a class="el" href="test__vfs__fat32_8cpp.html#af0dadebcbfb328170184e327e268aec3">test_vfs_fat32.cpp</a></li>
 <li>_binary_initrd_cpio_end&#160;:&#160;<a class="el" href="kernel_8cpp.html#a2c38eb4c3a51bab012a31eb7f42d54c0">kernel.cpp</a></li>
 <li>_binary_initrd_cpio_start&#160;:&#160;<a class="el" href="kernel_8cpp.html#a53b789d98a238ce07c0629d6ba055cff">kernel.cpp</a></li>
+<li>_stack_end&#160;:&#160;<a class="el" href="scheduler_8cpp.html#aa4c3a4a82848848b44540d9841a3dccc">scheduler.cpp</a></li>
+<li>_stack_start&#160;:&#160;<a class="el" href="scheduler_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1">scheduler.cpp</a></li>
 </ul>
 
 
@@ -160,10 +162,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <h3 class="doxsection"><a id="index_e" name="index_e"></a>- e -</h3><ul>
 <li>environ&#160;:&#160;<a class="el" href="unistd_8h.html#aa006daaf11f1e2e45a6ababaf463212b">unistd.h</a></li>
 <li>errno&#160;:&#160;<a class="el" href="errno_8c.html#ad65a8842cc674e3ddf69355898c0ecbf">errno.c</a>, <a class="el" href="errno_8h.html#ad65a8842cc674e3ddf69355898c0ecbf">errno.h</a></li>
+<li>error_code&#160;:&#160;<a class="el" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">kernel.cpp</a></li>
 </ul>
 
 
 <h3 class="doxsection"><a id="index_f" name="index_f"></a>- f -</h3><ul>
+<li>false&#160;:&#160;<a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">kernel.cpp</a></li>
 <li>fpu_owner&#160;:&#160;<a class="el" href="global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525">global_state.cpp</a></li>
 </ul>
 
@@ -171,11 +175,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <h3 class="doxsection"><a id="index_g" name="index_g"></a>- g -</h3><ul>
 <li>generated_tests&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aed8e7ca5b470a2d98eca89d4c2f3e8e0">test_registry.gen.hpp</a></li>
 <li>generated_tests_count&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e28db5aa04917fdba864c113c58b4fa">test_registry.gen.hpp</a></li>
-</ul>
-
-
-<h3 class="doxsection"><a id="index_h" name="index_h"></a>- h -</h3><ul>
-<li>has_page_table_shared_v&#160;:&#160;<a class="el" href="test__pml4__clone_8cpp.html#adbef84a521b001ae676d8c44958aa4e4">test_pml4_clone.cpp</a></li>
 </ul>
 
 
@@ -194,6 +193,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <h3 class="doxsection"><a id="index_m" name="index_m"></a>- m -</h3><ul>
 <li>multiboot_info_ptr&#160;:&#160;<a class="el" href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">global_state.cpp</a></li>
 <li>multiboot_magic&#160;:&#160;<a class="el" href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">global_state.cpp</a></li>
+</ul>
+
+
+<h3 class="doxsection"><a id="index_r" name="index_r"></a>- r -</h3><ul>
+<li>regs&#160;:&#160;<a class="el" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">kernel.cpp</a></li>
+<li>rip&#160;:&#160;<a class="el" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">kernel.cpp</a></li>
 </ul>
 
 

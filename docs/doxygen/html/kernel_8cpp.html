@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -126,6 +126,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 <code>#include &lt;<a class="el" href="apic_8hpp_source.html">kernel/arch/apic.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__latency__histogram_8hpp_source.html">kernel/arch/irq_latency_histogram.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__thread_8hpp_source.html">kernel/irq_thread.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__delivery_8hpp_source.html">kernel/irq_delivery.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="interrupt__controller_8hpp_source.html">kernel/arch/interrupt_controller.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="rtc_8hpp_source.html">kernel/arch/rtc.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
@@ -135,6 +136,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('kernel_8cpp.ht
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="iommu_2iommu_8hpp_source.html">kernel/iommu/iommu.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="ipc_8hpp_source.html">kernel/ipc/ipc.hpp</a>&gt;</code><br />
@@ -192,6 +194,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ae22655ba6f328217f1ebd6248ed82727" id="r_ae22655ba6f328217f1ebd6248ed82727"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae22655ba6f328217f1ebd6248ed82727">panic</a> (const char *msg)</td></tr>
 <tr class="memdesc:ae22655ba6f328217f1ebd6248ed82727"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
 <tr class="memitem:ae2bf43943abd1cc6ac00d36b17a973c3" id="r_ae2bf43943abd1cc6ac00d36b17a973c3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae2bf43943abd1cc6ac00d36b17a973c3">__attribute__</a> ((weak)) void <a class="el" href="test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a>(<a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memitem:aabfdfb827135142a9a9873c411fb99d1" id="r_aabfdfb827135142a9a9873c411fb99d1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aabfdfb827135142a9a9873c411fb99d1">panic</a> (&quot;reserved exception&quot;)</td></tr>
 <tr class="memitem:a05b6e6675cd9f2f3cb2fd0aa3bc812a3" id="r_a05b6e6675cd9f2f3cb2fd0aa3bc812a3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05b6e6675cd9f2f3cb2fd0aa3bc812a3">syscall_handler</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> number, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg0, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg1, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg2, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arg3, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:a61e633c8acb5cb45303ce5b45599b872" id="r_a61e633c8acb5cb45303ce5b45599b872"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a61e633c8acb5cb45303ce5b45599b872">handle_interrupt_c</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry_tsc)</td></tr>
 <tr class="memitem:a6758dbad75005fb55338b477c2e5204a" id="r_a6758dbad75005fb55338b477c2e5204a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6758dbad75005fb55338b477c2e5204a">format_datetime</a> (char *buf, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> wall_ns)</td></tr>
@@ -203,6 +206,10 @@ Variables</h2></td></tr>
 <tr class="memitem:acf393da2fe85b8d9fa8cd83ff83a6a0c" id="r_acf393da2fe85b8d9fa8cd83ff83a6a0c"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#acf393da2fe85b8d9fa8cd83ff83a6a0c">kernel_virt_end</a> []</td></tr>
 <tr class="memitem:a53b789d98a238ce07c0629d6ba055cff" id="r_a53b789d98a238ce07c0629d6ba055cff"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a53b789d98a238ce07c0629d6ba055cff">_binary_initrd_cpio_start</a> []</td></tr>
 <tr class="memitem:a2c38eb4c3a51bab012a31eb7f42d54c0" id="r_a2c38eb4c3a51bab012a31eb7f42d54c0"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2c38eb4c3a51bab012a31eb7f42d54c0">_binary_initrd_cpio_end</a> []</td></tr>
+<tr class="memitem:a62fb24a5114b3a2c8227926f8f0adaa2" id="r_a62fb24a5114b3a2c8227926f8f0adaa2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></td></tr>
+<tr class="memitem:a1fa277715dbc259c4bd045c128015845" id="r_a1fa277715dbc259c4bd045c128015845"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1fa277715dbc259c4bd045c128015845">rip</a></td></tr>
+<tr class="memitem:acf673abd8f09c5656f8e1093ef6ef708" id="r_acf673abd8f09c5656f8e1093ef6ef708"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#acf673abd8f09c5656f8e1093ef6ef708">regs</a></td></tr>
+<tr class="memitem:a5df37b7f02e5cdc7d9412b7f872b8e01" id="r_a5df37b7f02e5cdc7d9412b7f872b8e01"><td class="memItemLeft">return&#160;</td><td class="memItemRight"><a class="el" href="#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a6773415358edda571fb1be7fb810a2c2" name="a6773415358edda571fb1be7fb810a2c2"></a>
@@ -447,119 +454,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph.png" border="0" usemap="#akernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph" loading="lazy" alt=""/></div>
-<map name="akernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph" id="akernel_8cpp_ae54e1bcf3fe5f14443fdc8ddadfbb615_cgraph">
-<area shape="rect" title="Entry point after transitioning to the higher half." alt="" coords="5,1127,119,1153"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#ac8476bc9792dc91ea732ddbc383f7a5b" title="Adds a task to the scheduler&#39;s run queue." alt="" coords="190,5,320,48"/>
-<area shape="poly" title=" " alt="" coords="61,1126,70,923,90,586,104,410,121,253,141,133,152,91,164,65,178,53,176,58,169,68,157,93,147,134,127,254,110,411,95,586,75,923,67,1126"/>
-<area shape="rect" href="structkernel_1_1TaskControlBlock.html#a82a06cb63bdaa30a038a40e5632fbe9d" title="Creates a new kernel task with the given entry and scheduling parameters." alt="" coords="391,100,558,143"/>
-<area shape="poly" title=" " alt="" coords="61,1126,67,928,84,601,97,432,115,283,137,169,150,131,165,109,191,90,220,78,252,72,284,70,349,77,408,93,403,96,348,82,284,75,252,77,222,83,194,95,169,113,155,134,142,171,120,283,103,433,89,601,72,928,66,1126"/>
-<area shape="rect" href="kernel_8cpp.html#a80e920b60042b6c2750fd88974610e99" title=" " alt="" coords="429,188,520,215"/>
-<area shape="poly" title=" " alt="" coords="61,1126,69,946,88,652,102,500,119,366,140,265,152,231,165,210,192,190,223,177,256,169,291,165,358,169,418,182,414,185,357,175,291,171,257,174,225,182,195,195,169,214,156,233,145,266,124,367,107,501,93,652,74,946,66,1126"/>
-<area shape="rect" href="kernel_8cpp.html#aba40a75ea886b874f3247878df784d87" title=" " alt="" coords="195,224,314,251"/>
-<area shape="poly" title=" " alt="" coords="61,1126,72,956,93,680,107,538,124,411,143,315,153,282,165,261,182,248,180,253,169,264,158,284,148,316,129,412,113,538,98,680,77,956,67,1126"/>
-<area shape="rect" href="namespacekernel_1_1vfs.html#af07f68076c35369863e1297a548c9f94" title=" " alt="" coords="182,275,328,301"/>
-<area shape="poly" title=" " alt="" coords="60,1126,60,976,70,731,82,601,101,481,128,380,145,341,165,312,170,308,168,313,169,315,150,344,133,382,106,482,88,602,76,732,66,976,66,1126"/>
-<area shape="rect" href="classarch_1_1Keyboard.html#a14555f392329060ff5dc5ddd1256d4d5" title="Handles the keyboard IRQ (reads scancode from port)." alt="" coords="167,325,343,352"/>
-<area shape="poly" title=" " alt="" coords="61,1126,63,986,75,759,88,639,106,527,131,434,147,397,165,369,179,358,176,363,169,372,152,400,137,435,112,528,93,639,81,759,68,986,66,1126"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ac55cd7a631b4e76a2293edf8b8bb0bd4" title=" " alt="" coords="408,452,541,479"/>
-<area shape="poly" title=" " alt="" coords="60,1126,60,990,63,887,69,773,81,658,100,554,113,508,127,468,145,436,165,413,197,393,233,383,271,382,309,388,382,412,441,443,436,445,380,417,308,393,270,388,234,388,199,398,168,417,149,439,132,471,118,509,105,555,87,659,75,773,68,887,65,990,66,1126"/>
-<area shape="rect" href="classarch_1_1GDT.html#ab2ffded6d68ffeff49d4fde74d9fed86" title="Initialises the GDT entries (code, data, user, TSS)." alt="" coords="202,680,308,707"/>
-<area shape="poly" title=" " alt="" coords="62,1126,73,1043,94,920,125,798,143,750,165,717,189,702,186,707,169,721,148,752,130,800,99,921,78,1044,68,1126"/>
-<area shape="rect" href="classarch_1_1IDT.html#a1a84d139f0700c6ac5e210151777c51b" title="Initialises all IDT entries with default handlers." alt="" coords="205,731,304,757"/>
-<area shape="poly" title=" " alt="" coords="60,1126,61,1062,73,966,85,913,104,861,130,811,165,767,192,752,189,756,168,771,135,814,109,863,91,915,78,967,67,1063,65,1126"/>
-<area shape="rect" href="classarch_1_1Keyboard.html#a88b2726cc0d551f950c94d8497d00907" title="Initialises the PS/2 keyboard controller." alt="" coords="188,629,322,656"/>
-<area shape="poly" title=" " alt="" coords="62,1126,71,1035,91,897,105,825,122,758,141,704,165,666,175,659,173,664,169,670,146,706,127,760,110,826,96,897,76,1035,67,1127"/>
-<area shape="rect" href="namespacearch.html#ab1e7d8f3b867b1b2a37b796b1c749c0a" title="Writes a byte to an I/O port." alt="" coords="638,604,718,631"/>
-<area shape="poly" title=" " alt="" coords="61,1126,67,1024,83,868,97,788,114,714,137,655,150,632,165,615,200,597,250,587,310,583,376,583,512,592,625,607,620,610,511,598,376,588,310,588,250,592,202,602,168,619,154,635,142,657,119,716,102,789,89,869,73,1024,67,1126"/>
-<area shape="rect" href="classarch_1_1Timer.html#af9c0db51ea4552aa3bbbbd7cbef44fca" title="Initialises the PIT with the given frequency." alt="" coords="199,781,311,808"/>
-<area shape="poly" title=" " alt="" coords="61,1126,66,1072,81,992,94,947,112,903,135,862,165,825,186,811,183,816,169,829,140,865,117,906,99,949,86,993,71,1073,66,1127"/>
-<area shape="rect" href="classarch_1_1IDT.html#a08b6d5356adf2c4fa71bcbb9027f20a2" title="Registers a handler for a specific interrupt vector." alt="" coords="412,824,537,867"/>
-<area shape="poly" title=" " alt="" coords="61,1126,66,1076,81,1005,94,967,112,930,136,897,165,869,191,852,220,840,280,826,341,824,398,829,394,832,341,829,281,832,221,845,194,857,168,873,140,900,117,933,99,969,86,1007,71,1077,66,1127"/>
-<area shape="rect" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de" title=" " alt="" coords="218,883,292,909"/>
-<area shape="poly" title=" " alt="" coords="64,1126,74,1087,94,1034,123,976,143,950,165,926,182,914,204,905,201,910,185,918,168,930,147,953,128,979,98,1036,79,1089,69,1127"/>
-<area shape="rect" href="classkernel_1_1DriverRegistry.html#aaf688abe29167ffa1bb2b8dda1824bd4" title="Initialises the driver registry." alt="" coords="400,955,549,997"/>
-<area shape="poly" title=" " alt="" coords="64,1126,75,1092,95,1048,125,1004,144,985,165,970,192,958,219,949,277,941,334,943,388,951,383,954,333,948,277,946,220,954,193,963,168,974,147,989,129,1007,100,1051,80,1094,69,1127"/>
-<area shape="rect" href="classkernel_1_1IPC.html#a467e3365439c2f16ba4d91376a0c37a8" title="Initialises the IPC subsystem." alt="" coords="199,1051,311,1077"/>
-<area shape="poly" title=" " alt="" coords="87,1124,166,1087,188,1080,184,1085,168,1092,91,1128"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a18bc8dba0089d67f3e9b784a02a9ee3e" title=" " alt="" coords="191,528,319,555"/>
-<area shape="poly" title=" " alt="" coords="61,1126,69,1019,87,853,100,766,117,685,139,618,151,592,165,572,179,561,177,565,169,575,156,595,144,620,123,687,105,767,92,854,74,1020,67,1127"/>
-<area shape="rect" href="classkernel_1_1MemPool.html#afa2f4dd4e1b0bfbd311c339b772498c0" title="Initialises all pool classes from pre&#45;allocated memory." alt="" coords="183,1101,327,1128"/>
-<area shape="poly" title=" " alt="" coords="117,1131,169,1124,166,1128,121,1135"/>
-<area shape="rect" href="classkernel_1_1PMM.html#a5b0e255a792b629f160f6c690726950b" title=" " alt="" coords="195,1152,315,1179"/>
-<area shape="poly" title=" " alt="" coords="117,1145,181,1154,177,1157,120,1150"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#a6421e44dae2dd343f7f0e7064a89ad97" title="Initialises the scheduler and creates the idle task." alt="" coords="181,123,328,149"/>
-<area shape="poly" title=" " alt="" coords="61,1126,71,940,91,634,106,476,123,335,142,227,153,190,165,166,178,156,176,160,169,170,158,192,147,228,128,336,111,476,97,635,76,940,67,1126"/>
-<area shape="rect" href="classkernel_1_1Syscall.html#acf1a63e5b0e8d0cd318d25ec04e34962" title="Initialises the syscall handler (MSR setup)." alt="" coords="189,1203,321,1229"/>
-<area shape="poly" title=" " alt="" coords="87,1152,168,1188,188,1196,184,1199,166,1193,90,1156"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a1604231589d0915821a56f0bbf1525e0" title=" " alt="" coords="183,1253,326,1296"/>
-<area shape="poly" title=" " alt="" coords="74,1151,114,1194,140,1218,168,1239,177,1245,172,1247,165,1244,137,1222,111,1198,75,1157"/>
-<area shape="rect" href="namespacekernel_1_1vfs.html#a509957f6e50ab1f0433a61bd4624859a" title=" " alt="" coords="201,1320,308,1347"/>
-<area shape="poly" title=" " alt="" coords="67,1151,83,1184,103,1226,132,1269,168,1306,189,1318,184,1321,165,1310,128,1272,99,1228,78,1186,68,1156"/>
-<area shape="rect" href="classkernel_1_1VMM.html#a5da462b4221e1837dadb8f296652904c" title="Initialises the VMM and sets up the kernel page tables." alt="" coords="195,1371,315,1397"/>
-<area shape="poly" title=" " alt="" coords="66,1151,78,1193,96,1248,126,1307,146,1333,168,1357,182,1367,178,1369,165,1361,141,1337,122,1309,92,1250,73,1195,66,1156"/>
-<area shape="rect" href="classservice_1_1Framebuffer.html#a0c48217dc149beadf1749e6a351f4d8b" title="Initialises the framebuffer from Multiboot2 info." alt="" coords="184,1472,326,1515"/>
-<area shape="poly" title=" " alt="" coords="64,1151,73,1207,88,1286,101,1330,119,1373,141,1414,169,1452,179,1462,174,1464,165,1455,136,1417,114,1375,96,1331,83,1287,67,1208,64,1156"/>
-<area shape="rect" href="multiboot2_8hpp.html#aca304f434a73074c230698cdc9afa4e5" title="Finds a Multiboot2 tag by type." alt="" coords="425,1480,524,1507"/>
-<area shape="poly" title=" " alt="" coords="64,1151,73,1201,90,1270,103,1307,120,1344,142,1378,168,1407,257,1433,412,1475,407,1478,256,1438,165,1412,138,1381,115,1346,98,1309,85,1272,68,1202,64,1156"/>
-<area shape="rect" href="classservice_1_1ProgramRegistry.html#acf3afcb001a03c51db8d2f9505ed193a" title="Initialises the program registry." alt="" coords="170,1605,340,1648"/>
-<area shape="poly" title=" " alt="" coords="65,1151,78,1241,99,1373,113,1441,129,1504,148,1556,169,1592,171,1594,166,1596,165,1595,143,1559,124,1506,107,1443,93,1374,73,1242,65,1157"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a813c09d6caaa114ef6461727953451d8" title="Initialises the terminal and clears the screen." alt="" coords="182,1672,328,1699"/>
-<area shape="poly" title=" " alt="" coords="64,1151,75,1253,93,1405,107,1485,124,1558,144,1618,169,1658,172,1662,167,1664,165,1662,140,1620,119,1559,102,1486,88,1406,70,1253,64,1156"/>
-<area shape="rect" href="namespacekernel_1_1sync.html#aa2ee8b27f242c1625ef11e01adda6675" title=" " alt="" coords="186,1723,324,1749"/>
-<area shape="poly" title=" " alt="" coords="64,1151,73,1262,90,1429,104,1517,121,1598,143,1664,155,1690,169,1709,176,1716,171,1717,165,1712,150,1692,138,1666,116,1599,98,1518,85,1430,68,1262,64,1156"/>
-<area shape="rect" href="structkernel_1_1BootParams.html#a6138baa15360d448471f0a09bb737756" title=" " alt="" coords="187,1773,323,1816"/>
-<area shape="poly" title=" " alt="" coords="64,1151,73,1270,89,1452,102,1547,120,1636,142,1710,155,1738,169,1760,176,1768,171,1769,165,1763,150,1741,137,1711,115,1637,97,1548,84,1452,67,1270,64,1156"/>
-<area shape="rect" href="classarch_1_1GDT.html#a8acb20dbae0610e079244254f9ce9f70" title="Loads the GDT using the LGDT instruction." alt="" coords="199,1840,311,1867"/>
-<area shape="poly" title=" " alt="" coords="64,1151,70,1281,83,1484,96,1591,114,1690,138,1771,153,1803,169,1826,187,1840,182,1842,165,1830,148,1805,133,1773,109,1691,91,1592,78,1484,64,1281,63,1156"/>
-<area shape="rect" href="classarch_1_1IDT.html#ab5420ac0f951fe56c41843b6591a755a" title="Loads the IDT using the LIDT instruction." alt="" coords="202,1891,308,1917"/>
-<area shape="poly" title=" " alt="" coords="63,1151,68,1289,81,1507,93,1622,111,1729,136,1817,152,1851,169,1877,189,1893,184,1894,165,1881,147,1854,131,1819,106,1730,88,1623,75,1507,63,1289,63,1156"/>
-<area shape="rect" href="namespacekernel_1_1vfs.html#ac450fbfb3a930ded0b8c26fd5fc1e33f" title=" " alt="" coords="192,1941,318,1968"/>
-<area shape="poly" title=" " alt="" coords="63,1151,67,1298,78,1531,90,1655,109,1769,134,1864,150,1900,169,1928,180,1938,175,1940,165,1931,146,1903,129,1866,103,1770,85,1655,72,1531,61,1298,63,1156"/>
-<area shape="rect" href="structkernel_1_1BootParams.html#a18a875b5d2a2b8fa4b62950fe7051a10" title=" " alt="" coords="168,1539,342,1581"/>
-<area shape="poly" title=" " alt="" coords="63,1151,67,1219,78,1317,91,1372,109,1427,135,1479,169,1525,171,1528,166,1529,165,1528,130,1482,105,1429,86,1374,73,1318,61,1219,63,1156"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#a0d595ec39367db2ce160fb1d72c23fab" title="Reaps orphan TERMINATED tasks (no parent to WAITPID them)." alt="" coords="190,1992,320,2035"/>
-<area shape="poly" title=" " alt="" coords="63,1151,67,1305,77,1553,90,1685,108,1807,134,1909,150,1948,169,1978,179,1989,174,1991,165,1982,146,1951,129,1910,103,1808,84,1685,72,1553,61,1305,63,1157"/>
-<area shape="rect" href="classkernel_1_1DriverRegistry.html#aa368d4656ea582e9fef9a3d41353ca79" title="Registers a driver module." alt="" coords="181,984,329,1027"/>
-<area shape="poly" title=" " alt="" coords="72,1125,111,1082,137,1058,165,1036,176,1032,173,1036,168,1041,140,1062,114,1086,77,1127"/>
-<area shape="rect" href="test__selftest_8cpp.html#afc774f670f6be1bb43ca232cc4e9b643" title=" " alt="" coords="180,427,330,453"/>
-<area shape="poly" title=" " alt="" coords="61,1126,65,1000,79,801,92,696,110,599,134,519,148,488,165,464,170,460,168,465,169,467,153,490,139,521,115,601,97,697,84,802,70,1001,66,1126"/>
-<area shape="rect" href="namespacekernel_1_1test.html#a47e1961f61dd3427ce55333d8828a5de" title=" " alt="" coords="189,477,321,504"/>
-<area shape="poly" title=" " alt="" coords="61,1126,66,1009,82,825,95,728,113,639,136,565,149,536,165,514,177,506,174,511,169,518,154,539,141,567,118,640,100,729,87,826,72,1009,66,1126"/>
-<area shape="rect" href="classkernel_1_1PMM.html#a0abccda473b2936b5aa008a686f52c86" title=" " alt="" coords="178,2059,332,2101"/>
-<area shape="poly" title=" " alt="" coords="63,1151,65,1316,67,1442,74,1583,86,1726,105,1859,117,1918,132,1969,149,2012,169,2045,170,2048,165,2048,164,2048,144,2015,127,1971,112,1919,99,1860,80,1727,69,1583,62,1442,60,1316,63,1156"/>
-<area shape="rect" href="classarch_1_1GDT.html#ac96b550d916ef25012c08bd010b6c65a" title="Sets the RSP0 field in the TSS (kernel stack on ring 0 entry)." alt="" coords="173,2125,336,2152"/>
-<area shape="poly" title=" " alt="" coords="64,1151,75,1340,95,1646,110,1805,127,1946,146,2054,157,2090,169,2112,171,2115,166,2116,164,2115,152,2092,141,2055,121,1947,104,1806,90,1647,70,1340,64,1156"/>
-<area shape="rect" href="classservice_1_1Shell.html#ad4e5adf46f0f562f7b5a566fd53d37c0" title="Main shell loop (reads input, dispatches commands)." alt="" coords="187,2176,322,2219"/>
-<area shape="poly" title=" " alt="" coords="64,1151,75,1349,95,1671,110,1838,127,1987,147,2101,157,2139,169,2162,177,2172,172,2173,164,2166,152,2141,141,2102,121,1987,104,1838,90,1671,70,1349,64,1157"/>
-<area shape="rect" href="namespacearch.html#a55aa88ce8e9a3ab05fdea2146ed21aeb" title="Sets the interrupt flag (enables interrupts)." alt="" coords="221,2243,289,2269"/>
-<area shape="poly" title=" " alt="" coords="64,1151,74,1360,92,1704,106,1883,123,2042,144,2164,156,2205,169,2229,185,2242,208,2252,203,2253,183,2247,165,2232,151,2206,139,2165,118,2043,101,1883,87,1705,68,1361,64,1156"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#a77133baf25c2e9530f2b1709d881d1dc" title="Returns the task at a given index in the task array." alt="" coords="190,2293,320,2336"/>
-<area shape="poly" title=" " alt="" coords="64,1151,74,1369,92,1728,106,1915,124,2082,144,2210,156,2254,169,2280,179,2291,174,2291,164,2283,151,2255,139,2211,118,2083,101,1916,87,1729,69,1369,64,1157"/>
-<area shape="rect" href="classkernel_1_1Scheduler.html#a2cd9411be2c691fcec97a6ddfaa465f6" title="Returns the total number of managed tasks." alt="" coords="190,2360,320,2403"/>
-<area shape="poly" title=" " alt="" coords="64,1151,73,1380,91,1761,104,1960,122,2137,143,2273,156,2319,169,2346,179,2359,174,2358,164,2350,151,2320,138,2274,116,2137,99,1960,85,1761,68,1380,64,1157"/>
-<area shape="rect" href="classkernel_1_1PMM.html#a604f2d4587e26dd794e13a22d2213615" title="Allocates a contiguous block of pages (KERNEL ownership)." alt="" coords="613,100,743,143"/>
-<area shape="poly" title=" " alt="" coords="557,119,599,120,595,123,560,123"/>
-<area shape="poly" title=" " alt="" coords="313,226,416,209,412,213,317,230"/>
-<area shape="rect" href="namespacearch.html#addead5fdd04206009d38bb2eb805dc0c" title="Reads a byte from an I/O port." alt="" coords="439,325,510,352"/>
-<area shape="poly" title=" " alt="" coords="342,337,426,337,422,340,345,341"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="606,452,750,479"/>
-<area shape="poly" title=" " alt="" coords="540,463,593,464,589,467,543,467"/>
-<area shape="rect" href="namespacearch.html#a6f8baf3132cf31d6a3859a67315a7c79" title="Short I/O delay (write to unused port 0x80)." alt="" coords="427,680,522,707"/>
-<area shape="poly" title=" " alt="" coords="315,654,414,677,410,680,317,659"/>
-<area shape="poly" title=" " alt="" coords="321,636,625,619,621,622,324,641"/>
-<area shape="poly" title=" " alt="" coords="511,677,627,635,624,639,515,681"/>
-<area shape="rect" href="classarch_1_1Timer.html#a048197b0763a24cfb49b467d1f5b94bb" title="Handles the timer IRQ (increments tick count)." alt="" coords="398,773,552,800"/>
-<area shape="poly" title=" " alt="" coords="310,791,384,788,380,792,313,795"/>
-<area shape="poly" title=" " alt="" coords="310,805,399,826,395,829,313,810"/>
-<area shape="poly" title=" " alt="" coords="305,526,342,513,427,483,424,487,344,519,309,529"/>
-<area shape="poly" title=" " alt="" coords="318,541,432,550,496,558,559,571,634,596,629,599,558,576,495,564,431,555,321,546"/>
-<area shape="poly" title=" " alt="" coords="327,129,378,126,374,130,331,133"/>
-<area shape="poly" title=" " alt="" coords="325,1491,411,1492,407,1495,327,1496"/>
-<area shape="poly" title=" " alt="" coords="326,1536,415,1510,412,1514,329,1540"/>
-<area shape="poly" title=" " alt="" coords="327,993,387,986,383,990,331,998"/>
-<area shape="poly" title=" " alt="" coords="329,446,395,454,391,458,332,451"/>
-<area shape="poly" title=" " alt="" coords="320,481,395,473,391,477,323,485"/>
-</map>
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -582,13 +477,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="kernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph.png" border="0" usemap="#akernel_8cpp_a3893cb01e13bf4e36090daef580b7426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
 </div>
+<a id="aabfdfb827135142a9a9873c411fb99d1" name="aabfdfb827135142a9a9873c411fb99d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabfdfb827135142a9a9873c411fb99d1">&#9670;&#160;</a></span>panic() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">panic </td>
+          <td>(</td>
+          <td class="paramtype">&quot;reserved exception&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ae22655ba6f328217f1ebd6248ed82727" name="ae22655ba6f328217f1ebd6248ed82727"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae22655ba6f328217f1ebd6248ed82727">&#9670;&#160;</a></span>panic()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae22655ba6f328217f1ebd6248ed82727">&#9670;&#160;</a></span>panic() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -705,6 +617,34 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a62fb24a5114b3a2c8227926f8f0adaa2" name="a62fb24a5114b3a2c8227926f8f0adaa2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a62fb24a5114b3a2c8227926f8f0adaa2">&#9670;&#160;</a></span>error_code</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void error_code</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5df37b7f02e5cdc7d9412b7f872b8e01" name="a5df37b7f02e5cdc7d9412b7f872b8e01"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5df37b7f02e5cdc7d9412b7f872b8e01">&#9670;&#160;</a></span>false</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">return false</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="acf393da2fe85b8d9fa8cd83ff83a6a0c" name="acf393da2fe85b8d9fa8cd83ff83a6a0c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acf393da2fe85b8d9fa8cd83ff83a6a0c">&#9670;&#160;</a></span>kernel_virt_end</h2>
 
@@ -723,6 +663,36 @@ Here is the call graph for this function:</div>
 <span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
   </tr>
 </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acf673abd8f09c5656f8e1093ef6ef708" name="acf673abd8f09c5656f8e1093ef6ef708"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acf673abd8f09c5656f8e1093ef6ef708">&#9670;&#160;</a></span>regs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void regs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">{</div>
+<div class="line">    (void)vector</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a1fa277715dbc259c4bd045c128015845" name="a1fa277715dbc259c4bd045c128015845"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1fa277715dbc259c4bd045c128015845">&#9670;&#160;</a></span>rip</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void rip</td>
+        </tr>
+      </table>
 </div><div class="memdoc">
 
 </div>

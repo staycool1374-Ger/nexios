@@ -19,6 +19,11 @@ var annotated_dup =
         [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
         [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
         [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+        [ "IoMmuDmaCap", "classkernel_1_1cap_1_1_io_mmu_dma_cap.html", "classkernel_1_1cap_1_1_io_mmu_dma_cap" ],
+        [ "IrqCap", "classkernel_1_1cap_1_1_irq_cap.html", "classkernel_1_1cap_1_1_irq_cap" ],
+        [ "MmioCap", "classkernel_1_1cap_1_1_mmio_cap.html", "classkernel_1_1cap_1_1_mmio_cap" ],
+        [ "MmioUserMap", "classkernel_1_1cap_1_1_mmio_user_map.html", null ],
+        [ "MsixCap", "classkernel_1_1cap_1_1_msix_cap.html", "classkernel_1_1cap_1_1_msix_cap" ],
         [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ]
       ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
@@ -29,6 +34,15 @@ var annotated_dup =
       ] ],
       [ "gs", "namespacekernel_1_1gs.html", [
         [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ]
+      ] ],
+      [ "iommu", "namespacekernel_1_1iommu.html", [
+        [ "dmar", "namespacekernel_1_1iommu_1_1dmar.html", [
+          [ "RemappingUnit", "structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html", "structkernel_1_1iommu_1_1dmar_1_1_remapping_unit" ],
+          [ "DmarInfo", "structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html", "structkernel_1_1iommu_1_1dmar_1_1_dmar_info" ]
+        ] ],
+        [ "IoMmuDomain", "structkernel_1_1iommu_1_1_io_mmu_domain.html", "structkernel_1_1iommu_1_1_io_mmu_domain" ],
+        [ "IoMmuManager", "classkernel_1_1iommu_1_1_io_mmu_manager.html", null ],
+        [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ]
       ] ],
       [ "log", "namespacekernel_1_1log.html", [
         [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
@@ -67,12 +81,15 @@ var annotated_dup =
       [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
       [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
       [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+      [ "IrqDelivery", "classkernel_1_1_irq_delivery.html", null ],
+      [ "IrqRegistration", "structkernel_1_1_irq_registration.html", "structkernel_1_1_irq_registration" ],
       [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
       [ "Logger", "classkernel_1_1_logger.html", null ],
       [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
       [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
       [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
       [ "Rlimit", "structkernel_1_1_rlimit.html", "structkernel_1_1_rlimit" ],
+      [ "Scheduler", "classkernel_1_1_scheduler.html", "classkernel_1_1_scheduler" ],
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
       [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
       [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__ptr_8hpp
 <div class="foldopen" id="foldopen00015" data-start="{" data-end="}">
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno"><a class="line" href="struct_task_deleter.html#a85e7693e20863b8e23425186e34305c6">   15</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="struct_task_deleter.html#a85e7693e20863b8e23425186e34305c6">operator()</a>(TaskControlBlock *tcb) {</div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>        <span class="keywordflow">if</span> (tcb) {</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>            Scheduler::remove_task(*tcb);</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>            <a class="code hl_function" href="classkernel_1_1_scheduler.html#a1faa60d8cbc8f5827b9e81f7fe135205">Scheduler::remove_task</a>(*tcb);</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>            tcb-&gt;cleanup();</div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>            <span class="keyword">delete</span> tcb;</div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>        }</div>
@@ -158,6 +158,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task__ptr_8hpp
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span></div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno"><a class="line" href="task__ptr_8hpp.html#a53ca8685f1df91ebe286141b39601554">   39</a></span><span class="keyword">using </span><a class="code hl_typedef" href="task__ptr_8hpp.html#a53ca8685f1df91ebe286141b39601554">SimpleTaskPtr</a> = <a class="code hl_class" href="class_unique_ptr.html">UniquePtr&lt;TaskControlBlock, SimpleTaskDeleter&gt;</a>;</div>
 <div class="ttc" id="aclass_unique_ptr_html"><div class="ttname"><a href="class_unique_ptr.html">UniquePtr</a></div><div class="ttdoc">Minimal unique ownership wrapper for heap-allocated objects. Deletes the owned object on destruction ...</div><div class="ttdef"><b>Definition</b> unique_ptr.hpp:30</div></div>
+<div class="ttc" id="aclasskernel_1_1_scheduler_html_a1faa60d8cbc8f5827b9e81f7fe135205"><div class="ttname"><a href="classkernel_1_1_scheduler.html#a1faa60d8cbc8f5827b9e81f7fe135205">kernel::Scheduler::remove_task</a></div><div class="ttdeci">static void remove_task(TaskControlBlock &amp;task)</div><div class="ttdoc">Removes a task from the scheduler&#39;s run queue.</div><div class="ttdef"><b>Definition</b> scheduler.cpp:792</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
 <div class="ttc" id="ascheduler_8hpp_html"><div class="ttname"><a href="scheduler_8hpp.html">scheduler.hpp</a></div><div class="ttdoc">Rate-monotonic scheduler for task management and dispatching.</div></div>
 <div class="ttc" id="astruct_simple_task_deleter_html"><div class="ttname"><a href="struct_simple_task_deleter.html">SimpleTaskDeleter</a></div><div class="ttdoc">Deleter for a TaskControlBlock that was NOT added to the scheduler. Calls cleanup() + delete only.</div><div class="ttdef"><b>Definition</b> task_ptr.hpp:26</div></div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -121,8 +121,68 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8hpp
 
 <p>Rate-monotonic scheduler for task management and dispatching.  
 <a href="#details">More...</a></p>
-
+<div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler__config_8hpp_source.html">kernel/task/scheduler_config.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="test__context_8hpp_source.html">kernel/task/test_context.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="cpu__context_8hpp_source.html">kernel/arch/cpu_context.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler__errors_8hpp_source.html">kernel/task/scheduler_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task__errors_8hpp_source.html">kernel/task/task_errors.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="ready__queue__manager_8hpp_source.html">kernel/task/ready_queue_manager.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="deadline__list_8hpp_source.html">kernel/task/deadline_list.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="all__tasks__registry_8hpp_source.html">kernel/task/all_tasks_registry.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for scheduler.hpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="scheduler_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2task_2scheduler_8hpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div>
 <p><a href="scheduler_8hpp_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3AScheduler" id="r_kernel_3A_3AScheduler"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scheduler.html">kernel::Scheduler</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="classkernel_1_1_scheduler.html#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0).  <a href="classkernel_1_1_scheduler.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3AScheduler_3A_3ATaskIter" id="r_kernel_3A_3AScheduler_3A_3ATaskIter"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_1_1_task_iter.html">kernel::Scheduler::TaskIter</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lightweight forward iterator over all tasks in the registry. Iterates by priority (highest to lowest), then insertion order within each priority.  <a href="structkernel_1_1_scheduler_1_1_task_iter.html#details">More...</a><br /></td></tr>
+<tr class="memitem:kernel_3A_3AScheduler_3A_3ATaskFields" id="r_kernel_3A_3AScheduler_3A_3ATaskFields"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html">kernel::Scheduler::TaskFields</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task plain fields that are deep-copied into the snapshot. Pointers to heap sub-objects (kernel_stack, page_table_, msg_queue, etc.) are NOT included — they survive via the pointer array restore and MemPool/PMM restoration.  <a href="structkernel_1_1_scheduler_1_1_task_fields.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ac4b024e5b458938ba17df793943eedef" id="r_ac4b024e5b458938ba17df793943eedef"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac4b024e5b458938ba17df793943eedef">kernel::scheduler_save_rsp_to</a></td></tr>
+<tr class="memdesc:ac4b024e5b458938ba17df793943eedef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address to save the current RSP into during context switch. Accessed atomically from C++; read/written by isr_stubs.asm.  <br /></td></tr>
+<tr class="memitem:ac3698635a1028c993bb17376f59935c1" id="r_ac3698635a1028c993bb17376f59935c1"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac3698635a1028c993bb17376f59935c1">kernel::scheduler_load_rsp_from</a></td></tr>
+<tr class="memdesc:ac3698635a1028c993bb17376f59935c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">RSP value to load during context switch restore.  <br /></td></tr>
+<tr class="memitem:a8717ed879e07d6e261b521940de70ee7" id="r_a8717ed879e07d6e261b521940de70ee7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a8717ed879e07d6e261b521940de70ee7">kernel::scheduler_load_cr3_from</a></td></tr>
+<tr class="memdesc:a8717ed879e07d6e261b521940de70ee7"><td class="mdescLeft">&#160;</td><td class="mdescRight">CR3 value to load during context switch restore (0 = don't load).  <br /></td></tr>
+<tr class="memitem:ab2187af236405c0bcefe647b4a33398e" id="r_ab2187af236405c0bcefe647b4a33398e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ab2187af236405c0bcefe647b4a33398e">kernel::scheduler_next_task_id</a></td></tr>
+<tr class="memdesc:ab2187af236405c0bcefe647b4a33398e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID to set as current after the context switch completes.  <br /></td></tr>
+<tr class="memitem:ab66b635cab196ea26d2cfaaf47fc59b6" id="r_ab66b635cab196ea26d2cfaaf47fc59b6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ab66b635cab196ea26d2cfaaf47fc59b6">kernel::scheduler_load_kstack_base</a></td></tr>
+<tr class="memdesc:ab66b635cab196ea26d2cfaaf47fc59b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
+<tr class="memitem:a3e81dd1c530d5febe94bf37000962f09" id="r_a3e81dd1c530d5febe94bf37000962f09"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a3e81dd1c530d5febe94bf37000962f09">kernel::scheduler_load_kstack_top</a></td></tr>
+<tr class="memitem:a963403eae4c53dac69cc7db142c47c81" id="r_a963403eae4c53dac69cc7db142c47c81"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a963403eae4c53dac69cc7db142c47c81">kernel::scheduler_switch_generation</a></td></tr>
+<tr class="memdesc:a963403eae4c53dac69cc7db142c47c81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generation sequence counter for the deferred-switch pair. A publisher bumps it after writing load_rsp_from / load_cr3_from and before arming scheduler_save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair.  <br /></td></tr>
+<tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a45c7ed02104a8f2dc79052a0301a16c3">kernel::scheduler_kernel_cr3</a></td></tr>
+<tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
+<tr class="memitem:afb20072a8fd62f005a14dbdf87038f27" id="r_afb20072a8fd62f005a14dbdf87038f27"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afb20072a8fd62f005a14dbdf87038f27">kernel::scheduler_need_resched</a></td></tr>
+<tr class="memdesc:afb20072a8fd62f005a14dbdf87038f27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reschedule request flag. Set by task-context callers (reschedule(), terminate(), yield_as) to ask the timer ISR to (re)publish a deferred switch. The timer ISR is the SOLE publisher of the deferred switch (see rate_monotonic_schedule), so there is exactly one writer of the switch buffer per tick — eliminating the two-publisher race where a task-context reschedule() and the timer ISR's rate_monotonic_schedule both called switch_to_task and the last writer before the epilogue won, starving the other's selection.  <br /></td></tr>
+<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48">kernel::isr_nesting_depth</a></td></tr>
+<tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth. Incremented at each ISR entry, decremented before iretq. Checked by on_tick() to detect nested timer interrupts and skip re-entrant scheduler ops.  <br /></td></tr>
+<tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11">kernel::scheduler_corruption_count</a></td></tr>
+<tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
+<tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a9280448447d20124500fb1be0a0ed68f">kernel::deadline_detection_integrity</a></td></tr>
+<tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
+<tr class="memitem:af4c6d5dcd3bf1b60bf71cdd2b805f5a6" id="r_af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">kernel::fpu_owner</a></td></tr>
+<tr class="memdesc:af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot.  <br /></td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Rate-monotonic scheduler for task management and dispatching. </p>
 </div></div><!-- contents -->

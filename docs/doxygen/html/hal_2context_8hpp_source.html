@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -154,8 +154,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2context_8
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rax, rbx, rcx, rdx;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rsi, rdi, rbp;</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> r8, r9, r10, r11, r12, r13, r14, r15;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, error_code;</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip, cs, rflags, rsp, ss;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>;</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>, cs, rflags, rsp, ss;</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>};</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span></div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">class </span>ArchContextManager {</div>
@@ -200,12 +200,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2context_8
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> x16, x17, x18, x19, x20, x21, x22, x23;</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> x24, x25, x26, x27, x28, x29, x30;</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sp_el0, elr_el1, spsr_el1;</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, error_code;</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>;</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>};</div>
 <div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span></div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span><span class="keyword">class </span>ArchContextManager {</div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>  <span class="keyword">public</span>:</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> init_stack(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *stack_top, <span class="keywordtype">void</span> (*entry)(),</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    <span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span> init_stack(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&amp;stack_top, <span class="keywordtype">void</span> (*entry)(),</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>                                  <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <span class="comment">/*cs*/</span>, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <span class="comment">/*ss*/</span>,</div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>                                  <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> psr, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> user_rsp) {</div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        *--stack_top = 0;</div>
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2context_8
 <div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ra, sp, gp, tp;</div>
 <div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;</div>
 <div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, sstatus, stvec;</div>
-<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, error_code;</div>
+<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> vector, <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>;</div>
 <div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>};</div>
 <div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span></div>
 <div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span><span class="keyword">class </span>ArchContextManager {</div>
@@ -276,7 +276,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('hal_2context_8
 <div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span> </div>
 <div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="aconstants_8hpp_html"><div class="ttname"><a href="constants_8hpp.html">constants.hpp</a></div><div class="ttdoc">Central hardware and memory-layout constants (no magic numbers).</div></div>
-<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> gic.hpp:18</div></div>
+<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1170</div></div>
+<div class="ttc" id="akernel_8cpp_html_a62fb24a5114b3a2c8227926f8f0adaa2"><div class="ttname"><a href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></div><div class="ttdeci">uint64_t error_code</div><div class="ttdef"><b>Definition</b> kernel.cpp:1169</div></div>
+<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:31</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>

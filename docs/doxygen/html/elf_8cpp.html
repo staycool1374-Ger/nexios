@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf_8cpp.html'
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="buffer__pool_8hpp_source.html">kernel/ipc/buffer_pool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
@@ -140,50 +141,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf_8cpp.html'
 Include dependency graph for elf.cpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="elf_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2elf_2elf_8cpp" loading="lazy" alt=""/></div>
-<map name="asrc_2kernel_2elf_2elf_8cpp" id="asrc_2kernel_2elf_2elf_8cpp">
-<area shape="rect" title=" " alt="" coords="550,5,690,32"/>
-<area shape="rect" href="elf_8hpp.html" title=" " alt="" coords="5,88,123,115"/>
-<area shape="poly" title=" " alt="" coords="548,27,365,49,253,64,142,83,125,86,122,82,141,77,252,59,364,43,552,25"/>
-<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="99,245,224,272"/>
-<area shape="poly" title=" " alt="" coords="547,21,454,25,345,34,249,52,212,66,187,82,175,98,166,115,156,155,155,195,158,231,153,229,150,196,151,155,161,114,170,95,184,78,210,61,247,47,345,29,453,20,552,19"/>
-<area shape="rect" href="pmm_8hpp.html" title="Physical Memory Manager — bitmap&#45;based page allocator with owner tracking." alt="" coords="392,88,557,115"/>
-<area shape="poly" title=" " alt="" coords="600,31,512,83,509,78,595,34"/>
-<area shape="rect" href="constants_8hpp.html" title="Central hardware and memory&#45;layout constants (no magic numbers)." alt="" coords="504,171,608,197"/>
-<area shape="poly" title=" " alt="" coords="617,31,568,158,564,155,613,34"/>
-<area shape="rect" href="vmm_8hpp.html" title="Virtual Memory Manager — x86&#45;64 page table management." alt="" coords="555,245,720,272"/>
-<area shape="poly" title=" " alt="" coords="623,30,638,231,633,229,619,34"/>
-<area shape="rect" href="checked__ptr_8hpp.html" title=" " alt="" coords="682,80,843,123"/>
-<area shape="poly" title=" " alt="" coords="643,30,715,72,710,72,642,35"/>
-<area shape="rect" href="string_8hpp.html" title="Memory and string utility functions (extern &quot;C&quot; for ABI compat)." alt="" coords="788,171,866,197"/>
-<area shape="poly" title=" " alt="" coords="690,26,789,45,830,60,857,78,865,98,864,120,857,141,846,160,843,156,852,139,859,119,860,99,853,82,828,65,787,50,690,31"/>
-<area shape="rect" href="gdt_8hpp.html" title="Global Descriptor Table and Task State Segment definitions." alt="" coords="890,171,1022,197"/>
-<area shape="poly" title=" " alt="" coords="690,21,735,27,784,38,833,54,879,78,900,95,918,115,946,158,940,156,914,118,896,99,876,82,831,59,782,43,734,32,690,26"/>
-<area shape="rect" href="scheduler_8hpp.html" title="Rate&#45;monotonic scheduler for task management and dispatching." alt="" coords="198,88,367,115"/>
-<area shape="poly" title=" " alt="" coords="565,34,352,86,350,81,569,31"/>
-<area shape="rect" href="assert_8hpp.html" title="Debug assertion macros and the panic handler declaration." alt="" coords="1007,245,1089,272"/>
-<area shape="poly" title=" " alt="" coords="690,22,800,40,860,56,918,78,957,95,987,112,1013,135,1037,169,1048,200,1051,232,1047,228,1043,201,1032,172,1009,138,984,116,955,100,916,82,859,61,799,45,690,28"/>
-<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="453,320,531,347"/>
-<area shape="poly" title=" " alt="" coords="62,112,59,147,58,189,66,233,75,253,88,270,113,286,148,299,243,317,348,326,440,332,435,332,347,331,242,322,147,304,110,291,85,274,71,255,61,234,53,189,54,146,61,118"/>
-<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="197,171,336,197"/>
-<area shape="poly" title=" " alt="" coords="96,113,223,163,219,166,96,118"/>
-<area shape="poly" title=" " alt="" coords="267,196,271,234,278,253,289,270,321,296,360,313,400,323,440,331,435,331,399,328,358,318,319,300,285,274,273,256,266,235,264,200"/>
-<area shape="poly" title=" " alt="" coords="251,196,194,238,191,234,246,199"/>
-<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="298,245,379,272"/>
-<area shape="poly" title=" " alt="" coords="280,195,318,234,313,234,278,200"/>
-<area shape="poly" title=" " alt="" coords="220,270,439,318,435,322,219,275"/>
-<area shape="poly" title=" " alt="" coords="366,270,454,313,449,313,365,275"/>
-<area shape="poly" title=" " alt="" coords="478,114,492,305,487,303,474,117"/>
-<area shape="poly" title=" " alt="" coords="488,113,535,160,530,160,487,118"/>
-<area shape="poly" title=" " alt="" coords="553,197,505,308,502,304,548,199"/>
-<area shape="poly" title=" " alt="" coords="615,272,532,315,530,310,609,273"/>
-<area shape="poly" title=" " alt="" coords="767,121,770,155,767,196,756,237,747,257,734,274,702,293,654,308,547,328,546,323,653,303,700,288,730,270,742,254,751,235,762,195,764,155,764,125"/>
-<area shape="poly" title=" " alt="" coords="780,121,810,159,804,157,778,126"/>
-<area shape="poly" title=" " alt="" coords="825,196,809,236,795,257,778,274,750,291,721,305,660,323,599,333,547,336,547,330,599,327,658,318,719,300,748,286,774,270,791,253,805,234,821,199"/>
-<area shape="poly" title=" " alt="" coords="942,197,883,237,846,257,808,274,739,296,668,312,547,330,546,325,667,307,737,291,806,270,844,253,881,233,937,199"/>
-<area shape="poly" title=" " alt="" coords="296,112,350,169,474,308,469,308,346,172,294,118"/>
-<area shape="poly" title=" " alt="" coords="282,113,274,157,270,155,279,117"/>
-<area shape="poly" title=" " alt="" coords="1009,266,547,328,546,322,1004,265"/>
-</map>
+<!-- MAP 0 -->
 </div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>

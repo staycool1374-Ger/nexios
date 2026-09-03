@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -119,16 +119,38 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2early
 </div><!--header-->
 <div class="contents">
 
-<p>Stub file — early AArch64 init is performed in boot.S assembly.  
+<p>Early AArch64 init not covered by boot.S assembly: PAN (FEAT_PAN) detection + enablement for MP-4.4 (issue #5).  
 <a href="#details">More...</a></p>
-<table class="memberdecls">
+<div class="textblock"><code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for early_init.cpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="aarch64_2early__init_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2arch_2aarch64_2early__init_8cpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:EarlyInitStub" id="r_EarlyInitStub"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="struct_early_init_stub.html">EarlyInitStub</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dummy placeholder struct to prevent "no translation unit" warnings.  <a href="struct_early_init_stub.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ae75234524de4f60ea09150c8da54576b" id="r_ae75234524de4f60ea09150c8da54576b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ae75234524de4f60ea09150c8da54576b">arch::pan_init</a> ()</td></tr>
+<tr class="memdesc:ae75234524de4f60ea09150c8da54576b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4. Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and CONFIG_PAN is on, then defaults PSTATE.PAN to deny (clac). Every PAN sysreg/SCTLR access is gated on this detection — an access on a CPU without FEAT_PAN raises an UNDEFINED exception at EL1.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a84c3ad81d357b03972adf4feea72835a" id="r_a84c3ad81d357b03972adf4feea72835a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a84c3ad81d357b03972adf4feea72835a">arch::g_pan_supported</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Stub file — early AArch64 init is performed in boot.S assembly. </p>
+<div class="textblock"><p>Early AArch64 init not covered by boot.S assembly: PAN (FEAT_PAN) detection + enablement for MP-4.4 (issue #5). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

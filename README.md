@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.4.2--dev-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.4.2-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.4.1 — CSpace (Capability-Based Access Control) + Untyped allocator, Memory Protection (MP-1..MP-8), background ELF loader
+* **Status:** v0.4.2 — User-Space Infrastructure (Untyped allocator, IRQ/MMIO/IOMMU/MSI-X caps, VT-d live DMA protection)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -128,9 +128,9 @@ other. NexIOS takes the operating-system path:
 
 ## Roadmap & History
 
-- **Current work:** [GitHub Milestone v0.4.2](https://github.com/staycool1374-Ger/nexios/milestone/1) — open items tracked as Issues.
+- **Current work:** [GitHub Milestone v0.4.3](https://github.com/staycool1374-Ger/nexios/milestone/2) — open items tracked as Issues.
 - **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
-- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.1 (CSpace capability security, KernelObject refcounting, concurrency redesign, lock/safety enforcement, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
+- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.2 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, concurrency redesign, lock/safety enforcement, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
 
 Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 

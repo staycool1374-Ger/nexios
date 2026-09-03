@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -168,6 +168,8 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a5c46d988f5fd9e168db0a047f2486616" id="r_a5c46d988f5fd9e168db0a047f2486616"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a5c46d988f5fd9e168db0a047f2486616">bound_receiver</a> = nullptr</td></tr>
 <tr class="memitem:aa3592398db43865f1ff92c27e5956a47" id="r_aa3592398db43865f1ff92c27e5956a47"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa3592398db43865f1ff92c27e5956a47">badge</a> = 0</td></tr>
 <tr class="memitem:a40699f535c935245c038e8d33ae5189c" id="r_a40699f535c935245c038e8d33ae5189c"><td class="memItemLeft">sync::SpinLock&#160;</td><td class="memItemRight"><a class="el" href="#a40699f535c935245c038e8d33ae5189c">lock_</a></td></tr>
+<tr class="memitem:a73d17e58cd94a5ee63a426f06d9dc76e" id="r_a73d17e58cd94a5ee63a426f06d9dc76e"><td class="memItemLeft">volatile bool&#160;</td><td class="memItemRight"><a class="el" href="#a73d17e58cd94a5ee63a426f06d9dc76e">disposed_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:a73d17e58cd94a5ee63a426f06d9dc76e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set by <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> before the block is freed; blocked senders re-check it after wake so they never touch freed memory (H-3).  <br /></td></tr>
 <tr class="inherit_header pub_attribs_classkernel_1_1_kernel_object"><td colspan="2">Data Fields inherited from <a class="el" href="classkernel_1_1_kernel_object.html">kernel::KernelObject</a></td></tr>
 <tr class="memitem:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object" id="r_ae1b6efc57e4770d3a325c69db75ffcab"><td class="memItemLeft"><a class="el" href="classkernel_1_1_kernel_object.html#a8879b9a6fc77e39157e3458252aab0d8">KernelObject</a> *&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html#ae1b6efc57e4770d3a325c69db75ffcab">task_obj_next_</a> = nullptr</td></tr>
 <tr class="memdesc:ae1b6efc57e4770d3a325c69db75ffcab pub_attribs_classkernel_1_1_kernel_object"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive per-task object-list links. The list is owned by the TaskControlBlock and is only ever mutated outside IRQ context.  <br /></td></tr>
@@ -312,6 +314,22 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a73d17e58cd94a5ee63a426f06d9dc76e" name="a73d17e58cd94a5ee63a426f06d9dc76e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73d17e58cd94a5ee63a426f06d9dc76e">&#9670;&#160;</a></span>disposed_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">volatile bool kernel::cap::Endpoint::disposed_ = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set by <a class="el" href="#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> before the block is freed; blocked senders re-check it after wake so they never touch freed memory (H-3). </p>
 
 </div>
 </div>

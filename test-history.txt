@@ -595,3 +595,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-02 10:20:00 shell_interaction PASSED: 19 FAILED: 0 TIME: ~1800ms (issue #10 release fb-reservation fix)
 2026-09-02 10:30:00 release_all PASSED: 85 FAILED: 0 TIME: ~4000ms (issue #10 release gate, trace OFF)
 2026-09-02 10:35:00 all PASSED: 1009 FAILED: 0 TIME: ~47000ms (issue #10 debug gate, registered 1024)
+2026-09-03 08:57:56 all PASSED: 1009 FAILED: 0 TIME: 23s (v0.4.2 release-cycle debug gate, registered 1024, trace OFF)
+2026-09-03 08:58:17 release_all PASSED: 85 FAILED: 0 TIME: 4180ms (v0.4.2 release-cycle release gate, trace OFF)

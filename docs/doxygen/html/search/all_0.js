@@ -50,8 +50,8 @@ var searchData=
   ['_5fis_5freference_5fv_3c_20t_20_26_20_3e_47',['_is_reference_v&lt; T &amp; &gt;',['../namespacekernel.html#a863e6a5c2d82cdc71d146391ee86521c',1,'kernel']]],
   ['_5fis_5freference_5fv_3c_20t_20_26_26_20_3e_48',['_is_reference_v&lt; T &amp;&amp; &gt;',['../namespacekernel.html#a74cc18daff81587aac344bfc7b70f645',1,'kernel']]],
   ['_5freserved_49',['_reserved',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a16b2854d620087f0dceaa84bdf5fdcb6',1,'kernel::test::PtPoolSnapshot']]],
-  ['_5fstack_5fend_50',['_stack_end',['../namespacekernel.html#a2dc76afa8886a7fe002c3ca8fd481a42',1,'kernel']]],
-  ['_5fstack_5fstart_51',['_stack_start',['../namespacekernel.html#a25351510936e6c130b0678097e493b2a',1,'kernel']]],
+  ['_5fstack_5fend_50',['_stack_end',['../scheduler_8cpp.html#aa4c3a4a82848848b44540d9841a3dccc',1,'_stack_end:&#160;scheduler.cpp'],['../namespacekernel.html#a78863de6e15cebd20b4dd89ce98ea565',1,'kernel::_stack_end']]],
+  ['_5fstack_5fstart_51',['_stack_start',['../scheduler_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1',1,'_stack_start:&#160;scheduler.cpp'],['../namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b',1,'kernel::_stack_start']]],
   ['_5ftext_5fend_52',['_text_end',['../namespacekernel_1_1integrity.html#a0912016436aa515459dee605cde9079a',1,'kernel::integrity']]],
   ['_5ftext_5fstart_53',['_text_start',['../namespacekernel_1_1integrity.html#a656a8b22401d14c937c2a6354ca43fea',1,'kernel::integrity']]],
   ['_5funwind_5fresume_54',['_Unwind_Resume',['../cxxabi_8cpp.html#a5f67d1acf0b3b73d101a562d2e9f659b',1,'cxxabi.cpp']]]

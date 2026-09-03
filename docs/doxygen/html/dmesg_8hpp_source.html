@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -304,8 +304,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8hpp_sou
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>            <span class="keywordflow">if</span> (s_suppressed_)</div>
 <div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>                <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
 <div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>            <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ts = arch::Timer::ticks();</div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>            <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> tid = kernel::Scheduler::current_task()</div>
-<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>                                     ? kernel::Scheduler::current_task()-&gt;id</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>            <span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> tid = <a class="code hl_function" href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler::current_task</a>()</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>                                     ? <a class="code hl_function" href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler::current_task</a>()-&gt;id</div>
 <div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>                                     : 0;</div>
 <div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span> </div>
 <div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>            <span class="keywordtype">size_t</span> h = <a class="code hl_function" href="namespacekernel.html#a3467ffae4985a6e455b41fc91dfb2758">atomic_load</a>(&amp;<a class="code hl_variable" href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">head</a>, __ATOMIC_RELAXED);</div>
@@ -556,6 +556,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8hpp_sou
 <div class="line"><a id="l00450" name="l00450"></a><span class="lineno">  450</span> </div>
 <div class="line"><a id="l00451" name="l00451"></a><span class="lineno">  451</span>} <span class="comment">// namespace kernel::log</span></div>
 <div class="ttc" id="aatomic_8hpp_html"><div class="ttname"><a href="atomic_8hpp.html">atomic.hpp</a></div></div>
+<div class="ttc" id="aclasskernel_1_1_scheduler_html_ac094d7e0ec9c48c58637e36fce587be2"><div class="ttname"><a href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler::current_task</a></div><div class="ttdeci">static TaskControlBlock * current_task() noexcept</div><div class="ttdoc">Returns the currently running task (RSP-authoritative).</div><div class="ttdef"><b>Definition</b> scheduler.cpp:866</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a0387a8f14b7ef2ad6d8e212aebc30e56"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a0387a8f14b7ef2ad6d8e212aebc30e56">kernel::log::DmesgService::pop</a></div><div class="ttdeci">bool pop(LogEntry &amp;entry) noexcept</div><div class="ttdoc">Pop the oldest entry (dmesg_task consumer side).</div><div class="ttdef"><b>Definition</b> dmesg.hpp:109</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a12d6d811e2d671bbb39f5dfae603dd8e"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a12d6d811e2d671bbb39f5dfae603dd8e">kernel::log::DmesgService::clear</a></div><div class="ttdeci">void clear() noexcept</div><div class="ttdoc">Discard all entries.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:119</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a244e97a7b6fe01688641af008861c395"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a244e97a7b6fe01688641af008861c395">kernel::log::DmesgService::empty</a></div><div class="ttdeci">bool empty() const noexcept</div><div class="ttdoc">Check whether the buffer is empty.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:124</div></div>

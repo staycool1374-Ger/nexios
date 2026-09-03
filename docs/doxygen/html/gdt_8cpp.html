@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -141,10 +141,37 @@ Include dependency graph for gdt.cpp:</div>
 Namespaces</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:afd049f7ad59dbe455f460807475c2841" id="r_afd049f7ad59dbe455f460807475c2841"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afd049f7ad59dbe455f460807475c2841">offsetof</a>(type,  member)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Global Descriptor Table — sets up segmentation and Task State Segment (TSS) for privilege levels and IST. </p>
-</div></div><!-- contents -->
+</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="afd049f7ad59dbe455f460807475c2841" name="afd049f7ad59dbe455f460807475c2841"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd049f7ad59dbe455f460807475c2841">&#9670;&#160;</a></span>offsetof</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define offsetof</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>type</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>member</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">__builtin_offsetof(type, member)</div>
+</div><!-- fragment -->
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

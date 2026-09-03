@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -132,12 +132,12 @@ Directories</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
 <tr class="memitem:early_5Finit_2Ecpp" id="r_early_5Finit_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="aarch64_2early__init_8cpp.html">early_init.cpp</a></td></tr>
-<tr class="memdesc:aarch64_2early__init_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub file — early AArch64 init is performed in boot.S assembly. <br /></td></tr>
+<tr class="memdesc:aarch64_2early__init_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Early AArch64 init not covered by boot.S assembly: PAN (FEAT_PAN) detection + enablement for MP-4.4 (issue #5). <br /></td></tr>
 <tr class="memitem:idt_2Ecpp" id="r_idt_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="aarch64_2idt_8cpp.html">idt.cpp</a></td></tr>
 <tr class="memdesc:aarch64_2idt_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 exception vector table (VBAR_EL1) and interrupt dispatch. <br /></td></tr>
 <tr class="memitem:interrupt_5Fcontroller_2Ecpp" id="r_interrupt_5Fcontroller_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="aarch64_2interrupt__controller_8cpp.html">interrupt_controller.cpp</a></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="aarch64_2rtc_8cpp.html">rtc.cpp</a></td></tr>
-<tr class="memdesc:aarch64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 RTC driver using the system generic timer (CNTPCT_EL0). <br /></td></tr>
+<tr class="memdesc:aarch64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 RTC driver using the PL031 wall-clock RTC (QEMU virt). <br /></td></tr>
 <tr class="memitem:serial_2Ecpp" id="r_serial_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="aarch64_2serial_8cpp.html">serial.cpp</a></td></tr>
 <tr class="memdesc:aarch64_2serial_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 PL011 UART serial driver. <br /></td></tr>
 <tr class="memitem:test_5Faarch64_2Ecpp" id="r_test_5Faarch64_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__aarch64_8cpp.html">test_aarch64.cpp</a></td></tr>

@@ -8,12 +8,12 @@ var searchData=
   ['h2_5fev_5fidle_5farm_5',['H2_EV_IDLE_ARM',['../namespacekernel.html#ae4d880161f4292f9476f0da08c2493c7',1,'kernel']]],
   ['h2_5fev_5freenq_6',['H2_EV_REENQ',['../namespacekernel.html#aaf4c44145fd44721026b6f4c4b6466e6',1,'kernel']]],
   ['h2_5fev_5fskip_7',['H2_EV_SKIP',['../namespacekernel.html#a4257e9fd5d09c0baf1cd2301d27355be',1,'kernel']]],
-  ['has_5fpage_5ftable_5fshared_5fv_8',['has_page_table_shared_v',['../test__pml4__clone_8cpp.html#adbef84a521b001ae676d8c44958aa4e4',1,'test_pml4_clone.cpp']]],
-  ['head_9',['head',['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel']]],
-  ['heads_5f_10',['heads_',['../namespacekernel.html#afdea84e7e6716009ab17af4b202b8271',1,'kernel']]],
-  ['heap_5fsize_11',['HEAP_SIZE',['../namespacemem.html#a8e71bca99a7bdd8712f80891bcbee986',1,'mem']]],
-  ['heap_5fvaddr_12',['HEAP_VADDR',['../namespacemem.html#aaedfe55f27a0e1a673a6f5f26479be85',1,'mem']]],
-  ['height_13',['height',['../structservice_1_1_framebuffer_info.html#a7d35b7bdf9b164dd5776671a4fd8ff90',1,'service::FramebufferInfo']]],
-  ['help_14',['help',['../structservice_1_1_shell_1_1_command.html#af82239ce8a4ba81645b6da7b8d3374b7',1,'service::Shell::Command']]],
-  ['hhdm_5foffset_15',['HHDM_OFFSET',['../namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b',1,'arch']]]
+  ['head_8',['head',['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel']]],
+  ['heads_5f_9',['heads_',['../namespacekernel.html#afdea84e7e6716009ab17af4b202b8271',1,'kernel']]],
+  ['heap_5fsize_10',['HEAP_SIZE',['../namespacemem.html#a8e71bca99a7bdd8712f80891bcbee986',1,'mem']]],
+  ['heap_5fvaddr_11',['HEAP_VADDR',['../namespacemem.html#aaedfe55f27a0e1a673a6f5f26479be85',1,'mem']]],
+  ['height_12',['height',['../structservice_1_1_framebuffer_info.html#a7d35b7bdf9b164dd5776671a4fd8ff90',1,'service::FramebufferInfo']]],
+  ['help_13',['help',['../structservice_1_1_shell_1_1_command.html#af82239ce8a4ba81645b6da7b8d3374b7',1,'service::Shell::Command']]],
+  ['hhdm_5foffset_14',['HHDM_OFFSET',['../namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b',1,'arch']]],
+  ['hhdm_5fwindow_5fsize_15',['HHDM_WINDOW_SIZE',['../namespacearch.html#ae0a5af75fabcbd33d35318bdc4f59957',1,'arch']]]
 ];

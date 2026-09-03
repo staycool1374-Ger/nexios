@@ -10,9 +10,14 @@ var kernel_8cpp =
     [ "handle_interrupt_c", "kernel_8cpp.html#a61e633c8acb5cb45303ce5b45599b872", null ],
     [ "higherhalf_entry", "kernel_8cpp.html#ae54e1bcf3fe5f14443fdc8ddadfbb615", null ],
     [ "init_task_main", "kernel_8cpp.html#a3893cb01e13bf4e36090daef580b7426", null ],
+    [ "panic", "kernel_8cpp.html#aabfdfb827135142a9a9873c411fb99d1", null ],
     [ "panic", "kernel_8cpp.html#ae22655ba6f328217f1ebd6248ed82727", null ],
     [ "syscall_handler", "kernel_8cpp.html#a05b6e6675cd9f2f3cb2fd0aa3bc812a3", null ],
     [ "_binary_initrd_cpio_end", "kernel_8cpp.html#a2c38eb4c3a51bab012a31eb7f42d54c0", null ],
     [ "_binary_initrd_cpio_start", "kernel_8cpp.html#a53b789d98a238ce07c0629d6ba055cff", null ],
-    [ "kernel_virt_end", "kernel_8cpp.html#acf393da2fe85b8d9fa8cd83ff83a6a0c", null ]
+    [ "error_code", "kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2", null ],
+    [ "false", "kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01", null ],
+    [ "kernel_virt_end", "kernel_8cpp.html#acf393da2fe85b8d9fa8cd83ff83a6a0c", null ],
+    [ "regs", "kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708", null ],
+    [ "rip", "kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845", null ]
 ];

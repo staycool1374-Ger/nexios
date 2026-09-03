@@ -4,6 +4,11 @@ var namespacekernel_1_1cap =
     [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
     [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
     [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+    [ "IoMmuDmaCap", "classkernel_1_1cap_1_1_io_mmu_dma_cap.html", "classkernel_1_1cap_1_1_io_mmu_dma_cap" ],
+    [ "IrqCap", "classkernel_1_1cap_1_1_irq_cap.html", "classkernel_1_1cap_1_1_irq_cap" ],
+    [ "MmioCap", "classkernel_1_1cap_1_1_mmio_cap.html", "classkernel_1_1cap_1_1_mmio_cap" ],
+    [ "MmioUserMap", "classkernel_1_1cap_1_1_mmio_user_map.html", null ],
+    [ "MsixCap", "classkernel_1_1cap_1_1_msix_cap.html", "classkernel_1_1cap_1_1_msix_cap" ],
     [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ],
     [ "CapRights", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5", [
       [ "CAP_RIGHT_READ", "namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5adab68b51d572f1b802f432fa54aa580c", null ],
@@ -17,7 +22,11 @@ var namespacekernel_1_1cap =
       [ "Endpoint", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a2a6ba72e93aa7fa676d07973ed2716bb", null ],
       [ "Frame", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a", null ],
       [ "CNode", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78", null ],
-      [ "Untyped", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9", null ]
+      [ "Untyped", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9", null ],
+      [ "Mmio", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07", null ],
+      [ "Irq", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99ae72a6f2764689e0bd54a8a89b5393add", null ],
+      [ "IoMmuDma", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a1fe101e5a5b653d3e934ae22b5ca47d3", null ],
+      [ "Msix", "namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5", null ]
     ] ],
     [ "cap_slot_bits", "namespacekernel_1_1cap.html#ade55928be04f23829263375da7b1cb45", null ],
     [ "copy", "namespacekernel_1_1cap.html#a6c2aa3cc6cde9612df581d40ec198850", null ],

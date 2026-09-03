@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -131,6 +131,10 @@ Directories</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
+<tr class="memitem:acpi_2Ecpp" id="r_acpi_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="acpi_8cpp.html">acpi.cpp</a></td></tr>
+<tr class="memdesc:acpi_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ACPI DMAR discovery implementation (issue #9). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature. <br /></td></tr>
+<tr class="memitem:acpi_2Ehpp" id="r_acpi_2Ehpp"><td class="memItemLeft"><a href="acpi_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="acpi_8hpp.html">acpi.hpp</a></td></tr>
+<tr class="memdesc:acpi_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal ACPI/DMAR discovery for live VT-d (issue #9, phase-2). GRUB provides the RSDP through multiboot2 tags 14 (ACPI old / RSDP v1) and 15 (ACPI new / RSDP v2); the parser validates the checksum, walks RSDT/XSDT to the DMAR table and extracts the first DRHD remapping-unit base. Fail-closed: any malformed / checksum-mismatched table yields an empty DmarInfo (a corrupt table must never program an IOMMU). x86_64-only. <br /></td></tr>
 <tr class="memitem:keyboard_2Ecpp" id="r_keyboard_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="keyboard_8cpp.html">keyboard.cpp</a></td></tr>
 <tr class="memdesc:keyboard_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PS/2 keyboard driver — translates scancodes to ASCII characters and manages a ring-buffer input queue. <br /></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2rtc_8cpp.html">rtc.cpp</a></td></tr>

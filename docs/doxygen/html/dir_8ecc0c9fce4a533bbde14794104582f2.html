@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -141,6 +141,8 @@ Files</h2></td></tr>
 <tr class="memdesc:hal_2interrupt__controller_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC (RISC-V). <br /></td></tr>
 <tr class="memitem:io_2Ehpp" id="r_io_2Ehpp"><td class="memItemLeft"><a href="hal_2io_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="hal_2io_8hpp.html">io.hpp</a></td></tr>
 <tr class="memdesc:hal_2io_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives. <br /></td></tr>
+<tr class="memitem:iopb_2Ehpp" id="r_iopb_2Ehpp"><td class="memItemLeft"><a href="iopb_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="iopb_8hpp.html">iopb.hpp</a></td></tr>
+<tr class="memdesc:iopb_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arch-neutral per-task I/O-permission-bitmap (IOPB) interface (v0.4.2, issues #3/#8). x86_64: per-task TSS I/O bitmap delegation; other arches: no-op stubs. Issue #8 adds the grant ledger so revoking/disposing an IO MmioCap retroactively clears the granted port bits in live task bitmaps (closing the #3 revocation gap). <br /></td></tr>
 <tr class="memitem:irq_5Fguard_2Ehpp" id="r_irq_5Fguard_2Ehpp"><td class="memItemLeft"><a href="hal_2irq__guard_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="hal_2irq__guard_8hpp.html">irq_guard.hpp</a></td></tr>
 <tr class="memdesc:hal_2irq__guard_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII interrupt disable — disable IRQs on construction, restore on destruction. <br /></td></tr>
 <tr class="memitem:irq_5Flatency_5Fhistogram_2Ehpp" id="r_irq_5Flatency_5Fhistogram_2Ehpp"><td class="memItemLeft"><a href="hal_2irq__latency__histogram_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="hal_2irq__latency__histogram_8hpp.html">irq_latency_histogram.hpp</a></td></tr>
