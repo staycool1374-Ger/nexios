@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1024,   0,       0      },  // 989 executed +35 filtered; cap_msix(+13,#10) → registered 1024
+    {"all",                1026,   0,       0      },  // 991 executed +35 filtered; cap_msix(+13,#10) → 1024, stress_hrt(+2,#101) → 1026
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -204,6 +204,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
     {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
+
+    // hrt — hard real-time measurement under QEMU -icount (issue #101)
+    {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
 };
 
 static constexpr size_t k_expected_count_size =

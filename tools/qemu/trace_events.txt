@@ -1,0 +1,8 @@
+# QEMU trace-events file for deterministic RT measurement (issue #101).
+#
+# The `stress_hrt`/`hrt` test classes launch QEMU with
+#   -trace events=tools/qemu/trace_events.txt
+# per the issue's requirement.  QEMU hard-fails at startup if the path does
+# not exist, so this file is committed.  It contains only comments: no
+# `enable`/`disable` directives, hence ZERO events are traced and the
+# -icount virtualized timing is not perturbed by trace output.

@@ -183,6 +183,7 @@ void register_kernel_isolation_tests();
 void register_memory_isolation_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
+void register_stress_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -452,6 +453,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"bench_jitter", []() { register_jitter_tests(); }},
     {"bench_microkernel", []() { register_microkernel_transition_tests(); }},
 
+    // -- hrt: hard real-time measurement under QEMU -icount (issue #101) --
+    // Bounds are RELATIVE (stress vs measured baseline), so the class also
+    // runs cleanly inside `all` without -icount.  Class-scoped icount in the
+    // Makefile gives it hard deterministic timing when run standalone.
+    {"stress_hrt", []() { register_stress_hrt_tests(); }},
+
     // -- safe: curated subset with TF_RELEASE tests --
     {"safe",
      []() {
@@ -620,6 +627,7 @@ static void register_all_tests() {
     register_locking_tests();
     register_locking_stress_tests();
     register_preemption_tests();
+    register_stress_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -767,6 +775,7 @@ static void register_all_tests_second_half() {
     register_page_tables_tests();
     register_buffer_pool_deterministic_tests();
     register_no_op_new_tests();
+    register_stress_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif

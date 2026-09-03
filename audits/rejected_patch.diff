@@ -1,66 +1,52 @@
-diff --git a/src/kernel/arch/pci.cpp b/src/kernel/arch/pci.cpp
---- a/src/kernel/arch/pci.cpp
-+++ b/src/kernel/arch/pci.cpp
-@@ -529,10 +529,12 @@
- static void init_vector_alloc() {
-     if (g_vector_init)
-         return;
-     for (int i = 0; i < 32; ++i)
-         g_vector_used[i] = true; // CPU exceptions
-     for (int i = 32; i < 48; ++i)
-         g_vector_used[i] = true; // PIC IRQs
-     g_vector_used[0x80] = true;  // SYSCALL
-+    g_vector_used[64] = true;    // xAPIC scheduler timer (APIC_TIMER_VECTOR)
-+    g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
-     g_vector_init = true;
- }
-@@ -655,11 +655,17 @@
- static void msix_cache_store(const arch::PciBdf &bdf,
-                              const arch::PciMsixTableInfo &tbl) {
-+    // Dedupe by BDF: a repeated pci_scan_all() (test re-probe) must not grow
-+    // duplicate cache entries for the same device.
-+    for (size_t i = 0; i < kMsixCacheSize; ++i) {
-+        if (g_msix_cache[i].valid && g_msix_cache[i].bdf == bdf)
-+            return;
-+    }
-     for (size_t i = 0; i < kMsixCacheSize; ++i) {
-         if (!g_msix_cache[i].valid) {
-             g_msix_cache[i].valid = true;
-             g_msix_cache[i].bdf = bdf;
-             g_msix_cache[i].tbl = tbl;
-             return;
-         }
-     }
- }
-@@ -798,9 +798,12 @@
-     // Enable MSI-X and unmask function (the table entry itself stays masked
-     // until a driver arms it).
-     uint16_t ctrl = pci_config_readw(pci_make_addr(bdf, cap + 2));
-     ctrl |= PCI_MSIX_CTRL_ENABLE;
-     ctrl &= ~PCI_MSIX_CTRL_FUNCMASK;
-     pci_config_writel(pci_make_addr(bdf, cap + 2), ctrl);
-+    // Legacy contract: pci_enable_msix hands back a LIVE vector to the caller
-+    // (raw kernel path, no arm step) — unmask the entry now so delivery works.
-+    pci_msix_entry_set_masked(tbl, entry, false);
+--- a/src/kernel/test/test_stress_hrt.cpp	2026-09-03 14:58:02
++++ b/src/kernel/test/test_stress_hrt.cpp	2026-09-03 14:58:48
+@@ -75,6 +75,8 @@
+ uint64_t g_stress_max = 0;
+ uint64_t g_base_p95 = 0;
+ uint64_t g_stress_p95 = 0;
++uint64_t g_base_fail = 0;
++uint64_t g_stress_fail = 0;
  
-     Logger::info("MSI-X: enabled on %d:%d.%d entry=%d vector=%d", bdf.bus,
-                  bdf.device, bdf.function, entry, vec);
-diff --git a/src/kernel/irq_delivery.cpp b/src/kernel/irq_delivery.cpp
---- a/src/kernel/irq_delivery.cpp
-+++ b/src/kernel/irq_delivery.cpp
-@@ -115,6 +115,15 @@
-     // Timer vector must never be claimed.
-     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
-         return -1;
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Kernel-reserved vectors inside the MSI-X window (issue #10): the xAPIC
-+    // timer (64) drives the scheduler tick and 0xFF is the APIC spurious
-+    // vector — a user slot must never claim either (it would swallow the
-+    // scheduler tick / mis-route a spurious delivery).
-+    if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
-+        vector == static_cast<uint8_t>(arch::APIC::SPURIOUS_VECTOR))
-+        return -1;
-+#endif
-     // Reject vectors claimed by the threaded-IRQ path (single-owner).
-     if (IrqThread::for_vector(vector) != nullptr)
-         return -1;
+ // --- fixed 32-bucket log2 histograms (no dynamic allocation) ---
+ constexpr unsigned k_buckets = 32;
+@@ -115,6 +117,8 @@
+     __atomic_store_n(&g_stress_max, 0, __ATOMIC_RELEASE);
+     __atomic_store_n(&g_base_p95, 0, __ATOMIC_RELEASE);
+     __atomic_store_n(&g_stress_p95, 0, __ATOMIC_RELEASE);
++    __atomic_store_n(&g_base_fail, 0, __ATOMIC_RELEASE);
++    __atomic_store_n(&g_stress_fail, 0, __ATOMIC_RELEASE);
+     for (unsigned i = 0; i < k_buckets; ++i) {
+         g_base_hist[i] = 0;
+         g_stress_hist[i] = 0;
+@@ -253,7 +257,12 @@
+                     __atomic_load_n(&g_receiver_id, __ATOMIC_ACQUIRE),
+                     msg, reply);
+                 uint64_t t1 = arch::rdtsc();
+-                uint64_t elapsed = (ok && t1 > t0) ? t1 - t0 : 0;
++                if (!ok) {
++                    __atomic_add_fetch(&(stress ? g_stress_fail : g_base_fail),
++                                       1, __ATOMIC_RELAXED);
++                    continue;
++                }
++                uint64_t elapsed = t1 > t0 ? t1 - t0 : 0;
+                 if (elapsed != 0) {
+                     if (stress) {
+                         __atomic_add_fetch(&g_stress_nonzero, 1,
+@@ -321,6 +330,8 @@
+     uint64_t stress_max = __atomic_load_n(&g_stress_max, __ATOMIC_ACQUIRE);
+     uint64_t base_p95 = hist_p95(g_base_hist, base_nz);
+     uint64_t stress_p95 = hist_p95(g_stress_hist, stress_nz);
++    uint64_t base_fail = __atomic_load_n(&g_base_fail, __ATOMIC_ACQUIRE);
++    uint64_t stress_fail = __atomic_load_n(&g_stress_fail, __ATOMIC_ACQUIRE);
+ 
+     Logger::info(
+         "[STRESS_HRT] base: nz=%llu avg=%llu p95=%llu max=%llu | "
+@@ -332,6 +343,8 @@
+ 
+     JARVIS_ASSERT(base_nz >= k_iterations / 8);
+     JARVIS_ASSERT(stress_nz >= k_iterations / 8);
++    JARVIS_ASSERT(base_fail == 0);
++    JARVIS_ASSERT(stress_fail == 0);
+     JARVIS_ASSERT(stress_avg <= base_avg * k_avg_ratio ||
+                   stress_avg < k_abs_floor);
+     JARVIS_ASSERT(stress_p95 <=

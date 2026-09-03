@@ -144,7 +144,7 @@ ifeq ($(ARCH),x86_64)
     QEMU_SYSTEM     := qemu-system-x86_64
     QEMU_ARCH_FLAGS := -boot order=d \
                        -drive if=pflash,format=raw,readonly=on,file=$(QEMU_UEFI)
-    QEMU_DEBUG_EXIT := -device isa-debug-exit
+    QEMU_DEBUG_EXIT := -device isa-debug-exit,iobase=0xf4,iosize=0x04
     OBJDUMP_DIS_FLAGS := -M intel
 
 else ifeq ($(ARCH),aarch64)
@@ -289,6 +289,22 @@ QEMU_FLAGS := -cdrom $(DEBUG_ISO) -m 256M \
                 -drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
                 -device intel-iommu,intremap=off,dma-translation=on
 endif
+
+# Deterministic real-time measurement (issue #101): the stress_hrt / hrt
+# classes measure hard-RT latency with RELATIVE bounds (stress vs a measured
+# baseline), which are valid under standard TCG timing.  The issue's requested
+# `-icount shift=0,sleep=off` flags are provided via HRT_ICOUNT=1 but are NOT
+# enabled by default: QEMU 11's icount mode is incompatible with this kernel's
+# APIC TSC-deadline timer (QEMU-side `can_do_io` guard → "Bad icount read") and
+# periodic-APIC under icount stalls the daemon-ready handshake.  See
+# audits/report for the investigation.  Set HRT_ICOUNT=1 to force icount on a
+# QEMU version where the interaction is fixed.
+# NOTE: the flags contain commas, so they must expand from a pre-set variable —
+# $(if ...) splits function args on commas and would leak "sleep=off," to QEMU.
+HRT_ICOUNT_FLAGS  := -icount shift=0,sleep=off
+HRT_TRACE_FLAGS   := -trace events=tools/qemu/trace_events.txt
+QEMU_ICOUNT       ?= $(if $(HRT_ICOUNT),$(HRT_ICOUNT_FLAGS),)
+QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
@@ -881,6 +897,7 @@ define _run_test_qemu
 	\
 	expect tools/run-test.exp $(2) "$(TEST_VERDICT_LOG)" "$(TEST_SERIAL_LOG)" \
 	    $(QEMU_SYSTEM) $(QEMU_FLAGS) -display none -no-reboot $(QEMU_DEBUG_EXIT) \
+	    $(QEMU_ICOUNT) $(QEMU_TRACE_EVENTS) \
 	    2>&1 | gstdbuf -oL tee "$(TEST_SERIAL_LOG)"; \
 	date +%s > /tmp/test-end.timestamp; \
 	\
