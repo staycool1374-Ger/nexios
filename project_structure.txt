@@ -133,6 +133,8 @@
 │   ├── CMakeLists.txt
 │   └── main.cpp
 ├── compile_flags.txt
+├── debug
+│   └── nexios-rtos.iso
 ├── docs
 │   ├── _archive
 │   │   ├── fork-pt-deep-copy.md
@@ -10751,8 +10753,6 @@
 │   └── testcases-v0.9.x.md
 ├── readme.html
 ├── README.md
-├── release
-│   └── nexios-rtos.iso
 ├── scripts
 │   ├── gate.py
 │   ├── healthcheck.sh
