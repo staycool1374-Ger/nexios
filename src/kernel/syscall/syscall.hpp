@@ -95,6 +95,21 @@ enum class SyscallNumber : uint8_t {
     MAX_SYSCALL = 63,
 };
 
+/// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
+///        (issue #92).  constexpr so SYSCALL_FAST_MASK is a compile-time
+///        constant derived from k_syscall_fast[] — the single source of truth.
+/// @param list  Array of syscall numbers.
+/// @param count Number of elements in @p list.
+/// @return A bitmask with bit `n` set for each number in @p list.
+constexpr uint64_t syscall_fast_mask_from(const SyscallNumber *list,
+                                          size_t count) {
+    uint64_t mask = 0;
+    for (size_t i = 0; i < count; ++i) {
+        mask |= (1ULL << static_cast<uint64_t>(list[i]));
+    }
+    return mask;
+}
+
 /// @brief System call handler function signature.
 using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                     uint64_t arg3, uint64_t *regs);
@@ -122,6 +137,54 @@ class Syscall {
     static uint64_t handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                            uint64_t arg2, uint64_t arg3,
                            uint64_t *regs = nullptr);
+
+    /// @brief Lean FAST-path dispatch (issue #92).  Bounds-checked table
+    ///        dispatch WITHOUT the canary walk — for the audited pointer-free
+    ///        FAST subset only (docs/specs/syscall-fastpath.md §3.1/§4).  The
+    ///        callers of this path must never pass a number that dereferences
+    ///        user memory (enforced by SYSCALL_FAST_MASK membership review).
+    /// @param number Syscall number (see SyscallNumber).
+    /// @param arg0-3 Arguments passed from user space.
+    /// @param regs Pointer to register save area.
+    /// @return The syscall return value, or -1 for an out-of-range number.
+    static uint64_t handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
+                                uint64_t arg2, uint64_t arg3,
+                                uint64_t *regs = nullptr);
+
+    /// @brief Test hook: force the FULL path even for FAST members (proves
+    ///        both paths agree).  Plain static bool, default true — production
+    ///        parity when unarmed.
+    static void set_fastpath_enabled(bool enabled) {
+        s_fastpath_enabled_ = enabled;
+    }
+
+    /// @brief Audited pointer-free syscall subset (issue #92).  A member must
+    ///        NEVER dereference a user pointer — the FAST path skips the
+    ///        canary + (debug) SMAP/AC checks.  SEND/RECEIVE/SEND_SYNC are
+    ///        intentionally excluded (they touch user buffers via checked_ptr
+    ///        / safe_copy_to_user).  To reclassify, review the handler for
+    ///        user-memory access and update this list AND the spec.
+    static constexpr SyscallNumber k_syscall_fast[] = {
+        SyscallNumber::YIELD,
+        SyscallNumber::GET_TICKS,
+        SyscallNumber::PRINT,
+        SyscallNumber::CREATE_MAILBOX,
+        SyscallNumber::DESTROY_MAILBOX,
+        SyscallNumber::GETPID,
+        SyscallNumber::PAUSE,
+        SyscallNumber::REBOOT,
+        SyscallNumber::HALT,
+    };
+
+    /// @brief Bitmask of the pointer-free FAST syscall numbers (issue #92).
+    ///        Derived from k_syscall_fast[] — the single source of truth.
+    static constexpr uint64_t SYSCALL_FAST_MASK =
+        syscall_fast_mask_from(k_syscall_fast,
+                               sizeof(k_syscall_fast) /
+                                   sizeof(k_syscall_fast[0]));
+
+  private:
+    static inline bool s_fastpath_enabled_ = true;
 
   private:
     static uint64_t sys_yield(uint64_t, uint64_t, uint64_t, uint64_t,

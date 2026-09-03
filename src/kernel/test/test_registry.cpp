@@ -185,6 +185,7 @@ void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 void register_stress_hrt_tests();
 void register_scheduler_hrt_tests();
+void register_syscall_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -311,6 +312,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- syscall: dispatch interface and fuzzing --
     {"syscall_core", []() { register_syscall_tests(); }},
     {"syscall_fuzz", []() { register_syscall_fuzz_tests(); }},
+
+    // -- syscall_fastpath: tiered FAST/FULL dispatch (issue #92) --
+    {"syscall_fastpath", []() { register_syscall_fastpath_tests(); }},
 
     // -- process: lifecycle, exec, signals, limits --
     {"process_lifecycle", []() { register_process_tests(); }},
@@ -635,6 +639,7 @@ static void register_all_tests() {
     register_preemption_tests();
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
+    register_syscall_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -784,6 +789,7 @@ static void register_all_tests_second_half() {
     register_no_op_new_tests();
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
+    register_syscall_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif

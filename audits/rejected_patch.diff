@@ -1,52 +1,22 @@
---- a/src/kernel/test/test_stress_hrt.cpp	2026-09-03 14:58:02
-+++ b/src/kernel/test/test_stress_hrt.cpp	2026-09-03 14:58:48
-@@ -75,6 +75,8 @@
- uint64_t g_stress_max = 0;
- uint64_t g_base_p95 = 0;
- uint64_t g_stress_p95 = 0;
-+uint64_t g_base_fail = 0;
-+uint64_t g_stress_fail = 0;
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index a63a39c1..3af9b698 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -720,6 +720,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     cap::MmioUserMap::drain_task(*tcb);
  
- // --- fixed 32-bucket log2 histograms (no dynamic allocation) ---
- constexpr unsigned k_buckets = 32;
-@@ -115,6 +117,8 @@
-     __atomic_store_n(&g_stress_max, 0, __ATOMIC_RELEASE);
-     __atomic_store_n(&g_base_p95, 0, __ATOMIC_RELEASE);
-     __atomic_store_n(&g_stress_p95, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_base_fail, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_stress_fail, 0, __ATOMIC_RELEASE);
-     for (unsigned i = 0; i < k_buckets; ++i) {
-         g_base_hist[i] = 0;
-         g_stress_hist[i] = 0;
-@@ -253,7 +257,12 @@
-                     __atomic_load_n(&g_receiver_id, __ATOMIC_ACQUIRE),
-                     msg, reply);
-                 uint64_t t1 = arch::rdtsc();
--                uint64_t elapsed = (ok && t1 > t0) ? t1 - t0 : 0;
-+                if (!ok) {
-+                    __atomic_add_fetch(&(stress ? g_stress_fail : g_base_fail),
-+                                       1, __ATOMIC_RELAXED);
-+                    continue;
-+                }
-+                uint64_t elapsed = t1 > t0 ? t1 - t0 : 0;
-                 if (elapsed != 0) {
-                     if (stress) {
-                         __atomic_add_fetch(&g_stress_nonzero, 1,
-@@ -321,6 +330,8 @@
-     uint64_t stress_max = __atomic_load_n(&g_stress_max, __ATOMIC_ACQUIRE);
-     uint64_t base_p95 = hist_p95(g_base_hist, base_nz);
-     uint64_t stress_p95 = hist_p95(g_stress_hist, stress_nz);
-+    uint64_t base_fail = __atomic_load_n(&g_base_fail, __ATOMIC_ACQUIRE);
-+    uint64_t stress_fail = __atomic_load_n(&g_stress_fail, __ATOMIC_ACQUIRE);
- 
-     Logger::info(
-         "[STRESS_HRT] base: nz=%llu avg=%llu p95=%llu max=%llu | "
-@@ -332,6 +343,8 @@
- 
-     JARVIS_ASSERT(base_nz >= k_iterations / 8);
-     JARVIS_ASSERT(stress_nz >= k_iterations / 8);
-+    JARVIS_ASSERT(base_fail == 0);
-+    JARVIS_ASSERT(stress_fail == 0);
-     JARVIS_ASSERT(stress_avg <= base_avg * k_avg_ratio ||
-                   stress_avg < k_abs_floor);
-     JARVIS_ASSERT(stress_p95 <=
+     uint64_t old_pml4 = tcb->page_table_;
++    // Issue #92 canary relocation: the scheduler now samples user-task segment
++    // canaries at every context switch and on a bounded tick cadence
++    // (canary_check_in_scheduler_hooks).  Between the page_table_ swap below
++    // and install_segment_canaries() at the tail of this function, the TCB's
++    // canary_before/canary_after/canary_installed still describe the OLD image
++    // while page_table_ is the NEW pml4 — a tick/context-switch sample landing
++    // in this window would walk stale canary VAs against the new pml4 and
++    // false-trip (spurious production panic / test-mode latch).  Clear
++    // canary_installed so the verify loop is a no-op until the new canaries are
++    // armed below (install_segment_canaries re-ORs the bits).
++    tcb->canary_installed = 0;
+     tcb->page_table_ = new_pml4;
+     tcb->is_user_ = true;
+     tcb->user_stack_ = ustack_phys;

@@ -37,6 +37,7 @@ extern "C" void debug_write(const char *s);
 extern "C" void debug_write_hex(uint64_t value);
 extern "C" void debug_write_dec(uint64_t value);
 #include <kernel/memory/integrity.hpp>
+#include <kernel/core/global_state.hpp>
 #include <assert.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/test/test_isolate.hpp>
@@ -158,6 +159,41 @@ inline constexpr uint64_t H2_EV_CLR_SET  = 5;
 inline constexpr uint64_t H2_EV_CLR_MISC = 6;
 inline constexpr uint64_t H2_EV_IDLE_ARM = 7;
 inline constexpr uint64_t H2_EV_REENQ    = 8;
+
+/// @brief MP-3 canary sampling for the scheduler hooks (issue #92 canary
+///        relocation).  Verifies the user-segment canaries of a task that is
+///        about to run (context switch) or currently running (timer tick).
+///        Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a
+///        pure page-table read (no locks, no allocation) — safe in ISR/tick
+///        context.  Test mode latches g_canary_trip (the harness survives);
+///        production panics.  This restores corruption detection for FAST
+///        syscalls, which no longer consult canaries on entry.
+/// @param task    Task to verify (must be magic-valid).
+/// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
+/// @return true if verified (or no user task / no canary check enabled).
+bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip) {
+#if CONFIG_CANARY_GUARD
+    if (!task || !task->is_user_)
+        return true;
+    uint8_t bad_seg = 0;
+    uint64_t bad_va = 0;
+    if (!canary_verify_user_segments(task, bad_seg, bad_va)) {
+        if (kernel::Scheduler::is_test_active()) {
+            kernel::gs::set_canary_trip(task->id, bad_seg, rip);
+            return false;
+        }
+        kernel::Logger::fatal(
+            "CANARY TRIP (sched): task '%s' id=%u segment=%u va=0x%lx",
+            task->name, static_cast<unsigned>(task->id),
+            static_cast<unsigned>(bad_seg), bad_va);
+        panic("software sentinel canary violated");
+    }
+#else
+    (void)task;
+    (void)rip;
+#endif
+    return true;
+}
 
 // ---------------------------------------------------------------------------
 // Global deferred-switch event ring (H2 instrumentation, CONFIG_DEBUG).
@@ -1567,6 +1603,23 @@ void Scheduler::on_tick() noexcept {
             Logger::raw_write(" nt=");
             Logger::print_dec(all_tasks_.size());
             Logger::raw_write("\n");
+        }
+#endif
+
+        // Issue #92 canary relocation: sample the current user task's segment
+        // canaries on a bounded tick cadence (CONFIG_CANARY_SAMPLE_TICKS).
+        // Catches corruption for FAST-only tasks that never hit a FULL syscall.
+        // Pure reads; test-mode latch; production panic.  This runs inside the
+        // scheduler_lock_ + IrqGuard window of on_tick, exactly like the
+        // snapshot/TCB-magic watchdogs above.
+#if CONFIG_CANARY_GUARD
+        {
+            auto *cc = current_task();
+            if (cc && cc->is_user_ &&
+                cc->magic == TaskControlBlock::TCB_MAGIC &&
+                (current_tick & (CONFIG_CANARY_SAMPLE_TICKS - 1)) == 0) {
+                canary_check_in_scheduler_hooks(cc, 0);
+            }
         }
 #endif
 
@@ -3697,6 +3750,13 @@ extern "C" void scheduler_on_context_switch() {
     auto *t = kernel::Scheduler::find_task(id);
     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
         kernel::Scheduler::set_current_task(t);
+    // Issue #92 canary relocation: verify the incoming task's user-segment
+    // canaries at the context switch (the task is about to run).  Pure reads,
+    // test-mode latch, production panic — see canary_check_in_scheduler_hooks.
+    // Guards: only when the RSP swap actually applied (t found + valid).
+    if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC) {
+        kernel::canary_check_in_scheduler_hooks(t, 0);
+    }
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     // H2 apply-side frame audit (cold: fires only when a deferred switch
     // APPLIES to the harness).  The ISR epilogue has just loaded the harness's

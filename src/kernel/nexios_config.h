@@ -753,6 +753,16 @@
 #define CONFIG_CANARY_GUARD 1
 #endif
 
+/// Issue #92 canary relocation: cadence (in ticks) at which the scheduler
+/// samples the current user task's segment canaries on the timer tick.  A
+/// power of two so the cadence check is a cheap mask.  MUST be > 1 so the
+/// per-tick overhead stays bounded; FAST-only user tasks that never hit a
+/// FULL syscall are still corruption-checked at this interval AND on every
+/// context switch (canary_check_in_scheduler_hooks).
+#ifndef CONFIG_CANARY_SAMPLE_TICKS
+#define CONFIG_CANARY_SAMPLE_TICKS 64
+#endif
+
 /// v0.4.0 MP-4: SMEP (supervisor-mode execution prevention) — CR4 bit 20.
 /// On x86_64 the boot path sets it when CPUID leaf 7 EBX[7] is supported.
 #ifndef CONFIG_SMEP

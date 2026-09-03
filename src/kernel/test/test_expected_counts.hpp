@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1035,   0,       0      },  // measured 2026-09-03: registered 1035 (incl. stress_hrt+2 #101, scheduler_hrt+4 #102)
+    {"all",                1040,   0,       0      },  // measured: 1035 + syscall_fastpath(+5,#92) → 1040
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -68,6 +68,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // syscall
     {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+    {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
