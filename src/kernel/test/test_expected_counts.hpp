@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1026,   0,       0      },  // 991 executed +35 filtered; cap_msix(+13,#10) → 1024, stress_hrt(+2,#101) → 1026
+    {"all",                1035,   0,       0      },  // measured 2026-09-03: registered 1035 (incl. stress_hrt+2 #101, scheduler_hrt+4 #102)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -56,6 +56,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
     {"scheduler_starvation",  3,    0,       0      },  // SchedulerStarvation + PriorityInversionChain5 + DeadlockNestedMutexLoad
+    {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
 
     // task
     {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone

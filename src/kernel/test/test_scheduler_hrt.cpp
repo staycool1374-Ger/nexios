@@ -1,0 +1,568 @@
+/*
+ * NexIOS RTOS — Development Roadmap / Kernel Core
+ * Copyright (C) 2026 Arnold Hasshold
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/// @file test_scheduler_hrt.cpp
+/// @brief Hard real-time assertions on real scheduler dispatch (issue #102).
+///
+/// The existing scheduler_core tests verify FUNCTIONALITY only (reschedule,
+/// remove, reap, waitpid).  This class runs the same real-dispatch scenarios
+/// WITH time-measurement assertions: wake-to-dispatch latency of a higher-prio
+/// task after IPC::send / Semaphore::post, and periodic dispatch-cadence
+/// jitter.  Methodology mirrors the #101 stress_hrt class (see LEARNINGS):
+///   - RELATIVE bounds (stress vs measured baseline), never bare absolute
+///     cycle constants — TCG rdtsc advances in coarse quanta and a dispatch
+///     spans many ticks (base avg ~3.0M cycles).
+///   - Per-phase failure counters asserted == 0 (no Heisenbug masking).
+///   - Calibration-derived constants with >= 3x headroom.
+///   - Atomics for every cross-task flag (CODING_STYLE §11.6).
+///   - Cleanup (wait_for_termination_safe + drain_zombie_list) BEFORE asserts.
+/// No -icount dependence (QEMU 11 icount is incompatible with the APIC
+/// TSC-deadline timer — LEARNINGS #101 §2).  TF_KERNEL, debug-only.
+
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/memory/mempool.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/sync/spinlock.hpp>
+#include <kernel/sync/semaphore.hpp>
+#include "test_sched_helpers.hpp"
+
+using namespace kernel;
+
+namespace {
+
+// --- calibration-driven bounds (placeholders; refined from calibration) ---
+constexpr uint64_t k_avg_ratio = 8;
+constexpr uint64_t k_abs_floor = 10000000;
+constexpr uint64_t k_pathological_cap = 20000000;
+constexpr uint64_t k_iterations = 1000;
+constexpr uint64_t k_drive_cap_ticks = 30000;
+constexpr uint64_t k_ack_wait_ticks = 4000;
+constexpr uint64_t k_jitter_periods = 120;
+
+// --- fixed 32-bucket log2 histograms (no dynamic allocation) ---
+constexpr unsigned k_buckets = 32;
+
+uint64_t hist_bucket(uint64_t cycles) {
+    unsigned b = 0;
+    while (cycles > 1 && b < k_buckets - 1) {
+        cycles >>= 1;
+        ++b;
+    }
+    return b;
+}
+
+uint64_t hist_p95(uint64_t *hist, uint64_t total) {
+    if (total == 0)
+        return 0;
+    uint64_t need = (total * 95 + 99) / 100; // ceil(0.95 * total)
+    uint64_t acc = 0;
+    for (unsigned b = 0; b < k_buckets; ++b) {
+        acc += hist[b];
+        if (acc >= need)
+            return 1ULL << b;
+    }
+    return 1ULL << (k_buckets - 1);
+}
+
+// --- net-zero hammerer (shared by the two latency tests) ---
+// Gated by g_hammer_on; every allocation is paired with its free; every IPC
+// send is a self-roundtrip released before the next.  Exits on g_done.
+uint64_t g_hammer_on = 0;
+uint64_t g_done = 0;
+
+void hammerer_entry() {
+    while (__atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0) {
+        if (__atomic_load_n(&g_hammer_on, __ATOMIC_ACQUIRE) == 0) {
+            arch::hlt();
+            continue;
+        }
+        void *blk = MemPool::alloc(64);
+        if (blk != nullptr)
+            MemPool::free(blk);
+        uint64_t page = PMM::alloc_page();
+        if (page != 0)
+            PMM::free_page(page);
+        Message msg;
+        msg.sender_id = Scheduler::current_task()->id;
+        msg.type = 0xEE;
+        msg.priority = 0;
+        msg.data_size = 0;
+        IPC::send(msg.sender_id, msg);
+        Message out;
+        IPC::recv(out);
+        sync::SpinLock lock;
+        lock.lock();
+        lock.unlock();
+    }
+}
+
+// Per-phase accumulators for the latency tests.  One struct per test is
+// overkill; a single shared set is reset at each test start.
+uint64_t g_base_nonzero = 0;
+uint64_t g_stress_nonzero = 0;
+uint64_t g_base_sum = 0;
+uint64_t g_stress_sum = 0;
+uint64_t g_base_max = 0;
+uint64_t g_stress_max = 0;
+uint64_t g_base_fail = 0;
+uint64_t g_stress_fail = 0;
+uint64_t g_base_hist[k_buckets] = {};
+uint64_t g_stress_hist[k_buckets] = {};
+
+void reset_latency_stats() {
+    __atomic_store_n(&g_hammer_on, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_done, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_base_nonzero, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_stress_nonzero, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_base_sum, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_stress_sum, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_base_max, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_stress_max, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_base_fail, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_stress_fail, 0, __ATOMIC_RELEASE);
+    for (unsigned i = 0; i < k_buckets; ++i) {
+        g_base_hist[i] = 0;
+        g_stress_hist[i] = 0;
+    }
+}
+
+// Shared report + assert block for the two latency tests.  `name` labels the
+// Logger line.  Returns the number of asserts recorded (always 0 on success).
+void report_and_assert_latency(const char *name) {
+    uint64_t base_nz = __atomic_load_n(&g_base_nonzero, __ATOMIC_ACQUIRE);
+    uint64_t stress_nz = __atomic_load_n(&g_stress_nonzero, __ATOMIC_ACQUIRE);
+    uint64_t base_sum = __atomic_load_n(&g_base_sum, __ATOMIC_ACQUIRE);
+    uint64_t stress_sum = __atomic_load_n(&g_stress_sum, __ATOMIC_ACQUIRE);
+    uint64_t base_max = __atomic_load_n(&g_base_max, __ATOMIC_ACQUIRE);
+    uint64_t stress_max = __atomic_load_n(&g_stress_max, __ATOMIC_ACQUIRE);
+    uint64_t base_fail = __atomic_load_n(&g_base_fail, __ATOMIC_ACQUIRE);
+    uint64_t stress_fail = __atomic_load_n(&g_stress_fail, __ATOMIC_ACQUIRE);
+    uint64_t base_avg = base_nz ? base_sum / base_nz : 0;
+    uint64_t stress_avg = stress_nz ? stress_sum / stress_nz : 0;
+    uint64_t base_p95 = hist_p95(g_base_hist, base_nz);
+    uint64_t stress_p95 = hist_p95(g_stress_hist, stress_nz);
+
+    Logger::info(
+        "[SCHED_HRT] %s base: nz=%llu avg=%llu p95=%llu max=%llu fail=%llu | "
+        "stress: nz=%llu avg=%llu p95=%llu max=%llu fail=%llu",
+        name, (unsigned long long)base_nz, (unsigned long long)base_avg,
+        (unsigned long long)base_p95, (unsigned long long)base_max,
+        (unsigned long long)base_fail, (unsigned long long)stress_nz,
+        (unsigned long long)stress_avg, (unsigned long long)stress_p95,
+        (unsigned long long)stress_max, (unsigned long long)stress_fail);
+
+    JARVIS_ASSERT(base_fail == 0);
+    JARVIS_ASSERT(stress_fail == 0);
+    JARVIS_ASSERT(base_nz >= k_iterations / 8);
+    JARVIS_ASSERT(stress_nz >= k_iterations / 8);
+    JARVIS_ASSERT(stress_avg <= base_avg * k_avg_ratio ||
+                  stress_avg < k_abs_floor);
+    JARVIS_ASSERT(stress_p95 <=
+                  (base_p95 * k_avg_ratio > k_abs_floor
+                       ? base_p95 * k_avg_ratio
+                       : k_abs_floor));
+    JARVIS_ASSERT(stress_max < k_pathological_cap);
+}
+
+} // namespace
+
+// Runmode: kernel
+// Testidea: measurement sanity canary.  Confirms the TSC advances during the
+// test window and stays within a sane magnitude (TCG rdtsc is coarse-quantized
+// — back-to-back deltas are mostly 0, so only >=1 non-zero is required).
+// Input: k_iterations rdtsc-pair deltas with interrupts disabled.
+// Expect: at least one non-zero delta; avg and max below the caps.
+// Depends: arch::rdtsc, arch::IrqGuard
+JARVIS_TEST(scheduler_hrt_rdtsc_canary, "PRE: none | POST: none") {
+    uint64_t nonzero = 0;
+    uint64_t sum = 0;
+    uint64_t max_el = 0;
+    {
+        arch::IrqGuard guard;
+        for (uint64_t i = 0; i < k_iterations; ++i) {
+            uint64_t t0 = arch::rdtsc();
+            uint64_t t1 = arch::rdtsc();
+            uint64_t elapsed = t1 > t0 ? t1 - t0 : 0;
+            if (elapsed != 0) {
+                ++nonzero;
+                sum += elapsed;
+                if (elapsed > max_el)
+                    max_el = elapsed;
+            }
+        }
+    }
+    uint64_t avg = nonzero ? sum / nonzero : 0;
+    Logger::info("[SCHED_HRT] rdtsc canary: nonzero=%llu avg=%llu max=%llu",
+                 (unsigned long long)nonzero, (unsigned long long)avg,
+                 (unsigned long long)max_el);
+    JARVIS_ASSERT(nonzero >= 1);
+    JARVIS_ASSERT(avg < k_abs_floor);
+    JARVIS_ASSERT(max_el < k_pathological_cap);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: wake-to-dispatch latency of a prio-20 task after IPC::send_sync
+// from a prio-11 measurer (a genuine IPC wake: the measurer blocks in
+// send_sync, the receiver dispatches, replies, the measurer resumes — the
+// real deferred-switch IPC wake path).  Baseline vs a prio-1 hammerer stress
+// phase.  Relative bound: stress avg <= base avg * k_avg_ratio.
+// Input: receiver (prio 20, k_iterations recv/reply), measurer (prio 11,
+//        send_sync + rdtsc around it), hammerer (prio 1, gated net-zero churn).
+// Expect: IPC wake latency under stress within k_avg_ratio of baseline; fail
+//         counters == 0; wedge cap respected.
+// Depends: IPC, Scheduler, arch::rdtsc
+JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
+    reset_latency_stats();
+    static uint64_t g_receiver_id = 0;
+    __atomic_store_n(&g_receiver_id, 0, __ATOMIC_RELEASE);
+
+    auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
+    JARVIS_ASSERT(hammer != nullptr);
+
+    auto *receiver = TaskControlBlock::create(
+        []() {
+            for (uint64_t i = 0; i < k_iterations; ++i) {
+                Message msg;
+                while (!IPC::recv(msg))
+                    arch::hlt();
+                Message reply;
+                reply.sender_id = Scheduler::current_task()->id;
+                reply.type = msg.type + 1;
+                reply.priority = 0;
+                reply.data_size = 0;
+                if (!IPC::send(msg.sender_id, reply))
+                    return;
+            }
+        },
+        20, 10);
+    JARVIS_ASSERT(receiver != nullptr);
+    __atomic_store_n(&g_receiver_id, receiver->id, __ATOMIC_RELEASE);
+
+    auto *measurer = TaskControlBlock::create(
+        []() {
+            for (uint64_t i = 0; i < k_iterations; ++i) {
+                bool stress = i >= k_iterations / 2;
+                if (stress)
+                    __atomic_store_n(&g_hammer_on, 1, __ATOMIC_RELEASE);
+                Message msg;
+                msg.sender_id = Scheduler::current_task()->id;
+                msg.type = stress ? 0x22 : 0x11;
+                msg.priority = 0;
+                msg.data_size = 0;
+                Message reply;
+                uint64_t t0 = arch::rdtsc();
+                bool ok = IPC::send_sync(
+                    __atomic_load_n(&g_receiver_id, __ATOMIC_ACQUIRE), msg,
+                    reply);
+                uint64_t t1 = arch::rdtsc();
+                uint64_t elapsed = (ok && t1 > t0) ? t1 - t0 : 0;
+                if (!ok) {
+                    __atomic_add_fetch(&(stress ? g_stress_fail : g_base_fail),
+                                       1, __ATOMIC_RELAXED);
+                    continue;
+                }
+                if (elapsed != 0) {
+                    if (stress) {
+                        __atomic_add_fetch(&g_stress_nonzero, 1,
+                                           __ATOMIC_RELAXED);
+                        __atomic_add_fetch(&g_stress_sum, elapsed,
+                                           __ATOMIC_RELAXED);
+                        if (elapsed > __atomic_load_n(&g_stress_max,
+                                                      __ATOMIC_RELAXED))
+                            __atomic_store_n(&g_stress_max, elapsed,
+                                             __ATOMIC_RELAXED);
+                        unsigned b = hist_bucket(elapsed);
+                        __atomic_add_fetch(&g_stress_hist[b], 1,
+                                           __ATOMIC_RELAXED);
+                    } else {
+                        __atomic_add_fetch(&g_base_nonzero, 1,
+                                           __ATOMIC_RELAXED);
+                        __atomic_add_fetch(&g_base_sum, elapsed,
+                                           __ATOMIC_RELAXED);
+                        if (elapsed > __atomic_load_n(&g_base_max,
+                                                      __ATOMIC_RELAXED))
+                            __atomic_store_n(&g_base_max, elapsed,
+                                             __ATOMIC_RELAXED);
+                        unsigned b = hist_bucket(elapsed);
+                        __atomic_add_fetch(&g_base_hist[b], 1,
+                                           __ATOMIC_RELAXED);
+                    }
+                }
+            }
+            __atomic_store_n(&g_done, 1, __ATOMIC_RELEASE);
+        },
+        11, 10);
+    JARVIS_ASSERT(measurer != nullptr);
+
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*receiver);
+        Scheduler::add_task(*hammer);
+        Scheduler::add_task(*measurer);
+    }
+
+    uint64_t start = arch::Timer::ticks();
+    while (__atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0 &&
+           (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+
+    kernel::test::wait_for_termination_safe(measurer);
+    Scheduler::drain_zombie_list();
+    kernel::test::wait_for_termination_safe(receiver);
+    Scheduler::drain_zombie_list();
+    kernel::test::wait_for_termination_safe(hammer);
+    Scheduler::drain_zombie_list();
+
+    report_and_assert_latency("ipc_wake");
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: wake-to-dispatch latency via Semaphore::post (the raw scheduler
+// wake path — no IPC).  A prio-30 woken task GENUINELY blocks in wait() (the
+// sync pattern: BLOCKED + dequeued); a prio-11 measurer posts and measures
+// until the woken task records its resume time.  Measurer sits above the
+// harness (prio 10) so it dispatches; woken sits above the measurer so it
+// preempts on the wake tick.  Baseline vs hammerer stress, wedge cap.
+// Input: woken (prio 30, k_iterations wait/ack cycles), measurer (prio 11,
+//        post + bounded ack-spin), hammerer (prio 1, gated net-zero churn).
+// Expect: semaphore wake latency under stress within k_avg_ratio of baseline;
+//         fail counters == 0; wedge cap respected.
+// Depends: sync::Semaphore, Scheduler, arch::rdtsc
+JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
+            "PRE: none | POST: none") {
+    reset_latency_stats();
+    static uint64_t g_acked = 0;
+    static uint64_t g_recv_time = 0;
+    __atomic_store_n(&g_acked, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_recv_time, 0, __ATOMIC_RELEASE);
+    static sync::Semaphore g_gate;
+    g_gate.init(0, 1);
+
+    auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
+    JARVIS_ASSERT(hammer != nullptr);
+
+    auto *woken = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            sync::Semaphore *s = reinterpret_cast<sync::Semaphore *>(
+                self->user_data);
+            for (uint64_t i = 0; i < k_iterations; ++i) {
+                s->wait();
+                while (self->state == TaskState::BLOCKED)
+                    arch::pause();
+                __atomic_store_n(&g_recv_time, arch::rdtsc(),
+                                 __ATOMIC_RELEASE);
+                __atomic_add_fetch(&g_acked, 1, __ATOMIC_RELAXED);
+            }
+        },
+        30, 10);
+    JARVIS_ASSERT(woken != nullptr);
+    woken->user_data = &g_gate;
+
+    auto *measurer = TaskControlBlock::create(
+        []() {
+            for (uint64_t i = 0; i < k_iterations; ++i) {
+                bool stress = i >= k_iterations / 2;
+                if (stress)
+                    __atomic_store_n(&g_hammer_on, 1, __ATOMIC_RELEASE);
+                uint64_t t0 = arch::rdtsc();
+                g_gate.post();
+                uint64_t deadline = arch::Timer::ticks() + k_ack_wait_ticks;
+                while (__atomic_load_n(&g_acked, __ATOMIC_ACQUIRE) <= i &&
+                       arch::Timer::ticks() < deadline) {
+                    __atomic_store_n(&scheduler_need_resched, true,
+                                     __ATOMIC_RELEASE);
+                    arch::hlt();
+                }
+                if (__atomic_load_n(&g_acked, __ATOMIC_ACQUIRE) <= i) {
+                    __atomic_add_fetch(
+                        &(stress ? g_stress_fail : g_base_fail), 1,
+                        __ATOMIC_RELAXED);
+                    continue;
+                }
+                uint64_t t_recv =
+                    __atomic_load_n(&g_recv_time, __ATOMIC_ACQUIRE);
+                uint64_t elapsed = t_recv > t0 ? t_recv - t0 : 0;
+                if (elapsed != 0) {
+                    if (stress) {
+                        __atomic_add_fetch(&g_stress_nonzero, 1,
+                                           __ATOMIC_RELAXED);
+                        __atomic_add_fetch(&g_stress_sum, elapsed,
+                                           __ATOMIC_RELAXED);
+                        if (elapsed > __atomic_load_n(&g_stress_max,
+                                                      __ATOMIC_RELAXED))
+                            __atomic_store_n(&g_stress_max, elapsed,
+                                             __ATOMIC_RELAXED);
+                        unsigned b = hist_bucket(elapsed);
+                        __atomic_add_fetch(&g_stress_hist[b], 1,
+                                           __ATOMIC_RELAXED);
+                    } else {
+                        __atomic_add_fetch(&g_base_nonzero, 1,
+                                           __ATOMIC_RELAXED);
+                        __atomic_add_fetch(&g_base_sum, elapsed,
+                                           __ATOMIC_RELAXED);
+                        if (elapsed > __atomic_load_n(&g_base_max,
+                                                      __ATOMIC_RELAXED))
+                            __atomic_store_n(&g_base_max, elapsed,
+                                             __ATOMIC_RELAXED);
+                        unsigned b = hist_bucket(elapsed);
+                        __atomic_add_fetch(&g_base_hist[b], 1,
+                                           __ATOMIC_RELAXED);
+                    }
+                }
+            }
+            __atomic_store_n(&g_done, 1, __ATOMIC_RELEASE);
+        },
+        11, 10);
+    JARVIS_ASSERT(measurer != nullptr);
+
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*woken);
+        Scheduler::add_task(*hammer);
+        Scheduler::add_task(*measurer);
+    }
+
+    uint64_t start = arch::Timer::ticks();
+    while (__atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0 &&
+           (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+
+    kernel::test::wait_for_termination_safe(measurer);
+    Scheduler::drain_zombie_list();
+    kernel::test::wait_for_termination_safe(woken);
+    Scheduler::drain_zombie_list();
+    kernel::test::wait_for_termination_safe(hammer);
+    Scheduler::drain_zombie_list();
+
+    report_and_assert_latency("sem_wake");
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: periodic-task dispatch-cadence stability (release jitter).  A
+// prio-30 task with period_ticks=3 records the rdtsc delta between successive
+// wakeups across k_jitter_periods; jitter is bounded by k_avg_ratio * avg and
+// a wedge cap.  Tick quantization is inherent (intervals are ±1-2 ticks); the
+// relative bound and cap are sized from calibration.
+// Input: periodic task (prio 30, period 3), k_jitter_periods wakeups.
+// Expect: cadence stable — max <= k_avg_ratio * avg, max < wedge cap,
+//         fail counter == 0, at least half the periods recorded.
+// Depends: Scheduler, Timer, arch::rdtsc
+JARVIS_TEST(scheduler_hrt_release_jitter, "PRE: none | POST: none") {
+    static uint64_t g_jit_n = 0;
+    static uint64_t g_jit_sum = 0;
+    static uint64_t g_jit_max = 0;
+    static uint64_t g_jit_fail = 0;
+    static uint64_t g_done_jit = 0;
+    static uint64_t g_jit_hist[k_buckets] = {};
+    __atomic_store_n(&g_jit_n, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_jit_sum, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_jit_max, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_jit_fail, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&g_done_jit, 0, __ATOMIC_RELEASE);
+    for (unsigned i = 0; i < k_buckets; ++i)
+        g_jit_hist[i] = 0;
+
+    auto *periodic = TaskControlBlock::create(
+        []() {
+            uint64_t prev = arch::rdtsc();
+            for (uint64_t i = 0; i < k_jitter_periods; ++i) {
+                uint64_t cur = arch::rdtsc();
+                uint64_t delta = cur > prev ? cur - prev : 0;
+                prev = cur;
+                if (delta != 0) {
+                    __atomic_add_fetch(&g_jit_n, 1, __ATOMIC_RELAXED);
+                    __atomic_add_fetch(&g_jit_sum, delta, __ATOMIC_RELAXED);
+                    if (delta > __atomic_load_n(&g_jit_max, __ATOMIC_RELAXED))
+                        __atomic_store_n(&g_jit_max, delta,
+                                         __ATOMIC_RELAXED);
+                    unsigned b = hist_bucket(delta);
+                    __atomic_add_fetch(&g_jit_hist[b], 1, __ATOMIC_RELAXED);
+                }
+                if (delta > k_pathological_cap)
+                    __atomic_add_fetch(&g_jit_fail, 1, __ATOMIC_RELAXED);
+                uint64_t deadline = arch::Timer::ticks() + 3;
+                while (arch::Timer::ticks() < deadline) {
+                    __atomic_store_n(&scheduler_need_resched, true,
+                                     __ATOMIC_RELEASE);
+                    arch::hlt();
+                }
+            }
+            __atomic_store_n(&g_done_jit, 1, __ATOMIC_RELEASE);
+        },
+        30, 3);
+    JARVIS_ASSERT(periodic != nullptr);
+
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*periodic);
+    }
+
+    uint64_t start = arch::Timer::ticks();
+    while (__atomic_load_n(&g_done_jit, __ATOMIC_ACQUIRE) == 0 &&
+           (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+
+    kernel::test::wait_for_termination_safe(periodic);
+    Scheduler::drain_zombie_list();
+
+    uint64_t jit_n = __atomic_load_n(&g_jit_n, __ATOMIC_ACQUIRE);
+    uint64_t jit_sum = __atomic_load_n(&g_jit_sum, __ATOMIC_ACQUIRE);
+    uint64_t jit_max = __atomic_load_n(&g_jit_max, __ATOMIC_ACQUIRE);
+    uint64_t jit_fail = __atomic_load_n(&g_jit_fail, __ATOMIC_ACQUIRE);
+    uint64_t jit_avg = jit_n ? jit_sum / jit_n : 0;
+    uint64_t jit_p95 = hist_p95(g_jit_hist, jit_n);
+    Logger::info(
+        "[SCHED_HRT] jitter: n=%llu avg=%llu p95=%llu max=%llu fail=%llu",
+        (unsigned long long)jit_n, (unsigned long long)jit_avg,
+        (unsigned long long)jit_p95, (unsigned long long)jit_max,
+        (unsigned long long)jit_fail);
+
+    JARVIS_ASSERT(jit_fail == 0);
+    JARVIS_ASSERT(jit_n >= k_jitter_periods / 2);
+    JARVIS_ASSERT(jit_max <= jit_avg * k_avg_ratio || jit_avg == 0);
+    JARVIS_ASSERT(jit_max < k_pathological_cap);
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    JARVIS_TEST_PASS();
+}
+
+void register_scheduler_hrt_tests() {
+    Logger::info("Registering scheduler_hrt tests");
+    JARVIS_REGISTER_TEST(scheduler_hrt_rdtsc_canary);
+    JARVIS_REGISTER_TEST(scheduler_hrt_ipc_wake_latency);
+    JARVIS_REGISTER_TEST(scheduler_hrt_semaphore_wake_latency);
+    JARVIS_REGISTER_TEST(scheduler_hrt_release_jitter);
+}

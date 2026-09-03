@@ -184,6 +184,7 @@ void register_memory_isolation_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 void register_stress_hrt_tests();
+void register_scheduler_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -287,6 +288,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"scheduler_budget", []() { register_budget_tests(); }},
     {"scheduler_cpu_load", []() { register_cpu_load_tests(); }},
     {"scheduler_starvation", []() { register_starvation_deadlock_tests(); }},
+
+    // -- scheduler_hrt: hard real-time time assertions on real dispatch
+    //    (issue #102) — same functional scenarios as scheduler_core WITH
+    //    relative-bound time measurement (wake latency, preemption, jitter).
+    {"scheduler_hrt", []() { register_scheduler_hrt_tests(); }},
 
     // -- task: TCB, lifecycle, FPU, init --
     {"task_core", []() { register_task_tests(); }},
@@ -628,6 +634,7 @@ static void register_all_tests() {
     register_locking_stress_tests();
     register_preemption_tests();
     register_stress_hrt_tests();
+    register_scheduler_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -776,6 +783,7 @@ static void register_all_tests_second_half() {
     register_buffer_pool_deterministic_tests();
     register_no_op_new_tests();
     register_stress_hrt_tests();
+    register_scheduler_hrt_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
