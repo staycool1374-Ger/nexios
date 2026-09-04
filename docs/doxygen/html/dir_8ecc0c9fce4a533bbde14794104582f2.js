@@ -7,6 +7,7 @@ var dir_8ecc0c9fce4a533bbde14794104582f2 =
     [ "idt.hpp", "hal_2idt_8hpp.html", null ],
     [ "interrupt_controller.hpp", "hal_2interrupt__controller_8hpp.html", null ],
     [ "io.hpp", "hal_2io_8hpp.html", null ],
+    [ "iopb.hpp", "iopb_8hpp.html", "iopb_8hpp" ],
     [ "irq_guard.hpp", "hal_2irq__guard_8hpp.html", null ],
     [ "irq_latency_histogram.hpp", "hal_2irq__latency__histogram_8hpp.html", null ],
     [ "keyboard.hpp", "hal_2keyboard_8hpp.html", null ],

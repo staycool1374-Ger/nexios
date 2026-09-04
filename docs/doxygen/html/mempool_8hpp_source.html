@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span></div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        Pool()</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>            : block_size(0), block_count(0), free_count(0), data(nullptr),</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>              first_free(0), initialized(false) {</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>              first_free(0), initialized(<a class="code hl_variable" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>) {</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>        }</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span></div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordtype">bool</span> is_block_freed(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>)<span class="keyword"> const </span>{</div>
@@ -269,6 +269,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span> </div>
 <div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="agcov__handler_8cpp_html_a1f658a7d21dc9b85b8009cedb0a1aef6"><div class="ttname"><a href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a></div><div class="ttdeci">uint32_t idx</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:60</div></div>
+<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1176</div></div>
 <div class="ttc" id="amempool__errors_8hpp_html"><div class="ttname"><a href="mempool__errors_8hpp.html">mempool_errors.hpp</a></div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a6281f0779a982cc0f19a98b36495e7b3"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs::init_err</a></div><div class="ttdeci">VfsError init_err()</div><div class="ttdoc">Initialize the VFS subsystem with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:452</div></div>

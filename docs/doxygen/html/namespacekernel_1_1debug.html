@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -122,12 +122,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
 <tr class="memitem:a516d263e9a9dd5318b938067a1e3b353" id="r_a516d263e9a9dd5318b938067a1e3b353"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a516d263e9a9dd5318b938067a1e3b353">L</a> = <a class="el" href="classkernel_1_1_logger.html">Logger</a></td></tr>
-<tr class="memitem:a4c63317d15f89eed657007431bb35cb9" id="r_a4c63317d15f89eed657007431bb35cb9"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a4c63317d15f89eed657007431bb35cb9">S</a> = Scheduler</td></tr>
+<tr class="memitem:a4c63317d15f89eed657007431bb35cb9" id="r_a4c63317d15f89eed657007431bb35cb9"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a4c63317d15f89eed657007431bb35cb9">S</a> = <a class="el" href="classkernel_1_1_scheduler.html">Scheduler</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a9c80a5a9a3a6f52efef1fabf4192ab72" id="r_a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9c80a5a9a3a6f52efef1fabf4192ab72">dump_scheduler_info</a> ()</td></tr>
-<tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump scheduler indices, counts, flags, and deferred-switch globals.  <br /></td></tr>
+<tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print three hex key-value pairs.  <br /></td></tr>
 <tr class="memitem:ade0bc324da03fcc112cdb93eb35f220b" id="r_ade0bc324da03fcc112cdb93eb35f220b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade0bc324da03fcc112cdb93eb35f220b">dump_task_info</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> task_id)</td></tr>
 <tr class="memdesc:ade0bc324da03fcc112cdb93eb35f220b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs.  <br /></td></tr>
 <tr class="memitem:a70b0bd6c79eac81164d116b1c7b780d7" id="r_a70b0bd6c79eac81164d116b1c7b780d7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a70b0bd6c79eac81164d116b1c7b780d7">dump_all_tasks</a> ()</td></tr>
@@ -163,7 +163,7 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">using <a class="el" href="#a4c63317d15f89eed657007431bb35cb9">kernel::debug::S</a> = Scheduler</td>
+          <td class="memname">using <a class="el" href="#a4c63317d15f89eed657007431bb35cb9">kernel::debug::S</a> = <a class="el" href="classkernel_1_1_scheduler.html">Scheduler</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -211,6 +211,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
+<p>Print three hex key-value pairs. </p>
 <p>Dump scheduler indices, counts, flags, and deferred-switch globals. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>

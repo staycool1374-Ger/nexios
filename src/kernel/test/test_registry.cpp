@@ -183,6 +183,14 @@ void register_kernel_isolation_tests();
 void register_memory_isolation_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
+void register_stress_hrt_tests();
+void register_scheduler_hrt_tests();
+void register_syscall_fastpath_tests();
+void register_fpu_inv_tests();
+void register_cap_shm_tests();
+void register_cap_death_tests();
+void register_cap_pager_tests();
+void register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -287,6 +295,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"scheduler_cpu_load", []() { register_cpu_load_tests(); }},
     {"scheduler_starvation", []() { register_starvation_deadlock_tests(); }},
 
+    // -- scheduler_hrt: hard real-time time assertions on real dispatch
+    //    (issue #102) — same functional scenarios as scheduler_core WITH
+    //    relative-bound time measurement (wake latency, preemption, jitter).
+    {"scheduler_hrt", []() { register_scheduler_hrt_tests(); }},
+
     // -- task: TCB, lifecycle, FPU, init --
     {"task_core", []() { register_task_tests(); }},
     {"task_lifecycle", []() { register_task_lifecycle_tests(); }},
@@ -301,9 +314,17 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"task_init", []() { register_init_tests(); }},
     {"task_tcb_log", []() { register_tcb_write_log_tests(); }},
 
+    // -- fpu_invariants: FPU/SIMD context invariants (issue #93) --
+    // The legacy test_fpu*.cpp files are filtered out of the x86_64 build
+    // (GCC 16 / -mgeneral-regs-only); this class carries the INV-FPU tests.
+    {"fpu_invariants", []() { register_fpu_inv_tests(); }},
+
     // -- syscall: dispatch interface and fuzzing --
     {"syscall_core", []() { register_syscall_tests(); }},
     {"syscall_fuzz", []() { register_syscall_fuzz_tests(); }},
+
+    // -- syscall_fastpath: tiered FAST/FULL dispatch (issue #92) --
+    {"syscall_fastpath", []() { register_syscall_fastpath_tests(); }},
 
     // -- process: lifecycle, exec, signals, limits --
     {"process_lifecycle", []() { register_process_tests(); }},
@@ -331,6 +352,18 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // q35+intel-iommu QEMU variant (`make execute-test x86_64 debug
     // iommu_live`); on the default pc build there is no DMAR unit.
     {"iommu_live", []() { register_iommu_live_tests(); }},
+
+    // -- cap_shm: capability-gated shared-memory rings (issue #106 Part B) --
+    {"cap_shm", []() { register_cap_shm_tests(); }},
+
+    // -- cap_death: asynchronous task-death notifications (issue #105 Part B) --
+    {"cap_death", []() { register_cap_death_tests(); }},
+
+    // -- cap_pager: external pager protocol (issue #107) --
+    {"cap_pager", []() { register_cap_pager_tests(); }},
+
+    // -- ipc_fastpath: in-register IPC fastpath (issue #11) --
+    {"ipc_fastpath", []() { register_ipc_fastpath_tests(); }},
 
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
@@ -451,6 +484,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"bench_irq", []() { register_bench_irq_latency_tests(); }},
     {"bench_jitter", []() { register_jitter_tests(); }},
     {"bench_microkernel", []() { register_microkernel_transition_tests(); }},
+
+    // -- hrt: hard real-time measurement under QEMU -icount (issue #101) --
+    // Bounds are RELATIVE (stress vs measured baseline), so the class also
+    // runs cleanly inside `all` without -icount.  Class-scoped icount in the
+    // Makefile gives it hard deterministic timing when run standalone.
+    {"stress_hrt", []() { register_stress_hrt_tests(); }},
 
     // -- safe: curated subset with TF_RELEASE tests --
     {"safe",
@@ -620,6 +659,14 @@ static void register_all_tests() {
     register_locking_tests();
     register_locking_stress_tests();
     register_preemption_tests();
+    register_stress_hrt_tests();
+    register_scheduler_hrt_tests();
+    register_syscall_fastpath_tests();
+    register_fpu_inv_tests();
+    register_cap_shm_tests();
+    register_cap_death_tests();
+    register_cap_pager_tests();
+    register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -767,6 +814,14 @@ static void register_all_tests_second_half() {
     register_page_tables_tests();
     register_buffer_pool_deterministic_tests();
     register_no_op_new_tests();
+    register_stress_hrt_tests();
+    register_scheduler_hrt_tests();
+    register_syscall_fastpath_tests();
+    register_fpu_inv_tests();
+    register_cap_shm_tests();
+    register_cap_death_tests();
+    register_cap_pager_tests();
+    register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif

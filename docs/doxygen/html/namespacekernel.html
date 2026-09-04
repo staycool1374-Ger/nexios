@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -134,6 +134,7 @@ Namespaces</h2></td></tr>
 <tr class="memitem:gs" id="r_gs"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html">gs</a></td></tr>
 <tr class="memitem:integrity" id="r_integrity"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1integrity.html">integrity</a></td></tr>
 <tr class="memitem:iocd" id="r_iocd"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a></td></tr>
+<tr class="memitem:iommu" id="r_iommu"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iommu.html">iommu</a></td></tr>
 <tr class="memitem:ipc" id="r_ipc"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html">ipc</a></td></tr>
 <tr class="memitem:log" id="r_log"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">log</a></td></tr>
 <tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html">net</a></td></tr>
@@ -158,6 +159,10 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Specialization of <a class="el" href="structkernel_1_1_error_or.html" title="Wraps a value or an error (similar to Rust&#39;s Result).">ErrorOr</a> for void (error-only result).  <a href="structkernel_1_1_error_or_3_01void_01_4.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ExceptionSignalMap" id="r_ExceptionSignalMap"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_exception_signal_map.html">ExceptionSignalMap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maps a CPU exception vector to a signal number and action.  <a href="structkernel_1_1_exception_signal_map.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IrqDelivery" id="r_IrqDelivery"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_irq_delivery.html">IrqDelivery</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space IRQ delivery engine (issue #2).  <a href="classkernel_1_1_irq_delivery.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IrqRegistration" id="r_IrqRegistration"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One armed IRQ delivery registration.  <a href="structkernel_1_1_irq_registration.html#details">More...</a><br /></td></tr>
 <tr class="memitem:KernelObject" id="r_KernelObject"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_kernel_object.html">KernelObject</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive shared-reference-counted base for kernel objects.  <a href="classkernel_1_1_kernel_object.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Logger" id="r_Logger"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_logger.html">Logger</a></td></tr>
@@ -168,6 +173,8 @@ Data Structures</h2></td></tr>
 <tr class="memitem:ReadyQueuePOD" id="r_ReadyQueuePOD"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">POD snapshot of the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> state. All fields are plain data; memcpy-safe by construction.  <a href="structkernel_1_1_ready_queue_p_o_d.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Rlimit" id="r_Rlimit"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_rlimit.html">Rlimit</a></td></tr>
+<tr class="memitem:Scheduler" id="r_Scheduler"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scheduler.html">Scheduler</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="classkernel_1_1_scheduler.html#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0).  <a href="classkernel_1_1_scheduler.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SchedulerConfig" id="r_SchedulerConfig"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Boot-time scheduler configuration, injected from kernel_init.  <a href="structkernel_1_1_scheduler_config.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ScopedRef" id="r_ScopedRef"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scoped_ref.html">ScopedRef</a></td></tr>
@@ -198,6 +205,14 @@ Typedefs</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
+<tr class="memitem:a39a8b332edefebba052488078097a45b" id="r_a39a8b332edefebba052488078097a45b"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a39a8b332edefebba052488078097a45b">IrqDeliveryMode</a> : uint8_t { <a class="el" href="#a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c">WAIT</a> = 0
+, <a class="el" href="#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761">NOTIFY</a> = 1
+ }</td></tr>
+<tr class="memdesc:a39a8b332edefebba052488078097a45b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Delivery mode of an armed IRQ slot (issue #7). Bound atomically at arm() time under the slot lock; immutable for the arm lifetime.  <a href="#a39a8b332edefebba052488078097a45b">More...</a><br /></td></tr>
+<tr class="memitem:a6ead49c66ec3252aefe08e87743e2bb3" id="r_a6ead49c66ec3252aefe08e87743e2bb3"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3">IrqSlotKind</a> : uint8_t { <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2">PIC</a> = 0
+, <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301">MSIX</a> = 1
+ }</td></tr>
+<tr class="memdesc:a6ead49c66ec3252aefe08e87743e2bb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source kind of a claimed delivery slot (issue #10). The PIC (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore state; MSI-X vectors (48–255) mask/unmask their table entry instead. All mask logic is gated on this kind — a MSI-X vector must never run the PIC <span class="tt">vector - 32</span> line arithmetic (would mask the wrong IRQ line).  <a href="#a6ead49c66ec3252aefe08e87743e2bb3">More...</a><br /></td></tr>
 <tr class="memitem:a4c7abd4d7b6e60921e6661d7e6ac80af" id="r_a4c7abd4d7b6e60921e6661d7e6ac80af"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80af">RlimitResource</a> : uint8_t { <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afa5cedad6358425b5bfd888f80f1d5d9c0">RLIMIT_DATA</a> = 0
 , <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afafa92ee44ab9e8ffac445366271d021e3">RLIMIT_STACK</a> = 1
 , <a class="el" href="#a4c7abd4d7b6e60921e6661d7e6ac80afa3af036df3d1c74c3a8a9b127e668495f">RLIMIT_NOFILE</a> = 2
@@ -330,6 +345,15 @@ Variables</h2></td></tr>
 <tr class="memitem:a9710cee4bf56525b356e96332529a5a7" id="r_a9710cee4bf56525b356e96332529a5a7"><td class="memItemLeft">CanaryTrip&#160;</td><td class="memItemRight"><a class="el" href="#a9710cee4bf56525b356e96332529a5a7">g_canary_trip</a> {}</td></tr>
 <tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a> = 0</td></tr>
 <tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
+<tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad6ca324811bf34cc24e412c7353d1c31">IRQ_VECTOR_MIN</a> = 33</td></tr>
+<tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
+<tr class="memitem:af20030e5e873fe85b3929d0ffb1bbeca" id="r_af20030e5e873fe85b3929d0ffb1bbeca"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af20030e5e873fe85b3929d0ffb1bbeca">IRQ_VECTOR_MAX</a> = 47</td></tr>
+<tr class="memitem:a92ff3aab226103aecc5cee29134cd925" id="r_a92ff3aab226103aecc5cee29134cd925"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a92ff3aab226103aecc5cee29134cd925">MSIX_VECTOR_MAX</a> = 255</td></tr>
+<tr class="memdesc:a92ff3aab226103aecc5cee29134cd925"><td class="mdescLeft">&#160;</td><td class="mdescRight">MSI-X vector window upper bound (x86_64: 0xFF is the highest vector). MSI-X vectors live in 48–255, excluding the syscall vector 0x80.  <br /></td></tr>
+<tr class="memitem:ab596ed6f93b40b1636ef3dfcf39ebd1e" id="r_ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab596ed6f93b40b1636ef3dfcf39ebd1e">kIrqNotifyRevoked</a> = 0</td></tr>
+<tr class="memdesc:ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Value signalled to a NOTIFY-mode recipient's Notify when its slot is released (revoke/dispose/drain): the waker-owns-wakeup contract (CODING_STYLE §12.3). 0 is sync::NOTIFY_INVALID — outside the vector range (33–255) and distinguishable from a real delivery.  <br /></td></tr>
+<tr class="memitem:a4f515ca1539e4a4b052e43cedcc9a1aa" id="r_a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="memItemLeft"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4f515ca1539e4a4b052e43cedcc9a1aa">g_irq_regs</a> [<a class="el" href="nexios__config_8h.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td></tr>
+<tr class="memdesc:a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static delivery table (no dynamic allocation on RT paths).  <br /></td></tr>
 <tr class="memitem:afdea84e7e6716009ab17af4b202b8271" id="r_afdea84e7e6716009ab17af4b202b8271"><td class="memItemLeft">const TaskControlBlock *const&#160;</td><td class="memItemRight"><a class="el" href="#afdea84e7e6716009ab17af4b202b8271">heads_</a> []</td></tr>
 <tr class="memitem:ac84f34d32e4683fb9c3f512c093068cf" id="r_ac84f34d32e4683fb9c3f512c093068cf"><td class="memItemLeft">const TaskControlBlock *const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_priorities&#160;</td><td class="memItemRight"><a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memitem:aec37532c2fb1a123d928e41e13297533" id="r_aec37532c2fb1a123d928e41e13297533"><td class="memItemLeft">const TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a> = t</td></tr>
@@ -342,10 +366,35 @@ Variables</h2></td></tr>
 <tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a574a90ebc327d46aa6aab426a829176b">H2_EV_CLR_MISC</a> = 6</td></tr>
 <tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae4d880161f4292f9476f0da08c2493c7">H2_EV_IDLE_ARM</a> = 7</td></tr>
 <tr class="memitem:aaf4c44145fd44721026b6f4c4b6466e6" id="r_aaf4c44145fd44721026b6f4c4b6466e6"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaf4c44145fd44721026b6f4c4b6466e6">H2_EV_REENQ</a> = 8</td></tr>
-<tr class="memitem:a25351510936e6c130b0678097e493b2a" id="r_a25351510936e6c130b0678097e493b2a"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a25351510936e6c130b0678097e493b2a">_stack_start</a> []</td></tr>
-<tr class="memitem:a2dc76afa8886a7fe002c3ca8fd481a42" id="r_a2dc76afa8886a7fe002c3ca8fd481a42"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a2dc76afa8886a7fe002c3ca8fd481a42">_stack_end</a> []</td></tr>
+<tr class="memitem:ac4b024e5b458938ba17df793943eedef" id="r_ac4b024e5b458938ba17df793943eedef"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac4b024e5b458938ba17df793943eedef">scheduler_save_rsp_to</a></td></tr>
+<tr class="memdesc:ac4b024e5b458938ba17df793943eedef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address to save the current RSP into during context switch. Accessed atomically from C++; read/written by isr_stubs.asm.  <br /></td></tr>
+<tr class="memitem:ac3698635a1028c993bb17376f59935c1" id="r_ac3698635a1028c993bb17376f59935c1"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac3698635a1028c993bb17376f59935c1">scheduler_load_rsp_from</a></td></tr>
+<tr class="memdesc:ac3698635a1028c993bb17376f59935c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">RSP value to load during context switch restore.  <br /></td></tr>
+<tr class="memitem:a8717ed879e07d6e261b521940de70ee7" id="r_a8717ed879e07d6e261b521940de70ee7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8717ed879e07d6e261b521940de70ee7">scheduler_load_cr3_from</a></td></tr>
+<tr class="memdesc:a8717ed879e07d6e261b521940de70ee7"><td class="mdescLeft">&#160;</td><td class="mdescRight">CR3 value to load during context switch restore (0 = don't load).  <br /></td></tr>
+<tr class="memitem:ab2187af236405c0bcefe647b4a33398e" id="r_ab2187af236405c0bcefe647b4a33398e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2187af236405c0bcefe647b4a33398e">scheduler_next_task_id</a></td></tr>
+<tr class="memdesc:ab2187af236405c0bcefe647b4a33398e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID to set as current after the context switch completes.  <br /></td></tr>
+<tr class="memitem:ab66b635cab196ea26d2cfaaf47fc59b6" id="r_ab66b635cab196ea26d2cfaaf47fc59b6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab66b635cab196ea26d2cfaaf47fc59b6">scheduler_load_kstack_base</a></td></tr>
+<tr class="memdesc:ab66b635cab196ea26d2cfaaf47fc59b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
+<tr class="memitem:a3e81dd1c530d5febe94bf37000962f09" id="r_a3e81dd1c530d5febe94bf37000962f09"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3e81dd1c530d5febe94bf37000962f09">scheduler_load_kstack_top</a></td></tr>
+<tr class="memitem:a963403eae4c53dac69cc7db142c47c81" id="r_a963403eae4c53dac69cc7db142c47c81"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a963403eae4c53dac69cc7db142c47c81">scheduler_switch_generation</a></td></tr>
+<tr class="memdesc:a963403eae4c53dac69cc7db142c47c81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generation sequence counter for the deferred-switch pair. A publisher bumps it after writing load_rsp_from / load_cr3_from and before arming scheduler_save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair.  <br /></td></tr>
+<tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a45c7ed02104a8f2dc79052a0301a16c3">scheduler_kernel_cr3</a></td></tr>
+<tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
+<tr class="memitem:afb20072a8fd62f005a14dbdf87038f27" id="r_afb20072a8fd62f005a14dbdf87038f27"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb20072a8fd62f005a14dbdf87038f27">scheduler_need_resched</a></td></tr>
+<tr class="memdesc:afb20072a8fd62f005a14dbdf87038f27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reschedule request flag. Set by task-context callers (reschedule(), terminate(), yield_as) to ask the timer ISR to (re)publish a deferred switch. The timer ISR is the SOLE publisher of the deferred switch (see rate_monotonic_schedule), so there is exactly one writer of the switch buffer per tick — eliminating the two-publisher race where a task-context reschedule() and the timer ISR's rate_monotonic_schedule both called switch_to_task and the last writer before the epilogue won, starving the other's selection.  <br /></td></tr>
+<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
+<tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth. Incremented at each ISR entry, decremented before iretq. Checked by on_tick() to detect nested timer interrupts and skip re-entrant scheduler ops.  <br /></td></tr>
+<tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
+<tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
+<tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
+<tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
+<tr class="memitem:af4c6d5dcd3bf1b60bf71cdd2b805f5a6" id="r_af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">fpu_owner</a></td></tr>
+<tr class="memdesc:af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot.  <br /></td></tr>
+<tr class="memitem:ab1281ac93f9d469e2fc0dd731d358f3b" id="r_ab1281ac93f9d469e2fc0dd731d358f3b"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#ab1281ac93f9d469e2fc0dd731d358f3b">_stack_start</a> []</td></tr>
+<tr class="memitem:a78863de6e15cebd20b4dd89ce98ea565" id="r_a78863de6e15cebd20b4dd89ce98ea565"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a78863de6e15cebd20b4dd89ce98ea565">_stack_end</a> []</td></tr>
 <tr class="memitem:a3fb2836fc67f3791312d86a01372cc32" id="r_a3fb2836fc67f3791312d86a01372cc32"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
-<tr class="memitem:a3fb2836fc67f3791312d86a01372cc32 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a3fb2836fc67f3791312d86a01372cc32">_is_integral_v</a> = false</td></tr>
+<tr class="memitem:a3fb2836fc67f3791312d86a01372cc32 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a3fb2836fc67f3791312d86a01372cc32">_is_integral_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:a0918223d95121a29478551a127691778" id="r_a0918223d95121a29478551a127691778"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:a0918223d95121a29478551a127691778 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a0918223d95121a29478551a127691778">_is_integral_v&lt; bool &gt;</a> = true</td></tr>
 <tr class="memitem:a9994992c8836f95f14a796ab38ddf969" id="r_a9994992c8836f95f14a796ab38ddf969"><td class="memItemLeft">template&lt;&gt; </td></tr>
@@ -371,7 +420,7 @@ Variables</h2></td></tr>
 <tr class="memitem:ac9f09f29a4fe668ef01530e86ec9f2bf" id="r_ac9f09f29a4fe668ef01530e86ec9f2bf"><td class="memItemLeft">template&lt;&gt; </td></tr>
 <tr class="memitem:ac9f09f29a4fe668ef01530e86ec9f2bf template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#ac9f09f29a4fe668ef01530e86ec9f2bf">_is_integral_v&lt; unsigned long long &gt;</a> = true</td></tr>
 <tr class="memitem:a7fd1aa46e37cee18841f905e8fa47ea2" id="r_a7fd1aa46e37cee18841f905e8fa47ea2"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
-<tr class="memitem:a7fd1aa46e37cee18841f905e8fa47ea2 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a7fd1aa46e37cee18841f905e8fa47ea2">_is_reference_v</a> = false</td></tr>
+<tr class="memitem:a7fd1aa46e37cee18841f905e8fa47ea2 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a7fd1aa46e37cee18841f905e8fa47ea2">_is_reference_v</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:a863e6a5c2d82cdc71d146391ee86521c" id="r_a863e6a5c2d82cdc71d146391ee86521c"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
 <tr class="memitem:a863e6a5c2d82cdc71d146391ee86521c template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a863e6a5c2d82cdc71d146391ee86521c">_is_reference_v&lt; T &amp; &gt;</a> = true</td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645" id="r_a74cc18daff81587aac344bfc7b70f645"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
@@ -427,6 +476,66 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947" name="a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947"></a>NOT_IMPLEMENTED&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a1cb7b5e6d84a69536a1605c81098f106a198489bd72edc2407c15917c5323cd93" name="a1cb7b5e6d84a69536a1605c81098f106a198489bd72edc2407c15917c5323cd93"></a>IO_ERROR&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01" name="a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01"></a>CORRUPTED&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="a39a8b332edefebba052488078097a45b" name="a39a8b332edefebba052488078097a45b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39a8b332edefebba052488078097a45b">&#9670;&#160;</a></span>IrqDeliveryMode</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a39a8b332edefebba052488078097a45b">kernel::IrqDeliveryMode</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Delivery mode of an armed IRQ slot (issue #7). Bound atomically at arm() time under the slot lock; immutable for the arm lifetime. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c" name="a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c"></a>WAIT&#160;</td><td class="fielddoc"><p>blocking sys_irq_wait delivery (issue #2, default) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761" name="a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761"></a>NOTIFY&#160;</td><td class="fielddoc"><p>capability-backed IPC notification to the recipient's Notify (issue #7) — no pending/waiter bookkeeping </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a id="a6ead49c66ec3252aefe08e87743e2bb3" name="a6ead49c66ec3252aefe08e87743e2bb3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ead49c66ec3252aefe08e87743e2bb3">&#9670;&#160;</a></span>IrqSlotKind</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a6ead49c66ec3252aefe08e87743e2bb3">kernel::IrqSlotKind</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Source kind of a claimed delivery slot (issue #10). The PIC (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore state; MSI-X vectors (48–255) mask/unmask their table entry instead. All mask logic is gated on this kind — a MSI-X vector must never run the PIC <span class="tt">vector - 32</span> line arithmetic (would mask the wrong IRQ line). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2" name="a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2"></a>PIC&#160;</td><td class="fielddoc"><p>legacy PIC line (vectors 33–47) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301" name="a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301"></a>MSIX&#160;</td><td class="fielddoc"><p>MSI-X table entry (vectors 48–255, != 0x80). </p>
+</td></tr>
 </table>
 
 </div>
@@ -1176,6 +1285,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -1214,7 +1329,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -1292,7 +1407,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -1334,7 +1449,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -1363,7 +1478,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -1384,6 +1499,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Get the currently running task from the scheduler. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -1411,7 +1532,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -1446,7 +1567,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::_is_integral_v = false</td>
+          <td class="memname">bool kernel::_is_integral_v = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
   </td>
@@ -1758,7 +1879,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::_is_reference_v = false</td>
+          <td class="memname">bool kernel::_is_reference_v = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
   </td>
@@ -1818,8 +1939,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a2dc76afa8886a7fe002c3ca8fd481a42" name="a2dc76afa8886a7fe002c3ca8fd481a42"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2dc76afa8886a7fe002c3ca8fd481a42">&#9670;&#160;</a></span>_stack_end</h2>
+<a id="a78863de6e15cebd20b4dd89ce98ea565" name="a78863de6e15cebd20b4dd89ce98ea565"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78863de6e15cebd20b4dd89ce98ea565">&#9670;&#160;</a></span>_stack_end</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1828,7 +1949,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">char kernel::_stack_end</td>
+          <td class="memname">char kernel::_stack_end[]</td>
         </tr>
       </table>
   </td>
@@ -1840,8 +1961,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a25351510936e6c130b0678097e493b2a" name="a25351510936e6c130b0678097e493b2a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a25351510936e6c130b0678097e493b2a">&#9670;&#160;</a></span>_stack_start</h2>
+<a id="ab1281ac93f9d469e2fc0dd731d358f3b" name="ab1281ac93f9d469e2fc0dd731d358f3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab1281ac93f9d469e2fc0dd731d358f3b">&#9670;&#160;</a></span>_stack_start</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1850,7 +1971,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">char kernel::_stack_start</td>
+          <td class="memname">char kernel::_stack_start[]</td>
         </tr>
       </table>
   </td>
@@ -1859,6 +1980,54 @@ template&lt;typename T&gt; </div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9280448447d20124500fb1be0a0ed68f" name="a9280448447d20124500fb1be0a0ed68f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9280448447d20124500fb1be0a0ed68f">&#9670;&#160;</a></span>deadline_detection_integrity</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::deadline_detection_integrity</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan. </p>
+
+</div>
+</div>
+<a id="af4c6d5dcd3bf1b60bf71cdd2b805f5a6" name="af4c6d5dcd3bf1b60bf71cdd2b805f5a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">&#9670;&#160;</a></span>fpu_owner</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">TaskControlBlock* kernel::fpu_owner</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot. </p>
 
 </div>
 </div>
@@ -1901,6 +2070,22 @@ template&lt;typename T&gt; </div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4f515ca1539e4a4b052e43cedcc9a1aa" name="a4f515ca1539e4a4b052e43cedcc9a1aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4f515ca1539e4a4b052e43cedcc9a1aa">&#9670;&#160;</a></span>g_irq_regs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a> kernel::g_irq_regs[<a class="el" href="nexios__config_8h.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Static delivery table (no dynamic allocation on RT paths). </p>
 
 </div>
 </div>
@@ -2132,6 +2317,124 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="af20030e5e873fe85b3929d0ffb1bbeca" name="af20030e5e873fe85b3929d0ffb1bbeca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af20030e5e873fe85b3929d0ffb1bbeca">&#9670;&#160;</a></span>IRQ_VECTOR_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::IRQ_VECTOR_MAX = 47</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad6ca324811bf34cc24e412c7353d1c31" name="ad6ca324811bf34cc24e412c7353d1c31"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad6ca324811bf34cc24e412c7353d1c31">&#9670;&#160;</a></span>IRQ_VECTOR_MIN</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::IRQ_VECTOR_MIN = 33</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook. </p>
+
+</div>
+</div>
+<a id="a5fbbc3448d7b738e78241f86230e0f48" name="a5fbbc3448d7b738e78241f86230e0f48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5fbbc3448d7b738e78241f86230e0f48">&#9670;&#160;</a></span>isr_nesting_depth</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::isr_nesting_depth</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Current ISR nesting depth. Incremented at each ISR entry, decremented before iretq. Checked by on_tick() to detect nested timer interrupts and skip re-entrant scheduler ops. </p>
+
+</div>
+</div>
+<a id="ab596ed6f93b40b1636ef3dfcf39ebd1e" name="ab596ed6f93b40b1636ef3dfcf39ebd1e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab596ed6f93b40b1636ef3dfcf39ebd1e">&#9670;&#160;</a></span>kIrqNotifyRevoked</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::kIrqNotifyRevoked = 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Value signalled to a NOTIFY-mode recipient's Notify when its slot is released (revoke/dispose/drain): the waker-owns-wakeup contract (CODING_STYLE §12.3). 0 is sync::NOTIFY_INVALID — outside the vector range (33–255) and distinguishable from a real delivery. </p>
+
+</div>
+</div>
+<a id="a92ff3aab226103aecc5cee29134cd925" name="a92ff3aab226103aecc5cee29134cd925"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92ff3aab226103aecc5cee29134cd925">&#9670;&#160;</a></span>MSIX_VECTOR_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> kernel::MSIX_VECTOR_MAX = 255</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>MSI-X vector window upper bound (x86_64: 0xFF is the highest vector). MSI-X vectors live in 48–255, excluding the syscall vector 0x80. </p>
+
+</div>
+</div>
 <a id="ac84f34d32e4683fb9c3f512c093068cf" name="ac84f34d32e4683fb9c3f512c093068cf"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac84f34d32e4683fb9c3f512c093068cf">&#9670;&#160;</a></span>noexcept</h2>
 
@@ -2160,6 +2463,244 @@ template&lt;typename T&gt; </div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a48b013f336f1cc7c0546ff7a5aa9db11" name="a48b013f336f1cc7c0546ff7a5aa9db11"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a48b013f336f1cc7c0546ff7a5aa9db11">&#9670;&#160;</a></span>scheduler_corruption_count</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_corruption_count</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced. </p>
+
+</div>
+</div>
+<a id="a45c7ed02104a8f2dc79052a0301a16c3" name="a45c7ed02104a8f2dc79052a0301a16c3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a45c7ed02104a8f2dc79052a0301a16c3">&#9670;&#160;</a></span>scheduler_kernel_cr3</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_kernel_cr3</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context. </p>
+
+</div>
+</div>
+<a id="a8717ed879e07d6e261b521940de70ee7" name="a8717ed879e07d6e261b521940de70ee7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8717ed879e07d6e261b521940de70ee7">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_cr3_from</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>CR3 value to load during context switch restore (0 = don't load). </p>
+
+</div>
+</div>
+<a id="ab66b635cab196ea26d2cfaaf47fc59b6" name="ab66b635cab196ea26d2cfaaf47fc59b6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab66b635cab196ea26d2cfaaf47fc59b6">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_kstack_base</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq. </p>
+
+</div>
+</div>
+<a id="a3e81dd1c530d5febe94bf37000962f09" name="a3e81dd1c530d5febe94bf37000962f09"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e81dd1c530d5febe94bf37000962f09">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_kstack_top</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac3698635a1028c993bb17376f59935c1" name="ac3698635a1028c993bb17376f59935c1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac3698635a1028c993bb17376f59935c1">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_rsp_from</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>RSP value to load during context switch restore. </p>
+
+</div>
+</div>
+<a id="afb20072a8fd62f005a14dbdf87038f27" name="afb20072a8fd62f005a14dbdf87038f27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb20072a8fd62f005a14dbdf87038f27">&#9670;&#160;</a></span>scheduler_need_resched</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::scheduler_need_resched</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reschedule request flag. Set by task-context callers (reschedule(), terminate(), yield_as) to ask the timer ISR to (re)publish a deferred switch. The timer ISR is the SOLE publisher of the deferred switch (see rate_monotonic_schedule), so there is exactly one writer of the switch buffer per tick — eliminating the two-publisher race where a task-context reschedule() and the timer ISR's rate_monotonic_schedule both called switch_to_task and the last writer before the epilogue won, starving the other's selection. </p>
+
+</div>
+</div>
+<a id="ab2187af236405c0bcefe647b4a33398e" name="ab2187af236405c0bcefe647b4a33398e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2187af236405c0bcefe647b4a33398e">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_next_task_id</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Task ID to set as current after the context switch completes. </p>
+
+</div>
+</div>
+<a id="ac4b024e5b458938ba17df793943eedef" name="ac4b024e5b458938ba17df793943eedef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4b024e5b458938ba17df793943eedef">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* kernel::scheduler_save_rsp_to</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Address to save the current RSP into during context switch. Accessed atomically from C++; read/written by isr_stubs.asm. </p>
+
+</div>
+</div>
+<a id="a963403eae4c53dac69cc7db142c47c81" name="a963403eae4c53dac69cc7db142c47c81"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a963403eae4c53dac69cc7db142c47c81">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_switch_generation</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Generation sequence counter for the deferred-switch pair. A publisher bumps it after writing load_rsp_from / load_cr3_from and before arming scheduler_save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair. </p>
 
 </div>
 </div>

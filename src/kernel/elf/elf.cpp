@@ -25,7 +25,9 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
@@ -718,8 +720,23 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // (a later unmap/revoke/cleanup would write PTE entries into freed
     // page-table memory).
     cap::MmioUserMap::drain_task(*tcb);
+    cap::FrameUserMap::drain_task(*tcb);
+    // Issue #107: drain the pager registry before the old PML4 is freed so a
+    // pager-mapped ledger PTE cannot outlive the frames it references.
+    kernel::ipc::PagerRegistry::drain_task(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
+    // Issue #92 canary relocation: the scheduler now samples user-task segment
+    // canaries at every context switch and on a bounded tick cadence
+    // (canary_check_in_scheduler_hooks).  Between the page_table_ swap below
+    // and install_segment_canaries() at the tail of this function, the TCB's
+    // canary_before/canary_after/canary_installed still describe the OLD image
+    // while page_table_ is the NEW pml4 — a tick/context-switch sample landing
+    // in this window would walk stale canary VAs against the new pml4 and
+    // false-trip (spurious production panic / test-mode latch).  Clear
+    // canary_installed so the verify loop is a no-op until the new canaries are
+    // armed below (install_segment_canaries re-ORs the bits).
+    tcb->canary_installed = 0;
     tcb->page_table_ = new_pml4;
     tcb->is_user_ = true;
     tcb->user_stack_ = ustack_phys;

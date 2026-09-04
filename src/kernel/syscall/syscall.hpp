@@ -92,8 +92,39 @@ enum class SyscallNumber : uint8_t {
     IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
     MMIO_MAP = 61,     ///< map an MmioCap memory BAR into the caller's user VA window (issue #8)
     MMIO_UNMAP = 62,   ///< unmap a user MMIO mapping by VA (issue #8)
-    MAX_SYSCALL = 63,
+    FRAME_CREATE = 63, ///< get contiguous user frames into a FrameCap in the caller's CSpace (issue #106 Part B)
+    FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
+    FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
+    DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
+    DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
+    DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
+    PAGER_REGISTER = 69, ///< designate a pager for the caller's own faults (issue #107)
+    PAGER_RECV = 70,   ///< drain the next pending pager fault, non-blocking (issue #107)
+    PAGER_MAP = 71,    ///< map the pager's FrameCap into the client's PML4 (issue #107)
+    PAGER_ABORT = 72,  ///< pager cannot satisfy a fault: unmap + poison VA (issue #107)
+    PAGER_UNREGISTER = 73, ///< remove a pager registration (issue #107)
+    SEND_FAST = 74,      ///< register-passing SEND, payload in regs[] (issue #11)
+    RECV_FAST = 75,      ///< register-passing RECEIVE, payload in regs[] (issue #11)
+    SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
+    MAX_SYSCALL = 77,
 };
+
+/// @brief Folds a list of FAST syscall numbers into a single bitmask
+///        (issue #92).  constexpr so SYSCALL_FAST_MASK is a compile-time
+///        constant derived from k_syscall_fast[] — the single source of truth.
+///        __uint128_t: syscall numbers >= 64 (DEATH_*, PAGER_*, *_FAST) would
+///        overflow a 64-bit shift; the widened mask covers numbers < 128.
+/// @param list  Array of syscall numbers.
+/// @param count Number of elements in @p list.
+/// @return A bitmask with bit `n` set for each number in @p list.
+constexpr __uint128_t syscall_fast_mask_from(const SyscallNumber *list,
+                                             size_t count) {
+    __uint128_t mask = 0;
+    for (size_t i = 0; i < count; ++i) {
+        mask |= ((__uint128_t)1 << static_cast<uint64_t>(list[i]));
+    }
+    return mask;
+}
 
 /// @brief System call handler function signature.
 using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
@@ -122,6 +153,58 @@ class Syscall {
     static uint64_t handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                            uint64_t arg2, uint64_t arg3,
                            uint64_t *regs = nullptr);
+
+    /// @brief Lean FAST-path dispatch (issue #92).  Bounds-checked table
+    ///        dispatch WITHOUT the canary walk — for the audited pointer-free
+    ///        FAST subset only (docs/specs/syscall-fastpath.md §3.1/§4).  The
+    ///        callers of this path must never pass a number that dereferences
+    ///        user memory (enforced by SYSCALL_FAST_MASK membership review).
+    /// @param number Syscall number (see SyscallNumber).
+    /// @param arg0-3 Arguments passed from user space.
+    /// @param regs Pointer to register save area.
+    /// @return The syscall return value, or -1 for an out-of-range number.
+    static uint64_t handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
+                                uint64_t arg2, uint64_t arg3,
+                                uint64_t *regs = nullptr);
+
+    /// @brief Test hook: force the FULL path even for FAST members (proves
+    ///        both paths agree).  Plain static bool, default true — production
+    ///        parity when unarmed.
+    static void set_fastpath_enabled(bool enabled) {
+        s_fastpath_enabled_ = enabled;
+    }
+
+    /// @brief Audited pointer-free syscall subset (issue #92).  A member must
+    ///        NEVER dereference a user pointer — the FAST path skips the
+    ///        canary + (debug) SMAP/AC checks.  SEND/RECEIVE/SEND_SYNC are
+    ///        intentionally excluded (they touch user buffers via checked_ptr
+    ///        / safe_copy_to_user).  To reclassify, review the handler for
+    ///        user-memory access and update this list AND the spec.
+    static constexpr SyscallNumber k_syscall_fast[] = {
+        SyscallNumber::YIELD,
+        SyscallNumber::GET_TICKS,
+        SyscallNumber::PRINT,
+        SyscallNumber::CREATE_MAILBOX,
+        SyscallNumber::DESTROY_MAILBOX,
+        SyscallNumber::GETPID,
+        SyscallNumber::PAUSE,
+        SyscallNumber::REBOOT,
+        SyscallNumber::HALT,
+        SyscallNumber::SEND_FAST,
+        SyscallNumber::RECV_FAST,
+        SyscallNumber::SEND_SYNC_FAST,
+    };
+
+    /// @brief Bitmask of the pointer-free FAST syscall numbers (issue #92).
+    ///        Derived from k_syscall_fast[] — the single source of truth.
+    ///        128-bit: covers syscall numbers 0..127 (issue #11).
+    static constexpr __uint128_t SYSCALL_FAST_MASK =
+        syscall_fast_mask_from(k_syscall_fast,
+                               sizeof(k_syscall_fast) /
+                                   sizeof(k_syscall_fast[0]));
+
+  private:
+    static inline bool s_fastpath_enabled_ = true;
 
   private:
     static uint64_t sys_yield(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -248,6 +331,34 @@ class Syscall {
                                  uint64_t *);
     static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
                                    uint64_t *);
+    static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_death_watch(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_death_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
+    static uint64_t sys_pager_register(uint64_t, uint64_t, uint64_t, uint64_t,
+                                        uint64_t *);
+    static uint64_t sys_pager_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_pager_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_pager_abort(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_pager_unregister(uint64_t, uint64_t, uint64_t, uint64_t,
+                                         uint64_t *);
+    static uint64_t sys_send_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_recv_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_send_sync_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -314,6 +425,20 @@ class Syscall {
             &Syscall::sys_iommu_unmap,
             &Syscall::sys_mmio_map,
             &Syscall::sys_mmio_unmap,
+            &Syscall::sys_frame_create,
+            &Syscall::sys_frame_map,
+            &Syscall::sys_frame_unmap,
+            &Syscall::sys_death_watch,
+            &Syscall::sys_death_recv,
+            &Syscall::sys_death_unwatch,
+            &Syscall::sys_pager_register,
+            &Syscall::sys_pager_recv,
+            &Syscall::sys_pager_map,
+            &Syscall::sys_pager_abort,
+            &Syscall::sys_pager_unregister,
+            &Syscall::sys_send_fast,
+            &Syscall::sys_recv_fast,
+            &Syscall::sys_send_sync_fast,
     };
 };
 

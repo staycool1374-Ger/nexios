@@ -1,6 +1,4 @@
 var searchData=
 [
-  ['signal_0',['Signal',['../namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18',1,'kernel']]],
-  ['signalaction_1',['SignalAction',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749',1,'kernel']]],
-  ['statephase_2',['StatePhase',['../namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaa',1,'kernel::gs']]]
+  ['rlimitresource_0',['RlimitResource',['../namespacekernel.html#a4c7abd4d7b6e60921e6661d7e6ac80af',1,'kernel::RlimitResource'],['../test__rlimit_8cpp.html#a2e9c5fc5c5951f5059e407b4c707195d',1,'RlimitResource:&#160;test_rlimit.cpp']]]
 ];

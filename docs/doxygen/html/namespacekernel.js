@@ -79,6 +79,7 @@ var namespacekernel =
       [ "is_iocd_task", "namespacekernel_1_1iocd.html#af3dc88f6386fc50faedb450547369a6c", null ],
       [ "set_iocd_pid", "namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac", null ]
     ] ],
+    [ "iommu", "namespacekernel_1_1iommu.html", "namespacekernel_1_1iommu" ],
     [ "ipc", "namespacekernel_1_1ipc.html", [
       [ "BootMessage", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060be", [
         [ "MSG_DAEMON_READY", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc", null ],
@@ -110,12 +111,15 @@ var namespacekernel =
     [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
     [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
     [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
+    [ "IrqDelivery", "classkernel_1_1_irq_delivery.html", null ],
+    [ "IrqRegistration", "structkernel_1_1_irq_registration.html", "structkernel_1_1_irq_registration" ],
     [ "KernelObject", "classkernel_1_1_kernel_object.html", "classkernel_1_1_kernel_object" ],
     [ "Logger", "classkernel_1_1_logger.html", null ],
     [ "PriorityMap", "classkernel_1_1_priority_map.html", "classkernel_1_1_priority_map" ],
     [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
     [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
     [ "Rlimit", "structkernel_1_1_rlimit.html", "structkernel_1_1_rlimit" ],
+    [ "Scheduler", "classkernel_1_1_scheduler.html", "classkernel_1_1_scheduler" ],
     [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
     [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
     [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
@@ -141,6 +145,14 @@ var namespacekernel =
       [ "NOT_IMPLEMENTED", "namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947", null ],
       [ "IO_ERROR", "namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a198489bd72edc2407c15917c5323cd93", null ],
       [ "CORRUPTED", "namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01", null ]
+    ] ],
+    [ "IrqDeliveryMode", "namespacekernel.html#a39a8b332edefebba052488078097a45b", [
+      [ "WAIT", "namespacekernel.html#a39a8b332edefebba052488078097a45bad5cc6a0064b5c25ba37826aa3fda910c", null ],
+      [ "NOTIFY", "namespacekernel.html#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761", null ]
+    ] ],
+    [ "IrqSlotKind", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3", [
+      [ "PIC", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2", null ],
+      [ "MSIX", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301", null ]
     ] ],
     [ "LogLevel", "namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2", [
       [ "DEBUG", "namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2adc30ec20708ef7b0f641ef78b7880a15", null ],
@@ -233,11 +245,14 @@ var namespacekernel =
     [ "_is_reference_v", "namespacekernel.html#a7fd1aa46e37cee18841f905e8fa47ea2", null ],
     [ "_is_reference_v< T & >", "namespacekernel.html#a863e6a5c2d82cdc71d146391ee86521c", null ],
     [ "_is_reference_v< T && >", "namespacekernel.html#a74cc18daff81587aac344bfc7b70f645", null ],
-    [ "_stack_end", "namespacekernel.html#a2dc76afa8886a7fe002c3ca8fd481a42", null ],
-    [ "_stack_start", "namespacekernel.html#a25351510936e6c130b0678097e493b2a", null ],
+    [ "_stack_end", "namespacekernel.html#a78863de6e15cebd20b4dd89ce98ea565", null ],
+    [ "_stack_start", "namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b", null ],
+    [ "deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
+    [ "fpu_owner", "namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6", null ],
     [ "g_boot_epoch", "namespacekernel.html#a602102cf72c2d245437f6dfb539c71eb", null ],
     [ "g_boot_info", "namespacekernel.html#a82642ef1de738764f4ab5b0e505b50ac", null ],
     [ "g_canary_trip", "namespacekernel.html#a9710cee4bf56525b356e96332529a5a7", null ],
+    [ "g_irq_regs", "namespacekernel.html#a4f515ca1539e4a4b052e43cedcc9a1aa", null ],
     [ "g_user_access_recover_ip", "namespacekernel.html#ac685742eaa07e592bff0bab7216c0253", null ],
     [ "H2_EV_APPLY", "namespacekernel.html#a810111e89e31e78c3e32f99355db7234", null ],
     [ "H2_EV_ARM", "namespacekernel.html#a6d73afdfa1f338f65d85c38585f1e1f2", null ],
@@ -249,6 +264,21 @@ var namespacekernel =
     [ "H2_EV_SKIP", "namespacekernel.html#a4257e9fd5d09c0baf1cd2301d27355be", null ],
     [ "head", "namespacekernel.html#aec37532c2fb1a123d928e41e13297533", null ],
     [ "heads_", "namespacekernel.html#afdea84e7e6716009ab17af4b202b8271", null ],
+    [ "IRQ_VECTOR_MAX", "namespacekernel.html#af20030e5e873fe85b3929d0ffb1bbeca", null ],
+    [ "IRQ_VECTOR_MIN", "namespacekernel.html#ad6ca324811bf34cc24e412c7353d1c31", null ],
+    [ "isr_nesting_depth", "namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48", null ],
+    [ "kIrqNotifyRevoked", "namespacekernel.html#ab596ed6f93b40b1636ef3dfcf39ebd1e", null ],
+    [ "MSIX_VECTOR_MAX", "namespacekernel.html#a92ff3aab226103aecc5cee29134cd925", null ],
     [ "noexcept", "namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf", null ],
-    [ "return", "namespacekernel.html#a3bc3a31c6af358bc14fd59ca1ec1d75e", null ]
+    [ "return", "namespacekernel.html#a3bc3a31c6af358bc14fd59ca1ec1d75e", null ],
+    [ "scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],
+    [ "scheduler_kernel_cr3", "namespacekernel.html#a45c7ed02104a8f2dc79052a0301a16c3", null ],
+    [ "scheduler_load_cr3_from", "namespacekernel.html#a8717ed879e07d6e261b521940de70ee7", null ],
+    [ "scheduler_load_kstack_base", "namespacekernel.html#ab66b635cab196ea26d2cfaaf47fc59b6", null ],
+    [ "scheduler_load_kstack_top", "namespacekernel.html#a3e81dd1c530d5febe94bf37000962f09", null ],
+    [ "scheduler_load_rsp_from", "namespacekernel.html#ac3698635a1028c993bb17376f59935c1", null ],
+    [ "scheduler_need_resched", "namespacekernel.html#afb20072a8fd62f005a14dbdf87038f27", null ],
+    [ "scheduler_next_task_id", "namespacekernel.html#ab2187af236405c0bcefe647b4a33398e", null ],
+    [ "scheduler_save_rsp_to", "namespacekernel.html#ac4b024e5b458938ba17df793943eedef", null ],
+    [ "scheduler_switch_generation", "namespacekernel.html#a963403eae4c53dac69cc7db142c47c81", null ]
 ];

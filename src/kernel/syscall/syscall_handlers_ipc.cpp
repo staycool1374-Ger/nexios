@@ -144,6 +144,124 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     return reply.type;
 }
 
+// ---------------------------------------------------------------------------
+// Issue #11 — in-register IPC fastpath (docs/specs/ipc-fastpath.md §3).
+// Pointer-free by construction: payload is gathered/scattered only in the
+// caller's own regs[] kernel-stack frame — no checked_ptr, no SMAP window,
+// no canary walk (FAST class).  Blocking semantics delegate to the existing
+// IPC::send / IPC::recv / IPC::send_sync machinery unchanged (INV-3).
+//
+// ARCH NOTE (auditor S3): the k_fast_word_regs[] indices are x86_64-locked
+// (rsi/rdi/r8/r9/r10/r11).  The libc wrappers are x86_64-only and the numbers
+// are absent from the aarch64/riscv ABI, so the handlers are unreachable
+// there — but the register map must never be interpreted on a non-x86_64
+// frame.  The regs[] index table is the single source of truth (ipc.hpp).
+// ---------------------------------------------------------------------------
+
+uint64_t Syscall::sys_send_fast(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+                                uint64_t arg3, uint64_t *regs) {
+    if (!regs)
+        return static_cast<uint64_t>(-1);
+    uint64_t dest_id = arg0;
+    uint64_t data_size = arg2;
+    if (data_size > IPC_FAST_PAYLOAD_BYTES)
+        return static_cast<uint64_t>(-1);
+    auto *cur = syscall_task();
+    if (!cur)
+        return static_cast<uint64_t>(-1);
+    Message m{};
+    m.sender_id = cur->id;
+    m.type = arg1;
+    m.data_size = data_size;
+    (void)arg3; // payload word 0 rides in regs[4] (rsi) == arg3; gathered via regs[]
+    fast_regs_to_msg(regs, data_size, m);
+    return IPC::send(dest_id, m, 0) ? 0 : static_cast<uint64_t>(-1);
+}
+
+uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
+                                uint64_t arg3, uint64_t *regs) {
+    if (!regs)
+        return static_cast<uint64_t>(-1);
+    uint64_t max_size = arg2;
+    uint64_t timeout_ticks = arg3;
+    uint32_t clamp =
+        max_size < IPC_FAST_PAYLOAD_BYTES
+            ? static_cast<uint32_t>(max_size)
+            : static_cast<uint32_t>(IPC_FAST_PAYLOAD_BYTES);
+    uint64_t deadline =
+        timeout_ticks ? arch::Timer::ticks() + timeout_ticks : 0;
+    auto *cur = syscall_task();
+    if (!cur)
+        return static_cast<uint64_t>(-1);
+    Message msg{};
+    bool ok = false;
+    bool was_blocked = false;
+    while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
+        // An oversized best match is NOT consumed (stays queued for a full
+        // RECEIVE, INV-4) — disambiguate empty-vs-oversized with is_empty().
+        if (!cur->msg_queue.is_empty())
+            return static_cast<uint64_t>(-1);
+        // VULN-W3 bounded-wait deadline (mirrors sys_receive verbatim).
+        if (deadline && arch::Timer::ticks() >= deadline)
+            return static_cast<uint64_t>(-1);
+        if (cur->get_sporadic_server()) {
+            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
+        }
+        cur->state = TaskState::BLOCKED;
+        was_blocked = true;
+        Scheduler::dequeue_ready(*cur);
+        Scheduler::reschedule();
+        if (cur->is_user_) {
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+        } else {
+            arch::hlt();
+        }
+    }
+    if (was_blocked) {
+        cur->remaining_ticks = cur->period_ticks;
+        if (cur->get_sporadic_server()) {
+            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+            cur->get_sporadic_server()->on_activation(arch::Timer::ticks());
+        }
+    }
+    // Parity with IPC::recv: wake a blocked sender on a full queue once we
+    // drain one message (a slot opened up).
+    if (cur->msg_queue.blocked_senders_head)
+        IPC::wake_sender(cur->msg_queue, *cur);
+    fast_msg_to_regs(msg, regs);
+    return msg.type;
+}
+
+uint64_t Syscall::sys_send_sync_fast(uint64_t arg0, uint64_t arg1,
+                                     uint64_t arg2, uint64_t arg3,
+                                     uint64_t *regs) {
+    if (!regs)
+        return static_cast<uint64_t>(-1);
+    uint64_t dest_id = arg0;
+    uint64_t data_size = arg2;
+    if (data_size > IPC_FAST_PAYLOAD_BYTES)
+        return static_cast<uint64_t>(-1);
+    auto *cur = syscall_task();
+    if (!cur)
+        return static_cast<uint64_t>(-1);
+    // Gather the request BEFORE IPC::send_sync — the frame is read-only after
+    // the gather, so a block cannot invalidate the payload (INV-5).
+    Message m{};
+    m.sender_id = cur->id;
+    m.type = arg1;
+    m.data_size = data_size;
+    (void)arg3; // payload word 0 rides in regs[4] (rsi) == arg3; gathered via regs[]
+    fast_regs_to_msg(regs, data_size, m);
+    Message reply{};
+    if (!IPC::send_sync(dest_id, m, reply, IPC_FAST_PAYLOAD_BYTES))
+        return static_cast<uint64_t>(-1);
+    fast_msg_to_regs(reply, regs);
+    return reply.type;
+}
+
 uint64_t Syscall::sys_create_mailbox(uint64_t, uint64_t, uint64_t, uint64_t,
                                      uint64_t *) {
     return 0;

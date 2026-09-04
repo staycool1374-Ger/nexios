@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pci_8cpp.html'
 <p>PCI bus enumeration — arch-independent (uses HAL config space access).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="pci_8hpp_source.html">kernel/arch/pci.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="address_8hpp_source.html">kernel/memory/address.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for pci.cpp:</div>
@@ -149,6 +151,11 @@ Functions</h2></td></tr>
 <tr class="memitem:a68057e54d9a90d6545678a5b77d8b604" id="r_a68057e54d9a90d6545678a5b77d8b604"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a68057e54d9a90d6545678a5b77d8b604">arch::pci_free_vector</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vec)</td></tr>
 <tr class="memitem:adc4b509b8ba2e26aae708fff98409565" id="r_adc4b509b8ba2e26aae708fff98409565"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#adc4b509b8ba2e26aae708fff98409565">arch::pci_find_capability</a> (PciBdf bdf, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> cap_id)</td></tr>
 <tr class="memitem:af1db3b0c561e94a99c8f3f6d020093f5" id="r_af1db3b0c561e94a99c8f3f6d020093f5"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#af1db3b0c561e94a99c8f3f6d020093f5">arch::pci_enable_msi</a> (PciBdf bdf, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:a5f0b29e66c1ded4cde61c7ccd0dc2b4c" id="r_a5f0b29e66c1ded4cde61c7ccd0dc2b4c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a5f0b29e66c1ded4cde61c7ccd0dc2b4c">arch::pci_msix_premap_all</a> ()</td></tr>
+<tr class="memitem:ac1b280a31f7bae1f896d90239ed96348" id="r_ac1b280a31f7bae1f896d90239ed96348"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac1b280a31f7bae1f896d90239ed96348">arch::pci_msix_table_info</a> (PciBdf bdf, PciMsixTableInfo &amp;out)</td></tr>
+<tr class="memitem:a7b9a139f7af44bc665d24c1731c6f19c" id="r_a7b9a139f7af44bc665d24c1731c6f19c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a7b9a139f7af44bc665d24c1731c6f19c">arch::pci_program_msix_entry</a> (PciBdf bdf, const PciMsixTableInfo &amp;tbl, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> entry, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:ab73dfb2ec66dbef323c5e5cd372e3ff8" id="r_ab73dfb2ec66dbef323c5e5cd372e3ff8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab73dfb2ec66dbef323c5e5cd372e3ff8">arch::pci_msix_entry_set_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> entry, bool masked)</td></tr>
+<tr class="memitem:a064392a919e573428b1ba326b8cdb64d" id="r_a064392a919e573428b1ba326b8cdb64d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a064392a919e573428b1ba326b8cdb64d">arch::pci_msix_entry_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> entry)</td></tr>
 <tr class="memitem:ab8a3d0ed72e0355f607878da738a53e4" id="r_ab8a3d0ed72e0355f607878da738a53e4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab8a3d0ed72e0355f607878da738a53e4">arch::pci_enable_msix</a> (PciBdf bdf, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> entry, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> apic_id)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>

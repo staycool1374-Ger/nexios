@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('gic_8hpp.html'
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for gic.hpp:</div>
@@ -180,6 +181,12 @@ Variables</h2></td></tr>
 <tr class="memitem:a4116c31f44abf39e5c8ede6721a65690" id="r_a4116c31f44abf39e5c8ede6721a65690"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a4116c31f44abf39e5c8ede6721a65690">arch::GICC_PMR</a> = 0x0004</td></tr>
 <tr class="memitem:a482011a570ed30cf60b56b575e5f4ecf" id="r_a482011a570ed30cf60b56b575e5f4ecf"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a482011a570ed30cf60b56b575e5f4ecf">arch::GICC_IAR</a> = 0x000C</td></tr>
 <tr class="memitem:aee4f8ca1c1c346aed7468abf74036348" id="r_aee4f8ca1c1c346aed7468abf74036348"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aee4f8ca1c1c346aed7468abf74036348">arch::GICC_EOIR</a> = 0x0010</td></tr>
+<tr class="memitem:a1fb93cd4519d541d33f8aa2018f0d283" id="r_a1fb93cd4519d541d33f8aa2018f0d283"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1fb93cd4519d541d33f8aa2018f0d283">arch::GICC_CTLR_ENABLE</a> = 1U &lt;&lt; 0</td></tr>
+<tr class="memdesc:a1fb93cd4519d541d33f8aa2018f0d283"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICC_CTLR enable bits (QEMU GICv2 with security extensions).  <br /></td></tr>
+<tr class="memitem:a393c14148aadc2446b6270da8fe9faae" id="r_a393c14148aadc2446b6270da8fe9faae"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a393c14148aadc2446b6270da8fe9faae">arch::GICC_CTLR_ENABLE_GRP1</a> = 1U &lt;&lt; 1</td></tr>
+<tr class="memitem:a94e76b098df2d029e803b049a6542640" id="r_a94e76b098df2d029e803b049a6542640"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a94e76b098df2d029e803b049a6542640">arch::GICD_CTLR_ENABLE</a> = 1U &lt;&lt; 0</td></tr>
+<tr class="memdesc:a94e76b098df2d029e803b049a6542640"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICD_CTLR enable bits (NS view with security extensions).  <br /></td></tr>
+<tr class="memitem:a35388bca0e140dccc290bc2deb4bf793" id="r_a35388bca0e140dccc290bc2deb4bf793"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a35388bca0e140dccc290bc2deb4bf793">arch::GICD_CTLR_ENABLE_GRP1</a> = 1U &lt;&lt; 1</td></tr>
 <tr class="memitem:a9b746daa507660e7743691e667ca07db" id="r_a9b746daa507660e7743691e667ca07db"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a9b746daa507660e7743691e667ca07db">arch::INTID_UART0</a> = 33</td></tr>
 <tr class="memitem:aa58e5a794a7b439c68022656d6277820" id="r_aa58e5a794a7b439c68022656d6277820"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aa58e5a794a7b439c68022656d6277820">arch::INTID_RTC</a> = 34</td></tr>
 <tr class="memitem:acc5915b44b2ed7809dcb53701534dd45" id="r_acc5915b44b2ed7809dcb53701534dd45"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#acc5915b44b2ed7809dcb53701534dd45">arch::INTID_VIRTIO0</a> = 36</td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -129,8 +129,17 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge. Shared-heap class (PipeBuffer pattern): lifetime is pinned by capability slots; <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#af3270ad2831af92c117bb3d26ee727b7" title="Final teardown: detaches the receiver binding and returns the block to the MemPool.">dispose()</a> runs on the last reference.  <a href="classkernel_1_1cap_1_1_endpoint.html#details">More...</a><br /></td></tr>
 <tr class="memitem:FrameCap" id="r_FrameCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_frame_cap.html">FrameCap</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated physical frame (or contiguous range). Owns the PMM pages it wraps: the last reference frees them via <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a61c0c510877e83a8061a248ac229f9c9" title="Final teardown: returns every wrapped frame to the PMM and the block to the MemPool.">dispose()</a>. Shared-heap class (PipeBuffer pattern).  <a href="classkernel_1_1cap_1_1_frame_cap.html#details">More...</a><br /></td></tr>
+<tr class="memitem:IoMmuDmaCap" id="r_IoMmuDmaCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html">IoMmuDmaCap</a></td></tr>
+<tr class="memitem:IrqCap" id="r_IrqCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_irq_cap.html">IrqCap</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated hardware IRQ vector. Does NOT own the IRQ line (the PIC/APIC remains kernel-owned) — dispose only unregisters the vector from the delivery table and frees the MemPool block. Shared-heap class (<a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html" title="A capability-gated MMIO/BAR range. Does NOT own physical memory (device memory is never PMM-owned) — ...">MmioCap</a> pattern).  <a href="classkernel_1_1cap_1_1_irq_cap.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MmioCap" id="r_MmioCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html">MmioCap</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated MMIO/BAR range. Does NOT own physical memory (device memory is never PMM-owned) — dispose only frees the MemPool block. Shared-heap class (<a class="el" href="classkernel_1_1cap_1_1_frame_cap.html" title="A capability-gated physical frame (or contiguous range). Owns the PMM pages it wraps: the last refere...">FrameCap</a> pattern).  <a href="classkernel_1_1cap_1_1_mmio_cap.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MmioUserMap" id="r_MmioUserMap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html">MmioUserMap</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space MMIO page-frame mapping registry (issue #8). A static bounded table keyed by task id (<a class="el" href="classkernel_1_1_irq_delivery.html" title="User-space IRQ delivery engine (issue #2).">IrqDelivery</a> pattern) that maps an <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html" title="A capability-gated MMIO/BAR range. Does NOT own physical memory (device memory is never PMM-owned) — ...">MmioCap</a>'s memory BAR into a fixed user VA window for Ring 3 drivers via the SYS_MMIO_MAP/SYS_MMIO_UNMAP syscall surface. Keyed by owner_task_id + a per-slot generation (recycled-slot stale-VA defense). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; g_iopb_lock -&gt; mmio map lock (never held across VMM map/unmap or reschedule).  <a href="classkernel_1_1cap_1_1_mmio_user_map.html#details">More...</a><br /></td></tr>
+<tr class="memitem:MsixCap" id="r_MsixCap"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_msix_cap.html">MsixCap</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A capability-gated MSI-X vector on a PCI device. Does NOT own the MSI-X table memory (device memory is never PMM-owned) — dispose only re-masks the entry, releases the delivery-table slot, frees the vector and the MemPool block. Shared-heap class (<a class="el" href="classkernel_1_1cap_1_1_irq_cap.html" title="A capability-gated hardware IRQ vector. Does NOT own the IRQ line (the PIC/APIC remains kernel-owned)...">IrqCap</a> pattern).  <a href="classkernel_1_1cap_1_1_msix_cap.html#details">More...</a><br /></td></tr>
 <tr class="memitem:UntypedMem" id="r_UntypedMem"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html">UntypedMem</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Owns a contiguous PMM region and may be retyped at most once.  <a href="classkernel_1_1cap_1_1_untyped_mem.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Owns a contiguous PMM region and may be retyped into capabilities.  <a href="classkernel_1_1cap_1_1_untyped_mem.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
@@ -142,6 +151,11 @@ Enumerations</h2></td></tr>
 , <br />
 &#160;&#160;<a class="el" href="#a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78">CNode</a> = 4
 , <a class="el" href="#a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9">Untyped</a> = 5
+, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07">Mmio</a> = 6
+, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99ae72a6f2764689e0bd54a8a89b5393add">Irq</a> = 7
+, <br />
+&#160;&#160;<a class="el" href="#a4bea603a315495a20341a4cc2519eb99a1fe101e5a5b653d3e934ae22b5ca47d3">IoMmuDma</a> = 8
+, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5">Msix</a> = 9
 <br />
  }</td></tr>
 <tr class="memdesc:a4bea603a315495a20341a4cc2519eb99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability target types (iteration-1 slice). Null = empty slot; Task/Endpoint/Frame/CNode are live targets.  <a href="#a4bea603a315495a20341a4cc2519eb99">More...</a><br /></td></tr>
@@ -169,7 +183,7 @@ Functions</h2></td></tr>
 <tr class="memitem:aa5ccfc6e8ee86054dfce95f356a56cd6" id="r_aa5ccfc6e8ee86054dfce95f356a56cd6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#aa5ccfc6e8ee86054dfce95f356a56cd6">mint</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *src, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> src_handle, <a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *dst, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> rights_mask, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> badge) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:aa5ccfc6e8ee86054dfce95f356a56cd6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copies the capability with a reduced rights mask and, for endpoints, a new badge.  <br /></td></tr>
 <tr class="memitem:aa774f0b992b1d3ba975c5c91ff9690f6" id="r_aa774f0b992b1d3ba975c5c91ff9690f6"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#aa774f0b992b1d3ba975c5c91ff9690f6">retype</a> (<a class="el" href="classkernel_1_1cap_1_1_c_node.html">CNode</a> *cspace, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> untyped_handle, <a class="el" href="#a4bea603a315495a20341a4cc2519eb99">CapType</a> target_type, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> size, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> rights) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
-<tr class="memdesc:aa774f0b992b1d3ba975c5c91ff9690f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Iteration-1 supports Frame targets with an exact-size carve (ROADMAP 0.4.1 item 3). Kernel-internal API (no syscall yet).  <br /></td></tr>
+<tr class="memdesc:aa774f0b992b1d3ba975c5c91ff9690f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Supports Frame targets with a sub-range carve (issue #1): <code class="param">size</code> may be smaller than the Untyped's region (PAGE-aligned, prefix-only); the remainder is installed as a child Untyped in the same <code class="param">cspace</code> and is itself retypable (exhaustion model). size == ut-&gt;size is the exact-size degenerate case (no child). Non-destructive on validation/capacity failure; fail-closed after the guard is claimed.  <br /></td></tr>
 <tr class="memitem:ade55928be04f23829263375da7b1cb45" id="r_ade55928be04f23829263375da7b1cb45"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ade55928be04f23829263375da7b1cb45">cap_slot_bits</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ade55928be04f23829263375da7b1cb45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bits allocated to the slot index in a capability handle. Derived from CONFIG_CSLOT_COUNT (power of two preferred).  <br /></td></tr>
 <tr class="memitem:ad0673cef188c336d042b38b4d31a68e4" id="r_ad0673cef188c336d042b38b4d31a68e4"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad0673cef188c336d042b38b4d31a68e4">encode_handle</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> cspace_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> slot_index, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -245,6 +259,14 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a" name="a4bea603a315495a20341a4cc2519eb99a3bb3e8c8a24891ba0f7608bcc96f8b0a"></a>Frame&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78" name="a4bea603a315495a20341a4cc2519eb99a48818146589190cb4bc5c8e9a0fabb78"></a>CNode&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9" name="a4bea603a315495a20341a4cc2519eb99a4061e4e1089a827007bed4405fac6ee9"></a>Untyped&#160;</td><td class="fielddoc"><p>retype target (ROADMAP 0.4.1 item 3) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07" name="a4bea603a315495a20341a4cc2519eb99ad4861c9dc3a4e2f4b3edcff3c8604c07"></a>Mmio&#160;</td><td class="fielddoc"><p>MMIO BAR range (v0.4.2, issue #3). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99ae72a6f2764689e0bd54a8a89b5393add" name="a4bea603a315495a20341a4cc2519eb99ae72a6f2764689e0bd54a8a89b5393add"></a>Irq&#160;</td><td class="fielddoc"><p>hardware IRQ vector (v0.4.2, issue #2) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99a1fe101e5a5b653d3e934ae22b5ca47d3" name="a4bea603a315495a20341a4cc2519eb99a1fe101e5a5b653d3e934ae22b5ca47d3"></a>IoMmuDma&#160;</td><td class="fielddoc"><p>IOMMU DMA protection domain (v0.4.2, issue #4). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5" name="a4bea603a315495a20341a4cc2519eb99a50073b0e818c9249ad19b1631149fad5"></a>Msix&#160;</td><td class="fielddoc"><p>per-vector MSI-X entry on a PCI device (v0.4.2, issue #10) </p>
 </td></tr>
 </table>
 
@@ -696,8 +718,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Iteration-1 supports Frame targets with an exact-size carve (ROADMAP 0.4.1 item 3). Kernel-internal API (no syscall yet). </p>
-<dl class="section return"><dt>Returns</dt><dd>the new slot index, or -1 on any failure. </dd></dl>
+<p>Retypes the Untyped at <code class="param">untyped_handle</code> in <code class="param">cspace</code> into a new capability of <code class="param">target_type</code>, installed into <code class="param">cspace</code>. Supports Frame targets with a sub-range carve (issue #1): <code class="param">size</code> may be smaller than the Untyped's region (PAGE-aligned, prefix-only); the remainder is installed as a child Untyped in the same <code class="param">cspace</code> and is itself retypable (exhaustion model). size == ut-&gt;size is the exact-size degenerate case (no child). Non-destructive on validation/capacity failure; fail-closed after the guard is claimed. </p>
+<dl class="section return"><dt>Returns</dt><dd>the new target slot index, or -1 on any failure. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

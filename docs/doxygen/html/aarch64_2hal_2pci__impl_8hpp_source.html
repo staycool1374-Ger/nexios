@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -147,12 +147,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2hal_2
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="comment">// NOTE: included inside namespace arch {} in pci.hpp — do not re-wrap</span></div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span></div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">#ifndef CONFIG_PCI_ECAM_BASE</span></div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">#define CONFIG_PCI_ECAM_BASE 0x100000000ULL </span><span class="comment">// 4GB default</span></div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL </span><span class="comment">// QEMU virt aarch64 PCIe ECAM</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PCI_ECAM_SIZE =</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    0x100000000ULL; <span class="comment">// 256 buses * 32 devices * 8 functions * 4KB = 256MB</span></div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    0x100000000ULL; <span class="comment">// 256 buses * 32 devices * 8 functions * 4KB = 256MB (ECAM window at 0x3f000000)</span></div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span></div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pci_ecam_addr(PciBdf bdf, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> reg) {</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <span class="keywordflow">return</span> PCI_ECAM_BASE | (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(bdf.bus) &lt;&lt; 20) |</div>

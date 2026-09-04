@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -202,7 +202,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a0393b984f5bd8f8fa3e1014037f2dcd0" id="r_a0393b984f5bd8f8fa3e1014037f2dcd0"><td class="memItemLeft"><a class="el" href="#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0393b984f5bd8f8fa3e1014037f2dcd0">create_named_task</a> (void(*entry)(), <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks, const char *tag=nullptr)</td></tr>
 <tr class="memdesc:a0393b984f5bd8f8fa3e1014037f2dcd0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a task (via the kernel's TaskControlBlock::create) and adds it to the scheduler, tagging its <span class="tt">name</span> with the calling test case so leaked/orphaned tasks are traceable to their origin. <span class="tt">tag</span> (if non-null) is prefixed to the test name (e.g. a role like "worker"). Falls back to the raw <span class="tt">create</span> name when no test is active.  <br /></td></tr>
 <tr class="memitem:a2f2ad7408a2984ebbc8a46b37f1e6f5f" id="r_a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2f2ad7408a2984ebbc8a46b37f1e6f5f">add_task_named</a> (<a class="el" href="#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> &amp;task, const char *tag=nullptr)</td></tr>
-<tr class="memdesc:a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Adds an already-created task to the scheduler, tagging its <span class="tt">name</span> with the calling test case (see create_named_task). Thin wrapper over Scheduler::add_task that records provenance.  <br /></td></tr>
+<tr class="memdesc:a2f2ad7408a2984ebbc8a46b37f1e6f5f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Adds an already-created task to the scheduler, tagging its <span class="tt">name</span> with the calling test case (see create_named_task). Thin wrapper over <a class="el" href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538" title="Adds a task to the scheduler&#39;s run queue.">Scheduler::add_task</a> that records provenance.  <br /></td></tr>
 <tr class="memitem:a47e1961f61dd3427ce55333d8828a5de" id="r_a47e1961f61dd3427ce55333d8828a5de"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a47e1961f61dd3427ce55333d8828a5de">run_all</a> ()</td></tr>
 <tr class="memitem:a1c32eb5484b7cdcad0ae45d94849f02b" id="r_a1c32eb5484b7cdcad0ae45d94849f02b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c32eb5484b7cdcad0ae45d94849f02b">run_safe</a> ()</td></tr>
 <tr class="memitem:a9096f1bb9a2e4b1541226759b08c1ae5" id="r_a9096f1bb9a2e4b1541226759b08c1ae5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9096f1bb9a2e4b1541226759b08c1ae5">run_filtered</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> required_flags, bool use_isolation)</td></tr>
@@ -228,9 +228,9 @@ Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:a3b23d1ae6da9f187185032f5518943bd" id="r_a3b23d1ae6da9f187185032f5518943bd"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a3b23d1ae6da9f187185032f5518943bd">g_current_class</a> = nullptr</td></tr>
-<tr class="memitem:aa1ef760812274a6f89acf0ae8db11e94" id="r_aa1ef760812274a6f89acf0ae8db11e94"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa1ef760812274a6f89acf0ae8db11e94">g_filter_bench</a> = false</td></tr>
-<tr class="memitem:ad58197db512c3865261fe3571878f10a" id="r_ad58197db512c3865261fe3571878f10a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad58197db512c3865261fe3571878f10a">g_class_auto_shutdown</a> = false</td></tr>
-<tr class="memitem:a8ae596b8a7161c4f9f54d704059f822e" id="r_a8ae596b8a7161c4f9f54d704059f822e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8ae596b8a7161c4f9f54d704059f822e">g_vfs_touched</a> = false</td></tr>
+<tr class="memitem:aa1ef760812274a6f89acf0ae8db11e94" id="r_aa1ef760812274a6f89acf0ae8db11e94"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa1ef760812274a6f89acf0ae8db11e94">g_filter_bench</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:ad58197db512c3865261fe3571878f10a" id="r_ad58197db512c3865261fe3571878f10a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad58197db512c3865261fe3571878f10a">g_class_auto_shutdown</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:a8ae596b8a7161c4f9f54d704059f822e" id="r_a8ae596b8a7161c4f9f54d704059f822e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a8ae596b8a7161c4f9f54d704059f822e">g_vfs_touched</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:ac0148da1732dbc74470b34de594530d8" id="r_ac0148da1732dbc74470b34de594530d8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac0148da1732dbc74470b34de594530d8">g_kernel_entry_ns</a> = 0</td></tr>
 </table>
 <a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
@@ -294,7 +294,7 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Reference skeleton for a REAL blocked-sender / receiver-cleanup pattern. Blueprint for task_exit_wakes_blocked_senders and task_cleanup_frees_msg_queue_with_blocked_senders. </p>
-<p>receiver = create(receiver_entry, 11, 10) // no add_task fill receiver-&gt;msg_queue to IPC_MAX_QUEUE_MSG // BEFORE register sender = create(sender_entry, 12, 10); sender-&gt;user_data = &amp;sctx { arch::IrqGuard guard; // register atomically Scheduler::add_task(*receiver); Scheduler::add_task(*sender); // sender blocks on full q } Scheduler::reschedule(); while (sender-&gt;state != BLOCKED) asm volatile("pause"); Scheduler::reschedule(); // dispatch receiver while (receiver-&gt;state != TERMINATED) asm volatile("pause"); Scheduler::drain_zombie_list(); // cleanup wakes sender while (sender-&gt;state != TERMINATED) asm volatile("pause"); Scheduler::drain_zombie_list(); <a class="el" href="test_8hpp.html#a49403c168ea4b3a44b7cebd4eb5178b8">JARVIS_ASSERT_EQ(0ULL, send_result)</a>; // woken sender fast-fails </p>
+<p>receiver = create(receiver_entry, 11, 10) // no add_task fill receiver-&gt;msg_queue to IPC_MAX_QUEUE_MSG // BEFORE register sender = create(sender_entry, 12, 10); sender-&gt;user_data = &amp;sctx { arch::IrqGuard guard; // register atomically Scheduler::add_task(*receiver); Scheduler::add_task(*sender); // sender blocks on full q } <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>; while (sender-&gt;state != BLOCKED) asm volatile("pause"); <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>; // dispatch receiver while (receiver-&gt;state != TERMINATED) asm volatile("pause"); <a class="el" href="classkernel_1_1_scheduler.html#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">Scheduler::drain_zombie_list()</a>; // cleanup wakes sender while (sender-&gt;state != TERMINATED) asm volatile("pause"); <a class="el" href="classkernel_1_1_scheduler.html#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">Scheduler::drain_zombie_list()</a>; <a class="el" href="test_8hpp.html#a49403c168ea4b3a44b7cebd4eb5178b8">JARVIS_ASSERT_EQ(0ULL, send_result)</a>; // woken sender fast-fails </p>
 
 </div>
 </div>
@@ -322,7 +322,7 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Reference skeleton for a REAL parent-WAITPID / child-exit pattern. Blueprint for tests such as scheduler_waitpid_wakes_parent and scheduler_reap_respects_parent_wait. </p>
-<p>create parent + child TCBs (no add_task) parent-&gt;add_child(child) // sets child-&gt;parent_id ctx.child_id_ = child-&gt;id; parent-&gt;user_data = &amp;ctx { arch::IrqGuard guard; // register atomically Scheduler::add_task(*parent); // prio 20 (blocks first) Scheduler::add_task(*child); // prio 12 (runs after) } Scheduler::reschedule(); while (parent-&gt;state != BLOCKED &amp;&amp; parent-&gt;state != TERMINATED) asm volatile("pause"); while (parent-&gt;state != TERMINATED) asm volatile("pause"); // child exited, parent woke child_removed = find_task(ctx.child_id_) == nullptr; if (!child_removed) Scheduler::terminate(*child, 0); // cleanup Scheduler::drain_zombie_list(); // reclaim BEFORE assert JARVIS_ASSERT(ctx.woke_ == 1); <a class="el" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">JARVIS_ASSERT(child_removed)</a>; JARVIS_ASSERT_EQ(exit_status, ctx.status_); </p>
+<p>create parent + child TCBs (no add_task) parent-&gt;add_child(child) // sets child-&gt;parent_id ctx.child_id_ = child-&gt;id; parent-&gt;user_data = &amp;ctx { arch::IrqGuard guard; // register atomically Scheduler::add_task(*parent); // prio 20 (blocks first) Scheduler::add_task(*child); // prio 12 (runs after) } <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>; while (parent-&gt;state != BLOCKED &amp;&amp; parent-&gt;state != TERMINATED) asm volatile("pause"); while (parent-&gt;state != TERMINATED) asm volatile("pause"); // child exited, parent woke child_removed = find_task(ctx.child_id_) == nullptr; if (!child_removed) Scheduler::terminate(*child, 0); // cleanup <a class="el" href="classkernel_1_1_scheduler.html#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">Scheduler::drain_zombie_list()</a>; // reclaim BEFORE assert JARVIS_ASSERT(ctx.woke_ == 1); <a class="el" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">JARVIS_ASSERT(child_removed)</a>; JARVIS_ASSERT_EQ(exit_status, ctx.status_); </p>
 
 </div>
 </div>
@@ -350,7 +350,7 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Reference skeleton for ONE self-terminating dispatched task. Blueprint for task_exit_cleans_all_ipc_objects and lifecycle_*. </p>
-<p>t = TaskControlBlock::create(entry, prio, period); // no add_task // set page_table_/user_stack_/user_stack_size_/etc BEFORE add_task Scheduler::add_task(*t); Scheduler::reschedule(); while (t-&gt;state != TERMINATED) asm volatile("pause"); Scheduler::drain_zombie_list(); // terminate() alone frees // nothing; drain reclaims <a class="el" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">JARVIS_ASSERT(...)</a>; // never deref the freed TCB </p>
+<p>t = TaskControlBlock::create(entry, prio, period); // no add_task // set page_table_/user_stack_/user_stack_size_/etc BEFORE add_task Scheduler::add_task(*t); <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>; while (t-&gt;state != TERMINATED) asm volatile("pause"); <a class="el" href="classkernel_1_1_scheduler.html#ad026a249da546e4b265cf8774b3013cf" title="Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.">Scheduler::drain_zombie_list()</a>; // terminate() alone frees // nothing; drain reclaims <a class="el" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">JARVIS_ASSERT(...)</a>; // never deref the freed TCB </p>
 
 </div>
 </div>
@@ -373,7 +373,13 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Adds an already-created task to the scheduler, tagging its <span class="tt">name</span> with the calling test case (see create_named_task). Thin wrapper over Scheduler::add_task that records provenance. </p>
+<p>Adds an already-created task to the scheduler, tagging its <span class="tt">name</span> with the calling test case (see create_named_task). Thin wrapper over <a class="el" href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538" title="Adds a task to the scheduler&#39;s run queue.">Scheduler::add_task</a> that records provenance. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a2f2ad7408a2984ebbc8a46b37f1e6f5f_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a2f2ad7408a2984ebbc8a46b37f1e6f5f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
 
 </div>
 </div>
@@ -448,7 +454,7 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_afc3a2ab344e9fd124b6995c4332a1067_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_afc3a2ab344e9fd124b6995c4332a1067_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -504,7 +510,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a528c863464ccdb09e9f57510adee048d_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a528c863464ccdb09e9f57510adee048d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -535,7 +541,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a22a1e73ffb69f6fd807228fc5756b380_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a22a1e73ffb69f6fd807228fc5756b380_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -627,7 +633,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac3dcbb860f4f6469142dd4dd33b78398_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac3dcbb860f4f6469142dd4dd33b78398_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -653,7 +659,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aabafa220128e328e46c2c19135411898_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aabafa220128e328e46c2c19135411898_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -680,7 +686,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a0fb9d643d01186cc11f1c2868176b39c_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a0fb9d643d01186cc11f1c2868176b39c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -703,7 +709,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a47ad5e6d76deb150bf2cb8bf66bd3450_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a47ad5e6d76deb150bf2cb8bf66bd3450_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -728,7 +734,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_abbd641156133e294c60aa475e73dd520_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_abbd641156133e294c60aa475e73dd520_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -751,36 +757,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph" loading="lazy" alt=""/></div>
-<map name="anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph" id="anamespacekernel_1_1test_a47e1961f61dd3427ce55333d8828a5de_cgraph">
-<area shape="rect" title=" " alt="" coords="5,215,138,241"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#ae1c6719a50dda5616660226460c8fbdf" title=" " alt="" coords="186,5,329,48"/>
-<area shape="poly" title=" " alt="" coords="77,213,117,145,148,103,184,65,200,55,196,59,187,69,152,107,122,148,82,216"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a67e0bf935731e851c5130bab1b6c1861" title=" " alt="" coords="377,56,520,99"/>
-<area shape="poly" title=" " alt="" coords="79,213,120,160,150,131,184,108,228,91,273,80,363,73,359,76,274,85,229,96,187,113,153,136,124,164,84,216"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ac55cd7a631b4e76a2293edf8b8bb0bd4" title=" " alt="" coords="191,240,324,267"/>
-<area shape="poly" title=" " alt="" coords="137,234,179,241,174,244,139,240"/>
-<area shape="rect" href="namespacekernel_1_1test.html#afe67f03cec26eaf04ba601e548d6761d" title=" " alt="" coords="198,123,317,165"/>
-<area shape="poly" title=" " alt="" coords="101,212,196,170,193,174,105,216"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ad4ae5d24650cf692a9d70d545eaa1867" title=" " alt="" coords="382,189,515,232"/>
-<area shape="poly" title=" " alt="" coords="137,222,369,212,366,217,139,228"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a3706a331b1f53a82cec9a9020a1efdc4" title=" " alt="" coords="186,291,329,333"/>
-<area shape="poly" title=" " alt="" coords="103,239,197,282,192,285,103,245"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#a290fced036e79169734ae8b01c424f83" title=" " alt="" coords="186,357,329,400"/>
-<area shape="poly" title=" " alt="" coords="84,239,127,289,156,317,187,343,194,349,189,349,184,347,152,321,123,293,83,245"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a789c5af9e2c7393712ff3bfdae709afa" title=" " alt="" coords="188,424,327,451"/>
-<area shape="poly" title=" " alt="" coords="78,239,94,275,116,320,148,368,187,410,194,417,188,415,184,414,143,371,112,323,89,277,77,244"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="377,340,520,367"/>
-<area shape="poly" title=" " alt="" coords="302,265,330,276,377,302,419,331,413,331,374,307,328,281,302,270"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ad2aea07eb751fad2fb738fe4123c7e7b" title=" " alt="" coords="568,315,733,341"/>
-<area shape="poly" title=" " alt="" coords="520,342,555,340,550,341,521,347"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ae7f9fd488685463ec9810c40d6f907c7" title=" " alt="" coords="568,365,733,392"/>
-<area shape="poly" title=" " alt="" coords="521,360,555,366,550,366,521,365"/>
-<area shape="poly" title=" " alt="" coords="316,121,373,103,369,106,319,126"/>
-<area shape="rect" href="classkernel_1_1test_1_1Registry.html#ad30c0be8d7ba6161c038aa562c3ac885" title=" " alt="" coords="377,123,520,165"/>
-<area shape="poly" title=" " alt="" coords="316,141,364,143,359,145,318,147"/>
-<area shape="poly" title=" " alt="" coords="317,162,374,183,369,184,318,167"/>
-<area shape="poly" title=" " alt="" coords="299,421,328,410,406,375,411,374,330,414,301,426"/>
-</map>
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -805,7 +782,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ad8af3e26f5e10cffe7d3eecf79016c1d_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ad8af3e26f5e10cffe7d3eecf79016c1d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -830,7 +807,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a3e91e9cb699a855fe92a5294e1f9463b_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a3e91e9cb699a855fe92a5294e1f9463b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -855,7 +832,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ae1b9042f585e1bfaf6898aed96a403de_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ae1b9042f585e1bfaf6898aed96a403de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -882,7 +859,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a9096f1bb9a2e4b1541226759b08c1ae5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a9096f1bb9a2e4b1541226759b08c1ae5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -905,7 +882,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a1b7421d43e0e94ec4c1f0005f25222e2_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a1b7421d43e0e94ec4c1f0005f25222e2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -928,7 +905,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ae3930997b95bec7a00f32aecd001850a_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ae3930997b95bec7a00f32aecd001850a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -951,7 +928,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a1c32eb5484b7cdcad0ae45d94849f02b_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a1c32eb5484b7cdcad0ae45d94849f02b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -974,7 +951,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac69baaa93109936ecff8ff06f6fb827a_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac69baaa93109936ecff8ff06f6fb827a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -997,7 +974,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac6959c848d7b1df0ba4eea129c708171_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac6959c848d7b1df0ba4eea129c708171_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1020,7 +997,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a2be813db3ba66a8c409d2c8c8e2d69da_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a2be813db3ba66a8c409d2c8c8e2d69da_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1045,7 +1022,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ac77ca03eec1fc93ea4a740b9566588d7_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ac77ca03eec1fc93ea4a740b9566588d7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1104,7 +1081,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a5b61544ff1676d3f6d4a777c3211be31_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a5b61544ff1676d3f6d4a777c3211be31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -1163,7 +1140,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aa2a58a012f3f56d28d6e0df037fd66a6_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aa2a58a012f3f56d28d6e0df037fd66a6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -1193,6 +1170,12 @@ Here is the call graph for this function:</div>
 
 <p>Safely terminate a forever-task and drain its zombie. Handles the common case where terminate + drain_zombie_list is needed. </p>
 <dl class="section note"><dt>Note</dt><dd><span class="tt">terminate()</span> on an ALREADY-TERMINATED task re-appends it to the zombie list (release_zombie has no idempotency guard); on a task a PRIOR drain already reaped (block 0xDD-poisoned), reading state and calling terminate() dereferences freed memory (ENSURE panic). Guard on magic (is_valid) FIRST, then live state — an already-reaped block is skipped entirely. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a93254b4e527b1ef044a6f9fb022f1123_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a93254b4e527b1ef044a6f9fb022f1123_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
+</div>
 
 </div>
 </div>
@@ -1228,7 +1211,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a89714861e1c19a6975ca08da1f2b2cc6_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a89714861e1c19a6975ca08da1f2b2cc6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1270,7 +1253,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aed16b217483080d1d9bfec6f56472775_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aed16b217483080d1d9bfec6f56472775_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -1299,6 +1282,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Terminate one task ONLY if it is still live. Safe for tasks that self-terminated (already TERMINATED and sitting in the zombie list): terminate() is skipped, so no double zombie-append and no dereference of a block a prior drain may have freed. Checks magic first so an already-reaped (0xDD-poisoned) block is skipped without touching freed memory. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a0ac2a4e8b9b409a3f6023d7b1705ca0c_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a0ac2a4e8b9b409a3f6023d7b1705ca0c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 26 -->
+</div>
 
 </div>
 </div>
@@ -1323,7 +1312,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a2116b98892188c36c2a9b053bdca9df5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a2116b98892188c36c2a9b053bdca9df5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -1354,7 +1343,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_aebdef3f581d2b87696f34fa1a77a20d5_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_aebdef3f581d2b87696f34fa1a77a20d5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -1389,7 +1378,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_ad187fb124266bd89f9f48be1d22ba617_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_ad187fb124266bd89f9f48be1d22ba617_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -1441,6 +1430,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Arm the watchdog with both TSC-based and PIT-based timers. PIT channel 1 one-shot (~55ms) + TSC deadline. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a3682848fa74834ef280e24ea7c67ff5e_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a3682848fa74834ef280e24ea7c67ff5e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 30 -->
+</div>
 
 </div>
 </div>
@@ -1464,7 +1459,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_abfb7a4e797c8023392967822f5451ab1_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_abfb7a4e797c8023392967822f5451ab1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -1504,7 +1499,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1test_a6dbac4eb3cd0354a626677222a8c6a35_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a6dbac4eb3cd0354a626677222a8c6a35_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -1533,6 +1528,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Atomically set a task as current and call reschedule, with interrupts disabled to prevent timer ISR interference between the two operations. This restores the IF=0 semantics that tests using the "set_current + reschedule" pattern were originally designed for. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a5734651fc6722563ecb7a1893ea19b81_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a5734651fc6722563ecb7a1893ea19b81_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 33 -->
+</div>
 
 </div>
 </div>
@@ -1560,7 +1561,13 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Yield to a task to steer next_task() scheduling, then restore the harness as current and re-enqueue the task. Unlike <a class="el" href="#a5734651fc6722563ecb7a1893ea19b81" title="Atomically set a task as current and call reschedule, with interrupts disabled to prevent timer ISR i...">yield_as()</a>, the task was never actually executing — only configured as current to influence the scheduler's next selection. After this call the harness continues to drive execution via reschedule() and the given task remains eligible for scheduling (READY, in ready queue). This avoids the invariant violation that set_current() removes the "old current" from the ready queue even when it never ran. </p>
-<p>NOTE: sets scheduler_need_resched directly instead of calling Scheduler::reschedule(), because reschedule() calls next_task() which DEQUEUES the highest-priority peer task from the ready queue, leaving the RQ with only the re-enqueued task. The timer ISR would then dispatch the wrong task first. </p>
+<p>NOTE: sets scheduler_need_resched directly instead of calling <a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a>, because reschedule() calls next_task() which DEQUEUES the highest-priority peer task from the ready queue, leaving the RQ with only the re-enqueued task. The timer ISR would then dispatch the wrong task first. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1test_a6cdcc19c8e326942d1c980c8c62894f0_cgraph.png" border="0" usemap="#anamespacekernel_1_1test_a6cdcc19c8e326942d1c980c8c62894f0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 34 -->
+</div>
 
 </div>
 </div>
@@ -1572,7 +1579,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::test::g_class_auto_shutdown = false</td>
+          <td class="memname">bool kernel::test::g_class_auto_shutdown = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1600,7 +1607,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::test::g_filter_bench = false</td>
+          <td class="memname">bool kernel::test::g_filter_bench = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1628,7 +1635,7 @@ Here is the call graph for this function:</div>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::test::g_vfs_touched = false</td>
+          <td class="memname">bool kernel::test::g_vfs_touched = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
 </div><div class="memdoc">

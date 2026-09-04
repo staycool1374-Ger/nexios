@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1024,   0,       0      },  // 989 executed +35 filtered; cap_msix(+13,#10) → registered 1024
+    {"all",                1086,   0,       0      },  // measured: 1072 + ipc_fastpath(+14,#11) → 1086
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -56,6 +56,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
     {"scheduler_starvation",  3,    0,       0      },  // SchedulerStarvation + PriorityInversionChain5 + DeadlockNestedMutexLoad
+    {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
 
     // task
     {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
@@ -63,10 +64,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
     {"task_init",             3,    0,       0      },  // init task exists/reparents
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
+    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
 
     // syscall
     {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+    {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
@@ -91,13 +94,17 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
+    {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
+    {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
+    {"cap_pager",             13,   0,       0      },  // external pager protocol (issue #107): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary
+    {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
     {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
-    {"ipc_robustness",        6,    0,       0      },  // misformed/wraparound/concurrent/cleanup
+    {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
 
     // vfs
@@ -204,6 +211,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
     {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
+
+    // hrt — hard real-time measurement under QEMU -icount (issue #101)
+    {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
 };
 
 static constexpr size_t k_expected_count_size =

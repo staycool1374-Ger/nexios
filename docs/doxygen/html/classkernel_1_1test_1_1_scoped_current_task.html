@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -139,7 +139,7 @@ Public Member Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>RAII guard that sets a task as current for the duration of a scope, restoring the original task on destruction. Interrupts are disabled for the entire scope to prevent the timer ISR from consuming stale globals or undoing set_current(). </p>
-<p>NOTE: Do NOT perform blocking operations (semaphore wait, mutex lock with contention, IPC receive) inside this scope — the scheduler cannot context-switch with IF=0. For blocking patterns, use raw Scheduler::set_current() with the defensive cleanup in ~ScopedCurrentTask. </p>
+<p>NOTE: Do NOT perform blocking operations (semaphore wait, mutex lock with contention, IPC receive) inside this scope — the scheduler cannot context-switch with IF=0. For blocking patterns, use raw <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> with the defensive cleanup in ~ScopedCurrentTask. </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="abaa46b4f89a7425f5c8618f79f766031" name="abaa46b4f89a7425f5c8618f79f766031"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abaa46b4f89a7425f5c8618f79f766031">&#9670;&#160;</a></span>ScopedCurrentTask() <span class="overload">[1/2]</span></h2>
@@ -163,6 +163,12 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1test_1_1_scoped_current_task_abaa46b4f89a7425f5c8618f79f766031_cgraph.png" border="0" usemap="#aclasskernel_1_1test_1_1_scoped_current_task_abaa46b4f89a7425f5c8618f79f766031_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -188,6 +194,12 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1test_1_1_scoped_current_task_af07fb9c054d5c8e690bb75a2e17d1d80_cgraph.png" border="0" usemap="#aclasskernel_1_1test_1_1_scoped_current_task_af07fb9c054d5c8e690bb75a2e17d1d80_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -217,7 +229,7 @@ Public Member Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1test_1_1_scoped_current_task_addc493477fa7e017dfdccbe95e6fe4bb_cgraph.png" border="0" usemap="#aclasskernel_1_1test_1_1_scoped_current_task_addc493477fa7e017dfdccbe95e6fe4bb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -249,7 +261,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1test_1_1_scoped_current_task_a74b554a5ce1bbab437f5966e09ccbb33_cgraph.png" border="0" usemap="#aclasskernel_1_1test_1_1_scoped_current_task_a74b554a5ce1bbab437f5966e09ccbb33_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>

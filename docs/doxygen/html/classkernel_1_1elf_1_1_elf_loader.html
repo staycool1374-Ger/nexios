@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -163,7 +163,7 @@ Static Public Attributes</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Background ELF loader singleton. </p>
-<p>Threading model: the shell task only sets request parameters / flags under the spinlock and posts the wake semaphore; the loader task performs all chunk work and is the single owner of every resource it allocates. No lock is ever held across <span class="tt">Scheduler::reschedule()</span>. </p>
+<p>Threading model: the shell task only sets request parameters / flags under the spinlock and posts the wake semaphore; the loader task performs all chunk work and is the single owner of every resource it allocates. No lock is ever held across <span class="tt"><a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a></span>. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="ab2b19b522ee9bb6e2c02173f2b3d552d" name="ab2b19b522ee9bb6e2c02173f2b3d552d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab2b19b522ee9bb6e2c02173f2b3d552d">&#9670;&#160;</a></span>current_path()</h2>
@@ -216,7 +216,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions. </p>
-<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s Scheduler::unregister_task / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, IPC objects, fd table, then the MemPool block. </p>
+<p>Tear down a completed-but-never-scheduled TCB. It was built by finalize_loaded_task and never add_task'd, so cleanup()'s <a class="el" href="classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9" title="Best-effort unregister of a TCB from the scheduler&#39;s live tables. Used by TaskControlBlock::cleanup()...">Scheduler::unregister_task</a> / parent / daemon logic must NOT run. Frees the same resources: PML4 user pages + page, user stack, kernel stack, IPC objects, fd table, then the MemPool block. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -463,6 +463,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>The loader task's main loop (scheduler entry via the free elf_loader_task_main bridge). Blocks on the wake semaphore, runs one load per accepted request. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
 
 </div>
 </div>
@@ -494,7 +500,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>

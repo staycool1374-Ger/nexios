@@ -48,6 +48,12 @@ static constexpr size_t IPC_MAX_MSG_SIZE = CONFIG_IPC_MAX_MSG_SIZE;
 static constexpr size_t IPC_MAX_QUEUE_MSG = CONFIG_IPC_MAX_QUEUE_MSG;
 /// @brief Number of priority levels (0 = highest urgency).
 static constexpr size_t IPC_PRIORITY_LEVELS = CONFIG_IPC_PRIORITY_LEVELS;
+/// @brief Register-payload budget for the in-register IPC fastpath (issue #11).
+static constexpr size_t IPC_FAST_PAYLOAD_BYTES =
+    CONFIG_IPC_FAST_PAYLOAD_BYTES;
+/// The register budget must fit the message payload (design paper #11 §3.8).
+static_assert(IPC_FAST_PAYLOAD_BYTES <= IPC_MAX_MSG_SIZE,
+              "IPC fastpath register budget must fit the message payload");
 
 /// @brief A single IPC message with sender ID, type, priority, and payload.
 struct Message {
@@ -85,6 +91,11 @@ struct MessageQueue {
     void init();
     bool push(const Message &msg);
     bool pop(Message &msg);
+    /// @brief Pop the highest-priority message only if it fits @p max_size.
+    ///        Fail-closed for the IPC fastpath (issue #11, paper §3.9):
+    ///        an oversized best match is NOT removed (returns false).
+    ///        Callers disambiguate empty-vs-oversized with is_empty().
+    bool pop_clamped(Message &msg, uint32_t max_size);
 
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
@@ -98,6 +109,16 @@ struct MessageQueue {
     }
 
     size_t highest_priority() const;
+
+  private:
+    /// @brief Index of the highest-priority message (FIFO within a priority).
+    ///        Caller MUST hold lock_.  Returns IPC_MAX_QUEUE_MSG when empty.
+    ///        Shared by pop() and pop_clamped() so the selection never drifts
+    ///        (INV-P, paper §3.9).
+    size_t find_best_index() const;
+    /// @brief Remove the message at @p best_idx (compaction + prio_bitmap
+    ///        rebuild).  Caller MUST hold lock_.
+    void remove_at(size_t best_idx);
 };
 
 namespace sync {
@@ -106,6 +127,10 @@ class Semaphore;
 class EventGroup;
 class Queue;
 } // namespace sync
+
+namespace ipc {
+struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
+} // namespace ipc
 
 namespace task {
 class SporadicServer;
@@ -217,7 +242,7 @@ struct TaskControlBlock {
           page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
           user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
-          canary_installed(0), fpu_used(false), fpu_state{}, program_break(0),
+          canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
           program_break_start(0), kstack_low_water_(0), text_size_(0),
           data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
@@ -232,6 +257,7 @@ struct TaskControlBlock {
           blocked_on_queue(nullptr), reply_wait(false),
           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+          blocked_on_pager_fault(nullptr),
           held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
           next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
           generation(0) {
@@ -308,10 +334,17 @@ struct TaskControlBlock {
     ///        bit CANARY_SEGMENTS set when the kernel-stack canary is armed.
     uint8_t canary_installed;
 
-    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes, 16-byte aligned).
-    ///        Zeroed on task creation; populated lazily via #NM handler.
+    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes).  64-byte aligned
+    ///        (issue #93; FXSAVE requires 16, 64 avoids split-line stores and
+    ///        matches docs/specs/fpu-context.md §3.3).  Zeroed on task
+    ///        creation; populated lazily via #NM handler.  INV-FPU1: this is
+    ///        the ONLY FPU save location — never allocated at IRQ time.
     bool fpu_used;
-    alignas(16) uint8_t fpu_state[512];
+    /// @brief Debug/invariant generation counter, bumped on every fxsave of
+    ///        this task's state (issue #93).  0 = never saved.  Unconditional
+    ///        (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.
+    uint32_t fpu_state_gen;
+    alignas(64) uint8_t fpu_state[512];
 
     uint64_t program_break;
     uint64_t program_break_start;
@@ -480,6 +513,12 @@ struct TaskControlBlock {
     /// add_recv_waiter(), cleared in the wake/remove paths.  Used by cleanup()
     /// to detach a reaped task before the TCB is freed.
     sync::Queue *waiting_on_queue;
+
+    /// @brief Non-null while this task is BLOCKED on a delegated pager fault
+    ///        (issue #107, paper §4.8).  Set by the block path, cleared by the
+    ///        single wake path (never read stale).  The record pointer is
+    ///        valid for the block duration (the registry slot owns it).
+    kernel::ipc::PagerFault *blocked_on_pager_fault;
 
     /// @brief Number of mutexes currently held by this task (for PCP ceiling
     /// tracking).

@@ -104,6 +104,14 @@ static bool any_leak(const ResourceCounters &baseline,
         return true;
     if (current.cap_slots > baseline.cap_slots)
         return true;
+    if (current.death_watches > baseline.death_watches)
+        return true;
+    if (current.pager_registrations > baseline.pager_registrations)
+        return true;
+    if (current.pager_faults > baseline.pager_faults)
+        return true;
+    if (current.pager_mappings > baseline.pager_mappings)
+        return true;
     return false;
 }
 
@@ -224,6 +232,10 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
     print_row("Open FDs", baseline.open_fds, counters_.open_fds);
     print_row("Cap objects", baseline.cap_objects, counters_.cap_objects);
     print_row("Cap slots", baseline.cap_slots, counters_.cap_slots);
+    print_row("Pager regs", baseline.pager_registrations,
+              counters_.pager_registrations);
+    print_row("Pager faults", baseline.pager_faults, counters_.pager_faults);
+    print_row("Pager maps", baseline.pager_mappings, counters_.pager_mappings);
 
     print_backtrace();
     return false;

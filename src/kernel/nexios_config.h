@@ -209,6 +209,12 @@
 #define CONFIG_IPC_MAX_MSG_SIZE 64
 #endif
 
+/// Register-payload budget for the in-register IPC fastpath (issue #11).
+/// Must be <= CONFIG_IPC_MAX_MSG_SIZE (static_assert in task.hpp).
+#ifndef CONFIG_IPC_FAST_PAYLOAD_BYTES
+#define CONFIG_IPC_FAST_PAYLOAD_BYTES 48
+#endif
+
 /// Maximum number of messages in an IPC queue.
 #ifndef CONFIG_IPC_MAX_QUEUE_MSG
 #define CONFIG_IPC_MAX_QUEUE_MSG 16
@@ -576,6 +582,71 @@
 #define CONFIG_USER_MMIO_REGION_SIZE 0x200000ULL // 2 MiB
 #endif
 
+/// Maximum number of concurrent user-space frame (shared-memory) mappings per
+/// registry (issue #106 Part B).  Each entry reserves one slot in a fixed
+/// user VA window (CONFIG_USER_SHM_VA_BASE + slot*CONFIG_USER_SHM_REGION_SIZE).
+/// Static bounded array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_FRAME_MAPS
+#define CONFIG_CAP_MAX_FRAME_MAPS 8
+#endif
+
+/// Maximum number of concurrent death-watch slots in the DeathNotify registry
+/// (issue #105 Part B).  Each slot pairs one watched task with one supervisor;
+/// registration fails closed when the registry is exhausted.  Static bounded
+/// array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_DEATH_WATCHES
+#define CONFIG_CAP_MAX_DEATH_WATCHES 16
+#endif
+
+/// Maximum number of concurrent pager-client registrations in the PagerRegistry
+/// (issue #107).  Each slot pairs one client with its designated pager; a
+/// client with a pending fault is BLOCKED and cannot fault again, so at most
+/// one outstanding fault exists per slot.  Registration fails closed when the
+/// registry is exhausted.  Static bounded array — no dynamic allocation on
+/// real-time paths.
+#ifndef CONFIG_CAP_MAX_PAGER_CLIENTS
+#define CONFIG_CAP_MAX_PAGER_CLIENTS 8
+#endif
+
+/// Hard deadline (in ticks) for one delegated page-fault round-trip (issue
+/// #107).  The watchdog expires an overdue fault and wakes the client
+/// regardless of pager liveness; per-fault fail-closed (registration kept,
+/// poisoned-VA latch set).  The map-in-progress deferral adds at most one map
+/// window.  Must be positive.
+#ifndef CONFIG_PAGER_FAULT_TIMEOUT_TICKS
+#define CONFIG_PAGER_FAULT_TIMEOUT_TICKS 1000
+#endif
+
+/// Maximum number of pages a pager may map in a single SYS_PAGER_MAP (issue
+/// #107).  Bounds the fault ledger and the timeout/abort rollback.
+#ifndef CONFIG_PAGER_MAX_PAGES_PER_FAULT
+#define CONFIG_PAGER_MAX_PAGES_PER_FAULT 4
+#endif
+
+/// Maximum number of committed (resolved) pager-mapped pages kept per client
+/// registration (issue #107).  After a fault completes, the mapped pages stay
+/// pinned in a per-slot committed table until the client dies, the cap is
+/// revoked, or the registration is removed — so the pager's frames are never
+/// freed while the client's PML4 still references them.  Fails closed when
+/// full.
+#ifndef CONFIG_PAGER_MAX_COMMITTED_PAGES
+#define CONFIG_PAGER_MAX_COMMITTED_PAGES 16
+#endif
+
+/// Base of the fixed user-space shared-memory mapping window (issue #106
+/// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
+/// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window
+/// (0x61000000 + 8*2MiB = 0x61100000).  A static_assert in cap/frame_map.cpp
+/// pins the window bounds.
+#ifndef CONFIG_USER_SHM_VA_BASE
+#define CONFIG_USER_SHM_VA_BASE 0x62000000ULL
+#endif
+
+/// Size of one user shared-memory mapping region (issue #106 Part B).
+#ifndef CONFIG_USER_SHM_REGION_SIZE
+#define CONFIG_USER_SHM_REGION_SIZE 0x200000ULL // 2 MiB
+#endif
+
 /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
 /// by a TU-local live counter in cap/iommu.cpp.
 #ifndef CONFIG_CAP_MAX_IOMMU
@@ -751,6 +822,16 @@
 /// (kernel-stack canary).  Mismatch → controlled panic (or test latch).
 #ifndef CONFIG_CANARY_GUARD
 #define CONFIG_CANARY_GUARD 1
+#endif
+
+/// Issue #92 canary relocation: cadence (in ticks) at which the scheduler
+/// samples the current user task's segment canaries on the timer tick.  A
+/// power of two so the cadence check is a cheap mask.  MUST be > 1 so the
+/// per-tick overhead stays bounded; FAST-only user tasks that never hit a
+/// FULL syscall are still corruption-checked at this interval AND on every
+/// context switch (canary_check_in_scheduler_hooks).
+#ifndef CONFIG_CANARY_SAMPLE_TICKS
+#define CONFIG_CANARY_SAMPLE_TICKS 64
 #endif
 
 /// v0.4.0 MP-4: SMEP (supervisor-mode execution prevention) — CR4 bit 20.

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -132,7 +132,7 @@ Collaboration diagram for kernel::TestContext:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
-<tr class="memitem:a49381e269f0579d3db038daec2c19331" id="r_a49381e269f0579d3db038daec2c19331"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a49381e269f0579d3db038daec2c19331">test_active</a> = false</td></tr>
+<tr class="memitem:a49381e269f0579d3db038daec2c19331" id="r_a49381e269f0579d3db038daec2c19331"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a49381e269f0579d3db038daec2c19331">test_active</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:a49381e269f0579d3db038daec2c19331"><td class="mdescLeft">&#160;</td><td class="mdescRight">In-shell test cycle running.  <br /></td></tr>
 <tr class="memitem:a42c00c04818407f47f5fc9882cbf0101" id="r_a42c00c04818407f47f5fc9882cbf0101"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a42c00c04818407f47f5fc9882cbf0101">deadline_monitor_pid</a> = 0</td></tr>
 <tr class="memitem:a55d35f1e14445636c4c0cef4407963e8" id="r_a55d35f1e14445636c4c0cef4407963e8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a55d35f1e14445636c4c0cef4407963e8">dummy_save_rsp</a> = 0</td></tr>
@@ -140,7 +140,7 @@ Data Fields</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Test-runner state that the scheduler's ISR-visible paths must read. </p>
-<p>PfA-A: production boots with <span class="tt">nullptr</span> here, so every test flag resolves to its compile-time-false default and none of the state below exists as a scheduler global. The harness constructs one instance, calls Scheduler::set_test_context(), and clears it back to nullptr afterwards. </p>
+<p>PfA-A: production boots with <span class="tt">nullptr</span> here, so every test flag resolves to its compile-time-false default and none of the state below exists as a scheduler global. The harness constructs one instance, calls <a class="el" href="classkernel_1_1_scheduler.html#a244ba672064743d1c96a1d05cd94a851" title="Injects the test-runner context (PfA-A). Production keeps nullptr so all test flags resolve to false;...">Scheduler::set_test_context()</a>, and clears it back to nullptr afterwards. </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a42c00c04818407f47f5fc9882cbf0101" name="a42c00c04818407f47f5fc9882cbf0101"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a42c00c04818407f47f5fc9882cbf0101">&#9670;&#160;</a></span>deadline_monitor_pid</h2>
@@ -180,7 +180,7 @@ Data Fields</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool kernel::TestContext::test_active = false</td>
+          <td class="memname">bool kernel::TestContext::test_active = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
 </div><div class="memdoc">

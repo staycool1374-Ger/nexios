@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__isolate_
 <div class="textblock"><code>#include &lt;<a class="el" href="test__isolate_8hpp_source.html">kernel/test/test_isolate.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pmm_8hpp_source.html">kernel/memory/pmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
@@ -139,6 +140,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__isolate_
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="gdt_8hpp_source.html">kernel/arch/gdt.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="iopb_8hpp_source.html">kernel/arch/hal/iopb.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="msix_8hpp_source.html">kernel/cap/msix.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &quot;<a class="el" href="test__registry_8gen_8hpp_source.html">test_registry.gen.hpp</a>&quot;</code><br />
 </div><div class="textblock"><div class="dynheader">
@@ -174,6 +178,11 @@ Functions</h2></td></tr>
 <tr class="memdesc:abbd641156133e294c60aa475e73dd520"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate old daemon tasks and reload them from initrd. Call AFTER snapshot_restore + snapshot_destroy to replace corrupted page tables with fresh ones from initrd.  <br /></td></tr>
 <tr class="memitem:ad8af3e26f5e10cffe7d3eecf79016c1d" id="r_ad8af3e26f5e10cffe7d3eecf79016c1d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ad8af3e26f5e10cffe7d3eecf79016c1d">kernel::test::run_all_isolated_tests</a> ()</td></tr>
 <tr class="memdesc:ad8af3e26f5e10cffe7d3eecf79016c1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run all tests from the generated registry, calling setup/test/teardown in sequence with snapshot isolation between each test.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ab1281ac93f9d469e2fc0dd731d358f3b" id="r_ab1281ac93f9d469e2fc0dd731d358f3b"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b">kernel::_stack_start</a> []</td></tr>
+<tr class="memitem:a78863de6e15cebd20b4dd89ce98ea565" id="r_a78863de6e15cebd20b4dd89ce98ea565"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a78863de6e15cebd20b4dd89ce98ea565">kernel::_stack_end</a> []</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Test isolation snapshot/restore implementation. </p>

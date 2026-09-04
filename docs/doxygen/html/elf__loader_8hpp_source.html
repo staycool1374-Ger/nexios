@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf__loader_8h
 <div class="ttc" id="aclasskernel_1_1elf_1_1_elf_loader_html_ad4b037529a02716f60ffd23d522db9ba"><div class="ttname"><a href="classkernel_1_1elf_1_1_elf_loader.html#ad4b037529a02716f60ffd23d522db9ba">kernel::elf::ElfLoader::request_load</a></div><div class="ttdeci">static LoadResult request_load(const char *path)</div><div class="ttdoc">Shell-side: start a background load. Copies the path, sets state=VALIDATING, posts the wake semaphore...</div><div class="ttdef"><b>Definition</b> elf_loader.cpp:107</div></div>
 <div class="ttc" id="aclasskernel_1_1elf_1_1_elf_loader_html_aeb702b84e85d5ec931afc3ed8acce71c"><div class="ttname"><a href="classkernel_1_1elf_1_1_elf_loader.html#aeb702b84e85d5ec931afc3ed8acce71c">kernel::elf::ElfLoader::ensure_task</a></div><div class="ttdeci">static void ensure_task()</div><div class="ttdoc">Create the background loader task (idempotent). Called from kernel.cpp before the test runner so the ...</div><div class="ttdef"><b>Definition</b> elf_loader.cpp:94</div></div>
 <div class="ttc" id="aelf_8hpp_html"><div class="ttname"><a href="elf_8hpp.html">elf.hpp</a></div><div class="ttdoc">ELF64 binary loader — validate, load, exec.</div></div>
-<div class="ttc" id="anamespacekernel_1_1elf_html"><div class="ttname"><a href="namespacekernel_1_1elf.html">kernel::elf</a></div><div class="ttdef"><b>Definition</b> elf.cpp:42</div></div>
+<div class="ttc" id="anamespacekernel_1_1elf_html"><div class="ttname"><a href="namespacekernel_1_1elf.html">kernel::elf</a></div><div class="ttdef"><b>Definition</b> elf.cpp:43</div></div>
 <div class="ttc" id="anamespacekernel_1_1elf_html_a1c90403a3aa9677a921069fbf64f5280"><div class="ttname"><a href="namespacekernel_1_1elf.html#a1c90403a3aa9677a921069fbf64f5280">kernel::elf::elf_loader_task_main</a></div><div class="ttdeci">void elf_loader_task_main()</div><div class="ttdoc">The loader task&#39;s entry: block on the wake semaphore, run one load per accepted request,...</div><div class="ttdef"><b>Definition</b> elf_loader.cpp:88</div></div>
 <div class="ttc" id="anamespacekernel_1_1elf_html_a8f59bba1cd5bc9a93b5bd73e7c43bce5"><div class="ttname"><a href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5">kernel::elf::LoadState</a></div><div class="ttdeci">LoadState</div><div class="ttdoc">Loader state (public for tests / shell).</div><div class="ttdef"><b>Definition</b> elf_loader.hpp:39</div></div>
 <div class="ttc" id="anamespacekernel_1_1elf_html_a8f59bba1cd5bc9a93b5bd73e7c43bce5a2ba22e58ca17bb728d522bba36cf8350"><div class="ttname"><a href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2ba22e58ca17bb728d522bba36cf8350">kernel::elf::LoadState::DONE</a></div><div class="ttdeci">@ DONE</div><div class="ttdoc">Completed; completed_tcb_ retained.</div><div class="ttdef"><b>Definition</b> elf_loader.hpp:44</div></div>

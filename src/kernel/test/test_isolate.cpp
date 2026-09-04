@@ -40,6 +40,9 @@
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
+#include <kernel/ipc/death_notify.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/cap/msix.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
@@ -700,6 +703,7 @@ void snapshot_restore(const char *test_name) {
     // here so ResourceTracker does not see leaked resources.
     Scheduler::drain_zombie_list();
     __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
     if (auto *tctx = Scheduler::get_test_context())
         tctx->dummy_save_rsp = 0;
 
@@ -1358,6 +1362,15 @@ void snapshot_restore(const char *test_name) {
         // device pages can never leak a stale registry slot or VA across
         // snapshot cycles.
         cap::MmioUserMap::snapshot_reset();
+        cap::FrameUserMap::snapshot_reset();
+        // Reset the death-notify registry (issue #105 Part B) so a test that
+        // registered death watches can never leak a stale watch across
+        // snapshot cycles.
+        kernel::ipc::DeathNotify::snapshot_reset();
+        // Reset the pager registry (issue #107) so a test that registered a
+        // pager or left a fault pending can never leak a stale record across
+        // snapshot cycles.
+        kernel::ipc::PagerRegistry::snapshot_reset();
         // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
         // test that created an MsixCap never leaves a recycled (bdf, entry)
         // un-claimable in the next cycle.

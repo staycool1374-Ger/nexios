@@ -186,4 +186,94 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
     return __syscall5(SYS_GETRANDOM, (long)buf, (long)len, (long)flags, 0);
 }
 
+// Issue #11 — in-register IPC fastpath (docs/specs/ipc-fastpath.md §3.2).
+// x86_64 only: payload words ride rsi/rdi/r8/r9/r10/r11 (rbp excluded for
+// frame-pointer safety; rcx/rdx carry type/data_size in the live ABI).
+// Register budget CONFIG_IPC_FAST_PAYLOAD_BYTES = 48 bytes (6 words).
+#define SYS_SEND_FAST       74
+#define SYS_RECV_FAST       75
+#define SYS_SEND_SYNC_FAST  76
+
+#if defined(__x86_64__)
+static inline long sys_send_fast(unsigned long dest, unsigned long type,
+                                 unsigned long size,
+                                 const unsigned long w[6]) {
+    long ret;
+    register unsigned long w0 asm("rsi") = w[0];
+    register unsigned long w1 asm("rdi") = w[1];
+    register unsigned long w2 asm("r8") = w[2];
+    register unsigned long w3 asm("r9") = w[3];
+    register unsigned long w4 asm("r10") = w[4];
+    register unsigned long w5 asm("r11") = w[5];
+    asm volatile("int $0x80"
+                 : "=a"(ret)
+                 : "a"(SYS_SEND_FAST), "b"(dest), "c"(type), "d"(size),
+                   "S"(w0), "D"(w1), "r"(w2), "r"(w3), "r"(w4), "r"(w5)
+                 : "memory", "cc");
+    return ret;
+}
+
+static inline long sys_send_sync_fast(unsigned long dest, unsigned long type,
+                                      unsigned long size,
+                                      unsigned long w[6]) {
+    long ret;
+    register unsigned long w0 asm("rsi") = w[0];
+    register unsigned long w1 asm("rdi") = w[1];
+    register unsigned long w2 asm("r8") = w[2];
+    register unsigned long w3 asm("r9") = w[3];
+    register unsigned long w4 asm("r10") = w[4];
+    register unsigned long w5 asm("r11") = w[5];
+    asm volatile("int $0x80"
+                 : "=a"(ret), "+S"(w0), "+D"(w1), "+r"(w2), "+r"(w3),
+                   "+r"(w4), "+r"(w5)
+                 : "a"(SYS_SEND_SYNC_FAST), "b"(dest), "c"(type), "d"(size)
+                 : "memory", "cc");
+    w[0] = w0;
+    w[1] = w1;
+    w[2] = w2;
+    w[3] = w3;
+    w[4] = w4;
+    w[5] = w5;
+    return ret;
+}
+
+static inline long sys_recv_fast(unsigned long max_size,
+                                 unsigned long timeout_ticks,
+                                 unsigned long out[6]) {
+    long ret;
+    // rsi is in/out: timeout_ticks in, payload word 0 out.
+    register unsigned long w0 asm("rsi") = timeout_ticks;
+    register unsigned long w1 asm("rdi") = 0;
+    register unsigned long w2 asm("r8") = 0;
+    register unsigned long w3 asm("r9") = 0;
+    register unsigned long w4 asm("r10") = 0;
+    register unsigned long w5 asm("r11") = 0;
+    asm volatile("int $0x80"
+                 : "=a"(ret), "+S"(w0), "=D"(w1), "=r"(w2), "=r"(w3),
+                   "=r"(w4), "=r"(w5)
+                 : "a"(SYS_RECV_FAST), "b"(0), "c"(0), "d"(max_size)
+                 : "memory", "cc");
+    out[0] = w0;
+    out[1] = w1;
+    out[2] = w2;
+    out[3] = w3;
+    out[4] = w4;
+    out[5] = w5;
+    return ret;
+}
+#else
+static inline long sys_send_fast(unsigned long, unsigned long, unsigned long,
+                                 const unsigned long[6]) {
+    return -1;
+}
+static inline long sys_send_sync_fast(unsigned long, unsigned long,
+                                      unsigned long, unsigned long[6]) {
+    return -1;
+}
+static inline long sys_recv_fast(unsigned long, unsigned long,
+                                 unsigned long[6]) {
+    return -1;
+}
+#endif
+
 #endif

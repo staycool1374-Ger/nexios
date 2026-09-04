@@ -11,6 +11,7 @@ var aarch64_2test__stubs_8cpp =
     [ "register_idt_tests", "aarch64_2test__stubs_8cpp.html#a5c1a54812368e4ac2f814c6a1ef88e24", null ],
     [ "register_pci_tests", "aarch64_2test__stubs_8cpp.html#a6685cde06dcd80a022800c8644c2bfe9", null ],
     [ "register_pic_tests", "aarch64_2test__stubs_8cpp.html#adaad5cbf59a873be4f9b89273f3c83c0", null ],
+    [ "register_pml4_clone_tests", "aarch64_2test__stubs_8cpp.html#a2b41d9f576be42172aedb0dc6f4743c4", null ],
     [ "register_process_tests", "aarch64_2test__stubs_8cpp.html#ae1d5232fbf708fd2680b373e55efe60e", null ],
     [ "register_rtc_tests", "aarch64_2test__stubs_8cpp.html#aae15a79ba7cb568b6210f193130060ba", null ],
     [ "register_shell_interaction_tests", "aarch64_2test__stubs_8cpp.html#a13714cd376989323d066b68000c5ca93", null ],

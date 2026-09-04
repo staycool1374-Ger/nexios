@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -141,7 +141,7 @@ Functions</h2></td></tr>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Demonstrates the daemon restart crash after reload_daemon_tasks. </p>
 <p>When restart_stale_daemons() is called after reload_daemon_tasks(), the newly created daemon tasks crash on their first context switch (no startup message printed). This is a latent bug in the test isolation teardown sequence: reload_daemon_tasks() leaves the kernel in a state (corrupted page tables or MemPool) that makes userspace ELF execution unsafe.</p>
-<p>The crash is observable in the serial output: [DAEMON] 'vfsd' restarted (PID=4, restart #1) ← created Scheduler: task '' (ID=4) terminated ← crashes [DAEMON] 'vfsd' died (PID=4), restart_count=1 ← notify_death in cleanup</p>
+<p>The crash is observable in the serial output: [DAEMON] 'vfsd' restarted (PID=4, restart #1) ← created <a class="el" href="classkernel_1_1_scheduler.html" title="Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (d...">Scheduler</a>: task '' (ID=4) terminated ← crashes [DAEMON] 'vfsd' died (PID=4), restart_count=1 ← notify_death in cleanup</p>
 <p>The dmesg_push_base(0xDA01) in notify_death persists the event across reboot_from_table() because the dmesg buffer is never cleared. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a2869ae06e47101f041dbf01bd18e051c" name="a2869ae06e47101f041dbf01bd18e051c"></a>

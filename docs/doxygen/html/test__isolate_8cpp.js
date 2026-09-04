@@ -10,5 +10,7 @@ var test__isolate_8cpp =
     [ "kernel::test::snapshot_create", "namespacekernel_1_1test.html#a5b61544ff1676d3f6d4a777c3211be31", null ],
     [ "kernel::test::snapshot_destroy", "namespacekernel_1_1test.html#ae4288686f519dcd0faacfe54ae2f1bff", null ],
     [ "kernel::test::snapshot_is_active", "namespacekernel_1_1test.html#abec3b271acc661cda69074923732b6d4", null ],
-    [ "kernel::test::snapshot_restore", "namespacekernel_1_1test.html#aa2a58a012f3f56d28d6e0df037fd66a6", null ]
+    [ "kernel::test::snapshot_restore", "namespacekernel_1_1test.html#aa2a58a012f3f56d28d6e0df037fd66a6", null ],
+    [ "kernel::_stack_end", "namespacekernel.html#a78863de6e15cebd20b4dd89ce98ea565", null ],
+    [ "kernel::_stack_start", "namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b", null ]
 ];

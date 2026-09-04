@@ -115,8 +115,11 @@ orphan re-enqueue; `4bf751b4` — owner-resolution self-switch no-op;
 
 ## 6. Gaps
 
-- **Priority-ordered blocked-sender wakeup** (rms-rework Plan Phase 3) — not
-  confirmed implemented; `wake_sender` pops FIFO.
+- **Priority-ordered blocked-sender wakeup** — **IMPLEMENTED** (issue #106 Part
+  A, 2026-09-03): `IPC::block_sender` inserts blocked senders in descending
+  priority order (ipc.cpp:506-512) and `IPC::wake_sender` pops the head =
+  highest priority (ipc.cpp:543-559).  Verified by
+  `IpcPriorityOrderedWake` (ipc_robustness class).
 - **`sys_receive` bounded/timeout variant** (VULN-W3 in `specs/boundary.md`) —
   uses the discarded `arg3` slot as `timeout_ticks`; verification status
   unconfirmed.

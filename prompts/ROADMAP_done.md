@@ -1,5 +1,62 @@
 # Completed Roadmap Items
 
+## v0.4.2 — User-Space Infrastructure (RELEASED 2026-09-03, milestone 1)
+
+**Purpose:** ROADMAP 0.4.2 milestone — complete the capability-based
+user-space driver/hardware infrastructure on top of v0.4.1's CSpace:
+Untyped allocator exhaustion-model sub-range carve, IRQ caps with user-space
+delivery (WAIT + NOTIFY), MMIO caps + IOPB revocation closure, IOMMU DMA
+protection (VT-d identity tables + live enablement), MSI-X per-vector caps,
+plus aarch64 PAN/PXN and aarch64 bring-up. All items SIL 3 audited and
+closed via `closes #<n>` commits.
+
+- **Untyped child-split + sub-range carve** (`3eb2a50b`, closes #1) —
+  exhaustion-model `cap::retype`: parent spent, target owns `[0,carve)`,
+  child Untyped owns `[carve,size)` and is itself retypable; `SYS_CAP_RETYPE`
+  (56). Class `cap_untyped` 9→18.
+- **IRQ caps + user-space IRQ delivery** (`ef9b748b`, closes #2) — `IrqCap`
+  (CapType::Irq, CONFIG_CAP_MAX_IRQ=16, single-owner per vector, timer 32
+  reserved), owner-tagged static `IrqDelivery` table, `SYS_IRQ_REGISTER`(57)/
+  `SYS_IRQ_WAIT`(58). Class `cap_irq` 12.
+- **IRQ NOTIFY bridge** (`c7c8e703`, closes #7) — `IrqDeliveryMode{WAIT,
+  NOTIFY}` bound atomically at arm; NOTIFY delivers `recipient->notify.
+  notify(vector)`; revoke/drain wake blocked drivers with sentinel 0. Class
+  `cap_irq_notify` 7.
+- **MMIO caps + fine-grained I/O delegation** (`08c21a5f`+`adaef25a`+
+  `4d1bca31`, closes #3) — `MmioCap` (CapType::Mmio, CONFIG_CAP_MAX_MMIO),
+  `VMM::map_mmio_from_cap`, `SYS_IOPORT_GRANT`(55) + per-task TSS I/O bitmap
+  (TSSBlock + arch::iopb pool, default-deny). Class `cap_mmio` 10→14.
+- **User MMIO map + IOPB revocation closure** (`522fa072`, closes #8) —
+  `SYS_MMIO_MAP`(61)/`SYS_MMIO_UNMAP`(62) via static `MmioUserMap` registry;
+  IOPB grant ledger re-masks granted port bits on cap revoke/dispose. Class
+  `cap_mmio_user` 9.
+- **IOMMU DMA protection** (`bf0984b1` closes #4, `95f6564c` closes #9) —
+  capability-gated identity-IOVA VT-d table infrastructure
+  (`IoMmuDmaCap`+`IoMmuManager`, `SYS_IOMMU_MAP`(59)/`SYS_IOMMU_UNMAP`(60)),
+  then live VT-d enablement: ACPI/DMAR discovery (multiboot2 RSDP→RSDT/XSDT→
+  DMAR→DRHD), `enable_translation()` fail-closed, queued-invalidation
+  IOTLB/ctx flush. Classes `cap_iommu` 12, `iommu_live` 6.
+- **MSI-X vector infrastructure** (`515da009`, closes #10) — per-vector
+  `MsixCap` wrapping one MSI-X vector/entry, capability-backed delivery via
+  generalized `SYS_IRQ_REGISTER`/`SYS_IRQ_WAIT` (dual Irq|Msix lookup),
+  `IrqSlotKind{PIC,MSIX}` kind-gated mask hooks, claim window 33–255 minus
+  kernel-reserved vectors, per-(BDF,entry) single-owner claim registry,
+  MSI-X table programmed through VMM-mapped KVA. Class `cap_msix` 13.
+- **aarch64 PAN/PXN** (`1577242c`, closes #5) — SCTLR_EL1.PAN enablement +
+  PXN/UXN closure, 5 new arch_aarch64 tests (17→22).
+- **aarch64 bring-up + ISR classification + deep-copy descriptors**
+  (`1b45a37b` closes #91, `77aabf52`/`4b2bef37` closes #100,
+  `49462ae9` closes #103) — ISR_NOERR→ISR_ERR for #VE/#HV, full aarch64 boot
+  (ABI, scheduler, page tables, IRQ, PCI, RTC), valid L3 table descriptors.
+- **Audit-backlog remediation** (`3eb2a50b`..`16192718`, closes #6) —
+  all 8 pending remediation phases (P1..P8) from `audits/`.
+
+Gates at completion (2026-09-02/03): debug `all` **1009/1009** (registered
+1024), release `all` **85/85**, selftest 133/133. SIL 3 APPROVED per issue.
+Release gate re-run 2026-09-03: debug `all` 1009/1009, release `all` 85/85.
+
+---
+
 ## Active Development — v0.4.0
 
 ### Memory Protection (Phase 4.5) — prerequisite for safe SMP

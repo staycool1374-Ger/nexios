@@ -1,6 +1,5 @@
 var syscall_8cpp =
 [
-    [ "syscall_entry", "syscall_8cpp.html#af19c0e594765b520ec48f7458f142fab", null ],
     [ "kernel::syscall_is_user_task", "namespacekernel.html#a9bbea2daa70fd81363d98ce7b9c9f943", null ],
     [ "kernel::syscall_path_open", "namespacekernel.html#a9799f9b32ab65aeb956ce8717fe91bc4", null ],
     [ "kernel::syscall_task", "namespacekernel.html#aa7278439c20dc6234a77d3b08290701f", null ],

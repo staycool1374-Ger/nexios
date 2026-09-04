@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -199,7 +199,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a44b5cc49c445a145e3b4d20712ec2360" id="r_a44b5cc49c445a145e3b4d20712ec2360"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a44b5cc49c445a145e3b4d20712ec2360">scheduler_load_kstack_top</a> = 0</td></tr>
 <tr class="memitem:a358324b930c3d48b8613572314e94320" id="r_a358324b930c3d48b8613572314e94320"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a358324b930c3d48b8613572314e94320">scheduler_switch_generation</a> = 0</td></tr>
 <tr class="memitem:acf3d43b7766a9a34a8eb7c6020ca4be8" id="r_acf3d43b7766a9a34a8eb7c6020ca4be8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acf3d43b7766a9a34a8eb7c6020ca4be8">scheduler_kernel_cr3</a> = 0</td></tr>
-<tr class="memitem:a0cd8a9e394bdaa6d815168f5208a85fa" id="r_a0cd8a9e394bdaa6d815168f5208a85fa"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cd8a9e394bdaa6d815168f5208a85fa">scheduler_need_resched</a> = false</td></tr>
+<tr class="memitem:a0cd8a9e394bdaa6d815168f5208a85fa" id="r_a0cd8a9e394bdaa6d815168f5208a85fa"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cd8a9e394bdaa6d815168f5208a85fa">scheduler_need_resched</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:a749dfb81c6c748a8fe63fae0d81f2926" id="r_a749dfb81c6c748a8fe63fae0d81f2926"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a749dfb81c6c748a8fe63fae0d81f2926">isr_nesting_depth</a> = 0</td></tr>
 <tr class="memitem:aeb543e504861746afd26a43391444494" id="r_aeb543e504861746afd26a43391444494"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb543e504861746afd26a43391444494">irq_entry_tsc</a> = 0</td></tr>
 <tr class="memitem:a0f9de4949789f8c2d559e134c0bca614" id="r_a0f9de4949789f8c2d559e134c0bca614"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0f9de4949789f8c2d559e134c0bca614">scheduler_corruption_count</a> = 0</td></tr>
@@ -211,9 +211,9 @@ Variables</h2></td></tr>
 <tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac685742eaa07e592bff0bab7216c0253">kernel::g_user_access_recover_ip</a> = 0</td></tr>
 <tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
 <tr class="memitem:a3b23d1ae6da9f187185032f5518943bd" id="r_a3b23d1ae6da9f187185032f5518943bd"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a3b23d1ae6da9f187185032f5518943bd">kernel::test::g_current_class</a> = nullptr</td></tr>
-<tr class="memitem:aa1ef760812274a6f89acf0ae8db11e94" id="r_aa1ef760812274a6f89acf0ae8db11e94"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#aa1ef760812274a6f89acf0ae8db11e94">kernel::test::g_filter_bench</a> = false</td></tr>
-<tr class="memitem:ad58197db512c3865261fe3571878f10a" id="r_ad58197db512c3865261fe3571878f10a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ad58197db512c3865261fe3571878f10a">kernel::test::g_class_auto_shutdown</a> = false</td></tr>
-<tr class="memitem:a8ae596b8a7161c4f9f54d704059f822e" id="r_a8ae596b8a7161c4f9f54d704059f822e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a8ae596b8a7161c4f9f54d704059f822e">kernel::test::g_vfs_touched</a> = false</td></tr>
+<tr class="memitem:aa1ef760812274a6f89acf0ae8db11e94" id="r_aa1ef760812274a6f89acf0ae8db11e94"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#aa1ef760812274a6f89acf0ae8db11e94">kernel::test::g_filter_bench</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:ad58197db512c3865261fe3571878f10a" id="r_ad58197db512c3865261fe3571878f10a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ad58197db512c3865261fe3571878f10a">kernel::test::g_class_auto_shutdown</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:a8ae596b8a7161c4f9f54d704059f822e" id="r_a8ae596b8a7161c4f9f54d704059f822e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a8ae596b8a7161c4f9f54d704059f822e">kernel::test::g_vfs_touched</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:ac0148da1732dbc74470b34de594530d8" id="r_ac0148da1732dbc74470b34de594530d8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#ac0148da1732dbc74470b34de594530d8">kernel::test::g_kernel_entry_ns</a> = 0</td></tr>
 <tr class="memitem:a0669429229afe644a00199171051a45a" id="r_a0669429229afe644a00199171051a45a"><td class="memItemLeft">kernel::fat32::Fat32Partition *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a0669429229afe644a00199171051a45a">kernel::gs::g_fat32_partition</a> = nullptr</td></tr>
 <tr class="memitem:a2c3eac44f3d01da3e1ecabe828ac68e5" id="r_a2c3eac44f3d01da3e1ecabe828ac68e5"><td class="memItemLeft">::net::Nic *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a2c3eac44f3d01da3e1ecabe828ac68e5">kernel::gs::g_nic</a> = nullptr</td></tr>
@@ -397,7 +397,7 @@ Variables</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool scheduler_need_resched = false</td>
+          <td class="memname">bool scheduler_need_resched = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
         </tr>
       </table>
 </div><div class="memdoc">

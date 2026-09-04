@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -149,7 +149,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Wait/PID (waitpid) syscall tests. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): the waitpid contract is driven through the REAL kernel paths — a real parent task genuinely blocks in a wait (waiting_child_pid + waiting_child_status), a real child genuinely terminates via Scheduler::terminate(), and the real wake_waiting_parent path delivers the exit status and reaps the child. No direct state writes. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): the waitpid contract is driven through the REAL kernel paths — a real parent task genuinely blocks in a wait (waiting_child_pid + waiting_child_status), a real child genuinely terminates via <a class="el" href="classkernel_1_1_scheduler.html#a79305bfd1ec5dc31b569e5d2ecfdf544" title="Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of dire...">Scheduler::terminate()</a>, and the real wake_waiting_parent path delivers the exit status and reaps the child. No direct state writes. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a087b916adb2595c8d9e851135c2b3d89" name="a087b916adb2595c8d9e851135c2b3d89"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a087b916adb2595c8d9e851135c2b3d89">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/3]</span></h2>

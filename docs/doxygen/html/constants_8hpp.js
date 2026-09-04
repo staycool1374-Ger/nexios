@@ -25,6 +25,7 @@ var constants_8hpp =
     [ "mem::HEAP_SIZE", "namespacemem.html#a8e71bca99a7bdd8712f80891bcbee986", null ],
     [ "mem::HEAP_VADDR", "namespacemem.html#aaedfe55f27a0e1a673a6f5f26479be85", null ],
     [ "arch::HHDM_OFFSET", "namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b", null ],
+    [ "arch::HHDM_WINDOW_SIZE", "namespacearch.html#ae0a5af75fabcbd33d35318bdc4f59957", null ],
     [ "arch::PAGE_SIZE", "namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af", null ],
     [ "arch::PAGE_SIZE_2M", "namespacearch.html#a9c04cc6adc05ff5fdca738fe926d5fa3", null ],
     [ "arch::PML4_ENTRIES", "namespacearch.html#aee9618915c006922ecd2deb239616abd", null ],
@@ -32,6 +33,7 @@ var constants_8hpp =
     [ "arch::PML4_USER_COUNT", "namespacearch.html#a99106776d58225cbe472f60fefc21958", null ],
     [ "arch::QEMU_ACPI_PORT", "namespacearch.html#aa93f9f35aa8343da25692bbf7bcbcac2", null ],
     [ "arch::QEMU_SHUTDOWN_PORT", "namespacearch.html#ae10cddc0db174fd265d8a8b3b50b25c9", null ],
+    [ "arch::RAM_BASE_FALLBACK", "namespacearch.html#aebf4e2fccb4c8c343da664bcdccc6a91", null ],
     [ "mem::STACK_SIZE", "namespacemem.html#a710467a64fb906235a4120c91987afab", null ],
     [ "mem::STACK_VADDR", "namespacemem.html#aa37da75950fcac32199a40638151c163", null ],
     [ "UINT64_MAX", "constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db", null ]

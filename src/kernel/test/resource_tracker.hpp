@@ -40,6 +40,10 @@ struct ResourceCounters {
     size_t open_fds;
     size_t cap_objects;
     size_t cap_slots;
+    size_t death_watches;
+    size_t pager_registrations;
+    size_t pager_faults;
+    size_t pager_mappings;
 };
 
 #ifdef CONFIG_DEBUG
@@ -145,6 +149,46 @@ class ResourceTracker {
         if (counters_.cap_slots > 0)
             --counters_.cap_slots;
     }
+    void track_death_watch_add() {
+        ++counters_.death_watches;
+    }
+    void track_death_watch_remove() {
+        if (counters_.death_watches > 0)
+            --counters_.death_watches;
+    }
+    void track_death_watch_reset() {
+        counters_.death_watches = 0;
+    }
+    void track_pager_registration_add() {
+        ++counters_.pager_registrations;
+    }
+    void track_pager_registration_remove() {
+        if (counters_.pager_registrations > 0)
+            --counters_.pager_registrations;
+    }
+    void track_pager_fault_add() {
+        ++counters_.pager_faults;
+    }
+    void track_pager_fault_remove() {
+        if (counters_.pager_faults > 0)
+            --counters_.pager_faults;
+    }
+    void track_pager_mapping_add() {
+        ++counters_.pager_mappings;
+    }
+    void track_pager_mapping_remove() {
+        if (counters_.pager_mappings > 0)
+            --counters_.pager_mappings;
+    }
+    void track_pager_registration_reset() {
+        counters_.pager_registrations = 0;
+    }
+    void track_pager_fault_reset() {
+        counters_.pager_faults = 0;
+    }
+    void track_pager_mapping_reset() {
+        counters_.pager_mappings = 0;
+    }
 
     void capture(ResourceCounters &out) const {
         out = counters_;
@@ -219,6 +263,30 @@ class ResourceTracker {
     void track_cap_slot_add() {
     }
     void track_cap_slot_remove() {
+    }
+    void track_death_watch_add() {
+    }
+    void track_death_watch_remove() {
+    }
+    void track_death_watch_reset() {
+    }
+    void track_pager_registration_add() {
+    }
+    void track_pager_registration_remove() {
+    }
+    void track_pager_fault_add() {
+    }
+    void track_pager_fault_remove() {
+    }
+    void track_pager_mapping_add() {
+    }
+    void track_pager_mapping_remove() {
+    }
+    void track_pager_registration_reset() {
+    }
+    void track_pager_fault_reset() {
+    }
+    void track_pager_mapping_reset() {
     }
     void capture(ResourceCounters &) const {
     }

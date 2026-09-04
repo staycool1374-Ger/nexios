@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__thread_8h
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>                       arch::ISRHandler handler,</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>                       <span class="keywordtype">void</span> (*isr_ack)(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector) = <span class="keyword">nullptr</span>);</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> isr_entry(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> error_code, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip);</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> isr_entry(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a>, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a>);</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span></div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keyword">static</span> IrqThread *for_vector(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector);</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span></div>
@@ -172,11 +172,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__thread_8h
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span> </div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span><span class="preprocessor">#endif </span><span class="comment">// CONFIG_THREADED_IRQS</span></div>
 <div class="ttc" id="aidt_8hpp_html"><div class="ttname"><a href="idt_8hpp.html">idt.hpp</a></div></div>
+<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1170</div></div>
+<div class="ttc" id="akernel_8cpp_html_a62fb24a5114b3a2c8227926f8f0adaa2"><div class="ttname"><a href="kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2">error_code</a></div><div class="ttdeci">uint64_t error_code</div><div class="ttdef"><b>Definition</b> kernel.cpp:1169</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a94bddce0efe1b0b6a3dade264883f7ce"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a94bddce0efe1b0b6a3dade264883f7ce">kernel::vfs::create</a></div><div class="ttdeci">int create(const char *path, uint16_t mode)</div><div class="ttdoc">Create a regular file at the given path.</div><div class="ttdef"><b>Definition</b> vfs.cpp:415</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
-<div class="ttc" id="anexios__config_8h_html_a03a2952bcbbf877610fd24374cef4021"><div class="ttname"><a href="nexios__config_8h.html#a03a2952bcbbf877610fd24374cef4021">CONFIG_MAX_THREADED_IRQS</a></div><div class="ttdeci">#define CONFIG_MAX_THREADED_IRQS</div><div class="ttdoc">Maximum number of simultaneous threaded IRQ handler tasks.</div><div class="ttdef"><b>Definition</b> nexios_config.h:621</div></div>
+<div class="ttc" id="anexios__config_8h_html_a03a2952bcbbf877610fd24374cef4021"><div class="ttname"><a href="nexios__config_8h.html#a03a2952bcbbf877610fd24374cef4021">CONFIG_MAX_THREADED_IRQS</a></div><div class="ttdeci">#define CONFIG_MAX_THREADED_IRQS</div><div class="ttdoc">Maximum number of simultaneous threaded IRQ handler tasks.</div><div class="ttdef"><b>Definition</b> nexios_config.h:726</div></div>
 <div class="ttc" id="anotify_8hpp_html"><div class="ttname"><a href="notify_8hpp.html">notify.hpp</a></div><div class="ttdoc">One-shot notification (signalling) primitive — single waiter, value delivery.</div></div>
 <div class="ttc" id="aspsc__ring_8hpp_html"><div class="ttname"><a href="spsc__ring_8hpp.html">spsc_ring.hpp</a></div><div class="ttdoc">Lock-free single-producer single-consumer ring buffer template.</div></div>
 <div class="ttc" id="atask_8hpp_html"><div class="ttname"><a href="task_8hpp.html">task.hpp</a></div><div class="ttdoc">Task control block and state definitions for the kernel scheduler.</div></div>

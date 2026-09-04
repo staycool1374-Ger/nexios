@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -138,6 +138,7 @@ Include dependency graph for test_atomic_context_switch.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:aa045e907eeb1893918a7f28260eed3d6" id="r_aa045e907eeb1893918a7f28260eed3d6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa045e907eeb1893918a7f28260eed3d6">scheduler_on_context_switch</a> ()</td></tr>
+<tr class="memdesc:aa045e907eeb1893918a7f28260eed3d6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handle a synchronous exception from EL0 that is not an SVC (aarch64, called from vectors.S el0_sync).  <br /></td></tr>
 <tr class="memitem:a1377a0ef924b8841daa4f0b3b14bfc40" id="r_a1377a0ef924b8841daa4f0b3b14bfc40"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1377a0ef924b8841daa4f0b3b14bfc40">JARVIS_TEST</a> (atomic_globals_set_on_reschedule, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aee03d453e9a03909c72b2bc1a1b94333" id="r_aee03d453e9a03909c72b2bc1a1b94333"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aee03d453e9a03909c72b2bc1a1b94333">JARVIS_TEST</a> (atomic_fpu_owner_read_write, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a87a4783c33c3393d113a617afe48e334" id="r_a87a4783c33c3393d113a617afe48e334"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a87a4783c33c3393d113a617afe48e334">JARVIS_TEST</a> (atomic_next_task_id_consistency, &quot;PRE: none | POST: none&quot;)</td></tr>
@@ -330,6 +331,9 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Handle a synchronous exception from EL0 that is not an SVC (aarch64, called from vectors.S el0_sync). </p>
+<p>User-task faults (data/page abort, illegal instruction, ...) must never be dispatched as syscalls. Report the fault once per task, park the task (BLOCKED + dequeued) so the rest of the system keeps running, and advance ELR past the faulting instruction so the parked context stays consistent. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

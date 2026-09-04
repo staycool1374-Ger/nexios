@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -137,6 +137,8 @@ Files</h2></td></tr>
 <tr class="memdesc:x86__64_2hal_2idt_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Interrupt Descriptor Table — populates IDT entries and dispatches interrupts to registered handlers. <br /></td></tr>
 <tr class="memitem:io_5Fimpl_2Ehpp" id="r_io_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="x86__64_2hal_2io__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></td></tr>
 <tr class="memdesc:x86__64_2hal_2io__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 I/O port access, control register access, and CPU instruction wrappers. <br /></td></tr>
+<tr class="memitem:iopb_2Ecpp" id="r_iopb_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="iopb_8cpp.html">iopb.cpp</a></td></tr>
+<tr class="memdesc:iopb_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 per-task I/O permission bitmap management (issues #3/#8). A single global TSS carries an 8 KiB bitmap inside its segment. Per-task bitmaps live in a static pool (default-deny all-1s); on context switch the TSS bitmap is loaded only when the owner changes. SMP (per-CPU TSS) is v0.4.4 scope (docs/specs/per-cpu-smp.md) — this module is UP-only. Issue #8 adds the grant ledger: revoking/disposing an IO MmioCap retroactively re-masks the granted port bits in live task bitmaps. <br /></td></tr>
 <tr class="memitem:msr_5Fimpl_2Ehpp" id="r_msr_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="x86__64_2hal_2msr__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2msr__impl_8hpp.html">msr_impl.hpp</a></td></tr>
 <tr class="memdesc:x86__64_2hal_2msr__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 Model-Specific Register (MSR) read/write — RDMSR, WRMSR, and common MSR constants. <br /></td></tr>
 <tr class="memitem:page_5Ftable_5Fimpl_2Ehpp" id="r_page_5Ftable_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="x86__64_2hal_2page__table__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2page__table__impl_8hpp.html">page_table_impl.hpp</a></td></tr>

@@ -65,6 +65,11 @@ uint64_t deadline_detection_integrity = 0;
 // Tracks which task's FPU state is currently in the registers (declared in
 // scheduler.hpp's extern "C" block).
 kernel::TaskControlBlock *fpu_owner = nullptr;
+// Highest isr_nesting_depth observed inside the #NM handler (issue #93,
+// INV-FPU2 pin).  Reset in test_isolate restore; tests assert it stays
+// <= baseline + 1 across a #NM storm (an interrupt-gate #NM can never nest a
+// timer ISR inside the owner-swap).
+uint64_t fpu_nm_depth_max = 0;
 } // extern "C"
 
 namespace kernel {

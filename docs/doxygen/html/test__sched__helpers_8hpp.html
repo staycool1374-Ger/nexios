@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -131,12 +131,6 @@ Include dependency graph for test_sched_helpers.hpp:</div>
 <div class="center"><img src="test__sched__helpers_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2test_2test__sched__helpers_8hpp" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
 </div>
-</div><div class="textblock"><div class="dynheader">
-This graph shows which files directly or indirectly include this file:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__sched__helpers_8hpp__dep__incl.png" border="0" usemap="#asrc_2kernel_2test_2test__sched__helpers_8hppdep" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
-</div>
 </div>
 <p><a href="test__sched__helpers_8hpp_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
@@ -171,12 +165,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a5fe8e4fe371af9ccda6c34673f1d6133" id="r_a5fe8e4fe371af9ccda6c34673f1d6133"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html#a5fe8e4fe371af9ccda6c34673f1d6133">kernel::test::wait_for_termination_safe</a> (<a class="el" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *task)</td></tr>
 <tr class="memdesc:a5fe8e4fe371af9ccda6c34673f1d6133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Safely wait for task termination in a test harness. The raw <span class="tt"><a class="el" href="namespacekernel.html#a058eeb27b3f54e789e5f17935940c161">while</a> (t-&gt;state != TERMINATED) hlt()</span> pattern reads the TCB even after the zombie reaper has freed + 0xDD-poisoned it (e.g. when the scheduler is momentarily idle between test tasks) — the poisoned state is never TERMINATED, so the harness spins forever (H2 residual hang). is_valid() checks magic FIRST (<a class="el" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler.">task.hpp</a>), so a freed block reads magic != TCB_MAGIC and the wait exits. Also re-arms scheduler_need_resched so the timer ISR keeps driving the suite.  <br /></td></tr>
 <tr class="memitem:adaf685bd992e296e30fb7358c5f28b9a" id="r_adaf685bd992e296e30fb7358c5f28b9a"><td class="memItemLeft"><a class="el" href="task__ptr_8hpp.html#a263f29adbaac80d77e9fbbbf23965723">TaskPtr</a>&#160;</td><td class="memItemRight"><a class="el" href="#adaf685bd992e296e30fb7358c5f28b9a">create_test_task</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ipc_priority=5, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period=10)</td></tr>
-<tr class="memdesc:adaf685bd992e296e30fb7358c5f28b9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use Scheduler::set_current() to impersonate the task.  <br /></td></tr>
+<tr class="memdesc:adaf685bd992e296e30fb7358c5f28b9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Safe test helpers for scheduler operations (set_current, reschedule). </p>
-<p>Tests run under the INIT task (IF=1). The timer ISR fires rate_monotonic_schedule(), which can consume stale context-switch globals or undo set_current() via <a class="el" href="scheduler_8cpp.html#aa045e907eeb1893918a7f28260eed3d6">scheduler_on_context_switch()</a>. These helpers disable interrupts to prevent ISR interference.</p>
-<p>Use yield_as() for "set_current + reschedule" pairs. Use ScopedCurrentTask for scoped current-task changes (NO blocking ops). Use raw Scheduler::set_current() for blocking operations or deliberate preemption-simulation tests. </p>
+<p>Tests run under the INIT task (IF=1). The timer ISR fires rate_monotonic_schedule(), which can consume stale context-switch globals or undo set_current() via <a class="el" href="scheduler_8cpp.html#aa045e907eeb1893918a7f28260eed3d6" title="Handle a synchronous exception from EL0 that is not an SVC (aarch64, called from vectors....">scheduler_on_context_switch()</a>. These helpers disable interrupts to prevent ISR interference.</p>
+<p>Use yield_as() for "set_current + reschedule" pairs. Use ScopedCurrentTask for scoped current-task changes (NO blocking ops). Use raw <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> for blocking operations or deliberate preemption-simulation tests. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="adaf685bd992e296e30fb7358c5f28b9a" name="adaf685bd992e296e30fb7358c5f28b9a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adaf685bd992e296e30fb7358c5f28b9a">&#9670;&#160;</a></span>create_test_task()</h2>
@@ -205,7 +199,7 @@ Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use Scheduler::set_current() to impersonate the task. </p>
+<p>Create a TCB for test use and register it with the scheduler WITHOUT making it runnable. The task is registered in id_table_ and all_tasks_ (so IPC routing via find_task() works), and is placed in BLOCKED state to prevent the scheduler's lazy-rebuild from discovering and enqueuing it. Tests use <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> to impersonate the task. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">ipc_priority</td><td>Priority visible to IPC (block_sender inheritance). </td></tr>
@@ -214,6 +208,12 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><a class="el" href="task__ptr_8hpp.html#a263f29adbaac80d77e9fbbbf23965723" title="owning pointer for a scheduler-registered task.">TaskPtr</a> with RAII cleanup (remove_task + cleanup + delete). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sched__helpers_8hpp_adaf685bd992e296e30fb7358c5f28b9a_cgraph.png" border="0" usemap="#atest__sched__helpers_8hpp_adaf685bd992e296e30fb7358c5f28b9a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>

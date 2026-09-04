@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.1</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
    </div>
   </td>
  </tr>
@@ -144,7 +144,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Deadline miss detection tests — Phase 1: BLOCKED/WAITING coverage, TERMINATED exclusion, and periodic re-arm. </p>
-<p>v0.3.10 rework (SIMULATED → DRIVEN): every test now dispatches a REAL kernel task (prio ≥ 11) whose lambda GENUINELY overruns its real deadline (busy-waits past <span class="tt">period_ticks</span> using the real timer) and then either blocks on a real semaphore (staying live for the scan) or terminates. The detection scan <span class="tt">Scheduler::scan_deadlines()</span> is the exact entry the [deadline-mon] task executes — it observes a state reached through real execution, never through direct field mutation. </p>
+<p>v0.3.10 rework (SIMULATED → DRIVEN): every test now dispatches a REAL kernel task (prio ≥ 11) whose lambda GENUINELY overruns its real deadline (busy-waits past <span class="tt">period_ticks</span> using the real timer) and then either blocks on a real semaphore (staying live for the scan) or terminates. The detection scan <span class="tt"><a class="el" href="classkernel_1_1_scheduler.html#aabd465f67eed45ec2c20877a6f7398b8" title="Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detec...">Scheduler::scan_deadlines()</a></span> is the exact entry the [deadline-mon] task executes — it observes a state reached through real execution, never through direct field mutation. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a3d6fc4e035d5bfe0c8ea665fdc11d1d8" name="a3d6fc4e035d5bfe0c8ea665fdc11d1d8"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3d6fc4e035d5bfe0c8ea665fdc11d1d8">&#9670;&#160;</a></span>register_deadline_miss_tests()</h2>

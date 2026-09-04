@@ -36,6 +36,8 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/ipc/death_notify.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
@@ -46,6 +48,7 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/frame_map.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
 
@@ -292,6 +295,7 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.waiting_on_semaphore = nullptr;
     tcb.waiting_on_eventgroup = nullptr;
     tcb.waiting_on_queue = nullptr;
+    tcb.blocked_on_pager_fault = nullptr; // issue #107
     tcb.stack_pdpt_phys_ = 0;
     tcb.is_user_ = false;
     tcb.user_stack_ = 0;
@@ -1383,12 +1387,14 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // Save parent's FPU state if it's currently in the registers
     if (__atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE) == parent) {
         arch::fxsave(parent->fpu_state);
+        ++parent->fpu_state_gen;
     }
 #else
     (void)parent;
 #endif
     // Copy FPU state to child
     tcb->fpu_used = parent->fpu_used;
+    tcb->fpu_state_gen = parent->fpu_state_gen;
     if (parent->fpu_used) {
         __builtin_memcpy(tcb->fpu_state, parent->fpu_state, 512);
     }
@@ -1775,6 +1781,14 @@ void TaskControlBlock::cleanup() noexcept {
     // instead of blocking on a zombie destination.
     kernel::daemon::notify_death(this->id);
 
+    // Issue #105 Part B: latch this task's death records and poke its
+    // supervisors BEFORE any of this task's resources are torn down, so a
+    // still-resolvable supervisor is woken while the death is fresh.  Then free
+    // this task's own watches (incl. any PENDING records it held as a
+    // supervisor for others) before its Notify is destroyed below — a poke or a
+    // drain must never touch a recycled supervisor TCB.
+    kernel::ipc::DeathNotify::on_task_death(*this);
+
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         if (fd_table.fds[i].used) {
             auto *vn = fd_table.fds[i].vnode;
@@ -1845,6 +1859,11 @@ void TaskControlBlock::cleanup() noexcept {
         // drain was added to prevent (iter-2 S1).  Runs while the mapping's
         // cap reference is still valid (before release_all_objects).
         cap::MmioUserMap::drain_task(*this);
+        cap::FrameUserMap::drain_task(*this);
+        // Issue #107: drain the pager registry BEFORE free_user_pages — a
+        // pager-mapped ledger PTE must never outlive the frames it references
+        // (the pager owns the frames; the client's teardown unmaps them first).
+        kernel::ipc::PagerRegistry::drain_task(*this);
 
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
