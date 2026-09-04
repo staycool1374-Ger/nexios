@@ -592,6 +592,41 @@
 #define CONFIG_CAP_MAX_DEATH_WATCHES 16
 #endif
 
+/// Maximum number of concurrent pager-client registrations in the PagerRegistry
+/// (issue #107).  Each slot pairs one client with its designated pager; a
+/// client with a pending fault is BLOCKED and cannot fault again, so at most
+/// one outstanding fault exists per slot.  Registration fails closed when the
+/// registry is exhausted.  Static bounded array — no dynamic allocation on
+/// real-time paths.
+#ifndef CONFIG_CAP_MAX_PAGER_CLIENTS
+#define CONFIG_CAP_MAX_PAGER_CLIENTS 8
+#endif
+
+/// Hard deadline (in ticks) for one delegated page-fault round-trip (issue
+/// #107).  The watchdog expires an overdue fault and wakes the client
+/// regardless of pager liveness; per-fault fail-closed (registration kept,
+/// poisoned-VA latch set).  The map-in-progress deferral adds at most one map
+/// window.  Must be positive.
+#ifndef CONFIG_PAGER_FAULT_TIMEOUT_TICKS
+#define CONFIG_PAGER_FAULT_TIMEOUT_TICKS 1000
+#endif
+
+/// Maximum number of pages a pager may map in a single SYS_PAGER_MAP (issue
+/// #107).  Bounds the fault ledger and the timeout/abort rollback.
+#ifndef CONFIG_PAGER_MAX_PAGES_PER_FAULT
+#define CONFIG_PAGER_MAX_PAGES_PER_FAULT 4
+#endif
+
+/// Maximum number of committed (resolved) pager-mapped pages kept per client
+/// registration (issue #107).  After a fault completes, the mapped pages stay
+/// pinned in a per-slot committed table until the client dies, the cap is
+/// revoked, or the registration is removed — so the pager's frames are never
+/// freed while the client's PML4 still references them.  Fails closed when
+/// full.
+#ifndef CONFIG_PAGER_MAX_COMMITTED_PAGES
+#define CONFIG_PAGER_MAX_COMMITTED_PAGES 16
+#endif
+
 /// Base of the fixed user-space shared-memory mapping window (issue #106
 /// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
 /// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window

@@ -37,6 +37,7 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/ipc/death_notify.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
@@ -294,6 +295,7 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.waiting_on_semaphore = nullptr;
     tcb.waiting_on_eventgroup = nullptr;
     tcb.waiting_on_queue = nullptr;
+    tcb.blocked_on_pager_fault = nullptr; // issue #107
     tcb.stack_pdpt_phys_ = 0;
     tcb.is_user_ = false;
     tcb.user_stack_ = 0;
@@ -1858,6 +1860,10 @@ void TaskControlBlock::cleanup() noexcept {
         // cap reference is still valid (before release_all_objects).
         cap::MmioUserMap::drain_task(*this);
         cap::FrameUserMap::drain_task(*this);
+        // Issue #107: drain the pager registry BEFORE free_user_pages — a
+        // pager-mapped ledger PTE must never outlive the frames it references
+        // (the pager owns the frames; the client's teardown unmaps them first).
+        kernel::ipc::PagerRegistry::drain_task(*this);
 
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot

@@ -1,182 +1,63 @@
-diff --git a/docs/specs/death-notify.md b/docs/specs/death-notify.md
+diff --git a/src/kernel/cap/frame.cpp b/src/kernel/cap/frame.cpp
+index 27876edb..8c3a9226 100644
+--- a/src/kernel/cap/frame.cpp
++++ b/src/kernel/cap/frame.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include <kernel/cap/frame.hpp>
+ #include <kernel/cap/frame_map.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+@@ -52,6 +53,10 @@ void FrameCap::dispose() noexcept {
+     // non-owning (equality-match only) in the map registry — never
+     // dereferenced after this point.
+     FrameUserMap::invalidate_cap(this);
++    // Issue #107: same closure for the pager registry's fault ledger — a
++    // pager-mapped page backed by this cap must be unmapped + unpinned before
++    // the frames are freed.
++    ipc::PagerRegistry::invalidate_cap(this);
+     for (size_t i = 0; i < count; ++i)
+         PMM::free_page(phys + i * arch::PAGE_SIZE);
+     kernel::test::ResourceTracker::instance().track_cap_object_remove();
+@@ -62,6 +67,8 @@ void FrameCap::revoke() noexcept {
+     // Issue #106 Part B: same closure as dispose — a revoked capability must
+     // not leave stale frame mappings behind (fail-closed, MMIO parity).
+     FrameUserMap::invalidate_cap(this);
++    // Issue #107: pager-ledger closure (same rationale as dispose).
++    ipc::PagerRegistry::invalidate_cap(this);
+     KernelObject::revoke();
+ }
+ 
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index ace913c4..d990fcda 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -27,6 +27,7 @@
+ #include <kernel/cap/mmio.hpp>
+ #include <kernel/cap/frame_map.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
+@@ -720,6 +721,9 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     // page-table memory).
+     cap::MmioUserMap::drain_task(*tcb);
+     cap::FrameUserMap::drain_task(*tcb);
++    // Issue #107: drain the pager registry before the old PML4 is freed so a
++    // pager-mapped ledger PTE cannot outlive the frames it references.
++    kernel::ipc::PagerRegistry::drain_task(*tcb);
+ 
+     uint64_t old_pml4 = tcb->page_table_;
+     // Issue #92 canary relocation: the scheduler now samples user-task segment
+diff --git a/src/kernel/ipc/pager_registry.cpp b/src/kernel/ipc/pager_registry.cpp
 new file mode 100644
-index 00000000..34cf0fb5
+index 00000000..4489822b
 --- /dev/null
-+++ b/docs/specs/death-notify.md
-@@ -0,0 +1,146 @@
-+# Asynchronous Task-Death Notification — Crash Supervisor (issue #105 Part B)
-+
-+## Purpose
-+
-+Let a user-space supervisor detect when a server task dies (clean exit or
-+crash), learn *which* task died and *why*, reclaim the dead task's leaked
-+capabilities, and restart the failed server.  This is the kernel-side death
-+notification mechanism behind the "Crash Supervisor" fault-isolation story of
-+issue #105; the External Pager protocol (issue #105 Part A) is explicitly out
-+of scope and deferred to a separate design paper.
-+
-+## Motivation & Non-Goals
-+
-+- **Motivation:** the existing `daemon_mgr` restart is kernel-internal and only
-+  covers the two system daemons.  User-space supervisors need the same
-+  catch-crash / reclaim / restart loop for arbitrary servers.
-+- **Non-goals:** no external pager (#105 Part A), no `daemon_mgr` change, no
-+  signal-handler semantics change, no change to the #106 shared-memory ring
-+  itself (this mechanism is the *wakeup trigger* that pairs with it).
-+
-+## Syscall ABI
-+
-+Numbers 66–68 (all NON-FAST — they take the registry lock and DEATH_RECV writes
-+user memory; see syscall-fastpath.md §4 discipline).
-+
-+| Syscall | arg0 | arg1 | Return |
-+|---|---|---|---|
-+| `SYS_DEATH_WATCH` (66) | watched pid | supervisor pid (0 = caller) | 0 on success, -1 on invalid pair / not authorized / registry full |
-+| `SYS_DEATH_RECV` (67) | `DeathRecord*` out | — | 1 (record copied), 0 (none pending, never blocks), -1 (bad pointer) |
-+| `SYS_DEATH_UNWATCH` (68) | watched pid | — | 0 |
-+
-+### `DeathRecord` layout
-+
-+```c
-+struct DeathRecord {
-+    uint64_t dead_id;    // task that died
-+    uint64_t exit_code;  // exit code, or sign-extended signal on crash
-+    uint64_t flags;      // DEATH_FLAG_SIGNAL = 1 on abnormal (crash) death
-+};
-+```
-+
-+`DEATH_FLAG_SIGNAL` is set when `exit_code` has its high bit set — the kernel's
-+convention for signal-terminated tasks (e.g. `-SIGSEGV`).  The supervisor
-+distinguishes "clean server exit" from "crashed" without parsing process
-+semantics.
-+
-+## Registry Semantics (`ipc/death_notify.{hpp,cpp}`)
-+
-+- Static bounded table, `CONFIG_CAP_MAX_DEATH_WATCHES` (16) slots — no dynamic
-+  allocation on RT paths (CODING_STYLE §4).  Registration **fails closed** when
-+  full.
-+- Slot lifecycle: `ACTIVE` (watch installed) → `PENDING` (watched task died,
-+  record latched) → `FREE` (supervisor consumed via recv, or drain freed it).
-+- **Exactly-once:** records latch only from `TaskControlBlock::cleanup()`
-+  (the single death funnel, REAPED + magic idempotency guards).  A task that
-+  dies through self-exit, signal-death, or daemon teardown produces exactly one
-+  record; repeated `drain_zombie_list()` cannot duplicate it.
-+- **Asynchronous, non-blocking:** `on_task_death` never blocks the dying task's
-+  cleanup; `SYS_DEATH_RECV` never blocks the supervisor.  A crashed or stalled
-+  supervisor can never wedge the kernel.
-+- **Authority:** a watch is installed only by (a) the supervisor for the watched
-+  task, or (b) the watched task designating a supervisor.  A third party cannot
-+  register (worst case a spurious wakeup pulse — the mechanism is info-only,
-+  no privilege transfer).
-+- **Supervisor-alive safety:** every slot stores the supervisor's `(id,
-+  generation)`.  The poke goes through the supervisor's own `Notify::notify()`
-+  which already guards `TERMINATED`/`REAPED`/generation — a poke to a just-died
-+  supervisor is a safe no-op.  `drain_task` in the supervisor's `cleanup()`
-+  frees its ACTIVE + PENDING slots before its `Notify` is destroyed.
-+
-+### Lock ordering
-+
-+`DeathNotify::s_lock_` is a leaf SpinLock.  Supervisors are collected under the
-+lock and poked **outside** it (a poke can reach the scheduler).  `s_lock_` is
-+never held while acquiring `scheduler_lock_` or a `Notify` lock, so the single
-+direction `scheduler_lock_ → s_lock_` (on_tick → flush_zombies → cleanup →
-+on_task_death) forms no cycle.  As with the other per-object locks taken in
-+`cleanup()`, `s_lock_` is acquired in that ISR-reachable path; a preempted
-+holder could in theory make a zombie-watchdog ISR spin on it, but no deadlock
-+by ordering is possible.
-+
-+## Supervisor Protocol
-+
-+1. `SYS_DEATH_WATCH(server_pid, 0)` — the supervisor registers itself for the
-+   server it manages.
-+2. Block on the supervisor's `Notify` (e.g. `sys_notify_wait`), or poll
-+   `SYS_DEATH_RECV`.
-+3. On wakeup pulse (`DEATH_WAKE_PULSE`), drain `SYS_DEATH_RECV` in a loop until
-+   it returns 0 — the pulse is a wakeup only; the authoritative data (and any
-+   fan-in of multiple deaths) lives in the registry.
-+4. Reclaim: the dead task's capabilities are already released by the kernel
-+   (`release_all_objects` → CNode dispose → FrameCap/Endpoint/etc. dispose).
-+   Any shared-memory ring frames are reclaimed through the existing
-+   `FrameUserMap::drain_task` (#106 closure) before `free_user_pages`.
-+5. Restart the server; re-arm the watch.
-+6. `SYS_DEATH_UNWATCH` is available to tear a watch down cleanly.
-+
-+### Register/death race
-+
-+`watch()` re-validates both tasks alive under the registry lock at install
-+time, so a watch on a task that died moments earlier is rejected (`-1`).  There
-+is a microscopic window where a task dies *just after* the liveness check and
-+the watch is installed for a task that is already reaping; a supervisor SHOULD
-+treat a never-firing watch as "server pre-died" and poll once after a failed
-+restart before assuming the kernel lost the record.
-+
-+## Pairing with the #106 Shared-Memory Ring
-+
-+The death pulse is the recovery trigger when a ring producer/consumer dies: the
-+supervisor wakes, drains the death record, and reclaims the ring frames through
-+its own `FrameCap` after the kernel's `FrameUserMap::drain_task` has already
-+cleared the dead task's PTEs.  The ring itself is untouched by the death path.
-+
-+## Edge Cases & Failure Policy
-+
-+- **Supervisor death while notifications pending:** its slots (ACTIVE +
-+  PENDING) are freed by `drain_task` in its cleanup; pokes are safe no-ops.
-+- **Registry full:** new registrations fail closed (`-1`); the supervisor must
-+  drain pending records before registering more.
-+- **Unwatch before death:** the watch is removed; the eventual death produces no
-+  record.
-+- **Exactly-once:** guaranteed by the cleanup() single funnel + the atomic
-+  ACTIVE→PENDING transition under the lock.
-+
-+## Invariants
-+
-+1. Every task death produces at most one record per watching supervisor.
-+2. `on_task_death` never blocks; `SYS_DEATH_RECV` never blocks.
-+3. A slot is freed exactly once (consume, unwatch, or drain — never both).
-+4. No poke dereferences a recycled supervisor TCB (id + generation revalidated
-+   at poke time).
-+5. ResourceTracker `death_watches` is zero-delta across every test.
-+
-+## Test Plan (landed — class `cap_death`, 9 TF_KERNEL)
-+
-+| Test | Asserts |
-+|---|---|
-+| `death_watch_consume_roundtrip` | watch → terminate(42) → one record, dead_id, exit_code, no SIGNAL |
-+| `death_watch_crash_reason` | signal termination → high-bit exit_code + DEATH_FLAG_SIGNAL |
-+| `death_watch_multi_fan_in` | 3 deaths → 3 records, distinct ids, baseline restored |
-+| `death_watch_after_death_rejected` | watch on reaped task fails closed |
-+| `death_watch_supervisor_death_drains` | supervisor death frees ACTIVE + PENDING slots |
-+| `death_watch_registry_full_fails_closed` | exhaustion fails closed; consume frees a slot |
-+| `death_watch_exactly_once` | one death → one record under repeated drains |
-+| `death_watch_unwatch_before_death` | unwatch suppresses the notification |
-+| `death_recv_nonblocking_none` | empty recv returns 0 immediately |
-\ No newline at end of file
-diff --git a/docs/specs/shm.md b/docs/specs/shm.md
-index 6e5eca0a..00a88e61 100644
---- a/docs/specs/shm.md
-+++ b/docs/specs/shm.md
-@@ -117,5 +117,14 @@ a privilege hole).  `MAX_SYSCALL` 63 → 66.
-   capability rights still gate *who* may map.  RO-PTE is a documented follow-on.
- - A user-space `SYS_FRAME_CREATE` grant flow across CNodes (grant/copy already
-   exist — the test installs the cap in the producer's CSpace directly).
-+
-+## Pairing with the Crash Supervisor (issue #105 Part B)
-+
-+The async task-death notification mechanism (`docs/specs/death-notify.md`,
-+SYS_DEATH_WATCH/RECV/UNWATCH) is the supervisor wakeup that pairs with this
-+ring for client-server fault recovery: when a ring producer/consumer dies, the
-+supervisor's death pulse fires, it drains the death record, and the ring frames
-+are reclaimed via `FrameUserMap::drain_task` (already in the dying task's
-+`cleanup()`) before `free_user_pages` — no stale PTEs, no leaked frames.
- - SMP multi-producer/multi-consumer rings — the protocol is SPSC; the cache-line
-   alignment of head/tail prepares for a future SMP migration.
-\ No newline at end of file
-diff --git a/src/kernel/ipc/death_notify.cpp b/src/kernel/ipc/death_notify.cpp
-new file mode 100644
-index 00000000..43fb6adf
---- /dev/null
-+++ b/src/kernel/ipc/death_notify.cpp
-@@ -0,0 +1,225 @@
++++ b/src/kernel/ipc/pager_registry.cpp
+@@ -0,0 +1,736 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -195,32 +76,45 @@ index 00000000..43fb6adf
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file death_notify.cpp
-+/// @brief DeathNotify implementation (issue #105 Part B).  Mirrors the
-+/// FrameUserMap/MmioUserMap discipline: claim/mutate under the registry lock,
-+/// poke supervisors OUTSIDE it (a Notify poke can reach the scheduler, and the
-+/// documented order is scheduler_lock_ -> registry locks).  A slot's lifetime
-+/// is ACTIVE (watch installed) -> PENDING (watched task died, record latched)
-+/// -> FREE (supervisor consumed it via recv, or drain freed it).
++/// @file pager_registry.cpp
++/// @brief PagerRegistry implementation (issue #107).  Mirrors the DeathNotify /
++/// FrameUserMap discipline: mutate under the registry lock, wake/unmap/poke
++/// OUTSIDE it.  The bounded pager contract (paper §4) is enforced here: the
++/// faulting client blocks only on its passive registry record + the scheduler;
++/// the watchdog and the drain paths are the kernel-side waker sources that do
++/// not depend on pager liveness.
++///
++/// ISR-context lock discipline (S1): delegate_fault runs in the #PF ISR with
++/// IF=0 and must NEVER block on s_lock_ (a task-context holder can be tick-
++/// preempted and never rescheduled while the ISR spins).  It uses try_lock and
++/// fails closed (SIGSEGV) when the lock is held.  The watchdog (on_tick ISR)
++/// uses try_lock for the same reason.  All other paths run in task context
++/// where the plain SpinLock is safe (holders are preemptible, ISR try_locks
++/// skip).
 +
-+#include <kernel/ipc/death_notify.hpp>
++#include <kernel/ipc/pager_registry.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/memory/vmm.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
 +#include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/core/global_state.hpp>
 +#include <kernel/test/resource_tracker.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/timer.hpp>
++#include <constants.hpp>
 +
 +namespace kernel::ipc {
 +
-+DeathNotify::Slot DeathNotify::s_slots_[DeathNotify::kMaxWatches];
-+sync::SpinLock DeathNotify::s_lock_{};
++PagerRegistry::Slot PagerRegistry::s_slots_[PagerRegistry::kMaxClients];
++sync::SpinLock PagerRegistry::s_lock_{};
++uint64_t PagerRegistry::s_fault_seq_ = 0;
 +
 +namespace {
 +
-+/// @brief Whether @p t is live enough to be watched or to supervise.
-+///        Lock-free by design: find_task() does an atomic id_table read and
-+///        the caller re-validates under s_lock_ before installing a slot, so
-+///        the residual register/death race is recovered by unwatch/drain and
-+///        documented in docs/specs/death-notify.md.
++/// @brief Whether @p t is live enough to be a client or a pager.
++///        Lock-free by design: find_task() is an atomic id_table read and the
++///        caller re-validates under s_lock_ before installing a record.
 +inline bool task_live(const TaskControlBlock *t) {
 +    if (!t)
 +        return false;
@@ -228,187 +122,685 @@ index 00000000..43fb6adf
 +           t->state != TaskState::TERMINATED && t->state != TaskState::REAPED;
 +}
 +
++/// @brief Releases a committed pin + unmaps its PTE.  Called outside s_lock_
++///        (the release may run dispose -> invalidate_cap -> s_lock_).
++inline void release_committed(uint64_t va, uint64_t pml4, cap::FrameCap *pin) {
++    if (va != 0)
++        VMM::unmap_frame_from_cap(va, pml4);
++    if (pin)
++        pin->release();
++}
++
++/// @brief Releases a committed-pin table (arrays + count).  Called outside
++///        s_lock_ (each release may run dispose -> invalidate_cap -> s_lock_).
++/// @param va    Array of committed VAs (page-aligned).
++/// @param pml4  Array of client PML4 phys.
++/// @param pin   Array of cap pins.
++/// @param count Number of entries.
++inline void release_all_committed(uint64_t *va, uint64_t *pml4,
++                                  cap::FrameCap **pin, uint32_t count) {
++    for (uint32_t i = 0; i < count; ++i)
++        release_committed(va[i], pml4[i], pin[i]);
++}
++
++/// @brief Wakes a BLOCKED pager-fault client exactly once (collect-under-lock /
++///        wake-outside-lock; id+generation revalidated; clears
++///        blocked_on_pager_fault).  Safe no-op on a dead/drained client.
++void wake_client(uint64_t client_id, uint32_t client_gen) {
++    TaskControlBlock *c = Scheduler::find_task(client_id);
++    if (!task_live(c) || c->generation != client_gen)
++        return;
++    c->blocked_on_pager_fault = nullptr;
++    Scheduler::set_task_ready(*c);
++}
++
 +} // namespace
 +
-+bool DeathNotify::watch(kernel::TaskControlBlock &actor, uint64_t watched_pid,
-+                        uint64_t supervisor_pid) {
-+    // Authority gate: the actor must be either the watched task or the
-+    // supervisor it designates.  A third party can never install a watch (a
-+    // spurious wakeup pulse on a victim supervisor is still denied).
-+    const uint64_t sup = supervisor_pid != 0 ? supervisor_pid : actor.id;
-+    if (!(actor.id == watched_pid || actor.id == sup))
++bool PagerRegistry::register_client(kernel::TaskControlBlock &client,
++                                    uint64_t pager_pid) {
++    // Authority: the caller designates a pager for ITSELF only.  A third party
++    // can never install a pager on a victim (no capability-less fault
++    // injection); pager == client is rejected (a task can never page itself).
++    if (pager_pid == 0 || pager_pid == client.id)
 +        return false;
-+    if (sup == watched_pid)
-+        return false; // self-watch is meaningless
 +
-+    // Resolve both tasks lock-free first (cheap reject), then re-validate
-+    // under s_lock_ at install time.
-+    TaskControlBlock *watched = Scheduler::find_task(watched_pid);
-+    TaskControlBlock *supervisor = Scheduler::find_task(sup);
-+    if (!task_live(watched) || !task_live(supervisor))
++    TaskControlBlock *pager = Scheduler::find_task(pager_pid);
++    if (!task_live(pager))
 +        return false;
 +
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    // Re-validate under the lock: the tasks may have died between the
-+    // lock-free resolution and the slot claim (find_task is lock-free).
-+    watched = Scheduler::find_task(watched_pid);
-+    supervisor = Scheduler::find_task(sup);
-+    if (!task_live(watched) || !task_live(supervisor))
++    pager = Scheduler::find_task(pager_pid);
++    if (!task_live(pager))
 +        return false;
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
++    // One registration per client: a client that already has a registration
++    // (to any pager) cannot register again.
++    for (size_t i = 0; i < kMaxClients; ++i) {
++        if (s_slots_[i].state != SlotState::FREE &&
++            s_slots_[i].client_id == client.id &&
++            s_slots_[i].client_gen == client.generation)
++            return false;
++    }
++    for (size_t i = 0; i < kMaxClients; ++i) {
 +        if (s_slots_[i].state == SlotState::FREE) {
 +            s_slots_[i].state = SlotState::ACTIVE;
-+            s_slots_[i].watched_id = watched_pid;
-+            s_slots_[i].watched_gen = watched->generation;
-+            s_slots_[i].supervisor_id = sup;
-+            s_slots_[i].supervisor_gen = supervisor->generation;
-+            s_slots_[i].record = {};
-+            kernel::test::ResourceTracker::instance().track_death_watch_add();
++            s_slots_[i].client_id = client.id;
++            s_slots_[i].client_gen = client.generation;
++            s_slots_[i].pager_id = pager_pid;
++            s_slots_[i].pager_gen = pager->generation;
++            s_slots_[i].poisoned_va = 0;
++            s_slots_[i].poisoned_set = false;
++            s_slots_[i].fault = {};
++            s_slots_[i].pending = false;
++            s_slots_[i].mapped_count = 0;
++            kernel::test::ResourceTracker::instance()
++                .track_pager_registration_add();
 +            return true;
 +        }
 +    }
 +    return false; // registry full — fail closed
 +}
 +
-+void DeathNotify::unwatch(kernel::TaskControlBlock &supervisor,
-+                          uint64_t watched_pid) {
-+    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
-+        auto &sl = s_slots_[i];
-+        if (sl.state != SlotState::FREE &&
-+            sl.supervisor_id == supervisor.id &&
-+            sl.supervisor_gen == supervisor.generation &&
-+            sl.watched_id == watched_pid) {
++bool PagerRegistry::unregister(kernel::TaskControlBlock &caller,
++                               uint64_t client_pid) {
++    // Authority (F3): the caller may remove its OWN registration, or be the
++    // designated pager of the client it drops.  A third party can never evict
++    // a victim's registration (availability DoS).
++    bool is_self = (caller.id == client_pid);
++    // Collect committed pins + pending-fault wake info under the lock; release
++    // and wake OUTSIDE it (the release may dispose -> invalidate_cap ->
++    // s_lock_).
++    uint64_t va[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    uint64_t pml4[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    cap::FrameCap *pin[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    uint32_t count = 0;
++    uint64_t wake_id = 0;
++    uint32_t wake_gen = 0;
++    bool wake = false;
++    bool hit = false;
++    {
++        SpinLockGuard<sync::SpinLock> guard(s_lock_);
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE || sl.client_id != client_pid)
++                continue;
++            if (!is_self && !(sl.pager_id == caller.id &&
++                              sl.pager_gen == caller.generation))
++                continue; // third party — not authorized
++            hit = true;
++            if (sl.pending) {
++                wake_id = sl.fault.client_id;
++                wake_gen = sl.fault.client_gen;
++                wake = true;
++                sl.pending = false;
++                kernel::test::ResourceTracker::instance()
++                    .track_pager_fault_remove();
++            }
++            for (uint32_t j = 0; j < sl.mapped_count; ++j) {
++                va[count] = sl.mapped_va[j];
++                pml4[count] = sl.mapped_pml4[j];
++                pin[count] = sl.mapped_pin[j];
++                ++count;
++            }
++            sl.mapped_count = 0;
 +            sl.state = SlotState::FREE;
-+            kernel::test::ResourceTracker::instance().
-+                track_death_watch_remove();
++            sl.poisoned_set = false;
++            kernel::test::ResourceTracker::instance()
++                .track_pager_registration_remove();
 +        }
 +    }
++    release_all_committed(va, pml4, pin, count);
++    for (uint32_t j = 0; j < count; ++j)
++        kernel::test::ResourceTracker::instance().track_pager_mapping_remove();
++    if (wake)
++        wake_client(wake_id, wake_gen);
++    return hit;
 +}
 +
-+int DeathNotify::recv(kernel::TaskControlBlock &supervisor, DeathRecord &out) {
++int PagerRegistry::recv(kernel::TaskControlBlock &pager, PagerFaultMsg &out) {
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
++    for (size_t i = 0; i < kMaxClients; ++i) {
 +        auto &sl = s_slots_[i];
-+        if (sl.state == SlotState::PENDING &&
-+            sl.supervisor_id == supervisor.id &&
-+            sl.supervisor_gen == supervisor.generation) {
-+            out = sl.record;
-+            sl.state = SlotState::FREE;
-+            kernel::test::ResourceTracker::instance().
-+                track_death_watch_remove();
-+            return 1;
-+        }
++        if (sl.state == SlotState::FREE || !sl.pending ||
++            sl.pager_id != pager.id || sl.pager_gen != pager.generation)
++            continue;
++        out.fault_id = sl.fault.fault_id;
++        out.client_id = sl.fault.client_id;
++        out.fault_va = sl.fault.fault_va;
++        out.fault_flags = sl.fault.fault_flags;
++        // Two-phase protocol: RECV only COPIES the fault; the record stays
++        // PENDING and is consumed by exactly one of {MAP, ABORT, watchdog,
++        // drain} (paper §4.3).  Do NOT consume here — a pager that recvs then
++        // maps needs the record present.
++        return 1;
 +    }
 +    return 0; // none pending — never blocks
 +}
 +
-+void DeathNotify::on_task_death(kernel::TaskControlBlock &dead) {
-+    // Collect the supervisor (id, generation) pairs to poke OUTSIDE the lock.
-+    // Bounded by kMaxWatches (one slot per watch; a task can be watched by
-+    // many).  The generation is captured alongside the id so the poke-time
-+    // re-resolution revalidates BOTH — a recycled TCB with the same id but a
-+    // fresh generation is never poked (docs/specs/death-notify.md invariant #4).
-+    struct Poke {
-+        uint64_t id;
-+        uint32_t gen;
-+    };
-+    Poke pokes[kMaxWatches];
-+    size_t n_pokes = 0;
++int PagerRegistry::abort(kernel::TaskControlBlock &pager, uint64_t fault_id) {
++    // Collect under the lock; rollback + wake outside it.
++    uint64_t client_id = 0;
++    uint32_t client_gen = 0;
++    bool hit = false;
 +    {
 +        SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+        for (size_t i = 0; i < kMaxWatches; ++i) {
++        for (size_t i = 0; i < kMaxClients; ++i) {
 +            auto &sl = s_slots_[i];
-+            if (sl.state != SlotState::ACTIVE)
++            if (sl.state == SlotState::FREE || !sl.pending ||
++                sl.pager_id != pager.id || sl.pager_gen != pager.generation)
 +                continue;
-+            if (sl.watched_id == dead.id && sl.watched_gen == dead.generation) {
-+                sl.state = SlotState::PENDING;
-+                sl.record.dead_id = dead.id;
-+                sl.record.exit_code = dead.exit_code;
-+                sl.record.flags =
-+                    (dead.exit_code & (1ULL << 63)) ? DEATH_FLAG_SIGNAL : 0;
-+                if (sl.supervisor_id != dead.id) {
-+                    pokes[n_pokes].id = sl.supervisor_id;
-+                    pokes[n_pokes].gen = sl.supervisor_gen;
-+                    ++n_pokes;
++            if (sl.fault.fault_id != fault_id)
++                continue;
++            client_id = sl.fault.client_id;
++            client_gen = sl.fault.client_gen;
++            // Consume the record, poison the VA latch (F9), keep the
++            // registration (per-fault fail-closed).  An aborted fault has no
++            // committed pages (map() commits atomically), so nothing to unmap.
++            sl.pending = false;
++            sl.poisoned_va = sl.fault.fault_va;
++            sl.poisoned_set = true;
++            hit = true;
++            kernel::test::ResourceTracker::instance().track_pager_fault_remove();
++            break;
++        }
++    }
++    if (!hit)
++        return -1;
++    wake_client(client_id, client_gen);
++    return 0;
++}
++
++void PagerRegistry::invalidate_cap(cap::FrameCap *fc) {
++    // Collect matched committed entries under the lock (per-slot, per-page),
++    // unmap + release pins outside it.  Pointer-equality only.  At dispose()
++    // time no live committed entry references the cap (each pin keeps it
++    // alive), so this is normally a no-op; at revoke() time it clears live
++    // entries.  Auditor S2: a slot can hold SEVERAL entries pinned to the same
++    // cap (a multi-page map with count>1, or the same cap mapped for repeated
++    // faults of one client), so every matching entry in the slot must be
++    // removed — not just the first (the old break leaked the rest until the
++    // client died).
++    uint64_t va[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    uint64_t pml4[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    cap::FrameCap *pin[CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    for (size_t i = 0; i < kMaxClients; ++i) {
++        uint32_t n = 0;
++        {
++            SpinLockGuard<sync::SpinLock> guard(s_lock_);
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE || sl.mapped_count == 0)
++                continue;
++            uint32_t j = 0;
++            while (j < sl.mapped_count) {
++                if (sl.mapped_pin[j] != fc) {
++                    ++j;
++                    continue;
 +                }
++                va[n] = sl.mapped_va[j];
++                pml4[n] = sl.mapped_pml4[j];
++                pin[n] = sl.mapped_pin[j];
++                ++n;
++                // Remove the entry (swap-with-last).
++                sl.mapped_pin[j] = sl.mapped_pin[sl.mapped_count - 1];
++                sl.mapped_va[j] = sl.mapped_va[sl.mapped_count - 1];
++                sl.mapped_pml4[j] = sl.mapped_pml4[sl.mapped_count - 1];
++                sl.mapped_pin[sl.mapped_count - 1] = nullptr;
++                sl.mapped_va[sl.mapped_count - 1] = 0;
++                sl.mapped_pml4[sl.mapped_count - 1] = 0;
++                --sl.mapped_count;
++                kernel::test::ResourceTracker::instance()
++                    .track_pager_mapping_remove();
++                // Do NOT ++j: the swapped-in element must be re-examined.
 +            }
 +        }
++        for (uint32_t k = 0; k < n; ++k)
++            release_committed(va[k], pml4[k], pin[k]);
 +    }
-+    // Poke each supervisor outside the lock.  Re-resolve by id + generation
-+    // and go through Notify::notify(), which guards TERMINATED/REAPED plus the
-+    // captured generation — a poke to a just-died supervisor is a safe no-op.
-+    for (size_t i = 0; i < n_pokes; ++i) {
-+        TaskControlBlock *sup = Scheduler::find_task(pokes[i].id);
-+        if (!task_live(sup) || sup->generation != pokes[i].gen)
-+            continue;
-+        sup->notify.notify(static_cast<uint64_t>(DEATH_WAKE_PULSE));
-+    }
-+    // Free the dead task's own slots (incl. any ACTIVE self-watch it held as a
-+    // supervisor for others) before its Notify is destroyed in cleanup().
-+    drain_task(dead);
 +}
 +
-+void DeathNotify::drain_task(kernel::TaskControlBlock &supervisor) {
-+    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
-+        auto &sl = s_slots_[i];
-+        if (sl.state != SlotState::FREE &&
-+            sl.supervisor_id == supervisor.id &&
-+            sl.supervisor_gen == supervisor.generation) {
++void PagerRegistry::drain_task(kernel::TaskControlBlock &t) {
++    // Two roles in one scan:
++    //  - pager death: evict the registration, wake the client.
++    //  - client death: consume the fault, release the committed mappings.
++    // Collect all work under the lock, then release + wake outside it.
++    struct Work {
++        uint64_t client_id;
++        uint32_t client_gen;
++        bool wake;
++        uint64_t pml4;
++        cap::FrameCap *pin;
++        uint64_t va;
++    };
++    // Bound: a slot contributes at most CONFIG_PAGER_MAX_COMMITTED_PAGES
++    // committed entries PLUS one pending record (auditor S1: the previous
++    // kMaxClients * CONFIG_PAGER_MAX_COMMITTED_PAGES could overflow by up to
++    // kMaxClients entries when every matched slot had a full committed table
++    // AND a pending fault — 8 * 17 = 136 > 128).
++    Work work[kMaxClients * (CONFIG_PAGER_MAX_COMMITTED_PAGES + 1)];
++    size_t n = 0;
++    {
++        SpinLockGuard<sync::SpinLock> guard(s_lock_);
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE)
++                continue;
++            bool is_pager =
++                (sl.pager_id == t.id && sl.pager_gen == t.generation);
++            bool is_client =
++                (sl.client_id == t.id && sl.client_gen == t.generation);
++            if (!is_pager && !is_client)
++                continue;
++            // Collect every committed pin for release outside the lock.
++            for (uint32_t j = 0; j < sl.mapped_count; ++j) {
++                work[n].client_id = sl.fault.client_id;
++                work[n].client_gen = sl.fault.client_gen;
++                work[n].wake = is_pager; // pager death wakes the client
++                work[n].pml4 = sl.mapped_pml4[j];
++                work[n].pin = sl.mapped_pin[j];
++                work[n].va = sl.mapped_va[j];
++                ++n;
++                kernel::test::ResourceTracker::instance()
++                    .track_pager_mapping_remove();
++            }
++            sl.mapped_count = 0;
++            if (sl.pending) {
++                work[n].client_id = sl.fault.client_id;
++                work[n].client_gen = sl.fault.client_gen;
++                work[n].wake = is_pager;
++                work[n].pml4 = 0;
++                work[n].pin = nullptr;
++                work[n].va = 0;
++                ++n;
++                sl.pending = false;
++                kernel::test::ResourceTracker::instance()
++                    .track_pager_fault_remove();
++            }
 +            sl.state = SlotState::FREE;
-+            kernel::test::ResourceTracker::instance().
-+                track_death_watch_remove();
++            sl.poisoned_set = false;
++            kernel::test::ResourceTracker::instance()
++                .track_pager_registration_remove();
 +        }
 +    }
-+}
-+
-+void DeathNotify::snapshot_reset() {
-+    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
-+        s_slots_[i].state = SlotState::FREE;
-+        s_slots_[i].watched_id = 0;
-+        s_slots_[i].watched_gen = 0;
-+        s_slots_[i].supervisor_id = 0;
-+        s_slots_[i].supervisor_gen = 0;
-+        s_slots_[i].record = {};
++    for (size_t i = 0; i < n; ++i) {
++        if (work[i].va != 0)
++            release_committed(work[i].va, work[i].pml4, work[i].pin);
++        if (work[i].wake)
++            wake_client(work[i].client_id, work[i].client_gen);
 +    }
-+    // The registry holds no owned resources (no cap pins), so no per-slot
-+    // release is needed — the counter is reset to the pristine 0.
-+    kernel::test::ResourceTracker::instance().track_death_watch_reset();
 +}
 +
-+size_t DeathNotify::live_count() {
++void PagerRegistry::snapshot_reset() {
++    // Clear the whole registry; collect pins and release them OUTSIDE the
++    // lock (the last release may run dispose -> invalidate_cap -> s_lock_).
++    struct Work {
++        uint64_t pml4;
++        cap::FrameCap *pin;
++        uint64_t va;
++    };
++    Work work[kMaxClients * CONFIG_PAGER_MAX_COMMITTED_PAGES];
++    size_t n = 0;
++    {
++        SpinLockGuard<sync::SpinLock> guard(s_lock_);
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE && !sl.pending &&
++                sl.mapped_count == 0) {
++                sl.poisoned_set = false;
++                continue;
++            }
++            for (uint32_t j = 0; j < sl.mapped_count; ++j) {
++                work[n].pml4 = sl.mapped_pml4[j];
++                work[n].pin = sl.mapped_pin[j];
++                work[n].va = sl.mapped_va[j];
++                ++n;
++            }
++            sl.mapped_count = 0;
++            sl.pending = false;
++            sl.state = SlotState::FREE;
++            sl.poisoned_set = false;
++        }
++        s_fault_seq_ = 0;
++        kernel::test::ResourceTracker::instance()
++            .track_pager_registration_reset();
++        kernel::test::ResourceTracker::instance().track_pager_fault_reset();
++        kernel::test::ResourceTracker::instance().track_pager_mapping_reset();
++    }
++    for (size_t i = 0; i < n; ++i)
++        release_committed(work[i].va, work[i].pml4, work[i].pin);
++}
++
++size_t PagerRegistry::live_count() {
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
 +    size_t n = 0;
-+    for (size_t i = 0; i < kMaxWatches; ++i)
++    for (size_t i = 0; i < kMaxClients; ++i)
 +        if (s_slots_[i].state != SlotState::FREE)
 +            ++n;
 +    return n;
 +}
 +
-+bool DeathNotify::is_watching(kernel::TaskControlBlock &supervisor,
-+                              uint64_t watched_pid) {
++bool PagerRegistry::is_registered(kernel::TaskControlBlock &client) {
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxWatches; ++i) {
++    for (size_t i = 0; i < kMaxClients; ++i) {
 +        auto &sl = s_slots_[i];
-+        if (sl.state != SlotState::FREE &&
-+            sl.supervisor_id == supervisor.id &&
-+            sl.supervisor_gen == supervisor.generation &&
-+            sl.watched_id == watched_pid)
++        if (sl.state != SlotState::FREE && sl.client_id == client.id &&
++            sl.client_gen == client.generation)
 +            return true;
 +    }
 +    return false;
 +}
 +
++bool PagerRegistry::pending_fault(kernel::TaskControlBlock &pager) {
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    for (size_t i = 0; i < kMaxClients; ++i) {
++        auto &sl = s_slots_[i];
++        if (sl.state != SlotState::FREE && sl.pending &&
++            sl.pager_id == pager.id && sl.pager_gen == pager.generation)
++            return true;
++    }
++    return false;
++}
++
++bool PagerRegistry::delegate_fault(kernel::TaskControlBlock &client,
++                                   uint64_t error_code, uint64_t *regs,
++                                   uint64_t cr2) {
++    (void)regs; // the #PF ISR epilogue preserves the exception frame (§4.8)
++
++    // ---- Classification F1-F10 (paper §3.2).  Any reject -> SIGSEGV path. ----
++    // F2: NOT inside a stac/clac recovery window (the recover-IP redirect
++    //     returns before this branch is reached, so this is structurally true;
++    //     kept as an explicit guard for defence in depth).
++    if (kernel::gs::user_access_recover_ip() != 0)
++        return false;
++    // F3: not-present fault (P bit 0 clear).
++    if (error_code & 1)
++        return false;
++    // F4: no reserved-bit set (page-table structure sane).
++    if (error_code & (1ULL << 3))
++        return false;
++    // F5: genuine user-address access (U/S bit set).
++    if (!(error_code & (1ULL << 2)))
++        return false;
++    // F6: data access only (I/D bit clear; v1 NX-only).
++    if (error_code & (1ULL << 4))
++        return false;
++    // F7: fault VA in the user half.
++    const uint64_t fault_va =
++        cr2 & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
++    if (cr2 >= USER_SPACE_LIMIT)
++        return false;
++
++    // F8 + record creation (under the lock).
++    //
++    // CRITICAL (S1): this runs in the #PF ISR with IF=0.  A task-context
++    // holder of s_lock_ (register/recv/map/abort/unregister) can be tick-
++    // preempted and never rescheduled while the ISR spins on the lock.  Use
++    // try_lock and FAIL CLOSED (SIGSEGV) when the lock is held — a transient
++    // SIGSEGV is far better than a permanent ISR spin deadlock.
++    if (!s_lock_.try_lock())
++        return false;
++    uint64_t pager_id = 0;
++    uint32_t pager_gen = 0;
++    size_t slot_idx = kMaxClients;
++    {
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE || sl.client_id != client.id ||
++                sl.client_gen != client.generation)
++                continue;
++            // F8: live pager, pager != client.
++            if (sl.pager_id == client.id) {
++                s_lock_.unlock();
++                return false;
++            }
++            TaskControlBlock *p = Scheduler::find_task(sl.pager_id);
++            if (!task_live(p) || p->generation != sl.pager_gen) {
++                s_lock_.unlock();
++                return false;
++            }
++            // F9: not the poisoned-aborted VA latch.
++            if (sl.poisoned_set && sl.poisoned_va == fault_va) {
++                s_lock_.unlock();
++                return false;
++            }
++            // F10: no collision with an installed canary slot.
++            if (client.canary_installed != 0) {
++                bool collide = false;
++                for (int k = 0; k < TaskControlBlock::CANARY_SEGMENTS; ++k) {
++                    if ((client.canary_installed & (1U << k)) == 0)
++                        continue;
++                    uint64_t cb = client.canary_before[k];
++                    uint64_t ca = client.canary_after[k];
++                    if ((fault_va >= cb && fault_va < cb + arch::PAGE_SIZE) ||
++                        (fault_va >= ca && fault_va < ca + arch::PAGE_SIZE)) {
++                        collide = true;
++                        break;
++                    }
++                }
++                if (collide) {
++                    s_lock_.unlock();
++                    return false;
++                }
++            }
++            // B1: the caller is RUNNING, so no pending fault exists for this
++            // slot (a client with a pending fault is BLOCKED).  Structural.
++            if (sl.pending) {
++                s_lock_.unlock();
++                return false;
++            }
++            // A successful delegation of a DIFFERENT VA clears the poison
++            // latch (paper §4.5).
++            if (sl.poisoned_set && sl.poisoned_va != fault_va)
++                sl.poisoned_set = false;
++
++            ++s_fault_seq_;
++            sl.fault = {};
++            sl.fault.fault_id = s_fault_seq_;
++            sl.fault.client_id = client.id;
++            sl.fault.client_gen = client.generation;
++            sl.fault.pager_id = sl.pager_id;
++            sl.fault.pager_gen = sl.pager_gen;
++            sl.fault.fault_va = fault_va;
++            sl.fault.fault_flags = error_code;
++            sl.fault.deadline_tick =
++                arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS;
++            sl.fault.client_pml4 = client.page_table_;
++            sl.pending = true;
++            pager_id = sl.pager_id;
++            pager_gen = sl.pager_gen;
++            slot_idx = i;
++            kernel::test::ResourceTracker::instance().track_pager_fault_add();
++            break;
++        }
++        s_lock_.unlock();
++    }
++    if (slot_idx == kMaxClients)
++        return false; // no registration -> SIGSEGV
++
++    // Pulse the pager OUTSIDE the lock (id+gen revalidated; safe no-op on a
++    // dying pager — DeathNotify pattern).
++    {
++        TaskControlBlock *p = Scheduler::find_task(pager_id);
++        if (task_live(p) && p->generation == pager_gen)
++            p->notify.notify(static_cast<uint64_t>(PAGER_FAULT_PULSE));
++    }
++
++    // Block the client inside the #PF ISR (paper §4.8): the exception frame
++    // stays on the client's kernel stack; the ISR epilogue saves it into
++    // context.rsp and iretq's to the next task.  Resume restores the frame so
++    // the faulting instruction retries.  switch_away_from_terminating only
++    // re-enqueues a RUNNING current — a BLOCKED one is left dequeued.
++    client.state = TaskState::BLOCKED;
++    client.blocked_on_pager_fault = &s_slots_[slot_idx].fault;
++    Scheduler::dequeue_ready(client);
++    Scheduler::switch_away_from_terminating(client);
++    return true;
++}
++
++int PagerRegistry::map(kernel::TaskControlBlock &pager, uint64_t fault_id,
++                       cap::FrameCap *fc, uint64_t count, uint64_t flags) {
++    (void)flags; // v1 maps NX-only; no flag-gated executability (paper §2.2)
++    if (!fc || fc->revoked() || fc->phys == 0 || fc->count == 0)
++        return -1;
++    if (count == 0 || count > CONFIG_PAGER_MAX_PAGES_PER_FAULT)
++        return -1;
++    // F4 (audit): never map beyond the cap's extent — a 1-page cap cannot
++    // map 4 pages (would expose adjacent user-owned frames).
++    if (count > fc->count)
++        return -1;
++
++    // The whole map (phases 1-3) runs under IrqGuard: the VMM walk may
++    // allocate page-table pages and the commit must be atomic against the
++    // client being terminated concurrently (F6).  A BLOCKED pager-fault client
++    // can be SIGKILL'd; if cleanup ran free_user_pages mid-map, phase 3 would
++    // write into freed page-table memory.  IrqGuard makes the map atomic w.r.t.
++    // the scheduler (no tick -> no deferred switch -> no termination).
++    arch::IrqGuard ig{};
++
++    uint64_t fault_va = 0;
++    uint64_t client_pml4 = 0;
++    uint64_t client_id = 0;
++    uint32_t client_gen = 0;
++    size_t slot_idx = kMaxClients;
++    // Phase 1: claim the record + set the MAP_IN_PROGRESS pin under the lock.
++    {
++        SpinLockGuard<sync::SpinLock> guard(s_lock_);
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE || !sl.pending ||
++                sl.pager_id != pager.id || sl.pager_gen != pager.generation)
++                continue;
++            if (sl.fault.fault_id != fault_id || sl.fault.map_in_progress)
++                return -1;
++            // The committed table must have room for @p count more pages.
++            if (sl.mapped_count + count > CONFIG_PAGER_MAX_COMMITTED_PAGES)
++                return -1;
++            fault_va = sl.fault.fault_va;
++            client_pml4 = sl.fault.client_pml4;
++            client_id = sl.fault.client_id;
++            client_gen = sl.fault.client_gen;
++            slot_idx = i;
++            sl.fault.map_in_progress = true;
++            break;
++        }
++    }
++    if (slot_idx == kMaxClients)
++        return -1;
++
++    // Phase 2: map the pager's frames into the CLIENT's PML4 OUTSIDE the lock
++    // (map_page_in_pml4 may allocate table pages; NX-only, user-accessible).
++    // Still inside IrqGuard — the map is atomic.
++    for (uint64_t i = 0; i < count; ++i) {
++        VMM::map_page_in_pml4(fault_va + i * arch::PAGE_SIZE,
++                              fc->phys + i * arch::PAGE_SIZE, /*user=*/true,
++                              /*executable=*/false, client_pml4);
++    }
++
++    // Phase 3: re-acquire the lock; re-validate the record still PENDING and
++    // the cap NOT revoked (closes the revoke-during-map race with
++    // invalidate_cap).  On success, commit into the committed table (F1: the
++    // pins are held until drain/invalidate/unregister/snapshot).  On failure,
++    // roll back the phase-2 PTEs.
++    bool committed = false;
++    {
++        SpinLockGuard<sync::SpinLock> guard(s_lock_);
++        auto &sl = s_slots_[slot_idx];
++        if (sl.state != SlotState::FREE && sl.pending &&
++            sl.fault.fault_id == fault_id && !fc->revoked()) {
++            committed = true;
++            for (uint64_t i = 0; i < count; ++i) {
++                if (!fc->acquire()) {
++                    // Cap revoked concurrently — undo what we acquired so far.
++                    for (uint64_t j = 0; j < i; ++j) {
++                        --sl.mapped_count;
++                        sl.mapped_pin[sl.mapped_count]->release();
++                        sl.mapped_va[sl.mapped_count] = 0;
++                        sl.mapped_pin[sl.mapped_count] = nullptr;
++                        sl.mapped_pml4[sl.mapped_count] = 0;
++                        kernel::test::ResourceTracker::instance()
++                            .track_pager_mapping_remove();
++                    }
++                    committed = false;
++                    break;
++                }
++                sl.mapped_va[sl.mapped_count] = fault_va + i * arch::PAGE_SIZE;
++                sl.mapped_pml4[sl.mapped_count] = client_pml4;
++                sl.mapped_pin[sl.mapped_count] = fc;
++                ++sl.mapped_count;
++                kernel::test::ResourceTracker::instance()
++                    .track_pager_mapping_add();
++            }
++        }
++        if (committed) {
++            sl.pending = false;
++            sl.fault.map_in_progress = false;
++            kernel::test::ResourceTracker::instance()
++                .track_pager_fault_remove();
++        } else {
++            sl.fault.map_in_progress = false;
++        }
++    }
++    if (!committed) {
++        // Roll back the phase-2 PTEs (map may have partially written).
++        for (uint64_t i = 0; i < count; ++i)
++            VMM::unmap_frame_from_cap(fault_va + i * arch::PAGE_SIZE,
++                                      client_pml4);
++        return -1;
++    }
++
++    // Wake the client exactly once, outside the lock (still under IrqGuard —
++    // set_task_ready takes IrqGuard itself, nesting is fine).
++    wake_client(client_id, client_gen);
++    return 0;
++}
++
++void PagerRegistry::watchdog_scan(uint64_t now) {
++    // Runs under scheduler_lock_ + IrqGuard (on_tick), i.e. in ISR context.
++    // CRITICAL: use try_lock — a task-context holder of s_lock_ (register /
++    // recv / map / abort / drain) can be preempted by this tick, and blocking
++    // here would spin the ISR forever (the holder can never be rescheduled
++    // while the ISR spins).  Skipping a tick is harmless: the 1000-tick
++    // deadline absorbs a skipped scan, and a holder is mid-operation and
++    // releases imminently.
++    if (!s_lock_.try_lock())
++        return; // registry lock held by task context — skip this tick
++    struct Work {
++        uint64_t client_id;
++        uint32_t client_gen;
++    };
++    Work work[kMaxClients];
++    size_t n = 0;
++    {
++        for (size_t i = 0; i < kMaxClients; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state == SlotState::FREE || !sl.pending)
++                continue;
++            if (sl.fault.map_in_progress)
++                continue; // mid-map — defer (deadline absorbs the window)
++            if (sl.fault.deadline_tick > now)
++                continue;
++            work[n].client_id = sl.fault.client_id;
++            work[n].client_gen = sl.fault.client_gen;
++            ++n;
++            sl.pending = false;
++            sl.poisoned_va = sl.fault.fault_va; // F9 latch
++            sl.poisoned_set = true;
++            kernel::test::ResourceTracker::instance().track_pager_fault_remove();
++            // An expired fault has no committed pages (map() commits
++            // atomically under IrqGuard); nothing to unmap.
++        }
++        s_lock_.unlock();
++    }
++    for (size_t i = 0; i < n; ++i)
++        wake_client(work[i].client_id, work[i].client_gen);
++}
++
 +} // namespace kernel::ipc
 \ No newline at end of file
-diff --git a/src/kernel/ipc/death_notify.hpp b/src/kernel/ipc/death_notify.hpp
+diff --git a/src/kernel/ipc/pager_registry.hpp b/src/kernel/ipc/pager_registry.hpp
 new file mode 100644
-index 00000000..bcc220ac
+index 00000000..99194acb
 --- /dev/null
-+++ b/src/kernel/ipc/death_notify.hpp
-@@ -0,0 +1,123 @@
++++ b/src/kernel/ipc/pager_registry.hpp
+@@ -0,0 +1,170 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -427,18 +819,20 @@ index 00000000..bcc220ac
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file death_notify.hpp
-+/// @brief Asynchronous task-death notification registry (issue #105 Part B).
-+/// Lets a user-space supervisor register a watch on a task so it is woken up
-+/// when that task dies (normal exit or crash) and can then drain the death
-+/// record, reclaim leaked capabilities, and restart the failed server.  Mirrors
-+/// the FrameUserMap/MmioUserMap static-bounded-registry pattern.
++/// @file pager_registry.hpp
++/// @brief External pager protocol registry (issue #107): user-space #PF
++/// delegation to a capability-designated Ring-3 pager.  Mirrors
++/// DeathNotify/FrameUserMap: static bounded table, claim-under-lock /
++/// poke-outside-lock, id+generation revalidation.  The bounded pager contract
++/// (docs/specs/external-pager.md §4) designs the "pager blocked while faulting
++/// task waits" deadlock out by construction.
 +
 +#pragma once
 +
 +#include <types.hpp>
-+#include <kernel/sync/spinlock.hpp>
 +#include <constants.hpp>
++#include <kernel/cap/frame.hpp>
++#include <kernel/sync/spinlock.hpp>
 +
 +namespace kernel {
 +struct TaskControlBlock;
@@ -446,164 +840,268 @@ index 00000000..bcc220ac
 +
 +namespace kernel::ipc {
 +
-+/// @brief A single task-death record delivered to a supervisor.
-+struct DeathRecord {
-+    uint64_t dead_id = 0;  ///< id of the task that died
-+    uint64_t exit_code = 0; ///< exit code / signal delivered at death
-+    uint64_t flags = 0;    ///< DEATH_FLAG_* bitmask
++/// @brief Kernel-side record of one delegated page fault (paper §4.2).
++/// Lives in a registry slot; exactly one outstanding fault per registration
++/// (a client with a pending fault is BLOCKED and cannot fault again).
++struct PagerFault {
++    uint64_t fault_id = 0;   ///< monotonic sequence number
++    uint64_t client_id = 0;  ///< faulting client id
++    uint32_t client_gen = 0; ///< client TCB generation at record time
++    uint64_t pager_id = 0;   ///< serving pager id
++    uint32_t pager_gen = 0;  ///< pager TCB generation at record time
++    uint64_t fault_va = 0;   ///< page-aligned faulting VA
++    uint64_t fault_flags = 0; ///< raw #PF error-code bits (info)
++    uint64_t deadline_tick = 0; ///< now + CONFIG_PAGER_FAULT_TIMEOUT_TICKS
++    uint64_t client_pml4 = 0; ///< client PML4 phys captured at record time
++    // Ledger of pager-mapped pages for this fault (rollback on abort/timeout):
++    uint64_t mapped_va[CONFIG_PAGER_MAX_PAGES_PER_FAULT] = {};
++    cap::FrameCap *pin[CONFIG_PAGER_MAX_PAGES_PER_FAULT] = {};
++    uint32_t mapped_count = 0;
++    bool map_in_progress = false; ///< MAP_IN_PROGRESS pin (§7.2)
++    bool poisoned_va = false;     ///< aborted-VA latch (§4.5)
 +};
 +
-+/// @brief Death record flag: the death was an abnormal termination (a signal /
-+///        crash) rather than a clean exit.  Encoded from the high bit of the
-+///        task's exit code (negative exit codes carry the signal value).
-+constexpr uint64_t DEATH_FLAG_SIGNAL = 1ULL << 0;
++/// @brief User-visible RECV payload (exactly {fault_id, client_id, fault_va,
++/// fault_flags}).
++struct PagerFaultMsg {
++    uint64_t fault_id = 0;
++    uint64_t client_id = 0;
++    uint64_t fault_va = 0;
++    uint64_t fault_flags = 0;
++};
 +
-+/// @brief The wakeup value pulsed into a supervisor's Notify when one of its
-+///        watched tasks dies.  The authoritative data lives in the registry
-+///        (drained via SYS_DEATH_RECV); the pulse is a wakeup only, so a single
-+///        64-bit slot cannot lose a fan-in of multiple deaths.
-+constexpr uint64_t DEATH_WAKE_PULSE = 0xDEAD0001;
++/// @brief Wakeup value pulsed into a pager's Notify when a client faults.
++/// Wakeup-only; the authoritative data is drained via SYS_PAGER_RECV.
++constexpr uint64_t PAGER_FAULT_PULSE = 0x50414752;
 +
-+/// @brief Asynchronous task-death notification registry (issue #105 Part B).
-+/// A static bounded table pairing watched tasks with supervisors.  When a
-+/// watched task dies, its record is latched in the registry (exactly once, in
-+/// TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the
-+/// supervisor drains via SYS_DEATH_RECV (never blocks).  No dynamic allocation
-+/// on RT paths.  Lock order: scheduler_lock_ -> death notify lock (never held
-+/// across a scheduler call or a Notify poke — supervisors are collected under
-+/// the lock and poked outside it).
-+class DeathNotify {
++/// @brief External pager registry (issue #107).  A static bounded table keyed
++/// by client task (id + generation): one registration per client pairing it
++/// with its designated pager, plus the single outstanding fault record per
++/// registration.  The bounded pager contract: the faulting client blocks only
++/// on its passive registry record + the scheduler and is woken by exactly one
++/// of {MAP-complete, ABORT, watchdog-timeout, death-drain}; the kernel never
++/// waits on the pager.  No dynamic allocation on RT paths.  Lock order:
++/// scheduler_lock_ -> pager registry lock (never held across a scheduler call,
++/// a VMM map/unmap, a Notify poke, or a cap release).
++class PagerRegistry {
 +  public:
-+    /// @brief Registers a death watch.  Authority: the caller may register
-+    ///        (a) as the supervisor for @p watched_pid, or (b) as the watched
-+    ///        task designating @p supervisor_pid.  Fails closed when the
-+    ///        registry is full or the pair is invalid.
-+    /// @param actor         The calling task.
-+    /// @param watched_pid   Task to watch.
-+    /// @param supervisor_pid Task to notify on death; 0 = actor.
-+    /// @return true when the watch was installed.
-+    static bool watch(kernel::TaskControlBlock &actor, uint64_t watched_pid,
-+                      uint64_t supervisor_pid);
++    /// @brief Designates @p pager_pid as the pager for the calling client.
++    /// Authority: the caller may register only for itself (pager live,
++    /// pager != client).  Fails closed when the registry is full.
++    static bool register_client(kernel::TaskControlBlock &client,
++                                uint64_t pager_pid);
 +
-+    /// @brief Removes every watch the supervisor holds on @p watched_pid
-+    ///        (ACTIVE or PENDING).
-+    static void unwatch(kernel::TaskControlBlock &supervisor,
-+                        uint64_t watched_pid);
++    /// @brief Removes the registration for @p client_pid.  Authority: the
++    ///        caller must be the client itself or its designated pager (F3).
++    ///        Aborts any pending fault and releases committed mappings.
++    static bool unregister(kernel::TaskControlBlock &caller,
++                           uint64_t client_pid);
 +
-+    /// @brief Drains the next pending death record for @p supervisor (never
-+    ///        blocks).
-+    /// @param[out] out Receives the record on success.
-+    /// @return 1 when a record was copied, 0 when none is pending.
-+    static int recv(kernel::TaskControlBlock &supervisor, DeathRecord &out);
++    /// @brief Drains the next pending fault for @p pager (never blocks).
++    /// @return 1 when a fault was copied, 0 when none is pending.
++    static int recv(kernel::TaskControlBlock &pager, PagerFaultMsg &out);
 +
-+    /// @brief Latch the death records for @p dead and poke the supervisors.
-+    ///        Called exactly once per task death from cleanup().  Never blocks.
-+    static void on_task_death(kernel::TaskControlBlock &dead);
++    /// @brief Pager explicitly cannot satisfy @p fault_id: consume, rollback
++    ///        ledger, wake the client, poison the VA latch (paper §4.5).
++    static int abort(kernel::TaskControlBlock &pager, uint64_t fault_id);
 +
-+    /// @brief Frees every slot whose supervisor is @p supervisor (ACTIVE or
-+    ///        PENDING).  Called from cleanup() so a dying supervisor cannot
-+    ///        leave stale watches behind.
-+    static void drain_task(kernel::TaskControlBlock &supervisor);
++    /// @brief Maps the pager's FrameCap into the client's PML4 at the fault VA
++    ///        and completes the fault (paper §5, §7.2 TOCTOU pin).
++    static int map(kernel::TaskControlBlock &pager, uint64_t fault_id,
++                   cap::FrameCap *fc, uint64_t count, uint64_t flags);
++
++    /// @brief Classifies a user-mode #PF (paper §3.2 F1-F10); if delegatable,
++    ///        records the fault, pulses the pager, and blocks the client
++    ///        inside the #PF ISR (paper §4.8).  Returns true when delegated.
++    static bool delegate_fault(kernel::TaskControlBlock &client,
++                               uint64_t error_code, uint64_t *regs,
++                               uint64_t cr2);
++
++    /// @brief Timer watchdog (called from on_tick): expire overdue faults
++    ///        (per-fault fail-closed, registration KEPT, VA poison latch).
++    static void watchdog_scan(uint64_t now);
++
++    /// @brief Removes every registration/fault whose client OR pager is @p t
++    ///        (cleanup/exec drain; rolls back any ledger before the client's
++    ///        free_user_pages, and before the pager's Notify is destroyed).
++    static void drain_task(kernel::TaskControlBlock &t);
++
++    /// @brief Unmaps every ledger entry backed by @p fc across all clients
++    ///        (FrameCap revoke/dispose closure).
++    static void invalidate_cap(cap::FrameCap *fc);
 +
 +    /// @brief Clears the whole registry (test isolation snapshot restore).
 +    static void snapshot_reset();
 +
-+    /// @brief Number of live (ACTIVE + PENDING) slots (test accessor).
++    /// @brief Number of live registrations (test accessor).
 +    static size_t live_count();
 +
-+    /// @brief Whether @p supervisor currently holds a watch on @p watched_pid
-+    ///        (test accessor).
-+    static bool is_watching(kernel::TaskControlBlock &supervisor,
-+                            uint64_t watched_pid);
++    /// @brief Whether @p client currently has a registration (test accessor).
++    static bool is_registered(kernel::TaskControlBlock &client);
++
++    /// @brief Whether @p pager has a pending fault record (test accessor).
++    static bool pending_fault(kernel::TaskControlBlock &pager);
 +
 +  private:
-+    static constexpr size_t kMaxWatches = CONFIG_CAP_MAX_DEATH_WATCHES;
-+    enum class SlotState : uint8_t { FREE = 0, ACTIVE, PENDING };
++    static constexpr size_t kMaxClients = CONFIG_CAP_MAX_PAGER_CLIENTS;
++    enum class SlotState : uint8_t { FREE = 0, ACTIVE };
 +    struct Slot {
 +        SlotState state = SlotState::FREE;
-+        uint64_t watched_id = 0;     ///< watched task id
-+        uint32_t watched_gen = 0;    ///< TCB generation at watch time
-+        uint64_t supervisor_id = 0;  ///< supervisor task id
-+        uint32_t supervisor_gen = 0; ///< TCB generation at watch time
-+        DeathRecord record = {};     ///< latched record (PENDING only)
++        uint64_t client_id = 0;  ///< client task id
++        uint32_t client_gen = 0; ///< client TCB generation at register time
++        uint64_t pager_id = 0;   ///< pager task id
++        uint32_t pager_gen = 0;  ///< pager TCB generation at register time
++        uint64_t poisoned_va = 0; ///< aborted-VA latch (F9); 0 = none
++        bool poisoned_set = false;
++        PagerFault fault = {};   ///< the single outstanding fault (if pending)
++        bool pending = false;    ///< a fault record is live for this slot
++        // Committed (resolved) pager mappings into the client's PML4.  These
++        // PERSIST after the fault completes — the pins keep the pager's
++        // FrameCap alive so free_user_pages can never free a pager-owned frame
++        // that the client's PML4 still references.  Released only by
++        // drain_task / invalidate_cap / unregister / snapshot_reset.
++        uint64_t mapped_va[CONFIG_PAGER_MAX_COMMITTED_PAGES] = {};
++        uint64_t mapped_pml4[CONFIG_PAGER_MAX_COMMITTED_PAGES] = {};
++        cap::FrameCap *mapped_pin[CONFIG_PAGER_MAX_COMMITTED_PAGES] = {};
++        uint32_t mapped_count = 0;
 +    };
-+    static Slot s_slots_[kMaxWatches];
++    static Slot s_slots_[kMaxClients];
 +    static sync::SpinLock s_lock_;
++    static uint64_t s_fault_seq_;
 +};
 +
 +} // namespace kernel::ipc
 \ No newline at end of file
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 0c1eee37..091bf920 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -39,6 +39,7 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/syscall/syscall.hpp>
+ #include <kernel/driver/driver.hpp>
+ #include <version.hpp>
+@@ -1523,6 +1524,18 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+                 kernel::Logger::error("  CR2=%x", read_cr2());
+             }
+ 
++            // Issue #107: user-mode #PF delegation to a designated pager.  The
++            // classifier (paper §3.2 F1-F10) is checked BEFORE signal
++            // delivery; if delegated, the client blocks inside this ISR and
++            // resumes to retry the faulting instruction.  The #PF ISR
++            // epilogue saves the exception frame (the block runs with no
++            // lock held, §4.8).
++            if (vector == 14 &&
++                kernel::ipc::PagerRegistry::delegate_fault(
++                    *t, error_code, regs, read_cr2())) {
++                return;
++            }
++
+             bool was_delivered =
+                 deliver_signal_to_user(t, sig, vector, error_code, rip, regs);
+             if (!was_delivered && t->state == kernel::TaskState::TERMINATED) {
 diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index f45bc16d..4440bad3 100644
+index 4440bad3..a2f4fc32 100644
 --- a/src/kernel/nexios_config.h
 +++ b/src/kernel/nexios_config.h
-@@ -584,6 +584,14 @@
- #define CONFIG_CAP_MAX_FRAME_MAPS 8
+@@ -592,6 +592,41 @@
+ #define CONFIG_CAP_MAX_DEATH_WATCHES 16
  #endif
  
-+/// Maximum number of concurrent death-watch slots in the DeathNotify registry
-+/// (issue #105 Part B).  Each slot pairs one watched task with one supervisor;
-+/// registration fails closed when the registry is exhausted.  Static bounded
-+/// array — no dynamic allocation on real-time paths.
-+#ifndef CONFIG_CAP_MAX_DEATH_WATCHES
-+#define CONFIG_CAP_MAX_DEATH_WATCHES 16
++/// Maximum number of concurrent pager-client registrations in the PagerRegistry
++/// (issue #107).  Each slot pairs one client with its designated pager; a
++/// client with a pending fault is BLOCKED and cannot fault again, so at most
++/// one outstanding fault exists per slot.  Registration fails closed when the
++/// registry is exhausted.  Static bounded array — no dynamic allocation on
++/// real-time paths.
++#ifndef CONFIG_CAP_MAX_PAGER_CLIENTS
++#define CONFIG_CAP_MAX_PAGER_CLIENTS 8
++#endif
++
++/// Hard deadline (in ticks) for one delegated page-fault round-trip (issue
++/// #107).  The watchdog expires an overdue fault and wakes the client
++/// regardless of pager liveness; per-fault fail-closed (registration kept,
++/// poisoned-VA latch set).  The map-in-progress deferral adds at most one map
++/// window.  Must be positive.
++#ifndef CONFIG_PAGER_FAULT_TIMEOUT_TICKS
++#define CONFIG_PAGER_FAULT_TIMEOUT_TICKS 1000
++#endif
++
++/// Maximum number of pages a pager may map in a single SYS_PAGER_MAP (issue
++/// #107).  Bounds the fault ledger and the timeout/abort rollback.
++#ifndef CONFIG_PAGER_MAX_PAGES_PER_FAULT
++#define CONFIG_PAGER_MAX_PAGES_PER_FAULT 4
++#endif
++
++/// Maximum number of committed (resolved) pager-mapped pages kept per client
++/// registration (issue #107).  After a fault completes, the mapped pages stay
++/// pinned in a per-slot committed table until the client dies, the cap is
++/// revoked, or the registration is removed — so the pager's frames are never
++/// freed while the client's PML4 still references them.  Fails closed when
++/// full.
++#ifndef CONFIG_PAGER_MAX_COMMITTED_PAGES
++#define CONFIG_PAGER_MAX_COMMITTED_PAGES 16
 +#endif
 +
  /// Base of the fixed user-space shared-memory mapping window (issue #106
  /// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
  /// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window
 diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index abfbb4f5..598a2936 100644
+index 87ea7d76..66e39e14 100644
 --- a/src/kernel/syscall/syscall.hpp
 +++ b/src/kernel/syscall/syscall.hpp
-@@ -95,7 +95,10 @@ enum class SyscallNumber : uint8_t {
-     FRAME_CREATE = 63, ///< get contiguous user frames into a FrameCap in the caller's CSpace (issue #106 Part B)
-     FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
-     FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
--    MAX_SYSCALL = 66,
-+    DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
-+    DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
-+    DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
-+    MAX_SYSCALL = 69,
+@@ -98,7 +98,12 @@ enum class SyscallNumber : uint8_t {
+     DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
+     DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
+     DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
+-    MAX_SYSCALL = 69,
++    PAGER_REGISTER = 69, ///< designate a pager for the caller's own faults (issue #107)
++    PAGER_RECV = 70,   ///< drain the next pending pager fault, non-blocking (issue #107)
++    PAGER_MAP = 71,    ///< map the pager's FrameCap into the client's PML4 (issue #107)
++    PAGER_ABORT = 72,  ///< pager cannot satisfy a fault: unmap + poison VA (issue #107)
++    PAGER_UNREGISTER = 73, ///< remove a pager registration (issue #107)
++    MAX_SYSCALL = 74,
  };
  
  /// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
-@@ -314,12 +317,18 @@ class Syscall {
-                                  uint64_t *);
-     static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
-                                    uint64_t *);
--    static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
-+static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
-                                      uint64_t *);
-     static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
-                                   uint64_t *);
-     static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                     uint64_t *);
-+    static uint64_t sys_death_watch(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                     uint64_t *);
-+    static uint64_t sys_death_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+@@ -329,6 +334,16 @@ class Syscall {
                                      uint64_t *);
-+    static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                       uint64_t *);
+     static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
+                                        uint64_t *);
++    static uint64_t sys_pager_register(uint64_t, uint64_t, uint64_t, uint64_t,
++                                        uint64_t *);
++    static uint64_t sys_pager_recv(uint64_t, uint64_t, uint64_t, uint64_t,
++                                    uint64_t *);
++    static uint64_t sys_pager_map(uint64_t, uint64_t, uint64_t, uint64_t,
++                                  uint64_t *);
++    static uint64_t sys_pager_abort(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
++    static uint64_t sys_pager_unregister(uint64_t, uint64_t, uint64_t, uint64_t,
++                                         uint64_t *);
  
      static constexpr SyscallHandler
          syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
-@@ -389,6 +398,9 @@ class Syscall {
-             &Syscall::sys_frame_create,
-             &Syscall::sys_frame_map,
-             &Syscall::sys_frame_unmap,
-+            &Syscall::sys_death_watch,
-+            &Syscall::sys_death_recv,
-+            &Syscall::sys_death_unwatch,
+@@ -401,6 +416,11 @@ class Syscall {
+             &Syscall::sys_death_watch,
+             &Syscall::sys_death_recv,
+             &Syscall::sys_death_unwatch,
++            &Syscall::sys_pager_register,
++            &Syscall::sys_pager_recv,
++            &Syscall::sys_pager_map,
++            &Syscall::sys_pager_abort,
++            &Syscall::sys_pager_unregister,
      };
  };
  
-diff --git a/src/kernel/syscall/syscall_handlers_death.cpp b/src/kernel/syscall/syscall_handlers_death.cpp
+diff --git a/src/kernel/syscall/syscall_handlers_pager.cpp b/src/kernel/syscall/syscall_handlers_pager.cpp
 new file mode 100644
-index 00000000..ba4c08c7
+index 00000000..70998d0a
 --- /dev/null
-+++ b/src/kernel/syscall/syscall_handlers_death.cpp
-@@ -0,0 +1,86 @@
++++ b/src/kernel/syscall/syscall_handlers_pager.cpp
+@@ -0,0 +1,125 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -622,163 +1120,316 @@ index 00000000..ba4c08c7
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file syscall_handlers_death.cpp
-+/// @brief Asynchronous task-death notification syscalls (issue #105 Part B):
-+///   SYS_DEATH_WATCH  — register a death watch on a task (authority: the
-+///                      caller is the watched task or the supervisor).
-+///   SYS_DEATH_RECV   — drain the next pending death record (never blocks).
-+///   SYS_DEATH_UNWATCH — remove a death watch.
-+/// These syscalls take the registry lock and DEATH_RECV writes user memory —
-+/// they MUST stay out of k_syscall_fast[] (issue #92 discipline).
++/// @file syscall_handlers_pager.cpp
++/// @brief External pager syscalls (issue #107):
++///   SYS_PAGER_REGISTER  — designate a pager for the caller's own faults.
++///   SYS_PAGER_RECV      — drain the next pending fault (never blocks).
++///   SYS_PAGER_MAP       — map the pager's FrameCap into the CLIENT's PML4.
++///   SYS_PAGER_ABORT     — pager cannot satisfy a fault (unmap + poison VA).
++///   SYS_PAGER_UNREGISTER — remove a pager registration.
++/// These syscalls write user memory and touch cross-task page tables — they
++/// MUST stay out of k_syscall_fast[] (issue #92 discipline).
 +
 +#include <kernel/syscall/syscall.hpp>
 +#include <kernel/syscall/syscall_helpers.hpp>
-+#include <kernel/ipc/death_notify.hpp>
++#include <kernel/ipc/pager_registry.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/frame.hpp>
 +#include <kernel/memory/checked_ptr.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
 +
 +using namespace kernel;
 +
-+uint64_t Syscall::sys_death_watch(uint64_t watched_pid, uint64_t supervisor_pid,
-+                                  uint64_t, uint64_t, uint64_t *) {
++uint64_t Syscall::sys_pager_register(uint64_t pager_pid, uint64_t, uint64_t,
++                                     uint64_t, uint64_t *) {
 +    auto *t = Scheduler::current_task();
 +    if (!t)
 +        return static_cast<uint64_t>(-1);
-+    bool ok = ipc::DeathNotify::watch(*t, watched_pid, supervisor_pid);
-+    return ok ? 0 : static_cast<uint64_t>(-1);
++    return ipc::PagerRegistry::register_client(*t, pager_pid)
++               ? 0
++               : static_cast<uint64_t>(-1);
 +}
 +
-+uint64_t Syscall::sys_death_recv(uint64_t out_ptr, uint64_t, uint64_t,
++uint64_t Syscall::sys_pager_recv(uint64_t out_ptr, uint64_t, uint64_t,
 +                                 uint64_t, uint64_t *) {
 +    auto *t = Scheduler::current_task();
 +    if (!t)
 +        return static_cast<uint64_t>(-1);
 +
-+    // MP-4 (SMAP): a user task writes via safe_copy_to_user (stac-wrapped);
-+    // a kernel task writes directly.
-+    auto *out = reinterpret_cast<ipc::DeathRecord *>(out_ptr);
-+    // Validate the destination BEFORE consuming a record: a failed recv must
-+    // not permanently lose the death notification (issue #105 Part B audit).
-+    ipc::DeathRecord rec{};
++    // Validate the destination BEFORE consuming (auditor S2 pattern from
++    // sys_death_recv): a failed recv must not lose the fault notification.
++    auto *out = reinterpret_cast<ipc::PagerFaultMsg *>(out_ptr);
++    ipc::PagerFaultMsg msg{};
 +    int got = 0;
 +    if (syscall_is_user_task()) {
-+        CheckedPtr<ipc::DeathRecord> cptr(out, 1);
++        CheckedPtr<ipc::PagerFaultMsg> cptr(out, 1);
 +        if (!cptr.valid())
 +            return static_cast<uint64_t>(-1);
-+        got = ipc::DeathNotify::recv(*t, rec);
++        got = ipc::PagerRegistry::recv(*t, msg);
 +        if (got == 0)
 +            return 0; // nothing pending — never blocks
-+        if (!cptr.copy_to(&rec))
++        if (!cptr.copy_to(&msg))
 +            return static_cast<uint64_t>(-1);
 +    } else {
 +        if (!out)
 +            return static_cast<uint64_t>(-1);
-+        got = ipc::DeathNotify::recv(*t, rec);
++        got = ipc::PagerRegistry::recv(*t, msg);
 +        if (got == 0)
-+            return 0; // nothing pending — never blocks
-+        *out = rec;
++            return 0;
++        *out = msg;
 +    }
 +    return 1;
 +}
 +
-+uint64_t Syscall::sys_death_unwatch(uint64_t watched_pid, uint64_t, uint64_t,
-+                                    uint64_t, uint64_t *) {
++uint64_t Syscall::sys_pager_map(uint64_t fault_id, uint64_t cap_handle,
++                                uint64_t count, uint64_t flags, uint64_t *) {
++    auto *pager = Scheduler::current_task();
++    if (!pager)
++        return static_cast<uint64_t>(-1);
++
++    // Capability-gated: the pager must hold the Frame capability it maps
++    // (type + WRITE).  Mirrors sys_frame_map.
++    pager->ensure_cspace();
++    cap::CNode *cs = pager->get_cspace();
++    if (!cs)
++        return static_cast<uint64_t>(-1);
++    KernelObject *obj =
++        cap::lookup(cs, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
++    if (!obj)
++        return static_cast<uint64_t>(-1);
++    auto *fc = static_cast<cap::FrameCap *>(obj);
++
++    int r = ipc::PagerRegistry::map(*pager, fault_id, fc, count, flags);
++    obj->release();
++    return r == 0 ? 0 : static_cast<uint64_t>(-1);
++}
++
++uint64_t Syscall::sys_pager_abort(uint64_t fault_id, uint64_t, uint64_t,
++                                  uint64_t, uint64_t *) {
 +    auto *t = Scheduler::current_task();
 +    if (!t)
 +        return static_cast<uint64_t>(-1);
-+    ipc::DeathNotify::unwatch(*t, watched_pid);
-+    return 0;
++    return ipc::PagerRegistry::abort(*t, fault_id) == 0
++               ? 0
++               : static_cast<uint64_t>(-1);
++}
++
++uint64_t Syscall::sys_pager_unregister(uint64_t client_pid, uint64_t, uint64_t,
++                                       uint64_t, uint64_t *) {
++    auto *t = Scheduler::current_task();
++    if (!t)
++        return static_cast<uint64_t>(-1);
++    // Authority is enforced inside the registry: the caller may remove its own
++    // registration, or its designated pager may drop it (checked by slot
++    // match against the caller).
++    return ipc::PagerRegistry::unregister(*t, client_pid)
++               ? 0
++               : static_cast<uint64_t>(-1);
 +}
 \ No newline at end of file
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index c20c11f4..69bc0387 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+@@ -1623,6 +1624,12 @@ void Scheduler::on_tick() noexcept {
+         }
+ #endif
+ 
++        // Issue #107: external-pager fault watchdog — expire overdue delegated
++        // faults (per-fault fail-closed, registration KEPT, VA poison latch).
++        // Runs inside the scheduler_lock_ + IrqGuard window; records mid-map
++        // (map_in_progress) are deferred this tick.
++        kernel::ipc::PagerRegistry::watchdog_scan(current_tick);
++
+         if (s_deferred_kill_count > 0)
+             Scheduler::process_deferred_kills();
+ 
 diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 1bff2d4c..674146dc 100644
+index 674146dc..e90a9d80 100644
 --- a/src/kernel/task/task.cpp
 +++ b/src/kernel/task/task.cpp
-@@ -36,6 +36,7 @@
- #include <kernel/cap/cap.hpp>
+@@ -37,6 +37,7 @@
  #include <kernel/ipc/ipc.hpp>
  #include <kernel/ipc/buffer_pool.hpp>
-+#include <kernel/ipc/death_notify.hpp>
+ #include <kernel/ipc/death_notify.hpp>
++#include <kernel/ipc/pager_registry.hpp>
  #include <kernel/daemon/daemon_mgr.hpp>
  #include <kernel/sync/notify.hpp>
  #include <kernel/sync/eventgroup.hpp>
-@@ -1778,6 +1779,14 @@ void TaskControlBlock::cleanup() noexcept {
-     // instead of blocking on a zombie destination.
-     kernel::daemon::notify_death(this->id);
+@@ -294,6 +295,7 @@ void init_task_common(TaskControlBlock &tcb) {
+     tcb.waiting_on_semaphore = nullptr;
+     tcb.waiting_on_eventgroup = nullptr;
+     tcb.waiting_on_queue = nullptr;
++    tcb.blocked_on_pager_fault = nullptr; // issue #107
+     tcb.stack_pdpt_phys_ = 0;
+     tcb.is_user_ = false;
+     tcb.user_stack_ = 0;
+@@ -1858,6 +1860,10 @@ void TaskControlBlock::cleanup() noexcept {
+         // cap reference is still valid (before release_all_objects).
+         cap::MmioUserMap::drain_task(*this);
+         cap::FrameUserMap::drain_task(*this);
++        // Issue #107: drain the pager registry BEFORE free_user_pages — a
++        // pager-mapped ledger PTE must never outlive the frames it references
++        // (the pager owns the frames; the client's teardown unmaps them first).
++        kernel::ipc::PagerRegistry::drain_task(*this);
  
-+    // Issue #105 Part B: latch this task's death records and poke its
-+    // supervisors BEFORE any of this task's resources are torn down, so a
-+    // still-resolvable supervisor is woken while the death is fresh.  Then free
-+    // this task's own watches (incl. any PENDING records it held as a
-+    // supervisor for others) before its Notify is destroyed below — a poke or a
-+    // drain must never touch a recycled supervisor TCB.
-+    kernel::ipc::DeathNotify::on_task_death(*this);
+         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
+         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 85defbbb..69ed97ef 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -107,6 +107,10 @@ class EventGroup;
+ class Queue;
+ } // namespace sync
+ 
++namespace ipc {
++struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
++} // namespace ipc
 +
-     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
-         if (fd_table.fds[i].used) {
-             auto *vn = fd_table.fds[i].vnode;
+ namespace task {
+ class SporadicServer;
+ void dmesg_task_main();
+@@ -232,6 +236,7 @@ struct TaskControlBlock {
+           blocked_on_queue(nullptr), reply_wait(false),
+           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
++          blocked_on_pager_fault(nullptr),
+           held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
+           next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
+           generation(0) {
+@@ -488,6 +493,12 @@ struct TaskControlBlock {
+     /// to detach a reaped task before the TCB is freed.
+     sync::Queue *waiting_on_queue;
+ 
++    /// @brief Non-null while this task is BLOCKED on a delegated pager fault
++    ///        (issue #107, paper §4.8).  Set by the block path, cleared by the
++    ///        single wake path (never read stale).  The record pointer is
++    ///        valid for the block duration (the registry slot owns it).
++    kernel::ipc::PagerFault *blocked_on_pager_fault;
++
+     /// @brief Number of mutexes currently held by this task (for PCP ceiling
+     /// tracking).
+     size_t held_ceiling_depth_;
 diff --git a/src/kernel/test/resource_tracker.cpp b/src/kernel/test/resource_tracker.cpp
-index d657bfaa..071fd8ca 100644
+index 071fd8ca..03d893ba 100644
 --- a/src/kernel/test/resource_tracker.cpp
 +++ b/src/kernel/test/resource_tracker.cpp
-@@ -104,6 +104,8 @@ static bool any_leak(const ResourceCounters &baseline,
+@@ -106,6 +106,12 @@ static bool any_leak(const ResourceCounters &baseline,
          return true;
-     if (current.cap_slots > baseline.cap_slots)
+     if (current.death_watches > baseline.death_watches)
          return true;
-+    if (current.death_watches > baseline.death_watches)
++    if (current.pager_registrations > baseline.pager_registrations)
++        return true;
++    if (current.pager_faults > baseline.pager_faults)
++        return true;
++    if (current.pager_mappings > baseline.pager_mappings)
 +        return true;
      return false;
  }
  
+@@ -226,6 +232,10 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
+     print_row("Open FDs", baseline.open_fds, counters_.open_fds);
+     print_row("Cap objects", baseline.cap_objects, counters_.cap_objects);
+     print_row("Cap slots", baseline.cap_slots, counters_.cap_slots);
++    print_row("Pager regs", baseline.pager_registrations,
++              counters_.pager_registrations);
++    print_row("Pager faults", baseline.pager_faults, counters_.pager_faults);
++    print_row("Pager maps", baseline.pager_mappings, counters_.pager_mappings);
+ 
+     print_backtrace();
+     return false;
 diff --git a/src/kernel/test/resource_tracker.hpp b/src/kernel/test/resource_tracker.hpp
-index bfc843c7..c0fdcb99 100644
+index c0fdcb99..9dd9f233 100644
 --- a/src/kernel/test/resource_tracker.hpp
 +++ b/src/kernel/test/resource_tracker.hpp
-@@ -40,6 +40,7 @@ struct ResourceCounters {
-     size_t open_fds;
+@@ -41,6 +41,9 @@ struct ResourceCounters {
      size_t cap_objects;
      size_t cap_slots;
-+    size_t death_watches;
+     size_t death_watches;
++    size_t pager_registrations;
++    size_t pager_faults;
++    size_t pager_mappings;
  };
  
  #ifdef CONFIG_DEBUG
-@@ -145,6 +146,16 @@ class ResourceTracker {
-         if (counters_.cap_slots > 0)
-             --counters_.cap_slots;
+@@ -156,6 +159,36 @@ class ResourceTracker {
+     void track_death_watch_reset() {
+         counters_.death_watches = 0;
      }
-+    void track_death_watch_add() {
-+        ++counters_.death_watches;
++    void track_pager_registration_add() {
++        ++counters_.pager_registrations;
 +    }
-+    void track_death_watch_remove() {
-+        if (counters_.death_watches > 0)
-+            --counters_.death_watches;
++    void track_pager_registration_remove() {
++        if (counters_.pager_registrations > 0)
++            --counters_.pager_registrations;
 +    }
-+    void track_death_watch_reset() {
-+        counters_.death_watches = 0;
++    void track_pager_fault_add() {
++        ++counters_.pager_faults;
++    }
++    void track_pager_fault_remove() {
++        if (counters_.pager_faults > 0)
++            --counters_.pager_faults;
++    }
++    void track_pager_mapping_add() {
++        ++counters_.pager_mappings;
++    }
++    void track_pager_mapping_remove() {
++        if (counters_.pager_mappings > 0)
++            --counters_.pager_mappings;
++    }
++    void track_pager_registration_reset() {
++        counters_.pager_registrations = 0;
++    }
++    void track_pager_fault_reset() {
++        counters_.pager_faults = 0;
++    }
++    void track_pager_mapping_reset() {
++        counters_.pager_mappings = 0;
 +    }
  
      void capture(ResourceCounters &out) const {
          out = counters_;
-@@ -220,6 +231,12 @@ class ResourceTracker {
+@@ -237,6 +270,24 @@ class ResourceTracker {
      }
-     void track_cap_slot_remove() {
+     void track_death_watch_reset() {
      }
-+    void track_death_watch_add() {
++    void track_pager_registration_add() {
 +    }
-+    void track_death_watch_remove() {
++    void track_pager_registration_remove() {
 +    }
-+    void track_death_watch_reset() {
++    void track_pager_fault_add() {
++    }
++    void track_pager_fault_remove() {
++    }
++    void track_pager_mapping_add() {
++    }
++    void track_pager_mapping_remove() {
++    }
++    void track_pager_registration_reset() {
++    }
++    void track_pager_fault_reset() {
++    }
++    void track_pager_mapping_reset() {
 +    }
      void capture(ResourceCounters &) const {
      }
      void restore(const ResourceCounters &) {
-diff --git a/src/kernel/test/test_cap_death.cpp b/src/kernel/test/test_cap_death.cpp
+diff --git a/src/kernel/test/test_cap_pager.cpp b/src/kernel/test/test_cap_pager.cpp
 new file mode 100644
-index 00000000..c2519e83
+index 00000000..f6088ce9
 --- /dev/null
-+++ b/src/kernel/test/test_cap_death.cpp
-@@ -0,0 +1,449 @@
++++ b/src/kernel/test/test_cap_pager.cpp
+@@ -0,0 +1,688 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -797,55 +1448,111 @@ index 00000000..c2519e83
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_cap_death.cpp
-+/// @brief Asynchronous task-death notification tests (issue #105 Part B).
-+/// Verifies the DeathNotify registry + SYS_DEATH_WATCH/RECV/UNWATCH: exactly-
-+/// once latch on death, crash-reason (signal) encoding, multi-task fan-in,
-+/// registration authority + fail-closed exhaustion, supervisor-death drain,
-+/// and non-blocking recv.  ResourceTracker death_watches must be zero-delta.
++/// @file test_cap_pager.cpp
++/// @brief External pager protocol tests (issue #107).
++/// Verifies the PagerRegistry + SYS_PAGER_* (69-73): registration authority,
++/// fault classification (F1-F10), the block-in-#PF-ISR roundtrip (a real
++/// user-mode probe ELF faults; the harness acts as pager; the instruction
++/// retries after SYS_PAGER_MAP), the bounded pager contract (watchdog timeout
++/// per-fault fail-closed with registration KEPT, ABORT poison-VA, pager/client
++/// death drain, cap revoke), and coexistence with the recover-IP / canary
++/// paths.  The harness (init, PID 1) is the designated pager.
 +///
-+/// IMPORTANT: a helper task's id is captured BEFORE the task is terminated —
-+/// drain_zombie_list() frees the TCB, so reading t->id after death is a
-+/// use-after-free (garbage id).  All asserts use the captured id.
++/// Probe: userspace/pager-probe.c — registers PID 1 as pager, dereferences
++/// 0x10000000 (unmapped), writes 0xCAFE after the pager maps it, then _exit(0).
++/// A fault WITHOUT pager resolution re-faults (poisoned VA / evicted) →
++/// SIGSEGV → TERMINATED (signal exit code, high bit set).
++///
++/// SAFETY: delegate_fault() blocks the FAULTING (current) task inside the #PF
++/// ISR.  It must ONLY be exercised via a real user-mode fault (the probe); a
++/// direct call on a non-current task would corrupt the block path.  Tests that
++/// need a pending fault therefore drive the probe and let the harness (the
++/// pager) respond or not.
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/ipc/death_notify.hpp>
++#include <constants.hpp>
++#include <kernel/ipc/pager_registry.hpp>
 +#include <kernel/syscall/syscall.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/frame.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/test/resource_tracker.hpp>
++#include <kernel/core/global_state.hpp>
++#include <kernel/elf/elf.hpp>
++#include <initrd/initrd.hpp>
++#include <kernel/arch/timer.hpp>
 +#include <kernel/arch/io.hpp>
 +#include <kernel/arch/irq_guard.hpp>
-+#include <lib/signal.hpp>
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
 +
 +namespace {
 +
-+/// @brief Dispatches a syscall by number (Syscall::handle takes uint64_t).
-+uint64_t death_syscall(uint64_t number, uint64_t a0, uint64_t a1, uint64_t a2,
++/// @brief Dispatches a syscall by number.
++uint64_t pager_syscall(uint64_t number, uint64_t a0, uint64_t a1, uint64_t a2,
 +                       uint64_t a3, uint64_t *regs = nullptr) {
 +    return Syscall::handle(number, a0, a1, a2, a3, regs);
 +}
 +
-+/// @brief Creates a task that parks forever (self-terminates only when the
-+///        harness kills it), so the harness can drive the death path
-+///        deterministically.
-+/// @param[out] out_id Receives the task's id BEFORE it can die.
-+///
-+/// Priority note: HIGHER number = HIGHER priority (PriorityMap bitmap).  The
-+/// harness runs at priority 10 and is only non-preemptible while RUNNING; a
-+/// parked helper with priority > 10 that gets scheduled on a timer tick never
-+/// yields and starves the harness.  These helpers never need to RUN — they
-+/// only need to exist in id_table_ for watch()/terminate() — so they are
-+/// created at a LOW priority (2, below the harness) and aperiodic (period 0)
-+/// to stay out of the deadline list.
-+TaskControlBlock *make_parked(uint64_t /*unused_prio*/, uint64_t *out_id = nullptr) {
++/// @brief Installs a FrameCap into @p t's CSpace (returns the slot index).
++int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
++    t->ensure_cspace();
++    cap::CNode *cs = t->get_cspace();
++    if (!cs)
++        return -1;
++    int s = cs->install(fc, cap::CapType::Frame,
++                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
++    if (s >= 0)
++        fc->release(); // slot holds a reference; drop the creator's
++    return s;
++}
++
++/// @brief Encodes a real cap handle for @p slot in @p t's CSpace.
++uint64_t frame_handle(TaskControlBlock *t, int slot) {
++    cap::CNode *cs = t->get_cspace();
++    return cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(slot),
++                              cs->slot_gen(static_cast<uint32_t>(slot)));
++}
++
++/// @brief Loads the pager-probe ELF into a fresh user task (returns it added
++///        to the scheduler).  PID 1 (the harness) is the designated pager.
++TaskControlBlock *load_pager_probe() {
++    initrd::InitrdFile f = initrd::find("pager-probe.c.elf");
++    if (!f.data)
++        return nullptr;
++    auto *hdr = reinterpret_cast<const kernel::elf::ELF64Header *>(f.data);
++    if (!kernel::elf::validate_header(hdr))
++        return nullptr;
++    auto *t = kernel::elf::load(hdr, f.data, f.size);
++    if (!t)
++        return nullptr;
++    Scheduler::add_task(*t);
++    return t;
++}
++
++/// @brief Drives the scheduler until @p cond (a lambda) is true or bounded.
++template <typename F> void drive_until(F cond, int limit = 10000) {
++    for (int i = 0; i < limit && !cond(); ++i) {
++        __atomic_store_n(&kernel::scheduler_need_resched, true,
++                         __ATOMIC_RELEASE);
++        arch::hlt();
++    }
++}
++
++/// @brief True if @p code is a signal-termination exit code (high bit set).
++bool is_signal_death(uint64_t code) {
++    return (code & (1ULL << 63)) != 0;
++}
++
++/// @brief Creates a parked low-priority helper (never runs; only exists in
++///        id_table_ for registration/fault-target purposes).
++TaskControlBlock *make_parked(uint64_t *out_id = nullptr) {
 +    auto *t = TaskControlBlock::create(
 +        []() {
-+            // Park — the harness terminates us to drive the death path.
 +            for (;;)
 +                kernel::Scheduler::reschedule();
 +        },
@@ -861,466 +1568,683 @@ index 00000000..c2519e83
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: A supervisor registers a watch on a live helper; the helper exits
-+// with a known code; the supervisor drains exactly one record.
-+// Input: Helper task parks; supervisor (the harness) registers a watch; the
-+//        helper is terminated with exit code 42; recv returns the record.
-+// Expect: dead_id == helper id, exit_code == 42, no SIGNAL flag, slot freed.
-+// Depends: DeathNotify, SYS_DEATH_WATCH/RECV, cleanup() hook
-+JARVIS_TEST(death_watch_consume_roundtrip, "PRE: none | POST: none") {
++// Testidea: A client designates a live pager for itself; duplicate, third-party
++// and self-designation are rejected; the registry fails closed when full.
++// Input: Register a pager for helpers; attempt duplicates and self-pager.
++// Expect: authority gate holds; one slot per client; full fails closed.
++// Depends: PagerRegistry::register_client
++JARVIS_TEST(pager_register_authority, "PRE: none | POST: none") {
 +    auto *cur = Scheduler::current_task();
 +    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t hid = 0;
-+    auto *h = make_parked(21, &hid);
++    uint64_t pid = 0;
++    auto *h = make_parked(&pid);
 +    JARVIS_ASSERT(h != nullptr);
-+    JARVIS_ASSERT(hid != 0);
++    JARVIS_ASSERT(pid != 0);
 +    Scheduler::reschedule();
++    size_t base = ipc::PagerRegistry::live_count();
 +
-+    size_t base = ipc::DeathNotify::live_count();
-+    uint64_t r = death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(0ULL, r);
-+    JARVIS_ASSERT(ipc::DeathNotify::is_watching(*cur, hid));
++    // A helper (as client) designates the harness (cur) as its pager.
++    JARVIS_ASSERT(ipc::PagerRegistry::register_client(*h, cur->id));
++    JARVIS_ASSERT_EQ(base + 1, ipc::PagerRegistry::live_count());
++    JARVIS_ASSERT(ipc::PagerRegistry::is_registered(*h));
 +
-+    Scheduler::terminate(*h, 42);
-+    Scheduler::drain_zombie_list();
++    // Duplicate registration (same client) fails — one slot per client.
++    JARVIS_ASSERT(!ipc::PagerRegistry::register_client(*h, cur->id));
++    JARVIS_ASSERT_EQ(base + 1, ipc::PagerRegistry::live_count());
 +
-+    ipc::DeathRecord rec{};
-+    int got = ipc::DeathNotify::recv(*cur, rec);
-+    JARVIS_ASSERT_EQ(1, got);
-+    JARVIS_ASSERT_EQ(hid, rec.dead_id);
-+    JARVIS_ASSERT_EQ(42ULL, rec.exit_code);
-+    JARVIS_ASSERT_EQ(0ULL, rec.flags & ipc::DEATH_FLAG_SIGNAL);
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
++    // pager == client rejected; pager_pid 0 rejected.
++    JARVIS_ASSERT(!ipc::PagerRegistry::register_client(*h, pid));
++    JARVIS_ASSERT(!ipc::PagerRegistry::register_client(*h, 0));
++    JARVIS_ASSERT(!ipc::PagerRegistry::register_client(*cur, cur->id));
 +
-+// Runmode: kernel
-+// Testidea: A crash death (signal-terminated task) carries the signal value in
-+// exit_code and sets DEATH_FLAG_SIGNAL.
-+// Input: Watch a helper; terminate it with a negative (signal) exit code.
-+// Expect: exit_code is the sign-extended SIGSEGV, SIGNAL flag set.
-+// Depends: exit_code high-bit encoding, DEATH_FLAG_SIGNAL
-+JARVIS_TEST(death_watch_crash_reason, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t hid = 0;
-+    auto *h = make_parked(22, &hid);
-+    JARVIS_ASSERT(h != nullptr);
-+    JARVIS_ASSERT(hid != 0);
-+    Scheduler::reschedule();
++    // Unregister (client drops its own registration).
++    JARVIS_ASSERT(ipc::PagerRegistry::unregister(*cur, pid));
++    JARVIS_ASSERT_EQ(base, ipc::PagerRegistry::live_count());
 +
-+    size_t base = ipc::DeathNotify::live_count();
-+    uint64_t r = death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(0ULL, r);
-+
-+    uint64_t sigcode = static_cast<uint64_t>(
-+        -static_cast<int64_t>(static_cast<int>(Signal::SIGSEGV)));
-+    Scheduler::terminate(*h, sigcode);
-+    Scheduler::drain_zombie_list();
-+
-+    ipc::DeathRecord rec{};
-+    int got = ipc::DeathNotify::recv(*cur, rec);
-+    JARVIS_ASSERT_EQ(1, got);
-+    JARVIS_ASSERT_EQ(hid, rec.dead_id);
-+    JARVIS_ASSERT_EQ(sigcode, rec.exit_code);
-+    JARVIS_ASSERT(rec.flags & ipc::DEATH_FLAG_SIGNAL);
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: One supervisor watches three tasks; all die; exactly three records
-+// are drained in slot order; the registry returns to baseline.
-+// Input: Register 3 watches; terminate all 3 helpers; drain 3 records.
-+// Expect: 3 records with distinct dead ids; live_count back to baseline.
-+// Depends: multi-watch fan-in, recv scan order
-+JARVIS_TEST(death_watch_multi_fan_in, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t id1 = 0, id2 = 0, id3 = 0;
-+    auto *h1 = make_parked(31, &id1);
-+    auto *h2 = make_parked(32, &id2);
-+    auto *h3 = make_parked(33, &id3);
-+    JARVIS_ASSERT(h1 && h2 && h3);
-+    JARVIS_ASSERT(id1 && id2 && id3);
-+    Scheduler::reschedule();
-+
-+    size_t base = ipc::DeathNotify::live_count();
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id1, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id2, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id3, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(base + 3, ipc::DeathNotify::live_count());
-+
-+    Scheduler::terminate(*h1, 1);
-+    Scheduler::terminate(*h2, 2);
-+    Scheduler::terminate(*h3, 3);
-+    Scheduler::drain_zombie_list();
-+
-+    ipc::DeathRecord rec{};
-+    uint64_t seen = 0;
-+    for (int i = 0; i < 3; ++i) {
-+        int got = ipc::DeathNotify::recv(*cur, rec);
-+        JARVIS_ASSERT_EQ(1, got);
-+        seen |= (1ULL << (rec.dead_id % 64));
-+    }
-+    JARVIS_ASSERT(seen & (1ULL << (id1 % 64)));
-+    JARVIS_ASSERT(seen & (1ULL << (id2 % 64)));
-+    JARVIS_ASSERT(seen & (1ULL << (id3 % 64)));
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: A watch on a task that already exited/reaped is rejected.
-+// Input: Terminate + reap a helper; then attempt to watch it.
-+// Expect: watch fails; no slot created; registry baseline.
-+// Depends: authority + liveness validation in watch()
-+JARVIS_TEST(death_watch_after_death_rejected, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t hid = 0;
-+    auto *h = make_parked(41, &hid);
-+    JARVIS_ASSERT(h != nullptr);
-+    JARVIS_ASSERT(hid != 0);
-+    Scheduler::reschedule();
-+    Scheduler::terminate(*h, 0);
-+    Scheduler::drain_zombie_list();
-+
-+    size_t base = ipc::DeathNotify::live_count();
-+    uint64_t r = death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r);
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: A supervisor holding ACTIVE watches and PENDING records dies; its
-+// slots are freed by drain_task; no poke lands in a freed Notify.
-+// Input: A dedicated supervisor task S watches two helpers; the helpers die
-+//        (records PENDING for S); S then dies; its cleanup drains the slots.
-+// Expect: live_count returns to baseline; no crash; nothing remains pending.
-+// Depends: drain_task in cleanup(), poke safety
-+JARVIS_TEST(death_watch_supervisor_death_drains, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    // Baseline captured BEFORE any watch exists — the supervisor's two
-+    // registrations must be measured against this.
-+    size_t base = ipc::DeathNotify::live_count();
-+
-+    // The helpers S will watch.
-+    uint64_t id1 = 0, id2 = 0;
-+    auto *h1 = make_parked(51, &id1);
-+    auto *h2 = make_parked(52, &id2);
-+    JARVIS_ASSERT(h1 && h2);
-+    JARVIS_ASSERT(id1 && id2);
-+
-+    // The supervisor task S: registers watches on the two helpers (as their
-+    // supervisor), then parks.  We keep the harness itself alive throughout.
-+    static uint64_t g_watch1 = 0;
-+    static uint64_t g_watch2 = 0;
-+    static uint64_t g_done = 0;
-+    __atomic_store_n(&g_watch1, id1, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_watch2, id2, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_done, 0, __ATOMIC_RELEASE);
-+    auto *sup = TaskControlBlock::create(
-+        []() {
-+            uint64_t w1 = __atomic_load_n(&g_watch1, __ATOMIC_ACQUIRE);
-+            uint64_t w2 = __atomic_load_n(&g_watch2, __ATOMIC_ACQUIRE);
-+            uint64_t r1 = death_syscall(
-+                static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), w1, 0, 0,
-+                0);
-+            uint64_t r2 = death_syscall(
-+                static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), w2, 0, 0,
-+                0);
-+            __atomic_store_n(&g_done, (r1 == 0 && r2 == 0) ? 1U : 0U,
-+                             __ATOMIC_RELEASE);
-+            for (;;)
-+                kernel::Scheduler::reschedule();
-+        },
-+        53, 10);
-+    JARVIS_ASSERT(sup != nullptr);
-+    Scheduler::add_task(*sup);
-+    Scheduler::reschedule();
-+
-+    // Drive until S has registered both watches (bounded).
-+    for (int i = 0; i < 10000 && __atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0;
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+    JARVIS_ASSERT_EQ(1U, __atomic_load_n(&g_done, __ATOMIC_ACQUIRE));
-+    JARVIS_ASSERT_EQ(base + 2, ipc::DeathNotify::live_count());
-+
-+    // Kill the helpers: records become PENDING for S.
-+    Scheduler::terminate(*h1, 1);
-+    Scheduler::terminate(*h2, 2);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(base + 2, ipc::DeathNotify::live_count()); // PENDING
-+
-+    // S dies: its cleanup() drains the two PENDING records.  Use
-+    // terminate_and_drain (safe: skips already-dead, checks magic first).
-+    kernel::test::terminate_and_drain(*sup);
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: The registry fails closed when exhausted, and a freed slot admits
-+// a new watch.
-+// Input: Fill all CONFIG_CAP_MAX_DEATH_WATCHES slots with distinct helpers;
-+//        the next watch fails; consume one record; a new watch succeeds.
-+// Expect: exhaustion fails closed; consumption frees a slot.
-+// Depends: bounded registry, fail-closed watch()
-+JARVIS_TEST(death_watch_registry_full_fails_closed, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+
-+    constexpr size_t kMax = CONFIG_CAP_MAX_DEATH_WATCHES;
-+    uint64_t ids[kMax];
-+    TaskControlBlock *helpers[kMax];
-+    size_t base = ipc::DeathNotify::live_count();
++    // Registry full fails closed: fill CONFIG_CAP_MAX_PAGER_CLIENTS slots.
++    constexpr size_t kMax = CONFIG_CAP_MAX_PAGER_CLIENTS;
++    uint64_t cids[kMax];
++    TaskControlBlock *clients[kMax];
 +    for (size_t i = 0; i < kMax; ++i) {
-+        helpers[i] = make_parked(60 + static_cast<int>(i), &ids[i]);
-+        JARVIS_ASSERT(helpers[i] != nullptr);
-+        JARVIS_ASSERT(ids[i] != 0);
++        clients[i] = make_parked(&cids[i]);
++        JARVIS_ASSERT(clients[i] != nullptr);
++        JARVIS_ASSERT(cids[i] != 0);
 +    }
 +    Scheduler::reschedule();
-+
-+    for (size_t i = 0; i < kMax; ++i) {
-+        JARVIS_ASSERT_EQ(0ULL,
-+                         death_syscall(
-+                             static_cast<uint64_t>(SyscallNumber::DEATH_WATCH),
-+                             ids[i], 0, 0, 0));
-+    }
-+    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
-+
-+    // Exhausted: one more watch fails closed.
-+    uint64_t extra_id = 0;
-+    auto *extra = make_parked(80, &extra_id);
-+    JARVIS_ASSERT(extra != nullptr);
-+    uint64_t r = death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), extra_id, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r);
-+    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
-+
-+    // Consume one record -> a slot frees -> a new watch succeeds.
-+    Scheduler::terminate(*helpers[0], 0);
-+    Scheduler::drain_zombie_list();
-+    ipc::DeathRecord rec{};
-+    JARVIS_ASSERT_EQ(1, ipc::DeathNotify::recv(*cur, rec));
-+    JARVIS_ASSERT_EQ(base + kMax - 1, ipc::DeathNotify::live_count());
-+
-+    r = death_syscall(static_cast<uint64_t>(SyscallNumber::DEATH_WATCH),
-+                      extra_id, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(0ULL, r);
-+    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
-+
-+    // Teardown: kill the remaining helpers (safe, idempotent).
 +    for (size_t i = 0; i < kMax; ++i)
-+        kernel::test::terminate_if_live(helpers[i]);
++        JARVIS_ASSERT(
++            ipc::PagerRegistry::register_client(*clients[i], cur->id));
++    JARVIS_ASSERT_EQ(base + kMax, ipc::PagerRegistry::live_count());
++    uint64_t extra_id = 0;
++    auto *extra = make_parked(&extra_id);
++    JARVIS_ASSERT(extra != nullptr);
++    JARVIS_ASSERT(!ipc::PagerRegistry::register_client(*extra, cur->id));
++    JARVIS_ASSERT_EQ(base + kMax, ipc::PagerRegistry::live_count());
++
++    for (size_t i = 0; i < kMax; ++i)
++        ipc::PagerRegistry::unregister(*cur, cids[i]);
++    for (size_t i = 0; i < kMax; ++i)
++        kernel::test::terminate_if_live(clients[i]);
 +    kernel::test::terminate_if_live(extra);
++    kernel::test::terminate_if_live(h); // the first parked helper
 +    Scheduler::drain_zombie_list();
-+    // Consume the remaining PENDING records so the ResourceTracker
-+    // death_watches counter is zero-delta at the test boundary: the leak
-+    // check in snapshot_restore runs BEFORE the registry snapshot_reset, so
-+    // leftover records would fail the check once death_watches is verified.
-+    ipc::DeathRecord drain{};
-+    while (ipc::DeathNotify::recv(*cur, drain) == 1) {
-+    }
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_ASSERT_EQ(base, ipc::PagerRegistry::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: A single death yields exactly one record, even after repeated
-+// zombie drains.
-+// Input: Watch a helper; terminate it; drain the zombie list repeatedly; then
-+//        drain records.
-+// Expect: exactly one record; slot freed after consume.
-+// Depends: exactly-once latch (cleanup() single funnel)
-+JARVIS_TEST(death_watch_exactly_once, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t hid = 0;
-+    auto *h = make_parked(71, &hid);
-+    JARVIS_ASSERT(h != nullptr);
-+    JARVIS_ASSERT(hid != 0);
-+    Scheduler::reschedule();
-+
-+    size_t base = ipc::DeathNotify::live_count();
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0));
-+    Scheduler::terminate(*h, 7);
-+    Scheduler::drain_zombie_list();
-+    Scheduler::drain_zombie_list();
-+
-+    ipc::DeathRecord rec{};
-+    JARVIS_ASSERT_EQ(1, ipc::DeathNotify::recv(*cur, rec));
-+    JARVIS_ASSERT_EQ(hid, rec.dead_id);
-+    JARVIS_ASSERT_EQ(0, ipc::DeathNotify::recv(*cur, rec)); // no duplicate
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: SYS_DEATH_UNWATCH before the watched task dies suppresses the
-+// notification entirely.
-+// Input: Watch a helper; unwatch it; terminate the helper.
-+// Expect: no record; registry baseline.
-+// Depends: SYS_DEATH_UNWATCH
-+JARVIS_TEST(death_watch_unwatch_before_death, "PRE: none | POST: none") {
-+    auto *cur = Scheduler::current_task();
-+    JARVIS_ASSERT(cur != nullptr);
-+    uint64_t hid = 0;
-+    auto *h = make_parked(82, &hid);
-+    JARVIS_ASSERT(h != nullptr);
-+    JARVIS_ASSERT(hid != 0);
-+    Scheduler::reschedule();
-+
-+    size_t base = ipc::DeathNotify::live_count();
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(base + 1, ipc::DeathNotify::live_count());
-+    JARVIS_ASSERT_EQ(0ULL, death_syscall(
-+        static_cast<uint64_t>(SyscallNumber::DEATH_UNWATCH), hid, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+
-+    Scheduler::terminate(*h, 9);
-+    Scheduler::drain_zombie_list();
-+    ipc::DeathRecord rec{};
-+    JARVIS_ASSERT_EQ(0, ipc::DeathNotify::recv(*cur, rec));
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: SYS_DEATH_RECV with nothing pending returns 0 immediately (the
-+// supervisor never wedges).
-+// Input: Call recv with no watches/pending records.
++// Testidea: SYS_PAGER_RECV with nothing pending returns 0 immediately.
++// Input: Call recv with no pending faults.
 +// Expect: 0, registry unchanged.
 +// Depends: non-blocking recv
-+JARVIS_TEST(death_recv_nonblocking_none, "PRE: none | POST: none") {
++JARVIS_TEST(pager_recv_nonblocking_none, "PRE: none | POST: none") {
 +    auto *cur = Scheduler::current_task();
 +    JARVIS_ASSERT(cur != nullptr);
-+    size_t base = ipc::DeathNotify::live_count();
-+    ipc::DeathRecord rec{};
-+    int got = ipc::DeathNotify::recv(*cur, rec);
++    size_t base = ipc::PagerRegistry::live_count();
++    ipc::PagerFaultMsg msg{};
++    int got = ipc::PagerRegistry::recv(*cur, msg);
 +    JARVIS_ASSERT_EQ(0, got);
-+    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_ASSERT_EQ(base, ipc::PagerRegistry::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
-+void register_cap_death_tests() {
-+    Logger::info("Registering cap_death tests");
-+    JARVIS_REGISTER_TEST(death_watch_consume_roundtrip);
-+    JARVIS_REGISTER_TEST(death_watch_crash_reason);
-+    JARVIS_REGISTER_TEST(death_watch_multi_fan_in);
-+    JARVIS_REGISTER_TEST(death_watch_after_death_rejected);
-+    JARVIS_REGISTER_TEST(death_watch_supervisor_death_drains);
-+    JARVIS_REGISTER_TEST(death_watch_registry_full_fails_closed);
-+    JARVIS_REGISTER_TEST(death_watch_exactly_once);
-+    JARVIS_REGISTER_TEST(death_watch_unwatch_before_death);
-+    JARVIS_REGISTER_TEST(death_recv_nonblocking_none);
++// Runmode: kernel
++// Testidea: Non-delegatable #PFs are rejected by the classifier (F3 P=1,
++// F4 RSVD, F5 U/S=0, F6 I/D=1, F7 out-of-range).  All rejects return false
++// BEFORE the block path, so a direct call on a registered client is safe.
++// Input: Direct delegate_fault with synthetic error codes/CR2.
++// Expect: each returns false; no fault record created.
++// Depends: PagerRegistry::delegate_fault classification
++JARVIS_TEST(pager_classification_rejects, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t pid = 0;
++    auto *h = make_parked(&pid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(pid != 0);
++    Scheduler::reschedule();
++    JARVIS_ASSERT(ipc::PagerRegistry::register_client(*h, cur->id));
++
++    size_t base = ipc::PagerRegistry::live_count();
++    // F3: P=1 (present — write-to-RO / NX fault) not delegatable.
++    JARVIS_ASSERT(!ipc::PagerRegistry::delegate_fault(*h, 0x1, nullptr, 0x1000));
++    // F4: RSVD bit set.
++    JARVIS_ASSERT(!ipc::PagerRegistry::delegate_fault(*h, 0x8, nullptr, 0x1000));
++    // F5: U/S=0 (kernel-address access).
++    JARVIS_ASSERT(!ipc::PagerRegistry::delegate_fault(*h, 0x0, nullptr, 0x1000));
++    // F6: I/D=1 (instruction fetch — v1 NX-only).
++    JARVIS_ASSERT(
++        !ipc::PagerRegistry::delegate_fault(*h, 0x10, nullptr, 0x1000));
++    // F7: CR2 above USER_SPACE_LIMIT.
++    JARVIS_ASSERT(!ipc::PagerRegistry::delegate_fault(
++        *h, 0x4, nullptr, USER_SPACE_LIMIT + 0x1000));
++    JARVIS_ASSERT_EQ(base, ipc::PagerRegistry::live_count());
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    ipc::PagerRegistry::unregister(*cur, pid);
++    kernel::test::terminate_and_drain(*h);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A fault while g_user_access_recover_ip is set is NOT delegated.
++// Input: Set the recover-IP; call delegate_fault on a registered client.
++// Expect: false (F2); no record.
++// Depends: F2 classification, global_state accessor
++JARVIS_TEST(pager_recover_ip_not_delegated, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t pid = 0;
++    auto *h = make_parked(&pid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(pid != 0);
++    Scheduler::reschedule();
++    JARVIS_ASSERT(ipc::PagerRegistry::register_client(*h, cur->id));
++
++    kernel::gs::user_access_recover_ip() = 0x1234;
++    bool r = ipc::PagerRegistry::delegate_fault(*h, 0x4, nullptr, 0x1000);
++    kernel::gs::user_access_recover_ip() = 0;
++    JARVIS_ASSERT(!r);
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    ipc::PagerRegistry::unregister(*cur, pid);
++    kernel::test::terminate_and_drain(*h);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A real user-mode #PF on an unmapped VA is delegated to the
++// registered pager (the harness); the pager maps a FrameCap via SYS_PAGER_MAP;
++// the client resumes and the faulting write succeeds.  This is the definitive
++// block-in-#PF-ISR resume test.
++// Input: Load pager-probe.c.elf (registers PID 1 as pager, faults at
++//        0x10000000); harness recvs + maps + SYS_PAGER_MAP.
++// Expect: the probe writes 0xCAFE and _exit(0); record consumed; no pending.
++// Depends: block-in-ISR, PagerRegistry, SYS_PAGER_MAP, elf loader
++JARVIS_TEST(pager_fault_roundtrip, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++
++    // Drive until the probe faults and a record is pending for the harness.
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    ipc::PagerFaultMsg msg{};
++    JARVIS_ASSERT_EQ(1, ipc::PagerRegistry::recv(*cur, msg));
++    JARVIS_ASSERT_EQ(0x10000000ULL, msg.fault_va);
++    JARVIS_ASSERT_EQ(t->id, msg.client_id);
++    // The record is STILL pending after RECV (two-phase protocol).
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    // The pager (harness) allocates a 2-page frame and maps BOTH pages into the
++    // client PML4 (multi-entry committed table — exercises the auditor's N2
++    // multi-entry invalidation path on the probe's death drain).
++    uint64_t phys = PMM::alloc_user_contiguous(2);
++    JARVIS_ASSERT(phys != 0);
++    auto *fc = cap::FrameCap::create(phys, 2, true);
++    JARVIS_ASSERT(fc != nullptr);
++    int slot = install_frame(cur, fc);
++    JARVIS_ASSERT(slot >= 0);
++    uint64_t cap_h = frame_handle(cur, slot);
++    uint64_t r = pager_syscall(
++        static_cast<uint64_t>(SyscallNumber::PAGER_MAP), msg.fault_id, cap_h,
++        2, 0);
++    JARVIS_ASSERT_EQ(0ULL, r);
++
++    // Both mapped pages in the client PML4 resolve to the pager's frames.
++    // (Check while the probe's PML4 is still alive.)
++    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(0x10000000,
++                                                     t->page_table_));
++    JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
++                     VMM::virt_to_phys_in_pml4(0x10000000 + arch::PAGE_SIZE,
++                                               t->page_table_));
++
++    // Client resumes; the faulting write to 0x10000000 now succeeds; _exit(0).
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT_EQ(0ULL, t->exit_code); // clean exit (2 = reg fail)
++
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++    // The probe exited cleanly via sys_exit (switch_away_from_terminating,
++    // which does NOT release_zombie), so it is not in the zombie list.  Call
++    // Scheduler::terminate explicitly to release it, then reap — cleanup()
++    // drains the probe's pager registration.
++    Scheduler::terminate(*t, t->exit_code);
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(static_cast<size_t>(0), ipc::PagerRegistry::live_count());
++
++    // Teardown: drop the slot ref via cs->remove (1->0 -> dispose frees the
++    // frame).  The pager's cap is installed in the harness's CSpace.
++    cur->ensure_cspace();
++    cap::CNode *cs = cur->get_cspace();
++    cs->remove(static_cast<uint32_t>(slot));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A late SYS_PAGER_MAP after the fault was consumed (by a watchdog
++// timeout) returns an error; no mapping is installed; no double wake.
++// Input: probe faults; the watchdog consumes the fault; then MAP with the
++//        stale fault_id.
++// Expect: map returns -1; no PTE installed; probe SIGSEGV-terminates.
++// Depends: exactly-once consume gate, watchdog, SYS_PAGER_MAP
++JARVIS_TEST(pager_map_after_timeout_denied, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++    ipc::PagerFaultMsg msg{};
++    JARVIS_ASSERT_EQ(1, ipc::PagerRegistry::recv(*cur, msg));
++
++    // The watchdog consumes the fault (probe's registration survives, VA
++    // poisoned).
++    arch::Timer::set_ticks_for_test(
++        arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS + 10);
++    Scheduler::on_tick();
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    // Late MAP with the stale fault_id fails; no PTE at the fault VA.
++    uint64_t phys = PMM::alloc_user_contiguous(1);
++    JARVIS_ASSERT(phys != 0);
++    auto *fc = cap::FrameCap::create(phys, 1, true);
++    JARVIS_ASSERT(fc != nullptr);
++    int slot = install_frame(cur, fc);
++    JARVIS_ASSERT(slot >= 0);
++    uint64_t cap_h = frame_handle(cur, slot);
++    uint64_t r = pager_syscall(
++        static_cast<uint64_t>(SyscallNumber::PAGER_MAP), msg.fault_id, cap_h,
++        1, 0);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r);
++    // The probe's PML4 has no PTE at the fault VA (probe still alive — it
++    // re-faults on the poisoned VA and SIGSEGV-terminates; check before the
++    // cleanup frees the PML4).
++    JARVIS_ASSERT_EQ(0ULL,
++                     VMM::virt_to_phys_in_pml4(0x10000000, t->page_table_));
++
++    // The probe re-faults on the poisoned VA -> SIGSEGV -> terminated.
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT(is_signal_death(t->exit_code));
++
++    // Drop the slot ref via cs->remove (1->0 -> dispose frees the frame).
++    cur->ensure_cspace();
++    cap::CNode *cs = cur->get_cspace();
++    cs->remove(static_cast<uint32_t>(slot));
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: SYS_PAGER_ABORT consumes the fault, unmaps the ledger, wakes the
++// client, and poisons the VA latch — the same VA re-faults to SIGSEGV.
++// Input: probe faults; the pager (harness) ABORTs; the probe re-faults.
++// Expect: probe SIGSEGV-terminates (poisoned VA, no re-delegate loop).
++// Depends: abort(), poison-VA latch (F9)
++JARVIS_TEST(pager_abort_poisons_va, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++    ipc::PagerFaultMsg msg{};
++    JARVIS_ASSERT_EQ(1, ipc::PagerRegistry::recv(*cur, msg));
++
++    // The pager explicitly aborts: record consumed, VA poisoned.
++    JARVIS_ASSERT_EQ(0, ipc::PagerRegistry::abort(*cur, msg.fault_id));
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    // The probe re-faults on the same VA -> F9 reject -> SIGSEGV.  If the
++    // latch were broken it would re-delegate forever (timeout -> hang).
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT(is_signal_death(t->exit_code));
++
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The watchdog expires an overdue fault: the client is woken, the
++// ledger is unmapped, the VA latch is poisoned (same-VA retry -> SIGSEGV), and
++// the REGISTRATION IS KEPT (per-fault fail-closed).
++// Input: probe faults; harness never replies; advance tick; run on_tick().
++// Expect: probe SIGSEGV-terminates; registration evicted only by probe death.
++// Depends: watchdog_scan (on_tick), per-fault fail-closed policy
++JARVIS_TEST(pager_fault_timeout_aborts, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    // The pager never replies; the watchdog expires the fault.
++    arch::Timer::set_ticks_for_test(
++        arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS + 10);
++    Scheduler::on_tick();
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    // The probe re-faults on the poisoned VA -> SIGSEGV.  (Registration is
++    // kept per-fault; it is evicted when the probe dies in cleanup.)
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT(is_signal_death(t->exit_code));
++
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Pager death mid-fault: drain_task evicts the registration, rolls
++// back the ledger, and wakes the client (reverts to SIGSEGV on retry).
++// Input: probe faults; the pager (harness) calls drain_task(cur) (simulating
++//        the pager's cleanup).
++// Expect: probe SIGSEGV-terminates (no pager -> F8 reject).
++// Depends: drain_task (pager death path)
++JARVIS_TEST(pager_dead_drains_faults, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    // The pager (harness) dies: drain_task(cur) evicts its registrations and
++    // wakes the clients.
++    ipc::PagerRegistry::drain_task(*cur);
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++    JARVIS_ASSERT(!ipc::PagerRegistry::is_registered(*t));
++
++    // The probe re-faults with no pager -> SIGSEGV.
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT(is_signal_death(t->exit_code));
++
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Client death mid-fault: drain_task(client) consumes the fault and
++// unmaps the ledger before free_user_pages.
++// Input: probe faults; drain_task(probe) (simulating the client's cleanup).
++// Expect: record consumed; no pending; the pager's cap stays live.
++// Depends: drain_task (client death path)
++JARVIS_TEST(pager_client_death_unmaps, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    // The client (probe) dies: drain_task consumes the fault + rolls back.
++    ipc::PagerRegistry::drain_task(*t);
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++    JARVIS_ASSERT(!ipc::PagerRegistry::is_registered(*t));
++
++    // The client is woken only when the pager dies; here it was the CLIENT
++    // that died, so it is not re-queued — it stays TERMINATED-able.  We
++    // terminate it via the normal path.
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Revoking the pager's FrameCap while a fault is pending makes the
++// later SYS_PAGER_MAP fail (revoked-cap check) and invalidate_cap is a safe
++// no-op with no ledger entry.
++// Input: probe faults; the pager creates a frame and revokes it before MAP.
++// Expect: MAP returns -1; probe SIGSEGV-terminates (fault unresolved -> the
++//         watchdog/abort path or the revoked cap never maps).
++// Depends: invalidate_cap closure, revoked-cap check in map()
++JARVIS_TEST(pager_cap_revoke_unmaps, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++    ipc::PagerFaultMsg msg{};
++    JARVIS_ASSERT_EQ(1, ipc::PagerRegistry::recv(*cur, msg));
++
++    // A frame the pager would map; install it in the pager's CSpace, then revoke
++    // it before SYS_PAGER_MAP (a revoked cap must be refused at map time).
++    uint64_t phys = PMM::alloc_user_contiguous(1);
++    JARVIS_ASSERT(phys != 0);
++    auto *fc = cap::FrameCap::create(phys, 1, true);
++    JARVIS_ASSERT(fc != nullptr);
++    int slot = install_frame(cur, fc);
++    JARVIS_ASSERT(slot >= 0);
++    uint64_t cap_h = frame_handle(cur, slot);
++    fc->revoke(); // revoke BEFORE map
++
++    uint64_t r = pager_syscall(
++        static_cast<uint64_t>(SyscallNumber::PAGER_MAP), msg.fault_id, cap_h,
++        1, 0);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r); // revoked cap refused
++
++    // invalidate_cap (from dispose on the revoked cap's last release) is a
++    // safe no-op here (no ledger entry yet).
++    ipc::PagerRegistry::invalidate_cap(fc);
++
++    // The fault is still pending; the watchdog eventually SIGSEGV's the probe.
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++    arch::Timer::set_ticks_for_test(
++        arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS + 10);
++    Scheduler::on_tick();
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++
++    // Drop the slot ref via cs->remove (the 1->0 transition runs dispose and
++    // frees the revoked frame).  Do NOT fc->release() — the slot owns the only
++    // reference.
++    cur->ensure_cspace();
++    cap::CNode *cs = cur->get_cspace();
++    cs->remove(static_cast<uint32_t>(slot));
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A stalled pager cannot wedge the kernel — while the pager never
++// replies, the harness keeps running and the watchdog fires (B8/B6).
++// Input: probe faults and blocks; the harness (pager) never replies but keeps
++//        running; advance the tick; watchdog.
++// Expect: the harness is never blocked; the watchdog wakes the probe.
++// Depends: B8 deadlock-designed-out, watchdog_scan
++JARVIS_TEST(pager_deadlock_designed_out, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++
++    auto *t = load_pager_probe();
++    JARVIS_ASSERT(t != nullptr);
++    Scheduler::reschedule();
++    drive_until([&]() { return ipc::PagerRegistry::pending_fault(*cur); });
++    JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
++
++    // The pager (harness) is NOT blocked by the client's wait.
++    JARVIS_ASSERT(cur->state == TaskState::RUNNING);
++
++    // The watchdog fires despite the stalled "pager" (we just don't reply).
++    arch::Timer::set_ticks_for_test(
++        arch::Timer::ticks() + CONFIG_PAGER_FAULT_TIMEOUT_TICKS + 10);
++    Scheduler::on_tick();
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    // The probe re-faults on the poisoned VA -> SIGSEGV (never stranded).
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
++    JARVIS_ASSERT(is_signal_death(t->exit_code));
++
++    kernel::test::terminate_and_drain(*t);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: SYS_PAGER_MAP/delegate_fault refuse a canary-slot VA collision
++// (F10) and the canary sampler is unaffected by pager-served tasks.
++// Input: Install a canary at a known VA; attempt delegate_fault there.
++// Expect: the canary VA is NOT delegated (F10 reject, before the block path);
++//         a non-canary VA is delegated (via a probe roundtrip's presence).
++// Depends: F10 canary collision
++JARVIS_TEST(pager_smap_canary_coexist, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t pid = 0;
++    auto *h = make_parked(&pid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(pid != 0);
++    Scheduler::reschedule();
++    JARVIS_ASSERT(ipc::PagerRegistry::register_client(*h, cur->id));
++
++    // Give the client a canary slot so F10 has something to collide with.
++    h->canary_installed = 1;
++    h->canary_before[0] = 0xB000;
++    h->canary_after[0] = 0xC000;
++
++    // A fault at the canary-before page is NOT delegated (F10).  This reject
++    // returns before the block path, so the direct call is safe.
++    JARVIS_ASSERT(
++        !ipc::PagerRegistry::delegate_fault(*h, 0x4, nullptr, 0xB000));
++    JARVIS_ASSERT(!ipc::PagerRegistry::pending_fault(*cur));
++
++    // A non-canary VA still delegates (via the probe's real fault path in the
++    // roundtrip); here we only verify the reject did not touch the registry.
++    JARVIS_ASSERT_EQ(0, ipc::PagerRegistry::live_count() - (pid != 0 ? 1 : 0));
++
++    // Restore canary fields (test isolation would catch drift; keep clean).
++    h->canary_installed = 0;
++    h->canary_before[0] = 0;
++    h->canary_after[0] = 0;
++
++    ipc::PagerRegistry::unregister(*cur, pid);
++    kernel::test::terminate_and_drain(*h);
++    JARVIS_TEST_PASS();
++}
++
++void register_cap_pager_tests() {
++    Logger::info("Registering cap_pager tests");
++    JARVIS_REGISTER_TEST(pager_register_authority);
++    JARVIS_REGISTER_TEST(pager_recv_nonblocking_none);
++    JARVIS_REGISTER_TEST(pager_classification_rejects);
++    JARVIS_REGISTER_TEST(pager_recover_ip_not_delegated);
++    JARVIS_REGISTER_TEST(pager_fault_roundtrip);
++    JARVIS_REGISTER_TEST(pager_map_after_timeout_denied);
++    JARVIS_REGISTER_TEST(pager_abort_poisons_va);
++    JARVIS_REGISTER_TEST(pager_fault_timeout_aborts);
++    JARVIS_REGISTER_TEST(pager_dead_drains_faults);
++    JARVIS_REGISTER_TEST(pager_client_death_unmaps);
++    JARVIS_REGISTER_TEST(pager_cap_revoke_unmaps);
++    JARVIS_REGISTER_TEST(pager_deadlock_designed_out);
++    JARVIS_REGISTER_TEST(pager_smap_canary_coexist);
 +}
 \ No newline at end of file
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index e53708be..cce1c0de 100644
+index cce1c0de..1aac06d7 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1050,   0,       0      },  // measured: 1045 + cap_shm(+5,#106 Part B) → 1050
-+    {"all",                1059,   0,       0      },  // measured: 1050 + cap_death(+9,#105 Part B) → 1059
+-    {"all",                1059,   0,       0      },  // measured: 1050 + cap_death(+9,#105 Part B) → 1059
++    {"all",                1072,   0,       0      },  // measured: 1059 + cap_pager(+13,#107) → 1072
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -95,6 +95,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
+@@ -96,6 +96,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
      {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
-+    {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
+     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
++    {"cap_pager",             13,   0,       0      },  // external pager protocol (issue #107): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary
  
      // ipc
      {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
 diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index c4800ac8..936a5db0 100644
+index 936a5db0..e2a336f1 100644
 --- a/src/kernel/test/test_isolate.cpp
 +++ b/src/kernel/test/test_isolate.cpp
-@@ -41,6 +41,7 @@
- #include <kernel/arch/hal/iopb.hpp>
+@@ -42,6 +42,7 @@
  #include <kernel/cap/mmio.hpp>
  #include <kernel/cap/frame_map.hpp>
-+#include <kernel/ipc/death_notify.hpp>
+ #include <kernel/ipc/death_notify.hpp>
++#include <kernel/ipc/pager_registry.hpp>
  #include <kernel/cap/msix.hpp>
  #include <logger.hpp>
  #include "test_registry.gen.hpp"
-@@ -1357,6 +1358,10 @@ void snapshot_restore(const char *test_name) {
+@@ -1362,6 +1363,10 @@ void snapshot_restore(const char *test_name) {
+         // registered death watches can never leak a stale watch across
          // snapshot cycles.
-         cap::MmioUserMap::snapshot_reset();
-         cap::FrameUserMap::snapshot_reset();
-+        // Reset the death-notify registry (issue #105 Part B) so a test that
-+        // registered death watches can never leak a stale watch across
+         kernel::ipc::DeathNotify::snapshot_reset();
++        // Reset the pager registry (issue #107) so a test that registered a
++        // pager or left a fault pending can never leak a stale record across
 +        // snapshot cycles.
-+        kernel::ipc::DeathNotify::snapshot_reset();
++        kernel::ipc::PagerRegistry::snapshot_reset();
          // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
          // test that created an MsixCap never leaves a recycled (bdf, entry)
          // un-claimable in the next cycle.
 diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 3bb1d4c9..b0c1d825 100644
+index b0c1d825..17192cc1 100644
 --- a/src/kernel/test/test_registry.cpp
 +++ b/src/kernel/test/test_registry.cpp
-@@ -188,6 +188,7 @@ void register_scheduler_hrt_tests();
- void register_syscall_fastpath_tests();
+@@ -189,6 +189,7 @@ void register_syscall_fastpath_tests();
  void register_fpu_inv_tests();
  void register_cap_shm_tests();
-+void register_cap_death_tests();
+ void register_cap_death_tests();
++void register_cap_pager_tests();
  #if defined(CONFIG_ARCH_AARCH64)
  void register_aarch64_tests();
  #endif
-@@ -353,6 +354,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     // -- cap_shm: capability-gated shared-memory rings (issue #106 Part B) --
-     {"cap_shm", []() { register_cap_shm_tests(); }},
+@@ -357,6 +358,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // -- cap_death: asynchronous task-death notifications (issue #105 Part B) --
+     {"cap_death", []() { register_cap_death_tests(); }},
  
-+    // -- cap_death: asynchronous task-death notifications (issue #105 Part B) --
-+    {"cap_death", []() { register_cap_death_tests(); }},
++    // -- cap_pager: external pager protocol (issue #107) --
++    {"cap_pager", []() { register_cap_pager_tests(); }},
 +
      // -- ipc: messages, events, notifications, pipes --
      {"ipc_core", []() { register_ipc_tests(); }},
      {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
-@@ -652,6 +656,7 @@ static void register_all_tests() {
-     register_syscall_fastpath_tests();
+@@ -657,6 +661,7 @@ static void register_all_tests() {
      register_fpu_inv_tests();
      register_cap_shm_tests();
-+    register_cap_death_tests();
+     register_cap_death_tests();
++    register_cap_pager_tests();
  #if defined(CONFIG_ARCH_AARCH64)
       register_aarch64_tests();
  #endif
-@@ -804,6 +809,7 @@ static void register_all_tests_second_half() {
-     register_syscall_fastpath_tests();
+@@ -810,6 +815,7 @@ static void register_all_tests_second_half() {
      register_fpu_inv_tests();
      register_cap_shm_tests();
-+    register_cap_death_tests();
+     register_cap_death_tests();
++    register_cap_pager_tests();
  #if defined(CONFIG_ARCH_AARCH64)
       register_aarch64_tests();
  #endif
 diff --git a/src/lib/test.hpp b/src/lib/test.hpp
-index 90f687c9..deeb1f23 100644
+index deeb1f23..0f13cb0f 100644
 --- a/src/lib/test.hpp
 +++ b/src/lib/test.hpp
 @@ -92,7 +92,7 @@ public:
      static const char* current_test_name();
  
  private:
--    static constexpr size_t MAX_TESTS = 1072;
-+    static constexpr size_t MAX_TESTS = 1081;
+-    static constexpr size_t MAX_TESTS = 1081;
++    static constexpr size_t MAX_TESTS = 1094;
      static constexpr size_t MAX_CLASSES = 64;
      // NOLINTBEGIN(bugprone-dynamic-static-initializers)
      static TestCase tests_[MAX_TESTS];
+diff --git a/userspace/pager-probe.c b/userspace/pager-probe.c
+new file mode 100644
+index 00000000..07c9e10f
+--- /dev/null
++++ b/userspace/pager-probe.c
+@@ -0,0 +1,27 @@
++#include <unistd.h>
++#include <syscall.h>
++
++/* issue #107 — external-pager roundtrip probe.
++ *
++ * Registers PID 1 (the test harness / init) as its pager, then dereferences a
++ * deliberately unmapped user VA (0x10000000).  The kernel delegates the #PF
++ * to the registered pager (the harness), which maps a FrameCap at that VA;
++ * the client then resumes and the write succeeds.  Writes 0xCAFE to the page
++ * and _exit(0).  Without a pager this would SIGSEGV-terminate (fault-probe.c
++ * behaviour).
++ */
++#define SYS_PAGER_REGISTER 69
++
++static inline long pager_register(long pid) {
++    return __syscall5(SYS_PAGER_REGISTER, pid, 0, 0, 0);
++}
++
++int main(void) {
++    long reg = pager_register(1);
++    if (reg != 0)
++        _exit(2);
++    volatile unsigned long *p =
++        (volatile unsigned long *)0x10000000UL;
++    *p = 0xCAFEUL;
++    _exit(0);
++}
+\ No newline at end of file

@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/tcb_write_log.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -1622,6 +1623,12 @@ void Scheduler::on_tick() noexcept {
             }
         }
 #endif
+
+        // Issue #107: external-pager fault watchdog — expire overdue delegated
+        // faults (per-fault fail-closed, registration KEPT, VA poison latch).
+        // Runs inside the scheduler_lock_ + IrqGuard window; records mid-map
+        // (map_in_progress) are deferred this tick.
+        kernel::ipc::PagerRegistry::watchdog_scan(current_tick);
 
         if (s_deferred_kill_count > 0)
             Scheduler::process_deferred_kills();

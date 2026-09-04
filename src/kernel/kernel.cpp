@@ -39,6 +39,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/driver/driver.hpp>
 #include <version.hpp>
@@ -1521,6 +1522,18 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 
             if (vector == 14) {
                 kernel::Logger::error("  CR2=%x", read_cr2());
+            }
+
+            // Issue #107: user-mode #PF delegation to a designated pager.  The
+            // classifier (paper §3.2 F1-F10) is checked BEFORE signal
+            // delivery; if delegated, the client blocks inside this ISR and
+            // resumes to retry the faulting instruction.  The #PF ISR
+            // epilogue saves the exception frame (the block runs with no
+            // lock held, §4.8).
+            if (vector == 14 &&
+                kernel::ipc::PagerRegistry::delegate_fault(
+                    *t, error_code, regs, read_cr2())) {
+                return;
             }
 
             bool was_delivered =

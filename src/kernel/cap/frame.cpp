@@ -21,6 +21,7 @@
 
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/frame_map.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/test/resource_tracker.hpp>
@@ -52,6 +53,10 @@ void FrameCap::dispose() noexcept {
     // non-owning (equality-match only) in the map registry — never
     // dereferenced after this point.
     FrameUserMap::invalidate_cap(this);
+    // Issue #107: same closure for the pager registry's fault ledger — a
+    // pager-mapped page backed by this cap must be unmapped + unpinned before
+    // the frames are freed.
+    ipc::PagerRegistry::invalidate_cap(this);
     for (size_t i = 0; i < count; ++i)
         PMM::free_page(phys + i * arch::PAGE_SIZE);
     kernel::test::ResourceTracker::instance().track_cap_object_remove();
@@ -62,6 +67,8 @@ void FrameCap::revoke() noexcept {
     // Issue #106 Part B: same closure as dispose — a revoked capability must
     // not leave stale frame mappings behind (fail-closed, MMIO parity).
     FrameUserMap::invalidate_cap(this);
+    // Issue #107: pager-ledger closure (same rationale as dispose).
+    ipc::PagerRegistry::invalidate_cap(this);
     KernelObject::revoke();
 }
 

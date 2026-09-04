@@ -98,7 +98,12 @@ enum class SyscallNumber : uint8_t {
     DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
     DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
     DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
-    MAX_SYSCALL = 69,
+    PAGER_REGISTER = 69, ///< designate a pager for the caller's own faults (issue #107)
+    PAGER_RECV = 70,   ///< drain the next pending pager fault, non-blocking (issue #107)
+    PAGER_MAP = 71,    ///< map the pager's FrameCap into the client's PML4 (issue #107)
+    PAGER_ABORT = 72,  ///< pager cannot satisfy a fault: unmap + poison VA (issue #107)
+    PAGER_UNREGISTER = 73, ///< remove a pager registration (issue #107)
+    MAX_SYSCALL = 74,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
@@ -329,6 +334,16 @@ class Syscall {
                                     uint64_t *);
     static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
                                        uint64_t *);
+    static uint64_t sys_pager_register(uint64_t, uint64_t, uint64_t, uint64_t,
+                                        uint64_t *);
+    static uint64_t sys_pager_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_pager_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_pager_abort(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_pager_unregister(uint64_t, uint64_t, uint64_t, uint64_t,
+                                         uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -401,6 +416,11 @@ class Syscall {
             &Syscall::sys_death_watch,
             &Syscall::sys_death_recv,
             &Syscall::sys_death_unwatch,
+            &Syscall::sys_pager_register,
+            &Syscall::sys_pager_recv,
+            &Syscall::sys_pager_map,
+            &Syscall::sys_pager_abort,
+            &Syscall::sys_pager_unregister,
     };
 };
 

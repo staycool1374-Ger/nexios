@@ -107,6 +107,10 @@ class EventGroup;
 class Queue;
 } // namespace sync
 
+namespace ipc {
+struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
+} // namespace ipc
+
 namespace task {
 class SporadicServer;
 void dmesg_task_main();
@@ -232,6 +236,7 @@ struct TaskControlBlock {
           blocked_on_queue(nullptr), reply_wait(false),
           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+          blocked_on_pager_fault(nullptr),
           held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
           next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
           generation(0) {
@@ -487,6 +492,12 @@ struct TaskControlBlock {
     /// add_recv_waiter(), cleared in the wake/remove paths.  Used by cleanup()
     /// to detach a reaped task before the TCB is freed.
     sync::Queue *waiting_on_queue;
+
+    /// @brief Non-null while this task is BLOCKED on a delegated pager fault
+    ///        (issue #107, paper §4.8).  Set by the block path, cleared by the
+    ///        single wake path (never read stale).  The record pointer is
+    ///        valid for the block duration (the registry slot owns it).
+    kernel::ipc::PagerFault *blocked_on_pager_fault;
 
     /// @brief Number of mutexes currently held by this task (for PCP ceiling
     /// tracking).

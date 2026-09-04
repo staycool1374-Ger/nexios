@@ -27,6 +27,7 @@
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
@@ -720,6 +721,9 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // page-table memory).
     cap::MmioUserMap::drain_task(*tcb);
     cap::FrameUserMap::drain_task(*tcb);
+    // Issue #107: drain the pager registry before the old PML4 is freed so a
+    // pager-mapped ledger PTE cannot outlive the frames it references.
+    kernel::ipc::PagerRegistry::drain_task(*tcb);
 
     uint64_t old_pml4 = tcb->page_table_;
     // Issue #92 canary relocation: the scheduler now samples user-task segment
