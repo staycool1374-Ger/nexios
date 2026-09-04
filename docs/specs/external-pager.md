@@ -30,6 +30,15 @@ with it a supervisor-grade pager can *resolve* demand faults (sparse
 allocations, memory-mapped I/O backends, paged-out buffers) and keep the server
 alive.
 
+**Hard-RT framing (explicit):** fault delegation is **opt-in per client**
+(§4.1).  A hard-RT task that cannot tolerate a fault simply does not register a
+pager — it keeps default SIGSEGV and its WCET is unaffected.  The pager is for
+supervisor-managed servers, where a timed-out fault → SIGSEGV → supervisor
+restart (#105 Part B) is a deterministic, bounded recovery.  Scheduling never
+depends on the pager: the kernel never waits on it, and the client's worst-case
+fault latency is bounded by the kernel-enforced deadline regardless of pager
+behaviour (§4.6).
+
 ## 2. Motivation & Non-Goals
 
 ### 2.1 Motivation
@@ -200,6 +209,7 @@ signal-delivery path), and consistency with how signals are already delivered.
 | B6 | the kernel never blocks on the pager | pulse is a non-blocking poke; the client blocks only on its own registry record + the scheduler, never on any pager lock/queue |
 | B7 | ≤ `CONFIG_PAGER_MAX_PAGES_PER_FAULT` (default 4) pages per fault | validated in `SYS_PAGER_MAP`; bounded unmap on abort |
 | B8 | **deadlock footgun designed out** | the client's block is woken by exactly one of {MAP-complete, ABORT, watchdog-timeout, death-drain}; the timeout path (§4.6) guarantees the client is never stuck behind a stalled pager |
+| B9 | **no priority-inversion dependency** | a pager's effective priority must be ≥ the highest-priority client it serves; otherwise a starved pager times every fault out to SIGSEGV (bounded, but the availability goal fails).  The kernel adds no priority boost of its own in v1 |
 
 **The "pager blocked while faulting task waits" deadlock is impossible by
 construction:** the faulting task never waits on the pager — it waits in the
@@ -218,7 +228,9 @@ cooperation.
   **poisoned-VA latch** (the record's `poisoned_va`), so the immediate retry of
   the same VA re-faults and is classified non-delegable (F9) → SIGSEGV.  The
   latch is cleared on the next successful delegation of a different VA or on
-  unregister.  Prevents the abort/re-delegate infinite loop.
+  unregister.  The watchdog timeout uses the SAME latch (§4.6) — same-VA
+  retries go SIGSEGV while a future different-VA fault delegates normally.
+  Prevents the abort/re-delegate infinite loop.
 - Watchdog timeout (§4.6).
 - Death drain (§4.6).
 
@@ -229,16 +241,18 @@ cooperation.
   `map_in_progress == false` (§7.2).  The deadline is a **hard bounded latency,
   not a soft timeout**: for each overdue record — consume it under the registry
   lock (released before the wake), **rollback** (`VMM::unmap_frame_from_cap`
-  each ledger page in the client's PML4, release the cap pins), **evict the
-  registration fail-closed** (a pager that stalls is untrustworthy; the client
-  reverts to default SIGSEGV semantics until it explicitly re-registers via
-  `SYS_PAGER_REGISTER`), then wake the client.  The client is made READY
-  regardless of pager liveness (woken at ≤ `CONFIG_PAGER_FAULT_TIMEOUT_TICKS`
-  no matter what the pager does).  The client's retry re-faults with no
-  registration → SIGSEGV (F8 false).  No iret-frame injection is needed; the
-  loop is broken by eviction, not by per-VA bookkeeping.  A late
-  `SYS_PAGER_MAP` after eviction finds the record consumed → error, no second
-  wake, no double unmap.
+  each ledger page in the client's PML4, release the cap pins), set the
+  **poisoned-VA latch** (§4.5, same as `SYS_PAGER_ABORT`), then wake the client.
+  The client is made READY regardless of pager liveness (woken at ≤
+  `CONFIG_PAGER_FAULT_TIMEOUT_TICKS` + one map window — §7.2 — no matter what
+  the pager does).  The client's retry re-faults on the SAME VA → F9 false →
+  SIGSEGV (loop broken, no infinite re-delegate).  **Per-fault fail-closed with
+  registration kept:** THIS fault reverts to SIGSEGV, but the registration
+  survives so a FUTURE fault on a different VA is served normally (a transient
+  scheduling stall must not permanently disable paging).  **Eviction happens
+  only on pager death** (§4.6) or explicit unregister.  No iret-frame injection
+  is needed; a late `SYS_PAGER_MAP` after consumption finds the record gone →
+  error, no second wake, no double unmap.
 - **Pager death** (`PagerRegistry::drain_task(pager)` in the pager's
   `cleanup()`, before its Notify is destroyed): evict its registrations; for
   each client with a pending fault: consume, unmap ledger, release pins, wake
@@ -262,9 +276,54 @@ cooperation.
 |---|---|---|---|---|---|
 | `SYS_PAGER_MAP` | consumed | kept (mapped) | READY, retries | kept | faulting instruction succeeds |
 | `SYS_PAGER_ABORT` | consumed | unmapped | READY, retries | kept (+ VA poison latch) | re-fault → SIGSEGV (F9) |
-| watchdog timeout | consumed | unmapped | READY, retries | **evicted** | re-fault → SIGSEGV (F8) |
+| watchdog timeout | consumed | unmapped | READY, retries | kept (+ VA poison latch) | re-fault on SAME VA → SIGSEGV (F9); a future DIFFERENT VA delegates (per-fault fail-closed) |
 | pager death | consumed | unmapped | READY, retries | evicted | re-fault → SIGSEGV (F8) |
 | client death | consumed | unmapped (pre free_user_pages) | (dead) | evicted | — |
+
+### 4.8 Block-inside-#PF-ISR mechanism (highest implementation risk)
+
+The delegation path must **block the faulting client from inside the #PF
+exception handler** and resume it later so the faulting instruction retries.
+This is a *new* kernel mechanism — no existing path blocks from exception-ISR
+context (`sys_receive`/`Notify` block in task context; the #NM handler returns
+without blocking; signal delivery reschedules but never blocks).  The contract:
+
+1. **Entry state.**  The client faults; `handle_interrupt_c` (vector 14, user
+   CS) classifies (§3.2) and, if delegatable, calls
+   `PagerRegistry::delegate_fault(t, error_code, regs, cr2)`.  The exception
+   frame (`regs[]`) already holds the interrupted user state — the `iretq`
+   target `regs[17]` (RIP) + `regs[18]` (CS) + RSP are untouched.  The faulting
+   instruction will re-execute on resume; nothing is rewritten.
+2. **Record + pulse + block.**  Under the registry lock: create the fault
+   record (`deadline_tick` set), capture `(client_id, client_gen)` and
+   `(pager_id, pager_gen)`.  Release the lock, pulse the pager's Notify
+   (outside the lock, id+gen revalidated).  Then block the client
+   **without returning through the ISR epilogue**:
+   `state = BLOCKED; blocked_on_pager_fault = &record;
+   dequeue_ready(t); Scheduler::reschedule();` — the ISR never `iretq`'s to the
+   client; control stays in the kernel and the scheduler switches to a ready
+   task.  The client's kernel stack (with the exception frame) is preserved as
+   its suspended context.
+3. **Resume.**  On record consumption (MAP-complete / ABORT / watchdog / death-
+   drain), the registry wakes the client (`state = READY`, re-enqueue) via the
+   DeathNotify collect-under-lock / wake-outside-lock pattern.  The scheduler's
+   normal `switch_to_task` restores the client's kernel stack — the exception
+   frame — and the ISR epilogue `iretq` re-enters the user instruction that
+   faulted.
+4. **Exactly-once.**  The exception frame is restored by exactly one resume (the
+   `PENDING → consumed` transition is the single gate, §7.3).  A second
+   block/resume on the same fault is structurally impossible (the client is
+   BLOCKED, so it cannot fault again — B1).
+5. **Preemption safety.**  The block runs inside the ISR with the registry lock
+   ALREADY released (step 2) and holds no other lock; the ISR may be
+   interrupted by the timer watchdog without a lock-order inversion (§7.1).
+   `blocked_on_pager_fault` is cleared by the resume path (under the scheduler
+   discipline, mirroring `waiting_on_*`), so a stale pointer is never read.
+
+The v1 implementation keeps the client's stack intact for the whole block; the
+exception frame lives on the kernel stack, which is never freed while the task
+is BLOCKED (the reaper only frees it after the task is TERMINATED + drained,
+and `PagerRegistry::drain_task(client)` runs before `free_user_pages`, §5.3).
 
 ## 5. Mapping & Ownership Model
 
@@ -465,7 +524,7 @@ is exercised via the live dispatcher.
 |---|---|
 | `pager_register_authority` | client designates own pager OK; third-party designation rejected; self-pager rejected; full registry fails closed |
 | `pager_fault_roundtrip` | client faults on unmapped VA; pager RECVs `{id, va, flags}`, MAPs a FrameCap; client instruction completes; PTE present in client PML4; record consumed; ResourceTracker zero-delta |
-| `pager_fault_timeout_aborts` | pager never responds; watchdog expires the fault; client re-faults → SIGSEGV/terminates; registration **evicted**; ledger unmapped (no PTE in client PML4) |
+| `pager_fault_timeout_aborts` | pager never responds; watchdog expires the fault; client re-faults on the same VA → SIGSEGV/terminates; registration **kept** (a different VA still delegates); ledger unmapped (no PTE in client PML4) |
 | `pager_map_after_timeout_denied` | late `SYS_PAGER_MAP` returns error; no mapping installed; no double wake |
 | `pager_abort_poisons_va` | `SYS_PAGER_ABORT` → client re-faults once → SIGSEGV (no re-delegate loop); a different VA still delegates |
 | `pager_dead_drains_faults` | pager dies mid-fault: client woken, registration evicted, ledger unmapped, cap pins released |
@@ -489,11 +548,15 @@ debug `all` + release `all`, test-history rows per AGENTS.md.
    pages are needed, a rights review (which capability right authorizes an
    executable cross-task map? today `map_page_in_pml4` has no exec right gate)
    is required before v2.  **Blocks nothing in v1.**
-2. **Timeout policy — RESOLVED: hard eviction at 1000 ticks.**  The deadline is
-   a hard bounded latency; the watchdog evicts the registration fail-closed and
-   wakes the client (never stuck, ≤ 1000 ticks regardless of pager liveness).
-   Immediate re-registration after eviction is permitted (the client opts back
-   in explicitly).  See §4.6.
+2. **Timeout policy — RESOLVED: per-fault fail-closed, registration KEPT.**  The
+   deadline is a hard bounded latency; the watchdog consumes the record, unmaps
+   the ledger, sets the poisoned-VA latch (F9), and wakes the client (never
+   stuck, ≤ timeout + map window regardless of pager liveness).  THIS fault
+   reverts to SIGSEGV, but the registration survives — a transient scheduling
+   stall does not permanently disable paging; eviction happens only on pager
+   death or explicit unregister.  Priority invariant B9: a pager that cannot
+   outrank its clients will time every fault out; deployment must ensure the
+   pager's effective priority ≥ its clients'.  See §4.6/§4.7.
 3. **Client wakeup with pending signals — RESOLVED: retry-first.**  The faulting
    instruction re-executes before any pending signal is delivered (signal
    delivery at the next syscall/exception boundary).  Hard-real-time rationale:
@@ -510,9 +573,10 @@ debug `all` + release `all`, test-history rows per AGENTS.md.
    v1.
 6. **SMP.**  The design is single-core today; §7.2 documents the SMP-safe pin.
    Confirm SMP is out of scope for the implementation (tracked by #85).
-7. **Poisoned-VA latch lifetime.**  v1: one aborted-VA latch per registration,
-   cleared on next successful delegation of a different VA.  Acceptable, or
-   should an aborted VA be permanent for the registration?
+7. **Poisoned-VA latch lifetime — RESOLVED.**  One aborted-VA latch per
+   registration, shared by `SYS_PAGER_ABORT` and the watchdog timeout (§4.5);
+   cleared on the next successful delegation of a different VA or on
+   unregister.  A permanent latch is a follow-on (needs a VA-reuse policy).
 
 ## 12. Non-Goals (reprise)
 
