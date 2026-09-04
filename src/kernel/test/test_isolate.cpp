@@ -41,6 +41,7 @@
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/frame_map.hpp>
+#include <kernel/ipc/death_notify.hpp>
 #include <kernel/cap/msix.hpp>
 #include <logger.hpp>
 #include "test_registry.gen.hpp"
@@ -1357,6 +1358,10 @@ void snapshot_restore(const char *test_name) {
         // snapshot cycles.
         cap::MmioUserMap::snapshot_reset();
         cap::FrameUserMap::snapshot_reset();
+        // Reset the death-notify registry (issue #105 Part B) so a test that
+        // registered death watches can never leak a stale watch across
+        // snapshot cycles.
+        kernel::ipc::DeathNotify::snapshot_reset();
         // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
         // test that created an MsixCap never leaves a recycled (bdf, entry)
         // un-claimable in the next cycle.

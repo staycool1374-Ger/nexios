@@ -36,6 +36,7 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/ipc/death_notify.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
@@ -1777,6 +1778,14 @@ void TaskControlBlock::cleanup() noexcept {
     // Must run before msg_queue is destroyed so blocked senders get fast-fail
     // instead of blocking on a zombie destination.
     kernel::daemon::notify_death(this->id);
+
+    // Issue #105 Part B: latch this task's death records and poke its
+    // supervisors BEFORE any of this task's resources are torn down, so a
+    // still-resolvable supervisor is woken while the death is fresh.  Then free
+    // this task's own watches (incl. any PENDING records it held as a
+    // supervisor for others) before its Notify is destroyed below — a poke or a
+    // drain must never touch a recycled supervisor TCB.
+    kernel::ipc::DeathNotify::on_task_death(*this);
 
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         if (fd_table.fds[i].used) {

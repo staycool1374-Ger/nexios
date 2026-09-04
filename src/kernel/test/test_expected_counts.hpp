@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1050,   0,       0      },  // measured: 1045 + cap_shm(+5,#106 Part B) → 1050
+    {"all",                1059,   0,       0      },  // measured: 1050 + cap_death(+9,#105 Part B) → 1059
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -95,6 +95,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
     {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
+    {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip

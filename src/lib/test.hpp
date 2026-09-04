@@ -92,7 +92,7 @@ public:
     static const char* current_test_name();
 
 private:
-    static constexpr size_t MAX_TESTS = 1072;
+    static constexpr size_t MAX_TESTS = 1081;
     static constexpr size_t MAX_CLASSES = 64;
     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
     static TestCase tests_[MAX_TESTS];

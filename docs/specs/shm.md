@@ -117,5 +117,14 @@ a privilege hole).  `MAX_SYSCALL` 63 → 66.
   capability rights still gate *who* may map.  RO-PTE is a documented follow-on.
 - A user-space `SYS_FRAME_CREATE` grant flow across CNodes (grant/copy already
   exist — the test installs the cap in the producer's CSpace directly).
+
+## Pairing with the Crash Supervisor (issue #105 Part B)
+
+The async task-death notification mechanism (`docs/specs/death-notify.md`,
+SYS_DEATH_WATCH/RECV/UNWATCH) is the supervisor wakeup that pairs with this
+ring for client-server fault recovery: when a ring producer/consumer dies, the
+supervisor's death pulse fires, it drains the death record, and the ring frames
+are reclaimed via `FrameUserMap::drain_task` (already in the dying task's
+`cleanup()`) before `free_user_pages` — no stale PTEs, no leaked frames.
 - SMP multi-producer/multi-consumer rings — the protocol is SPSC; the cache-line
   alignment of head/tail prepares for a future SMP migration.

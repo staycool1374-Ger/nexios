@@ -584,6 +584,14 @@
 #define CONFIG_CAP_MAX_FRAME_MAPS 8
 #endif
 
+/// Maximum number of concurrent death-watch slots in the DeathNotify registry
+/// (issue #105 Part B).  Each slot pairs one watched task with one supervisor;
+/// registration fails closed when the registry is exhausted.  Static bounded
+/// array — no dynamic allocation on real-time paths.
+#ifndef CONFIG_CAP_MAX_DEATH_WATCHES
+#define CONFIG_CAP_MAX_DEATH_WATCHES 16
+#endif
+
 /// Base of the fixed user-space shared-memory mapping window (issue #106
 /// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
 /// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window

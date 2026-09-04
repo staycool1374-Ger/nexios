@@ -1,211 +1,182 @@
-diff --git a/docs/specs/ipc.md b/docs/specs/ipc.md
-index 54b50ed8..010ef72a 100644
---- a/docs/specs/ipc.md
-+++ b/docs/specs/ipc.md
-@@ -115,8 +115,11 @@ orphan re-enqueue; `4bf751b4` — owner-resolution self-switch no-op;
- 
- ## 6. Gaps
- 
--- **Priority-ordered blocked-sender wakeup** (rms-rework Plan Phase 3) — not
--  confirmed implemented; `wake_sender` pops FIFO.
-+- **Priority-ordered blocked-sender wakeup** — **IMPLEMENTED** (issue #106 Part
-+  A, 2026-09-03): `IPC::block_sender` inserts blocked senders in descending
-+  priority order (ipc.cpp:506-512) and `IPC::wake_sender` pops the head =
-+  highest priority (ipc.cpp:543-559).  Verified by
-+  `IpcPriorityOrderedWake` (ipc_robustness class).
- - **`sys_receive` bounded/timeout variant** (VULN-W3 in `specs/boundary.md`) —
-   uses the discarded `arg3` slot as `timeout_ticks`; verification status
-   unconfirmed.
-diff --git a/docs/specs/shm.md b/docs/specs/shm.md
+diff --git a/docs/specs/death-notify.md b/docs/specs/death-notify.md
 new file mode 100644
-index 00000000..6e5eca0a
+index 00000000..34cf0fb5
 --- /dev/null
-+++ b/docs/specs/shm.md
-@@ -0,0 +1,121 @@
-+# Capability Shared-Memory Granules — Zero-Copy Ring (issue #106 Part B)
-+
-+**Doc ID:** NEX-SPEC-2026-09-03-106
-+**Status:** IMPLEMENTED (issue #106 Part B, v0.4.3 — 2026-09-03)
-+**Milestone target:** v0.4.3
-+**Related:** `docs/specs/ipc.md` (priority-ordered wake, Part A),
-+`src/kernel/cap/frame_map.{hpp,cpp}`, `src/kernel/ipc/shm_ring.hpp`,
-+`src/kernel/cap/frame.{hpp,cpp}`, `docs/specs/cspace.md`.
++++ b/docs/specs/death-notify.md
+@@ -0,0 +1,146 @@
++# Asynchronous Task-Death Notification — Crash Supervisor (issue #105 Part B)
 +
 +## Purpose
 +
-+A capability-gated, genuinely zero-copy shared-memory ring for high-throughput
-+client-server IPC.  A producer and a consumer each map the SAME physical
-+frames (backed by a `FrameCap`) into their user VA window via
-+`SYS_FRAME_MAP`; after mapping, data flows directly between the two user
-+spaces through the shared frames with **no kernel involvement** (zero syscalls
-+on the data path).  The capability is the single authority gate: ownership,
-+grant, and revocation are enforced by the CSpace machinery (issues #1–#10).
++Let a user-space supervisor detect when a server task dies (clean exit or
++crash), learn *which* task died and *why*, reclaim the dead task's leaked
++capabilities, and restart the failed server.  This is the kernel-side death
++notification mechanism behind the "Crash Supervisor" fault-isolation story of
++issue #105; the External Pager protocol (issue #105 Part A) is explicitly out
++of scope and deferred to a separate design paper.
 +
-+## Design
++## Motivation & Non-Goals
 +
-+### FrameUserMap registry (`cap/frame_map.{hpp,cpp}`)
++- **Motivation:** the existing `daemon_mgr` restart is kernel-internal and only
++  covers the two system daemons.  User-space supervisors need the same
++  catch-crash / reclaim / restart loop for arbitrary servers.
++- **Non-goals:** no external pager (#105 Part A), no `daemon_mgr` change, no
++  signal-handler semantics change, no change to the #106 shared-memory ring
++  itself (this mechanism is the *wakeup trigger* that pairs with it).
 +
-+Mirror of `MmioUserMap` (issue #8):
++## Syscall ABI
 +
-+- Static bounded slot table (`CONFIG_CAP_MAX_FRAME_MAPS`, default 8), each slot
-+  keyed by `owner_task_id` + `owner_gen` (recycled-slot stale-VA defense).
-+- Each slot maps into a fixed user VA window:
-+  `CONFIG_USER_SHM_VA_BASE + slot * CONFIG_USER_SHM_REGION_SIZE`
-+  (base `0x62000000`, region `2 MiB`).  The window is statically pinned:
-+  above the heap (`0x60100000`), above the MMIO window (`0x61100000`), below
-+  the user stack (`0x70000000`).
-+- The registry holds a reference (`acquire()`) on the backing `FrameCap` for
-+  the lifetime of a live slot — the VMM unmap path can never dereference a
-+  freed cap (UAF, mmio.cpp precedent).
-+- Lock discipline: claim/clear/revalidate under `s_lock_`; VMM map/unmap
-+  (which may allocate PMM page-table pages) OUTSIDE `s_lock_`.  Only the path
-+  that observes the slot's `occupied true->false` transition releases the
-+  slot pin (double-release → premature dispose → UAF guard, identical to
-+  mmio.cpp:186-198/236-246).
-+- Revocation closure: `FrameCap::dispose()` / `revoke()` call
-+  `FrameUserMap::invalidate_cap(this)` to retroactively unmap every live
-+  mapping backed by the cap before the cap block is freed.
-+- Task-death drain: `TaskControlBlock::cleanup()` and `exec_into_current`
-+  call `FrameUserMap::drain_task` (beside `MmioUserMap::drain_task`) so a
-+  recycled PML4 never carries stale shared-memory PTEs.
++Numbers 66–68 (all NON-FAST — they take the registry lock and DEATH_RECV writes
++user memory; see syscall-fastpath.md §4 discipline).
 +
-+### Syscalls (`syscall_handlers_shm.cpp`)
-+
-+| Syscall | Number | Signature | Semantics |
++| Syscall | arg0 | arg1 | Return |
 +|---|---|---|---|
-+| `SYS_FRAME_CREATE` | 63 | `(count)` → slot index | Allocates `count` contiguous USER-owned frames (`PMM::alloc_user_contiguous`), wraps them in a `FrameCap`, installs it in the caller's root CNode (R/W), returns the slot. Rollback on failure. |
-+| `SYS_FRAME_MAP` | 64 | `(cap_handle)` → VA | `cap::lookup` a `Frame` cap with `CAP_RIGHT_WRITE`; `FrameUserMap::map` into the caller's VA window. |
-+| `SYS_FRAME_UNMAP` | 65 | `(va)` → 0/-1 | `FrameUserMap::unmap` (owner+generation revalidated). |
++| `SYS_DEATH_WATCH` (66) | watched pid | supervisor pid (0 = caller) | 0 on success, -1 on invalid pair / not authorized / registry full |
++| `SYS_DEATH_RECV` (67) | `DeathRecord*` out | — | 1 (record copied), 0 (none pending, never blocks), -1 (bad pointer) |
++| `SYS_DEATH_UNWATCH` (68) | watched pid | — | 0 |
 +
-+These syscalls touch page tables and MUST stay out of `k_syscall_fast[]`
-+(issue #92 discipline — a canary-skip on a page-table-touching path would be
-+a privilege hole).  `MAX_SYSCALL` 63 → 66.
++### `DeathRecord` layout
 +
-+### Shared ring protocol (`ipc/shm_ring.hpp`)
++```c
++struct DeathRecord {
++    uint64_t dead_id;    // task that died
++    uint64_t exit_code;  // exit code, or sign-extended signal on crash
++    uint64_t flags;      // DEATH_FLAG_SIGNAL = 1 on abnormal (crash) death
++};
++```
 +
-+- `SharedRingHeader` lives at the **start of page 0** of the `FrameCap`:
-+  magic (`0x4E455852494E47`), version, `capacity`, `element_size`, plus
-+  cache-line-aligned (`alignas(64)`) `head` (producer-write-only) and `tail`
-+  (consumer-write-only).
-+- Data lives in pages 1..N-1.  Ring capacity = `(frame_count - 1) * PAGE_SIZE`
-+  rounded down to a power of two (so the wrap mask works).
-+- `shm_ring_init` is called once by the producer before either side uses the
-+  ring.  `shm_ring_push` / `shm_ring_pop` follow the SPSCRing acquire/release
-+  protocol (head published with release after the payload write; tail
-+  published with release after the payload read).  Single-producer /
-+  single-consumer.
-+- Element size is a fixed multiple of 8.  Head/tail are in bytes; the element
-+  index is `head / element_size`.
++`DEATH_FLAG_SIGNAL` is set when `exit_code` has its high bit set — the kernel's
++convention for signal-terminated tasks (e.g. `-SIGSEGV`).  The supervisor
++distinguishes "clean server exit" from "crashed" without parsing process
++semantics.
 +
-+### Revocation semantics
++## Registry Semantics (`ipc/death_notify.{hpp,cpp}`)
 +
-+- `SYS_CAP_REVOKE` → `FrameCap::revoke()` → `FrameUserMap::invalidate_cap`
-+  unmaps EVERY live mapping backed by the cap (all owners), then marks the cap
-+  revoked (acquire() refuses).  Frames are freed only on the last reference
-+  (dispose).
-+- `SYS_FRAME_UNMAP` removes only the calling task's mapping.
-+- Task death/exec: cleanup drains the task's mappings.
++- Static bounded table, `CONFIG_CAP_MAX_DEATH_WATCHES` (16) slots — no dynamic
++  allocation on RT paths (CODING_STYLE §4).  Registration **fails closed** when
++  full.
++- Slot lifecycle: `ACTIVE` (watch installed) → `PENDING` (watched task died,
++  record latched) → `FREE` (supervisor consumed via recv, or drain freed it).
++- **Exactly-once:** records latch only from `TaskControlBlock::cleanup()`
++  (the single death funnel, REAPED + magic idempotency guards).  A task that
++  dies through self-exit, signal-death, or daemon teardown produces exactly one
++  record; repeated `drain_zombie_list()` cannot duplicate it.
++- **Asynchronous, non-blocking:** `on_task_death` never blocks the dying task's
++  cleanup; `SYS_DEATH_RECV` never blocks the supervisor.  A crashed or stalled
++  supervisor can never wedge the kernel.
++- **Authority:** a watch is installed only by (a) the supervisor for the watched
++  task, or (b) the watched task designating a supervisor.  A third party cannot
++  register (worst case a spurious wakeup pulse — the mechanism is info-only,
++  no privilege transfer).
++- **Supervisor-alive safety:** every slot stores the supervisor's `(id,
++  generation)`.  The poke goes through the supervisor's own `Notify::notify()`
++  which already guards `TERMINATED`/`REAPED`/generation — a poke to a just-died
++  supervisor is a safe no-op.  `drain_task` in the supervisor's `cleanup()`
++  frees its ACTIVE + PENDING slots before its `Notify` is destroyed.
++
++### Lock ordering
++
++`DeathNotify::s_lock_` is a leaf SpinLock.  Supervisors are collected under the
++lock and poked **outside** it (a poke can reach the scheduler).  `s_lock_` is
++never held while acquiring `scheduler_lock_` or a `Notify` lock, so the single
++direction `scheduler_lock_ → s_lock_` (on_tick → flush_zombies → cleanup →
++on_task_death) forms no cycle.  As with the other per-object locks taken in
++`cleanup()`, `s_lock_` is acquired in that ISR-reachable path; a preempted
++holder could in theory make a zombie-watchdog ISR spin on it, but no deadlock
++by ordering is possible.
++
++## Supervisor Protocol
++
++1. `SYS_DEATH_WATCH(server_pid, 0)` — the supervisor registers itself for the
++   server it manages.
++2. Block on the supervisor's `Notify` (e.g. `sys_notify_wait`), or poll
++   `SYS_DEATH_RECV`.
++3. On wakeup pulse (`DEATH_WAKE_PULSE`), drain `SYS_DEATH_RECV` in a loop until
++   it returns 0 — the pulse is a wakeup only; the authoritative data (and any
++   fan-in of multiple deaths) lives in the registry.
++4. Reclaim: the dead task's capabilities are already released by the kernel
++   (`release_all_objects` → CNode dispose → FrameCap/Endpoint/etc. dispose).
++   Any shared-memory ring frames are reclaimed through the existing
++   `FrameUserMap::drain_task` (#106 closure) before `free_user_pages`.
++5. Restart the server; re-arm the watch.
++6. `SYS_DEATH_UNWATCH` is available to tear a watch down cleanly.
++
++### Register/death race
++
++`watch()` re-validates both tasks alive under the registry lock at install
++time, so a watch on a task that died moments earlier is rejected (`-1`).  There
++is a microscopic window where a task dies *just after* the liveness check and
++the watch is installed for a task that is already reaping; a supervisor SHOULD
++treat a never-firing watch as "server pre-died" and poll once after a failed
++restart before assuming the kernel lost the record.
++
++## Pairing with the #106 Shared-Memory Ring
++
++The death pulse is the recovery trigger when a ring producer/consumer dies: the
++supervisor wakes, drains the death record, and reclaims the ring frames through
++its own `FrameCap` after the kernel's `FrameUserMap::drain_task` has already
++cleared the dead task's PTEs.  The ring itself is untouched by the death path.
++
++## Edge Cases & Failure Policy
++
++- **Supervisor death while notifications pending:** its slots (ACTIVE +
++  PENDING) are freed by `drain_task` in its cleanup; pokes are safe no-ops.
++- **Registry full:** new registrations fail closed (`-1`); the supervisor must
++  drain pending records before registering more.
++- **Unwatch before death:** the watch is removed; the eventual death produces no
++  record.
++- **Exactly-once:** guaranteed by the cleanup() single funnel + the atomic
++  ACTIVE→PENDING transition under the lock.
 +
 +## Invariants
 +
-+- INV-SHM1: no dynamic allocation on the map/unmap/push/pop paths (static
-+  bounded registry + fixed VA window + fixed header).
-+- INV-SHM2: the capability is the only authority — `cap::lookup` (type +
-+  rights + generation) gates every `SYS_FRAME_*`; a revoked cap refuses map.
-+- INV-SHM3: slot pin released exactly once (occupied true→false transition
-+  observer only).
-+- INV-SHM4: `drain_task` runs before `free_user_pages` at both call sites
-+  (never walk a freed PML4).
-+- INV-SHM5: ResourceTracker zero-delta — `FrameCap` create/dispose balance
-+  cap_objects; slot install/remove balance cap_slots; frame alloc/free
-+  balance pmm_pages_used.
++1. Every task death produces at most one record per watching supervisor.
++2. `on_task_death` never blocks; `SYS_DEATH_RECV` never blocks.
++3. A slot is freed exactly once (consume, unwatch, or drain — never both).
++4. No poke dereferences a recycled supervisor TCB (id + generation revalidated
++   at poke time).
++5. ResourceTracker `death_watches` is zero-delta across every test.
 +
-+## Test Plan (landed — class `cap_shm`, 5 TF_KERNEL)
++## Test Plan (landed — class `cap_death`, 9 TF_KERNEL)
 +
-+1. `frame_user_map_unmap_roundtrip` — real-PML4 task maps a FrameCap via
-+   SYS_FRAME_MAP, unmaps via SYS_FRAME_UNMAP; live_count returns to 0.
-+2. `frame_user_map_revoke_denied` — revoked FrameCap refuses SYS_FRAME_MAP.
-+3. `shm_ring_producer_consumer` — producer maps + writes a 32-element ring
-+   into its cloned PML4; the harness proves zero-copy (mapped VA →
-+   `virt_to_phys_in_pml4` == the ring phys) and reads the ring back via the
-+   physical frames (HHDM alias — the same frames a consumer would read),
-+   verifying payload + order.
-+4. `shm_ring_task_death_drain` — a mapping dies with its task; the registry
-+   drains (live_count baseline).
-+5. `shm_ring_revocation_cleanup` — revoking the FrameCap clears the live
-+   mapping + drops its pin (live_count baseline).
-+
-+## Non-Goals
-+
-+- Read-only (RO-PTE) mappings for the consumer — both sides map RW today;
-+  capability rights still gate *who* may map.  RO-PTE is a documented follow-on.
-+- A user-space `SYS_FRAME_CREATE` grant flow across CNodes (grant/copy already
-+  exist — the test installs the cap in the producer's CSpace directly).
-+- SMP multi-producer/multi-consumer rings — the protocol is SPSC; the cache-line
-+  alignment of head/tail prepares for a future SMP migration.
++| Test | Asserts |
++|---|---|
++| `death_watch_consume_roundtrip` | watch → terminate(42) → one record, dead_id, exit_code, no SIGNAL |
++| `death_watch_crash_reason` | signal termination → high-bit exit_code + DEATH_FLAG_SIGNAL |
++| `death_watch_multi_fan_in` | 3 deaths → 3 records, distinct ids, baseline restored |
++| `death_watch_after_death_rejected` | watch on reaped task fails closed |
++| `death_watch_supervisor_death_drains` | supervisor death frees ACTIVE + PENDING slots |
++| `death_watch_registry_full_fails_closed` | exhaustion fails closed; consume frees a slot |
++| `death_watch_exactly_once` | one death → one record under repeated drains |
++| `death_watch_unwatch_before_death` | unwatch suppresses the notification |
++| `death_recv_nonblocking_none` | empty recv returns 0 immediately |
 \ No newline at end of file
-diff --git a/src/kernel/cap/frame.cpp b/src/kernel/cap/frame.cpp
-index e80d3fff..27876edb 100644
---- a/src/kernel/cap/frame.cpp
-+++ b/src/kernel/cap/frame.cpp
-@@ -20,6 +20,7 @@
- /// @brief Capability-wrapped physical memory frame implementation.
- 
- #include <kernel/cap/frame.hpp>
-+#include <kernel/cap/frame_map.hpp>
- #include <kernel/memory/mempool.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/test/resource_tracker.hpp>
-@@ -45,10 +46,23 @@ FrameCap *FrameCap::create(uint64_t phys, size_t count, bool is_user) {
- }
- 
- void FrameCap::dispose() noexcept {
-+    // Issue #106 Part B revocation closure: before the cap block is freed,
-+    // retroactively remove this cap's user frame mappings so a live task's
-+    // mapped shared frames cannot outlive the capability.  The cap pointer is
-+    // non-owning (equality-match only) in the map registry — never
-+    // dereferenced after this point.
-+    FrameUserMap::invalidate_cap(this);
-     for (size_t i = 0; i < count; ++i)
-         PMM::free_page(phys + i * arch::PAGE_SIZE);
-     kernel::test::ResourceTracker::instance().track_cap_object_remove();
-     MemPool::free(this);
- }
- 
-+void FrameCap::revoke() noexcept {
-+    // Issue #106 Part B: same closure as dispose — a revoked capability must
-+    // not leave stale frame mappings behind (fail-closed, MMIO parity).
-+    FrameUserMap::invalidate_cap(this);
-+    KernelObject::revoke();
-+}
+diff --git a/docs/specs/shm.md b/docs/specs/shm.md
+index 6e5eca0a..00a88e61 100644
+--- a/docs/specs/shm.md
++++ b/docs/specs/shm.md
+@@ -117,5 +117,14 @@ a privilege hole).  `MAX_SYSCALL` 63 → 66.
+   capability rights still gate *who* may map.  RO-PTE is a documented follow-on.
+ - A user-space `SYS_FRAME_CREATE` grant flow across CNodes (grant/copy already
+   exist — the test installs the cap in the producer's CSpace directly).
 +
- } // namespace kernel::cap
-diff --git a/src/kernel/cap/frame.hpp b/src/kernel/cap/frame.hpp
-index 76164419..bbf144f5 100644
---- a/src/kernel/cap/frame.hpp
-+++ b/src/kernel/cap/frame.hpp
-@@ -40,9 +40,14 @@ class FrameCap : public KernelObject {
-     static FrameCap *create(uint64_t phys, size_t count, bool is_user);
- 
-     /// @brief Final teardown: returns every wrapped frame to the PMM and the
--    ///        block to the MemPool.
-+    ///        block to the MemPool.  Also retroactively removes this cap's
-+    ///        user frame mappings (issue #106 revocation closure).
-     void dispose() noexcept override;
- 
-+    /// @brief Marks the cap revoked; retroactively removes this cap's user
-+    ///        frame mappings (issue #106).  Called by cap::revoke.
-+    void revoke() noexcept override;
++## Pairing with the Crash Supervisor (issue #105 Part B)
 +
-     /// @brief Genuinely shared (referenced by capability slots).
-     bool is_shared() const noexcept override {
-         return true;
-diff --git a/src/kernel/cap/frame_map.cpp b/src/kernel/cap/frame_map.cpp
++The async task-death notification mechanism (`docs/specs/death-notify.md`,
++SYS_DEATH_WATCH/RECV/UNWATCH) is the supervisor wakeup that pairs with this
++ring for client-server fault recovery: when a ring producer/consumer dies, the
++supervisor's death pulse fires, it drains the death record, and the ring frames
++are reclaimed via `FrameUserMap::drain_task` (already in the dying task's
++`cleanup()`) before `free_user_pages` — no stale PTEs, no leaked frames.
+ - SMP multi-producer/multi-consumer rings — the protocol is SPSC; the cache-line
+   alignment of head/tail prepares for a future SMP migration.
+\ No newline at end of file
+diff --git a/src/kernel/ipc/death_notify.cpp b/src/kernel/ipc/death_notify.cpp
 new file mode 100644
-index 00000000..b82b8975
+index 00000000..43fb6adf
 --- /dev/null
-+++ b/src/kernel/cap/frame_map.cpp
-@@ -0,0 +1,306 @@
++++ b/src/kernel/ipc/death_notify.cpp
+@@ -0,0 +1,225 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -224,301 +195,220 @@ index 00000000..b82b8975
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file frame_map.cpp
-+/// @brief FrameUserMap implementation (issue #106 Part B).  Mirrors MmioUserMap
-+/// (issue #8) exactly: static bounded slot array, claim-under-lock /
-+/// map-outside-lock, revalidate-before-release discipline.  A FrameCap owns
-+/// its PMM frames (dispose frees them on the last reference); every slot and
-+/// every user-map pin must be released before dispose.
++/// @file death_notify.cpp
++/// @brief DeathNotify implementation (issue #105 Part B).  Mirrors the
++/// FrameUserMap/MmioUserMap discipline: claim/mutate under the registry lock,
++/// poke supervisors OUTSIDE it (a Notify poke can reach the scheduler, and the
++/// documented order is scheduler_lock_ -> registry locks).  A slot's lifetime
++/// is ACTIVE (watch installed) -> PENDING (watched task died, record latched)
++/// -> FREE (supervisor consumed it via recv, or drain freed it).
 +
-+#include <kernel/cap/frame_map.hpp>
-+#include <kernel/memory/mempool.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/task/task.hpp>
++#include <kernel/ipc/death_notify.hpp>
 +#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
 +#include <kernel/sync/spinlock_guard.hpp>
 +#include <kernel/test/resource_tracker.hpp>
-+#include <constants.hpp>
 +
-+// Placement new (defined in lib/new.cpp, no <new> header in freestanding)
-+inline void *operator new(unsigned long, void *placement) noexcept {
-+    return placement;
++namespace kernel::ipc {
++
++DeathNotify::Slot DeathNotify::s_slots_[DeathNotify::kMaxWatches];
++sync::SpinLock DeathNotify::s_lock_{};
++
++namespace {
++
++/// @brief Whether @p t is live enough to be watched or to supervise.
++///        Lock-free by design: find_task() does an atomic id_table read and
++///        the caller re-validates under s_lock_ before installing a slot, so
++///        the residual register/death race is recovered by unwatch/drain and
++///        documented in docs/specs/death-notify.md.
++inline bool task_live(const TaskControlBlock *t) {
++    if (!t)
++        return false;
++    return t->magic == TaskControlBlock::TCB_MAGIC &&
++           t->state != TaskState::TERMINATED && t->state != TaskState::REAPED;
 +}
 +
-+namespace kernel::cap {
++} // namespace
 +
-+// Issue #106 Part B: the fixed user SHM window must sit below the user stack
-+// and clear of the heap AND the MMIO window.  The window base + all regions
-+// must fit.
-+static_assert(CONFIG_USER_SHM_VA_BASE >= mem::HEAP_VADDR + mem::HEAP_SIZE,
-+              "user SHM window must be above the user heap");
-+static_assert(CONFIG_USER_SHM_VA_BASE >=
-+                  CONFIG_USER_MMIO_VA_BASE +
-+                      static_cast<uint64_t>(CONFIG_CAP_MAX_MMIO_MAPS) *
-+                          CONFIG_USER_MMIO_REGION_SIZE,
-+              "user SHM window must sit above the MMIO window");
-+static_assert(CONFIG_USER_SHM_VA_BASE +
-+                      static_cast<uint64_t>(CONFIG_CAP_MAX_FRAME_MAPS) *
-+                          CONFIG_USER_SHM_REGION_SIZE <=
-+                  mem::STACK_VADDR,
-+              "user SHM window must fit below the user stack");
-+static_assert(CONFIG_USER_SHM_REGION_SIZE >= arch::PAGE_SIZE,
-+              "user SHM region must hold at least one page");
-+static_assert(CONFIG_CAP_MAX_FRAME_MAPS > 0,
-+              "CONFIG_CAP_MAX_FRAME_MAPS must be positive");
++bool DeathNotify::watch(kernel::TaskControlBlock &actor, uint64_t watched_pid,
++                        uint64_t supervisor_pid) {
++    // Authority gate: the actor must be either the watched task or the
++    // supervisor it designates.  A third party can never install a watch (a
++    // spurious wakeup pulse on a victim supervisor is still denied).
++    const uint64_t sup = supervisor_pid != 0 ? supervisor_pid : actor.id;
++    if (!(actor.id == watched_pid || actor.id == sup))
++        return false;
++    if (sup == watched_pid)
++        return false; // self-watch is meaningless
 +
-+FrameUserMap::Slot FrameUserMap::s_slots_[FrameUserMap::kMaxMaps];
-+sync::SpinLock FrameUserMap::s_lock_{};
-+
-+FrameUserMap::Slot *FrameUserMap::slot(size_t i) {
-+    if (i >= kMaxMaps)
-+        return nullptr;
-+    return &s_slots_[i];
-+}
-+
-+uint64_t FrameUserMap::map(kernel::TaskControlBlock &task, cap::FrameCap &fc) {
-+    // Fail closed on a revoked cap or a zero frame (VMM parity).  A
-+    // kernel-backed (is_user == false) cap is NEVER user-mappable: mapping
-+    // kernel physical memory into the user VA window would be a privilege
-+    // escalation even if such a cap ever reached a user CNode (defense-in-depth
-+    // — SYS_FRAME_CREATE always installs is_user == true, and user retype of a
-+    // kernel Untyped is unreachable today, but the map path must not rely on
-+    // creation-side guarantees alone).
-+    if (fc.revoked() || !fc.is_user || fc.phys == 0 || fc.count == 0)
-+        return static_cast<uint64_t>(-1);
-+    const uint64_t bytes = fc.count * arch::PAGE_SIZE;
-+    if (bytes > CONFIG_USER_SHM_REGION_SIZE)
-+        return static_cast<uint64_t>(-1); // range exceeds one fixed region
-+
-+    uint64_t pml4 = task.page_table_;
-+    if (pml4 == 0)
-+        return static_cast<uint64_t>(-1); // kernel task — no user PML4
-+
-+    // Claim a slot under the lock (exhaustion fails closed).  The user VA is
-+    // slot-derived: BASE + slot*REGION — fixed, collision-free by construction.
-+    // The registry holds a reference on the backing cap for the lifetime of a
-+    // live slot so the VMM unmap path can never dereference a freed cap (UAF,
-+    // mmio.cpp precedent).  The caller (sys_frame_map) also holds a ref, so
-+    // this acquire cannot trigger dispose during map().
-+    int16_t idx = -1;
-+    uint64_t va = static_cast<uint64_t>(-1);
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+        for (size_t i = 0; i < kMaxMaps; ++i) {
-+            if (!s_slots_[i].occupied) {
-+                if (!fc.acquire())
-+                    return static_cast<uint64_t>(-1); // revoked — fail closed
-+                idx = static_cast<int16_t>(i);
-+                va = CONFIG_USER_SHM_VA_BASE +
-+                     static_cast<uint64_t>(i) * CONFIG_USER_SHM_REGION_SIZE;
-+                s_slots_[i].owner_task_id = task.id;
-+                s_slots_[i].owner_gen = task.generation;
-+                s_slots_[i].fc = &fc;
-+                s_slots_[i].va = va;
-+                s_slots_[i].pml4 = pml4;
-+                s_slots_[i].occupied = true;
-+                break;
-+            }
-+        }
-+    }
-+    if (idx < 0)
-+        return static_cast<uint64_t>(-1); // registry full — fail closed
-+
-+    // Map OUTSIDE the registry lock (VMM walks allocate PMM pages; holding the
-+    // map lock across them would risk lock inversion with PMM/mempool).
-+    if (!VMM::map_frame_from_cap(&fc, va, /*user=*/true, pml4)) {
-+        // Roll back the claimed slot on a failed map and drop the slot's pin.
-+        // Re-validate the slot still holds THIS mapping: a concurrent
-+        // invalidate_cap (cross-task revoke) may have cleared the slot (and
-+        // released its pin) while we mapped outside the lock.  Only the path
-+        // that observes the occupied true->false transition releases the pin —
-+        // releasing unconditionally is a double-release (refcount corruption ->
-+        // premature dispose -> use-after-free).
-+        bool cleared = false;
-+        {
-+            SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+            auto &sl = s_slots_[static_cast<size_t>(idx)];
-+            if (sl.occupied && sl.fc == &fc && sl.va == va) {
-+                sl.occupied = false;
-+                cleared = true;
-+            }
-+        }
-+        if (cleared)
-+            fc.release(); // slot pin only; the caller still holds its own ref
-+        return static_cast<uint64_t>(-1);
-+    }
-+    return va;
-+}
-+
-+bool FrameUserMap::unmap(kernel::TaskControlBlock &task, uint64_t va) {
-+    // Find the slot by VA under the lock; ownership + generation revalidated
-+    // (a recycled task id or stale VA must not unmap another task's mapping).
-+    int16_t idx = -1;
-+    cap::FrameCap *fc = nullptr;
-+    uint64_t pml4 = 0;
-+    size_t pages = 0;
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+        for (size_t i = 0; i < kMaxMaps; ++i) {
-+            if (s_slots_[i].occupied && s_slots_[i].va == va &&
-+                s_slots_[i].owner_task_id == task.id &&
-+                s_slots_[i].owner_gen == task.generation) {
-+                idx = static_cast<int16_t>(i);
-+                fc = s_slots_[i].fc;
-+                pml4 = s_slots_[i].pml4;
-+                // Pin is held here — the count read is safe.  Capture it for
-+                // the unmap loop below (VMM::unmap_frame_from_cap clears ONE
-+                // PTE; map_frame_from_cap mapped fc->count pages).
-+                pages = s_slots_[i].fc->count;
-+                break;
-+            }
-+        }
-+    }
-+    if (idx < 0)
++    // Resolve both tasks lock-free first (cheap reject), then re-validate
++    // under s_lock_ at install time.
++    TaskControlBlock *watched = Scheduler::find_task(watched_pid);
++    TaskControlBlock *supervisor = Scheduler::find_task(sup);
++    if (!task_live(watched) || !task_live(supervisor))
 +        return false;
 +
-+    // Unmap every PTE outside the lock, then free the slot.  The slot's own
-+    // reference keeps @p fc alive across the unmap (the caller, sys_frame_unmap,
-+    // holds none), so the VMM unmap deref is safe.  Re-validate the slot at the
-+    // clear step: a concurrent invalidate_cap (cross-task revoke) may clear
-+    // this slot (and release its pin) while we unmap outside the lock.  Only
-+    // the path that observes the occupied true->false transition releases the
-+    // slot's pin — releasing unconditionally is a double-release.
-+    for (size_t i = 0; i < pages; ++i)
-+        VMM::unmap_frame_from_cap(va + i * arch::PAGE_SIZE, pml4);
-+    bool cleared = false;
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    // Re-validate under the lock: the tasks may have died between the
++    // lock-free resolution and the slot claim (find_task is lock-free).
++    watched = Scheduler::find_task(watched_pid);
++    supervisor = Scheduler::find_task(sup);
++    if (!task_live(watched) || !task_live(supervisor))
++        return false;
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        if (s_slots_[i].state == SlotState::FREE) {
++            s_slots_[i].state = SlotState::ACTIVE;
++            s_slots_[i].watched_id = watched_pid;
++            s_slots_[i].watched_gen = watched->generation;
++            s_slots_[i].supervisor_id = sup;
++            s_slots_[i].supervisor_gen = supervisor->generation;
++            s_slots_[i].record = {};
++            kernel::test::ResourceTracker::instance().track_death_watch_add();
++            return true;
++        }
++    }
++    return false; // registry full — fail closed
++}
++
++void DeathNotify::unwatch(kernel::TaskControlBlock &supervisor,
++                          uint64_t watched_pid) {
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        auto &sl = s_slots_[i];
++        if (sl.state != SlotState::FREE &&
++            sl.supervisor_id == supervisor.id &&
++            sl.supervisor_gen == supervisor.generation &&
++            sl.watched_id == watched_pid) {
++            sl.state = SlotState::FREE;
++            kernel::test::ResourceTracker::instance().
++                track_death_watch_remove();
++        }
++    }
++}
++
++int DeathNotify::recv(kernel::TaskControlBlock &supervisor, DeathRecord &out) {
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        auto &sl = s_slots_[i];
++        if (sl.state == SlotState::PENDING &&
++            sl.supervisor_id == supervisor.id &&
++            sl.supervisor_gen == supervisor.generation) {
++            out = sl.record;
++            sl.state = SlotState::FREE;
++            kernel::test::ResourceTracker::instance().
++                track_death_watch_remove();
++            return 1;
++        }
++    }
++    return 0; // none pending — never blocks
++}
++
++void DeathNotify::on_task_death(kernel::TaskControlBlock &dead) {
++    // Collect the supervisor (id, generation) pairs to poke OUTSIDE the lock.
++    // Bounded by kMaxWatches (one slot per watch; a task can be watched by
++    // many).  The generation is captured alongside the id so the poke-time
++    // re-resolution revalidates BOTH — a recycled TCB with the same id but a
++    // fresh generation is never poked (docs/specs/death-notify.md invariant #4).
++    struct Poke {
++        uint64_t id;
++        uint32_t gen;
++    };
++    Poke pokes[kMaxWatches];
++    size_t n_pokes = 0;
 +    {
 +        SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+        auto &sl = s_slots_[static_cast<size_t>(idx)];
-+        if (sl.occupied && sl.fc == fc && sl.va == va &&
-+            sl.owner_task_id == task.id && sl.owner_gen == task.generation) {
-+            sl.occupied = false;
-+            cleared = true;
-+        }
-+    }
-+    if (cleared)
-+        fc->release(); // drop the slot's pin outside the lock (may dispose)
-+    return true;
-+}
-+
-+void FrameUserMap::invalidate_cap(cap::FrameCap *fc) {
-+    // Collect matching slots under the lock, unmap their PTEs outside it,
-+    // then free the slots and drop each slot's pin.  Pointer-equality only.
-+    // At dispose() time no live slot references the cap (each slot holds its
-+    // own ref, so dispose cannot fire while mapped), so this is normally a
-+    // no-op; at revoke() time it clears live slots and releases their pins.
-+    for (size_t i = 0; i < kMaxMaps; ++i) {
-+        uint64_t va = 0;
-+        uint64_t pml4 = 0;
-+        cap::FrameCap *match = nullptr;
-+        size_t pages = 0;
-+        bool hit = false;
-+        {
-+            SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+            if (!s_slots_[i].occupied || s_slots_[i].fc != fc)
++        for (size_t i = 0; i < kMaxWatches; ++i) {
++            auto &sl = s_slots_[i];
++            if (sl.state != SlotState::ACTIVE)
 +                continue;
-+            va = s_slots_[i].va;
-+            match = s_slots_[i].fc;
-+            // The slot stores the PML4 phys captured at map time — the owning
-+            // task may not be scheduler-resolvable (e.g. a stand-alone test
-+            // fixture), so never re-resolve by id here.
-+            pml4 = s_slots_[i].pml4;
-+            // Pin is held here — the count read is safe.
-+            pages = s_slots_[i].fc->count;
-+            s_slots_[i].occupied = false;
-+            hit = true;
++            if (sl.watched_id == dead.id && sl.watched_gen == dead.generation) {
++                sl.state = SlotState::PENDING;
++                sl.record.dead_id = dead.id;
++                sl.record.exit_code = dead.exit_code;
++                sl.record.flags =
++                    (dead.exit_code & (1ULL << 63)) ? DEATH_FLAG_SIGNAL : 0;
++                if (sl.supervisor_id != dead.id) {
++                    pokes[n_pokes].id = sl.supervisor_id;
++                    pokes[n_pokes].gen = sl.supervisor_gen;
++                    ++n_pokes;
++                }
++            }
 +        }
-+        if (hit) {
-+            // Clear EVERY page of a multi-page mapping (map_frame_from_cap
-+            // mapped fc->count pages; unmap_frame_from_cap clears one PTE).
-+            for (size_t j = 0; j < pages; ++j)
-+                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
-+            match->release(); // drop the slot's pin (outside the lock)
++    }
++    // Poke each supervisor outside the lock.  Re-resolve by id + generation
++    // and go through Notify::notify(), which guards TERMINATED/REAPED plus the
++    // captured generation — a poke to a just-died supervisor is a safe no-op.
++    for (size_t i = 0; i < n_pokes; ++i) {
++        TaskControlBlock *sup = Scheduler::find_task(pokes[i].id);
++        if (!task_live(sup) || sup->generation != pokes[i].gen)
++            continue;
++        sup->notify.notify(static_cast<uint64_t>(DEATH_WAKE_PULSE));
++    }
++    // Free the dead task's own slots (incl. any ACTIVE self-watch it held as a
++    // supervisor for others) before its Notify is destroyed in cleanup().
++    drain_task(dead);
++}
++
++void DeathNotify::drain_task(kernel::TaskControlBlock &supervisor) {
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        auto &sl = s_slots_[i];
++        if (sl.state != SlotState::FREE &&
++            sl.supervisor_id == supervisor.id &&
++            sl.supervisor_gen == supervisor.generation) {
++            sl.state = SlotState::FREE;
++            kernel::test::ResourceTracker::instance().
++                track_death_watch_remove();
 +        }
 +    }
 +}
 +
-+void FrameUserMap::drain_task(kernel::TaskControlBlock &task) {
-+    for (size_t i = 0; i < kMaxMaps; ++i) {
-+        uint64_t va = 0;
-+        uint64_t pml4 = 0;
-+        cap::FrameCap *fc = nullptr;
-+        size_t pages = 0;
-+        bool hit = false;
-+        {
-+            SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+            if (!s_slots_[i].occupied ||
-+                s_slots_[i].owner_task_id != task.id)
-+                continue;
-+            va = s_slots_[i].va;
-+            fc = s_slots_[i].fc;
-+            pml4 = s_slots_[i].pml4;
-+            // Pin is held here — the count read is safe.
-+            pages = s_slots_[i].fc->count;
-+            s_slots_[i].occupied = false;
-+            hit = true;
-+        }
-+        if (hit) {
-+            // Clear EVERY page of a multi-page mapping before the owning
-+            // task's PML4 is freed (map_frame_from_cap mapped fc->count
-+            // pages; unmap_frame_from_cap clears one PTE).
-+            for (size_t j = 0; j < pages; ++j)
-+                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
-+            fc->release(); // drop the slot's pin (outside the lock)
-+        }
++void DeathNotify::snapshot_reset() {
++    SpinLockGuard<sync::SpinLock> guard(s_lock_);
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        s_slots_[i].state = SlotState::FREE;
++        s_slots_[i].watched_id = 0;
++        s_slots_[i].watched_gen = 0;
++        s_slots_[i].supervisor_id = 0;
++        s_slots_[i].supervisor_gen = 0;
++        s_slots_[i].record = {};
 +    }
++    // The registry holds no owned resources (no cap pins), so no per-slot
++    // release is needed — the counter is reset to the pristine 0.
++    kernel::test::ResourceTracker::instance().track_death_watch_reset();
 +}
 +
-+void FrameUserMap::snapshot_reset() {
-+    // Clear the whole registry and drop each slot's pin.  Pins are released
-+    // OUTSIDE the lock: the last release may run dispose() -> MemPool::free
-+    // (and dispose calls invalidate_cap, which takes s_lock_).
-+    cap::FrameCap *to_release[kMaxMaps];
-+    size_t n = 0;
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+        for (size_t i = 0; i < kMaxMaps; ++i) {
-+            if (s_slots_[i].occupied)
-+                to_release[n++] = s_slots_[i].fc;
-+            s_slots_[i].owner_task_id = 0;
-+            s_slots_[i].owner_gen = 0;
-+            s_slots_[i].fc = nullptr;
-+            s_slots_[i].va = 0;
-+            s_slots_[i].pml4 = 0;
-+            s_slots_[i].occupied = false;
-+        }
-+    }
-+    for (size_t i = 0; i < n; ++i)
-+        to_release[i]->release();
-+}
-+
-+size_t FrameUserMap::live_count() {
++size_t DeathNotify::live_count() {
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
 +    size_t n = 0;
-+    for (size_t i = 0; i < kMaxMaps; ++i)
-+        if (s_slots_[i].occupied)
++    for (size_t i = 0; i < kMaxWatches; ++i)
++        if (s_slots_[i].state != SlotState::FREE)
 +            ++n;
 +    return n;
 +}
 +
-+bool FrameUserMap::is_owner(kernel::TaskControlBlock &task, uint64_t va) {
++bool DeathNotify::is_watching(kernel::TaskControlBlock &supervisor,
++                              uint64_t watched_pid) {
 +    SpinLockGuard<sync::SpinLock> guard(s_lock_);
-+    for (size_t i = 0; i < kMaxMaps; ++i)
-+        if (s_slots_[i].occupied && s_slots_[i].va == va &&
-+            s_slots_[i].owner_task_id == task.id &&
-+            s_slots_[i].owner_gen == task.generation)
++    for (size_t i = 0; i < kMaxWatches; ++i) {
++        auto &sl = s_slots_[i];
++        if (sl.state != SlotState::FREE &&
++            sl.supervisor_id == supervisor.id &&
++            sl.supervisor_gen == supervisor.generation &&
++            sl.watched_id == watched_pid)
 +            return true;
++    }
 +    return false;
 +}
 +
-+} // namespace kernel::cap
++} // namespace kernel::ipc
 \ No newline at end of file
-diff --git a/src/kernel/cap/frame_map.hpp b/src/kernel/cap/frame_map.hpp
+diff --git a/src/kernel/ipc/death_notify.hpp b/src/kernel/ipc/death_notify.hpp
 new file mode 100644
-index 00000000..013c5290
+index 00000000..bcc220ac
 --- /dev/null
-+++ b/src/kernel/cap/frame_map.hpp
-@@ -0,0 +1,93 @@
++++ b/src/kernel/ipc/death_notify.hpp
+@@ -0,0 +1,123 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -537,353 +427,183 @@ index 00000000..013c5290
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file frame_map.hpp
-+/// @brief Capability-gated user-space frame (shared-memory) mapping registry
-+/// (issue #106 Part B).  Mirrors MmioUserMap (issue #8): maps a FrameCap's
-+/// physical frames into a fixed user VA window for Ring-3 shared-memory
-+/// producers/consumers via SYS_FRAME_MAP/SYS_FRAME_UNMAP.  Genuinely zero-copy
-+/// — two tasks mapping the same FrameCap share the same physical frames.
++/// @file death_notify.hpp
++/// @brief Asynchronous task-death notification registry (issue #105 Part B).
++/// Lets a user-space supervisor register a watch on a task so it is woken up
++/// when that task dies (normal exit or crash) and can then drain the death
++/// record, reclaim leaked capabilities, and restart the failed server.  Mirrors
++/// the FrameUserMap/MmioUserMap static-bounded-registry pattern.
 +
 +#pragma once
 +
 +#include <types.hpp>
-+#include <kernel/cap/frame.hpp>
 +#include <kernel/sync/spinlock.hpp>
++#include <constants.hpp>
 +
 +namespace kernel {
 +struct TaskControlBlock;
 +}
 +
-+namespace kernel::cap {
++namespace kernel::ipc {
 +
-+/// @brief User-space frame mapping registry (issue #106 Part B).  A static
-+/// bounded table keyed by task id (MmioUserMap pattern) that maps a FrameCap's
-+/// frames into a fixed user VA window for Ring 3 shared memory via the
-+/// SYS_FRAME_MAP/SYS_FRAME_UNMAP syscall surface.  Keyed by owner_task_id + a
-+/// per-slot generation (recycled-slot stale-VA defense).  No dynamic
-+/// allocation on RT paths.  Lock order: scheduler_lock_ -> frame map lock
-+/// (never held across VMM map/unmap or reschedule).
-+class FrameUserMap {
++/// @brief A single task-death record delivered to a supervisor.
++struct DeathRecord {
++    uint64_t dead_id = 0;  ///< id of the task that died
++    uint64_t exit_code = 0; ///< exit code / signal delivered at death
++    uint64_t flags = 0;    ///< DEATH_FLAG_* bitmask
++};
++
++/// @brief Death record flag: the death was an abnormal termination (a signal /
++///        crash) rather than a clean exit.  Encoded from the high bit of the
++///        task's exit code (negative exit codes carry the signal value).
++constexpr uint64_t DEATH_FLAG_SIGNAL = 1ULL << 0;
++
++/// @brief The wakeup value pulsed into a supervisor's Notify when one of its
++///        watched tasks dies.  The authoritative data lives in the registry
++///        (drained via SYS_DEATH_RECV); the pulse is a wakeup only, so a single
++///        64-bit slot cannot lose a fan-in of multiple deaths.
++constexpr uint64_t DEATH_WAKE_PULSE = 0xDEAD0001;
++
++/// @brief Asynchronous task-death notification registry (issue #105 Part B).
++/// A static bounded table pairing watched tasks with supervisors.  When a
++/// watched task dies, its record is latched in the registry (exactly once, in
++/// TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the
++/// supervisor drains via SYS_DEATH_RECV (never blocks).  No dynamic allocation
++/// on RT paths.  Lock order: scheduler_lock_ -> death notify lock (never held
++/// across a scheduler call or a Notify poke — supervisors are collected under
++/// the lock and poked outside it).
++class DeathNotify {
 +  public:
-+    /// @brief Maps @p fc's frames into @p task's user VA window.
-+    /// @return The user VA base (CONFIG_USER_SHM_VA_BASE + slot*REGION), or
-+    ///         -1 on a revoked cap, a zero frame, a full registry, a missing
-+    ///         user page table, or a failed map.
-+    static uint64_t map(kernel::TaskControlBlock &task, cap::FrameCap &fc);
++    /// @brief Registers a death watch.  Authority: the caller may register
++    ///        (a) as the supervisor for @p watched_pid, or (b) as the watched
++    ///        task designating @p supervisor_pid.  Fails closed when the
++    ///        registry is full or the pair is invalid.
++    /// @param actor         The calling task.
++    /// @param watched_pid   Task to watch.
++    /// @param supervisor_pid Task to notify on death; 0 = actor.
++    /// @return true when the watch was installed.
++    static bool watch(kernel::TaskControlBlock &actor, uint64_t watched_pid,
++                      uint64_t supervisor_pid);
 +
-+    /// @brief Unmaps the mapping at @p va if it belongs to @p task.
-+    /// @return true when a mapping was removed.
-+    static bool unmap(kernel::TaskControlBlock &task, uint64_t va);
++    /// @brief Removes every watch the supervisor holds on @p watched_pid
++    ///        (ACTIVE or PENDING).
++    static void unwatch(kernel::TaskControlBlock &supervisor,
++                        uint64_t watched_pid);
 +
-+    /// @brief Immediately removes every live mapping backed by @p fc
-+    ///        (revocation closure).  Called from FrameCap::dispose/revoke
-+    ///        before the cap block is freed.  Pointer-equality only — never
-+    ///        dereferenced.
-+    static void invalidate_cap(cap::FrameCap *fc);
++    /// @brief Drains the next pending death record for @p supervisor (never
++    ///        blocks).
++    /// @param[out] out Receives the record on success.
++    /// @return 1 when a record was copied, 0 when none is pending.
++    static int recv(kernel::TaskControlBlock &supervisor, DeathRecord &out);
 +
-+    /// @brief Removes every live mapping owned by @p task.  Called from
-+    ///        TaskControlBlock::cleanup() (never leaves a dangling PTE in a
-+    ///        recycled PML4).
-+    static void drain_task(kernel::TaskControlBlock &task);
++    /// @brief Latch the death records for @p dead and poke the supervisors.
++    ///        Called exactly once per task death from cleanup().  Never blocks.
++    static void on_task_death(kernel::TaskControlBlock &dead);
++
++    /// @brief Frees every slot whose supervisor is @p supervisor (ACTIVE or
++    ///        PENDING).  Called from cleanup() so a dying supervisor cannot
++    ///        leave stale watches behind.
++    static void drain_task(kernel::TaskControlBlock &supervisor);
 +
 +    /// @brief Clears the whole registry (test isolation snapshot restore).
 +    static void snapshot_reset();
 +
-+    /// @brief Number of live mappings (test accessor).
++    /// @brief Number of live (ACTIVE + PENDING) slots (test accessor).
 +    static size_t live_count();
 +
-+    /// @brief Whether @p task currently owns the mapping at @p va (test
-+    ///        accessor).
-+    static bool is_owner(kernel::TaskControlBlock &task, uint64_t va);
++    /// @brief Whether @p supervisor currently holds a watch on @p watched_pid
++    ///        (test accessor).
++    static bool is_watching(kernel::TaskControlBlock &supervisor,
++                            uint64_t watched_pid);
 +
 +  private:
-+    static constexpr size_t kMaxMaps = CONFIG_CAP_MAX_FRAME_MAPS;
++    static constexpr size_t kMaxWatches = CONFIG_CAP_MAX_DEATH_WATCHES;
++    enum class SlotState : uint8_t { FREE = 0, ACTIVE, PENDING };
 +    struct Slot {
-+        uint64_t owner_task_id = 0; ///< owning task (0 = free)
-+        uint64_t owner_gen = 0;     ///< TCB generation at map time
-+        cap::FrameCap *fc = nullptr; ///< backing cap (equality only)
-+        uint64_t va = 0;            ///< user VA base of the mapping
-+        uint64_t pml4 = 0;          ///< owning task's PML4 phys at map time
-+        bool occupied = false;      ///< slot in use
++        SlotState state = SlotState::FREE;
++        uint64_t watched_id = 0;     ///< watched task id
++        uint32_t watched_gen = 0;    ///< TCB generation at watch time
++        uint64_t supervisor_id = 0;  ///< supervisor task id
++        uint32_t supervisor_gen = 0; ///< TCB generation at watch time
++        DeathRecord record = {};     ///< latched record (PENDING only)
 +    };
-+    static Slot s_slots_[kMaxMaps];
++    static Slot s_slots_[kMaxWatches];
 +    static sync::SpinLock s_lock_;
-+    static Slot *slot(size_t i);
 +};
 +
-+} // namespace kernel::cap
-\ No newline at end of file
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 3af9b698..ace913c4 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -25,6 +25,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/memory/mempool.hpp>
- #include <kernel/cap/mmio.hpp>
-+#include <kernel/cap/frame_map.hpp>
- #include <kernel/ipc/buffer_pool.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/memory/vmm.hpp>
-@@ -718,6 +719,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     // (a later unmap/revoke/cleanup would write PTE entries into freed
-     // page-table memory).
-     cap::MmioUserMap::drain_task(*tcb);
-+    cap::FrameUserMap::drain_task(*tcb);
- 
-     uint64_t old_pml4 = tcb->page_table_;
-     // Issue #92 canary relocation: the scheduler now samples user-task segment
-diff --git a/src/kernel/ipc/shm_ring.hpp b/src/kernel/ipc/shm_ring.hpp
-new file mode 100644
-index 00000000..4797efe2
---- /dev/null
-+++ b/src/kernel/ipc/shm_ring.hpp
-@@ -0,0 +1,166 @@
-+/*
-+ * NexIOS RTOS — Capability-Based Access Control (CSpace)
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file shm_ring.hpp
-+/// @brief Shared-memory ring protocol (issue #106 Part B).  A SPSC ring
-+/// living in the physical frames of a FrameCap shared by two user tasks via
-+/// SYS_FRAME_MAP.  Page 0 holds the SharedRingHeader (magic/version/capacity +
-+/// cache-line-aligned head/tail); data pages 1..N-1 hold the ring payload.
-+/// Zero-syscall after mapping: producer/consumer access the shared frames
-+/// directly.  Head/tail follow the SPSCRing acquire/release protocol (single
-+/// producer / single consumer — never written by the other side).
-+
-+#pragma once
-+
-+#include <types.hpp>
-+#include <constants.hpp>
-+#include <kernel/arch/io.hpp>
-+
-+namespace kernel::shm {
-+
-+/// @brief Magic identifying a valid shared ring header (0x4E4558 'NEX' +
-+///        0x52494E47 'RING').
-+constexpr uint64_t SHM_RING_MAGIC = 0x4E455852494E47ULL;
-+/// @brief Protocol version.
-+constexpr uint64_t SHM_RING_VERSION = 1;
-+
-+/// @brief Shared ring header — lives at the start of page 0 of the frame cap.
-+///        The head (producer-write-only) and tail (consumer-write-only) are
-+///        cache-line aligned (64 bytes) to avoid false sharing on future SMP.
-+///        layout is fixed and documented (docs/specs/shm.md).
-+struct alignas(64) SharedRingHeader {
-+    /// @brief Magic for sanity (0 when not initialised).
-+    uint64_t magic = 0;
-+    /// @brief Protocol version.
-+    uint64_t version = 0;
-+    /// @brief Ring capacity in bytes = (frame_count - 1) * PAGE_SIZE
-+    ///        (must be a power of two — see shm_ring_init).
-+    uint64_t capacity = 0;
-+    /// @brief Element size in bytes (fixed-size elements).
-+    uint64_t element_size = 0;
-+    /// @brief Producer index (bytes).  Written only by the producer.
-+    alignas(64) uint64_t head = 0;
-+    /// @brief Consumer index (bytes).  Written only by the consumer.
-+    alignas(64) uint64_t tail = 0;
-+};
-+
-+/// @brief Initialises a shared ring header at @p header (must be the start of
-+///        page 0 of a frame cap with @p frame_count pages).  @p element_size
-+///        must be a positive multiple of 8.  The ring data capacity is
-+///        (frame_count - 1) * PAGE_SIZE; it is rounded DOWN to a power of two
-+///        so the head/tail wrap mask works.  Called by the producer once,
-+///        before either side maps/uses the ring.
-+/// @param header      Pointer to the header area (page-0 start).
-+/// @param frame_count Number of pages in the backing FrameCap (>= 2).
-+/// @param element_size Fixed element size in bytes.
-+inline void shm_ring_init(SharedRingHeader *header, uint64_t frame_count,
-+                          uint64_t element_size) {
-+    if (!header || frame_count < 2 || element_size == 0 ||
-+        (element_size % 8) != 0)
-+        return;
-+    uint64_t raw = (frame_count - 1) * arch::PAGE_SIZE;
-+    // Round down to a power of two.
-+    uint64_t cap = 1;
-+    while (cap * 2 <= raw)
-+        cap *= 2;
-+    __atomic_store_n(&header->magic, SHM_RING_MAGIC, __ATOMIC_RELEASE);
-+    __atomic_store_n(&header->version, SHM_RING_VERSION, __ATOMIC_RELEASE);
-+    __atomic_store_n(&header->capacity, cap, __ATOMIC_RELEASE);
-+    __atomic_store_n(&header->element_size, element_size, __ATOMIC_RELEASE);
-+    __atomic_store_n(&header->head, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&header->tail, 0, __ATOMIC_RELEASE);
-+}
-+
-+/// @brief Whether @p header points at an initialised ring.
-+inline bool shm_ring_valid(const SharedRingHeader *header) {
-+    return header &&
-+           __atomic_load_n(&header->magic, __ATOMIC_ACQUIRE) == SHM_RING_MAGIC &&
-+           __atomic_load_n(&header->version, __ATOMIC_ACQUIRE) ==
-+               SHM_RING_VERSION;
-+}
-+
-+/// @brief Whether the ring has room for one more element.
-+inline bool shm_ring_has_space(const SharedRingHeader *header) {
-+    if (!header)
-+        return false;
-+    uint64_t cap = __atomic_load_n(&header->capacity, __ATOMIC_ACQUIRE);
-+    uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
-+    if (cap == 0 || esz == 0)
-+        return false;
-+    uint64_t h = __atomic_load_n(&header->head, __ATOMIC_RELAXED);
-+    uint64_t t = __atomic_load_n(&header->tail, __ATOMIC_ACQUIRE);
-+    uint64_t used = (h >= t) ? (h - t) : (h + cap - t);
-+    return used + esz <= cap;
-+}
-+
-+/// @brief Whether the ring has at least one element.
-+inline bool shm_ring_has_data(const SharedRingHeader *header) {
-+    if (!header)
-+        return false;
-+    uint64_t h = __atomic_load_n(&header->head, __ATOMIC_ACQUIRE);
-+    uint64_t t = __atomic_load_n(&header->tail, __ATOMIC_RELAXED);
-+    return h != t;
-+}
-+
-+/// @brief Data pointer for element @p idx (0-based) at @p data_base (start of
-+///        page 1).  Caller must have verified space/data via the has_* helpers.
-+inline uint8_t *shm_ring_elem(const SharedRingHeader *header,
-+                              uint8_t *data_base, uint64_t idx) {
-+    uint64_t cap = __atomic_load_n(&header->capacity, __ATOMIC_ACQUIRE);
-+    uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
-+    uint64_t off = (idx * esz) & (cap - 1);
-+    return data_base + off;
-+}
-+
-+/// @brief Producer push: copy @p src (element_size bytes) into the ring at the
-+///        head.  Returns false when full or not initialised.  Head is
-+///        published with release after the payload write (SPSC protocol).
-+inline bool shm_ring_push(SharedRingHeader *header, uint8_t *data_base,
-+                          const uint8_t *src) {
-+    if (!header || !data_base || !src)
-+        return false;
-+    if (!shm_ring_has_space(header))
-+        return false;
-+    uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
-+    uint64_t h = __atomic_load_n(&header->head, __ATOMIC_RELAXED);
-+    uint8_t *dst = shm_ring_elem(header, data_base, h / esz);
-+    for (uint64_t i = 0; i < esz; ++i)
-+        dst[i] = src[i];
-+    __atomic_store_n(&header->head, h + esz, __ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+/// @brief Consumer pop: copy the element at the tail into @p dst.
-+///        Returns false when empty or not initialised.  Tail is published with
-+///        release after the payload read (SPSC protocol).
-+inline bool shm_ring_pop(SharedRingHeader *header, uint8_t *data_base,
-+                         uint8_t *dst) {
-+    if (!header || !data_base || !dst)
-+        return false;
-+    if (!shm_ring_has_data(header))
-+        return false;
-+    uint64_t esz = __atomic_load_n(&header->element_size, __ATOMIC_ACQUIRE);
-+    uint64_t t = __atomic_load_n(&header->tail, __ATOMIC_RELAXED);
-+    const uint8_t *src = shm_ring_elem(header, data_base, t / esz);
-+    for (uint64_t i = 0; i < esz; ++i)
-+        dst[i] = src[i];
-+    __atomic_store_n(&header->tail, t + esz, __ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+} // namespace kernel::shm
++} // namespace kernel::ipc
 \ No newline at end of file
 diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 19e2ce76..f45bc16d 100644
+index f45bc16d..4440bad3 100644
 --- a/src/kernel/nexios_config.h
 +++ b/src/kernel/nexios_config.h
-@@ -576,6 +576,28 @@
- #define CONFIG_USER_MMIO_REGION_SIZE 0x200000ULL // 2 MiB
+@@ -584,6 +584,14 @@
+ #define CONFIG_CAP_MAX_FRAME_MAPS 8
  #endif
  
-+/// Maximum number of concurrent user-space frame (shared-memory) mappings per
-+/// registry (issue #106 Part B).  Each entry reserves one slot in a fixed
-+/// user VA window (CONFIG_USER_SHM_VA_BASE + slot*CONFIG_USER_SHM_REGION_SIZE).
-+/// Static bounded array — no dynamic allocation on real-time paths.
-+#ifndef CONFIG_CAP_MAX_FRAME_MAPS
-+#define CONFIG_CAP_MAX_FRAME_MAPS 8
++/// Maximum number of concurrent death-watch slots in the DeathNotify registry
++/// (issue #105 Part B).  Each slot pairs one watched task with one supervisor;
++/// registration fails closed when the registry is exhausted.  Static bounded
++/// array — no dynamic allocation on real-time paths.
++#ifndef CONFIG_CAP_MAX_DEATH_WATCHES
++#define CONFIG_CAP_MAX_DEATH_WATCHES 16
 +#endif
 +
-+/// Base of the fixed user-space shared-memory mapping window (issue #106
-+/// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
-+/// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window
-+/// (0x61000000 + 8*2MiB = 0x61100000).  A static_assert in cap/frame_map.cpp
-+/// pins the window bounds.
-+#ifndef CONFIG_USER_SHM_VA_BASE
-+#define CONFIG_USER_SHM_VA_BASE 0x62000000ULL
-+#endif
-+
-+/// Size of one user shared-memory mapping region (issue #106 Part B).
-+#ifndef CONFIG_USER_SHM_REGION_SIZE
-+#define CONFIG_USER_SHM_REGION_SIZE 0x200000ULL // 2 MiB
-+#endif
-+
- /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
- /// by a TU-local live counter in cap/iommu.cpp.
- #ifndef CONFIG_CAP_MAX_IOMMU
+ /// Base of the fixed user-space shared-memory mapping window (issue #106
+ /// Part B).  Lies below mem::STACK_VADDR (0x70000000), above the heap
+ /// (mem::HEAP_VADDR + mem::HEAP_SIZE = 0x60100000) and above the MMIO window
 diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index 87799c03..8b443b2f 100644
+index abfbb4f5..598a2936 100644
 --- a/src/kernel/syscall/syscall.hpp
 +++ b/src/kernel/syscall/syscall.hpp
-@@ -92,7 +92,10 @@ enum class SyscallNumber : uint8_t {
-     IOMMU_UNMAP = 60,  ///< remove an IOMMU DMA mapping (issue #4)
-     MMIO_MAP = 61,     ///< map an MmioCap memory BAR into the caller's user VA window (issue #8)
-     MMIO_UNMAP = 62,   ///< unmap a user MMIO mapping by VA (issue #8)
--    MAX_SYSCALL = 63,
-+    FRAME_CREATE = 63, ///< allocate contiguous user frames into a new FrameCap in the caller's CSpace (issue #106 Part B)
-+    FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
-+    FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
-+    MAX_SYSCALL = 66,
+@@ -95,7 +95,10 @@ enum class SyscallNumber : uint8_t {
+     FRAME_CREATE = 63, ///< get contiguous user frames into a FrameCap in the caller's CSpace (issue #106 Part B)
+     FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
+     FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
+-    MAX_SYSCALL = 66,
++    DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
++    DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
++    DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
++    MAX_SYSCALL = 69,
  };
  
  /// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
-@@ -311,6 +314,12 @@ class Syscall {
+@@ -314,12 +317,18 @@ class Syscall {
                                   uint64_t *);
      static uint64_t sys_mmio_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
                                     uint64_t *);
-+    static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
+-    static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
++static uint64_t sys_frame_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
+     static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
+     static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
 +                                     uint64_t *);
-+    static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                  uint64_t *);
-+    static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                    uint64_t *);
++    static uint64_t sys_death_watch(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
++    static uint64_t sys_death_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
++    static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
++                                       uint64_t *);
  
      static constexpr SyscallHandler
          syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
-@@ -377,6 +386,9 @@ class Syscall {
-             &Syscall::sys_iommu_unmap,
-             &Syscall::sys_mmio_map,
-             &Syscall::sys_mmio_unmap,
-+            &Syscall::sys_frame_create,
-+            &Syscall::sys_frame_map,
-+            &Syscall::sys_frame_unmap,
+@@ -389,6 +398,9 @@ class Syscall {
+             &Syscall::sys_frame_create,
+             &Syscall::sys_frame_map,
+             &Syscall::sys_frame_unmap,
++            &Syscall::sys_death_watch,
++            &Syscall::sys_death_recv,
++            &Syscall::sys_death_unwatch,
      };
  };
  
-diff --git a/src/kernel/syscall/syscall_handlers_shm.cpp b/src/kernel/syscall/syscall_handlers_shm.cpp
+diff --git a/src/kernel/syscall/syscall_handlers_death.cpp b/src/kernel/syscall/syscall_handlers_death.cpp
 new file mode 100644
-index 00000000..36f56f14
+index 00000000..ba4c08c7
 --- /dev/null
-+++ b/src/kernel/syscall/syscall_handlers_shm.cpp
-@@ -0,0 +1,111 @@
++++ b/src/kernel/syscall/syscall_handlers_death.cpp
+@@ -0,0 +1,86 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -902,126 +622,163 @@ index 00000000..36f56f14
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file syscall_handlers_shm.cpp
-+/// @brief Capability-gated shared-memory syscalls (issue #106 Part B):
-+///   SYS_FRAME_CREATE  — allocate contiguous user frames into a new FrameCap
-+///                       installed in the caller's CSpace (returns the slot).
-+///   SYS_FRAME_MAP      — map a FrameCap's frames into the caller's user VA
-+///                       window (FrameUserMap::map).
-+///   SYS_FRAME_UNMAP    — unmap a user frame mapping by VA.
-+/// These syscalls touch page tables and MUST stay out of k_syscall_fast[]
-+/// (issue #92 discipline).
++/// @file syscall_handlers_death.cpp
++/// @brief Asynchronous task-death notification syscalls (issue #105 Part B):
++///   SYS_DEATH_WATCH  — register a death watch on a task (authority: the
++///                      caller is the watched task or the supervisor).
++///   SYS_DEATH_RECV   — drain the next pending death record (never blocks).
++///   SYS_DEATH_UNWATCH — remove a death watch.
++/// These syscalls take the registry lock and DEATH_RECV writes user memory —
++/// they MUST stay out of k_syscall_fast[] (issue #92 discipline).
 +
 +#include <kernel/syscall/syscall.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/cap/frame_map.hpp>
-+#include <kernel/memory/pmm.hpp>
++#include <kernel/syscall/syscall_helpers.hpp>
++#include <kernel/ipc/death_notify.hpp>
++#include <kernel/memory/checked_ptr.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/sync/spinlock_guard.hpp>
 +
 +using namespace kernel;
 +
-+/// @brief Resolves the current task's root CNode (mirrors
-+///        syscall_handlers_cap.cpp::current_cspace).
-+static cap::CNode *shm_current_cspace() {
-+    auto *t = Scheduler::current_task();
-+    if (!t)
-+        return nullptr;
-+    t->ensure_cspace();
-+    return t->get_cspace();
-+}
-+
-+uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
-+                                   uint64_t, uint64_t *) {
-+    cap::CNode *cs = shm_current_cspace();
-+    if (!cs)
-+        return static_cast<uint64_t>(-1);
-+    if (count == 0 || count > CONFIG_CAP_MAX_FRAME_MAPS)
-+        return static_cast<uint64_t>(-1);
-+
-+    // Allocate contiguous USER-owned frames (fail closed on exhaustion).
-+    uint64_t phys = PMM::alloc_user_contiguous(static_cast<size_t>(count));
-+    if (phys == 0)
-+        return static_cast<uint64_t>(-1);
-+
-+    auto *fc = cap::FrameCap::create(phys, static_cast<size_t>(count), true);
-+    if (!fc) {
-+        // Roll back the allocation on cap-create failure.
-+        for (size_t i = 0; i < count; ++i)
-+            PMM::free_page(phys + i * arch::PAGE_SIZE);
-+        return static_cast<uint64_t>(-1);
-+    }
-+
-+    int idx = cs->install(fc, cap::CapType::Frame,
-+                          cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    if (idx < 0) {
-+        fc->release(); // never installed — drop the creator reference
-+        return static_cast<uint64_t>(-1);
-+    }
-+    fc->release(); // slot holds a reference; drop the creator's
-+    return static_cast<uint64_t>(idx);
-+}
-+
-+uint64_t Syscall::sys_frame_map(uint64_t cap_handle, uint64_t, uint64_t,
-+                                uint64_t, uint64_t *) {
-+    cap::CNode *src = shm_current_cspace();
-+    if (!src)
-+        return static_cast<uint64_t>(-1);
-+
-+    // Capability-gated: the caller must hold a Frame capability (WRITE = the
-+    // right to install the mapping).  Mirrors sys_mmio_map.
-+    KernelObject *obj =
-+        cap::lookup(src, cap_handle, cap::CapType::Frame, cap::CAP_RIGHT_WRITE);
-+    if (!obj)
-+        return static_cast<uint64_t>(-1);
-+    auto *fc = static_cast<cap::FrameCap *>(obj);
-+
-+    auto *t = Scheduler::current_task();
-+    if (!t) {
-+        obj->release();
-+        return static_cast<uint64_t>(-1);
-+    }
-+    uint64_t va = cap::FrameUserMap::map(*t, *fc);
-+    obj->release();
-+    return va;
-+}
-+
-+uint64_t Syscall::sys_frame_unmap(uint64_t va, uint64_t, uint64_t, uint64_t,
-+                                  uint64_t *) {
++uint64_t Syscall::sys_death_watch(uint64_t watched_pid, uint64_t supervisor_pid,
++                                  uint64_t, uint64_t, uint64_t *) {
 +    auto *t = Scheduler::current_task();
 +    if (!t)
 +        return static_cast<uint64_t>(-1);
-+    return cap::FrameUserMap::unmap(*t, va) ? 0 : static_cast<uint64_t>(-1);
++    bool ok = ipc::DeathNotify::watch(*t, watched_pid, supervisor_pid);
++    return ok ? 0 : static_cast<uint64_t>(-1);
++}
++
++uint64_t Syscall::sys_death_recv(uint64_t out_ptr, uint64_t, uint64_t,
++                                 uint64_t, uint64_t *) {
++    auto *t = Scheduler::current_task();
++    if (!t)
++        return static_cast<uint64_t>(-1);
++
++    // MP-4 (SMAP): a user task writes via safe_copy_to_user (stac-wrapped);
++    // a kernel task writes directly.
++    auto *out = reinterpret_cast<ipc::DeathRecord *>(out_ptr);
++    // Validate the destination BEFORE consuming a record: a failed recv must
++    // not permanently lose the death notification (issue #105 Part B audit).
++    ipc::DeathRecord rec{};
++    int got = 0;
++    if (syscall_is_user_task()) {
++        CheckedPtr<ipc::DeathRecord> cptr(out, 1);
++        if (!cptr.valid())
++            return static_cast<uint64_t>(-1);
++        got = ipc::DeathNotify::recv(*t, rec);
++        if (got == 0)
++            return 0; // nothing pending — never blocks
++        if (!cptr.copy_to(&rec))
++            return static_cast<uint64_t>(-1);
++    } else {
++        if (!out)
++            return static_cast<uint64_t>(-1);
++        got = ipc::DeathNotify::recv(*t, rec);
++        if (got == 0)
++            return 0; // nothing pending — never blocks
++        *out = rec;
++    }
++    return 1;
++}
++
++uint64_t Syscall::sys_death_unwatch(uint64_t watched_pid, uint64_t, uint64_t,
++                                    uint64_t, uint64_t *) {
++    auto *t = Scheduler::current_task();
++    if (!t)
++        return static_cast<uint64_t>(-1);
++    ipc::DeathNotify::unwatch(*t, watched_pid);
++    return 0;
 +}
 \ No newline at end of file
 diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index c256ae0b..1bff2d4c 100644
+index 1bff2d4c..674146dc 100644
 --- a/src/kernel/task/task.cpp
 +++ b/src/kernel/task/task.cpp
-@@ -46,6 +46,7 @@
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/arch/hal/iopb.hpp>
- #include <kernel/cap/mmio.hpp>
-+#include <kernel/cap/frame_map.hpp>
- #include <kernel/irq_delivery.hpp>
- #include <assert.hpp>
+@@ -36,6 +36,7 @@
+ #include <kernel/cap/cap.hpp>
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
++#include <kernel/ipc/death_notify.hpp>
+ #include <kernel/daemon/daemon_mgr.hpp>
+ #include <kernel/sync/notify.hpp>
+ #include <kernel/sync/eventgroup.hpp>
+@@ -1778,6 +1779,14 @@ void TaskControlBlock::cleanup() noexcept {
+     // instead of blocking on a zombie destination.
+     kernel::daemon::notify_death(this->id);
  
-@@ -1847,6 +1848,7 @@ void TaskControlBlock::cleanup() noexcept {
-         // drain was added to prevent (iter-2 S1).  Runs while the mapping's
-         // cap reference is still valid (before release_all_objects).
-         cap::MmioUserMap::drain_task(*this);
-+        cap::FrameUserMap::drain_task(*this);
++    // Issue #105 Part B: latch this task's death records and poke its
++    // supervisors BEFORE any of this task's resources are torn down, so a
++    // still-resolvable supervisor is woken while the death is fresh.  Then free
++    // this task's own watches (incl. any PENDING records it held as a
++    // supervisor for others) before its Notify is destroyed below — a poke or a
++    // drain must never touch a recycled supervisor TCB.
++    kernel::ipc::DeathNotify::on_task_death(*this);
++
+     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
+         if (fd_table.fds[i].used) {
+             auto *vn = fd_table.fds[i].vnode;
+diff --git a/src/kernel/test/resource_tracker.cpp b/src/kernel/test/resource_tracker.cpp
+index d657bfaa..071fd8ca 100644
+--- a/src/kernel/test/resource_tracker.cpp
++++ b/src/kernel/test/resource_tracker.cpp
+@@ -104,6 +104,8 @@ static bool any_leak(const ResourceCounters &baseline,
+         return true;
+     if (current.cap_slots > baseline.cap_slots)
+         return true;
++    if (current.death_watches > baseline.death_watches)
++        return true;
+     return false;
+ }
  
-         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
-         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
-diff --git a/src/kernel/test/test_cap_shm.cpp b/src/kernel/test/test_cap_shm.cpp
+diff --git a/src/kernel/test/resource_tracker.hpp b/src/kernel/test/resource_tracker.hpp
+index bfc843c7..c0fdcb99 100644
+--- a/src/kernel/test/resource_tracker.hpp
++++ b/src/kernel/test/resource_tracker.hpp
+@@ -40,6 +40,7 @@ struct ResourceCounters {
+     size_t open_fds;
+     size_t cap_objects;
+     size_t cap_slots;
++    size_t death_watches;
+ };
+ 
+ #ifdef CONFIG_DEBUG
+@@ -145,6 +146,16 @@ class ResourceTracker {
+         if (counters_.cap_slots > 0)
+             --counters_.cap_slots;
+     }
++    void track_death_watch_add() {
++        ++counters_.death_watches;
++    }
++    void track_death_watch_remove() {
++        if (counters_.death_watches > 0)
++            --counters_.death_watches;
++    }
++    void track_death_watch_reset() {
++        counters_.death_watches = 0;
++    }
+ 
+     void capture(ResourceCounters &out) const {
+         out = counters_;
+@@ -220,6 +231,12 @@ class ResourceTracker {
+     }
+     void track_cap_slot_remove() {
+     }
++    void track_death_watch_add() {
++    }
++    void track_death_watch_remove() {
++    }
++    void track_death_watch_reset() {
++    }
+     void capture(ResourceCounters &) const {
+     }
+     void restore(const ResourceCounters &) {
+diff --git a/src/kernel/test/test_cap_death.cpp b/src/kernel/test/test_cap_death.cpp
 new file mode 100644
-index 00000000..d5210d76
+index 00000000..c2519e83
 --- /dev/null
-+++ b/src/kernel/test/test_cap_shm.cpp
-@@ -0,0 +1,495 @@
++++ b/src/kernel/test/test_cap_death.cpp
+@@ -0,0 +1,449 @@
 +/*
 + * NexIOS RTOS — Capability-Based Access Control (CSpace)
 + * Copyright (C) 2026 Arnold Hasshold
@@ -1040,734 +797,530 @@ index 00000000..d5210d76
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_cap_shm.cpp
-+/// @brief Capability-gated shared-memory ring tests (issue #106 Part B).
-+/// Verifies the FrameUserMap registry + SYS_FRAME_CREATE/MAP/UNMAP + the
-+/// shared-ring protocol: genuine zero-copy (both tasks map the same phys),
-+/// revocation closure, task-death drain, and ResourceTracker neutrality.
++/// @file test_cap_death.cpp
++/// @brief Asynchronous task-death notification tests (issue #105 Part B).
++/// Verifies the DeathNotify registry + SYS_DEATH_WATCH/RECV/UNWATCH: exactly-
++/// once latch on death, crash-reason (signal) encoding, multi-task fan-in,
++/// registration authority + fail-closed exhaustion, supervisor-death drain,
++/// and non-blocking recv.  ResourceTracker death_watches must be zero-delta.
++///
++/// IMPORTANT: a helper task's id is captured BEFORE the task is terminated —
++/// drain_zombie_list() frees the TCB, so reading t->id after death is a
++/// use-after-free (garbage id).  All asserts use the captured id.
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/frame.hpp>
-+#include <kernel/cap/frame_map.hpp>
++#include <kernel/ipc/death_notify.hpp>
 +#include <kernel/syscall/syscall.hpp>
-+#include <kernel/ipc/shm_ring.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/memory/vmm.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
 +#include <kernel/test/resource_tracker.hpp>
 +#include <kernel/arch/io.hpp>
 +#include <kernel/arch/irq_guard.hpp>
++#include <lib/signal.hpp>
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
 +
 +namespace {
 +
-+/// @brief Installs a FrameCap into @p t's CSpace (returns the slot index).
-+int install_frame(TaskControlBlock *t, cap::FrameCap *fc) {
-+    t->ensure_cspace();
-+    cap::CNode *cs = t->get_cspace();
-+    if (!cs)
-+        return -1;
-+    int s = cs->install(fc, cap::CapType::Frame,
-+                        cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+    if (s >= 0)
-+        fc->release(); // slot holds a reference; drop the creator's
-+    return s;
++/// @brief Dispatches a syscall by number (Syscall::handle takes uint64_t).
++uint64_t death_syscall(uint64_t number, uint64_t a0, uint64_t a1, uint64_t a2,
++                       uint64_t a3, uint64_t *regs = nullptr) {
++    return Syscall::handle(number, a0, a1, a2, a3, regs);
 +}
 +
-+/// @brief Dispatches a syscall by number (Syscall::handle takes uint64_t).
-+uint64_t shm_syscall(uint64_t number, uint64_t a0, uint64_t a1, uint64_t a2,
-+                     uint64_t a3, uint64_t *regs = nullptr) {
-+    return Syscall::handle(number, a0, a1, a2, a3, regs);
++/// @brief Creates a task that parks forever (self-terminates only when the
++///        harness kills it), so the harness can drive the death path
++///        deterministically.
++/// @param[out] out_id Receives the task's id BEFORE it can die.
++///
++/// Priority note: HIGHER number = HIGHER priority (PriorityMap bitmap).  The
++/// harness runs at priority 10 and is only non-preemptible while RUNNING; a
++/// parked helper with priority > 10 that gets scheduled on a timer tick never
++/// yields and starves the harness.  These helpers never need to RUN — they
++/// only need to exist in id_table_ for watch()/terminate() — so they are
++/// created at a LOW priority (2, below the harness) and aperiodic (period 0)
++/// to stay out of the deadline list.
++TaskControlBlock *make_parked(uint64_t /*unused_prio*/, uint64_t *out_id = nullptr) {
++    auto *t = TaskControlBlock::create(
++        []() {
++            // Park — the harness terminates us to drive the death path.
++            for (;;)
++                kernel::Scheduler::reschedule();
++        },
++        2, 0);
++    if (!t)
++        return nullptr;
++    if (out_id)
++        *out_id = t->id;
++    Scheduler::add_task(*t);
++    return t;
 +}
 +
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: SYS_FRAME_MAP maps a FrameCap's frames into the caller's user VA
-+// window; SYS_FRAME_UNMAP removes the mapping.  Genuine physical backing.
-+// Input: Task installs a FrameCap in its CSpace; dispatches SYS_FRAME_MAP;
-+//        verifies virt_to_phys == fc->phys; SYS_FRAME_UNMAP.
-+// Expect: map returns a VA in the SHM window whose phys matches; unmap
-+//         clears it; zero ResourceTracker delta.
-+// Depends: FrameUserMap, SYS_FRAME_MAP/UNMAP
-+JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
-+    static uint64_t g_map_ret = 0;
-+    static uint64_t g_unmap_ret = 0;
-+    static uint64_t g_done = 0;
-+    __atomic_store_n(&g_map_ret, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_unmap_ret, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_done, 0, __ATOMIC_RELEASE);
++// Testidea: A supervisor registers a watch on a live helper; the helper exits
++// with a known code; the supervisor drains exactly one record.
++// Input: Helper task parks; supervisor (the harness) registers a watch; the
++//        helper is terminated with exit code 42; recv returns the record.
++// Expect: dead_id == helper id, exit_code == 42, no SIGNAL flag, slot freed.
++// Depends: DeathNotify, SYS_DEATH_WATCH/RECV, cleanup() hook
++JARVIS_TEST(death_watch_consume_roundtrip, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t hid = 0;
++    auto *h = make_parked(21, &hid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(hid != 0);
++    Scheduler::reschedule();
 +
-+    auto *t = TaskControlBlock::create(
++    size_t base = ipc::DeathNotify::live_count();
++    uint64_t r = death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
++    JARVIS_ASSERT_EQ(0ULL, r);
++    JARVIS_ASSERT(ipc::DeathNotify::is_watching(*cur, hid));
++
++    Scheduler::terminate(*h, 42);
++    Scheduler::drain_zombie_list();
++
++    ipc::DeathRecord rec{};
++    int got = ipc::DeathNotify::recv(*cur, rec);
++    JARVIS_ASSERT_EQ(1, got);
++    JARVIS_ASSERT_EQ(hid, rec.dead_id);
++    JARVIS_ASSERT_EQ(42ULL, rec.exit_code);
++    JARVIS_ASSERT_EQ(0ULL, rec.flags & ipc::DEATH_FLAG_SIGNAL);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A crash death (signal-terminated task) carries the signal value in
++// exit_code and sets DEATH_FLAG_SIGNAL.
++// Input: Watch a helper; terminate it with a negative (signal) exit code.
++// Expect: exit_code is the sign-extended SIGSEGV, SIGNAL flag set.
++// Depends: exit_code high-bit encoding, DEATH_FLAG_SIGNAL
++JARVIS_TEST(death_watch_crash_reason, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t hid = 0;
++    auto *h = make_parked(22, &hid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(hid != 0);
++    Scheduler::reschedule();
++
++    size_t base = ipc::DeathNotify::live_count();
++    uint64_t r = death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
++    JARVIS_ASSERT_EQ(0ULL, r);
++
++    uint64_t sigcode = static_cast<uint64_t>(
++        -static_cast<int64_t>(static_cast<int>(Signal::SIGSEGV)));
++    Scheduler::terminate(*h, sigcode);
++    Scheduler::drain_zombie_list();
++
++    ipc::DeathRecord rec{};
++    int got = ipc::DeathNotify::recv(*cur, rec);
++    JARVIS_ASSERT_EQ(1, got);
++    JARVIS_ASSERT_EQ(hid, rec.dead_id);
++    JARVIS_ASSERT_EQ(sigcode, rec.exit_code);
++    JARVIS_ASSERT(rec.flags & ipc::DEATH_FLAG_SIGNAL);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: One supervisor watches three tasks; all die; exactly three records
++// are drained in slot order; the registry returns to baseline.
++// Input: Register 3 watches; terminate all 3 helpers; drain 3 records.
++// Expect: 3 records with distinct dead ids; live_count back to baseline.
++// Depends: multi-watch fan-in, recv scan order
++JARVIS_TEST(death_watch_multi_fan_in, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t id1 = 0, id2 = 0, id3 = 0;
++    auto *h1 = make_parked(31, &id1);
++    auto *h2 = make_parked(32, &id2);
++    auto *h3 = make_parked(33, &id3);
++    JARVIS_ASSERT(h1 && h2 && h3);
++    JARVIS_ASSERT(id1 && id2 && id3);
++    Scheduler::reschedule();
++
++    size_t base = ipc::DeathNotify::live_count();
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id1, 0, 0, 0));
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id2, 0, 0, 0));
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), id3, 0, 0, 0));
++    JARVIS_ASSERT_EQ(base + 3, ipc::DeathNotify::live_count());
++
++    Scheduler::terminate(*h1, 1);
++    Scheduler::terminate(*h2, 2);
++    Scheduler::terminate(*h3, 3);
++    Scheduler::drain_zombie_list();
++
++    ipc::DeathRecord rec{};
++    uint64_t seen = 0;
++    for (int i = 0; i < 3; ++i) {
++        int got = ipc::DeathNotify::recv(*cur, rec);
++        JARVIS_ASSERT_EQ(1, got);
++        seen |= (1ULL << (rec.dead_id % 64));
++    }
++    JARVIS_ASSERT(seen & (1ULL << (id1 % 64)));
++    JARVIS_ASSERT(seen & (1ULL << (id2 % 64)));
++    JARVIS_ASSERT(seen & (1ULL << (id3 % 64)));
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A watch on a task that already exited/reaped is rejected.
++// Input: Terminate + reap a helper; then attempt to watch it.
++// Expect: watch fails; no slot created; registry baseline.
++// Depends: authority + liveness validation in watch()
++JARVIS_TEST(death_watch_after_death_rejected, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t hid = 0;
++    auto *h = make_parked(41, &hid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(hid != 0);
++    Scheduler::reschedule();
++    Scheduler::terminate(*h, 0);
++    Scheduler::drain_zombie_list();
++
++    size_t base = ipc::DeathNotify::live_count();
++    uint64_t r = death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A supervisor holding ACTIVE watches and PENDING records dies; its
++// slots are freed by drain_task; no poke lands in a freed Notify.
++// Input: A dedicated supervisor task S watches two helpers; the helpers die
++//        (records PENDING for S); S then dies; its cleanup drains the slots.
++// Expect: live_count returns to baseline; no crash; nothing remains pending.
++// Depends: drain_task in cleanup(), poke safety
++JARVIS_TEST(death_watch_supervisor_death_drains, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    // Baseline captured BEFORE any watch exists — the supervisor's two
++    // registrations must be measured against this.
++    size_t base = ipc::DeathNotify::live_count();
++
++    // The helpers S will watch.
++    uint64_t id1 = 0, id2 = 0;
++    auto *h1 = make_parked(51, &id1);
++    auto *h2 = make_parked(52, &id2);
++    JARVIS_ASSERT(h1 && h2);
++    JARVIS_ASSERT(id1 && id2);
++
++    // The supervisor task S: registers watches on the two helpers (as their
++    // supervisor), then parks.  We keep the harness itself alive throughout.
++    static uint64_t g_watch1 = 0;
++    static uint64_t g_watch2 = 0;
++    static uint64_t g_done = 0;
++    __atomic_store_n(&g_watch1, id1, __ATOMIC_RELEASE);
++    __atomic_store_n(&g_watch2, id2, __ATOMIC_RELEASE);
++    __atomic_store_n(&g_done, 0, __ATOMIC_RELEASE);
++    auto *sup = TaskControlBlock::create(
 +        []() {
-+            auto *cur = Scheduler::current_task();
-+            uint64_t phys = PMM::alloc_user_contiguous(2);
-+            if (phys == 0) {
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            auto *fc = cap::FrameCap::create(phys, 2, true);
-+            if (!fc) {
-+                for (size_t i = 0; i < 2; ++i)
-+                    PMM::free_page(phys + i * arch::PAGE_SIZE);
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            cur->ensure_cspace();
-+            cap::CNode *cs = cur->get_cspace();
-+            int s = cs->install(fc, cap::CapType::Frame,
-+                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+            if (s < 0) {
-+                fc->release();
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            fc->release(); // slot holds a ref; drop the creator's
-+            uint64_t h = cap::encode_handle(
-+                cs->cspace_id, static_cast<uint32_t>(s),
-+                cs->slot_gen(static_cast<uint32_t>(s)));
-+            __atomic_store_n(
-+                &g_map_ret,
-+                Syscall::handle(
-+                    static_cast<uint64_t>(SyscallNumber::FRAME_MAP), h, 0, 0, 0,
-+                    nullptr),
-+                __ATOMIC_RELEASE);
-+            uint64_t va = __atomic_load_n(&g_map_ret, __ATOMIC_ACQUIRE);
-+            if (va != static_cast<uint64_t>(-1)) {
-+                __atomic_store_n(
-+                    &g_unmap_ret,
-+                    Syscall::handle(
-+                        static_cast<uint64_t>(SyscallNumber::FRAME_UNMAP), va,
-+                        0, 0, 0, nullptr),
-+                    __ATOMIC_RELEASE);
-+            }
-+            __atomic_store_n(&g_done, 1, __ATOMIC_RELEASE);
-+            // Park (do NOT self-terminate): the harness verifies the PTE
-+            // clearing in the still-live cloned PML4 (multi-page closure —
-+            // BOTH pages of the 2-page mapping must be unmapped), then
-+            // terminates this task.
++            uint64_t w1 = __atomic_load_n(&g_watch1, __ATOMIC_ACQUIRE);
++            uint64_t w2 = __atomic_load_n(&g_watch2, __ATOMIC_ACQUIRE);
++            uint64_t r1 = death_syscall(
++                static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), w1, 0, 0,
++                0);
++            uint64_t r2 = death_syscall(
++                static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), w2, 0, 0,
++                0);
++            __atomic_store_n(&g_done, (r1 == 0 && r2 == 0) ? 1U : 0U,
++                             __ATOMIC_RELEASE);
 +            for (;;)
 +                kernel::Scheduler::reschedule();
 +        },
-+        11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    // Real user PML4 (kernel half cloned) so the frame map registry can map
-+    // into current_task()->page_table_.  Ring 0 execution is unaffected
-+    // (kernel half is copied); cleanup frees the clone.
-+    t->page_table_ = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(t->page_table_ != 0);
-+    Scheduler::add_task(*t);
++        53, 10);
++    JARVIS_ASSERT(sup != nullptr);
++    Scheduler::add_task(*sup);
 +    Scheduler::reschedule();
 +
-+    // Drive until the task has mapped + unmapped (bounded).
++    // Drive until S has registered both watches (bounded).
 +    for (int i = 0; i < 10000 && __atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0;
 +         ++i) {
 +        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
 +        arch::hlt();
 +    }
++    JARVIS_ASSERT_EQ(1U, __atomic_load_n(&g_done, __ATOMIC_ACQUIRE));
++    JARVIS_ASSERT_EQ(base + 2, ipc::DeathNotify::live_count());
 +
-+    uint64_t va = __atomic_load_n(&g_map_ret, __ATOMIC_ACQUIRE);
-+    JARVIS_ASSERT(va != static_cast<uint64_t>(-1));
-+    JARVIS_ASSERT(va >= CONFIG_USER_SHM_VA_BASE);
-+    JARVIS_ASSERT_EQ(0ULL, __atomic_load_n(&g_unmap_ret, __ATOMIC_ACQUIRE));
-+    // Multi-page closure: SYS_FRAME_UNMAP must clear EVERY page of a
-+    // multi-page mapping, not just the region base (otherwise a later cap
-+    // dispose leaves live user PTEs aliasing freed physical memory).
-+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->page_table_));
-+    JARVIS_ASSERT_EQ(
-+        0ULL, VMM::virt_to_phys_in_pml4(va + arch::PAGE_SIZE, t->page_table_));
-+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::FrameUserMap::live_count());
-+    kernel::test::terminate_and_drain(*t);
++    // Kill the helpers: records become PENDING for S.
++    Scheduler::terminate(*h1, 1);
++    Scheduler::terminate(*h2, 2);
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(base + 2, ipc::DeathNotify::live_count()); // PENDING
++
++    // S dies: its cleanup() drains the two PENDING records.  Use
++    // terminate_and_drain (safe: skips already-dead, checks magic first).
++    kernel::test::terminate_and_drain(*sup);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: SYS_FRAME_MAP refuses a revoked FrameCap.
-+// Input: Install a FrameCap; revoke it; attempt SYS_FRAME_MAP.
-+// Expect: map returns -1; no mapping installed.
-+// Depends: FrameCap::revoke, FrameUserMap, SYS_FRAME_MAP
-+JARVIS_TEST(frame_user_map_revoke_denied, "PRE: none | POST: none") {
++// Testidea: The registry fails closed when exhausted, and a freed slot admits
++// a new watch.
++// Input: Fill all CONFIG_CAP_MAX_DEATH_WATCHES slots with distinct helpers;
++//        the next watch fails; consume one record; a new watch succeeds.
++// Expect: exhaustion fails closed; consumption frees a slot.
++// Depends: bounded registry, fail-closed watch()
++JARVIS_TEST(death_watch_registry_full_fails_closed, "PRE: none | POST: none") {
 +    auto *cur = Scheduler::current_task();
 +    JARVIS_ASSERT(cur != nullptr);
 +
-+    uint64_t phys = PMM::alloc_user_contiguous(1);
-+    JARVIS_ASSERT(phys != 0);
-+    auto *fc = cap::FrameCap::create(phys, 1, true);
-+    JARVIS_ASSERT(fc != nullptr);
-+    int slot = install_frame(cur, fc);
-+    JARVIS_ASSERT(slot >= 0);
++    constexpr size_t kMax = CONFIG_CAP_MAX_DEATH_WATCHES;
++    uint64_t ids[kMax];
++    TaskControlBlock *helpers[kMax];
++    size_t base = ipc::DeathNotify::live_count();
++    for (size_t i = 0; i < kMax; ++i) {
++        helpers[i] = make_parked(60 + static_cast<int>(i), &ids[i]);
++        JARVIS_ASSERT(helpers[i] != nullptr);
++        JARVIS_ASSERT(ids[i] != 0);
++    }
++    Scheduler::reschedule();
 +
-+    fc->revoke();
-+    // Encode a REAL handle (cspace + slot + generation) so the revoke denial
-+    // is genuinely exercised — a bare slot index would fail lookup for the
-+    // wrong reason and make this test vacuous.
-+    cap::CNode *cs = cur->get_cspace();
-+    uint64_t h = cap::encode_handle(
-+        cs->cspace_id, static_cast<uint32_t>(slot),
-+        cs->slot_gen(static_cast<uint32_t>(slot)));
-+    uint64_t va = shm_syscall(static_cast<uint64_t>(SyscallNumber::FRAME_MAP),
-+                              h, 0, 0, 0);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), va);
++    for (size_t i = 0; i < kMax; ++i) {
++        JARVIS_ASSERT_EQ(0ULL,
++                         death_syscall(
++                             static_cast<uint64_t>(SyscallNumber::DEATH_WATCH),
++                             ids[i], 0, 0, 0));
++    }
++    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
 +
-+    // cs->remove drops the slot's reference; the 1->0 transition runs dispose()
-+    // which frees the revoked frame.  Do NOT call fc->release() afterwards —
-+    // that would decrement a freed block's refcount (use-after-free).
-+    cs->remove(static_cast<uint32_t>(slot));
++    // Exhausted: one more watch fails closed.
++    uint64_t extra_id = 0;
++    auto *extra = make_parked(80, &extra_id);
++    JARVIS_ASSERT(extra != nullptr);
++    uint64_t r = death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), extra_id, 0, 0, 0);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r);
++    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
++
++    // Consume one record -> a slot frees -> a new watch succeeds.
++    Scheduler::terminate(*helpers[0], 0);
++    Scheduler::drain_zombie_list();
++    ipc::DeathRecord rec{};
++    JARVIS_ASSERT_EQ(1, ipc::DeathNotify::recv(*cur, rec));
++    JARVIS_ASSERT_EQ(base + kMax - 1, ipc::DeathNotify::live_count());
++
++    r = death_syscall(static_cast<uint64_t>(SyscallNumber::DEATH_WATCH),
++                      extra_id, 0, 0, 0);
++    JARVIS_ASSERT_EQ(0ULL, r);
++    JARVIS_ASSERT_EQ(base + kMax, ipc::DeathNotify::live_count());
++
++    // Teardown: kill the remaining helpers (safe, idempotent).
++    for (size_t i = 0; i < kMax; ++i)
++        kernel::test::terminate_if_live(helpers[i]);
++    kernel::test::terminate_if_live(extra);
++    Scheduler::drain_zombie_list();
++    // Consume the remaining PENDING records so the ResourceTracker
++    // death_watches counter is zero-delta at the test boundary: the leak
++    // check in snapshot_restore runs BEFORE the registry snapshot_reset, so
++    // leftover records would fail the check once death_watches is verified.
++    ipc::DeathRecord drain{};
++    while (ipc::DeathNotify::recv(*cur, drain) == 1) {
++    }
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: A shared ring between a producer and a consumer — both map the
-+// same FrameCap phys (genuine zero-copy); the ring protocol transfers fixed
-+// elements across the shared frames with no kernel involvement after mapping.
-+// Input: Producer task allocates a 4-page ring FrameCap, installs it, maps
-+//        it, shm_ring_init, pushes 32 elements, publishes the shared VA.
-+//        A consumer task polls the shared VA (kernel tasks share the kernel
-+//        PML4, so the producer's mapped VA is directly visible), pops the 32
-+//        elements and verifies payload+order.
-+// Expect: producer + consumer both complete; all 32 elements round-trip in
-+//         order.
-+// Depends: FrameUserMap, shm_ring, SYS_FRAME_*
-+JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
-+    static uint64_t g_prod_done = 0;
-+    static uint64_t g_phys = 0;
-+    static uint64_t g_va = 0;
-+    __atomic_store_n(&g_prod_done, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_phys, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_va, 0, __ATOMIC_RELEASE);
-+
-+    // Producer: allocates the ring, installs + maps it (into its own cloned
-+    // PML4), initialises the header and pushes 32 elements.  A kernel task
-+    // runs in the kernel PML4 (never CR3-switched to page_table_), so it
-+    // cannot dereference its own mapped VA — the harness verifies the ring
-+    // content through the PHYSICAL frames (HHDM alias), which is the same
-+    // zero-copy backing the consumer would read.
-+    auto *producer = TaskControlBlock::create(
-+        []() {
-+            auto *cur = Scheduler::current_task();
-+            uint64_t phys = PMM::alloc_user_contiguous(4);
-+            if (phys == 0) {
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            auto *fc = cap::FrameCap::create(phys, 4, true);
-+            if (!fc) {
-+                for (size_t i = 0; i < 4; ++i)
-+                    PMM::free_page(phys + i * arch::PAGE_SIZE);
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            cur->ensure_cspace();
-+            cap::CNode *cs = cur->get_cspace();
-+            int s = cs->install(fc, cap::CapType::Frame,
-+                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+            if (s < 0) {
-+                fc->release();
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            fc->release(); // slot holds a ref; drop the creator's
-+            uint64_t h = cap::encode_handle(
-+                cs->cspace_id, static_cast<uint32_t>(s),
-+                cs->slot_gen(static_cast<uint32_t>(s)));
-+            uint64_t va = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::FRAME_MAP), h, 0, 0, 0,
-+                nullptr);
-+            if (va == static_cast<uint64_t>(-1)) {
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            __atomic_store_n(&g_va, va, __ATOMIC_RELEASE);
-+            __atomic_store_n(&g_phys, phys, __ATOMIC_RELEASE);
-+            // Write the ring header + data directly into the PHYSICAL frames
-+            // (HHDM alias) — the frames are the zero-copy shared backing.
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *hdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
-+                arch::HHDM_OFFSET + phys);
-+            kernel::shm::shm_ring_init(hdr, 4, 8);
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            uint8_t *data = reinterpret_cast<uint8_t *>(
-+                arch::HHDM_OFFSET + phys + arch::PAGE_SIZE);
-+            for (uint64_t i = 0; i < 32; ++i) {
-+                uint64_t v = i + 100;
-+                kernel::shm::shm_ring_push(
-+                    hdr, data, reinterpret_cast<uint8_t *>(&v));
-+            }
-+            __atomic_store_n(&g_prod_done, 1, __ATOMIC_RELEASE);
-+            // Park (do NOT self-terminate): the harness verifies the mapping
-+            // and reads the ring while the task's cloned PML4 is still live.
-+            for (;;)
-+                kernel::Scheduler::reschedule();
-+        },
-+        20, 10);
-+    JARVIS_ASSERT(producer != nullptr);
-+    producer->page_table_ = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(producer->page_table_ != 0);
-+    Scheduler::add_task(*producer);
++// Testidea: A single death yields exactly one record, even after repeated
++// zombie drains.
++// Input: Watch a helper; terminate it; drain the zombie list repeatedly; then
++//        drain records.
++// Expect: exactly one record; slot freed after consume.
++// Depends: exactly-once latch (cleanup() single funnel)
++JARVIS_TEST(death_watch_exactly_once, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t hid = 0;
++    auto *h = make_parked(71, &hid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(hid != 0);
 +    Scheduler::reschedule();
 +
-+    // Drive until the producer completes (bounded).
-+    for (int i = 0;
-+         i < 10000 && !(__atomic_load_n(&g_prod_done, __ATOMIC_ACQUIRE) == 1);
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+
-+    uint64_t phys = __atomic_load_n(&g_phys, __ATOMIC_ACQUIRE);
-+    uint64_t va = __atomic_load_n(&g_va, __ATOMIC_ACQUIRE);
-+    JARVIS_ASSERT_EQ(1ULL, g_prod_done);
-+    JARVIS_ASSERT(phys != 0);
-+    JARVIS_ASSERT(va != 0);
-+
-+    // Zero-copy proof: the mapped VA in the producer's PML4 resolves to the
-+    // same physical frame the producer wrote.  Runs while the producer's
-+    // cloned PML4 is still alive (task is parked, not drained).
-+    uint64_t mapped = VMM::virt_to_phys_in_pml4(va, producer->page_table_);
-+    JARVIS_ASSERT(mapped != 0);
-+    JARVIS_ASSERT(mapped == phys);
-+
-+    // Consumer-equivalent read: the harness reads the shared PHYSICAL frames
-+    // (HHDM alias) and verifies the ring protocol round-tripped 32 elements.
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *hdr =
-+        reinterpret_cast<kernel::shm::SharedRingHeader *>(arch::HHDM_OFFSET +
-+                                                          phys);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    uint8_t *data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys +
-+                                                arch::PAGE_SIZE);
-+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(hdr));
-+    uint64_t ok = 1;
-+    for (uint64_t i = 0; i < 32; ++i) {
-+        uint64_t v = 0;
-+        if (!kernel::shm::shm_ring_pop(hdr, data,
-+                                       reinterpret_cast<uint8_t *>(&v)) ||
-+            v != i + 100) {
-+            ok = 0;
-+            break;
-+        }
-+    }
-+    JARVIS_ASSERT_EQ(1ULL, ok);
-+
-+    // Cleanup AFTER verification (cookbook Rule 5).
-+    kernel::test::terminate_and_drain(*producer);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: FrameUserMap::drain_task removes a dying task's mappings so a
-+// recycled PML4 never carries stale shared-memory PTEs.
-+// Input: A task installs + maps a FrameCap; the task terminates; drain_task
-+//        runs; the registry is empty.
-+// Expect: live_count returns to baseline; no leak.
-+// Depends: FrameUserMap::drain_task, task cleanup
-+JARVIS_TEST(shm_ring_task_death_drain, "PRE: none | POST: none") {
-+    static uint64_t g_map_ok = 0;
-+    __atomic_store_n(&g_map_ok, 0, __ATOMIC_RELEASE);
-+    size_t base = cap::FrameUserMap::live_count();
-+    // A short-lived task maps a frame then self-terminates; cleanup drains.
-+    // A real user PML4 (kernel half cloned) is required so the map genuinely
-+    // installs a slot — otherwise the task never maps and this test would be
-+    // vacuous (drain_task would have nothing to drain).
-+    auto *t = TaskControlBlock::create(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            uint64_t phys = PMM::alloc_user_contiguous(1);
-+            if (phys == 0)
-+                return;
-+            auto *fc = cap::FrameCap::create(phys, 1, true);
-+            if (!fc) {
-+                PMM::free_page(phys);
-+                return;
-+            }
-+            self->ensure_cspace();
-+            cap::CNode *cs = self->get_cspace();
-+            int s = cs->install(fc, cap::CapType::Frame,
-+                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+            if (s < 0) {
-+                fc->release();
-+                return;
-+            }
-+            fc->release(); // slot holds a ref; drop the creator's
-+            uint64_t h = cap::encode_handle(
-+                cs->cspace_id, static_cast<uint32_t>(s),
-+                cs->slot_gen(static_cast<uint32_t>(s)));
-+            uint64_t va = shm_syscall(
-+                static_cast<uint64_t>(SyscallNumber::FRAME_MAP), h, 0, 0, 0);
-+            __atomic_store_n(&g_map_ok,
-+                             (va != static_cast<uint64_t>(-1)) ? 1U : 0U,
-+                             __ATOMIC_RELEASE);
-+        },
-+        30, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    t->page_table_ = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(t->page_table_ != 0);
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
++    size_t base = ipc::DeathNotify::live_count();
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0));
++    Scheduler::terminate(*h, 7);
++    Scheduler::drain_zombie_list();
 +    Scheduler::drain_zombie_list();
 +
-+    // The mapping really was established before death (non-vacuous), and the
-+    // task-death drain returned the registry to baseline (no pin leak).
-+    JARVIS_ASSERT_EQ(1ULL, __atomic_load_n(&g_map_ok, __ATOMIC_ACQUIRE));
-+    JARVIS_ASSERT_EQ(base, cap::FrameUserMap::live_count());
-+    kernel::test::terminate_and_drain(*t);
++    ipc::DeathRecord rec{};
++    JARVIS_ASSERT_EQ(1, ipc::DeathNotify::recv(*cur, rec));
++    JARVIS_ASSERT_EQ(hid, rec.dead_id);
++    JARVIS_ASSERT_EQ(0, ipc::DeathNotify::recv(*cur, rec)); // no duplicate
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: Revoking a shared FrameCap removes a live task's mapping
-+//        (revocation closure through FrameCap::revoke -> invalidate_cap).
-+// Input: A real-PML4 task installs + maps a FrameCap and publishes the VA +
-+//        cap pointer; the harness revokes the cap; the mapping clears.
-+// Expect: live_count returns to baseline; the task's slot is drained.
-+// Depends: FrameCap::revoke -> FrameUserMap::invalidate_cap
-+JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
-+    static uint64_t g_va = 0;
-+    static cap::FrameCap *g_fc = nullptr;
-+    __atomic_store_n(&g_va, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(reinterpret_cast<uint64_t *>(&g_fc), 0, __ATOMIC_RELEASE);
-+
-+    auto *t = TaskControlBlock::create(
-+        []() {
-+            auto *cur = Scheduler::current_task();
-+            uint64_t phys = PMM::alloc_user_contiguous(1);
-+            if (phys == 0) {
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            auto *fc = cap::FrameCap::create(phys, 1, true);
-+            if (!fc) {
-+                PMM::free_page(phys);
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            __atomic_store_n(reinterpret_cast<uint64_t *>(&g_fc),
-+                             reinterpret_cast<uint64_t>(fc), __ATOMIC_RELEASE);
-+            cur->ensure_cspace();
-+            cap::CNode *cs = cur->get_cspace();
-+            int s = cs->install(fc, cap::CapType::Frame,
-+                                cap::CAP_RIGHT_READ | cap::CAP_RIGHT_WRITE);
-+            if (s < 0) {
-+                fc->release();
-+                Scheduler::terminate(*cur, 0);
-+                return;
-+            }
-+            fc->release(); // slot holds a ref; drop the creator's
-+            uint64_t h = cap::encode_handle(
-+                cs->cspace_id, static_cast<uint32_t>(s),
-+                cs->slot_gen(static_cast<uint32_t>(s)));
-+            uint64_t va = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::FRAME_MAP), h, 0, 0, 0,
-+                nullptr);
-+            __atomic_store_n(&g_va, va, __ATOMIC_RELEASE);
-+            // Park: keep the mapping alive while the harness revokes.
-+            for (;;)
-+                kernel::Scheduler::reschedule();
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    t->page_table_ = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(t->page_table_ != 0);
-+
-+    size_t base = cap::FrameUserMap::live_count();
-+    Scheduler::add_task(*t);
++// Testidea: SYS_DEATH_UNWATCH before the watched task dies suppresses the
++// notification entirely.
++// Input: Watch a helper; unwatch it; terminate the helper.
++// Expect: no record; registry baseline.
++// Depends: SYS_DEATH_UNWATCH
++JARVIS_TEST(death_watch_unwatch_before_death, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    uint64_t hid = 0;
++    auto *h = make_parked(82, &hid);
++    JARVIS_ASSERT(h != nullptr);
++    JARVIS_ASSERT(hid != 0);
 +    Scheduler::reschedule();
 +
-+    // Wait until the task has mapped + published the VA.
-+    for (int i = 0; i < 10000 && __atomic_load_n(&g_va, __ATOMIC_ACQUIRE) == 0;
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+    uint64_t va = __atomic_load_n(&g_va, __ATOMIC_ACQUIRE);
-+    JARVIS_ASSERT(va != static_cast<uint64_t>(-1));
-+    JARVIS_ASSERT(va != 0);
-+    JARVIS_ASSERT_EQ(1U + base, cap::FrameUserMap::live_count());
++    size_t base = ipc::DeathNotify::live_count();
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_WATCH), hid, 0, 0, 0));
++    JARVIS_ASSERT_EQ(base + 1, ipc::DeathNotify::live_count());
++    JARVIS_ASSERT_EQ(0ULL, death_syscall(
++        static_cast<uint64_t>(SyscallNumber::DEATH_UNWATCH), hid, 0, 0, 0));
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
 +
-+    // Revoke the cap: invalidate_cap must clear the live slot + drop its pin.
-+    cap::FrameCap *fc = reinterpret_cast<cap::FrameCap *>(
-+        __atomic_load_n(reinterpret_cast<uint64_t *>(&g_fc), __ATOMIC_ACQUIRE));
-+    JARVIS_ASSERT(fc != nullptr);
-+    fc->revoke();
-+    JARVIS_ASSERT_EQ(base, cap::FrameUserMap::live_count());
-+
-+    // Cleanup: terminate the parked task.  Its teardown releases the CSpace
-+    // (CNode dispose -> slot remove -> FrameCap ref 1->0 -> dispose), which
-+    // frees the revoked cap.  Do NOT fc->release() here — @p fc is dangling
-+    // (the harness holds no reference of its own); releasing would decrement a
-+    // freed block's refcount (use-after-free).
-+    kernel::test::terminate_if_live(t);
-+    kernel::test::wait_for_termination_safe(t);
++    Scheduler::terminate(*h, 9);
 +    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(base, cap::FrameUserMap::live_count());
++    ipc::DeathRecord rec{};
++    JARVIS_ASSERT_EQ(0, ipc::DeathNotify::recv(*cur, rec));
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
 +    JARVIS_TEST_PASS();
 +}
 +
-+void register_cap_shm_tests() {
-+    Logger::info("Registering cap_shm tests");
-+    JARVIS_REGISTER_TEST(frame_user_map_unmap_roundtrip);
-+    JARVIS_REGISTER_TEST(frame_user_map_revoke_denied);
-+    JARVIS_REGISTER_TEST(shm_ring_producer_consumer);
-+    JARVIS_REGISTER_TEST(shm_ring_task_death_drain);
-+    JARVIS_REGISTER_TEST(shm_ring_revocation_cleanup);
++// Runmode: kernel
++// Testidea: SYS_DEATH_RECV with nothing pending returns 0 immediately (the
++// supervisor never wedges).
++// Input: Call recv with no watches/pending records.
++// Expect: 0, registry unchanged.
++// Depends: non-blocking recv
++JARVIS_TEST(death_recv_nonblocking_none, "PRE: none | POST: none") {
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    size_t base = ipc::DeathNotify::live_count();
++    ipc::DeathRecord rec{};
++    int got = ipc::DeathNotify::recv(*cur, rec);
++    JARVIS_ASSERT_EQ(0, got);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
++    JARVIS_TEST_PASS();
++}
++
++void register_cap_death_tests() {
++    Logger::info("Registering cap_death tests");
++    JARVIS_REGISTER_TEST(death_watch_consume_roundtrip);
++    JARVIS_REGISTER_TEST(death_watch_crash_reason);
++    JARVIS_REGISTER_TEST(death_watch_multi_fan_in);
++    JARVIS_REGISTER_TEST(death_watch_after_death_rejected);
++    JARVIS_REGISTER_TEST(death_watch_supervisor_death_drains);
++    JARVIS_REGISTER_TEST(death_watch_registry_full_fails_closed);
++    JARVIS_REGISTER_TEST(death_watch_exactly_once);
++    JARVIS_REGISTER_TEST(death_watch_unwatch_before_death);
++    JARVIS_REGISTER_TEST(death_recv_nonblocking_none);
 +}
 \ No newline at end of file
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 5cea3886..e53708be 100644
+index e53708be..cce1c0de 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1044,   0,       0      },  // measured: 1040 + fpu_invariants(+4,#93) → 1044
-+    {"all",                1050,   0,       0      },  // measured: 1045 + cap_shm(+5,#106 Part B) → 1050
+-    {"all",                1050,   0,       0      },  // measured: 1045 + cap_shm(+5,#106 Part B) → 1050
++    {"all",                1059,   0,       0      },  // measured: 1050 + cap_death(+9,#105 Part B) → 1059
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -94,13 +94,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
+@@ -95,6 +95,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
      {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
-+    {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
+     {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
++    {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
  
      // ipc
      {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
-     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
-     {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
-     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
--    {"ipc_robustness",        6,    0,       0      },  // misformed/wraparound/concurrent/cleanup
-+    {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
-     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
- 
-     // vfs
-diff --git a/src/kernel/test/test_ipc_robustness.cpp b/src/kernel/test/test_ipc_robustness.cpp
-index 7d5d28c7..771755c7 100644
---- a/src/kernel/test/test_ipc_robustness.cpp
-+++ b/src/kernel/test/test_ipc_robustness.cpp
-@@ -50,6 +50,26 @@ struct IpcRctx {
-     uint64_t out_;
- };
- 
-+// IpcPriorityOrderedWake shared state (issue #106 Part A): sender wake flags
-+// indexed by priority bucket + the receiver task id senders target.
-+uint64_t s_wake_flags[3] = {0, 0, 0};
-+uint64_t s_recv_id = 0;
-+
-+/// @brief Sender entry for IpcPriorityOrderedWake: send to the shared receiver
-+///        id, then flag completion.  Context passed via user_data (capture-less
-+///        entry function requirement of TaskControlBlock::create).
-+void ipc_prio_sender_entry() {
-+    auto *self = Scheduler::current_task();
-+    auto *flag = reinterpret_cast<uint64_t *>(self->user_data);
-+    Message msg{};
-+    msg.sender_id = self->id;
-+    msg.type = 1;
-+    msg.priority = 0;
-+    msg.data_size = 0;
-+    IPC::send(s_recv_id, msg, 0);
-+    __atomic_store_n(flag, 1, __ATOMIC_RELEASE);
-+}
-+
- } // namespace
- 
- TEST_CLASS(IpcMisformedMessages) {
-@@ -478,6 +498,126 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
-     JARVIS_ASSERT_EQ(0ULL, send_result);
- };
- 
-+TEST_CLASS(IpcPriorityOrderedWake) {
-+    // Issue #106 Part A (subsumes #15): verifies blocked-sender wakeup is
-+    // PRIORITY-ORDERED (highest priority first).  block_sender inserts
-+    // descending by priority (ipc.cpp:506-512) and wake_sender pops the head
-+    // (ipc.cpp:543-559) — this test proves the ordering through the REAL
-+    // wake path (IPC::recv → wake_sender), not just list inspection.
-+    //
-+    // Pattern mirrors IpcBlockedSenderOnReceiverCleanup (above): the receiver
-+    // is the test task itself, fills its own queue so senders genuinely
-+    // block, registers 3 senders under one IrqGuard, drains one slot, and
-+    // asserts the highest-priority sender is woken first.
-+    auto *self = Scheduler::current_task();
-+    JARVIS_ASSERT(self != nullptr);
-+    s_recv_id = self->id;
-+    s_wake_flags[0] = 0;
-+    s_wake_flags[1] = 0;
-+    s_wake_flags[2] = 0;
-+
-+    // Fill this task's own queue so real senders block (full queue).
-+    Message fill{};
-+    fill.sender_id = 0;
-+    fill.type = 99;
-+    fill.priority = 0;
-+    fill.data_size = 0;
-+    for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i)
-+        self->msg_queue.push(fill);
-+
-+    // 3 senders at distinct priorities (higher number = more urgent).
-+    auto *hi = TaskControlBlock::create(ipc_prio_sender_entry, 16, 10);
-+    auto *mid = TaskControlBlock::create(ipc_prio_sender_entry, 14, 10);
-+    auto *lo = TaskControlBlock::create(ipc_prio_sender_entry, 12, 10);
-+    JARVIS_ASSERT(hi != nullptr);
-+    JARVIS_ASSERT(mid != nullptr);
-+    JARVIS_ASSERT(lo != nullptr);
-+    hi->user_data = &s_wake_flags[0];
-+    mid->user_data = &s_wake_flags[1];
-+    lo->user_data = &s_wake_flags[2];
-+
-+    {
-+        arch::IrqGuard _guard;
-+        Scheduler::add_task(*hi);
-+        Scheduler::add_task(*mid);
-+        Scheduler::add_task(*lo);
-+    }
-+
-+    // Drive until all three are genuinely BLOCKED on the full queue.
-+    Scheduler::reschedule();
-+    for (int i = 0; i < 1000 && !(hi->state == TaskState::BLOCKED &&
-+                                  mid->state == TaskState::BLOCKED &&
-+                                  lo->state == TaskState::BLOCKED);
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+    JARVIS_ASSERT(hi->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(mid->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(lo->state == TaskState::BLOCKED);
-+
-+    // List must be sorted descending (highest at head) — proves insert
-+    // ordering.  Inspect under the queue lock.
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(self->msg_queue.lock_);
-+        JARVIS_ASSERT(self->msg_queue.blocked_senders_head == hi);
-+        JARVIS_ASSERT(hi->blocked_next == mid);
-+        JARVIS_ASSERT(mid->blocked_next == lo);
-+        JARVIS_ASSERT(lo->blocked_next == nullptr);
-+    }
-+
-+    // Drain one slot via the REAL recv path → wake_sender pops the head.
-+    Message out;
-+    JARVIS_ASSERT(IPC::recv(out));
-+
-+    // The highest-priority sender is woken first (hi prio 16 preempts the
-+    // prio-14/12 on the next tick).  Wait until hi has actually RUN (its
-+    // flag is set — proves it completed its send + terminated), while
-+    // mid/lo must still be BLOCKED (never woken).
-+    for (int i = 0; i < 1000 && !(__atomic_load_n(&s_wake_flags[0], __ATOMIC_ACQUIRE) == 1); ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[0]);
-+    JARVIS_ASSERT_EQ(0ULL, s_wake_flags[1]);
-+    JARVIS_ASSERT_EQ(0ULL, s_wake_flags[2]);
-+    JARVIS_ASSERT(mid->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(lo->state == TaskState::BLOCKED);
-+
-+    // Drain the rest — each pop wakes the next head (mid, then lo).  The
-+    // woken senders re-push one message then terminate.  Drain a bounded
-+    // count = original fill + 3 re-pushes (fixed, no unsynchronized list read).
-+    Message extra;
-+    for (uint64_t i = 0; i < IPC_MAX_QUEUE_MSG + 3; ++i) {
-+        if (!IPC::recv(extra))
-+            break;
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+
-+    // Give every woken sender a chance to run + re-push + self-terminate.
-+    for (int i = 0; i < 1000 && !(hi->state == TaskState::TERMINATED &&
-+                                  mid->state == TaskState::TERMINATED &&
-+                                  lo->state == TaskState::TERMINATED);
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
-+    }
-+
-+    // Cleanup BEFORE asserts (cookbook Rule 5): force-terminate any straggler
-+    // and reclaim all zombies exactly once.
-+    kernel::test::terminate_and_drain3(hi, mid, lo);
-+
-+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[0]);
-+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[1]);
-+    JARVIS_ASSERT_EQ(1ULL, s_wake_flags[2]);
-+    {
-+        SpinLockGuard<sync::SpinLock> guard(self->msg_queue.lock_);
-+        JARVIS_ASSERT(self->msg_queue.blocked_senders_head == nullptr);
-+    }
-+    JARVIS_TEST_PASS();
-+};
-+
- void register_ipc_robustness_tests() {
-     Logger::info("Registering IPC robustness tests");
-     REGISTER_CLASS(IpcMisformedMessages);
-@@ -488,6 +628,7 @@ void register_ipc_robustness_tests() {
- #endif
-     REGISTER_CLASS(IpcBidirectionalSendSync);
-     REGISTER_CLASS(IpcBlockedSenderOnReceiverCleanup);
-+    REGISTER_CLASS(IpcPriorityOrderedWake);
- }
- #ifndef __clang__
- #pragma GCC diagnostic pop
 diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 20a4086c..c4800ac8 100644
+index c4800ac8..936a5db0 100644
 --- a/src/kernel/test/test_isolate.cpp
 +++ b/src/kernel/test/test_isolate.cpp
-@@ -40,6 +40,7 @@
- #include <kernel/arch/gdt.hpp>
+@@ -41,6 +41,7 @@
  #include <kernel/arch/hal/iopb.hpp>
  #include <kernel/cap/mmio.hpp>
-+#include <kernel/cap/frame_map.hpp>
+ #include <kernel/cap/frame_map.hpp>
++#include <kernel/ipc/death_notify.hpp>
  #include <kernel/cap/msix.hpp>
  #include <logger.hpp>
  #include "test_registry.gen.hpp"
-@@ -1355,6 +1356,7 @@ void snapshot_restore(const char *test_name) {
-         // device pages can never leak a stale registry slot or VA across
+@@ -1357,6 +1358,10 @@ void snapshot_restore(const char *test_name) {
          // snapshot cycles.
          cap::MmioUserMap::snapshot_reset();
-+        cap::FrameUserMap::snapshot_reset();
+         cap::FrameUserMap::snapshot_reset();
++        // Reset the death-notify registry (issue #105 Part B) so a test that
++        // registered death watches can never leak a stale watch across
++        // snapshot cycles.
++        kernel::ipc::DeathNotify::snapshot_reset();
          // Reset the MSI-X per-(BDF, entry) claim registry (issue #10) so a
          // test that created an MsixCap never leaves a recycled (bdf, entry)
          // un-claimable in the next cycle.
 diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 630b0712..3bb1d4c9 100644
+index 3bb1d4c9..b0c1d825 100644
 --- a/src/kernel/test/test_registry.cpp
 +++ b/src/kernel/test/test_registry.cpp
-@@ -187,6 +187,7 @@ void register_stress_hrt_tests();
- void register_scheduler_hrt_tests();
+@@ -188,6 +188,7 @@ void register_scheduler_hrt_tests();
  void register_syscall_fastpath_tests();
  void register_fpu_inv_tests();
-+void register_cap_shm_tests();
+ void register_cap_shm_tests();
++void register_cap_death_tests();
  #if defined(CONFIG_ARCH_AARCH64)
  void register_aarch64_tests();
  #endif
-@@ -349,6 +350,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     // iommu_live`); on the default pc build there is no DMAR unit.
-     {"iommu_live", []() { register_iommu_live_tests(); }},
+@@ -353,6 +354,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // -- cap_shm: capability-gated shared-memory rings (issue #106 Part B) --
+     {"cap_shm", []() { register_cap_shm_tests(); }},
  
-+    // -- cap_shm: capability-gated shared-memory rings (issue #106 Part B) --
-+    {"cap_shm", []() { register_cap_shm_tests(); }},
++    // -- cap_death: asynchronous task-death notifications (issue #105 Part B) --
++    {"cap_death", []() { register_cap_death_tests(); }},
 +
      // -- ipc: messages, events, notifications, pipes --
      {"ipc_core", []() { register_ipc_tests(); }},
      {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
-@@ -647,6 +651,7 @@ static void register_all_tests() {
-     register_scheduler_hrt_tests();
+@@ -652,6 +656,7 @@ static void register_all_tests() {
      register_syscall_fastpath_tests();
      register_fpu_inv_tests();
-+    register_cap_shm_tests();
+     register_cap_shm_tests();
++    register_cap_death_tests();
  #if defined(CONFIG_ARCH_AARCH64)
       register_aarch64_tests();
  #endif
-@@ -798,6 +803,7 @@ static void register_all_tests_second_half() {
-     register_scheduler_hrt_tests();
+@@ -804,6 +809,7 @@ static void register_all_tests_second_half() {
      register_syscall_fastpath_tests();
      register_fpu_inv_tests();
-+    register_cap_shm_tests();
+     register_cap_shm_tests();
++    register_cap_death_tests();
  #if defined(CONFIG_ARCH_AARCH64)
       register_aarch64_tests();
  #endif
+diff --git a/src/lib/test.hpp b/src/lib/test.hpp
+index 90f687c9..deeb1f23 100644
+--- a/src/lib/test.hpp
++++ b/src/lib/test.hpp
+@@ -92,7 +92,7 @@ public:
+     static const char* current_test_name();
+ 
+ private:
+-    static constexpr size_t MAX_TESTS = 1072;
++    static constexpr size_t MAX_TESTS = 1081;
+     static constexpr size_t MAX_CLASSES = 64;
+     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
+     static TestCase tests_[MAX_TESTS];

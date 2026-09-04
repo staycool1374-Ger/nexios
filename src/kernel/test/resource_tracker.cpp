@@ -104,6 +104,8 @@ static bool any_leak(const ResourceCounters &baseline,
         return true;
     if (current.cap_slots > baseline.cap_slots)
         return true;
+    if (current.death_watches > baseline.death_watches)
+        return true;
     return false;
 }
 

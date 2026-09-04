@@ -1,150 +1,66 @@
---- a/src/kernel/cap/frame_map.cpp
-+++ b/src/kernel/cap/frame_map.cpp
-@@ -148,6 +148,7 @@
-     int16_t idx = -1;
-     cap::FrameCap *fc = nullptr;
-     uint64_t pml4 = 0;
-+    size_t pages = 0;
-     {
-         SpinLockGuard<sync::SpinLock> guard(s_lock_);
-         for (size_t i = 0; i < kMaxMaps; ++i) {
-@@ -157,6 +158,10 @@
-                 idx = static_cast<int16_t>(i);
-                 fc = s_slots_[i].fc;
-                 pml4 = s_slots_[i].pml4;
-+                // Pin is held here — the count read is safe.  Capture it for
-+                // the unmap loop below (VMM::unmap_frame_from_cap clears ONE
-+                // PTE; map_frame_from_cap mapped fc->count pages).
-+                pages = s_slots_[i].fc->count;
-                 break;
-             }
-         }
-@@ -164,14 +169,15 @@
-     if (idx < 0)
-         return false;
+--- a/src/kernel/test/resource_tracker.cpp
++++ b/src/kernel/test/resource_tracker.cpp
+@@ -104,6 +104,8 @@
+         return true;
+     if (current.cap_slots > baseline.cap_slots)
+         return true;
++    if (current.death_watches > baseline.death_watches)
++        return true;
+     return false;
+ }
  
--    // Unmap the PTE outside the lock, then free the slot.  The slot's own
-+    // Unmap every PTE outside the lock, then free the slot.  The slot's own
-     // reference keeps @p fc alive across the unmap (the caller, sys_frame_unmap,
-     // holds none), so the VMM unmap deref is safe.  Re-validate the slot at the
-     // clear step: a concurrent invalidate_cap (cross-task revoke) may clear
-     // this slot (and release its pin) while we unmap outside the lock.  Only
-     // the path that observes the occupied true->false transition releases the
-     // slot's pin — releasing unconditionally is a double-release.
--    VMM::unmap_frame_from_cap(va, pml4);
-+    for (size_t i = 0; i < pages; ++i)
-+        VMM::unmap_frame_from_cap(va + i * arch::PAGE_SIZE, pml4);
-     bool cleared = false;
-     {
-         SpinLockGuard<sync::SpinLock> guard(s_lock_);
-@@ -197,6 +203,7 @@
-         uint64_t va = 0;
-         uint64_t pml4 = 0;
-         cap::FrameCap *match = nullptr;
-+        size_t pages = 0;
-         bool hit = false;
-         {
-             SpinLockGuard<sync::SpinLock> guard(s_lock_);
-@@ -208,11 +215,16 @@
-             // task may not be scheduler-resolvable (e.g. a stand-alone test
-             // fixture), so never re-resolve by id here.
-             pml4 = s_slots_[i].pml4;
-+            // Pin is held here — the count read is safe.
-+            pages = s_slots_[i].fc->count;
-             s_slots_[i].occupied = false;
-             hit = true;
-         }
-         if (hit) {
--            VMM::unmap_frame_from_cap(va, pml4);
-+            // Clear EVERY page of a multi-page mapping (map_frame_from_cap
-+            // mapped fc->count pages; unmap_frame_from_cap clears one PTE).
-+            for (size_t j = 0; j < pages; ++j)
-+                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
-             match->release(); // drop the slot's pin (outside the lock)
-         }
+
+--- a/src/kernel/syscall/syscall_handlers_death.cpp
++++ b/src/kernel/syscall/syscall_handlers_death.cpp
+@@ -49,23 +49,28 @@
+     if (!t)
+         return static_cast<uint64_t>(-1);
+ 
+-    ipc::DeathRecord rec{};
+-    int got = ipc::DeathNotify::recv(*t, rec);
+-    if (got == 0)
+-        return 0; // nothing pending — never blocks
+-
+     // MP-4 (SMAP): a user task writes via safe_copy_to_user (stac-wrapped);
+     // a kernel task writes directly.
+     auto *out = reinterpret_cast<ipc::DeathRecord *>(out_ptr);
++    // Validate the destination BEFORE consuming a record: a failed recv must
++    // not permanently lose the death notification (issue #105 Part B audit).
++    ipc::DeathRecord rec{};
++    int got;
+     if (syscall_is_user_task()) {
+         CheckedPtr<ipc::DeathRecord> cptr(out, 1);
+         if (!cptr.valid())
+             return static_cast<uint64_t>(-1);
++        got = ipc::DeathNotify::recv(*t, rec);
++        if (got == 0)
++            return 0; // nothing pending — never blocks
+         if (!cptr.copy_to(&rec))
+             return static_cast<uint64_t>(-1);
+     } else {
+         if (!out)
+             return static_cast<uint64_t>(-1);
++        got = ipc::DeathNotify::recv(*t, rec);
++        if (got == 0)
++            return 0; // nothing pending — never blocks
+         *out = rec;
      }
-@@ -223,6 +235,7 @@
-         uint64_t va = 0;
-         uint64_t pml4 = 0;
-         cap::FrameCap *fc = nullptr;
-+        size_t pages = 0;
-         bool hit = false;
-         {
-             SpinLockGuard<sync::SpinLock> guard(s_lock_);
-@@ -232,11 +245,17 @@
-             va = s_slots_[i].va;
-             fc = s_slots_[i].fc;
-             pml4 = s_slots_[i].pml4;
-+            // Pin is held here — the count read is safe.
-+            pages = s_slots_[i].fc->count;
-             s_slots_[i].occupied = false;
-             hit = true;
-         }
-         if (hit) {
--            VMM::unmap_frame_from_cap(va, pml4);
-+            // Clear EVERY page of a multi-page mapping before the owning
-+            // task's PML4 is freed (map_frame_from_cap mapped fc->count
-+            // pages; unmap_frame_from_cap clears one PTE).
-+            for (size_t j = 0; j < pages; ++j)
-+                VMM::unmap_frame_from_cap(va + j * arch::PAGE_SIZE, pml4);
-             fc->release(); // drop the slot's pin (outside the lock)
-         }
-     }
---- a/src/kernel/test/test_cap_shm.cpp
-+++ b/src/kernel/test/test_cap_shm.cpp
-@@ -74,8 +74,10 @@
- JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
-     static uint64_t g_map_ret = 0;
-     static uint64_t g_unmap_ret = 0;
-+    static uint64_t g_done = 0;
-     __atomic_store_n(&g_map_ret, 0, __ATOMIC_RELEASE);
-     __atomic_store_n(&g_unmap_ret, 0, __ATOMIC_RELEASE);
-+    __atomic_store_n(&g_done, 0, __ATOMIC_RELEASE);
- 
-     auto *t = TaskControlBlock::create(
-         []() {
-@@ -120,8 +122,13 @@
-                         0, 0, 0, nullptr),
-                     __ATOMIC_RELEASE);
-             }
--            cs->remove(static_cast<uint32_t>(s));
--            Scheduler::terminate(*cur, 0);
-+            __atomic_store_n(&g_done, 1, __ATOMIC_RELEASE);
-+            // Park (do NOT self-terminate): the harness verifies the PTE
-+            // clearing in the still-live cloned PML4 (multi-page closure —
-+            // BOTH pages of the 2-page mapping must be unmapped), then
-+            // terminates this task.
-+            for (;;)
-+                kernel::Scheduler::reschedule();
-         },
-         11, 10);
-     JARVIS_ASSERT(t != nullptr);
-@@ -132,14 +139,26 @@
-     JARVIS_ASSERT(t->page_table_ != 0);
-     Scheduler::add_task(*t);
-     Scheduler::reschedule();
--    kernel::test::wait_for_termination_safe(t);
--    Scheduler::drain_zombie_list();
- 
-+    // Drive until the task has mapped + unmapped (bounded).
-+    for (int i = 0; i < 10000 && __atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0;
-+         ++i) {
-+        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
-+        arch::hlt();
+     return 1;
+
+--- a/src/kernel/test/test_cap_death.cpp
++++ b/src/kernel/test/test_cap_death.cpp
+@@ -345,6 +345,14 @@
+         kernel::test::terminate_if_live(helpers[i]);
+     kernel::test::terminate_if_live(extra);
+     Scheduler::drain_zombie_list();
++    // Consume the remaining PENDING records so the ResourceTracker
++    // death_watches counter is zero-delta at the test boundary: the leak
++    // check in snapshot_restore runs BEFORE the registry snapshot_reset, so
++    // leftover records would fail the check once death_watches is verified.
++    ipc::DeathRecord drain{};
++    while (ipc::DeathNotify::recv(*cur, drain) == 1) {
 +    }
-+
-     uint64_t va = __atomic_load_n(&g_map_ret, __ATOMIC_ACQUIRE);
-     JARVIS_ASSERT(va != static_cast<uint64_t>(-1));
-     JARVIS_ASSERT(va >= CONFIG_USER_SHM_VA_BASE);
-     JARVIS_ASSERT_EQ(0ULL, __atomic_load_n(&g_unmap_ret, __ATOMIC_ACQUIRE));
-+    // Multi-page closure: SYS_FRAME_UNMAP must clear EVERY page of a
-+    // multi-page mapping, not just the region base (otherwise a later cap
-+    // dispose leaves live user PTEs aliasing freed physical memory).
-+    JARVIS_ASSERT_EQ(0ULL, VMM::virt_to_phys_in_pml4(va, t->page_table_));
-+    JARVIS_ASSERT_EQ(
-+        0ULL, VMM::virt_to_phys_in_pml4(va + arch::PAGE_SIZE, t->page_table_));
-     JARVIS_ASSERT_EQ(static_cast<size_t>(0), cap::FrameUserMap::live_count());
-+    kernel::test::terminate_and_drain(*t);
++    JARVIS_ASSERT_EQ(base, ipc::DeathNotify::live_count());
      JARVIS_TEST_PASS();
  }
  

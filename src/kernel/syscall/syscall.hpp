@@ -95,7 +95,10 @@ enum class SyscallNumber : uint8_t {
     FRAME_CREATE = 63, ///< get contiguous user frames into a FrameCap in the caller's CSpace (issue #106 Part B)
     FRAME_MAP = 64,    ///< map a FrameCap's frames into the caller's user VA window (issue #106 Part B)
     FRAME_UNMAP = 65,  ///< unmap a user frame mapping by VA (issue #106 Part B)
-    MAX_SYSCALL = 66,
+    DEATH_WATCH = 66,  ///< register an asynchronous death notification watch (issue #105 Part B)
+    DEATH_RECV = 67,   ///< drain the next pending death record, non-blocking (issue #105 Part B)
+    DEATH_UNWATCH = 68, ///< remove a death watch (issue #105 Part B)
+    MAX_SYSCALL = 69,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
@@ -319,7 +322,13 @@ class Syscall {
     static uint64_t sys_frame_map(uint64_t, uint64_t, uint64_t, uint64_t,
                                   uint64_t *);
     static uint64_t sys_frame_unmap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_death_watch(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_death_recv(uint64_t, uint64_t, uint64_t, uint64_t,
                                     uint64_t *);
+    static uint64_t sys_death_unwatch(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -389,6 +398,9 @@ class Syscall {
             &Syscall::sys_frame_create,
             &Syscall::sys_frame_map,
             &Syscall::sys_frame_unmap,
+            &Syscall::sys_death_watch,
+            &Syscall::sys_death_recv,
+            &Syscall::sys_death_unwatch,
     };
 };
 
