@@ -75,19 +75,19 @@ constexpr size_t k_fast_count =
 //         no bit >= MAX_SYSCALL.
 // Depends: Syscall::SYSCALL_FAST_MASK, Syscall::k_syscall_fast[]
 JARVIS_TEST(fast_mask_matches_config, "PRE: none | POST: none") {
-    const uint64_t mask = Syscall::SYSCALL_FAST_MASK;
+    const __uint128_t mask = Syscall::SYSCALL_FAST_MASK;
     JARVIS_ASSERT(mask != 0);
 
     // Every member's bit is set.
     for (size_t i = 0; i < k_fast_count; ++i) {
         uint64_t n = static_cast<uint64_t>(Syscall::k_syscall_fast[i]);
         JARVIS_ASSERT(n < static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
-        JARVIS_ASSERT(mask & (1ULL << n));
+        JARVIS_ASSERT(mask & ((__uint128_t)1 << n));
     }
 
     // No bit outside the list is set (popcount equals list size).
-    uint64_t bits = 0;
-    uint64_t tmp = mask;
+    __uint128_t bits = 0;
+    __uint128_t tmp = mask;
     while (tmp) {
         bits += (tmp & 1u);
         tmp >>= 1;
@@ -121,6 +121,13 @@ JARVIS_TEST(fast_call_correctness, "PRE: none | POST: none") {
         if (n == static_cast<uint64_t>(SyscallNumber::PAUSE) ||
             n == static_cast<uint64_t>(SyscallNumber::HALT) ||
             n == static_cast<uint64_t>(SyscallNumber::REBOOT))
+            continue;
+        // The *_FAST IPC syscalls (issue #11) are skipped here: RECV_FAST on
+        // an empty queue would block the harness (its queue is never drained),
+        // and the three are exercised by the ipc_fastpath class.
+        if (n == static_cast<uint64_t>(SyscallNumber::SEND_FAST) ||
+            n == static_cast<uint64_t>(SyscallNumber::RECV_FAST) ||
+            n == static_cast<uint64_t>(SyscallNumber::SEND_SYNC_FAST))
             continue;
         uint64_t full = Syscall::handle(n, 0, 0, 0, 0, regs);
         uint64_t fast = Syscall::handle_fast(n, 0, 0, 0, 0, regs);

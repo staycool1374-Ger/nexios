@@ -209,6 +209,12 @@
 #define CONFIG_IPC_MAX_MSG_SIZE 64
 #endif
 
+/// Register-payload budget for the in-register IPC fastpath (issue #11).
+/// Must be <= CONFIG_IPC_MAX_MSG_SIZE (static_assert in task.hpp).
+#ifndef CONFIG_IPC_FAST_PAYLOAD_BYTES
+#define CONFIG_IPC_FAST_PAYLOAD_BYTES 48
+#endif
+
 /// Maximum number of messages in an IPC queue.
 #ifndef CONFIG_IPC_MAX_QUEUE_MSG
 #define CONFIG_IPC_MAX_QUEUE_MSG 16

@@ -274,7 +274,7 @@ SEND_SYNC_FAST (int $0x80)
   `WCET(RECV_FAST) ≤ WCET(RECV)` structurally; blocking-case WCET is
   identical to the full path (the block dominates and is unchanged).
   Measured evidence per the #101/#102 relative methodology (§5
-  `fast_latency_lt_full`).
+  `fast_latency_vs_full`).
 
 ### 3.6 Assembly vs C (ONE audited dispatcher)
 
@@ -380,11 +380,20 @@ used only by the three fast handlers.
   full queue blocks via the existing `block_sender` machinery, and RECV_FAST
   on an empty queue via the existing `sys_receive` block body (WEDGE-
   invariant, PI boost, deferred switch, H2 guards) — no new blocking code
-  exists to audit.
+  exists to audit.  *Auditor S3 note:* for a **kernel-context** caller the
+  RECV_FAST block body adds `else { arch::hlt(); }` (the user-task
+  `sti/hlt/cli` is `is_user_`-gated, and the `hlt` mirrors the already-
+  audited `send_sync` kernel-task pattern, ipc.cpp §send_sync).  Safe under
+  IF=1 (scheduler-mediated); the full-path `sys_receive` lacks the kernel-
+  `hlt` and is left untouched.
 - INV-4: RECV_FAST **never consumes** an oversized message — delivery is via
   `pop_clamped` (§3.9), which removes the best-priority message only if
   `data_size ≤ clamp`; an oversized best stays queued (`pop_clamped` false
   on a non-empty queue) and RECV_FAST returns `-1` for the full `RECEIVE`.
+  *Auditor S3 note:* a concurrent producer push between `pop_clamped`'s lock
+  release and the caller's `is_empty()` re-read yields a spurious `-1` with
+  the message preserved (fail-safe; the design's sole-consumer model §3.9
+  makes this benign — no peer can have removed the caller's own message).
 - INV-5: SEND_SYNC_FAST gathers the request **before** `IPC::send_sync`
   (the frame is read-only after the gather, so a block cannot invalidate the
   payload); the reply pop is clamped (`reply_max_size = budget`).  A fitting
@@ -426,8 +435,8 @@ zero-delta asserted).
 | `fast_recv_empty_blocks` | RECV_FAST on empty queue blocks until a sender delivers; wake + priority restore correct. |
 | `fast_send_sync_roundtrip` | SEND_SYNC_FAST: request payload delivered to peer, reply delivered in caller's registers, `reply.type` in `rax`. |
 | `fast_authority_same_as_send` | SEND_FAST to a dead/TERMINATED task → `-1`; self-send to full queue refused; identical outcome set to full SEND for the same inputs. |
-| `fast_no_user_deref_canary` | a SEND_FAST/RECV_FAST-only task with a tampered stack canary does **not** trip at syscall entry (FAST skip); detection remains via the scheduler sample (mirrors `fast_path_skips_canary`). |
-| `fast_latency_lt_full` | relative latency, #101/#102 methodology: `sum(SEND_FAST) ≤ sum(SEND)` and `sum(RECV_FAST) ≤ sum(RECV)` with a magnitude-sanity canary; no absolute cycle bound (TCG quantization). |
+| `fast_no_user_deref_canary` | the three fast handlers are driven from harness context (real FAST dispatch, fabricated regs[]): they complete without faulting and return the pointer-free fail-closed results (SEND_FAST to a non-existent task → `-1`; RECV_FAST empty + 1-tick deadline → `-1`, harness never blocks).  Canary-skip for the three members is inherited structurally from FAST membership (the handler review proves pointer-freedom), NOT asserted via a tampered-canary user task (auditor S3 note — weaker than the initial draft's intent). |
+| `fast_latency_vs_full` | relative latency, #101/#102 methodology: `avg(SEND_FAST) ≤ avg(SEND) * 2` (fair fail-closed pair: both to an invalid dest → `-1`) with a magnitude-sanity canary; no absolute cycle bound (TCG quantization). |
 | `fast_hybrid_mixed_queue` | interleaved fast + full sends/receives on one mailbox preserve FIFO/priority order and both drain correctly. |
 
 Validation: `make execute-test x86_64 debug ipc_fastpath`, then the

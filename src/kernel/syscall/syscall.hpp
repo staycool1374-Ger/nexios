@@ -103,20 +103,25 @@ enum class SyscallNumber : uint8_t {
     PAGER_MAP = 71,    ///< map the pager's FrameCap into the client's PML4 (issue #107)
     PAGER_ABORT = 72,  ///< pager cannot satisfy a fault: unmap + poison VA (issue #107)
     PAGER_UNREGISTER = 73, ///< remove a pager registration (issue #107)
-    MAX_SYSCALL = 74,
+    SEND_FAST = 74,      ///< register-passing SEND, payload in regs[] (issue #11)
+    RECV_FAST = 75,      ///< register-passing RECEIVE, payload in regs[] (issue #11)
+    SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
+    MAX_SYSCALL = 77,
 };
 
-/// @brief Folds a list of FAST syscall numbers into a single uint64_t bitmask
+/// @brief Folds a list of FAST syscall numbers into a single bitmask
 ///        (issue #92).  constexpr so SYSCALL_FAST_MASK is a compile-time
 ///        constant derived from k_syscall_fast[] — the single source of truth.
+///        __uint128_t: syscall numbers >= 64 (DEATH_*, PAGER_*, *_FAST) would
+///        overflow a 64-bit shift; the widened mask covers numbers < 128.
 /// @param list  Array of syscall numbers.
 /// @param count Number of elements in @p list.
 /// @return A bitmask with bit `n` set for each number in @p list.
-constexpr uint64_t syscall_fast_mask_from(const SyscallNumber *list,
-                                          size_t count) {
-    uint64_t mask = 0;
+constexpr __uint128_t syscall_fast_mask_from(const SyscallNumber *list,
+                                             size_t count) {
+    __uint128_t mask = 0;
     for (size_t i = 0; i < count; ++i) {
-        mask |= (1ULL << static_cast<uint64_t>(list[i]));
+        mask |= ((__uint128_t)1 << static_cast<uint64_t>(list[i]));
     }
     return mask;
 }
@@ -185,11 +190,15 @@ class Syscall {
         SyscallNumber::PAUSE,
         SyscallNumber::REBOOT,
         SyscallNumber::HALT,
+        SyscallNumber::SEND_FAST,
+        SyscallNumber::RECV_FAST,
+        SyscallNumber::SEND_SYNC_FAST,
     };
 
     /// @brief Bitmask of the pointer-free FAST syscall numbers (issue #92).
     ///        Derived from k_syscall_fast[] — the single source of truth.
-    static constexpr uint64_t SYSCALL_FAST_MASK =
+    ///        128-bit: covers syscall numbers 0..127 (issue #11).
+    static constexpr __uint128_t SYSCALL_FAST_MASK =
         syscall_fast_mask_from(k_syscall_fast,
                                sizeof(k_syscall_fast) /
                                    sizeof(k_syscall_fast[0]));
@@ -344,6 +353,12 @@ class Syscall {
                                      uint64_t *);
     static uint64_t sys_pager_unregister(uint64_t, uint64_t, uint64_t, uint64_t,
                                          uint64_t *);
+    static uint64_t sys_send_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_recv_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_send_sync_fast(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -421,6 +436,9 @@ class Syscall {
             &Syscall::sys_pager_map,
             &Syscall::sys_pager_abort,
             &Syscall::sys_pager_unregister,
+            &Syscall::sys_send_fast,
+            &Syscall::sys_recv_fast,
+            &Syscall::sys_send_sync_fast,
     };
 };
 

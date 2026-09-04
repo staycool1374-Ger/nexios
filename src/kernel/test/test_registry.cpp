@@ -190,6 +190,7 @@ void register_fpu_inv_tests();
 void register_cap_shm_tests();
 void register_cap_death_tests();
 void register_cap_pager_tests();
+void register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -360,6 +361,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- cap_pager: external pager protocol (issue #107) --
     {"cap_pager", []() { register_cap_pager_tests(); }},
+
+    // -- ipc_fastpath: in-register IPC fastpath (issue #11) --
+    {"ipc_fastpath", []() { register_ipc_fastpath_tests(); }},
 
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
@@ -662,6 +666,7 @@ static void register_all_tests() {
     register_cap_shm_tests();
     register_cap_death_tests();
     register_cap_pager_tests();
+    register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif
@@ -816,6 +821,7 @@ static void register_all_tests_second_half() {
     register_cap_shm_tests();
     register_cap_death_tests();
     register_cap_pager_tests();
+    register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_AARCH64)
      register_aarch64_tests();
 #endif

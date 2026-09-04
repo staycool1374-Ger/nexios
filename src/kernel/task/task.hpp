@@ -48,6 +48,12 @@ static constexpr size_t IPC_MAX_MSG_SIZE = CONFIG_IPC_MAX_MSG_SIZE;
 static constexpr size_t IPC_MAX_QUEUE_MSG = CONFIG_IPC_MAX_QUEUE_MSG;
 /// @brief Number of priority levels (0 = highest urgency).
 static constexpr size_t IPC_PRIORITY_LEVELS = CONFIG_IPC_PRIORITY_LEVELS;
+/// @brief Register-payload budget for the in-register IPC fastpath (issue #11).
+static constexpr size_t IPC_FAST_PAYLOAD_BYTES =
+    CONFIG_IPC_FAST_PAYLOAD_BYTES;
+/// The register budget must fit the message payload (design paper #11 §3.8).
+static_assert(IPC_FAST_PAYLOAD_BYTES <= IPC_MAX_MSG_SIZE,
+              "IPC fastpath register budget must fit the message payload");
 
 /// @brief A single IPC message with sender ID, type, priority, and payload.
 struct Message {
@@ -85,6 +91,11 @@ struct MessageQueue {
     void init();
     bool push(const Message &msg);
     bool pop(Message &msg);
+    /// @brief Pop the highest-priority message only if it fits @p max_size.
+    ///        Fail-closed for the IPC fastpath (issue #11, paper §3.9):
+    ///        an oversized best match is NOT removed (returns false).
+    ///        Callers disambiguate empty-vs-oversized with is_empty().
+    bool pop_clamped(Message &msg, uint32_t max_size);
 
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
@@ -98,6 +109,16 @@ struct MessageQueue {
     }
 
     size_t highest_priority() const;
+
+  private:
+    /// @brief Index of the highest-priority message (FIFO within a priority).
+    ///        Caller MUST hold lock_.  Returns IPC_MAX_QUEUE_MSG when empty.
+    ///        Shared by pop() and pop_clamped() so the selection never drifts
+    ///        (INV-P, paper §3.9).
+    size_t find_best_index() const;
+    /// @brief Remove the message at @p best_idx (compaction + prio_bitmap
+    ///        rebuild).  Caller MUST hold lock_.
+    void remove_at(size_t best_idx);
 };
 
 namespace sync {

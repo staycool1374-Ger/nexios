@@ -142,7 +142,8 @@ int syscall_path_open(const char *path, uint64_t flags) {
     // user memory, so there is nothing for the canary to protect.  FULL-path
     // syscalls keep the canary verify (see canary_check_on_full_path below).
     // Bounds are already checked above — exactly one check before indexing.
-    if (s_fastpath_enabled_ && (SYSCALL_FAST_MASK & (1ULL << number)))
+    if (s_fastpath_enabled_ &&
+        (SYSCALL_FAST_MASK & ((__uint128_t)1 << number)))
         return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 
     // FULL path: MP-3 canary verify of user segments (page-table reads, no

@@ -97,15 +97,9 @@ bool MessageQueue::push(const Message &msg) {
     return true;
 }
 
-/// @brief Remove the highest-priority message (FIFO within same priority).
-/// @return true if a message was dequeued.
-bool MessageQueue::pop(Message &out) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
-    if (is_empty())
-        return false;
-
-    // Find message with highest priority (lowest priority number).
-    // For same-priority messages, scan from head to preserve FIFO order.
+/// @brief Index of the highest-priority message (FIFO within a priority).
+/// @return IPC_MAX_QUEUE_MSG when empty.  Caller MUST hold lock_.
+size_t MessageQueue::find_best_index() const {
     size_t best_prio = IPC_PRIORITY_LEVELS + 1;
     size_t best_idx = IPC_MAX_QUEUE_MSG;
     for (size_t i = 0; i < count; ++i) {
@@ -117,13 +111,12 @@ bool MessageQueue::pop(Message &out) {
                 break;
         }
     }
-    if (best_idx >= IPC_MAX_QUEUE_MSG)
-        return false;
+    return best_idx;
+}
 
-    out = msgs[best_idx];
-
-    // Compact: remove the gap by either advancing head (if best_idx == head)
-    // or shifting trailing entries left by one.
+/// @brief Remove the message at @p best_idx (compaction + prio_bitmap
+///        rebuild).  Caller MUST hold lock_.
+void MessageQueue::remove_at(size_t best_idx) {
     if (best_idx == head) {
         head = (head + 1) % IPC_MAX_QUEUE_MSG;
     } else {
@@ -152,7 +145,41 @@ bool MessageQueue::pop(Message &out) {
         size_t idx = (head + i) % IPC_MAX_QUEUE_MSG;
         prio_bitmap |= (1ULL << msgs[idx].priority);
     }
+}
 
+/// @brief Remove the highest-priority message (FIFO within same priority).
+/// @return true if a message was dequeued.
+bool MessageQueue::pop(Message &out) {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (is_empty())
+        return false;
+
+    size_t best_idx = find_best_index();
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+
+    out = msgs[best_idx];
+    remove_at(best_idx);
+    return true;
+}
+
+/// @brief Remove the highest-priority message only if it fits @p max_size.
+/// @return true if a fitting message was dequeued; false if the queue is
+///         empty OR the best match is oversized (NOT removed — fail-closed,
+///         issue #11 paper §3.9).  Callers disambiguate with is_empty().
+bool MessageQueue::pop_clamped(Message &msg, uint32_t max_size) {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    if (is_empty())
+        return false;
+
+    size_t best_idx = find_best_index();
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+    if (msgs[best_idx].data_size > max_size)
+        return false;
+
+    msg = msgs[best_idx];
+    remove_at(best_idx);
     return true;
 }
 
@@ -365,7 +392,8 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) {
 }
 
 /// @brief Send and block until a reply arrives (client-side synchronous IPC).
-bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
+bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
+                    uint32_t reply_max_size) {
     // Send the request message
     if (!send(dest_id, msg))
         return false;
@@ -418,6 +446,11 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply) {
         cur->remaining_ticks = cur->period_ticks;
     }
 
+    // Issue #11 fastpath: a non-zero reply clamp means an oversized reply is
+    // NOT consumed (stays queued for a later full RECEIVE).  Default 0 keeps
+    // the v1 full-path contract (consume any reply).
+    if (reply_max_size != 0)
+        return cur->msg_queue.pop_clamped(reply, reply_max_size);
     return cur->msg_queue.pop(reply);
 }
 
