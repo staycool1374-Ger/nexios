@@ -191,6 +191,18 @@ void register_cap_shm_tests();
 void register_cap_death_tests();
 void register_cap_pager_tests();
 void register_ipc_fastpath_tests();
+void register_rtc_datetime_tests();
+void register_keyboard_decode_tests();
+void register_gdt_layout_tests();
+void register_initrd_parser_tests();
+void register_serial_logic_tests();
+void register_vfs_procfs_tests();
+void register_vfs_tmpfs_corrupt_tests();
+void register_pipe_blocking_tests();
+void register_virtio_blk_req_tests();
+void register_ahci_deep_tests();
+void register_ahci_live_tests();
+void register_acpi_parse_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 #endif
@@ -312,6 +324,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_fpu_xmm_all_tests();
      }},
     {"task_init", []() { register_init_tests(); }},
+
+    // -- initrd_parser: cpio-newc archive parser (issue #112) --
+    {"initrd_parser", []() { register_initrd_parser_tests(); }},
     {"task_tcb_log", []() { register_tcb_write_log_tests(); }},
 
     // -- fpu_invariants: FPU/SIMD context invariants (issue #93) --
@@ -365,6 +380,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- ipc_fastpath: in-register IPC fastpath (issue #11) --
     {"ipc_fastpath", []() { register_ipc_fastpath_tests(); }},
 
+    // -- ipc_pipe_blocking: pipe blocking semantics (issue #111) --
+    {"ipc_pipe_blocking", []() { register_pipe_blocking_tests(); }},
+
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
     {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
@@ -384,6 +402,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"vfs_fstab", []() { register_fstab_tests(); }},
     {"vfs_fat32", []() { register_fat32_tests(); }},
     {"vfs_fat32_integration", []() { register_vfs_fat32_tests(); }},
+
+    // -- vfs_procfs: /proc filesystem nodes (issue #109) --
+    {"vfs_procfs", []() { register_vfs_procfs_tests(); }},
+
+    // -- vfs_tmpfs_corrupt: tmpfs corruption/timeout analogue (issue #114) --
+    {"vfs_tmpfs_corrupt", []() { register_vfs_tmpfs_corrupt_tests(); }},
 
     // -- servers: user-space daemons --
     {"servers_vfsd", []() { register_vfsd_tests(); }},
@@ -437,6 +461,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_timer", []() { register_timer_tests(); }},
     {"hal_apic", []() { register_apic_timer_tests(); }},
     {"hal_rtc", []() { register_rtc_tests(); }},
+    {"hal_rtc_datetime", []() { register_rtc_datetime_tests(); }},
+    {"hal_keyboard_decode", []() { register_keyboard_decode_tests(); }},
+    {"hal_gdt_layout", []() { register_gdt_layout_tests(); }},
+    {"hal_serial_logic", []() { register_serial_logic_tests(); }},
+    {"acpi_parse", []() { register_acpi_parse_tests(); }},
 
     // -- drivers: device driver framework and controllers --
     {"drivers_core", []() { register_driver_tests(); }},
@@ -444,6 +473,18 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"drivers_pci", []() { register_pci_tests(); }},
     {"drivers_virtio", []() { register_virtio_tests(); }},
     {"drivers_dma", []() { register_dma_tests(); }},
+
+    // -- drivers_virtio_blk_req: virtio-blk request path (issue #117) --
+    {"drivers_virtio_blk_req", []() { register_virtio_blk_req_tests(); }},
+
+    // -- drivers_ahci_deep: AHCI protocol contracts (issue #108) --
+    {"drivers_ahci_deep", []() { register_ahci_deep_tests(); }},
+
+    // -- ahci_live: real AHCI command path on the q35+ICH9 variant --
+    //    NOT part of `all` — requires the q35+OVMF+ide-hd QEMU variant
+    //    (`make execute-test x86_64 debug ahci_live`); on the default pc
+    //    machine there is no AHCI controller.
+    {"ahci_live", []() { register_ahci_live_tests(); }},
 
     // -- network: pure protocol primitives --
     {"network_core", []() { register_net_tests(); }},
@@ -549,6 +590,7 @@ static void register_all_tests() {
     register_sync_block_pattern_tests();
     register_spinlock_tests();
     register_task_lifecycle_tests();
+    register_initrd_parser_tests();
     register_idle_task_tests();
     register_zombie_cleanup_tests();
     register_wcet_cleanup_tests();
@@ -562,22 +604,23 @@ static void register_all_tests() {
     register_idt_tests();
     register_exc_table_tests();
     register_pipe_tests();
-     register_gcov_tests();
-     register_debug_tests();
-     register_framebuffer_tests();
+    register_pipe_blocking_tests();
+    register_gcov_tests();
+    register_debug_tests();
+    register_framebuffer_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
-     register_preemption_under_syscall_tests();
+    register_preemption_under_syscall_tests();
 #endif
-     register_spinlock_stress_tests();
+    register_spinlock_stress_tests();
     register_atomic_context_switch_tests();
     register_bench_syscall_latency_tests();
-     register_bench_irq_latency_tests();
-     register_starvation_deadlock_tests();
+    register_bench_irq_latency_tests();
+    register_starvation_deadlock_tests();
 
-     // v0.3.4 tests
-     register_apic_timer_tests();
-     register_jitter_tests();
-     register_deadline_miss_tests();
+    // v0.3.4 tests
+    register_apic_timer_tests();
+    register_jitter_tests();
+    register_deadline_miss_tests();
     register_wcet_overrun_tests();
     register_ss_deadline_tests();
     register_deadline_recovery_tests();
@@ -602,11 +645,13 @@ static void register_all_tests() {
     register_resource_exhaustion_tests();
     register_block_device_tests();
     register_fat32_tests();
-     register_vfs_fat32_tests();
+    register_vfs_fat32_tests();
+    register_vfs_procfs_tests();
+    register_vfs_tmpfs_corrupt_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
-     register_ipc_blocking_tests();
+    register_ipc_blocking_tests();
 #endif
-     register_ipc_lock_free_tests();
+    register_ipc_lock_free_tests();
     register_vfsd_authorization_tests();
     register_textutils_tests();
     register_shell_interaction_tests();
@@ -617,12 +662,19 @@ static void register_all_tests() {
     register_dmesg_tests();
     register_daemon_restart_crash_tests();
     register_hal_tests();
+    register_rtc_datetime_tests();
+    register_keyboard_decode_tests();
+    register_gdt_layout_tests();
+    register_serial_logic_tests();
+    register_acpi_parse_tests();
     register_buildsystem_tests();
     register_config_checks_tests();
     register_secure_exec_tests();
     register_pci_tests();
     register_virtio_tests();
+    register_virtio_blk_req_tests();
     register_dma_tests();
+    register_ahci_deep_tests();
     register_net_tests();
     register_ipc_benchmark_tests();
     register_microkernel_transition_tests();

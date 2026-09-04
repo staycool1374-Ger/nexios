@@ -290,6 +290,34 @@ QEMU_FLAGS := -cdrom $(DEBUG_ISO) -m 256M \
                 -device intel-iommu,intremap=off,dma-translation=on
 endif
 
+# Real AHCI test variant (issue #108): class=ahci_live boots the kernel on
+# the q35 machine, whose ICH9 south bridge exposes a real emulated AHCI
+# controller (PCI class 01:06) with a scratch raw disk attached to the AHCI
+# bus — AhciDriver::probe() drives the genuine command path (FIS build,
+# PRD DMA, CI issue, completion poll) against emulated hardware.  UEFI via
+# OVMF (same reason as iommu_live: the ISO is UEFI-only El Torito).  The
+# scratch image is zeroed on demand; it is NOT the FAT32 disk, so the boot
+# FAT32 mount fails gracefully (disk-free boot path like iommu_live).
+AHCI_SCRATCH_IMG := build/ahci_scratch.img
+ifeq ($(CLASS),ahci_live)
+$(AHCI_SCRATCH_IMG):
+	@mkdir -p $(dir $@)
+	@dd if=/dev/zero of=$@ bs=1M count=64 status=none
+# Build the scratch disk as part of the debug build when this class runs.
+debug: $(AHCI_SCRATCH_IMG)
+QEMU_FLAGS := -m 256M \
+                -chardev stdio,id=dbg,mux=on \
+                -serial chardev:dbg -device isa-debugcon,chardev=dbg \
+                -mon chardev=dbg \
+                -machine q35,sata=off -cpu max \
+                -drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+                -device ich9-ahci,id=ahci0 \
+                -drive file=$(DEBUG_ISO),if=none,id=ahci_cd,media=cdrom,readonly=on \
+                -device ide-cd,drive=ahci_cd,bus=ahci0.0,unit=0 \
+                -drive file=$(AHCI_SCRATCH_IMG),if=none,id=ahci_scratch,format=raw \
+                -device ide-hd,drive=ahci_scratch,bus=ahci0.1,unit=0
+endif
+
 # Deterministic real-time measurement (issue #101): the stress_hrt / hrt
 # classes measure hard-RT latency with RELATIVE bounds (stress vs a measured
 # baseline), which are valid under standard TCG timing.  The issue's requested

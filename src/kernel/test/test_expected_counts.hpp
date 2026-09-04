@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1086,   0,       0      },  // measured: 1072 + ipc_fastpath(+14,#11) → 1086
+    {"all",                1162,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -98,6 +98,18 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
     {"cap_pager",             13,   0,       0      },  // external pager protocol (issue #107): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
+    {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics (issue #111): reader wake, full-pipe partial write, write-close EOF, read-close EPIPE, two-reader order, closed-end errors
+    {"vfs_procfs",             9,   0,       0      },  // procfs nodes (issue #109): root dir, readdir static/pid, meminfo format, pci, self stat, pid dir close, unknown reject, dir read
+    {"vfs_tmpfs_corrupt",      7,   0,       0      },  // tmpfs corrupt/timeout analogue (issue #114): duplicates, missing unlink, non-empty dir, oversize, stale recycle, fragmentation, concurrent
+    {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
+    {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush
+    {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
+    {"hal_serial_logic",       6,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar
+    {"acpi_parse",             3,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity
+    {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
+    {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
+    {"ahci_live",              3,   0,       0      },  // real AHCI command path on q35+ICH9 variant (issue #108): probe, roundtrip, isolation — NOT in all
+    {"initrd_parser",          9,   0,       0      },  // cpio-newc parser (issue #112): find dotted/missing, corrupt magic, truncation, trailer, readdir order, normalization, zero-length, restore
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
