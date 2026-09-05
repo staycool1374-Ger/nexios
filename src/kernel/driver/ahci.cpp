@@ -621,18 +621,19 @@ bool AhciDriver::init() {
 }
 
 AhciDriver *AhciDriver::probe() {
-#ifndef __clang__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
-#endif
-    auto *drv_mem = kernel::MemPool::alloc(sizeof(AhciDriver));
-    if (!drv_mem) return nullptr;
+    // AhciDriver is too large for MemPool (16176 bytes > 8192 max pool class).
+    // Allocate from PMM instead (16176 bytes = 4 pages).
+    constexpr size_t kDriverSize = sizeof(AhciDriver);
+    constexpr size_t kDriverPages = (kDriverSize + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    uint64_t phys = PMM::alloc_contiguous(kDriverPages);
+    if (phys == 0)
+        return nullptr;
+    void *drv_mem = reinterpret_cast<void *>(phys + arch::HHDM_OFFSET);
     auto *drv = new (drv_mem) AhciDriver();
-#ifndef __clang__
-#pragma GCC diagnostic pop
-#endif
     if (!drv || !drv->init()) {
-        drv->~AhciDriver(); kernel::MemPool::free(drv);
+        drv->~AhciDriver();
+        for (size_t i = 0; i < kDriverPages; ++i)
+            PMM::free_page(phys + i * arch::PAGE_SIZE);
         return nullptr;
     }
     return drv;
