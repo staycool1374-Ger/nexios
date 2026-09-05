@@ -245,7 +245,7 @@ QEMU_NET       := -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disabl
 # parses the combined stream for the TEST SUMMARY.
 QEMU_FLAGS     = -cdrom $(DEBUG_ISO) -m 256M \
                 -chardev stdio,id=dbg,mux=on \
-                -serial chardev:dbg -device isa-debugcon,chardev=dbg -mon chardev=dbg \
+                -serial chardev:dbg -device isa-debugcon,chardev=dbg -monitor chardev:dbg \
                 $(QEMU_NET) $(QEMU_ARCH_FLAGS)
 
 # v0.4.0 MP-4: x86_64 needs SMEP (CR4 bit 20) for the SMEP tests; QEMU's
@@ -628,7 +628,7 @@ profiling: CXX := x86_64-elf-g++
 profiling: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
                        -Wno-type-limits -Wno-unused-but-set-variable \
                        -Wno-class-memaccess \
-                       -finstrument-functions -DCONFIG_PROFILING
+                       -finstrument-functions -DCONFIG_PROFILING -DCONFIG_DEBUG
 profiling: LDFLAGS += -L $(GCOV_LIB_DIR)
 profiling: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profiling)'
@@ -645,6 +645,38 @@ profiling: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/
 	    tee build/profiling/qemu.log
 	@printf '  %-7s %s\n' 'PROFILE' 'Extracting coverage data…'
 	python3 tools/extract_gcda.py build/profiling/gcda.raw
+endif
+
+# ------------------------------------------------------------------------------
+# Sampling-based profiling (lightweight, no instrumentation overhead)
+# Usage: make profile-class CLASS=safe
+# ------------------------------------------------------------------------------
+ifneq ($(ARCH),x86_64)
+profile-class:
+	@printf '  %-7s %s\n' 'ERROR' 'Sampling profiling only supported on x86_64 (arch=$(ARCH))'; exit 1
+else
+profile-class: CXX := x86_64-elf-g++
+profile-class: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
+                       -Wno-type-limits -Wno-unused-but-set-variable \
+                       -Wno-class-memaccess \
+                       -DCONFIG_DEBUG
+profile-class: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
+	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profile-class)'
+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
+	cp $(KERNEL) iso/boot/kernel.elf
+	@printf '  %-7s %s\n' 'ISO' '$(DEBUG_ISO)'
+	@mkdir -p $(dir $(DEBUG_ISO))
+	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
+	@if [ -z "$(CLASS)" ]; then echo "ERROR: CLASS not set. Usage: make profile-class CLASS=safe"; exit 1; fi
+	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
+	@printf '  %-7s %s\n' 'PROFILE' 'Booting in QEMU for class $(CLASS)…'
+	mkdir -p build/profiling/$(CLASS)
+	$(QEMU_SYSTEM) -cdrom $(DEBUG_ISO) -m 256M -serial file:build/profiling/$(CLASS)/samples.raw \
+	    $(QEMU_NET) -boot order=d -no-reboot -device isa-debug-exit \
+	    -drive if=pflash,format=raw,readonly=on,file=$(QEMU_UEFI) 2>&1 | \
+	    tee build/profiling/$(CLASS)/qemu.log
+	@printf '  %-7s %s\n' 'PROFILE' 'Extracting samples for class $(CLASS)…'
+	python3 tools/extract_samples.py build/profiling/$(CLASS)/samples.raw build/profiling/$(CLASS)
 endif
 
 # ------------------------------------------------------------------------------

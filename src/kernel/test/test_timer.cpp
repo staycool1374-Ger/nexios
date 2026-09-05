@@ -76,9 +76,9 @@ JARVIS_TEST(pit_irq0_handler_increments_ticks, "PRE: iocd | POST: none") {
     arch::IrqGuard guard;
     arch::Timer::set_ticks_for_test(0);
     JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::ticks());
-    arch::Timer::handle_irq();
+    arch::Timer::handle_irq(0);
     JARVIS_ASSERT_EQ((uint64_t)1, arch::Timer::ticks());
-    arch::Timer::handle_irq();
+    arch::Timer::handle_irq(0);
     JARVIS_ASSERT_EQ((uint64_t)2, arch::Timer::ticks());
     JARVIS_TEST_PASS();
 }

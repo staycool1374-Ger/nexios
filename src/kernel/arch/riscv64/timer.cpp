@@ -76,7 +76,8 @@ uint64_t Timer::ns() {
 }
 
 /// @brief Handle a timer interrupt: increment tick count and re-arm via SBI.
-void Timer::handle_irq() {
+/// @param ip Instruction pointer from interrupt frame.
+void Timer::handle_irq(uint64_t ip) {
     ticks_ = ticks_ + 1;
     // Re-arm timer via SBI
     uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);

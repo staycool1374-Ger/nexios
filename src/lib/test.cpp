@@ -35,6 +35,10 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/timer.hpp>
 
+#ifdef CONFIG_PROFILING
+extern "C" void gcov_flush_to_serial();
+#endif
+
 namespace kernel {
 namespace test {
 
@@ -545,6 +549,11 @@ void run_release() {
     arch::io_wait();
     arch::outw(arch::QEMU_SHUTDOWN_PORT, 0x2000);
     arch::io_wait();
+    
+#ifdef CONFIG_PROFILING
+    gcov_flush_to_serial();
+#endif
+    
     arch::qemu_debug_exit(static_cast<uint8_t>(result));
     arch::io_wait();
     // Keyboard controller reset (triple fault -> QEMU exit with -no-reboot)

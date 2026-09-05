@@ -31,6 +31,7 @@
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/serial.hpp>
+#include <kernel/profiling/sampler.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -927,6 +928,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         }
     }
 #endif
+
+    // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
+    kernel::profiling::Sampler::init();
+    kernel::profiling::Sampler::set_sample_rate(10); // Sample every 10 ticks
+    kernel::profiling::Sampler::set_enabled(true);
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
 

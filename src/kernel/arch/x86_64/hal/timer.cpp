@@ -26,6 +26,7 @@
 #include <kernel/arch/apic.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/idt.hpp>
+#include <kernel/profiling/sampler.hpp>
 
 namespace arch {
 
@@ -43,13 +44,13 @@ void Timer::init(uint32_t frequency_hz) {
     // across QEMU/hardware, and is independent of the tick source).
     calibrate_tsc(frequency_hz);
 
-#if CONFIG_USE_APIC_TIMER
+    #if CONFIG_USE_APIC_TIMER
     if (arch::APIC::is_enabled()) {
         // Register the tick handler at the dedicated APIC timer vector.
         // The handler increments ticks and calls the scheduler.
         IDT::register_handler_raw(APIC::APIC_TIMER_VECTOR,
-                                  [](uint64_t, uint64_t, uint64_t) {
-                                      handle_irq();
+                                  [](uint64_t, uint64_t, uint64_t rip) {
+                                      handle_irq(rip);
                                       kernel::Scheduler::on_tick();
                                       // Re-arm TSC-deadline for next tick
                                       if (arch::APIC::is_timer_active())
@@ -69,8 +70,8 @@ void Timer::init(uint32_t frequency_hz) {
     // Legacy PIT timer
     set_frequency(frequency_hz);
     IDT::register_handler(InterruptVector::TIMER,
-                          [](uint64_t, uint64_t, uint64_t) {
-                              handle_irq();
+                          [](uint64_t, uint64_t, uint64_t rip) {
+                              handle_irq(rip);
                               kernel::Scheduler::on_tick();
                           });
 }
@@ -93,8 +94,10 @@ uint64_t Timer::ticks() {
 }
 
 /// @brief PIT IRQ handler — increments the tick counter.
-void Timer::handle_irq() {
+/// @param ip Instruction pointer from interrupt frame (RIP on x86_64).
+void Timer::handle_irq(uint64_t ip) {
     __atomic_fetch_add(&ticks_, 1UL, __ATOMIC_RELAXED);
+    kernel::profiling::Sampler::record_sample(ip);
 }
 
 /// @brief Calibrate the TSC frequency using the PIT as a reference.

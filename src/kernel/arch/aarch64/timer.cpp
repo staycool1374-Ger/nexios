@@ -37,8 +37,8 @@ uint32_t Timer::tick_interval_ = 0;
 void Timer::init(uint32_t frequency_hz) {
     set_frequency(frequency_hz);
     IDT::register_handler(InterruptVector::TIMER,
-                          [](uint64_t, uint64_t, uint64_t) {
-                              handle_irq();
+                          [](uint64_t, uint64_t, uint64_t rip) {
+                              handle_irq(rip);
                               kernel::Scheduler::on_tick();
                           });
 }
@@ -78,7 +78,9 @@ uint64_t Timer::ns() {
 /// @brief Handle a timer interrupt: increment tick count and re-arm the timer.
 /// The compare value must be pushed into the future again, otherwise the
 /// level-asserted interrupt re-pends immediately after EOI (IRQ storm).
-void Timer::handle_irq() {
+/// @param ip Instruction pointer from interrupt frame.
+void Timer::handle_irq(uint64_t ip) {
+    (void)ip;
     ticks_ = ticks_ + 1;
     uint64_t interval = tick_interval_;
     if (interval == 0) {

@@ -50,7 +50,8 @@ class Timer {
     /// @param frequency_hz New tick rate in Hz.
     static void set_frequency(uint32_t frequency_hz);
     /// @brief Handle a timer interrupt (increment tick count).
-    static void handle_irq();
+    /// @param ip Instruction pointer from interrupt frame (RIP on x86_64).
+    static void handle_irq(uint64_t ip);
     /// @brief Override the tick count (test support).
     /// @param value New tick value.
     static void set_ticks_for_test(uint64_t value);
@@ -93,7 +94,8 @@ class Timer {
     /// @brief Change the tick frequency at runtime.
     static void set_frequency(uint32_t frequency_hz);
     /// @brief Handle a timer interrupt.
-    static void handle_irq();
+    /// @param ip Instruction pointer from interrupt frame.
+    static void handle_irq(uint64_t ip);
     /// @brief Override the tick count (test support).
     static void set_ticks_for_test(uint64_t value);
 
@@ -129,7 +131,8 @@ class Timer {
     /// @brief Change the tick frequency at runtime.
     static void set_frequency(uint32_t frequency_hz);
     /// @brief Handle a timer interrupt.
-    static void handle_irq();
+    /// @param ip Instruction pointer from interrupt frame.
+    static void handle_irq(uint64_t ip);
     /// @brief Override the tick count (test support).
     static void set_ticks_for_test(uint64_t value);
 
