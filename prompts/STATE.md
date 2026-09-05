@@ -94,7 +94,7 @@
 - GIC test: verify via ISENABLER (ICENABLER read-back unreliable on QEMU GICv2); DTB test: HHDM deref + tolerate absent DTB (QEMU non-Linux `-kernel` provides none), fallback memory region recorded in boot_info.
 
 ### Next Move
-- **Next selection:** #85 (v0.4.x SMP test-coverage checklist, testbed) or the v0.4.4 milestone (#94/#95 per-cpu-smp / elf-shared-libs design papers).
+- **Next selection:** #95 (elf-shared-libs design paper) or #85 (v0.4.x SMP test-coverage checklist, testbed).
 - **MSI-X follow-ups (after #10):** user-facing PCI-delegation create syscall (SYS_MSIX_CREATE from a BDF) for Ring-3 drivers; VT-d interrupt remapping (IRTE encoding) so MSI-X messages route through the IOMMU under `intremap=on` (currently `intremap=off` in the iommu_live variant); per-entry mask re-read in `entry_masked()` is already table-backed. See docs/specs/cspace.md §2.6 + iommu.md §8.
 - **IOMMU phase-2 (follow-up to #4):** live VT-d — ACPI/DMAR discovery, GCMD/IRTA/RTA programming, IOTLB flush, fault-event handling, kernel-DMA domain, QEMU `-device intel-iommu` integration; then AMD-Vi/SMMU backends behind the same IoMmuManager interface (docs/specs/iommu.md §8). Also: reclaim the per-bus ctx-table slot in clear_attachment + bidirectional static_assert (S3 notes).
 - **aarch64 PAN runtime:** arch_aarch64 class green 22/22 on cortex-a72 (PAN unsupported — degraded mode). PAN-capable CPU model (e.g. `-cpu max`/neoverse) would enable the real PAN path.
@@ -145,4 +145,5 @@
 - docs/specs/drivers.md: FLAW-06 ledger BOUNDED.
 - Makefile/mk/rules.mk/tools/gen_test_registry.py: multi-arch portability (from #99).
 - src/kernel/core/global_state.{hpp,cpp}: single definition point for all cross-TU kernel globals (7-phase refactor).
+- src/kernel/arch/x86_64/hal/percpu.{hpp,cpp}: Per-CPU state block (4 KiB page per CPU, GS_BASE), isr_nesting_depth/irq_entry_tsc/fpu_owner/current_task migration, percpu_init_bsp/ap, CONFIG_MAX_CPUS=1 default.
 - BUGS.md: elf_loader H2-family flake logged (2026-08-14).
