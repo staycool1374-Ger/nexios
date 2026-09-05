@@ -89,7 +89,7 @@ other. NexIOS takes the operating-system path:
   O(1) scheduling decisions, RAII-enforced interrupt windows (`IrqGuard`).
 - **AI-orchestrated development process** — every change passes a mandatory
   three-agent pipeline (planner → developer → independent SIL 3 auditor) with
-  diff-based audits, in-kernel regression gates (873 debug / 84 release tests),
+  diff-based audits, in-kernel regression gates,
   and full audit-trail documentation. NexIOS doubles as a long-running case
   study: how far can structured LLM orchestration go in building a
   safety-critical system?
