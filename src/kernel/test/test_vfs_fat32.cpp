@@ -23,7 +23,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-null-argument"
 #pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
+#if __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wanalyzer-undefined-behavior-ptrdiff"
+#endif
 #endif
 
 #include <test.hpp>

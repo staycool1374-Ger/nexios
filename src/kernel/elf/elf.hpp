@@ -19,12 +19,13 @@
  */
 
 /// @file elf.hpp
-/// @brief ELF64 binary loader — validate, load, exec.
+/// @brief ELF64 binary loader — validate, load, exec, shared-object support.
 
 #pragma once
 
 #include <types.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/elf/elf_shared.hpp>
 
 namespace kernel {
 namespace elf {
@@ -134,6 +135,39 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
 bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
                        const char *const *argv, const char *const *envp,
                        uint64_t *regs, uint64_t file_size = 0);
+
+/// @brief Load a shared object (.so) into the current task's address space.
+///        Returns the load base address, or 0 on failure.
+/// @param soname The shared object name (e.g. "libc.so").
+/// @param pml4 The task's PML4 to map the library into.
+/// @param[out] out_load_base Base address where the library was mapped.
+/// @return true on success.
+bool load_shared_object(const char *soname, uint64_t pml4,
+                        uint64_t *out_load_base);
+
+/// @brief Resolve DT_NEEDED dependencies for an ELF binary, loading each
+///        required shared object recursively.
+/// @param hdr The main executable's ELF header (must have PT_DYNAMIC).
+/// @param file_data Raw file data of the main executable.
+/// @param file_size Size of the file data.
+/// @param pml4 The task PML4 to map libraries into.
+/// @param load_base Base load address of the main executable.
+/// @return true on success, false on failure (missing lib, cycle, etc.).
+bool resolve_dependencies(const ELF64Header *hdr, const uint8_t *file_data,
+                          uint64_t file_size, uint64_t pml4,
+                          uint64_t load_base);
+
+/// @brief Apply relocations for a loaded shared object.
+/// @param phdr The PT_LOAD program header for the library.
+/// @param dyn The PT_DYNAMIC program header for the library.
+/// @param load_base Base address where the library was mapped.
+/// @param pml4 The task PML4.
+/// @param soname Library soname (for error reporting).
+/// @return true on success.
+bool apply_relocations(const ELF64ProgramHeader *phdr,
+                       const ELF64ProgramHeader *dyn,
+                       uint64_t load_base, uint64_t pml4,
+                       const char *soname);
 
 } // namespace elf
 } // namespace kernel
