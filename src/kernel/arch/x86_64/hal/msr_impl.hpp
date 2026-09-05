@@ -54,6 +54,8 @@ inline constexpr uint32_t IA32_STAR = 0xC0000081;
 inline constexpr uint32_t IA32_LSTAR = 0xC0000082;
 /// @brief IA32_FMASK MSR — RFLAGS mask cleared on SYSCALL entry (0xC0000084).
 inline constexpr uint32_t IA32_FMASK = 0xC0000084;
+/// @brief IA32_GS_BASE MSR — GS base address for user-mode (0xC0000101).
+inline constexpr uint32_t MSR_GS_BASE = 0xC0000101;
 
 } // namespace arch
 // NOLINTEND(bugprone-narrowing-conversions)
