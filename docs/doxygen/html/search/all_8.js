@@ -18,7 +18,7 @@ var searchData=
   ['handle_5fslot_15',['handle_slot',['../namespacekernel_1_1cap.html#a56523952ffab65cb3f5413884b5b2711',1,'kernel::cap']]],
   ['has_5fpriority_16',['has_priority',['../classkernel_1_1_all_tasks_registry.html#a294176c2a3a6878efb176a9b2b8b818a',1,'kernel::AllTasksRegistry']]],
   ['has_5fready_17',['has_ready',['../classkernel_1_1_ready_queue_manager.html#ad9860837c2ece684ae95b9de3727a584',1,'kernel::ReadyQueueManager']]],
-  ['head_18',['head',['../classkernel_1_1_all_tasks_registry.html#ab7329259334f17a70fc386b1e2943485',1,'kernel::AllTasksRegistry::head()'],['../classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b',1,'kernel::TaskQueue::head()'],['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel::head']]],
+  ['head_18',['head',['../structkernel_1_1shm_1_1_shared_ring_header.html#a1425bcad949cab726170a06f88378859',1,'kernel::shm::SharedRingHeader::head'],['../classkernel_1_1_all_tasks_registry.html#ab7329259334f17a70fc386b1e2943485',1,'kernel::AllTasksRegistry::head()'],['../classkernel_1_1_task_queue.html#ac679ad082b6979eb92d7605573caa40b',1,'kernel::TaskQueue::head()'],['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel::head']]],
   ['head_5findex_19',['head_index',['../classkernel_1_1log_1_1_dmesg_service.html#aadb7f64506129b725cb7bd1968b0b539',1,'kernel::log::DmesgService']]],
   ['heads_5f_20',['heads_',['../namespacekernel.html#afdea84e7e6716009ab17af4b202b8271',1,'kernel']]],
   ['heap_5fsize_21',['HEAP_SIZE',['../namespacemem.html#a8e71bca99a7bdd8712f80891bcbee986',1,'mem']]],

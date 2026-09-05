@@ -4,6 +4,7 @@ var namespacekernel_1_1cap =
     [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
     [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
     [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+    [ "FrameUserMap", "classkernel_1_1cap_1_1_frame_user_map.html", null ],
     [ "IoMmuDmaCap", "classkernel_1_1cap_1_1_io_mmu_dma_cap.html", "classkernel_1_1cap_1_1_io_mmu_dma_cap" ],
     [ "IrqCap", "classkernel_1_1cap_1_1_irq_cap.html", "classkernel_1_1cap_1_1_irq_cap" ],
     [ "MmioCap", "classkernel_1_1cap_1_1_mmio_cap.html", "classkernel_1_1cap_1_1_mmio_cap" ],

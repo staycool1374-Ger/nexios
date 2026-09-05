@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__net_8h
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *tx_buf;</div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> tx_buf_phys;</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span> </div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_size;</div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9">queue_size</a>;</div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> rx_avail_idx;</div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> tx_avail_idx;</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> rx_last_seen_used;</div>
@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__net_8h
 <div class="ttc" id="anamespacekernel_1_1net_html_af8019b1cd8dcf090045eb65e97779e2b"><div class="ttname"><a href="namespacekernel_1_1net.html#af8019b1cd8dcf090045eb65e97779e2b">kernel::net::virtio_net_destroy</a></div><div class="ttdeci">void virtio_net_destroy()</div><div class="ttdef"><b>Definition</b> virtio_net.cpp:363</div></div>
 <div class="ttc" id="anamespacekernel_html_aef2c5f8888b21de09ec3a76f5b964885"><div class="ttname"><a href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((noinline)) static uint64_t bucket_of(const TaskControlBlock *t</div><div class="ttdoc">Find the priority bucket a node currently lives in. A task&#39;s stored t-&gt;priority may have been changed...</div></div>
 <div class="ttc" id="anet_8hpp_html"><div class="ttname"><a href="net_8hpp.html">net.hpp</a></div><div class="ttdoc">Network stack core — NIC interface, packet dispatch.</div></div>
+<div class="ttc" id="atest__virtio__blk__req_8cpp_html_aaa4d2e8d7266d47af455c8340648d3b9"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9">queue_size</a></div><div class="ttdeci">uint16_t queue_size</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:9</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>

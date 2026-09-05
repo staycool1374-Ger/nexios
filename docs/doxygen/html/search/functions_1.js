@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['abort_0',['abort',['../stdlib_8c.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c'],['../stdlib_8h.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c']]],
+  ['abort_0',['abort',['../classkernel_1_1ipc_1_1_pager_registry.html#ad5dc5caaa2e644a7e978c182c3c8a87a',1,'kernel::ipc::PagerRegistry::abort()'],['../stdlib_8c.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c'],['../stdlib_8h.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c']]],
   ['abs_1',['abs',['../stdlib_8c.html#afd4f329c8efb45c0dfff44525047a0fa',1,'abs(int n):&#160;stdlib.c'],['../stdlib_8h.html#afd4f329c8efb45c0dfff44525047a0fa',1,'abs(int n):&#160;stdlib.c']]],
   ['acquire_2',['acquire',['../classkernel_1_1_kernel_object.html#a9b05ebf7eeb2acebab467626da5ef464',1,'kernel::KernelObject']]],
   ['add_5fdir_5fentry_3',['add_dir_entry',['../namespacekernel_1_1fat32.html#aa9f8a2b8e4f80b05086c924c915f3939',1,'kernel::fat32']]],

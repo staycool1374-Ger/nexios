@@ -26,6 +26,7 @@ var global__state_8cpp =
     [ "kernel::gs::try_set_nic", "namespacekernel_1_1gs.html#af7d35e270dec4bdcec35118534857dac", null ],
     [ "kernel::gs::user_access_recover_ip", "namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693", null ],
     [ "deadline_detection_integrity", "global__state_8cpp.html#a836cef767155acb24511242c71a483c2", null ],
+    [ "fpu_nm_depth_max", "global__state_8cpp.html#ac5cd42fea610f44e7de0179a68eaca95", null ],
     [ "fpu_owner", "global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525", null ],
     [ "kernel::g_boot_epoch", "namespacekernel.html#a602102cf72c2d245437f6dfb539c71eb", null ],
     [ "kernel::g_boot_info", "namespacekernel.html#a82642ef1de738764f4ab5b0e505b50ac", null ],

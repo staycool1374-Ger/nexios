@@ -39,5 +39,6 @@ var searchData=
   ['notify_5fdeath_36',['notify_death',['../namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3',1,'kernel::daemon']]],
   ['null_37',['NULL',['../stdlib_8h.html#a070d2ce7b6bb7e5c05602aa8c308d0c4',1,'stdlib.h']]],
   ['null_38',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]],
-  ['nullptr_5ft_39',['nullptr_t',['../types_8hpp.html#afb2c9350d32e78a0e4c960b9859ccb40',1,'types.hpp']]]
+  ['nullptr_5ft_39',['nullptr_t',['../types_8hpp.html#afb2c9350d32e78a0e4c960b9859ccb40',1,'types.hpp']]],
+  ['num_5fqueues_40',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]]
 ];

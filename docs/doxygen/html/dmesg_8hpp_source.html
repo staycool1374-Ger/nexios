@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -556,7 +556,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8hpp_sou
 <div class="line"><a id="l00450" name="l00450"></a><span class="lineno">  450</span> </div>
 <div class="line"><a id="l00451" name="l00451"></a><span class="lineno">  451</span>} <span class="comment">// namespace kernel::log</span></div>
 <div class="ttc" id="aatomic_8hpp_html"><div class="ttname"><a href="atomic_8hpp.html">atomic.hpp</a></div></div>
-<div class="ttc" id="aclasskernel_1_1_scheduler_html_ac094d7e0ec9c48c58637e36fce587be2"><div class="ttname"><a href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler::current_task</a></div><div class="ttdeci">static TaskControlBlock * current_task() noexcept</div><div class="ttdoc">Returns the currently running task (RSP-authoritative).</div><div class="ttdef"><b>Definition</b> scheduler.cpp:866</div></div>
+<div class="ttc" id="aclasskernel_1_1_scheduler_html_ac094d7e0ec9c48c58637e36fce587be2"><div class="ttname"><a href="classkernel_1_1_scheduler.html#ac094d7e0ec9c48c58637e36fce587be2">kernel::Scheduler::current_task</a></div><div class="ttdeci">static TaskControlBlock * current_task() noexcept</div><div class="ttdoc">Returns the currently running task (RSP-authoritative).</div><div class="ttdef"><b>Definition</b> scheduler.cpp:903</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a0387a8f14b7ef2ad6d8e212aebc30e56"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a0387a8f14b7ef2ad6d8e212aebc30e56">kernel::log::DmesgService::pop</a></div><div class="ttdeci">bool pop(LogEntry &amp;entry) noexcept</div><div class="ttdoc">Pop the oldest entry (dmesg_task consumer side).</div><div class="ttdef"><b>Definition</b> dmesg.hpp:109</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a12d6d811e2d671bbb39f5dfae603dd8e"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a12d6d811e2d671bbb39f5dfae603dd8e">kernel::log::DmesgService::clear</a></div><div class="ttdeci">void clear() noexcept</div><div class="ttdoc">Discard all entries.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:119</div></div>
 <div class="ttc" id="aclasskernel_1_1log_1_1_dmesg_service_html_a244e97a7b6fe01688641af008861c395"><div class="ttname"><a href="classkernel_1_1log_1_1_dmesg_service.html#a244e97a7b6fe01688641af008861c395">kernel::log::DmesgService::empty</a></div><div class="ttdeci">bool empty() const noexcept</div><div class="ttdoc">Check whether the buffer is empty.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:124</div></div>
@@ -621,7 +621,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dmesg_8hpp_sou
 <div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
 <div class="ttc" id="anamespacekernel_html_aec37532c2fb1a123d928e41e13297533"><div class="ttname"><a href="namespacekernel.html#aec37532c2fb1a123d928e41e13297533">kernel::head</a></div><div class="ttdeci">const TaskControlBlock * head</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:136</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
-<div class="ttc" id="anexios__config_8h_html_a15f72011bdc6888b3a6aef544acc4604"><div class="ttname"><a href="nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></div><div class="ttdeci">#define CONFIG_DMESG_CAPACITY</div><div class="ttdef"><b>Definition</b> nexios_config.h:271</div></div>
+<div class="ttc" id="anexios__config_8h_html_a15f72011bdc6888b3a6aef544acc4604"><div class="ttname"><a href="nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604">CONFIG_DMESG_CAPACITY</a></div><div class="ttdeci">#define CONFIG_DMESG_CAPACITY</div><div class="ttdef"><b>Definition</b> nexios_config.h:277</div></div>
 <div class="ttc" id="ascheduler_8hpp_html"><div class="ttname"><a href="scheduler_8hpp.html">scheduler.hpp</a></div><div class="ttdoc">Rate-monotonic scheduler for task management and dispatching.</div></div>
 <div class="ttc" id="ascheduler__errors_8hpp_html"><div class="ttname"><a href="scheduler__errors_8hpp.html">scheduler_errors.hpp</a></div><div class="ttdoc">Scheduler error codes and string lookup.</div></div>
 <div class="ttc" id="astructkernel_1_1log_1_1_log_entry_html"><div class="ttname"><a href="structkernel_1_1log_1_1_log_entry.html">kernel::log::LogEntry</a></div><div class="ttdoc">A single dmesg log entry.</div><div class="ttdef"><b>Definition</b> dmesg.hpp:73</div></div>

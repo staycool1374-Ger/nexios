@@ -13,13 +13,13 @@
 
 <p align="center">
   <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
-  <img src="https://img.shields.io/badge/tests-873%20debug%20%7C%2084%20release-2ea44f?style=flat-square" alt="Tests"/>
+  <img src="https://img.shields.io/badge/tests-1147%20debug%20%7C%2085%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
   <img src="https://img.shields.io/badge/arch-x86__64%20%7C%20ARM64%2FRISCV%20planned-1f425f?style=flat-square" alt="x86_64"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.4.2-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.4.3-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.4.2 — User-Space Infrastructure (Untyped allocator, IRQ/MMIO/IOMMU/MSI-X caps, VT-d live DMA protection)
+* **Status:** v0.4.3 — Test-Coverage Completion (1147 debug tests, 85 release tests, AhciDriver PMM alloc, aarch64 build fix)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.

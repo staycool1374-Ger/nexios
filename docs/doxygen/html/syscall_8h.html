@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -203,6 +203,9 @@ Macros</h2></td></tr>
 <tr class="memitem:ac6342053465ca34f0040a81fba783f10" id="r_ac6342053465ca34f0040a81fba783f10"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ac6342053465ca34f0040a81fba783f10">SYS_GETRANDOM</a>&#160;&#160;&#160;47</td></tr>
 <tr class="memitem:aa9dc5b835355b16c7cce2b43e42a4d50" id="r_aa9dc5b835355b16c7cce2b43e42a4d50"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa9dc5b835355b16c7cce2b43e42a4d50">SYS_REBOOT</a>&#160;&#160;&#160;49</td></tr>
 <tr class="memitem:a0ab4c59a00bbb0748e2a79162fd25a0b" id="r_a0ab4c59a00bbb0748e2a79162fd25a0b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0ab4c59a00bbb0748e2a79162fd25a0b">SYS_HALT</a>&#160;&#160;&#160;50</td></tr>
+<tr class="memitem:a68b61781f5ac80afc6091ec39aa96483" id="r_a68b61781f5ac80afc6091ec39aa96483"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a68b61781f5ac80afc6091ec39aa96483">SYS_SEND_FAST</a>&#160;&#160;&#160;74</td></tr>
+<tr class="memitem:ad7695b44543c8bff861cbc4f3045f229" id="r_ad7695b44543c8bff861cbc4f3045f229"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad7695b44543c8bff861cbc4f3045f229">SYS_RECV_FAST</a>&#160;&#160;&#160;75</td></tr>
+<tr class="memitem:a53b3d3a95756b4353c180717e179c14d" id="r_a53b3d3a95756b4353c180717e179c14d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a53b3d3a95756b4353c180717e179c14d">SYS_SEND_SYNC_FAST</a>&#160;&#160;&#160;76</td></tr>
 </table>
 <a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
 <a id="a61de240e040a8e5ce91fd37e71520755" name="a61de240e040a8e5ce91fd37e71520755"></a>
@@ -695,6 +698,20 @@ Macros</h2></td></tr>
 
 </div>
 </div>
+<a id="ad7695b44543c8bff861cbc4f3045f229" name="ad7695b44543c8bff861cbc4f3045f229"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7695b44543c8bff861cbc4f3045f229">&#9670;&#160;</a></span>SYS_RECV_FAST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SYS_RECV_FAST&#160;&#160;&#160;75</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a1637dd7c2d32b1b5037a3ba6f505db2f" name="a1637dd7c2d32b1b5037a3ba6f505db2f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1637dd7c2d32b1b5037a3ba6f505db2f">&#9670;&#160;</a></span>SYS_RMDIR</h2>
 
@@ -723,6 +740,20 @@ Macros</h2></td></tr>
 
 </div>
 </div>
+<a id="a68b61781f5ac80afc6091ec39aa96483" name="a68b61781f5ac80afc6091ec39aa96483"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68b61781f5ac80afc6091ec39aa96483">&#9670;&#160;</a></span>SYS_SEND_FAST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SYS_SEND_FAST&#160;&#160;&#160;74</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a18d793896959cf3403a70d094fa463e2" name="a18d793896959cf3403a70d094fa463e2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a18d793896959cf3403a70d094fa463e2">&#9670;&#160;</a></span>SYS_SEND_SYNC</h2>
 
@@ -731,6 +762,20 @@ Macros</h2></td></tr>
       <table class="memname">
         <tr>
           <td class="memname">#define SYS_SEND_SYNC&#160;&#160;&#160;3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a53b3d3a95756b4353c180717e179c14d" name="a53b3d3a95756b4353c180717e179c14d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53b3d3a95756b4353c180717e179c14d">&#9670;&#160;</a></span>SYS_SEND_SYNC_FAST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SYS_SEND_SYNC_FAST&#160;&#160;&#160;76</td>
         </tr>
       </table>
 </div><div class="memdoc">

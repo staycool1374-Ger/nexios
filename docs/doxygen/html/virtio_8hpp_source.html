@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -324,14 +324,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio_8hpp_so
 <div class="line"><a id="l00238" name="l00238"></a><span class="lineno">  238</span>    <span class="keywordflow">return</span> virtio_read_common8(t, VIRTIO_COMMON_DEVICE_STATUS);</div>
 <div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span>}</div>
 <div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span></div>
-<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span><span class="keyword">inline</span> <span class="keywordtype">void</span> virtio_write_status(<span class="keyword">const</span> VirtioTransport &amp;t, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> status) {</div>
-<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>    virtio_write_common8(t, VIRTIO_COMMON_DEVICE_STATUS, status);</div>
+<div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span><span class="keyword">inline</span> <span class="keywordtype">void</span> virtio_write_status(<span class="keyword">const</span> VirtioTransport &amp;t, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a>) {</div>
+<div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>    virtio_write_common8(t, VIRTIO_COMMON_DEVICE_STATUS, <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a>);</div>
 <div class="line"><a id="l00244" name="l00244"></a><span class="lineno">  244</span>}</div>
 <div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span></div>
 <div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacearch.html#a61b1d4d8c642abd27d65bb1f64405e58">virtio_negotiate_features</a>(VirtioTransport &amp;t, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> driver_features);</div>
 <div class="line"><a id="l00249" name="l00249"></a><span class="lineno">  249</span></div>
 <div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacearch.html#a9feefbea1a3cdebff8c58cb8dec3d426">virtio_setup_queue</a>(VirtioTransport &amp;t, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_idx,</div>
-<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span>                        <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_size, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> desc_phys,</div>
+<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span>                        <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9">queue_size</a>, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> desc_phys,</div>
 <div class="line"><a id="l00260" name="l00260"></a><span class="lineno">  260</span>                        <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> avail_phys, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> used_phys);</div>
 <div class="line"><a id="l00261" name="l00261"></a><span class="lineno">  261</span></div>
 <div class="line"><a id="l00263" name="l00263"></a><span class="lineno">  263</span><span class="keyword">inline</span> <span class="keywordtype">void</span> virtio_notify(<span class="keyword">const</span> VirtioTransport &amp;t, <a class="code hl_typedef" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> queue_idx) {</div>
@@ -352,6 +352,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio_8hpp_so
 <div class="ttc" id="anamespacearch_html_a61b1d4d8c642abd27d65bb1f64405e58"><div class="ttname"><a href="namespacearch.html#a61b1d4d8c642abd27d65bb1f64405e58">arch::virtio_negotiate_features</a></div><div class="ttdeci">bool virtio_negotiate_features(VirtioTransport &amp;t, uint64_t driver_features)</div><div class="ttdef"><b>Definition</b> virtio_pci.cpp:168</div></div>
 <div class="ttc" id="anamespacearch_html_a9feefbea1a3cdebff8c58cb8dec3d426"><div class="ttname"><a href="namespacearch.html#a9feefbea1a3cdebff8c58cb8dec3d426">arch::virtio_setup_queue</a></div><div class="ttdeci">bool virtio_setup_queue(VirtioTransport &amp;t, uint16_t queue_idx, uint16_t queue_size, uint64_t desc_phys, uint64_t avail_phys, uint64_t used_phys)</div><div class="ttdef"><b>Definition</b> virtio_pci.cpp:201</div></div>
 <div class="ttc" id="apci_8hpp_html"><div class="ttname"><a href="pci_8hpp.html">pci.hpp</a></div><div class="ttdoc">PCI enumeration — arch-independent interface using HAL config space access.</div></div>
+<div class="ttc" id="atest__virtio__blk__req_8cpp_html_aaa4d2e8d7266d47af455c8340648d3b9"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9">queue_size</a></div><div class="ttdeci">uint16_t queue_size</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:9</div></div>
+<div class="ttc" id="atest__virtio__blk__req_8cpp_html_ade818037fd6c985038ff29656089758d"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a></div><div class="ttdeci">uint8_t status</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:6</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>

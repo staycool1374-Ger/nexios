@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -137,7 +137,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8hpp
 Include dependency graph for scheduler.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="scheduler_8hpp__incl.png" border="0" usemap="#asrc_2kernel_2task_2scheduler_8hpp" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<map name="asrc_2kernel_2task_2scheduler_8hpp" id="asrc_2kernel_2task_2scheduler_8hpp">
+<area shape="rect" title="Rate&#45;monotonic scheduler for task management and dispatching." alt="" coords="5,5,197,32"/>
+<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="108,229,187,256"/>
+<area shape="poly" title=" " alt="" coords="99,30,96,66,97,106,105,144,118,180,135,216,130,215,113,182,99,146,92,107,91,66,98,35"/>
+<area shape="rect" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler." alt="" coords="106,80,245,107"/>
+<area shape="poly" title=" " alt="" coords="114,30,155,69,150,70,114,35"/>
+<area shape="poly" title=" " alt="" coords="162,105,142,129,126,156,123,170,125,186,135,216,130,215,119,187,118,170,121,154,138,126,158,109"/>
+<area shape="rect" href="vfs_8hpp.html" title=" " alt="" coords="136,155,261,181"/>
+<area shape="poly" title=" " alt="" coords="181,105,192,140,187,139,179,110"/>
+<area shape="rect" href="signal_8hpp.html" title="Signal definitions used by the kernel for user exception delivery." alt="" coords="285,155,365,181"/>
+<area shape="poly" title=" " alt="" coords="202,105,288,147,282,148,201,110"/>
+<area shape="poly" title=" " alt="" coords="192,181,167,219,163,215,187,183"/>
+<area shape="poly" title=" " alt="" coords="297,181,193,226,192,221,291,182"/>
+</map>
 </div>
 </div>
 <p><a href="scheduler_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -180,6 +193,8 @@ Variables</h2></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
 <tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a9280448447d20124500fb1be0a0ed68f">kernel::deadline_detection_integrity</a></td></tr>
 <tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
+<tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0635983d70bccde24c7125eba436d74e">kernel::fpu_nm_depth_max</a></td></tr>
+<tr class="memdesc:a0635983d70bccde24c7125eba436d74e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap).  <br /></td></tr>
 <tr class="memitem:af4c6d5dcd3bf1b60bf71cdd2b805f5a6" id="r_af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">kernel::fpu_owner</a></td></tr>
 <tr class="memdesc:af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot.  <br /></td></tr>
 </table>

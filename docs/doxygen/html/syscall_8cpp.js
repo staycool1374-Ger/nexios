@@ -1,5 +1,6 @@
 var syscall_8cpp =
 [
+    [ "kernel::canary_check_on_full_path", "namespacekernel.html#a59203fb708dcb70f7046b645fb81052e", null ],
     [ "kernel::syscall_is_user_task", "namespacekernel.html#a9bbea2daa70fd81363d98ce7b9c9f943", null ],
     [ "kernel::syscall_path_open", "namespacekernel.html#a9799f9b32ab65aeb956ce8717fe91bc4", null ],
     [ "kernel::syscall_task", "namespacekernel.html#aa7278439c20dc6234a77d3b08290701f", null ],

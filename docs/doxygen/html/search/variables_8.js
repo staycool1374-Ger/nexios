@@ -8,7 +8,7 @@ var searchData=
   ['h2_5fev_5fidle_5farm_5',['H2_EV_IDLE_ARM',['../namespacekernel.html#ae4d880161f4292f9476f0da08c2493c7',1,'kernel']]],
   ['h2_5fev_5freenq_6',['H2_EV_REENQ',['../namespacekernel.html#aaf4c44145fd44721026b6f4c4b6466e6',1,'kernel']]],
   ['h2_5fev_5fskip_7',['H2_EV_SKIP',['../namespacekernel.html#a4257e9fd5d09c0baf1cd2301d27355be',1,'kernel']]],
-  ['head_8',['head',['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel']]],
+  ['head_8',['head',['../structkernel_1_1shm_1_1_shared_ring_header.html#a1425bcad949cab726170a06f88378859',1,'kernel::shm::SharedRingHeader::head'],['../namespacekernel.html#aec37532c2fb1a123d928e41e13297533',1,'kernel::head']]],
   ['heads_5f_9',['heads_',['../namespacekernel.html#afdea84e7e6716009ab17af4b202b8271',1,'kernel']]],
   ['heap_5fsize_10',['HEAP_SIZE',['../namespacemem.html#a8e71bca99a7bdd8712f80891bcbee986',1,'mem']]],
   ['heap_5fvaddr_11',['HEAP_VADDR',['../namespacemem.html#aaedfe55f27a0e1a673a6f5f26479be85',1,'mem']]],

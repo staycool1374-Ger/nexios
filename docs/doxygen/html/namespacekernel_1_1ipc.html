@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -119,11 +119,33 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:DeathNotify" id="r_DeathNotify"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1ipc_1_1_death_notify.html">DeathNotify</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Asynchronous task-death notification registry (issue #105 Part B). A static bounded table pairing watched tasks with supervisors. When a watched task dies, its record is latched in the registry (exactly once, in TaskControlBlock::cleanup()) and the supervisor's Notify is pulsed; the supervisor drains via SYS_DEATH_RECV (never blocks). No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; death notify lock (never held across a scheduler call or a Notify poke — supervisors are collected under the lock and poked outside it).  <a href="classkernel_1_1ipc_1_1_death_notify.html#details">More...</a><br /></td></tr>
+<tr class="memitem:DeathRecord" id="r_DeathRecord"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ipc_1_1_death_record.html">DeathRecord</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A single task-death record delivered to a supervisor.  <a href="structkernel_1_1ipc_1_1_death_record.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PagerFault" id="r_PagerFault"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ipc_1_1_pager_fault.html">PagerFault</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-side record of one delegated page fault (paper §4.2). Lives in a registry slot; exactly one outstanding fault per registration (a client with a pending fault is BLOCKED and cannot fault again).  <a href="structkernel_1_1ipc_1_1_pager_fault.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PagerFaultMsg" id="r_PagerFaultMsg"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1ipc_1_1_pager_fault_msg.html">PagerFaultMsg</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-visible RECV payload (exactly {fault_id, client_id, fault_va, fault_flags}).  <a href="structkernel_1_1ipc_1_1_pager_fault_msg.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PagerRegistry" id="r_PagerRegistry"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html">PagerRegistry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">External pager registry (issue #107). A static bounded table keyed by client task (id + generation): one registration per client pairing it with its designated pager, plus the single outstanding fault record per registration. The bounded pager contract: the faulting client blocks only on its passive registry record + the scheduler and is woken by exactly one of {MAP-complete, ABORT, watchdog-timeout, death-drain}; the kernel never waits on the pager. No dynamic allocation on RT paths. Lock order: scheduler_lock_ -&gt; pager registry lock (never held across a scheduler call, a VMM map/unmap, a Notify poke, or a cap release).  <a href="classkernel_1_1ipc_1_1_pager_registry.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
 <tr class="memitem:a2ff5729652bd08ce2741040379c060be" id="r_a2ff5729652bd08ce2741040379c060be"><td class="memItemLeft">enum &#160;</td><td class="memItemRight"><a class="el" href="#a2ff5729652bd08ce2741040379c060be">BootMessage</a> : uint32_t { <a class="el" href="#a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc">MSG_DAEMON_READY</a> = 0xF0000001
 , <a class="el" href="#a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5">MSG_DAEMON_FAILED</a> = 0xF0000002
  }</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:afda77acf485f592f5694942f370f6ba3" id="r_afda77acf485f592f5694942f370f6ba3"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afda77acf485f592f5694942f370f6ba3">DEATH_FLAG_SIGNAL</a> = 1ULL &lt;&lt; 0</td></tr>
+<tr class="memdesc:afda77acf485f592f5694942f370f6ba3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Death record flag: the death was an abnormal termination (a signal / crash) rather than a clean exit. Encoded from the high bit of the task's exit code (negative exit codes carry the signal value).  <br /></td></tr>
+<tr class="memitem:ad4c5f6e636bcbfb1eb3014700428982c" id="r_ad4c5f6e636bcbfb1eb3014700428982c"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad4c5f6e636bcbfb1eb3014700428982c">DEATH_WAKE_PULSE</a> = 0xDEAD0001</td></tr>
+<tr class="memdesc:ad4c5f6e636bcbfb1eb3014700428982c"><td class="mdescLeft">&#160;</td><td class="mdescRight">The wakeup value pulsed into a supervisor's Notify when one of its watched tasks dies. The authoritative data lives in the registry (drained via SYS_DEATH_RECV); the pulse is a wakeup only, so a single 64-bit slot cannot lose a fan-in of multiple deaths.  <br /></td></tr>
+<tr class="memitem:a0045f7908254e5e6ac7a76ad9edd5d44" id="r_a0045f7908254e5e6ac7a76ad9edd5d44"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0045f7908254e5e6ac7a76ad9edd5d44">PAGER_FAULT_PULSE</a> = 0x50414752</td></tr>
+<tr class="memdesc:a0045f7908254e5e6ac7a76ad9edd5d44"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wakeup value pulsed into a pager's Notify when a client faults. Wakeup-only; the authoritative data is drained via SYS_PAGER_RECV.  <br /></td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
 <a id="a2ff5729652bd08ce2741040379c060be" name="a2ff5729652bd08ce2741040379c060be"></a>
@@ -141,6 +163,79 @@ Enumerations</h2></td></tr>
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc" name="a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc"></a>MSG_DAEMON_READY&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5" name="a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5"></a>MSG_DAEMON_FAILED&#160;</td><td class="fielddoc"></td></tr>
 </table>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="afda77acf485f592f5694942f370f6ba3" name="afda77acf485f592f5694942f370f6ba3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afda77acf485f592f5694942f370f6ba3">&#9670;&#160;</a></span>DEATH_FLAG_SIGNAL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::ipc::DEATH_FLAG_SIGNAL = 1ULL &lt;&lt; 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Death record flag: the death was an abnormal termination (a signal / crash) rather than a clean exit. Encoded from the high bit of the task's exit code (negative exit codes carry the signal value). </p>
+
+</div>
+</div>
+<a id="ad4c5f6e636bcbfb1eb3014700428982c" name="ad4c5f6e636bcbfb1eb3014700428982c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad4c5f6e636bcbfb1eb3014700428982c">&#9670;&#160;</a></span>DEATH_WAKE_PULSE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::ipc::DEATH_WAKE_PULSE = 0xDEAD0001</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>The wakeup value pulsed into a supervisor's Notify when one of its watched tasks dies. The authoritative data lives in the registry (drained via SYS_DEATH_RECV); the pulse is a wakeup only, so a single 64-bit slot cannot lose a fan-in of multiple deaths. </p>
+
+</div>
+</div>
+<a id="a0045f7908254e5e6ac7a76ad9edd5d44" name="a0045f7908254e5e6ac7a76ad9edd5d44"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0045f7908254e5e6ac7a76ad9edd5d44">&#9670;&#160;</a></span>PAGER_FAULT_PULSE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::ipc::PAGER_FAULT_PULSE = 0x50414752</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Wakeup value pulsed into a pager's Notify when a client faults. Wakeup-only; the authoritative data is drained via SYS_PAGER_RECV. </p>
 
 </div>
 </div>

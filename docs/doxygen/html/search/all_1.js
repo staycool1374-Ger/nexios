@@ -2,7 +2,7 @@ var searchData=
 [
   ['a_0',['a',['../struct_test_struct.html#a5402eb099ce14f4b385441077a11c2a6',1,'TestStruct']]],
   ['aarch64_1',['aarch64',['../structkernel_1_1test_1_1_expected_counts.html#a9cf2a40449dfa71af19aac1319d06c81',1,'kernel::test::ExpectedCounts']]],
-  ['abort_2',['abort',['../stdlib_8c.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c'],['../stdlib_8h.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c']]],
+  ['abort_2',['abort',['../classkernel_1_1ipc_1_1_pager_registry.html#ad5dc5caaa2e644a7e978c182c3c8a87a',1,'kernel::ipc::PagerRegistry::abort()'],['../stdlib_8c.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c'],['../stdlib_8h.html#a8dec7c95227ff149687066cf04029191',1,'abort(void):&#160;stdlib.c']]],
   ['abs_3',['abs',['../stdlib_8c.html#afd4f329c8efb45c0dfff44525047a0fa',1,'abs(int n):&#160;stdlib.c'],['../stdlib_8h.html#afd4f329c8efb45c0dfff44525047a0fa',1,'abs(int n):&#160;stdlib.c']]],
   ['acpi_2ecpp_4',['acpi.cpp',['../acpi_8cpp.html',1,'']]],
   ['acpi_2ehpp_5',['acpi.hpp',['../acpi_8hpp.html',1,'']]],

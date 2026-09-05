@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -138,6 +138,7 @@ Namespaces</h2></td></tr>
 <tr class="memitem:ipc" id="r_ipc"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html">ipc</a></td></tr>
 <tr class="memitem:log" id="r_log"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">log</a></td></tr>
 <tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html">net</a></td></tr>
+<tr class="memitem:shm" id="r_shm"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1shm.html">shm</a></td></tr>
 <tr class="memitem:sync" id="r_sync"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">sync</a></td></tr>
 <tr class="memitem:task" id="r_task"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html">task</a></td></tr>
 <tr class="memitem:test" id="r_test"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html">test</a></td></tr>
@@ -288,6 +289,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a3a9da091bb2229af08f856b08498fa51" id="r_a3a9da091bb2229af08f856b08498fa51"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9da091bb2229af08f856b08498fa51">random_fill</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
 <tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
 <tr class="memdesc:aa7278439c20dc6234a77d3b08290701f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the currently running task from the scheduler.  <br /></td></tr>
+<tr class="memitem:a59203fb708dcb70f7046b645fb81052e" id="r_a59203fb708dcb70f7046b645fb81052e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a59203fb708dcb70f7046b645fb81052e">canary_check_on_full_path</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
+<tr class="memdesc:a59203fb708dcb70f7046b645fb81052e"><td class="mdescLeft">&#160;</td><td class="mdescRight">MP-3 canary verification for the FULL syscall path (issue #92). Checks the current user task's segment canaries; a mismatch latches g_canary_trip in test mode (returns false → the caller returns -1) or panics in production. Runs ONLY on the FULL path — the FAST subset dereferences no user memory, so it is covered instead by the scheduler's context-switch / timer-tick canary sampling.  <br /></td></tr>
 <tr class="memitem:a9bbea2daa70fd81363d98ce7b9c9f943" id="r_a9bbea2daa70fd81363d98ce7b9c9f943"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9bbea2daa70fd81363d98ce7b9c9f943">syscall_is_user_task</a> ()</td></tr>
 <tr class="memdesc:a9bbea2daa70fd81363d98ce7b9c9f943"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if the current task is a user-space task (is_user_ flag — MP-1: page_table_ != 0 no longer discriminates, every task owns a private kernel-half PML4).  <br /></td></tr>
 <tr class="memitem:afbcf504abb27c24da8a91380e1f73882" id="r_afbcf504abb27c24da8a91380e1f73882"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#afbcf504abb27c24da8a91380e1f73882">syscall_task_open</a> (vfs::Vnode *vn, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> flags)</td></tr>
@@ -300,6 +303,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
 <tr class="memitem:a1dae18e023980d3a17ebc183f9986bd3" id="r_a1dae18e023980d3a17ebc183f9986bd3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1dae18e023980d3a17ebc183f9986bd3">for</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> p=0;p&lt; num_priorities;++p)</td></tr>
+<tr class="memitem:a477db93fbbdf2a6d3cfc20606a525044" id="r_a477db93fbbdf2a6d3cfc20606a525044"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a477db93fbbdf2a6d3cfc20606a525044">canary_check_in_scheduler_hooks</a> (TaskControlBlock *task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip)</td></tr>
+<tr class="memdesc:a477db93fbbdf2a6d3cfc20606a525044"><td class="mdescLeft">&#160;</td><td class="mdescRight">MP-3 canary sampling for the scheduler hooks (issue #92 canary relocation). Verifies the user-segment canaries of a task that is about to run (context switch) or currently running (timer tick). Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a pure page-table read (no locks, no allocation) — safe in ISR/tick context. Test mode latches g_canary_trip (the harness survives); production panics. This restores corruption detection for FAST syscalls, which no longer consult canaries on entry.  <br /></td></tr>
 <tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a> (TaskControlBlock &amp;tcb)</td></tr>
 <tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895">kslot_snapshot_bytes</a> ()</td></tr>
 <tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5566867274b1950bc3ed7acc375508">kslot_snapshot_capture</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst)</td></tr>
@@ -389,6 +394,8 @@ Variables</h2></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
 <tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
 <tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
+<tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0635983d70bccde24c7125eba436d74e">fpu_nm_depth_max</a></td></tr>
+<tr class="memdesc:a0635983d70bccde24c7125eba436d74e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap).  <br /></td></tr>
 <tr class="memitem:af4c6d5dcd3bf1b60bf71cdd2b805f5a6" id="r_af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">fpu_owner</a></td></tr>
 <tr class="memdesc:af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot.  <br /></td></tr>
 <tr class="memitem:ab1281ac93f9d469e2fc0dd731d358f3b" id="r_ab1281ac93f9d469e2fc0dd731d358f3b"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#ab1281ac93f9d469e2fc0dd731d358f3b">_stack_start</a> []</td></tr>
@@ -1121,6 +1128,75 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="a477db93fbbdf2a6d3cfc20606a525044" name="a477db93fbbdf2a6d3cfc20606a525044"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a477db93fbbdf2a6d3cfc20606a525044">&#9670;&#160;</a></span>canary_check_in_scheduler_hooks()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::canary_check_in_scheduler_hooks </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>MP-3 canary sampling for the scheduler hooks (issue #92 canary relocation). Verifies the user-segment canaries of a task that is about to run (context switch) or currently running (timer tick). Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a pure page-table read (no locks, no allocation) — safe in ISR/tick context. Test mode latches g_canary_trip (the harness survives); production panics. This restores corruption detection for FAST syscalls, which no longer consult canaries on entry. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">task</td><td>Task to verify (must be magic-valid). </td></tr>
+    <tr><td class="paramname">rip</td><td>Approximate fault RIP for the latch (0 in scheduler hooks). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if verified (or no user task / no canary check enabled). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a477db93fbbdf2a6d3cfc20606a525044_cgraph.png" border="0" usemap="#anamespacekernel_a477db93fbbdf2a6d3cfc20606a525044_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a59203fb708dcb70f7046b645fb81052e" name="a59203fb708dcb70f7046b645fb81052e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59203fb708dcb70f7046b645fb81052e">&#9670;&#160;</a></span>canary_check_on_full_path()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::canary_check_on_full_path </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>regs</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>MP-3 canary verification for the FULL syscall path (issue #92). Checks the current user task's segment canaries; a mismatch latches g_canary_trip in test mode (returns false → the caller returns -1) or panics in production. Runs ONLY on the FULL path — the FAST subset dereferences no user memory, so it is covered instead by the scheduler's context-switch / timer-tick canary sampling. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">regs</td><td>Register save area (for the fault RIP in test-mode latch). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if canaries verified or no user task; false on a trip (caller returns -1). Always true when CONFIG_CANARY_GUARD is disabled. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.png" border="0" usemap="#anamespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a id="ac6fb6d864696d4527766d2ab81c2e3ce" name="ac6fb6d864696d4527766d2ab81c2e3ce"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac6fb6d864696d4527766d2ab81c2e3ce">&#9670;&#160;</a></span>canary_install_kernel_stack()</h2>
 
@@ -1160,7 +1236,7 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -1289,7 +1365,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -1329,7 +1405,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -1407,7 +1483,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -1449,7 +1525,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -1478,7 +1554,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -1503,7 +1579,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -1532,7 +1608,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -2004,6 +2080,30 @@ template&lt;typename T&gt; </div>
 </div><div class="memdoc">
 
 <p>Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan. </p>
+
+</div>
+</div>
+<a id="a0635983d70bccde24c7125eba436d74e" name="a0635983d70bccde24c7125eba436d74e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0635983d70bccde24c7125eba436d74e">&#9670;&#160;</a></span>fpu_nm_depth_max</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::fpu_nm_depth_max</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap). </p>
 
 </div>
 </div>

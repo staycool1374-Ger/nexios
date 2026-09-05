@@ -80,18 +80,14 @@ var namespacekernel =
       [ "set_iocd_pid", "namespacekernel_1_1iocd.html#abb256f04b1e192ba428e9ec86fd4baac", null ]
     ] ],
     [ "iommu", "namespacekernel_1_1iommu.html", "namespacekernel_1_1iommu" ],
-    [ "ipc", "namespacekernel_1_1ipc.html", [
-      [ "BootMessage", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060be", [
-        [ "MSG_DAEMON_READY", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060bea967b13a35e9ff41d406b6822fc0c98dc", null ],
-        [ "MSG_DAEMON_FAILED", "namespacekernel_1_1ipc.html#a2ff5729652bd08ce2741040379c060beaa513cfd8090f1020059205372d2b69f5", null ]
-      ] ]
-    ] ],
+    [ "ipc", "namespacekernel_1_1ipc.html", "namespacekernel_1_1ipc" ],
     [ "log", "namespacekernel_1_1log.html", "namespacekernel_1_1log" ],
     [ "net", "namespacekernel_1_1net.html", [
       [ "virtio_net_destroy", "namespacekernel_1_1net.html#af8019b1cd8dcf090045eb65e97779e2b", null ],
       [ "virtio_net_poll", "namespacekernel_1_1net.html#ad963f2495bdf069ba09023e4b584c4b2", null ],
       [ "virtio_net_probe", "namespacekernel_1_1net.html#ac79735cf719349d1a7d42f5c788b1406", null ]
     ] ],
+    [ "shm", "namespacekernel_1_1shm.html", "namespacekernel_1_1shm" ],
     [ "sync", "namespacekernel_1_1sync.html", "namespacekernel_1_1sync" ],
     [ "task", "namespacekernel_1_1task.html", [
       [ "dmesg_task_main", "namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193", null ],
@@ -210,6 +206,8 @@ var namespacekernel =
     [ "atomic_release_fence", "namespacekernel.html#a694a81cf88aaa57b10bbb8850672ef0c", null ],
     [ "atomic_store", "namespacekernel.html#a990823fa4f88496f91379344984fe8d5", null ],
     [ "atomic_store", "namespacekernel.html#a6150ab02de411dbe57ab81bb5b9ff39a", null ],
+    [ "canary_check_in_scheduler_hooks", "namespacekernel.html#a477db93fbbdf2a6d3cfc20606a525044", null ],
+    [ "canary_check_on_full_path", "namespacekernel.html#a59203fb708dcb70f7046b645fb81052e", null ],
     [ "canary_install_kernel_stack", "namespacekernel.html#ac6fb6d864696d4527766d2ab81c2e3ce", null ],
     [ "canary_install_user_segments", "namespacekernel.html#a772626334577fb34746dd85c3e6e3b9c", null ],
     [ "canary_verify_kernel_stack", "namespacekernel.html#ad3793a2cf2cf423d61fe25cf2ecb8ba4", null ],
@@ -248,6 +246,7 @@ var namespacekernel =
     [ "_stack_end", "namespacekernel.html#a78863de6e15cebd20b4dd89ce98ea565", null ],
     [ "_stack_start", "namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b", null ],
     [ "deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
+    [ "fpu_nm_depth_max", "namespacekernel.html#a0635983d70bccde24c7125eba436d74e", null ],
     [ "fpu_owner", "namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6", null ],
     [ "g_boot_epoch", "namespacekernel.html#a602102cf72c2d245437f6dfb539c71eb", null ],
     [ "g_boot_info", "namespacekernel.html#a82642ef1de738764f4ab5b0e505b50ac", null ],

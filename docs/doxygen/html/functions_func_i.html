@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -127,17 +127,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>insert()&#160;:&#160;<a class="el" href="classkernel_1_1_deadline_list.html#a2f6a12357489a4dfc0689f4bb1f986af">kernel::DeadlineList</a></li>
 <li>install()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#ab6e71b22609a28abf0d8f9f4a1d99433">kernel::cap::CNode</a></li>
 <li>instance()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#ac9a97f01ba5d97af15cb3903e128f79e">kernel::log::DmesgService</a>, <a class="el" href="classkernel_1_1test_1_1_resource_tracker.html#ae6714ff73598e9c50d0f742625c17fdf">kernel::test::ResourceTracker</a>, <a class="el" href="classservice_1_1_terminal.html#a218b0fead5d0e1ee9b29ae73d357d168">service::Terminal</a></li>
-<li>invalidate_cap()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#ae27abc439253bc04d09bb3e244694fc5">kernel::cap::MmioUserMap</a></li>
+<li>invalidate_cap()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#acee30a31e35324acd757b51a9b47b9d5">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#ae27abc439253bc04d09bb3e244694fc5">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#ad9ac551b83076f9b4fdeac6400d11531">kernel::ipc::PagerRegistry</a></li>
 <li>IrqSpinLockGuard()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_irq_spin_lock_guard.html#adbaa09714184b111bb674152b0a970a3">kernel::sync::IrqSpinLockGuard</a></li>
 <li>is_apic_supported()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a6cf29bb7b88440859780745585d13e3e">arch::APIC</a></li>
 <li>is_enabled()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a33afc32551a0caa10c64d0bb6d0dd952">arch::APIC</a></li>
-<li>is_owner()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#aa27cd367f9107aaf671eaf3cf862ac85">kernel::cap::MmioUserMap</a></li>
+<li>is_owner()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a3e3ff59a18407df3a101450e440060f7">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#aa27cd367f9107aaf671eaf3cf862ac85">kernel::cap::MmioUserMap</a></li>
 <li>is_pool_backed()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#a510dcbc8492ee1adf161f749985ba1e5">kernel::KernelObject</a></li>
 <li>is_preemptible()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a7ed00d22c2b04a213ee0f4af683059e6">kernel::Scheduler</a></li>
+<li>is_registered()&#160;:&#160;<a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#aa9e9b8883e16c4dd182cb7578e0cd6f6">kernel::ipc::PagerRegistry</a></li>
 <li>is_set()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#aecb4bd54dfeb624d488efc1a28a3aa93">kernel::PriorityMap</a></li>
 <li>is_shared()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#aa73bc0e7f514e8cdfeecbca9ff4c67df">kernel::cap::CNode</a>, <a class="el" href="classkernel_1_1cap_1_1_endpoint.html#a7052d2b0234a94380ba1522ba38e5fae">kernel::cap::Endpoint</a>, <a class="el" href="classkernel_1_1cap_1_1_frame_cap.html#a0550606e7774b1f6f3d73c5756463798">kernel::cap::FrameCap</a>, <a class="el" href="classkernel_1_1cap_1_1_io_mmu_dma_cap.html#af97cb03e26d4ad27f9462330912ef492">kernel::cap::IoMmuDmaCap</a>, <a class="el" href="classkernel_1_1cap_1_1_irq_cap.html#a8d329439d24137821a3444e4d5e55e9c">kernel::cap::IrqCap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_cap.html#a607b3cafc6668a606f9c267b3cda347c">kernel::cap::MmioCap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#adfb018337d6f166eb8a7e7422b4119f3">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a3f3ca89dca306f3179e2e788e44ca38c">kernel::cap::UntypedMem</a>, <a class="el" href="classkernel_1_1_kernel_object.html#ae799dc1281a302b5baeca90a159e386a">kernel::KernelObject</a>, <a class="el" href="structkernel_1_1vfs_1_1_pipe_buffer.html#a128d723b9ae8acf348e6207ba30d3a28">kernel::vfs::PipeBuffer</a></li>
 <li>is_suppressed()&#160;:&#160;<a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a652ff369a2d761f89c91e35ed4db00c9">kernel::log::DmesgService</a></li>
 <li>is_timer_active()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#af4ff34c7949bdf461b8d0c7963c3eb73">arch::APIC</a></li>
+<li>is_watching()&#160;:&#160;<a class="el" href="classkernel_1_1ipc_1_1_death_notify.html#a8611d522b34cb3200a332a68f2d23fa6">kernel::ipc::DeathNotify</a></li>
 <li>isr_entry()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#ae8c01dc070b3edef2055d2576a7438b1">kernel::IrqDelivery</a></li>
 </ul>
 </div><!-- contents -->

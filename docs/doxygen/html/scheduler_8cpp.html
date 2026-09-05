@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8cpp
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="tcb__write__log_8hpp_source.html">kernel/task/tcb_write_log.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="pager__registry_8hpp_source.html">kernel/ipc/pager_registry.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="gdt_8hpp_source.html">kernel/arch/gdt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2irq__guard_8hpp_source.html">kernel/arch/hal/irq_guard.hpp</a>&gt;</code><br />
@@ -134,6 +135,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler_8cpp
 <code>#include &lt;<a class="el" href="dump_8hpp_source.html">kernel/debug/dump.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="ipc__sched__trace_8hpp_source.html">kernel/debug/ipc_sched_trace.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="integrity_8hpp_source.html">kernel/memory/integrity.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="resource__tracker_8hpp_source.html">kernel/test/resource_tracker.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="test__isolate_8hpp_source.html">kernel/test/test_isolate.hpp</a>&gt;</code><br />
@@ -164,6 +166,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a80e920b60042b6c2750fd88974610e99" id="r_a80e920b60042b6c2750fd88974610e99"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a80e920b60042b6c2750fd88974610e99">debug_write</a> (const char *s)</td></tr>
 <tr class="memitem:afc833d2926e5dca3c9fbed32f7a7656a" id="r_afc833d2926e5dca3c9fbed32f7a7656a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc833d2926e5dca3c9fbed32f7a7656a">debug_write_hex</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
 <tr class="memitem:ac9b08212c79ab5465098caa93a4188bd" id="r_ac9b08212c79ab5465098caa93a4188bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac9b08212c79ab5465098caa93a4188bd">debug_write_dec</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
+<tr class="memitem:a477db93fbbdf2a6d3cfc20606a525044" id="r_a477db93fbbdf2a6d3cfc20606a525044"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a477db93fbbdf2a6d3cfc20606a525044">kernel::canary_check_in_scheduler_hooks</a> (TaskControlBlock *task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip)</td></tr>
+<tr class="memdesc:a477db93fbbdf2a6d3cfc20606a525044"><td class="mdescLeft">&#160;</td><td class="mdescRight">MP-3 canary sampling for the scheduler hooks (issue #92 canary relocation). Verifies the user-segment canaries of a task that is about to run (context switch) or currently running (timer tick). Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a pure page-table read (no locks, no allocation) — safe in ISR/tick context. Test mode latches g_canary_trip (the harness survives); production panics. This restores corruption detection for FAST syscalls, which no longer consult canaries on entry.  <br /></td></tr>
 <tr class="memitem:a776f2e51260c582da13e92d833060e5d" id="r_a776f2e51260c582da13e92d833060e5d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a776f2e51260c582da13e92d833060e5d">scheduler_diag_pre_save</a> ()</td></tr>
 <tr class="memitem:a03544fcc8fdcdcb83bd69f8274d7e957" id="r_a03544fcc8fdcdcb83bd69f8274d7e957"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a03544fcc8fdcdcb83bd69f8274d7e957">scheduler_diag_depth_skip</a> ()</td></tr>
 <tr class="memdesc:a03544fcc8fdcdcb83bd69f8274d7e957"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue depth-skip hook (isr_stubs.asm:133-134). Fires when a pending deferred-switch apply is skipped because the ISR nesting depth exceeds 2. Cold path. Dumps the arm target + the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).  <br /></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -170,9 +170,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('unistd_8h_sour
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="keywordtype">int</span> <a class="code hl_function" href="unistd_8h.html#aa9164ba18a8c801ed4adf42ce9247ef9">pipe</a>(<span class="keywordtype">int</span> fds[2]);</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span> </div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><a class="code hl_typedef" href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a> <a class="code hl_function" href="unistd_8h.html#aa4e4714e6e8927c80b2553a40094b6d9">fork</a>(<span class="keywordtype">void</span>);</div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><a class="code hl_typedef" href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a> <a class="code hl_function" href="unistd_8h.html#a77de8005691d1f125540d66032a3cc62">waitpid</a>(<a class="code hl_typedef" href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a> pid, <span class="keywordtype">int</span>* status, <span class="keywordtype">int</span> options);</div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><a class="code hl_typedef" href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a> <a class="code hl_function" href="unistd_8h.html#a77de8005691d1f125540d66032a3cc62">waitpid</a>(<a class="code hl_typedef" href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a> pid, <span class="keywordtype">int</span>* <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a>, <span class="keywordtype">int</span> options);</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span> </div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keywordtype">void</span> <a class="code hl_function" href="unistd_8h.html#abc96bd69b58b2deaddb484478d911c1b">_exit</a>(<span class="keywordtype">int</span> status);</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="keywordtype">void</span> <a class="code hl_function" href="unistd_8h.html#abc96bd69b58b2deaddb484478d911c1b">_exit</a>(<span class="keywordtype">int</span> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a>);</div>
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> <a class="code hl_function" href="unistd_8h.html#a69c97039c9ec10a30e5edbdf365e3bbd">sleep</a>(<span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> seconds);</div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> <a class="code hl_function" href="unistd_8h.html#a8c476685d78ea93ee343f8a0580c79fe">alarm</a>(<span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> seconds);</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="keywordtype">int</span> <a class="code hl_function" href="unistd_8h.html#a2f316a4ad94a242df56b01953677015d">gettimeofday</a>(<span class="keyword">struct</span> <a class="code hl_struct" href="structtimeval.html">timeval</a>* tv, <span class="keywordtype">void</span>* tz);</div>
@@ -186,6 +186,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('unistd_8h_sour
 <div class="ttc" id="agcov__handler_8cpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:59</div></div>
 <div class="ttc" id="astructtimeval_html"><div class="ttname"><a href="structtimeval.html">timeval</a></div><div class="ttdef"><b>Definition</b> time.h:40</div></div>
 <div class="ttc" id="astructutsname_html"><div class="ttname"><a href="structutsname.html">utsname</a></div><div class="ttdef"><b>Definition</b> utsname.h:24</div></div>
+<div class="ttc" id="atest__virtio__blk__req_8cpp_html_ade818037fd6c985038ff29656089758d"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a></div><div class="ttdeci">uint8_t status</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:6</div></div>
 <div class="ttc" id="atime_8h_html"><div class="ttname"><a href="time_8h.html">time.h</a></div></div>
 <div class="ttc" id="atypes_8h_html"><div class="ttname"><a href="types_8h.html">types.h</a></div></div>
 <div class="ttc" id="atypes_8h_html_a288e13e815d43b06e75819f8939524df"><div class="ttname"><a href="types_8h.html#a288e13e815d43b06e75819f8939524df">pid_t</a></div><div class="ttdeci">int pid_t</div><div class="ttdef"><b>Definition</b> types.h:24</div></div>

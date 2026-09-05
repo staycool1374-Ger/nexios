@@ -4,6 +4,17 @@ var searchData=
   ['qemu_5facpi_5fport_1',['QEMU_ACPI_PORT',['../namespacearch.html#aa93f9f35aa8343da25692bbf7bcbcac2',1,'arch']]],
   ['qemu_5fshutdown_5fport_2',['QEMU_SHUTDOWN_PORT',['../namespacearch.html#ae10cddc0db174fd265d8a8b3b50b25c9',1,'arch']]],
   ['queue_5fcounts_3',['queue_counts',['../structkernel_1_1_ready_queue_p_o_d.html#a318bc49fef785fc0a3189cef55985f40',1,'kernel::ReadyQueuePOD']]],
-  ['queue_5fheads_4',['queue_heads',['../structkernel_1_1_ready_queue_p_o_d.html#a59a58c05f78035ebab676ffd6b7d31ba',1,'kernel::ReadyQueuePOD']]],
-  ['queue_5ftails_5',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]]
+  ['queue_5fdesc_5fhi_4',['queue_desc_hi',['../test__virtio__blk__req_8cpp.html#a58e2be4bf9db5013e9fb8c64e633af78',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdesc_5flo_5',['queue_desc_lo',['../test__virtio__blk__req_8cpp.html#ab4fe944bcbd3c49e609999c37ac8491e',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdev_5fhi_6',['queue_dev_hi',['../test__virtio__blk__req_8cpp.html#ae1423dd487c9bead71a9856d5949387b',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdev_5flo_7',['queue_dev_lo',['../test__virtio__blk__req_8cpp.html#ac5acd85a2c532459c35b17bbb46a2df0',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdrv_5fhi_8',['queue_drv_hi',['../test__virtio__blk__req_8cpp.html#a829576cc32b933ac5e4fdf3e5283fd9c',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdrv_5flo_9',['queue_drv_lo',['../test__virtio__blk__req_8cpp.html#a2ec5e611fea443a12da89ad389f1b372',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fenable_10',['queue_enable',['../test__virtio__blk__req_8cpp.html#a50d57b3ce7d083980b4ca27a8e5c4b53',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fheads_11',['queue_heads',['../structkernel_1_1_ready_queue_p_o_d.html#a59a58c05f78035ebab676ffd6b7d31ba',1,'kernel::ReadyQueuePOD']]],
+  ['queue_5fmsix_12',['queue_msix',['../test__virtio__blk__req_8cpp.html#a0d4970f06edd693edcfbbd0ae087078d',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fnotify_5foff_13',['queue_notify_off',['../test__virtio__blk__req_8cpp.html#ac85df60197b98323cf85f8dff0fefa57',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fsel_14',['queue_sel',['../test__virtio__blk__req_8cpp.html#abb2504bab2485cba474f63c4cbc68ca9',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fsize_15',['queue_size',['../test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5ftails_16',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -141,6 +141,10 @@ Files</h2></td></tr>
 <tr class="memdesc:frame_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability-wrapped physical memory frame implementation. <br /></td></tr>
 <tr class="memitem:frame_2Ehpp" id="r_frame_2Ehpp"><td class="memItemLeft"><a href="frame_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="frame_8hpp.html">frame.hpp</a></td></tr>
 <tr class="memdesc:frame_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability-wrapped physical memory frame (shared-heap KernelObject). <br /></td></tr>
+<tr class="memitem:frame_5Fmap_2Ecpp" id="r_frame_5Fmap_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="frame__map_8cpp.html">frame_map.cpp</a></td></tr>
+<tr class="memdesc:frame__map_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">FrameUserMap implementation (issue #106 Part B). Mirrors MmioUserMap (issue #8) exactly: static bounded slot array, claim-under-lock / map-outside-lock, revalidate-before-release discipline. A FrameCap owns its PMM frames (dispose frees them on the last reference); every slot and every user-map pin must be released before dispose. <br /></td></tr>
+<tr class="memitem:frame_5Fmap_2Ehpp" id="r_frame_5Fmap_2Ehpp"><td class="memItemLeft"><a href="frame__map_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="frame__map_8hpp.html">frame_map.hpp</a></td></tr>
+<tr class="memdesc:frame__map_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capability-gated user-space frame (shared-memory) mapping registry (issue #106 Part B). Mirrors MmioUserMap (issue #8): maps a FrameCap's physical frames into a fixed user VA window for Ring-3 shared-memory producers/consumers via SYS_FRAME_MAP/SYS_FRAME_UNMAP. Genuinely zero-copy — two tasks mapping the same FrameCap share the same physical frames. <br /></td></tr>
 <tr class="memitem:iommu_2Ecpp" id="r_iommu_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="cap_2iommu_8cpp.html">iommu.cpp</a></td></tr>
 <tr class="memdesc:cap_2iommu_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IoMmuDmaCap implementation (issue #4). Bound by CONFIG_CAP_MAX_IOMMU via a TU-local live counter (<a class="el" href="irq_8cpp.html" title="IrqCap implementation (issue #2). Bound by CONFIG_CAP_MAX_IRQ via a TU-local live counter (mmio....">irq.cpp</a> pattern); folds into the existing cap_objects ResourceTracker counter. The domain slot is claimed at create() time and released at dispose/revoke — authority loss always removes the domain FIRST (fail-closed DMA teardown). <br /></td></tr>
 <tr class="memitem:iommu_2Ehpp" id="r_iommu_2Ehpp"><td class="memItemLeft"><a href="cap_2iommu_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="cap_2iommu_8hpp.html">iommu.hpp</a></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -133,6 +133,10 @@ Files</h2></td></tr>
 <tr class="memdesc:buffer__pool_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Zero-copy buffer pool — allocate, transfer, map, free buffers via handles. <br /></td></tr>
 <tr class="memitem:buffer_5Fpool_5Ferrors_2Ehpp" id="r_buffer_5Fpool_5Ferrors_2Ehpp"><td class="memItemLeft"><a href="buffer__pool__errors_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="buffer__pool__errors_8hpp.html">buffer_pool_errors.hpp</a></td></tr>
 <tr class="memdesc:buffer__pool__errors_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Buffer pool error codes (X-macro table with human-readable strings). <br /></td></tr>
+<tr class="memitem:death_5Fnotify_2Ecpp" id="r_death_5Fnotify_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="death__notify_8cpp.html">death_notify.cpp</a></td></tr>
+<tr class="memdesc:death__notify_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">DeathNotify implementation (issue #105 Part B). Mirrors the FrameUserMap/MmioUserMap discipline: claim/mutate under the registry lock, poke supervisors OUTSIDE it (a Notify poke can reach the scheduler, and the documented order is scheduler_lock_ -&gt; registry locks). A slot's lifetime is ACTIVE (watch installed) -&gt; PENDING (watched task died, record latched) -&gt; FREE (supervisor consumed it via recv, or drain freed it). <br /></td></tr>
+<tr class="memitem:death_5Fnotify_2Ehpp" id="r_death_5Fnotify_2Ehpp"><td class="memItemLeft"><a href="death__notify_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="death__notify_8hpp.html">death_notify.hpp</a></td></tr>
+<tr class="memdesc:death__notify_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Asynchronous task-death notification registry (issue #105 Part B). Lets a user-space supervisor register a watch on a task so it is woken up when that task dies (normal exit or crash) and can then drain the death record, reclaim leaked capabilities, and restart the failed server. Mirrors the FrameUserMap/MmioUserMap static-bounded-registry pattern. <br /></td></tr>
 <tr class="memitem:ipc_2Ecpp" id="r_ipc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="ipc_8cpp.html">ipc.cpp</a></td></tr>
 <tr class="memdesc:ipc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Priority-based IPC implementation — message queue, send/recv, sync send, priority inheritance. <br /></td></tr>
 <tr class="memitem:ipc_2Ehpp" id="r_ipc_2Ehpp"><td class="memItemLeft"><a href="ipc_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="ipc_8hpp.html">ipc.hpp</a></td></tr>
@@ -140,6 +144,13 @@ Files</h2></td></tr>
 <tr class="memitem:ipc_5Fboot_2Ehpp" id="r_ipc_5Fboot_2Ehpp"><td class="memItemLeft"><a href="ipc__boot_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="ipc__boot_8hpp.html">ipc_boot.hpp</a></td></tr>
 <tr class="memitem:ipc_5Ferrors_2Ehpp" id="r_ipc_5Ferrors_2Ehpp"><td class="memItemLeft"><a href="ipc__errors_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="ipc__errors_8hpp.html">ipc_errors.hpp</a></td></tr>
 <tr class="memdesc:ipc__errors_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPC error codes (X-macro table with human-readable strings). <br /></td></tr>
+<tr class="memitem:pager_5Fregistry_2Ecpp" id="r_pager_5Fregistry_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="pager__registry_8cpp.html">pager_registry.cpp</a></td></tr>
+<tr class="memdesc:pager__registry_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PagerRegistry implementation (issue #107). Mirrors the DeathNotify / FrameUserMap discipline: mutate under the registry lock, wake/unmap/poke OUTSIDE it. The bounded pager contract (paper §4) is enforced here: the faulting client blocks only on its passive registry record + the scheduler; the watchdog and the drain paths are the kernel-side waker sources that do not depend on pager liveness. <br /></td></tr>
+<tr class="memitem:pager_5Fregistry_2Ehpp" id="r_pager_5Fregistry_2Ehpp"><td class="memItemLeft"><a href="pager__registry_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="pager__registry_8hpp.html">pager_registry.hpp</a></td></tr>
+<tr class="memdesc:pager__registry_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">External pager protocol registry (issue #107): user-space #PF delegation to a capability-designated Ring-3 pager. Mirrors DeathNotify/FrameUserMap: static bounded table, claim-under-lock / poke-outside-lock, id+generation revalidation. The bounded pager contract (docs/specs/external-pager.md §4) designs the "pager blocked while faulting
+task waits" deadlock out by construction. <br /></td></tr>
+<tr class="memitem:shm_5Fring_2Ehpp" id="r_shm_5Fring_2Ehpp"><td class="memItemLeft"><a href="shm__ring_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="shm__ring_8hpp.html">shm_ring.hpp</a></td></tr>
+<tr class="memdesc:shm__ring_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared-memory ring protocol (issue #106 Part B). A SPSC ring living in the physical frames of a FrameCap shared by two user tasks via SYS_FRAME_MAP. Page 0 holds the SharedRingHeader (magic/version/capacity + cache-line-aligned head/tail); data pages 1..N-1 hold the ring payload. Zero-syscall after mapping: producer/consumer access the shared frames directly. Head/tail follow the SPSCRing acquire/release protocol (single producer / single consumer — never written by the other side). <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

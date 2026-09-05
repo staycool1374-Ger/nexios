@@ -9,6 +9,17 @@ var searchData=
   ['queue_2ecpp_6',['queue.cpp',['../queue_8cpp.html',1,'']]],
   ['queue_2ehpp_7',['queue.hpp',['../queue_8hpp.html',1,'']]],
   ['queue_5fcounts_8',['queue_counts',['../structkernel_1_1_ready_queue_p_o_d.html#a318bc49fef785fc0a3189cef55985f40',1,'kernel::ReadyQueuePOD']]],
-  ['queue_5fheads_9',['queue_heads',['../structkernel_1_1_ready_queue_p_o_d.html#a59a58c05f78035ebab676ffd6b7d31ba',1,'kernel::ReadyQueuePOD']]],
-  ['queue_5ftails_10',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]]
+  ['queue_5fdesc_5fhi_9',['queue_desc_hi',['../test__virtio__blk__req_8cpp.html#a58e2be4bf9db5013e9fb8c64e633af78',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdesc_5flo_10',['queue_desc_lo',['../test__virtio__blk__req_8cpp.html#ab4fe944bcbd3c49e609999c37ac8491e',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdev_5fhi_11',['queue_dev_hi',['../test__virtio__blk__req_8cpp.html#ae1423dd487c9bead71a9856d5949387b',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdev_5flo_12',['queue_dev_lo',['../test__virtio__blk__req_8cpp.html#ac5acd85a2c532459c35b17bbb46a2df0',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdrv_5fhi_13',['queue_drv_hi',['../test__virtio__blk__req_8cpp.html#a829576cc32b933ac5e4fdf3e5283fd9c',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fdrv_5flo_14',['queue_drv_lo',['../test__virtio__blk__req_8cpp.html#a2ec5e611fea443a12da89ad389f1b372',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fenable_15',['queue_enable',['../test__virtio__blk__req_8cpp.html#a50d57b3ce7d083980b4ca27a8e5c4b53',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fheads_16',['queue_heads',['../structkernel_1_1_ready_queue_p_o_d.html#a59a58c05f78035ebab676ffd6b7d31ba',1,'kernel::ReadyQueuePOD']]],
+  ['queue_5fmsix_17',['queue_msix',['../test__virtio__blk__req_8cpp.html#a0d4970f06edd693edcfbbd0ae087078d',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fnotify_5foff_18',['queue_notify_off',['../test__virtio__blk__req_8cpp.html#ac85df60197b98323cf85f8dff0fefa57',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fsel_19',['queue_sel',['../test__virtio__blk__req_8cpp.html#abb2504bab2485cba474f63c4cbc68ca9',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5fsize_20',['queue_size',['../test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9',1,'test_virtio_blk_req.cpp']]],
+  ['queue_5ftails_21',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]]
 ];

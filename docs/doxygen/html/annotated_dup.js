@@ -19,6 +19,7 @@ var annotated_dup =
         [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
         [ "Endpoint", "classkernel_1_1cap_1_1_endpoint.html", "classkernel_1_1cap_1_1_endpoint" ],
         [ "FrameCap", "classkernel_1_1cap_1_1_frame_cap.html", "classkernel_1_1cap_1_1_frame_cap" ],
+        [ "FrameUserMap", "classkernel_1_1cap_1_1_frame_user_map.html", null ],
         [ "IoMmuDmaCap", "classkernel_1_1cap_1_1_io_mmu_dma_cap.html", "classkernel_1_1cap_1_1_io_mmu_dma_cap" ],
         [ "IrqCap", "classkernel_1_1cap_1_1_irq_cap.html", "classkernel_1_1cap_1_1_irq_cap" ],
         [ "MmioCap", "classkernel_1_1cap_1_1_mmio_cap.html", "classkernel_1_1cap_1_1_mmio_cap" ],
@@ -44,9 +45,19 @@ var annotated_dup =
         [ "IoMmuManager", "classkernel_1_1iommu_1_1_io_mmu_manager.html", null ],
         [ "IoMmuMapping", "structkernel_1_1iommu_1_1_io_mmu_mapping.html", "structkernel_1_1iommu_1_1_io_mmu_mapping" ]
       ] ],
+      [ "ipc", "namespacekernel_1_1ipc.html", [
+        [ "DeathNotify", "classkernel_1_1ipc_1_1_death_notify.html", null ],
+        [ "DeathRecord", "structkernel_1_1ipc_1_1_death_record.html", "structkernel_1_1ipc_1_1_death_record" ],
+        [ "PagerFault", "structkernel_1_1ipc_1_1_pager_fault.html", "structkernel_1_1ipc_1_1_pager_fault" ],
+        [ "PagerFaultMsg", "structkernel_1_1ipc_1_1_pager_fault_msg.html", "structkernel_1_1ipc_1_1_pager_fault_msg" ],
+        [ "PagerRegistry", "classkernel_1_1ipc_1_1_pager_registry.html", null ]
+      ] ],
       [ "log", "namespacekernel_1_1log.html", [
         [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
         [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ]
+      ] ],
+      [ "shm", "namespacekernel_1_1shm.html", [
+        [ "SharedRingHeader", "structkernel_1_1shm_1_1_shared_ring_header.html", "structkernel_1_1shm_1_1_shared_ring_header" ]
       ] ],
       [ "sync", "namespacekernel_1_1sync.html", [
         [ "IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", "classkernel_1_1sync_1_1_irq_spin_lock_guard" ]

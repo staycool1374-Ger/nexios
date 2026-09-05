@@ -9,7 +9,7 @@ var searchData=
   ['libfdt_5finternal_2eh_6',['libfdt_internal.h',['../libfdt__internal_8h.html',1,'']]],
   ['line_5fbuf_5fsize_7',['LINE_BUF_SIZE',['../classservice_1_1_terminal.html#aaa9841cb6a1fb762bfc3ee845df1310b',1,'service::Terminal']]],
   ['line_5fwas_5fmasked_8',['line_was_masked',['../structkernel_1_1_irq_registration.html#a2a8b1f98dfd8b1799359837a6133730b',1,'kernel::IrqRegistration']]],
-  ['live_5fcount_9',['live_count',['../classkernel_1_1cap_1_1_mmio_user_map.html#a2664a39bec5747af26307d496e1f878f',1,'kernel::cap::MmioUserMap']]],
+  ['live_5fcount_9',['live_count',['../classkernel_1_1cap_1_1_frame_user_map.html#a68b0b29d016c3fe8c9838f2a118b6f22',1,'kernel::cap::FrameUserMap::live_count()'],['../classkernel_1_1cap_1_1_mmio_user_map.html#a2664a39bec5747af26307d496e1f878f',1,'kernel::cap::MmioUserMap::live_count()'],['../classkernel_1_1ipc_1_1_death_notify.html#a15374aff2420c1fa276ee14c4344e510',1,'kernel::ipc::DeathNotify::live_count()'],['../classkernel_1_1ipc_1_1_pager_registry.html#abb16d6c3aa72b80d89187b2b9f7dea11',1,'kernel::ipc::PagerRegistry::live_count()']]],
   ['load_10',['load',['../namespacekernel_1_1elf.html#ae81746671637a90991ec1b98cef60dc4',1,'kernel::elf']]],
   ['loadresult_11',['LoadResult',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796',1,'kernel::elf']]],
   ['loadstate_12',['LoadState',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5',1,'kernel::elf']]],

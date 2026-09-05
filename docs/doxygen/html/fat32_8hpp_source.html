@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.2</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
    </div>
   </td>
  </tr>
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> SECTOR_SIZE = 512;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="keyword">struct </span>MbrPartition {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> status;         </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> <a class="code hl_variable" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a>;         </div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> partition_type; </div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> lba_start;     </div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> sector_count;  </div>
@@ -296,6 +296,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="ttc" id="anamespacekernel_1_1vfs_html_aebf94bc8bbd1d4da9adf682e10e082de"><div class="ttname"><a href="namespacekernel_1_1vfs.html#aebf94bc8bbd1d4da9adf682e10e082de">kernel::vfs::mount</a></div><div class="ttdeci">int mount(Filesystem &amp;filesystem, const char *mount_point)</div><div class="ttdoc">Mount a filesystem at a mount point.</div><div class="ttdef"><b>Definition</b> vfs.cpp:277</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
 <div class="ttc" id="anamespacekernel_html_aef2c5f8888b21de09ec3a76f5b964885"><div class="ttname"><a href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((noinline)) static uint64_t bucket_of(const TaskControlBlock *t</div><div class="ttdoc">Find the priority bucket a node currently lives in. A task&#39;s stored t-&gt;priority may have been changed...</div></div>
+<div class="ttc" id="atest__virtio__blk__req_8cpp_html_ade818037fd6c985038ff29656089758d"><div class="ttname"><a href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">status</a></div><div class="ttdeci">uint8_t status</div><div class="ttdef"><b>Definition</b> test_virtio_blk_req.cpp:6</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a2f2ac413d894553957c9a59c1f4653df"><div class="ttname"><a href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a></div><div class="ttdeci">signed long long int64_t</div><div class="ttdef"><b>Definition</b> types.hpp:32</div></div>

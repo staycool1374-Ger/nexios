@@ -1,7 +1,7 @@
 var searchData=
 [
   ['malloc_0',['malloc',['../stdlib_8c.html#a9c36d0fe3ec4675cbffdc9b52f5fb399',1,'malloc(size_t size):&#160;stdlib.c'],['../stdlib_8h.html#a9c36d0fe3ec4675cbffdc9b52f5fb399',1,'malloc(size_t size):&#160;stdlib.c']]],
-  ['map_1',['map',['../classkernel_1_1cap_1_1_mmio_user_map.html#afdd1e85f6b3cb6f4573f13a55b0a1c13',1,'kernel::cap::MmioUserMap']]],
+  ['map_1',['map',['../classkernel_1_1cap_1_1_frame_user_map.html#a85d0da5d5967e598e5082a5482e375dd',1,'kernel::cap::FrameUserMap::map()'],['../classkernel_1_1cap_1_1_mmio_user_map.html#afdd1e85f6b3cb6f4573f13a55b0a1c13',1,'kernel::cap::MmioUserMap::map()'],['../classkernel_1_1ipc_1_1_pager_registry.html#a6e8b85887afecdbaae3de7bc976d837b',1,'kernel::ipc::PagerRegistry::map()']]],
   ['map_5fframe_2',['map_frame',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#adbed9ff975a1f17ea0c2023eeb2217c9',1,'kernel::iommu::IoMmuManager']]],
   ['map_5fmmio_3',['map_mmio',['../classarch_1_1_a_p_i_c.html#a12b1c16e3b9a9b899aa22d653cb77a9a',1,'arch::APIC']]],
   ['mapping_5fcount_4',['mapping_count',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a15b657b8380e46b29e702228f3dba83d',1,'kernel::iommu::IoMmuManager']]],

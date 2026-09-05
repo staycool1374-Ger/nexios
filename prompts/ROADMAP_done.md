@@ -1,5 +1,30 @@
 # Completed Roadmap Items
 
+## v0.4.3 — Test-Coverage Completion (RELEASED 2026-09-05)
+
+**Purpose:** Complete test coverage for v0.4.x (11 new test classes, 76 tests),
+fix silent build/runtime defects unblocked by coverage:
+- AhciDriver::probe PMM alloc (16176 bytes > 8192 MemPool max) — #119
+- aarch64 build broken: iommu.cpp g_probe_result unused-variable — #120
+- syscall_handlers_irq x86-only guards for IRQ/MSI-X helpers
+All gates pass: debug `all` 1147/1147, release `all` 85/85, selftest 133/133.
+
+- **AhciDriver PMM alloc fix** (`e21045fc`, closes #119) —
+  AhciDriver (16176 bytes) allocated from 4 contiguous PMM pages instead of
+  MemPool. Unblocks `ahci_live` real-hardware tests and silent AHCI boot path.
+- **aarch64 build fix** (`66a87e32`, closes #120) — `[[maybe_unused]]` on
+  `g_probe_result` in iommu.cpp; x86-only IRQ/MSI-X helpers in
+  `syscall_handlers_irq.cpp` guarded with `CONFIG_ARCH_X86_64`.
+- **Test coverage milestone** (#85, #108–#118) — 11 new test classes added
+  (hal_rtc_datetime, hal_keyboard_decode, hal_gdt_layout, initrd_parser,
+  hal_serial_logic, vfs_procfs, vfs_tmpfs_corrupt, ipc_pipe_blocking,
+  drivers_virtio_blk_req, drivers_ahci_deep, acpi_parse), 76 tests total.
+
+Gates at completion (2026-09-05): debug `all` **1147/1147** (registered 1162),
+release `all` **85/85**, selftest 133/133. SIL 3 APPROVED per issue.
+
+---
+
 ## v0.4.2 — User-Space Infrastructure (RELEASED 2026-09-03, milestone 1)
 
 **Purpose:** ROADMAP 0.4.2 milestone — complete the capability-based

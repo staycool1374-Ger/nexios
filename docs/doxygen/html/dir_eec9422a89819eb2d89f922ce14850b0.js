@@ -7,6 +7,8 @@ var dir_eec9422a89819eb2d89f922ce14850b0 =
     [ "endpoint.hpp", "endpoint_8hpp.html", "endpoint_8hpp" ],
     [ "frame.cpp", "frame_8cpp.html", "frame_8cpp" ],
     [ "frame.hpp", "frame_8hpp.html", "frame_8hpp" ],
+    [ "frame_map.cpp", "frame__map_8cpp.html", "frame__map_8cpp" ],
+    [ "frame_map.hpp", "frame__map_8hpp.html", "frame__map_8hpp" ],
     [ "iommu.cpp", "cap_2iommu_8cpp.html", "cap_2iommu_8cpp" ],
     [ "iommu.hpp", "cap_2iommu_8hpp.html", "cap_2iommu_8hpp" ],
     [ "irq.cpp", "irq_8cpp.html", "irq_8cpp" ],

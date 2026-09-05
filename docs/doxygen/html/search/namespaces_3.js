@@ -22,9 +22,10 @@ var searchData=
   ['kernel_3a_3aipc_19',['ipc',['../namespacekernel_1_1ipc.html',1,'kernel']]],
   ['kernel_3a_3alog_20',['log',['../namespacekernel_1_1log.html',1,'kernel']]],
   ['kernel_3a_3anet_21',['net',['../namespacekernel_1_1net.html',1,'kernel']]],
-  ['kernel_3a_3async_22',['sync',['../namespacekernel_1_1sync.html',1,'kernel']]],
-  ['kernel_3a_3atask_23',['task',['../namespacekernel_1_1task.html',1,'kernel']]],
-  ['kernel_3a_3atest_24',['test',['../namespacekernel_1_1test.html',1,'kernel']]],
-  ['kernel_3a_3avfs_25',['vfs',['../namespacekernel_1_1vfs.html',1,'kernel']]],
-  ['kernel_3a_3avfsd_26',['vfsd',['../namespacekernel_1_1vfsd.html',1,'kernel']]]
+  ['kernel_3a_3ashm_22',['shm',['../namespacekernel_1_1shm.html',1,'kernel']]],
+  ['kernel_3a_3async_23',['sync',['../namespacekernel_1_1sync.html',1,'kernel']]],
+  ['kernel_3a_3atask_24',['task',['../namespacekernel_1_1task.html',1,'kernel']]],
+  ['kernel_3a_3atest_25',['test',['../namespacekernel_1_1test.html',1,'kernel']]],
+  ['kernel_3a_3avfs_26',['vfs',['../namespacekernel_1_1vfs.html',1,'kernel']]],
+  ['kernel_3a_3avfsd_27',['vfsd',['../namespacekernel_1_1vfsd.html',1,'kernel']]]
 ];

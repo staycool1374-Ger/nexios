@@ -7,5 +7,6 @@ var searchData=
   ['next_4',['next',['../structkernel_1_1vfs_1_1_tmpfs_entry.html#acbfccaeb35609bc4ac916c40ccda33df',1,'kernel::vfs::TmpfsEntry']]],
   ['nodename_5',['nodename',['../structkernel_1_1_utsname.html#aab115ec19cffb053233edd1a34d8a7c8',1,'kernel::Utsname::nodename'],['../struct_utsname.html#a4dff749dd54609cb71cb0ab73b3e809d',1,'Utsname::nodename'],['../structutsname.html#a0adf5436d5015d6408d0347684a4184e',1,'utsname::nodename']]],
   ['noexcept_6',['noexcept',['../namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf',1,'kernel']]],
-  ['notifies_7',['notifies',['../structkernel_1_1test_1_1_resource_counters.html#ab9b9548a06c39c6a31bc16cdf75317c5',1,'kernel::test::ResourceCounters']]]
+  ['notifies_7',['notifies',['../structkernel_1_1test_1_1_resource_counters.html#ab9b9548a06c39c6a31bc16cdf75317c5',1,'kernel::test::ResourceCounters']]],
+  ['num_5fqueues_8',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]]
 ];

@@ -72,6 +72,8 @@
 - Cheap-high-value path DONE: fixed 2 real `branch-clone` (scheduler.cpp can_reap ~698-707, fat32_fs.cpp SEEK_END/default); disabled 3 clang-tidy checks in Makefile (performance-no-int-to-ptr, bugprone-reserved-identifier, bugprone-easily-swappable-parameters).
 - MemoryChecker in tools/validate_style.py REWRITTEN to a brace-depth-aware function-nesting stack (func_stack + pending_func) with: boot-alloc exemption set (_boot_alloc_funcs: AhciDriver::probe, AtaPioDriver::probe_first_drive, VirtioBlkDriver::probe, virtio_net_probe, higherhalf_entry); control-keyword exclusion (_ctrl_keywords); skip of `#`/comment lines; and `\b` word boundaries on `_new_delete` (r"\bnew\b\s|\bdelete\b\s|\bmalloc\s*\(|\bfree\s*\(") to stop false matches on `is_free(`/`bufpool_free(`/`track_*_free(`.
 - VERIFIED: `make check-style` → Errors: 0, Passed. `make debug NO_LTO=1` → ISO built cleanly.
+- **ISSUE #120** (2026-09-05, commits `66a87e32`): aarch64 build broken by unused `g_probe_result` in iommu.cpp. Fixed: marked as `[[maybe_unused]]`; wrapped IRQ/MSI-X helpers in `syscall_handlers_irq.cpp` with `CONFIG_ARCH_X86_64` guard. All x86_64/aarch64 gates pass (debug 1147/1147, release 85/85).
+- **ISSUE #119** (2026-09-05, commits `e21045fc`): AhciDriver::probe failed silently (16176 bytes > 8192 MemPool max). Fixed: allocate from PMM (4 contiguous pages = 16KB). x86_64/aarch64 builds pass, selftest (133/133), full gates pass.
 
 #### Active
 - **v0.4.3-dev** (bumped 2026-09-03): milestone 2 features all CLOSED (#92, #93, #106, #105, #107, #11); milestone 9 "Test-Coverage Completion" COMPLETE (11 issues, 2026-09-04). Remaining open in v0.4.3 family: #85 (SMP test-coverage tracker — v0.4.x milestone 2 work, testbed).
@@ -92,8 +94,6 @@
 - GIC test: verify via ISENABLER (ICENABLER read-back unreliable on QEMU GICv2); DTB test: HHDM deref + tolerate absent DTB (QEMU non-Linux `-kernel` provides none), fallback memory region recorded in boot_info.
 
 ### Next Move
-- **Fix #119** (AhciDriver::probe MemPool size defect) — unlocks the ahci_live real-hardware tests (precondition guard flips live automatically) and re-enables the silent AHCI boot path.
-- **Fix #120** (aarch64 iommu.cpp unused-variable) — restores the multi-arch compile gate broken since #9.
 - **Next selection:** #85 (v0.4.x SMP test-coverage checklist, testbed) or the v0.4.4 milestone (#94/#95 per-cpu-smp / elf-shared-libs design papers).
 - **MSI-X follow-ups (after #10):** user-facing PCI-delegation create syscall (SYS_MSIX_CREATE from a BDF) for Ring-3 drivers; VT-d interrupt remapping (IRTE encoding) so MSI-X messages route through the IOMMU under `intremap=on` (currently `intremap=off` in the iommu_live variant); per-entry mask re-read in `entry_masked()` is already table-backed. See docs/specs/cspace.md §2.6 + iommu.md §8.
 - **IOMMU phase-2 (follow-up to #4):** live VT-d — ACPI/DMAR discovery, GCMD/IRTA/RTA programming, IOTLB flush, fault-event handling, kernel-DMA domain, QEMU `-device intel-iommu` integration; then AMD-Vi/SMMU backends behind the same IoMmuManager interface (docs/specs/iommu.md §8). Also: reclaim the per-bus ctx-table slot in clear_attachment + bidirectional static_assert (S3 notes).
