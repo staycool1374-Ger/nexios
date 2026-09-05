@@ -59,7 +59,7 @@ bool g_translation_live = false;
 ///        in low memory that test isolation rewinds, so a re-probe during a
 ///        test must NOT re-walk them — it reuses the first (boot-time) scan.
 ///        0 = never probed, 1 = hardware live, 2 = probed but absent.
-int g_probe_result = 0;
+[[maybe_unused]] int g_probe_result = 0;
 
 /// @brief Static 4 KiB invalidation queue (phase-2, spec §6.5.1).  One
 ///        static page — no dynamic allocation on real-time paths.  16-byte

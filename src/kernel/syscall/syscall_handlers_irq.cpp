@@ -45,6 +45,8 @@ cap::CNode *current_cspace();
 
 namespace {
 
+#if defined(CONFIG_ARCH_X86_64)
+
 /// @brief Looks up an IrqCap OR MsixCap in @p src (issue #10).  Both wrap a
 ///        hardware vector that the delivery table can arm for user-space
 ///        delivery via the same SYS_IRQ_REGISTER/SYS_IRQ_WAIT machinery.  No
@@ -83,6 +85,8 @@ bool irq_like_fields(KernelObject *obj, bool is_msix, int16_t &reg_idx,
     }
     return reg_idx >= 0;
 }
+
+#endif // CONFIG_ARCH_X86_64
 
 } // namespace
 
