@@ -54,6 +54,13 @@ JARVIS_TEST(pmm_user_alloc, "PRE: none | POST: none") {
 }
 
 JARVIS_TEST(pmm_total_memory, "PRE: none | POST: none") {
+    uint64_t total = PMM::total_memory();
+    JARVIS_ASSERT(total > 0);
+    // Total memory should be at least the PMM window size (128 MiB default)
+    JARVIS_ASSERT(total >= arch::HHDM_WINDOW_SIZE);
+    // Free memory should be less than or equal to total
+    JARVIS_ASSERT(PMM::free_memory() <= total);
+    // Free memory should be positive (we have at least some free pages)
     JARVIS_ASSERT(PMM::free_memory() > 0);
     JARVIS_TEST_PASS();
 }

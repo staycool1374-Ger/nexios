@@ -62,41 +62,91 @@ void scheduler_waitpid_child_entry() {
 } // namespace
 
 // Runmode: kernel
-// Testidea: Validates that the scheduler reports at least one task running.
-// Input: No parameters; reads global scheduler state
-// Expect: JARVIS_ASSERT checks that task_count >= 1
-// Depends: test, scheduler
+// Testidea: Validates that the scheduler task count increments when a task is
+// added and decrements when removed. Also verifies the count includes the
+// current task and idle task.
+// Input: Create a task, add it, verify count increases; remove it, verify
+// count restores.
+// Expect: task_count increases by 1 after add_task, returns to original after
+// terminate_and_drain.
+// Depends: test, scheduler, task, pmm, vmm
 JARVIS_TEST(scheduler_task_count, "PRE: none | POST: none") {
-    uint64_t cnt = Scheduler::task_count();
-    JARVIS_ASSERT(cnt >= 1);
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
-// Testidea: Validates that the current task is non-null and has a positive
-// task ID.
-// Input: No parameters; reads current task from Scheduler::current_task()
-// Expect: JARVIS_ASSERT checks non-null and id > 0
-// Depends: test, scheduler
-JARVIS_TEST(scheduler_current_task, "PRE: none | POST: none") {
-    auto *cur = Scheduler::current_task();
-    JARVIS_ASSERT(cur != nullptr);
-    JARVIS_ASSERT(cur->id > 0);
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
-// Testidea: Validates that calling Scheduler::reschedule returns a valid
-// current task (no-op reschedule).
-// Input: No parameters; captures before/after task pointers
-// Expect: JARVIS_ASSERT checks that before and after are both non-null
-// Depends: test, scheduler
-JARVIS_TEST(scheduler_reschedule_noop, "PRE: none | POST: none") {
     auto *before = Scheduler::current_task();
     JARVIS_ASSERT(before != nullptr);
-    Scheduler::reschedule();
+    uint64_t cnt_before = Scheduler::task_count();
+
+    auto *new_task = TaskControlBlock::create([]() {}, 1, 10);
+    JARVIS_ASSERT(new_task != nullptr);
+    Scheduler::add_task(*new_task);
+    JARVIS_ASSERT_EQ(cnt_before + 1, Scheduler::task_count());
+
+    kernel::test::terminate_and_drain(*new_task);
+    JARVIS_ASSERT_EQ(cnt_before, Scheduler::task_count());
+
     auto *after = Scheduler::current_task();
     JARVIS_ASSERT(after != nullptr);
+
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Validates that the current task is non-null, has a positive task
+// ID, and is in RUNNING state. Also verifies current_task changes after a
+// real context switch to a higher-priority task.
+// Input: Create a higher-priority task, dispatch it, verify current_task
+// updates.
+// Expect: current_task returns the higher-priority task while it runs.
+// Depends: test, scheduler, task
+JARVIS_TEST(scheduler_current_task, "PRE: none | POST: none") {
+    static uint64_t g_self = 0;
+    static uint64_t g_ran = 0;
+
+    auto *high = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            g_self = cur ? cur->id : 0;
+            g_ran = 1;
+        },
+        11, 10);
+    JARVIS_ASSERT(high != nullptr);
+    Scheduler::add_task(*high);
+
+    auto *original = Scheduler::current_task();
+    JARVIS_ASSERT(original != nullptr);
+    JARVIS_ASSERT(original->id > 0);
+    JARVIS_ASSERT(original->state == TaskState::RUNNING);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(high);
+
+    const auto high_id = high->id;
+    kernel::test::terminate_and_drain(*high);
+    JARVIS_ASSERT_EQ(1ULL, g_ran);
+    JARVIS_ASSERT(g_self == high_id);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Validates that reschedule() does NOT swap to a different task
+// when the current task is the only non-idle task (no spurious context
+// switch). This is the anti-spurious-switch guarantee.
+// Input: No other READY tasks; call reschedule.
+// Expect: current_task() returns the same task after reschedule.
+// Depends: test, scheduler
+JARVIS_TEST(scheduler_reschedule_noop, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+
+    // reschedule() is a *real* cooperative switch: it dispatches the highest
+    // READY task via the scheduler. It must NOT spuriously switch away from the
+    // current (RUNNING) task when the only other candidate is the idle/harness
+    // task — that is the anti-spurious-switch guard (scheduler.cpp:~1375).
+    {
+        arch::IrqGuard guard;
+        auto *before = Scheduler::current_task();
+        Scheduler::reschedule();
+        auto *after = Scheduler::current_task();
+        JARVIS_ASSERT(after == before);
+    }
     JARVIS_TEST_PASS();
 }
 

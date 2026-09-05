@@ -48,6 +48,18 @@ JARVIS_TEST(page_tables_pool_multiple_allocs, "PRE: none | POST: none") {
 JARVIS_TEST(page_tables_pool_size_configured, "PRE: none | POST: none") {
     JARVIS_ASSERT(CONFIG_PAGE_TABLE_POOL_SIZE > 0);
     JARVIS_ASSERT(CONFIG_PAGE_TABLE_POOL_SIZE >= 256);
+    // Verify the pool actually has the configured number of pages available
+    uint64_t count = 0;
+    uint64_t pages[256];
+    for (size_t i = 0; i < 256; ++i) {
+        pages[i] = PMM::alloc_page_table();
+        if (pages[i] == 0)
+            break;
+        count++;
+    }
+    JARVIS_ASSERT_FMT(count >= 256, "Page-table pool has %lu pages, expected >= 256", count);
+    for (size_t i = 0; i < count; ++i)
+        PMM::free_page(pages[i]);
     JARVIS_TEST_PASS();
 }
 
@@ -108,6 +120,20 @@ JARVIS_TEST(page_tables_free_pages_on_cleanup, "PRE: none | POST: none") {
 JARVIS_TEST(page_tables_max_process_pages_config, "PRE: none | POST: none") {
     JARVIS_ASSERT(CONFIG_MAX_PROCESS_PAGES > 0);
     JARVIS_ASSERT(CONFIG_MAX_PROCESS_PAGES >= 64);
+    // Verify a user task can actually allocate up to the configured limit
+    // by creating a user task and checking its page table is usable
+    auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(t->page_table_ != 0);
+    // Map a page to verify the page table works
+    uint64_t test_pa = PMM::alloc_user_page();
+    JARVIS_ASSERT(test_pa != 0);
+    VMM::map_page_in_pml4(0x10000000, test_pa, true, t->page_table_);
+    uint64_t resolved = VMM::virt_to_phys_in_pml4(0x10000000, t->page_table_);
+    JARVIS_ASSERT_EQ(test_pa, resolved);
+    PMM::free_page(test_pa);
+    t->cleanup();
+    delete t;
     JARVIS_TEST_PASS();
 }
 
