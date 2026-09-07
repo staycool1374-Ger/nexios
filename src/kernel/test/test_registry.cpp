@@ -114,6 +114,8 @@ void register_ipc_blocking_tests();
 void register_vfsd_authorization_tests();
 void register_textutils_tests();
 void register_shell_interaction_tests();
+void register_shell_commands_tests();
+void register_services_framework_tests();
 void register_irq_guard_tests();
 void register_shell_redirect_tests();
 void register_klog_tests();
@@ -519,6 +521,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"shell_interaction", []() { register_shell_interaction_tests(); }},
     {"shell_redirect", []() { register_shell_redirect_tests(); }},
     {"shell_textutils", []() { register_textutils_tests(); }},
+    {"shell_commands", []() { register_shell_commands_tests(); }},
+    {"services_framework", []() { register_services_framework_tests(); }},
     {"ui_framebuffer", []() { register_framebuffer_tests(); }},
 
     // -- random: RNG subsystem --
@@ -687,6 +691,8 @@ static void register_all_tests() {
     register_vfsd_authorization_tests();
     register_textutils_tests();
     register_shell_interaction_tests();
+    register_shell_commands_tests();
+    register_services_framework_tests();
     register_irq_guard_tests();
     register_irqguard_audit_tests();
     register_shell_redirect_tests();
