@@ -206,6 +206,10 @@ void register_ahci_live_tests();
 void register_initrd_parser_tests();
 void register_vfs_procfs_tests();
 void register_vfs_tmpfs_corrupt_tests();
+void register_devfs_tests();
+void register_procfs_ops_tests();
+void register_initrd_fs_tests();
+void register_vfs_errors_tests();
 void register_pipe_blocking_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
@@ -414,6 +418,18 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- vfs_tmpfs_corrupt: tmpfs corruption/timeout analogue (issue #114) --
     {"vfs_tmpfs_corrupt", []() { register_vfs_tmpfs_corrupt_tests(); }},
+
+    // -- vfs_devfs: /dev device-node operations (issue #124) --
+    {"vfs_devfs", []() { register_devfs_tests(); }},
+
+    // -- vfs_procfs_ops: procfs per-node op contracts (issue #124) --
+    {"vfs_procfs_ops", []() { register_procfs_ops_tests(); }},
+
+    // -- vfs_initrd_fs: initrd filesystem vnodes (issue #124) --
+    {"vfs_initrd_fs", []() { register_initrd_fs_tests(); }},
+
+    // -- vfs_errors: VfsError *_err API + error-code mapping (issue #124) --
+    {"vfs_errors", []() { register_vfs_errors_tests(); }},
 
     // -- servers: user-space daemons --
     {"servers_vfsd", []() { register_vfsd_tests(); }},
@@ -660,6 +676,10 @@ static void register_all_tests() {
     register_vfs_fat32_tests();
     register_vfs_procfs_tests();
     register_vfs_tmpfs_corrupt_tests();
+    register_devfs_tests();
+    register_procfs_ops_tests();
+    register_initrd_fs_tests();
+    register_vfs_errors_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
     register_ipc_blocking_tests();
 #endif
