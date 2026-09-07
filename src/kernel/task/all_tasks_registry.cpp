@@ -262,3 +262,4 @@ void AllTasksRegistry::rebuild() noexcept {
 }
 
 } // namespace kernel
+// NOLINTEND(bugprone-easily-swappable-parameters)

@@ -24,12 +24,12 @@
 #include <scope_guard.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/arch/io.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
 
-extern "C" void scheduler_on_context_switch();
 
 // Runmode: kernel
 // Testidea: After reschedule(), context-switch globals are set consistently.
@@ -229,7 +229,7 @@ JARVIS_TEST(atomics_assembly_bridge, "PRE: none | POST: none") {
                      __ATOMIC_RELEASE);
 
     // Call the bridge function that isr_stubs.asm invokes
-    scheduler_on_context_switch();
+    kernel::gs::scheduler_on_context_switch();
 
     // Verify current task was updated by the bridge
     auto *after = Scheduler::current_task();

@@ -218,6 +218,16 @@ class Scheduler {
     ///        wrongly decide the monitor still exists.  Resetting the pointer
     ///        forces a clean re-spawn.
     static void reset_monitor_task() noexcept { s_monitor_task_ = nullptr; }
+
+    /// @brief Verifies canary guards for a user task during context switch.
+    ///        Called from scheduler hooks (isr_stubs.asm) when a user task
+    ///        context is about to be restored.  Verifies the user segment
+    ///        canaries are intact and reports trips in test mode or panics in
+    ///        production.  Called from isr_stubs.asm via scheduler_on_context_switch.
+    /// @param task    Task to verify (must be magic-valid).
+    /// @param rip     Approximate fault RIP for the latch (0 in scheduler hooks).
+    /// @return true if verified (or no user task / no canary check enabled).
+    static bool canary_check_in_scheduler_hooks(TaskControlBlock *task, uint64_t rip);
     /// @brief Resets the scan-requested flag (used by snapshot_restore to
     ///        clear stale flags).
     static void reset_scan_requested() noexcept {

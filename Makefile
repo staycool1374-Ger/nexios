@@ -659,7 +659,7 @@ profile-class: CXX := x86_64-elf-g++
 profile-class: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
                        -Wno-type-limits -Wno-unused-but-set-variable \
                        -Wno-class-memaccess \
-                       -DCONFIG_DEBUG
+                       -DCONFIG_DEBUG -DCONFIG_PROFILING
 profile-class: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profile-class)'
 	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
@@ -671,12 +671,103 @@ profile-class: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld 
 	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
 	@printf '  %-7s %s\n' 'PROFILE' 'Booting in QEMU for class $(CLASS)…'
 	mkdir -p build/profiling/$(CLASS)
-	$(QEMU_SYSTEM) -cdrom $(DEBUG_ISO) -m 256M -serial file:build/profiling/$(CLASS)/samples.raw \
-	    $(QEMU_NET) -boot order=d -no-reboot -device isa-debug-exit \
+	$(QEMU_SYSTEM) -cdrom $(DEBUG_ISO) -m 256M \
+	    -chardev stdio,id=dbg,mux=on \
+	    -serial chardev:dbg -monitor chardev:dbg \
+	    -debugcon file:build/profiling/$(CLASS)/samples.raw \
+	    $(QEMU_NET) $(QEMU_ARCH_FLAGS) \
+	    -boot order=d -no-reboot -device isa-debug-exit \
 	    -drive if=pflash,format=raw,readonly=on,file=$(QEMU_UEFI) 2>&1 | \
 	    tee build/profiling/$(CLASS)/qemu.log
 	@printf '  %-7s %s\n' 'PROFILE' 'Extracting samples for class $(CLASS)…'
 	python3 tools/extract_samples.py build/profiling/$(CLASS)/samples.raw build/profiling/$(CLASS)
+endif
+
+# ------------------------------------------------------------------------------
+# Dynamic test coverage — function-level (issue #122, phase B)
+#
+# One instrumented kernel (-finstrument-functions) is built once and booted
+# once per test class.  Every run serialises the executed-function set over
+# COM1 to build/coverage/<class>/serial.raw; tools/coverage_report.py unions
+# the per-class sets and reports coverage per source file / per area.
+#
+#   make coverage-build                # build the instrumented kernel once
+#   make coverage-class CLASS=safe     # run one class and capture its dump
+#   make coverage                      # build + run COVERAGE_CLASSES + merge
+# ------------------------------------------------------------------------------
+COVERAGE_DIR       := build/coverage
+COVERAGE_MAX_FUNCS ?= 16384
+COVERAGE_TIMEOUT   ?= 300
+COVERAGE_CLASSES   ?= safe basic_lib basic_atomic scheduler_core ipc_core
+# The coverage handler must not instrument itself (self-measurement noise on
+# every dump byte).  Nothing else is excluded: an excluded file would be
+# reported as uncovered even when it runs.
+COVERAGE_EXCLUDES  := src/kernel/gcov/,gcov_handler.cpp
+COVERAGE_FLAGS     := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
+                      -g -Og -fno-inline -fno-inline-functions \
+                      -fno-omit-frame-pointer -DCONFIG_DEBUG -DCONFIG_COVERAGE \
+                      -DCONFIG_COVERAGE_MAX_FUNCS=$(COVERAGE_MAX_FUNCS) \
+                      -finstrument-functions \
+                      -finstrument-functions-exclude-file-list=$(COVERAGE_EXCLUDES) \
+                      -Wno-type-limits -Wno-unused-but-set-variable \
+                      -Wno-class-memaccess
+
+ifneq ($(ARCH),x86_64)
+coverage-build coverage-class coverage:
+	@printf '  %-7s %s\n' 'ERROR' 'Coverage only supported on x86_64 (arch=$(ARCH))'; exit 1
+else
+coverage-build: CXX := x86_64-elf-g++
+coverage-build: CXXFLAGS := $(COVERAGE_FLAGS)
+coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
+	@printf '  %-7s %s\n' 'LD' 'kernel.elf (coverage)'
+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
+	cp $(KERNEL) iso/boot/kernel.elf
+	@mkdir -p $(dir $(DEBUG_ISO)) $(COVERAGE_DIR) $(dir $(BUILD_STAMP))
+	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
+	cp $(KERNEL) $(COVERAGE_DIR)/kernel.elf
+	@echo coverage > $(BUILD_STAMP)
+	@printf '  %-7s %s\n' 'COVERAGE' 'Instrumented ISO: $(DEBUG_ISO)'
+
+# Relink-only step: the objects already carry the instrumentation, only the
+# initrd (test-config.txt) and therefore the link layout change per class.
+coverage-class: CXX := x86_64-elf-g++
+coverage-class: CXXFLAGS := $(COVERAGE_FLAGS)
+coverage-class:
+	@if [ -z "$(CLASS)" ]; then echo "ERROR: CLASS not set. Usage: make coverage-class CLASS=safe"; exit 1; fi
+	@mkdir -p $(COVERAGE_DIR)/$(CLASS)
+	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
+	@printf '  %-7s %s\n' 'COVERAGE' 'Relinking for class $(CLASS)…'
+	@$(MAKE) --no-print-directory $(INITRD_OBJ) $(KERNEL) \
+	    CXX="x86_64-elf-g++" CXXFLAGS="$(COVERAGE_FLAGS)"
+	cp $(KERNEL) iso/boot/kernel.elf
+	cp $(KERNEL) $(COVERAGE_DIR)/$(CLASS)/kernel.elf
+	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
+	@printf '  %-7s %s\n' 'COVERAGE' 'Booting class $(CLASS)…'
+	if ! command -v gtimeout >/dev/null 2>&1; then \
+	    echo "gtimeout missing (install coreutils)."; exit 1; \
+	fi; \
+	if ! printf '%s' "$(QEMU_FLAGS)" | grep -q -- '-serial chardev:dbg'; then \
+	    echo "ERROR: QEMU_FLAGS has no '-serial chardev:dbg' to redirect"; exit 1; \
+	fi; \
+	_COV_FLAGS=$$(echo "$(QEMU_FLAGS)" | sed 's|-serial chardev:dbg|-serial file:$(COVERAGE_DIR)/$(CLASS)/serial.raw|'); \
+	gtimeout $(COVERAGE_TIMEOUT) $(QEMU_SYSTEM) $$_COV_FLAGS -display none \
+	    -no-reboot $(QEMU_DEBUG_EXIT) > $(COVERAGE_DIR)/$(CLASS)/qemu.log 2>&1 || true
+	@if [ ! -s $(COVERAGE_DIR)/$(CLASS)/serial.raw ]; then \
+	    echo "ERROR: no serial capture for class $(CLASS)"; exit 1; \
+	fi
+	@printf '  %-7s %s\n' 'COVERAGE' 'Capture: $(COVERAGE_DIR)/$(CLASS)/serial.raw'
+
+coverage:
+	@mkdir -p $(COVERAGE_DIR)
+	@cp initrd/tests/test-config.txt $(COVERAGE_DIR)/.test-config.bak 2>/dev/null || \
+	    printf 'safe\n' > $(COVERAGE_DIR)/.test-config.bak
+	@$(MAKE) --no-print-directory coverage-build
+	@for c in $(COVERAGE_CLASSES); do \
+	    $(MAKE) --no-print-directory coverage-class CLASS=$$c || exit 1; \
+	done
+	@python3 tools/coverage_report.py --dir $(COVERAGE_DIR) --out $(COVERAGE_DIR)
+	@cp $(COVERAGE_DIR)/.test-config.bak initrd/tests/test-config.txt
+	@printf '  %-7s %s\n' 'COVERAGE' 'Report: $(COVERAGE_DIR)/report.html'
 endif
 
 # ------------------------------------------------------------------------------

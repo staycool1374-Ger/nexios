@@ -167,6 +167,13 @@ void run_suite(const char* suite_name);
 void print_report(uint64_t start_ns, uint64_t end_ns);
 
 void set_kernel_entry_ns();
+
+#ifdef CONFIG_PROFILING
+/// @brief Dump profiling samples to serial port.
+/// Can be called explicitly by test framework when test class completes.
+void profiling_dump_samples();
+#endif
+
 void set_class_auto_shutdown(bool enabled);
 
 struct TestClass {

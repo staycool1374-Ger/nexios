@@ -36,7 +36,10 @@
 #include <kernel/arch/timer.hpp>
 
 #ifdef CONFIG_PROFILING
-extern "C" void gcov_flush_to_serial();
+#include <kernel/profiling/sampler.hpp>
+#endif
+#if defined(CONFIG_PROFILING) || defined(CONFIG_COVERAGE)
+#include <kernel/gcov/gcov_handler.hpp>
 #endif
 
 namespace kernel {
@@ -491,6 +494,11 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
         Logger::warn("No tests matched flags 0x%x", required_flags);
     }
 
+#ifdef CONFIG_PROFILING
+    // Dump profiling samples at the end of the test class
+    kernel::test::profiling_dump_samples();
+#endif
+
     print_report(start_ns, end_ns);
 
 #if CONFIG_DEADLINE_MONITOR_TASK
@@ -540,6 +548,43 @@ void run_release() {
         while ((arch::inb(COM1_LSR) & 0x20) == 0) { }
         while ((arch::inb(COM1_LSR) & 0x40) == 0) { }
     }
+#ifdef CONFIG_COVERAGE
+    // Dump the executed-function set BEFORE QEMU is signalled to exit: the
+    // ACPI sleep write below tears the VM down immediately (the dump would
+    // be lost).  Interrupts are already disabled (see arch::cli() above), so
+    // the table cannot change while it is serialised.
+    gcov_flush_to_serial();
+#endif
+
+#ifdef CONFIG_PROFILING
+    // Debug marker before dump
+    arch::outb(0x3F8, '[');
+    arch::outb(0x3F8, 'D');
+    arch::outb(0x3F8, 'U');
+    arch::outb(0x3F8, 'M');
+    arch::outb(0x3F8, 'P');
+    arch::outb(0x3F8, ']');
+    // Add timeout to prevent infinite blocking
+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x20) == 0); ++timeout) { arch::io_wait(); }
+    
+    gcov_flush_to_serial();
+    kernel::profiling::Sampler::dump_to_serial();
+    // Drain serial TX FIFO after dumping samples to ensure output is flushed
+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x40) == 0); ++timeout) { arch::io_wait(); }
+    // Reduced delay
+    for (int i = 0; i < 50000; ++i) { arch::io_wait(); }
+    
+    // Debug marker after dump
+    arch::outb(0x3F8, '[');
+    arch::outb(0x3F8, 'D');
+    arch::outb(0x3F8, 'O');
+    arch::outb(0x3F8, 'N');
+    arch::outb(0x3F8, 'E');
+    arch::outb(0x3F8, ']');
+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x40) == 0); ++timeout) { arch::io_wait(); }
+    for (int i = 0; i < 50000; ++i) { arch::io_wait(); }
+#endif
+
     // Signal QEMU to exit via multiple methods with io_wait() between
     // attempts to ensure each out* instruction completes.  Even if none
     // work (e.g. UEFI intercepts legacy ports), the Makefile kills QEMU
@@ -549,11 +594,7 @@ void run_release() {
     arch::io_wait();
     arch::outw(arch::QEMU_SHUTDOWN_PORT, 0x2000);
     arch::io_wait();
-    
-#ifdef CONFIG_PROFILING
-    gcov_flush_to_serial();
-#endif
-    
+
     arch::qemu_debug_exit(static_cast<uint8_t>(result));
     arch::io_wait();
     // Keyboard controller reset (triple fault -> QEMU exit with -no-reboot)
@@ -593,6 +634,115 @@ void run_registered(uint8_t required_flags) {
         shutdown_kernel(result);
     }
 }
+
+#ifdef CONFIG_PROFILING
+/// @brief Dump profiling samples to debugcon (0xE9) which is muxed with COM1.
+/// Can be called explicitly by test framework when test class completes.
+void profiling_dump_samples() {
+    // Also write to COM1 so it appears in serial capture
+    static constexpr uint16_t COM1 = 0x3F8;
+    static constexpr uint16_t COM1_LSR = 0x3FD;
+    static constexpr uint32_t SERIAL_DRAIN_POLL_LIMIT = 100000;
+    
+    // Wait for COM1 TX FIFO ready (bounded: a stalled UART must never hang
+    // the shutdown path; CODING_STYLE section 6 fully-bounded loops).
+    for (uint32_t poll = 0;
+         poll < SERIAL_DRAIN_POLL_LIMIT &&
+             ((arch::inb(COM1_LSR) & 0x20) == 0);
+         ++poll) {
+        arch::io_wait();
+    }
+    
+    // Very visible marker before dump
+    arch::outb(COM1, '\\');
+    arch::outb(COM1, 'n');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'P');
+    arch::outb(COM1, 'R');
+    arch::outb(COM1, 'O');
+    arch::outb(COM1, 'F');
+    arch::outb(COM1, 'I');
+    arch::outb(COM1, 'L');
+    arch::outb(COM1, 'I');
+    arch::outb(COM1, 'N');
+    arch::outb(COM1, 'G');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'D');
+    arch::outb(COM1, 'U');
+    arch::outb(COM1, 'M');
+    arch::outb(COM1, 'P');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'S');
+    arch::outb(COM1, 'T');
+    arch::outb(COM1, 'A');
+    arch::outb(COM1, 'R');
+    arch::outb(COM1, 'T');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '\\');
+    arch::outb(COM1, 'n');
+    
+    arch::outb(0xE9, '[');
+    arch::outb(0xE9, 'D');
+    arch::outb(0xE9, 'U');
+    arch::outb(0xE9, 'M');
+    arch::outb(0xE9, 'P');
+    arch::outb(0xE9, ']');
+    
+    gcov_flush_to_serial();
+    kernel::profiling::Sampler::dump_to_serial();
+    
+    // Very visible marker after dump
+    for (uint32_t poll = 0;
+         poll < SERIAL_DRAIN_POLL_LIMIT &&
+             ((arch::inb(COM1_LSR) & 0x20) == 0);
+         ++poll) {
+        arch::io_wait();
+    }
+    arch::outb(COM1, '\\');
+    arch::outb(COM1, 'n');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'P');
+    arch::outb(COM1, 'R');
+    arch::outb(COM1, 'O');
+    arch::outb(COM1, 'F');
+    arch::outb(COM1, 'I');
+    arch::outb(COM1, 'L');
+    arch::outb(COM1, 'I');
+    arch::outb(COM1, 'N');
+    arch::outb(COM1, 'G');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'D');
+    arch::outb(COM1, 'U');
+    arch::outb(COM1, 'M');
+    arch::outb(COM1, 'P');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, 'E');
+    arch::outb(COM1, 'N');
+    arch::outb(COM1, 'D');
+    arch::outb(COM1, ' ');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '=');
+    arch::outb(COM1, '\\');
+    arch::outb(COM1, 'n');
+    
+    arch::outb(0xE9, '[');
+    arch::outb(0xE9, 'D');
+    arch::outb(0xE9, 'O');
+    arch::outb(0xE9, 'N');
+    arch::outb(0xE9, 'E');
+    arch::outb(0xE9, ']');
+}
+#endif
 
 void set_class_auto_shutdown(bool enabled) {
     kernel::gs::set_class_auto_shutdown(enabled);
