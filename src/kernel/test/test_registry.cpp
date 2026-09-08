@@ -116,6 +116,7 @@ void register_textutils_tests();
 void register_shell_interaction_tests();
 void register_debug_dump_tests();
 void register_profiler_sampler_tests();
+void register_kernel_top_tests();
 void register_checked_ptr_api_tests();
 void register_memory_integrity_tests();
 void register_shell_commands_tests();
@@ -457,6 +458,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_no_dynamic_alloc_tests();
      }},
     {"memory_checked_ptr", []() { register_checked_ptr_tests(); }},
+    {"kernel_top", []() { register_kernel_top_tests(); }},
     {"memory_checked_ptr_api", []() { register_checked_ptr_api_tests(); }},
     {"memory_integrity", []() { register_memory_integrity_tests(); }},
     {"memory_resource_exhaustion", []() { register_resource_exhaustion_tests(); }},
@@ -704,6 +706,7 @@ static void register_all_tests() {
     register_debug_dump_tests();
     register_profiler_sampler_tests();
     register_checked_ptr_api_tests();
+    register_kernel_top_tests();
     register_memory_integrity_tests();
     register_irq_guard_tests();
     register_irqguard_audit_tests();

@@ -773,3 +773,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-08 10:16:13 profiler_sampler PASSED: 6 FAILED: 0 TIME: 133ms
 2026-09-08 11:43:55 memory_checked_ptr_api PASSED: 6 FAILED: 0 TIME: 578ms
 2026-09-08 11:44:14 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
+2026-09-08 15:50:03 kernel_top PASSED: 3 FAILED: 0 TIME: 336ms
+2026-09-08 15:53:02 kernel_top PASSED: 4 FAILED: 0 TIME: 117ms
