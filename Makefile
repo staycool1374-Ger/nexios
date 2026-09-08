@@ -141,6 +141,7 @@ ifeq ($(ARCH),x86_64)
                    -z max-page-size=0x1000 -Map=build/kernel.map
 
     GCOV_LIB_DIR    := $(dir $(shell $(CC) -print-file-name=libgcov.a 2>/dev/null))
+    GCOV_INC_DIR    := $(GCOV_LIB_DIR)include
     QEMU_SYSTEM     := qemu-system-x86_64
     QEMU_ARCH_FLAGS := -boot order=d \
                        -drive if=pflash,format=raw,readonly=on,file=$(QEMU_UEFI)
@@ -699,18 +700,46 @@ COVERAGE_DIR       := build/coverage
 COVERAGE_MAX_FUNCS ?= 16384
 COVERAGE_TIMEOUT   ?= 300
 COVERAGE_CLASSES   ?= safe basic_lib basic_atomic scheduler_core ipc_core
+# Phase: func = Phase B (issue #122, -finstrument-functions, function level).
+#        line = Phase A (issue #123, -fprofile-arcs + libgcov, line/branch).
+COVERAGE_PHASE     ?= func
 # The coverage handler must not instrument itself (self-measurement noise on
 # every dump byte).  Nothing else is excluded: an excluded file would be
 # reported as uncovered even when it runs.
 COVERAGE_EXCLUDES  := src/kernel/gcov/,gcov_handler.cpp
-COVERAGE_FLAGS     := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
+
+# Flags shared by both phases.
+COVERAGE_COMMON_FLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
                       -g -Og -fno-inline -fno-inline-functions \
-                      -fno-omit-frame-pointer -DCONFIG_DEBUG -DCONFIG_COVERAGE \
-                      -DCONFIG_COVERAGE_MAX_FUNCS=$(COVERAGE_MAX_FUNCS) \
-                      -finstrument-functions \
-                      -finstrument-functions-exclude-file-list=$(COVERAGE_EXCLUDES) \
+                      -fno-omit-frame-pointer -DCONFIG_DEBUG \
                       -Wno-type-limits -Wno-unused-but-set-variable \
                       -Wno-class-memaccess
+
+# Phase B: -finstrument-functions + our own executed-function table.
+COVERAGE_FUNC_FLAGS := $(COVERAGE_COMMON_FLAGS) \
+                      -DCONFIG_COVERAGE \
+                      -DCONFIG_COVERAGE_MAX_FUNCS=$(COVERAGE_MAX_FUNCS) \
+                      -finstrument-functions \
+                      -finstrument-functions-exclude-file-list=$(COVERAGE_EXCLUDES)
+
+# Phase A: real gcov.  -fprofile-abs-path makes the gcno-recorded filenames
+# absolute so the host can place the reconstructed .gcda next to its .gcno.
+# GCOV_INC_DIR holds the toolchain's gcov.h (freestanding-safe declarations).
+COVERAGE_LINE_FLAGS := $(COVERAGE_COMMON_FLAGS) \
+                      -DCONFIG_GCOV_LINE \
+                      -fprofile-arcs -ftest-coverage -fprofile-abs-path \
+                      -I$(GCOV_INC_DIR)
+
+ifeq ($(COVERAGE_PHASE),line)
+COVERAGE_FLAGS     := $(COVERAGE_LINE_FLAGS)
+# libgcov.a is freestanding-safe here: its only undefined symbol is strlen,
+# which src/lib/string.hpp provides.  Our gcov_handler.cpp supplies
+# __gcov_init(), so libgcov's own copy is never pulled from the archive.
+COVERAGE_LD_LIBS   := $(GCOV_LIB_DIR)libgcov.a
+else
+COVERAGE_FLAGS     := $(COVERAGE_FUNC_FLAGS)
+COVERAGE_LD_LIBS   :=
+endif
 
 ifneq ($(ARCH),x86_64)
 coverage-build coverage-class coverage:
@@ -718,9 +747,10 @@ coverage-build coverage-class coverage:
 else
 coverage-build: CXX := x86_64-elf-g++
 coverage-build: CXXFLAGS := $(COVERAGE_FLAGS)
+coverage-build: LD_LIBS := $(COVERAGE_LD_LIBS)
 coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (coverage)'
-	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(COVERAGE_LD_LIBS)
 	cp $(KERNEL) iso/boot/kernel.elf
 	@mkdir -p $(dir $(DEBUG_ISO)) $(COVERAGE_DIR) $(dir $(BUILD_STAMP))
 	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
@@ -732,13 +762,15 @@ coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld
 # initrd (test-config.txt) and therefore the link layout change per class.
 coverage-class: CXX := x86_64-elf-g++
 coverage-class: CXXFLAGS := $(COVERAGE_FLAGS)
+coverage-class: LD_LIBS := $(COVERAGE_LD_LIBS)
 coverage-class:
 	@if [ -z "$(CLASS)" ]; then echo "ERROR: CLASS not set. Usage: make coverage-class CLASS=safe"; exit 1; fi
 	@mkdir -p $(COVERAGE_DIR)/$(CLASS)
 	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
 	@printf '  %-7s %s\n' 'COVERAGE' 'Relinking for class $(CLASS)…'
 	@$(MAKE) --no-print-directory $(INITRD_OBJ) $(KERNEL) \
-	    CXX="x86_64-elf-g++" CXXFLAGS="$(COVERAGE_FLAGS)"
+	    CXX="x86_64-elf-g++" CXXFLAGS="$(COVERAGE_FLAGS)" \
+	    LD_LIBS="$(COVERAGE_LD_LIBS)"
 	cp $(KERNEL) iso/boot/kernel.elf
 	cp $(KERNEL) $(COVERAGE_DIR)/$(CLASS)/kernel.elf
 	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null

@@ -38,7 +38,8 @@
 #ifdef CONFIG_PROFILING
 #include <kernel/profiling/sampler.hpp>
 #endif
-#if defined(CONFIG_PROFILING) || defined(CONFIG_COVERAGE)
+#if defined(CONFIG_PROFILING) || defined(CONFIG_COVERAGE) || \
+    defined(CONFIG_GCOV_LINE)
 #include <kernel/gcov/gcov_handler.hpp>
 #endif
 
@@ -554,6 +555,20 @@ void run_release() {
     // be lost).  Interrupts are already disabled (see arch::cli() above), so
     // the table cannot change while it is serialised.
     gcov_flush_to_serial();
+#endif
+
+#ifdef CONFIG_GCOV_LINE
+    // Phase A: stream the per-translation-unit gcov profile (real line/branch
+    // coverage) the same way - before the ACPI exit write, interrupts off.
+    //
+    // The per-TU registration hooks run HERE, not at boot: they only publish
+    // the gcov_info pointers into our table, while the arc counters are
+    // incremented by the instrumented code from the very first instruction
+    // regardless of registration.  Running them during early boot crashed
+    // before any output; registering at dump time is equally correct and
+    // needs no working kernel state.
+    gcov_run_ctors();
+    gcov_line_dump_to_serial();
 #endif
 
 #ifdef CONFIG_PROFILING

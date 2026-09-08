@@ -26,9 +26,21 @@
 
 extern "C" {
 
-/// @brief Serialise the executed-function set over COM1.
+/// @brief Serialise the executed-function set over COM1 (Phase B).
 /// Emits a framed, checksummed record (see docs/specs/coverage.md).
 /// Safe to call with interrupts disabled; never blocks unbounded.
 void gcov_flush_to_serial();
+
+/// @brief Serialise every translation unit's gcov profile over COM1 (Phase A,
+/// issue #123).  Emits one "GCOV:<len>:<filename>\n<payload>" record per
+/// instrumented translation unit, framed by @@GCDABEGIN@@/@@GCDAEND@@.
+/// Only provided in the -fprofile-arcs build; safe with interrupts disabled.
+void gcov_line_dump_to_serial();
+
+/// @brief Run the linker-collected static constructor table so every
+/// instrumented translation unit registers its gcov profile.  Must be called
+/// before any profile data is needed; only provided in the -fprofile-arcs
+/// build.  Bounded by the table's own sentinels.
+void gcov_run_ctors();
 
 } // extern "C"
