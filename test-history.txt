@@ -775,3 +775,19 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-08 11:44:14 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
 2026-09-08 15:50:03 kernel_top PASSED: 3 FAILED: 0 TIME: 336ms
 2026-09-08 15:53:02 kernel_top PASSED: 4 FAILED: 0 TIME: 117ms
+2026-09-08 16:18:10 synchronization_err_api PASSED: 6 FAILED: 0 TIME: 597ms
+2026-09-08 16:20:27 synchronization_err_api PASSED: 6 FAILED: 0 TIME: 140ms
+2026-09-08 16:23:37 synchronization_err_api PASSED: 7 FAILED: 0 TIME: 161ms
+2026-09-08 16:25:27 synchronization_sync PASSED:19 FAILED:0 TIME: 9s
+2026-09-08 16:25:35 synchronization_locking PASSED:19 FAILED:0 TIME: 8s
+2026-09-08 16:25:44 synchronization_pip PASSED:10 FAILED:0 TIME: 9s
+2026-09-08 16:25:53 synchronization_pcp PASSED:8 FAILED:0 TIME: 9s
+2026-09-08 16:26:02 synchronization_spinlock PASSED:10 FAILED:0 TIME: 9s
+2026-09-08 16:26:11 synchronization_irq_guard PASSED:4 FAILED:0 TIME: 9s
+2026-09-08 16:26:19 synchronization_lock_order PASSED:4 FAILED:0 TIME: 8s
+2026-09-08 16:26:28 synchronization_lock_validator PASSED:6 FAILED:0 TIME: 9s
+2026-09-08 16:26:37 synchronization_pi_donation PASSED:5 FAILED:0 TIME: 9s
+2026-09-08 16:26:52 ipc_core PASSED:23 FAILED:0 TIME: 9s
+2026-09-08 16:27:01 ipc_robustness PASSED:7 FAILED:0 TIME: 9s
+2026-09-08 16:27:12 safe PASSED:133 FAILED:0 TIME: 11s
+2026-09-08 16:27:24 selftest PASSED:133 FAILED:0 TIME: 12s
