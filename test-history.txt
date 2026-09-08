@@ -771,3 +771,5 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-07 19:36:45 services_framework PASSED: 7 FAILED: 0 TIME: 259ms
 2026-09-08 08:30:29 debug_dump PASSED: 4 FAILED: 0 TIME: 448ms
 2026-09-08 10:16:13 profiler_sampler PASSED: 6 FAILED: 0 TIME: 133ms
+2026-09-08 11:43:55 memory_checked_ptr_api PASSED: 6 FAILED: 0 TIME: 578ms
+2026-09-08 11:44:14 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
