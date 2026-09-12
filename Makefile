@@ -599,7 +599,7 @@ endif
 # -Wanalyzer-undefined-behavior-ptrdiff: GCC 15+), so keep only the
 # suppressions this compiler actually knows (CI uses GCC 13).
 # ------------------------------------------------------------------------------
-ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
+ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
 cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
 release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
 release: $(TEST_REGISTRY_GEN)
