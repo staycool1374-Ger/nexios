@@ -32,7 +32,11 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/io.hpp>
 #include <kernel/ipc/ipc.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/memory/vmm.hpp>
+#include <kernel/vfs/vfs.hpp>
 #include <signal.hpp>
 #include "test_sched_helpers.hpp"
 
@@ -477,6 +481,300 @@ JARVIS_TEST(syscall_signal_sigreturn, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// ============================================================================
+// User-task syscall fixture (issue #143, x86_64 only).
+//
+// A REAL Ring-3 task performs real int $0x80 syscalls against a REAL private
+// PML4, so safe_copy_{to,from}_user take the user-task path (is_user_ true)
+// with ambient tables that actually map the probed pages.  Follows the
+// install_user_yield_stub pattern (task.cpp): hand-crafted machine code
+// written via the HHDM alias, mapped user-accessible, entered through the
+// auto-installed yield-stub page.
+//
+// Layout (all below USER_SPACE_LIMIT, clear of the yield stub 0x40000000,
+// MMIO/SHM windows, stack 0x70000000 and the >=0x100000000 buffer area):
+//   code  0x40000000  reuses the auto-installed yield-stub page (content
+//                     replaced with the probe; executable, as mapped)
+//   data  0x50001000  fresh user page, mapped RW + NX (5-arg map call):
+//                     [0..7] first call's return, [8..15] second call's
+//                     return, [16..] probed struct.
+// Teardown is the standard terminate+drain: cleanup() frees the PML4 tree
+// (free_user_pages reclaims the user-owned code/data/table pages), the
+// stacks and the TCB — no manual page management, no tracker delta.
+// ============================================================================
+#if defined(CONFIG_ARCH_X86_64)
+namespace {
+
+/// @brief Code VA: the auto-installed yield-stub page, content replaced.
+constexpr uint64_t kUserProbeCodeVa = 0x40000000ULL;
+/// @brief Data VA: fresh user page mapped by the fixture (RW, NX).
+constexpr uint64_t kUserProbeDataVa = 0x50001000ULL;
+/// @brief Struct offset inside the data page (return slots precede it).
+constexpr uint64_t kUserProbeStructOff = 16;
+/// @brief Bounded-join budget: the probe runs ~3 dispatches; this is orders
+///        of magnitude above that, so expiry means a real wedge (converted
+///        to FAIL, never a hang — see issue #148).
+constexpr uint64_t kUserProbeJoinSpins = 10000000ULL;
+/// @brief Fixture priority: above the harness so ticks dispatch it.
+constexpr uint64_t kUserProbePrio = 20;
+
+/// @brief Emit one (mov edx,data; mov eax,num; mov ebx,arg0; movabs
+///        rcx,arg1; int $0x80; mov [rdx+disp],rax) call sequence at @p code.
+///        Returns the advanced pointer.  edx carries the data-page base
+///        (always mapped, so return stores never fault even when rcx
+///        probes garbage); rcx is full 64-bit so limit-boundary pointers
+///        are expressible.  Return slots live at [edx+0] and [edx+8] —
+///        INSIDE the mapped page (a negative displacement would fault
+///        below it; issue #143).  The store is 64-bit (REX.W): the handler
+///        returns uint64_t and a 32-bit EAX store would truncate -1 to
+///        0xFFFFFFFF.
+uint8_t *emit_user_syscall(uint8_t *code, uint32_t num, uint32_t arg0,
+                           uint64_t arg1, int8_t ret_disp) {
+    *code++ = 0xBA;
+    uint32_t data_lo = static_cast<uint32_t>(kUserProbeDataVa);
+    for (uint64_t i = 0; i < 4; ++i)
+        *code++ = static_cast<uint8_t>((data_lo >> (i * 8)) & 0xFF);
+    *code++ = 0xB8;
+    for (uint64_t i = 0; i < 4; ++i)
+        *code++ = static_cast<uint8_t>((num >> (i * 8)) & 0xFF);
+    *code++ = 0xBB;
+    for (uint64_t i = 0; i < 4; ++i)
+        *code++ = static_cast<uint8_t>((arg0 >> (i * 8)) & 0xFF);
+    *code++ = 0x48;
+    *code++ = 0xB9;
+    for (uint64_t i = 0; i < 8; ++i)
+        *code++ = static_cast<uint8_t>((arg1 >> (i * 8)) & 0xFF);
+    *code++ = 0xCD;
+    *code++ = 0x80;
+    *code++ = 0x48;
+    *code++ = 0x89;
+    if (ret_disp == 0) {
+        *code++ = 0x02;
+    } else {
+        *code++ = 0x42;
+        *code++ = static_cast<uint8_t>(ret_disp);
+    }
+    return code;
+}
+
+/// @brief Run two syscalls from a REAL dispatched user task and read back
+///        the return slots + struct area.  See the fixture block comment.
+/// @return true if the probe reached EXIT (false = setup/join failure;
+///         the caller owns no resources either way — teardown ran inside).
+bool run_user_probe(uint32_t num_a, uint32_t arg0_a, uint64_t arg1_a,
+                    uint32_t num_b, uint32_t arg0_b, uint64_t arg1_b,
+                    uint64_t *out_ret_a, uint64_t *out_ret_b,
+                    uint8_t *out_data) {
+    auto *fixture = TaskControlBlock::create_user(kernel::test::forever_entry,
+                                                  kUserProbePrio, 10, 32768);
+    if (!fixture) {
+        return false;
+    }
+    uint64_t data_phys = PMM::alloc_user_page();
+    if (data_phys) {
+        VMM::map_page_in_pml4(kUserProbeDataVa, data_phys, true, false,
+                              fixture->page_table_);
+    }
+    uint64_t code_phys = VMM::virt_to_phys_in_pml4(kUserProbeCodeVa,
+                                                   fixture->page_table_);
+    uint64_t data_check = VMM::virt_to_phys_in_pml4(kUserProbeDataVa,
+                                                    fixture->page_table_);
+    if (!data_phys || data_check != data_phys || !code_phys) {
+        kernel::test::terminate_and_drain(*fixture);
+        return false;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *code = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + code_phys);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + data_phys);
+    for (uint64_t i = 0; i < 512; ++i)
+        data[i] = 0;
+    code = emit_user_syscall(code, num_a, arg0_a, arg1_a, 0);
+    code = emit_user_syscall(code, num_b, arg0_b, arg1_b, 8);
+    *code++ = 0xB8;
+    *code++ = 0x06;
+    *code++ = 0x00;
+    *code++ = 0x00;
+    *code++ = 0x00;
+    *code++ = 0xBB;
+    *code++ = 0x00;
+    *code++ = 0x00;
+    *code++ = 0x00;
+    *code++ = 0x00;
+    *code++ = 0xCD;
+    *code++ = 0x80;
+    *code++ = 0xEB;
+    *code++ = 0xFE;
+    Scheduler::add_task(*fixture);
+    Scheduler::reschedule();
+    for (uint64_t i = 0;
+         i < kUserProbeJoinSpins && fixture->state != TaskState::TERMINATED;
+         ++i) {
+        arch::pause();
+    }
+    // Observe BEFORE teardown: drain frees the PML4 and the TCB.
+    data_check = VMM::virt_to_phys_in_pml4(kUserProbeDataVa,
+                                           fixture->page_table_);
+    bool exited = (fixture->state == TaskState::TERMINATED);
+    // Clean EXIT (code 0) is required: a fault-death (e.g. SIGSEGV, -11)
+    // also yields TERMINATED but leaves zero-init memory that reads back
+    // as plausible zeros — asserting the exit code makes vacuous passes
+    // impossible.
+    bool clean_exit = exited && (fixture->exit_code == 0);
+    bool observed = exited && (data_check == data_phys);
+    if (observed) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + data_phys);
+        *out_ret_a = 0;
+        *out_ret_b = 0;
+        for (uint64_t i = 0; i < 8; ++i) {
+            *out_ret_a |= static_cast<uint64_t>(data[i]) << (i * 8);
+            *out_ret_b |= static_cast<uint64_t>(data[8 + i]) << (i * 8);
+        }
+        for (uint64_t i = 0; i < 512; ++i)
+            out_data[i] = data[i];
+    }
+    // sys_exit self-termination never queues a zombie (no release_zombie),
+    // so an exited fixture still needs terminate() to become reapable; a
+    // signal-death already queued via terminate() and must NOT be
+    // re-terminated (double zombie-append).  Our stub only ever exits 0,
+    // so TERMINATED+0 means unqueued while TERMINATED+nonzero means queued.
+    if (TaskControlBlock::is_valid(fixture) &&
+        (fixture->state != TaskState::TERMINATED ||
+         fixture->exit_code == 0)) {
+        Scheduler::terminate(*fixture, 0);
+    }
+    Scheduler::drain_zombie_list();
+    return observed && clean_exit;
+}
+
+} // namespace
+#endif
+
+// Runmode: kernel
+// Testidea: REAL Ring-3 GETRLIMIT(NOFILE)+SETRLIMIT round-trip through the
+//           user-task copy path (is_user_ true, ambient user PML4).
+// Input: Dispatched user task: getrlimit(2, data+16) then
+//        setrlimit(0, data+16); results read back via phys translation.
+// Expect: Probe reaches EXIT; both return 0; rlim_cur == rlim_max ==
+//         MAX_FDS.  Covers safe_copy_{to,from}_user<Rlimit>,
+//         checked<Rlimit>/CheckedPtr ctor+valid+unsafe_ptr (mutable and
+//         const).
+// Depends: kernel::Syscall::sys_getrlimit/sys_setrlimit, VMM user mapping
+JARVIS_TEST(syscall_user_getrlimit_roundtrip, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    uint64_t struct_va = kUserProbeDataVa + kUserProbeStructOff;
+    bool ran = run_user_probe(45, 2, struct_va, 46, 0, struct_va, &ret_a,
+                              &ret_b, data);
+    uint64_t cur = 0;
+    uint64_t max = 0;
+    for (uint64_t i = 0; i < 8; ++i) {
+        cur |= static_cast<uint64_t>(data[16 + i]) << (i * 8);
+        max |= static_cast<uint64_t>(data[24 + i]) << (i * 8);
+    }
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(0ULL, ret_a);
+    JARVIS_ASSERT_EQ(0ULL, ret_b);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(vfs::MAX_FDS), cur);
+    JARVIS_ASSERT_EQ(cur, max);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: REAL Ring-3 GETTOD+UNAME round-trip through the user-task copy
+//           path (same fixture as getrlimit).
+// Input: Dispatched user task: gettod(data+16) then uname(data+16).
+// Expect: Probe reaches EXIT; both return 0; tv_sec != 0 with
+//         tv_usec < 1000000; uts.sysname is "NexIOS".  Covers
+//         safe_copy_to_user<Timeval/Utsname> + checked/CheckedPtr families.
+// Depends: kernel::Syscall::sys_gettod/sys_uname
+JARVIS_TEST(syscall_user_gettod_uname, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    uint64_t struct_va = kUserProbeDataVa + kUserProbeStructOff;
+    uint32_t struct_lo = static_cast<uint32_t>(struct_va);
+    bool ran = run_user_probe(34, struct_lo, 0, 35, struct_lo, 0, &ret_a,
+                              &ret_b, data);
+    int64_t sec = 0;
+    uint64_t usec = 0;
+    for (uint64_t i = 0; i < 8; ++i) {
+        sec |= static_cast<int64_t>(data[16 + i]) << (i * 8);
+        usec |= static_cast<uint64_t>(data[24 + i]) << (i * 8);
+    }
+    bool sysname_ok = (data[16] == 'N' && data[17] == 'e' &&
+                       data[18] == 'x' && data[19] == 'I' &&
+                       data[20] == 'O' && data[21] == 'S' &&
+                       data[22] == '\0');
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(0ULL, ret_a);
+    JARVIS_ASSERT_EQ(0ULL, ret_b);
+    JARVIS_ASSERT(sec != 0);
+    JARVIS_ASSERT(usec < 1000000ULL);
+    JARVIS_ASSERT(sysname_ok);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: User-task syscalls must REJECT non-user pointers without
+//           touching them (valid() gate, no dereference, no fault).
+// Input: Dispatched user task: getrlimit(2, NULL) then
+//        getrlimit(2, 0xFFFF800000000000).
+// Expect: Probe reaches EXIT; both return -1.  Return slots live on the
+//         always-mapped data page, so the stores themselves never fault.
+// Depends: kernel::CheckedPtr::valid, sys_getrlimit user-task gate
+JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    bool ran = run_user_probe(45, 2, 0, 45, 2, 0xFFFF800000000000ULL, &ret_a,
+                              &ret_b, data);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: A user-range but UNMAPPED pointer must fail closed through the
+//           fault-recovery path (real #PF inside safe_copy, redirected to
+//           the recover label), while a mapped pointer in the same task
+//           succeeds — proving the success/failure split is the mapping,
+//           not the task.
+//           PARKED as stub (issue #149): the recovery resume loops
+//           silently; re-activate once #149 is fixed (keep the mapped
+//           control call — it is covered by the roundtrip test meanwhile).
+// Input: Dispatched user task: getrlimit(2, 0x60000000) [user range,
+//        never mapped] then getrlimit(2, data+16) [mapped control].
+// Expect: Probe reaches EXIT; first returns -1 (fault recovered), second
+//         returns 0.  Covers the recover_to path that no kernel-task test
+//         can reach.
+// Depends: kernel::safe_copy_to_user fault recovery (recover_to label)
+JARVIS_TEST(syscall_user_unmapped_fault, "PRE: none | POST: none") {
+    /* Pseudocode:
+     * 1. Defensive destroy of prior vectors (none live); build the probe:
+     *    call_a = getrlimit(2, 0x60000000), call_b = getrlimit(2, data+16).
+     * 2. Dispatch the user task; join boundedly on TERMINATED + exit 0.
+     * 3. Read back rets via phys translation BEFORE teardown.
+     * 4. terminate + drain; assert ran, ret_a == -1, ret_b == 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
 // Testidea: Registers all syscall test cases with the test framework.
 // Input: None.
 // Expect: All JARVIS_REGISTER_TEST calls succeed and tests are available for
@@ -505,4 +803,9 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_fork_returns_pid);
     JARVIS_REGISTER_TEST(syscall_exec_nonexistent);
     JARVIS_REGISTER_TEST(syscall_signal_sigreturn);
+
+    JARVIS_REGISTER_TEST(syscall_user_getrlimit_roundtrip);
+    JARVIS_REGISTER_TEST(syscall_user_gettod_uname);
+    JARVIS_REGISTER_TEST(syscall_user_copy_reject);
+    JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
 }

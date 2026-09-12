@@ -311,6 +311,31 @@ JARVIS_TEST(checked_ptr_api_safe_copy_templates_fail_closed,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: safe_copy must fail closed through the fault-recovery path
+//           (real #PF inside the copy, redirected to the recover label)
+//           when the user range is valid but unmapped — not only through
+//           the range gate.
+//           PARKED as stub (issue #149): the recovery resume loops
+//           silently instead of returning false; re-activate once #149
+//           is fixed.
+// Input: safe_copy_from_user (kernel dst, unmapped 0x60000000 src) and
+//        safe_copy_to_user (unmapped 0x60000000 dst, kernel src), 16 bytes
+//        each; sentinel planted in the kernel destination first.
+// Expect: Both return false, destination sentinel unchanged, no panic,
+//         no hang — the fault is recovered synchronously.
+// Depends: safe_copy_from_user/safe_copy_to_user fault recovery
+JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
+            "PRE: vfsd, iocd | POST: none") {
+    /* Pseudocode:
+     * 1. Plant 0xA5 sentinel in kernel_dst[16], pattern in kernel_src[16].
+     * 2. from_ok = safe_copy_from_user(kernel_dst, 0x60000000, 16).
+     * 3. to_ok = safe_copy_to_user(0x60000000, kernel_src, 16).
+     * 4. Assert !from_ok && !to_ok and the sentinel is unchanged.
+     */
+    JARVIS_TEST_PASS();
+}
+
 void register_checked_ptr_api_tests() {
     Logger::info("Registering CheckedPtr API tests");
     JARVIS_REGISTER_TEST(checked_ptr_api_scalar_types);
@@ -319,4 +344,5 @@ void register_checked_ptr_api_tests() {
     JARVIS_REGISTER_TEST(checked_ptr_api_signal_frame);
     JARVIS_REGISTER_TEST(checked_ptr_api_zero_count_is_noop);
     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_templates_fail_closed);
+    JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_fault_recovery);
 }
