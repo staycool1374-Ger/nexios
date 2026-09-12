@@ -48,11 +48,13 @@ class Queue {
   public:
     static constexpr size_t MAX_WAITERS = CONFIG_SYNC_MAX_WAITERS;
 
+    // NOTE: mem-initializers are kept in declaration order (-Wreorder).
     Queue()
-        : head_(0), tail_(0), count_(0), send_waiters_(0), recv_waiters_(0),
-          last_sender_(nullptr), last_receiver_(nullptr),
+        : head_(0), tail_(0), count_(0), send_waiters_{}, send_waiter_gens_{},
+          send_waiters_count_(0), recv_waiters_{}, recv_waiter_gens_{},
+          recv_waiters_count_(0), last_sender_(nullptr), last_receiver_(nullptr),
           last_sender_gen_(0), last_receiver_gen_(0), send_holder_prio_(0),
-          recv_holder_prio_(0), send_waiters_count_(0), recv_waiters_count_(0) {
+          recv_holder_prio_(0) {
     }
     /// @brief Initialize the message queue to empty.
     void init();
