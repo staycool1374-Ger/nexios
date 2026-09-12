@@ -281,7 +281,22 @@ This project has a knowledge graph at graphify-out/ with god nodes, community st
 
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
-Rules:
+Rules (mandatory retrieval — no self-exemption):
+- Familiarity with file paths, prior-session context, or confidence that
+  direct reads suffice is NEVER grounds to skip. Overconfidence in local
+  context is the exact failure mode this rule guards: the graph and vault
+  answer questions you have not thought to ask (hidden contracts, prior
+  audit findings, in-tree precedents).
+- Before the FIRST source read of any non-trivial task, run at least one
+  `graphify query/path` (relationships, callers, precedents) and at least
+  one `obsidian_search_vault` (subsystem specs, `audits/done/*` reports).
+  Paste the queries plus a one-line disposition each ("used X / ignored Y
+  because …") into the plan or the issue work-begun comment. No retrieval
+  artifacts → the auditor rejects the change (PROMPT-audit.md check 7),
+  independent of code quality.
+- Staleness doctrine: the graph may lag the tree. Graph = relationships,
+  precedents, contracts; files = current text. Lag is a reason to read
+  files AS WELL, never to skip the graph.
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
@@ -293,6 +308,7 @@ Rules:
 - Canonical names: `mcp__graphify__query` → `query_graph`, `mcp__graphify__path` → `shortest_path`, `mcp__graphify__explain` → `get_node`+`get_neighbors`, `mcp__obsidian__read_note` → `obsidian_read_note` (full map: `MCP-CONFIG.md` §4).
 - Hierarchy: MCP tools first when configured; raw CLI is the fallback when MCP is unreachable. `graphify update .` is CLI-only — no MCP update tool exists.
 - Vault Integrity: Obsidian is authoritative for specs/roadmaps/test cases. MCP writes must preserve YAML frontmatter, `[[wikilinks]]`, and folder structure.
+- Vault Precaution Read: before implementing in a subsystem, search the vault for its specs and `audits/done/*` reports — that is where precautions live (trust-boundary contracts, prior findings, test traps). A subsystem with vault coverage implemented without a vault read is a process violation.
 - Context Minimization: call `mcp__graphify__query` or `mcp__graphify__explain` before touching high-level code or specs; never ingest raw spec files wholesale.
 
 ## Active Summary
