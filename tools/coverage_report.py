@@ -12,6 +12,10 @@ frame format).  This script
      to source files with ``addr2line``,
   5. reports coverage per area and per file, worst first.
 
+Itanium ABI C1/C2 constructor and D0/D1/D2 destructor twins are collapsed
+to one entry (C1/D1) before unioning, so never-enterable base-object
+variants do not inflate the denominator (issue #142).
+
 Usage:
     python3 tools/coverage_report.py --dir build/coverage --out build/coverage
 """
@@ -33,6 +37,27 @@ FUNC_TYPES = ("T", "t", "W", "w")
 # Cap for the per-area "never entered" function listing in the markdown report
 # (the full set is always counted in the tables above).
 UNCOVERED_PER_AREA = 600
+
+# Itanium C++ ABI duplicate variants (issue #142): every non-trivial
+# constructor is emitted twice (C1 = complete-object, C2 = base-object) and
+# every destructor up to three times (D0 = deleting, D1 = complete-object,
+# D2 = base-object). With -fno-inline (COVERAGE_FLAGS) the out-of-line copies
+# survive as distinct weak symbols, but only the C1/D1 variant can ever be
+# entered for a class that is never used as a base (e.g. CheckedPtr<T>).
+# Counting each twin inflates the denominator with permanently uncoverable
+# entries, so the twins are collapsed to one canonical entry (C1/D1).
+# Ctor/dtor special names are the only non-length-prefixed components in a
+# mangled nested name, hence the "not preceded by a digit" guard: a class
+# literally named "C1" mangles as "2C1" and must not match (such twins are
+# conservatively left uncollapsed).
+ABI_VARIANT_RE = re.compile(r"(?<!\d)(C[12]|D[012])E")
+
+
+def canonicalize_abi_variant(mangled):
+    """Fold Itanium C2 -> C1 and D0/D2 -> D1 in a mangled symbol name."""
+    def _fold(match):
+        return ("C1" if match.group(1).startswith("C") else "D1") + "E"
+    return ABI_VARIANT_RE.sub(_fold, mangled)
 
 
 class Frame:
@@ -97,8 +122,9 @@ def load_symbols(elf):
         print(f"  nm failed for {elf}: {proc.stderr.strip()}")
         return [], [], []
     addrs, names, pretty = [], [], []
-    # Identity is the mangled name (two distinct instantiations can demangle
-    # to the same text); the demangled run is only used for display.
+    # Identity is the canonicalized mangled name (two distinct instantiations
+    # can demangle to the same text); the demangled run is only used for
+    # display.
     demap = {}
     for line in demangled.stdout.splitlines():
         parts = line.split()
@@ -113,7 +139,10 @@ def load_symbols(elf):
         except ValueError:
             continue
         addrs.append(addr)
-        names.append(" ".join(parts[2:]))
+        # Identity is the canonicalized mangled name: Itanium C1/C2 and
+        # D0/D1/D2 twins (issue #142) count as one function. The demangled
+        # run below is only used for display.
+        names.append(canonicalize_abi_variant(" ".join(parts[2:])))
         pretty.append(demap.get(parts[0], " ".join(parts[2:])))
     return addrs, names, pretty
 
@@ -293,6 +322,12 @@ def main():
     lines.append("Note: `kernel/gcov` is the coverage handler itself — it is "
                  "deliberately excluded from instrumentation, so 0% there is "
                  "expected.\n")
+    lines.append("Note: Itanium ABI duplicate variants are collapsed — C1/C2 "
+                 "constructors count as one entry (C1) and D0/D1/D2 "
+                 "destructors as one (D1). The base-object/deleting twins are "
+                 "never entered for classes that are never used as bases, so "
+                 "counting them would inflate the denominator with "
+                 "permanently uncoverable entries (issue #142).\n")
     lines.append("\n## Coverage per area (worst first)\n")
     lines.append("| Area | Covered | Total | % |")
     lines.append("|---|---:|---:|---:|")

@@ -78,7 +78,12 @@ sentinel; the host rejects such a capture.  All serial polls are bounded.
 1. Parse every `serial.raw`, validate both sentinels and the checksum.
 2. Resolve executed addresses against that class' own ELF (`nm`).
 3. Union the results by *(source file, function name)* — relinking shifts
-   addresses, so names are the stable identity.
+   addresses, so names are the stable identity. Itanium ABI duplicate
+   variants are collapsed before unioning: C1/C2 constructors count as one
+   entry (C1), D0/D1/D2 destructors as one (D1). The base-object/deleting
+   twins are never entered for classes that are never used as bases
+   (e.g. `CheckedPtr<T>`), so counting them would inflate the denominator
+   with permanently uncoverable entries (issue #142).
 4. Build the universe of functions with `nm` and attribute every function to
    a source file with a single batched `addr2line` call per class.
 5. Report per area (`src/kernel/<area>`, `src/lib`, …), per file, worst
