@@ -43,6 +43,18 @@ public:
     /// @brief Find the IrqThread for a given vector (or nullptr).
     static IrqThread *for_vector(uint8_t vector);
 
+    /// @brief Tear down the IrqThread for a given vector.
+    /// @param vector Interrupt vector number.
+    /// @return true if a live instance was destroyed, false if none exists
+    ///         for the vector (or it owns the calling task).
+    /// @note Task context only: the handler task must be quiescent (BLOCKED
+    ///       in its Notify wait, e.g. after masking the vector at the
+    ///       interrupt controller).  The teardown is synchronous — the
+    ///       handler task is terminated and reaped before returning, so no
+    ///       ResourceTracker task delta survives and the test-boundary
+    ///       cleanup never sees a half-torn instance.
+    static bool destroy(uint8_t vector);
+
     /// @brief True if the given TCB belongs to a live IrqThread handler task.
     /// Used by test cleanup to avoid killing threaded-IRQ handler tasks.
     static bool is_irq_thread_task(const TaskControlBlock *t) noexcept;
