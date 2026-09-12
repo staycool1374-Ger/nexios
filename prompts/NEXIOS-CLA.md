@@ -1,6 +1,6 @@
-# Contributor License Agreement (CLA) for Jarvis RTOS
+# Contributor License Agreement (CLA) for NexIOS RTOS
 
-Thank you for your interest in contributing to Jarvis RTOS ("the Project"). 
+Thank you for your interest in contributing to NexIOS RTOS ("the Project"). 
 
 In order to clarify the intellectual property status of contributions and to protect both the Project's users and the Project's ability to offer alternative commercial licensing models, Arnold Hasshold ("the Owner") must have a Contributor License Agreement (CLA) on file from each contributor.
 
@@ -22,8 +22,8 @@ Subject to the terms and conditions of this Agreement, You hereby grant to the O
 
 ### 4. Ownership and Flexibility
 You retain full ownership of Your Contribution and can use it for your own purposes or license it to others. However, You acknowledge that the Owner has the right to:
-* Maintain Jarvis RTOS as an Open Source project (under GPLv3).
-* Offer Jarvis RTOS under a commercial subscription or OEM per-device license model to customers who cannot use GPLv3 code in their proprietary products.
+* Maintain NexIOS RTOS as an Open Source project (under GPLv3).
+* Offer NexIOS RTOS under a commercial subscription or OEM per-device license model to customers who cannot use GPLv3 code in their proprietary products.
 
 ### 5. Your Warranties
 You represent and warrant that:
