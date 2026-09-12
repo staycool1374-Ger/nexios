@@ -183,6 +183,12 @@ userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
 # ------------------------------------------------------------------------------
 # Initrd
 # ------------------------------------------------------------------------------
+# Default test selection baked into a plain `make debug`/`make release` ISO.
+# Test flows (execute-test/debug-test) overwrite this file directly; this
+# rule only fires on fresh checkouts (e.g. CI) where it does not exist yet.
+initrd/tests/test-config.txt:
+	@mkdir -p initrd/tests
+	@printf 'none\n' > $@
 $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
 	@printf '  %-7s %s\n' 'CPIO' 'initrd.cpio'
 	@mkdir -p initrd_root/etc initrd_root/tmp initrd_root/tests
