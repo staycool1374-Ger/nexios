@@ -20,13 +20,39 @@
     "shared_context_bridge": {
       "type": "local",
       "enabled": true,
-      "command": "npx",
-      "args": [
+      "command": [
+        "npx",
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "src/",
         "audits/"
       ]
+    },
+    "graphify": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "graphify.serve",
+        "/Users/arnold/jarvis/graphify-out/graph.json"
+      ],
+      "environment": {}
+    },
+    "obsidian": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "obsidian-mcp@2",
+        "serve",
+        "--vault",
+        "jarvis=/Users/arnold/vaults/jarvis"
+      ],
+      "environment": {
+        "OBSIDIAN_VAULT_PATH": "/Users/arnold/vaults/jarvis"
+      }
     }
   }
 }

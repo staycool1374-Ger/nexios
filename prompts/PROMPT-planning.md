@@ -19,10 +19,11 @@ PLANNING REQUIREMENTS:
 1. Identify all affected source files and concurrency boundaries (e.g., IrqGuard).
 2. Outline exact code changes step-by-step to prevent double-free, Heisenbugs, or critical section interference.
 3. Identify potential SIL 3 compliance risks upfront.
+4. Query subsystem boundaries, dependencies, and race-condition risks via MCP graph calls (`mcp__graphify__query`, `mcp__graphify__path`, `mcp__graphify__explain`; CLI `graphify query/path/explain` fallback) BEFORE generating step-by-step execution tasks.
 
 Context sources (read-only): `prompts/AGENTS-KERNEL-BRIEFING.md` (scheduler, boot, gotchas),
 `prompts/CODING_STYLE.md` (mandatory rules), `prompts/BUGS.md` (open critical bugs), `prompts/ROADMAP.md`
-(active milestone only).
+(active milestone only), plus the MCP graph (scoped subgraphs, never raw spec ingestion).
 
 ## OUTPUT SCHEMA
 

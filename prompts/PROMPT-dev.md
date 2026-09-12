@@ -26,6 +26,7 @@ Safely implement, validate, and evolve the architecture under strict functional 
 - Check `~/jarvis/prompts/BUGS.md`. **Rule:** Critical bugs must be 100% resolved before feature work.
 - Read `~/jarvis/project_structure.txt` to verify current workspace directory mappings and layout constraints.
 - Read `~/jarvis/Makefile`.
+- Retrieve specifications strictly through MCP graph query tools (`mcp__graphify__query "<feature>"`, `mcp__graphify__explain "<component>"`) to minimize context-window load — CLI `graphify query/path/explain` fallback only when MCP is unreachable. Never ingest raw spec files wholesale.
 - *Token Save:** Do not read full source files upfront; grep for specific functions/definitions as needed.
 
 ## Handling lessons.md (Conditional Rule)
@@ -67,6 +68,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
   - Commit messages reference the issue (`#<n>`; `fixes #<n>` auto-closes on push).
 - Update `prompts/LESSONS.md` with compressed hardware/architectural insights if not trivial.
 - Sync docs (`README.md`, `prompts/ROADMAP.md`).
+- Mirror doc updates into Obsidian via MCP write tools (`mcp__obsidian__write_note`, preserving frontmatter/`[[wikilinks]]`/folder structure) and run `graphify update .` (CLI-only, no MCP equivalent) post-implementation.
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
 
 ### ResourceTracker (Strict Awareness)
