@@ -188,12 +188,15 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     Timeval tv = {};
     tv.tv_sec = static_cast<int64_t>(secs);
     tv.tv_usec = 0;
-    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
-    if (syscall_is_user_task() &&
-        !safe_copy_to_user(tv_ptr.unsafe_ptr(), &tv, 1))
-        return static_cast<uint64_t>(-1);
-    else
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).  A successful
+    // user copy must NOT fall through to the direct write below: it runs
+    // with AC=0 and faults on the user page under SMAP (issue #143).
+    if (syscall_is_user_task()) {
+        if (!safe_copy_to_user(tv_ptr.unsafe_ptr(), &tv, 1))
+            return static_cast<uint64_t>(-1);
+    } else {
         *tv_ptr.unsafe_ptr() = tv;
+    }
     return 0;
 }
 
@@ -215,12 +218,15 @@ uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     strlcpy(uts.version, Version::build_date(), sizeof(uts.version));
     strlcpy(uts.machine, "x86_64", sizeof(uts.machine));
     strlcpy(uts.domainname, "(none)", sizeof(uts.domainname));
-    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
-    if (syscall_is_user_task() &&
-        !safe_copy_to_user(uts_ptr.unsafe_ptr(), &uts, 1))
-        return static_cast<uint64_t>(-1);
-    else
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).  A successful
+    // user copy must NOT fall through to the direct write below: it runs
+    // with AC=0 and faults on the user page under SMAP (issue #143).
+    if (syscall_is_user_task()) {
+        if (!safe_copy_to_user(uts_ptr.unsafe_ptr(), &uts, 1))
+            return static_cast<uint64_t>(-1);
+    } else {
         *uts_ptr.unsafe_ptr() = uts;
+    }
     return 0;
 }
 
@@ -356,12 +362,15 @@ uint64_t Syscall::sys_getrlimit(uint64_t arg0, uint64_t arg1, uint64_t,
     auto rl_ptr = checked(reinterpret_cast<Rlimit *>(arg1));
     if (syscall_is_user_task() && !rl_ptr.valid())
         return static_cast<uint64_t>(-1);
-    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).
-    if (syscall_is_user_task() &&
-        !safe_copy_to_user(rl_ptr.unsafe_ptr(), &rl, 1))
-        return static_cast<uint64_t>(-1);
-    else
+    // MP-4 (SMAP): local + safe_copy_to_user (stac-wrapped).  A successful
+    // user copy must NOT fall through to the direct write below: it runs
+    // with AC=0 and faults on the user page under SMAP (issue #143).
+    if (syscall_is_user_task()) {
+        if (!safe_copy_to_user(rl_ptr.unsafe_ptr(), &rl, 1))
+            return static_cast<uint64_t>(-1);
+    } else {
         *rl_ptr.unsafe_ptr() = rl;
+    }
     return 0;
 }
 
