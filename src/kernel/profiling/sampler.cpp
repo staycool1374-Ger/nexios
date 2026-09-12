@@ -40,6 +40,10 @@ static volatile size_t sample_count = 0;
 // Configuration
 static volatile uint32_t sample_every_n_ticks = 10; // Sample every N timer ticks
 static volatile bool sampler_enabled = false;
+// Own monotonic call counter.  arch::Timer::ticks() is rewound by the test
+// harness (set_ticks_for_test / snapshot restore), so gating on it starves
+// the sampler — a boot-time tick of 0 produced the only sample ever taken.
+static volatile uint64_t sample_seq = 0;
 
 // Function address lookup (populated from ELF symbols at boot)
 static constexpr size_t MAX_FUNCTIONS = 16384;
@@ -50,6 +54,7 @@ static uint32_t func_count = 0;
 void Sampler::init() {
     sample_head = 0;
     sample_count = 0;
+    sample_seq = 0;
     sampler_enabled = false;
     sample_every_n_ticks = 10; // Default: sample every 10 ticks (~1000 Hz / 10 = 100 samples/sec)
 }
@@ -80,12 +85,9 @@ void Sampler::record_sample(uint64_t ip) {
     // Guard against uninitialized state - use safe division
     // Use volatile read to prevent optimization issues
     uint32_t rate = sample_every_n_ticks;
-    if (rate <= 1) {
-        // rate == 0 or rate == 1: sample every tick, no modulo needed
-    } else {
-        // rate > 1: sample at interval, use modulo with safe check
-        uint64_t ticks = arch::Timer::ticks();
-        if (ticks % rate != 0) return;
+    if (rate > 1) {
+        uint64_t seq = __atomic_fetch_add(&sample_seq, 1, __ATOMIC_RELAXED);
+        if (seq % rate != 0) return;
     }
     
     // Store sample atomically
@@ -97,18 +99,19 @@ void Sampler::record_sample(uint64_t ip) {
 void Sampler::dump_to_serial() {
 #if defined(CONFIG_ARCH_X86_64)
     // Output format: SMPL <count> <ip1> <ip2> ...
-    arch::outb(arch::COM1, 'S');
-    arch::outb(arch::COM1, 'M');
-    arch::outb(arch::COM1, 'P');
-    arch::outb(arch::COM1, 'L');
+    // Uses debugcon port (0xE9) which is captured by -debugcon file:
+    // debugcon has no FIFO status, just write directly
+    arch::outb(0xE9, 'S');
+    arch::outb(0xE9, 'M');
+    arch::outb(0xE9, 'P');
+    arch::outb(0xE9, 'L');
     
     size_t count = sample_count;
     if (count > SAMPLE_BUFFER_SIZE) count = SAMPLE_BUFFER_SIZE;
     
     // Output count as 4 bytes little-endian
     for (int i = 0; i < 4; i++) {
-        while ((arch::inb(arch::COM1 + 5) & 0x20) == 0) ;
-        arch::outb(arch::COM1, (count >> (i * 8)) & 0xFF);
+        arch::outb(0xE9, (count >> (i * 8)) & 0xFF);
     }
     
     // Output samples (each as 8 bytes little-endian)
@@ -117,8 +120,7 @@ void Sampler::dump_to_serial() {
         size_t idx = (start + i) % SAMPLE_BUFFER_SIZE;
         uint64_t ip = sample_buffer[idx];
         for (int j = 0; j < 8; j++) {
-            while ((arch::inb(arch::COM1 + 5) & 0x20) == 0) ;
-            arch::outb(arch::COM1, (ip >> (j * 8)) & 0xFF);
+            arch::outb(0xE9, (ip >> (j * 8)) & 0xFF);
         }
     }
 #else
@@ -135,6 +137,7 @@ size_t Sampler::get_sample_count() {
 void Sampler::clear() {
     sample_head = 0;
     sample_count = 0;
+    sample_seq = 0;
 }
 
 void Sampler::register_from_symbol_table(const uint8_t* symtab_data, size_t symtab_size) {

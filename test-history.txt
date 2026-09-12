@@ -745,3 +745,82 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-04 21:14:50 all PASSED: 85 FAILED: 0 TIME: 3979ms
 2026-09-04 21:18:20 selftest PASSED: 85 FAILED: 0 TIME: 4s
 2026-09-04 21:26:40 drivers_virtio_blk_req PASSED: 7 FAILED: 0 TIME: 21s
+2026-09-06 16:01:42 safe PASSED: 133 FAILED: 0 TIME: 30350ms
+2026-09-07 18:32:36 vfs_devfs PASSED: 10 FAILED: 0 TIME: 244ms
+2026-09-07 18:32:57 vfs_procfs_ops PASSED: 6 FAILED: 0 TIME: 145ms
+2026-09-07 18:33:13 vfs_initrd_fs PASSED: 7 FAILED: 0 TIME: 692ms
+2026-09-07 18:34:29 vfs_errors PASSED: 6 FAILED: 0 TIME: 136ms
+2026-09-07 18:34:48 vfs_core PASSED:20 FAILED:0 TIME: 9s
+2026-09-07 18:34:57 vfs_tmpfs PASSED:10 FAILED:0 TIME: 9s
+2026-09-07 18:35:06 vfs_fstab PASSED:5 FAILED:0 TIME: 9s
+2026-09-07 18:35:14 vfs_fat32 PASSED:40 FAILED:0 TIME: 8s
+2026-09-07 18:35:23 vfs_fat32_integration PASSED:14 FAILED:0 TIME: 9s
+2026-09-07 18:35:32 vfs_procfs PASSED:9 FAILED:0 TIME: 9s
+2026-09-07 18:35:41 vfs_tmpfs_corrupt PASSED:7 FAILED:0 TIME: 9s
+2026-09-07 18:35:50 initrd_parser PASSED:9 FAILED:0 TIME: 9s
+2026-09-07 18:36:02 safe PASSED:133 FAILED:0 TIME: 12s
+2026-09-07 18:36:14 selftest PASSED:133 FAILED:0 TIME: 12s
+2026-09-07 19:26:46 shell_commands PASSED: 21 FAILED: 0 TIME: 485ms
+2026-09-07 19:27:04 services_framework PASSED: 6 FAILED: 0 TIME: 207ms
+2026-09-07 19:27:14 shell_interaction PASSED:19 FAILED:0 TIME: 10s
+2026-09-07 19:27:23 shell_redirect PASSED:3 FAILED:0 TIME: 9s
+2026-09-07 19:27:32 shell_textutils PASSED:1 FAILED:0 TIME: 9s
+2026-09-07 19:27:44 safe PASSED:133 FAILED:0 TIME: 12s
+2026-09-07 19:27:56 selftest PASSED:133 FAILED:0 TIME: 12s
+2026-09-07 19:36:28 shell_commands PASSED: 22 FAILED: 0 TIME: 560ms
+2026-09-07 19:36:45 services_framework PASSED: 7 FAILED: 0 TIME: 259ms
+2026-09-08 08:30:29 debug_dump PASSED: 4 FAILED: 0 TIME: 448ms
+2026-09-08 10:16:13 profiler_sampler PASSED: 6 FAILED: 0 TIME: 133ms
+2026-09-08 11:43:55 memory_checked_ptr_api PASSED: 6 FAILED: 0 TIME: 578ms
+2026-09-08 11:44:14 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
+2026-09-08 15:50:03 kernel_top PASSED: 3 FAILED: 0 TIME: 336ms
+2026-09-08 15:53:02 kernel_top PASSED: 4 FAILED: 0 TIME: 117ms
+2026-09-08 16:18:10 synchronization_err_api PASSED: 6 FAILED: 0 TIME: 597ms
+2026-09-08 16:20:27 synchronization_err_api PASSED: 6 FAILED: 0 TIME: 140ms
+2026-09-08 16:23:37 synchronization_err_api PASSED: 7 FAILED: 0 TIME: 161ms
+2026-09-08 16:25:27 synchronization_sync PASSED:19 FAILED:0 TIME: 9s
+2026-09-08 16:25:35 synchronization_locking PASSED:19 FAILED:0 TIME: 8s
+2026-09-08 16:25:44 synchronization_pip PASSED:10 FAILED:0 TIME: 9s
+2026-09-08 16:25:53 synchronization_pcp PASSED:8 FAILED:0 TIME: 9s
+2026-09-08 16:26:02 synchronization_spinlock PASSED:10 FAILED:0 TIME: 9s
+2026-09-08 16:26:11 synchronization_irq_guard PASSED:4 FAILED:0 TIME: 9s
+2026-09-08 16:26:19 synchronization_lock_order PASSED:4 FAILED:0 TIME: 8s
+2026-09-08 16:26:28 synchronization_lock_validator PASSED:6 FAILED:0 TIME: 9s
+2026-09-08 16:26:37 synchronization_pi_donation PASSED:5 FAILED:0 TIME: 9s
+2026-09-08 16:26:52 ipc_core PASSED:23 FAILED:0 TIME: 9s
+2026-09-08 16:27:01 ipc_robustness PASSED:7 FAILED:0 TIME: 9s
+2026-09-08 16:27:12 safe PASSED:133 FAILED:0 TIME: 11s
+2026-09-08 16:27:24 selftest PASSED:133 FAILED:0 TIME: 12s
+2026-09-08 18:09:12 selftest PASSED: 133 FAILED: 0 TIME: verification-after-123
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (no TEST SUMMARY; silent after irq200 create in isr_ack_and_task_entry)
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (repro; same silent wedge)
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: ~10s (with temporary Logger DIAG prints in test 8)
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary handler prio 5; test 8 FAILs fast on quiescent as designed)
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary isr_entry skip; test 8 FAILs on acks as designed, suite completes)
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 45s STATUS: TIMEOUT (wedge moved to ring_full_reject test 7)
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 227ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 221ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 231ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 909ms
+2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 7779ms
+2026-09-12 15:26:05 memory_checked_ptr_api PASSED: 7 FAILED: 0 TIME: 652ms
+2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 531ms
+2026-09-12 15:26:05 memory_vmm PASSED: 12 FAILED: 0 TIME: 279ms
+2026-09-12 15:26:05 memory_pmm PASSED: 9 FAILED: 0 TIME: 208ms
+2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 328ms
+2026-09-12 15:26:05 memory_slab PASSED: 5 FAILED: 0 TIME: 473ms
+2026-09-12 15:26:05 memory_safety PASSED: 11 FAILED: 0 TIME: 307ms
+2026-09-12 15:26:05 memory_determinism PASSED: 4 FAILED: 0 TIME: 10799ms
+2026-09-12 15:26:05 memory_checked_ptr PASSED: 4 FAILED: 0 TIME: 175ms
+2026-09-12 15:26:05 memory_integrity PASSED: 2 FAILED: 0 TIME: 62ms
+2026-09-12 15:26:05 memory_resource_exhaustion PASSED: 5 FAILED: 0 TIME: 12672ms
+2026-09-12 15:26:05 memory_stack_alloc PASSED: 11 FAILED: 0 TIME: 128ms
+2026-09-12 15:26:05 memory_stack_profiler PASSED: 6 FAILED: 0 TIME: 150ms
+2026-09-12 15:26:05 memory_static_pools PASSED: 4 FAILED: 0 TIME: 101ms
+2026-09-12 15:26:05 memory_no_op_new PASSED: 6 FAILED: 0 TIME: 136ms
+2026-09-12 15:26:05 memory_vmm PASSED: 12 FAILED: 0 TIME: 272ms
+2026-09-12 15:26:05 syscall_core PASSED: 19 FAILED: 0 TIME: 522ms
+2026-09-12 15:26:05 safe PASSED: 133 FAILED: 0 TIME: 7075ms
+2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 212ms
+2026-09-12 15:26:05 memory_mempool PASSED: 5 FAILED: 0 TIME: 128ms

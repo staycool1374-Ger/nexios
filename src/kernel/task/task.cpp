@@ -105,7 +105,12 @@ namespace kernel {
 /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
 /// any caller that waits for termination (ipc_blocking test hang).
 #if defined(CONFIG_ARCH_X86_64)
-static void _task_trampoline(void (*entry)()) {
+// NOT instrumented (coverage builds): _task_trampoline is entered by the
+// context switch with a synthetic frame — there is no return address above
+// RBP, so the -finstrument-functions hook would read the unmapped stack top
+// and page-fault before the task ever runs (issue #122).
+static void __attribute__((no_instrument_function))
+_task_trampoline(void (*entry)()) {
     entry();
     auto *self = Scheduler::current_task();
     if (self)

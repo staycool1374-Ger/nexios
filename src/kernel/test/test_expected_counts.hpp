@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1162,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118)
+    {"all",                1176,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -67,7 +67,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
 
     // syscall
-    {"syscall_core",         15,    0,       0      },  // syscall interface (exit test disabled in source)
+    {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
@@ -101,6 +101,10 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics (issue #111): reader wake, full-pipe partial write, write-close EOF, read-close EPIPE, two-reader order, closed-end errors
     {"vfs_procfs",             9,   0,       0      },  // procfs nodes (issue #109): root dir, readdir static/pid, meminfo format, pci, self stat, pid dir close, unknown reject, dir read
     {"vfs_tmpfs_corrupt",      7,   0,       0      },  // tmpfs corrupt/timeout analogue (issue #114): duplicates, missing unlink, non-empty dir, oversize, stale recycle, fragmentation, concurrent
+    {"vfs_devfs",             10,   0,       0      },  // devfs device nodes (issue #124): root stable/reject/readdir/lookup + null, console, tty, kbd, random op contracts + init
+    {"vfs_procfs_ops",         6,   0,       0      },  // procfs per-node op contracts (issue #124): root byte-op rejection, meminfo/pci readonly, self dir, pid dir, pid stat
+    {"vfs_initrd_fs",          7,   0,       0      },  // initrd filesystem vnodes (issue #124): root dir/fail-closed lseek/readdir, lookup build, file readonly/lseek/close
+    {"vfs_errors",             6,   0,       0      },  // VfsError *_err API (issue #124): fdtable codes, resolve, find_fs, mount, mkdir/create/unlink, init/set_root
     {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
     {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush
     {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
@@ -134,8 +138,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
-    {"memory_pmm",            8,    0,       0      },  // PMM alloc/free unit tests + window geometry (hosts 0-test delegate)
-    {"memory_mempool",        4,    0,       0      },  // MemPool allocator tests
+    {"memory_pmm",            9,    0,       0      },  // PMM alloc/free unit tests + window geometry (hosts 0-test delegate) + err wrappers (issue #143)
+    {"memory_mempool",        5,    0,       0      },  // MemPool allocator tests + err/pin/Pool helpers (issue #143)
     {"memory_slab",           5,    0,       0      },  // Slab reclaim tests
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants + MP-2 red zones + MP-3 canaries
     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion + no-dynamic-alloc neutral cycles (v0.3.8)
@@ -152,7 +156,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
     {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-    {"memory_vmm",           10,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm
+    {"memory_vmm",           12,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143)
 
     // wcet / deadline
     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
@@ -193,6 +197,14 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
+    {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
+    {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
+    {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
+    {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
+    {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+    {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+    {"shell_commands",       22,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source
+    {"services_framework",    7,    0,       0      },  // services framework (issue #125): terminal colors, length-bounded write, cursor/splash, fb gate, scroll, program registry bounds
     {"ui_framebuffer",        5,    0,       0      },  // framebuffer init/putpixel/clear/scroll
 
     // random

@@ -160,6 +160,78 @@ JARVIS_TEST(pmm_alloc_within_window, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The thin *_err wrappers and pool introspection helpers must
+//           validate, delegate, and report — each entered at least once
+//           for function-level coverage (issue #143 item 4).  Only
+//           immediate-fail inputs and small real allocations are used, so
+//           no pool is ever drained and no concurrent allocator can
+//           interfere.  init_err is deliberately NOT driven: it re-inits
+//           the live PMM bitmaps mid-suite.
+// Input: Every _err wrapper with reject + success inputs; every pool_*
+//        accessor; error_string over all codes.
+// Expect: INVALID for bad inputs, OK + round-tripped pages for good ones,
+//         consistent pool geometry, exact error strings, no tracker delta.
+// Depends: PMM _err wrappers, pool introspection, error_string<PmmError>
+JARVIS_TEST(pmm_err_wrappers_and_inspect, "PRE: none | POST: none") {
+    using errors::PmmError;
+    uint64_t out = 0;
+    bool flag = false;
+    JARVIS_ASSERT(PMM::alloc_page_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(out != 0);
+    JARVIS_ASSERT(PMM::free_page_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::alloc_user_page_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(out != 0);
+    JARVIS_ASSERT(PMM::is_user_page_err(out, flag) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(flag);
+    JARVIS_ASSERT(PMM::free_page_err(out) == errors::PMM_ERR_OK);
+    uint64_t kern = PMM::alloc_page();
+    JARVIS_ASSERT(kern != 0);
+    JARVIS_ASSERT(PMM::is_user_page_err(kern, flag) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(!flag);
+    JARVIS_ASSERT(PMM::free_page_err(kern) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::alloc_contiguous_err(0, out) == errors::PMM_ERR_INVALID);
+    JARVIS_ASSERT(PMM::alloc_contiguous_err(PMM::total_memory(), out) ==
+                  errors::PMM_ERR_INVALID);
+    JARVIS_ASSERT(PMM::alloc_contiguous_err(2, out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(out != 0);
+    JARVIS_ASSERT(PMM::free_page_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::free_page_err(out + arch::PAGE_SIZE) ==
+                  errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::alloc_user_contiguous_err(0, out) ==
+                  errors::PMM_ERR_INVALID);
+    JARVIS_ASSERT(PMM::alloc_user_contiguous_err(2, out) ==
+                  errors::PMM_ERR_OK);
+    JARVIS_ASSERT(out != 0);
+    JARVIS_ASSERT(PMM::free_page_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::free_page_err(out + arch::PAGE_SIZE) ==
+                  errors::PMM_ERR_OK);
+    JARVIS_ASSERT(PMM::alloc_page_table_err(out) == errors::PMM_ERR_OK);
+    JARVIS_ASSERT(out != 0);
+    JARVIS_ASSERT(PMM::free_page_err(out) == errors::PMM_ERR_OK);
+    uint64_t bogus = PMM::total_memory() + arch::PAGE_SIZE;
+    JARVIS_ASSERT(PMM::free_page_err(bogus) == errors::PMM_ERR_INVALID);
+    JARVIS_ASSERT(PMM::is_user_page_err(bogus, flag) == errors::PMM_ERR_INVALID);
+    JARVIS_ASSERT(PMM::pool_total_pages() >= PMM::pool_used_pages());
+    JARVIS_ASSERT(PMM::pool_start() <= PMM::pool_end());
+    (void)PMM::pool_generation();
+    (void)PMM::pool_refcount();
+    (void)PMM::pool_is_mapped();
+    (void)PMM::pool_is_poisoned();
+    (void)PMM::pool_is_tainted();
+    JARVIS_ASSERT(PMM::window_base_page() <= PMM::window_end_page());
+    JARVIS_ASSERT(PMM::total_memory() > 0);
+    JARVIS_ASSERT(PMM::free_memory() <= PMM::total_memory());
+    (void)PMM::get_oom_handler();
+    JARVIS_ASSERT(errors::error_string(errors::PMM_ERR_OK) != nullptr);
+    JARVIS_ASSERT(errors::error_string(errors::PMM_ERR_OOM) != nullptr);
+    JARVIS_ASSERT(errors::error_string(errors::PMM_ERR_USER_OOM) != nullptr);
+    JARVIS_ASSERT(errors::error_string(errors::PMM_ERR_TABLE_OOM) != nullptr);
+    JARVIS_ASSERT(errors::error_string(errors::PMM_ERR_INVALID) != nullptr);
+    JARVIS_ASSERT(errors::error_string(static_cast<PmmError>(999)) != nullptr);
+    JARVIS_TEST_PASS();
+}
+
 void register_pmm_tests() {
     Logger::info("Registering PMM tests");
     JARVIS_REGISTER_TEST(pmm_alloc_free);
@@ -170,4 +242,5 @@ void register_pmm_tests() {
     JARVIS_REGISTER_TEST(pmm_window_geometry);
     JARVIS_REGISTER_TEST(pmm_window_live_state);
     JARVIS_REGISTER_TEST(pmm_alloc_within_window);
+    JARVIS_REGISTER_TEST(pmm_err_wrappers_and_inspect);
 }

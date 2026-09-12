@@ -78,6 +78,27 @@ SECTIONS
         *(.ldata.*)
         *(.got)
         *(.got.plt)
+        /* Static constructor / destructor tables.  The kernel does not run
+           these in normal builds (globals are POD or explicitly initialised),
+           but -fprofile-arcs registers each translation unit's gcov profile
+           through a constructor in .ctors.<priority>.  They are collected
+           INSIDE .data (never as their own output section): a separate output
+           section would break this segment's constant VMA<->LMA delta, and
+           GRUB loads by LMA, so the table would land in unloaded memory. */
+        /* MUST be pointer-aligned: the tables are arrays of function
+           pointers, and an unaligned base makes every entry a byte-shifted
+           fragment of two adjacent pointers (a 2-byte skew is enough to turn
+           a valid 0xffff8000_0022xxxx entry into garbage and fault on call). */
+        . = ALIGN(16);
+        __ctors_start = .;
+        KEEP(*(.ctors))
+        KEEP(*(.ctors.*))
+        __ctors_end = .;
+        . = ALIGN(16);
+        __dtors_start = .;
+        KEEP(*(.dtors))
+        KEEP(*(.dtors.*))
+        __dtors_end = .;
         KEEP(*(.marker.data.end))
         _data_end = .;
     } :data

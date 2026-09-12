@@ -129,4 +129,4 @@ static inline SignalAction default_signal_action(uint64_t sig) {
 }
 
 } // namespace kernel
-// NOLINTEND(performance-no-int-to-ptr)
+// NOLINTEND(performance-no-int-to-ptr,bugprone-branch-clone)

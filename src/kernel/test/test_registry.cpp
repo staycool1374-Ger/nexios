@@ -114,6 +114,14 @@ void register_ipc_blocking_tests();
 void register_vfsd_authorization_tests();
 void register_textutils_tests();
 void register_shell_interaction_tests();
+void register_debug_dump_tests();
+void register_profiler_sampler_tests();
+void register_kernel_top_tests();
+void register_sync_err_api_tests();
+void register_checked_ptr_api_tests();
+void register_memory_integrity_tests();
+void register_shell_commands_tests();
+void register_services_framework_tests();
 void register_irq_guard_tests();
 void register_shell_redirect_tests();
 void register_klog_tests();
@@ -206,6 +214,10 @@ void register_ahci_live_tests();
 void register_initrd_parser_tests();
 void register_vfs_procfs_tests();
 void register_vfs_tmpfs_corrupt_tests();
+void register_devfs_tests();
+void register_procfs_ops_tests();
+void register_initrd_fs_tests();
+void register_vfs_errors_tests();
 void register_pipe_blocking_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
@@ -415,6 +427,18 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- vfs_tmpfs_corrupt: tmpfs corruption/timeout analogue (issue #114) --
     {"vfs_tmpfs_corrupt", []() { register_vfs_tmpfs_corrupt_tests(); }},
 
+    // -- vfs_devfs: /dev device-node operations (issue #124) --
+    {"vfs_devfs", []() { register_devfs_tests(); }},
+
+    // -- vfs_procfs_ops: procfs per-node op contracts (issue #124) --
+    {"vfs_procfs_ops", []() { register_procfs_ops_tests(); }},
+
+    // -- vfs_initrd_fs: initrd filesystem vnodes (issue #124) --
+    {"vfs_initrd_fs", []() { register_initrd_fs_tests(); }},
+
+    // -- vfs_errors: VfsError *_err API + error-code mapping (issue #124) --
+    {"vfs_errors", []() { register_vfs_errors_tests(); }},
+
     // -- servers: user-space daemons --
     {"servers_vfsd", []() { register_vfsd_tests(); }},
     {"servers_vfsd_auth", []() { register_vfsd_authorization_tests(); }},
@@ -435,6 +459,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_no_dynamic_alloc_tests();
      }},
     {"memory_checked_ptr", []() { register_checked_ptr_tests(); }},
+    {"kernel_top", []() { register_kernel_top_tests(); }},
+    {"synchronization_err_api", []() { register_sync_err_api_tests(); }},
+    {"memory_checked_ptr_api", []() { register_checked_ptr_api_tests(); }},
+    {"memory_integrity", []() { register_memory_integrity_tests(); }},
     {"memory_resource_exhaustion", []() { register_resource_exhaustion_tests(); }},
     {"memory_stack_alloc", []() { register_stack_alloc_tests(); }},
     {"memory_stack_profiler", []() { register_stack_profiler_tests(); }},
@@ -503,6 +531,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"shell_interaction", []() { register_shell_interaction_tests(); }},
     {"shell_redirect", []() { register_shell_redirect_tests(); }},
     {"shell_textutils", []() { register_textutils_tests(); }},
+    {"debug_dump", []() { register_debug_dump_tests(); }},
+    {"profiler_sampler", []() { register_profiler_sampler_tests(); }},
+    {"shell_commands", []() { register_shell_commands_tests(); }},
+    {"services_framework", []() { register_services_framework_tests(); }},
     {"ui_framebuffer", []() { register_framebuffer_tests(); }},
 
     // -- random: RNG subsystem --
@@ -660,6 +692,10 @@ static void register_all_tests() {
     register_vfs_fat32_tests();
     register_vfs_procfs_tests();
     register_vfs_tmpfs_corrupt_tests();
+    register_devfs_tests();
+    register_procfs_ops_tests();
+    register_initrd_fs_tests();
+    register_vfs_errors_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
     register_ipc_blocking_tests();
 #endif
@@ -667,6 +703,14 @@ static void register_all_tests() {
     register_vfsd_authorization_tests();
     register_textutils_tests();
     register_shell_interaction_tests();
+    register_shell_commands_tests();
+    register_services_framework_tests();
+    register_debug_dump_tests();
+    register_profiler_sampler_tests();
+    register_checked_ptr_api_tests();
+    register_kernel_top_tests();
+    register_sync_err_api_tests();
+    register_memory_integrity_tests();
     register_irq_guard_tests();
     register_irqguard_audit_tests();
     register_shell_redirect_tests();

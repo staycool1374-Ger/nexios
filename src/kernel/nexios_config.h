@@ -752,6 +752,22 @@
     {65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}
 #endif
 
+// Instrumented (coverage) builds call the profiling hook on every function
+// entry, which deepens every frame.  The 16 KiB tier-1 stack overflows on the
+// deepest task paths (issue #122), so all tiers are doubled here.  Guarded so
+// production builds keep the audited sizes.
+#ifdef CONFIG_COVERAGE
+#undef CONFIG_STACK_SIZE
+#define CONFIG_STACK_SIZE 131072
+#undef CONFIG_STACK_SIZE_TABLE
+#define CONFIG_STACK_SIZE_TABLE                                                \
+    {131072, 65536, 131072, 131072, 131072, 131072, 131072, 131072}
+// The kstack VA window is intentionally left at its default: alloc_kslot()
+// can only map 8 page tables (~16 MiB), so raising it would silently break
+// the fail-closed behaviour instead of helping.  16 MiB still allows ~124
+// concurrent 128 KiB stacks — far above CONFIG_MAX_TASKS.
+#endif
+
 /// Maximum number of zombies in the zombie list before the on_tick watchdog
 /// force-flushes.  0 disables the watchdog (idle-only cleanup).
 /// Default: 32.

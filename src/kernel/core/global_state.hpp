@@ -60,6 +60,22 @@ namespace net {
 struct Nic;
 } // namespace net
 
+// H2 ring event codes and recording macro (mirrored from scheduler.cpp for
+// cross-TU ISR diagnostic hooks).
+inline constexpr uint64_t H2_EV_SKIP     = 3;
+inline constexpr uint64_t H2_EV_REENQ    = 8;
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+#define H2_REC(ev, a, b, c) kernel::debug::h2_record((ev), (a), (b), (c))
+#else
+#define H2_REC(ev, a, b, c) ((void)0)
+#endif
+
+// Boot stack bounds (linker symbols) — C linkage for assembly.
+extern "C" {
+extern char _stack_start[];
+extern char _stack_end[];
+}
+
 namespace kernel {
 namespace gs {
 
@@ -204,6 +220,79 @@ bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept;
 ::net::Nic *get_nic() noexcept;
 /// @brief Set the NIC instance.  Rejected unless null or kernel-half.
 bool try_set_nic(::net::Nic *nic) noexcept;
+
+/// @brief Context-switch bridge called from isr_stubs.asm to apply
+///        the deferred task switch.  Reads scheduler_next_task_id,
+///        updates current_task(), clears the arm, and performs
+///        canary/IPC checks.
+extern "C" void scheduler_on_context_switch() noexcept;
+
+/// @brief ISR-entry pre-save hook (isr_stubs.asm:217-220).  Fires on every ISR
+/// entry, recording the interrupted task's RSP before any context switch.
+/// Verifies the interrupted task's RSP lies within its kernel stack.  If the
+/// check fails, logs a detailed report (current task, RSP, stack bounds, all
+/// other tasks owning that RSP) — evidence for H2.  Runs with IF=0 (interrupt
+/// gate); must not re-enable IRQs.
+extern "C" void scheduler_diag_pre_save() noexcept;
+
+/// @brief ISR-epilogue depth-skip hook (isr_stubs.asm:133-134).  Fires when a
+///        pending deferred-switch apply is skipped because the ISR nesting
+/// depth exceeds 2.  Cold path.  Dumps the arm target + the RFLAGS the
+/// interrupted task will return to (H2 IF=0 freeze hypothesis).
+/// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
+extern "C" void scheduler_diag_depth_skip() noexcept;
+
+/// @brief ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275).  Fires
+///        when a pending deferred-switch apply is aborted because the loaded
+/// RSP lies outside [scheduler_load_kstack_base, top) — the asm-side
+/// stale/foreign-frame guard.  Cold path.  Dumps the rejected RSP, the
+/// kstack range, the arm target, and the RFLAGS the interrupted task
+/// will return to (H2 IF=0 freeze hypothesis).
+/// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
+
+/// @brief ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that
+///        captured generation @p captured_gen at entry found it changed before
+///        its epilogue, so it skipped applying the deferred switch — leaving
+///        the dequeued target stranded until the next tick.  H2 ring event.
+/// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
+extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
+                                      [[maybe_unused]] uint64_t current_gen) noexcept;
+
+/// @brief Apply-side liveness + ownership re-check for the deferred switch
+///        (called from isr_stubs.asm BEFORE `mov rsp,[load_rsp_from]`).  The
+///        arm side (switch_to_task) validates the target's frame at publish
+///        time, but the arm can survive past its ISR (nested-ISR depth guard or
+///        generation-skip) into a later ISR, and in between the target task can
+///        be terminated/freed (IRQs on) or the published RSP can drift from the
+///        target's CURRENT kernel stack (snapshot restore / free+reuse).  The
+///        [H2W] orphan-displacement fires when the apply then iretq's onto the
+///        freed/foreign RSP (find_task(id)==null → current-cache lag → [H2W]
+///        harness displacement).  This re-checks BOTH liveness (id_table_) AND
+///        ownership (the published RSP lies inside the target's live kernel_stack,
+///        or the harness boot stack) with IRQs disabled — so no task-context
+///        removal can interleave — and aborts (clear atoms + bump generation) on
+///        any mismatch.
+/// @return 1 = apply the switch, 0 = abort it (atoms already invalidated).
+/// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
+extern "C" int scheduler_validate_pending_switch() noexcept;
+
+/// @brief ISR-epilogue callback for the `.abort_switch` path
+///        (isr_stubs.asm): the deferred switch was refused because its load RSP
+///        fell outside the dispatched task's kernel stack.  The arm side may
+///        have already repointed TSS.RSP0 at the aborted `next` task's kernel
+///        stack top (scheduler.cpp:1991, user-task dispatch).  Rebind RSP0 to
+///        the CONTINUING task's own kernel stack so the next ring-3→ring-0
+///        transition (int $0x80 trap gate) cannot push its iretq frame onto a
+///        freed/foreign stack.  Harmless for ring-0-only runs (no privilege
+///        transition ever consumes RSP0).
+/// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
+extern "C" void scheduler_abort_switch_fixup() noexcept;
+
+/// @brief Context-switch bridge called from isr_stubs.asm to apply
+///        the deferred task switch.  Reads scheduler_next_task_id,
+///        updates current_task(), clears the arm, and performs
+///        canary/IPC checks.
+extern "C" void scheduler_on_context_switch() noexcept;
 
 } // namespace gs
 } // namespace kernel

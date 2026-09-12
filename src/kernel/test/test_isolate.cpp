@@ -1151,8 +1151,12 @@ void snapshot_restore(const char *test_name) {
                                 Logger::raw_write("\n");
                                 continue;
                             }
-                            // Validate size is reasonable (not beyond stack end)
-                            if (kstart + saved_size > kend || saved_size > 65536) {
+                            // Validate size is reasonable (not beyond stack
+                            // end).  The bound tracks CONFIG_STACK_SIZE so
+                            // instrumented (coverage) builds with deeper
+                            // stacks do not reject every snapshot entry.
+                            if (kstart + saved_size > kend ||
+                                saved_size > CONFIG_STACK_SIZE) {
                                 Logger::raw_write("[KSTACK] invalid saved_size=");
                                 Logger::print_dec(saved_size);
                                 Logger::raw_write(" in test \"");
