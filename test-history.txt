@@ -792,3 +792,15 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-08 16:27:12 safe PASSED:133 FAILED:0 TIME: 11s
 2026-09-08 16:27:24 selftest PASSED:133 FAILED:0 TIME: 12s
 2026-09-08 18:09:12 selftest PASSED: 133 FAILED: 0 TIME: verification-after-123
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (no TEST SUMMARY; silent after irq200 create in isr_ack_and_task_entry)
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT (repro; same silent wedge)
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: ~10s (with temporary Logger DIAG prints in test 8)
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary handler prio 5; test 8 FAILs fast on quiescent as designed)
+2026-09-12 15:26:05 kernel_top PASSED: 8 FAILED: 1 TIME: ~10s (temporary isr_entry skip; test 8 FAILs on acks as designed, suite completes)
+2026-09-12 15:26:05 kernel_top PASSED: 0 FAILED: 0 TIME: 45s STATUS: TIMEOUT (wedge moved to ring_full_reject test 7)
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 227ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 221ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 231ms
+2026-09-12 15:26:05 kernel_top PASSED: 9 FAILED: 0 TIME: 909ms
+2026-09-12 15:26:05 selftest PASSED: 133 FAILED: 0 TIME: 7779ms

@@ -91,6 +91,65 @@ bool IrqThread::create(uint8_t vector, uint64_t priority,
 
 // ─── ISR entry ───────────────────────────────────────────────────────────
 
+// ─── Teardown ─────────────────────────────────────────────────────────────
+
+bool IrqThread::destroy(uint8_t vector) {
+    size_t slot = count_;
+    for (size_t scan = 0; scan < count_; ++scan) {
+        if (instances_[scan].valid_ && instances_[scan].vector_ == vector) {
+            slot = scan;
+            break;
+        }
+    }
+    if (slot >= count_) {
+        return false;
+    }
+    auto &target = instances_[slot];
+    if (!target.tcb_ || target.tcb_ == Scheduler::current_task()) {
+        return false;
+    }
+
+    // Invalidate first: for_vector()/is_irq_thread_task() stop matching, and
+    // an in-flight ISR observes null notify_ (isr_entry null-checks it)
+    // instead of a half-torn instance.  Task context only by contract.
+    target.valid_ = false;
+    TaskControlBlock *handler_task = target.tcb_;
+    target.tcb_ = nullptr;
+    target.notify_ = nullptr;
+
+    // Compact the table: move the last slot into the hole field by field.
+    // The SPSC ring is not copyable, so it is reset instead of moved — its
+    // bytes belonged to the destroyed instance.  Keeps create() append-only.
+    size_t last = count_ - 1;
+    if (slot != last) {
+        auto &source = instances_[last];
+        target.vector_ = source.vector_;
+        target.priority_ = source.priority_;
+        target.handler_ = source.handler_;
+        target.isr_ack_ = source.isr_ack_;
+        target.tcb_ = source.tcb_;
+        target.notify_ = source.notify_;
+        target.ring_.reset();
+        target.valid_ = true;
+        source.valid_ = false;
+        source.tcb_ = nullptr;
+        source.notify_ = nullptr;
+    }
+    count_ = last;
+
+    // Synchronously terminate and reap: a TERMINATED-but-unreaped zombie
+    // would be re-terminated by the test-boundary cleanup (double
+    // zombie-append), and the task count must be back at baseline before
+    // returning.  The quiescent handler is BLOCKED in its Notify wait; its
+    // waiter slot dies with the TCB, and Notify::notify on a TERMINATED
+    // waiter is a guarded no-op, so no use-after-free is possible.
+    if (handler_task->state != TaskState::TERMINATED) {
+        Scheduler::terminate(*handler_task, 0);
+    }
+    Scheduler::drain_zombie_list();
+    return true;
+}
+
 void IrqThread::isr_entry(uint8_t vector, uint64_t error_code, uint64_t rip) {
     (void)error_code;
     (void)rip;
