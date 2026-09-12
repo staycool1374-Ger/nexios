@@ -62,6 +62,7 @@ CRITICAL CHECKS:
 4. **Memory Safety:** Does the generated code introduce potential double-free risks in the PMM or BufferPool?
 5. **Critical Section Interference:** Does the generated code interfere in critical sections with the existing implementation or global kernel invariants?
 6. **Preprocessor & Conditional Semantics:** Check the SEMANTIC of the code in terms of using #ifdef or #ifndef sections. Look for possible missed implementations, asymmetric behavior, or uninitialized variables inside conditional if/else or preprocessor blocks.
+7. **Context-Retrieval Artifacts:** Does the issue thread show graphify + vault retrieval artifacts (queries pasted with dispositions) for this non-trivial change? Absence ⇒ REJECTED as S2 (process violation), independent of code quality.
 
 ## REPORT FORMAT (structured output)
 
