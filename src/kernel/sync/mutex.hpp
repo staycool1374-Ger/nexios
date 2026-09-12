@@ -38,7 +38,7 @@ class Mutex {
 
     Mutex()
         : owner_(nullptr), holder_priority_(0), lock_count_(0),
-          priority_ceiling_(0), wait_count_(0) {
+          initialized_(false), priority_ceiling_(0), wait_count_(0) {
     }
     /// @brief Initialize the mutex to unlocked state.
     void init();

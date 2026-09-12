@@ -52,7 +52,7 @@ class Queue {
         : head_(0), tail_(0), count_(0), send_waiters_(0), recv_waiters_(0),
           last_sender_(nullptr), last_receiver_(nullptr),
           last_sender_gen_(0), last_receiver_gen_(0), send_holder_prio_(0),
-          recv_holder_prio_(0) {
+          recv_holder_prio_(0), send_waiters_count_(0), recv_waiters_count_(0) {
     }
     /// @brief Initialize the message queue to empty.
     void init();
