@@ -593,8 +593,15 @@ endif
 #
 # The sub-make receives CXXFLAGS without -DCONFIG_DEBUG (never added to base).
 # The stamp is written first so an interrupted build is detected on next run.
+#
+# Unknown -W options are hard errors, and analyzer warnings are
+# GCC-version-dependent (-Wanalyzer-infinite-loop: GCC 14+,
+# -Wanalyzer-undefined-behavior-ptrdiff: GCC 15+), so keep only the
+# suppressions this compiler actually knows (CI uses GCC 13).
 # ------------------------------------------------------------------------------
-release: CXXFLAGS += -g -O2 -fanalyzer -Wno-error=analyzer-null-argument -Wno-error=analyzer-possible-null-dereference -Wno-error=analyzer-use-of-uninitialized-value -Wno-error=analyzer-infinite-loop -Wno-error=analyzer-malloc-leak -Wno-error=analyzer-undefined-behavior-ptrdiff -Wno-error=analyzer-out-of-bounds
+ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
+cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
+release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
 release: $(TEST_REGISTRY_GEN)
 release:
 ifneq ($(ARCH),x86_64)
