@@ -30,3 +30,4 @@ bench_mandelbrot
 bench_mandelbrot.cpp
 tools/gdb/*.gdb
 .opencode/
+.obsidian/

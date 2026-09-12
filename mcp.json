@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "graphify": {
+      "command": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "args": [
+        "-m",
+        "graphify.serve",
+        "/Users/arnold/jarvis/graphify-out/graph.json"
+      ],
+      "env": {
+        "GRAPHIFY_GRAPH": "/Users/arnold/jarvis/graphify-out/graph.json"
+      }
+    },
+    "obsidian": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "obsidian-mcp@2",
+        "serve",
+        "--vault",
+        "jarvis=/Users/arnold/vaults/jarvis"
+      ],
+      "env": {
+        "OBSIDIAN_VAULT_PATH": "/Users/arnold/vaults/jarvis"
+      }
+    }
+  }
+}

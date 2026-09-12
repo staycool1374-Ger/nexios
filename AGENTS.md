@@ -222,6 +222,7 @@ evidence-backed. Do not stack changes across steps.
 
 ## Pre-Flight
 - Run `bash ~/jarvis/scripts/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
+- Confirm `graphify` CLI availability (`command -v graphify`) and `graphify-out/graph.json` exists before starting tasks. If MCP servers are configured (`mcp.json` / `opencode.json` `mcp` section), prefer MCP tools over raw CLI (see graphify section).
 
 ## Makefile Usage (MANDATORY — re-read this before every test invocation)
 - Only valid test target: `make execute-test <arch> <build> <class>`
@@ -286,6 +287,13 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+### MCP Protocol & Hierarchy (see `mcp.json`, `MCP-CONFIG.md`, `SETUP-GRAPHIFY.md`)
+- Servers: `graphify` (`query_graph`, `get_node`, `get_neighbors`, `shortest_path`, `get_community`, `god_nodes`, `graph_stats`) and `obsidian` (`obsidian_read_note`, `obsidian_create_note`, `obsidian_edit_note`, `obsidian_search_vault`).
+- Canonical names: `mcp__graphify__query` → `query_graph`, `mcp__graphify__path` → `shortest_path`, `mcp__graphify__explain` → `get_node`+`get_neighbors`, `mcp__obsidian__read_note` → `obsidian_read_note` (full map: `MCP-CONFIG.md` §4).
+- Hierarchy: MCP tools first when configured; raw CLI is the fallback when MCP is unreachable. `graphify update .` is CLI-only — no MCP update tool exists.
+- Vault Integrity: Obsidian is authoritative for specs/roadmaps/test cases. MCP writes must preserve YAML frontmatter, `[[wikilinks]]`, and folder structure.
+- Context Minimization: call `mcp__graphify__query` or `mcp__graphify__explain` before touching high-level code or specs; never ingest raw spec files wholesale.
 
 ## Active Summary
 ### Objective
