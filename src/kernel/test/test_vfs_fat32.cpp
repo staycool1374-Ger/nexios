@@ -23,7 +23,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-null-argument"
 #pragma GCC diagnostic ignored "-Wanalyzer-possible-null-dereference"
-#if __GNUC__ >= 12
+#if __GNUC__ >= 15 // -Wanalyzer-undefined-behavior-ptrdiff is new in GCC 15
 #pragma GCC diagnostic ignored "-Wanalyzer-undefined-behavior-ptrdiff"
 #endif
 #endif
