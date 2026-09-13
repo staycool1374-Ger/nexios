@@ -1095,6 +1095,9 @@ static void build_canonical_path(const char* cwd, const char* target,
         buf[i] = '\0';
     }
     // Normalize in-place: collapse //, resolve . and ..
+    // An absolute source keeps its leading '/' (issue #141): seed it before
+    // the first segment so re-joining never produces a root-relative string.
+    const bool absolute = (buf[0] == '/');
     char stack[256];
     size_t sp = 0;
     const char* p = buf;
@@ -1112,6 +1115,7 @@ static void build_canonical_path(const char* cwd, const char* target,
             }
             continue;
         }
+        if (absolute && sp == 0) stack[sp++] = '/';
         if (sp > 0 && stack[sp - 1] != '/') stack[sp++] = '/';
         for (size_t i = 0; i < seg_len; ++i) stack[sp++] = start[i];
     }

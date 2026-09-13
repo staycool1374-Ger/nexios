@@ -480,9 +480,8 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
     char pwd[k_capture_size];
     run_shell("pwd", pwd, sizeof(pwd));
 
-    // `cd /` restores the canonical root exactly (see the leading-slash
-    // defect note in shell_cd_error_paths_and_pwd — the root case is the one
-    // path the normalizer still renders absolutely).
+    // `cd /` restores the canonical root exactly (absolute targets keep
+    // their leading '/' per issue #141).
     bool at_root_exact =
         pwd[0] == '/' && (pwd[1] == '\n' || pwd[1] == '\0');
 
@@ -501,9 +500,9 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
 // Input: Shell::execute("cd /no-such-dir-zz"), ("cd /dev/tty"),
 //        ("cd /tmp"), ("pwd"), ("cd /"), ("pwd").
 // Expect: "no such directory" and "not a directory" respectively; pwd shows
-//         the tmp directory after the successful cd (rendered without the
-//         leading '/' — see the defect note below) and exactly "/" after the
-//         restore.
+//         exactly "/tmp" after the successful cd and exactly "/" after the
+//         restore (issue #141 fixed: absolute targets keep their leading
+//         '/').
 // Depends: service::Shell, vfs::resolve
 JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
     ensure_standard_mounts();
@@ -522,20 +521,17 @@ JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
     char at_root[k_capture_size];
     run_shell("pwd", at_root, sizeof(at_root));
 
-    // NOTE (defect found by this test, reported as a kernel bug): for an
-    // absolute target below the root, `build_canonical_path()` strips the
-    // leading '/' — the normalizer skips every leading separator and only
-    // re-inserts a '/' *between* segments, never before the first one.  So
-    // `cd /tmp` leaves the canonical cwd as "tmp" and `pwd` prints "tmp".
-    // The DATA contract asserted here is therefore "the cwd ends at the
-    // target directory", not "the cwd is the absolute path".
-    bool in_tmp_ok = has(in_tmp, "tmp");
+    // Absolute targets keep their leading '/' (issue #141 fixed): the
+    // canonical cwd after `cd /tmp` is exactly "/tmp".
+    bool in_tmp_exact = in_tmp[0] == '/' && in_tmp[1] == 't' &&
+                        in_tmp[2] == 'm' && in_tmp[3] == 'p' &&
+                        (in_tmp[4] == '\n' || in_tmp[4] == '\0');
     bool at_root_exact =
         at_root[0] == '/' && (at_root[1] == '\n' || at_root[1] == '\0');
 
     JARVIS_ASSERT(has(missing, "no such directory"));
     JARVIS_ASSERT(has(notdir, "not a directory"));
-    JARVIS_ASSERT(in_tmp_ok);
+    JARVIS_ASSERT(in_tmp_exact);
     JARVIS_ASSERT(at_root_exact);
     JARVIS_TEST_PASS();
 }

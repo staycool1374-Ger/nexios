@@ -1,317 +1,78 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index d990fcda..6e614043 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -163,14 +163,17 @@ static constexpr size_t INITIAL_HEAP_SIZE =
- static int count_strings(const char *const *arr) {
-     if (!arr)
-         return 0;
-+    // Hoisted above the keep-alive edge: the goto below must not cross a
-+    // non-vacuous initialization (issue #149).
-+    int str_count{};
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cnt);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_cnt);
-     arch::stac();
--    int n = 0;
--    while (arr[n])
--        ++n;
-+    while (arr[str_count])
-+        ++str_count;
-     arch::clac();
-     g_user_access_recover_ip = 0;
--    return n;
-+    return str_count;
+diff --git a/src/kernel/test/test_shell_commands.cpp b/src/kernel/test/test_shell_commands.cpp
+index d9c7a8b8..9fb64cc4 100644
+--- a/src/kernel/test/test_shell_commands.cpp
++++ b/src/kernel/test/test_shell_commands.cpp
+@@ -480,9 +480,8 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
+     char pwd[k_capture_size];
+     run_shell("pwd", pwd, sizeof(pwd));
  
- recover_cnt:
-     arch::clac();
-@@ -183,9 +186,11 @@ recover_cnt:
- static uint64_t total_string_len(const char *const *arr) {
-     if (!arr)
-         return 0;
-+    // Hoisted above the keep-alive edge (issue #149, see count_strings).
-+    uint64_t total{};
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_len);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_len);
-     arch::stac();
--    uint64_t total = 0;
-     for (int i = 0; arr[i]; ++i)
-         total += strlen(arr[i]) + 1;
-     arch::clac();
-@@ -204,6 +209,7 @@ static void copy_strings(uint8_t *dest, const char *const *arr) {
-     if (!arr)
-         return;
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cpy);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_cpy);
-     arch::stac();
-     for (int i = 0; arr[i]; ++i) {
-         size_t len = strlen(arr[i]) + 1;
-@@ -417,6 +423,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
-     user_rsp = user_rsp - reinterpret_cast<uint64_t>(stack_top) +
-                mem::STACK_VADDR + arch::PAGE_SIZE + mem::STACK_SIZE;
+-    // `cd /` restores the canonical root exactly (see the leading-slash
+-    // defect note in shell_cd_error_paths_and_pwd — the root case is the one
+-    // path the normalizer still renders absolutely).
++    // `cd /` restores the canonical root exactly (absolute targets keep
++    // their leading '/' per issue #141).
+     bool at_root_exact =
+         pwd[0] == '/' && (pwd[1] == '\n' || pwd[1] == '\0');
  
-+    // Keep-alive edges for recover_envp/recover_argv (issue #149): they live
-+    // here — not at their setups — because the gotos must not cross the
-+    // argv/envp initializations above. Any reachable spot before the labels
-+    // suffices; the edge originates from live code so the blocks survive.
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_envp);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_argv);
-     return user_rsp;
+@@ -501,9 +500,9 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
+ // Input: Shell::execute("cd /no-such-dir-zz"), ("cd /dev/tty"),
+ //        ("cd /tmp"), ("pwd"), ("cd /"), ("pwd").
+ // Expect: "no such directory" and "not a directory" respectively; pwd shows
+-//         the tmp directory after the successful cd (rendered without the
+-//         leading '/' — see the defect note below) and exactly "/" after the
+-//         restore.
++//         exactly "/tmp" after the successful cd and exactly "/" after the
++//         restore (issue #141 fixed: absolute targets keep their leading
++//         '/').
+ // Depends: service::Shell, vfs::resolve
+ JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
+     ensure_standard_mounts();
+@@ -522,20 +521,17 @@ JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
+     char at_root[k_capture_size];
+     run_shell("pwd", at_root, sizeof(at_root));
  
- recover_envp:
-diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
-index 541615f4..64f18c52 100644
---- a/src/kernel/memory/checked_ptr.hpp
-+++ b/src/kernel/memory/checked_ptr.hpp
-@@ -35,6 +35,28 @@ static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
- ///        Page fault handler checks this and redirects here on fault.
- extern "C" constinit uint64_t g_user_access_recover_ip;
+-    // NOTE (defect found by this test, reported as a kernel bug): for an
+-    // absolute target below the root, `build_canonical_path()` strips the
+-    // leading '/' — the normalizer skips every leading separator and only
+-    // re-inserts a '/' *between* segments, never before the first one.  So
+-    // `cd /tmp` leaves the canonical cwd as "tmp" and `pwd` prints "tmp".
+-    // The DATA contract asserted here is therefore "the cwd ends at the
+-    // target directory", not "the cwd is the absolute path".
+-    bool in_tmp_ok = has(in_tmp, "tmp");
++    // Absolute targets keep their leading '/' (issue #141 fixed): the
++    // canonical cwd after `cd /tmp` is exactly "/tmp".
++    bool in_tmp_exact = in_tmp[0] == '/' && in_tmp[1] == 't' &&
++                        in_tmp[2] == 'm' && in_tmp[3] == 'p' &&
++                        (in_tmp[4] == '\n' || in_tmp[4] == '\0');
+     bool at_root_exact =
+         at_root[0] == '/' && (at_root[1] == '\n' || at_root[1] == '\0');
  
-+/// @brief Opaque keep-alive edge for fault-recovery labels (issue #149).
-+/// GCC deletes basic blocks unreachable by control flow even when their
-+/// address is taken with &&label (verified at -O0/-Og/-O2: recover bodies
-+/// absent binary-wide, labels resolve into the setup sequence, so a #PF
-+/// resume re-arms and re-faults forever; only blocks rejoining hot code
-+/// survive). A conditional goto through a value the compiler cannot fold
-+/// (CR3 low 12 bits via volatile asm — always zero at runtime since the
-+/// table root is page-aligned) forces emission with the label resolving
-+/// to the real body. The condition is false at runtime; even if taken it
-+/// only reaches the failure path (fail-closed, never fail-open).
-+/// @note Place in reachable code before the label — either immediately after
-+///       `g_user_access_recover_ip = &&label;`, or after the last initialized
-+///       declaration when one sits between setup and label: the goto must not
-+///       cross a non-vacuous initialization (hard error). Crossing
-+///       clac/g=0/return tails is always safe.
-+#define NEXIOS_FAULT_RECOVERY_KEEP(label)                                    \
-+    do {                                                                     \
-+        if ((arch::read_cr3() & 0xFFFULL) == 0xFFFULL) {                      \
-+            goto label;                                                      \
-+        }                                                                    \
-+    } while (0)
-+
- /// @brief Check if a memory range lies entirely within user space.
- /// @return true if the range is valid user-space memory.
- // NOLINTBEGIN(performance-no-int-to-ptr,bugprone-narrowing-conversions)
-@@ -97,6 +119,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
-         if (!valid())
-             return false;
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cf);
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_cf);
-         arch::stac();
-         memcpy(kernel_dst, unsafe_ptr(), count_ * sizeof(T));
-         arch::clac();
-@@ -115,6 +138,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
-         if (!valid())
-             return false;
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_ct);
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_ct);
-         arch::stac();
-         memcpy(unsafe_ptr(), kernel_src, count_ * sizeof(T));
-         arch::clac();
-@@ -135,6 +159,9 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_rd);
-         arch::stac();
-         T value = unsafe_ptr()[index];
-+        // Keep-alive sits after the last initialized declaration: the edge
-+        // below crosses only clac/g=0/return (issue #149).
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_rd);
-         arch::clac();
-         g_user_access_recover_ip = 0;
-         return value;
-@@ -151,6 +178,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
-         if (!valid())
-             return false;
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_wr);
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_wr);
-         arch::stac();
-         unsafe_ptr()[index] = value;
-         arch::clac();
-@@ -194,9 +222,12 @@ static inline bool is_user_string(const void *user_ptr,
-     uint64_t probe_cr3 = arch::read_cr3();
-     if (VMM::virt_to_phys_in_pml4(addr, probe_cr3) == 0)
-         return false;
-+    // Hoisted above the keep-alive edge: the goto below must not cross a
-+    // non-vacuous initialization (issue #149). The cast itself cannot fault.
-+    auto *p = static_cast<const volatile char *>(user_ptr);
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_str_chk);
-     arch::stac();
--    auto *p = static_cast<const volatile char *>(user_ptr);
-     for (uint64_t i = 0; i < max_len; ++i) {
-         if (p[i] == '\0') {
-             arch::clac();
-@@ -224,6 +255,7 @@ static inline bool strncpy_from_user(char *dst, const char *src,
-     if (!is_user_string(src, max_len))
-         return false;
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_str);
-     arch::stac();
-     for (uint64_t i = 0; i < max_len; ++i) {
-         dst[i] = src[i];
-@@ -254,6 +286,7 @@ static inline bool safe_copy_from_user(T *dst, const T *src, uint64_t count) {
-     if (!is_user_range(src, count * sizeof(T)))
-         return false;
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_from);
-     arch::stac();
-     memcpy(dst, src, count * sizeof(T));
-     arch::clac();
-@@ -274,6 +307,7 @@ static inline bool safe_copy_to_user(T *dst, const T *src, uint64_t count) {
-     if (!is_user_range(dst, count * sizeof(T)))
-         return false;
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_to);
-     arch::stac();
-     memcpy(dst, src, count * sizeof(T));
-     arch::clac();
-diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
-index 805c7e2e..bb711e5e 100644
---- a/src/kernel/syscall/syscall_handlers_fs.cpp
-+++ b/src/kernel/syscall/syscall_handlers_fs.cpp
-@@ -246,15 +246,19 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-     // uses kernel buffers elsewhere, so stac cannot live inside the op).
-     // Arm fault recovery + stac around the call so a #PF on the user buffer
-     // returns -1 instead of panicking, and AC is cleared on every path.
-+    // Split above the keep-alive edge: the goto below must not cross a
-+    // non-vacuous initialization (issue #149).
-+    int64_t read_result{};
-     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_read);
-+    NEXIOS_FAULT_RECOVERY_KEEP(recover_read);
-     arch::stac();
--    int64_t r =
-+    read_result =
-         f->vnode->ops->read(*f->vnode, buf.unsafe_ptr(), count, f->offset);
-     arch::clac();
-     g_user_access_recover_ip = 0;
--    if (r > 0)
--        f->offset += static_cast<uint64_t>(r);
--    return static_cast<uint64_t>(r >= 0 ? r : -1);
-+    if (read_result > 0)
-+        f->offset += static_cast<uint64_t>(read_result);
-+    return static_cast<uint64_t>(read_result >= 0 ? read_result : -1);
- 
- recover_read:
-     arch::clac();
-diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
-index 28279db9..dd257717 100644
---- a/src/kernel/syscall/syscall_handlers_misc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_misc.cpp
-@@ -418,6 +418,7 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-         // user write is stac-wrapped with fault recovery.
-         g_user_access_recover_ip =
-             reinterpret_cast<uint64_t>(&&recover_rand);
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_rand);
-         arch::stac();
-         random_fill(buf.unsafe_ptr(), static_cast<size_t>(arg1));
-         arch::clac();
-@@ -458,7 +459,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-         // MP-4 (SMAP): arm fault recovery for the user writes inside the
-         // for_each callback below.
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_klog);
--    }
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_klog);    }
- 
-     kernel::log::DmesgService::instance().for_each(
-         [&](const kernel::log::LogEntry &e) {
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index 6d228f5c..d589bd3a 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -135,6 +135,7 @@ static bool validate_argv_envp(const char *const *ptr, bool is_user_task,
-         const char *const *p = ptr;
-         size_t arg_count = 0;
-         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_exec);
-+        NEXIOS_FAULT_RECOVERY_KEEP(recover_exec);
-         arch::stac();
-         while (*p) {
-             if (++arg_count > MAX_EXEC_ARGS) {
-diff --git a/src/kernel/test/test_checked_ptr_api.cpp b/src/kernel/test/test_checked_ptr_api.cpp
-index b5476c3f..1ec22416 100644
---- a/src/kernel/test/test_checked_ptr_api.cpp
-+++ b/src/kernel/test/test_checked_ptr_api.cpp
-@@ -327,12 +327,25 @@ JARVIS_TEST(checked_ptr_api_safe_copy_templates_fail_closed,
- // Depends: safe_copy_from_user/safe_copy_to_user fault recovery
- JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
-             "PRE: vfsd, iocd | POST: none") {
--    /* Pseudocode:
--     * 1. Plant 0xA5 sentinel in kernel_dst[16], pattern in kernel_src[16].
--     * 2. from_ok = safe_copy_from_user(kernel_dst, 0x60000000, 16).
--     * 3. to_ok = safe_copy_to_user(0x60000000, kernel_src, 16).
--     * 4. Assert !from_ok && !to_ok and the sentinel is unchanged.
--     */
-+    // Reactivated by the issue #149 keep-alive fix: the recover bodies now
-+    // survive codegen, so a #PF inside the copy redirects to them.
-+    uint8_t kernel_dst[16] = {};
-+    uint8_t kernel_src[16] = {};
-+    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
-+        kernel_dst[idx] = 0xA5;
-+        kernel_src[idx] = static_cast<uint8_t>(idx);
-+    }
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *unmapped = reinterpret_cast<uint8_t *>(0x60000000ULL);
-+    const bool from_ok =
-+        safe_copy_from_user(kernel_dst, unmapped, sizeof(kernel_dst));
-+    const bool to_ok =
-+        safe_copy_to_user(unmapped, kernel_src, sizeof(kernel_src));
-+    JARVIS_ASSERT(!from_ok);
-+    JARVIS_ASSERT(!to_ok);
-+    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
-+        JARVIS_ASSERT_EQ(0xA5, kernel_dst[idx]);
-+    }
+     JARVIS_ASSERT(has(missing, "no such directory"));
+     JARVIS_ASSERT(has(notdir, "not a directory"));
+-    JARVIS_ASSERT(in_tmp_ok);
++    JARVIS_ASSERT(in_tmp_exact);
+     JARVIS_ASSERT(at_root_exact);
      JARVIS_TEST_PASS();
  }
- 
-diff --git a/src/kernel/test/test_cross_arch.cpp b/src/kernel/test/test_cross_arch.cpp
-index c63f4170..0d569472 100644
---- a/src/kernel/test/test_cross_arch.cpp
-+++ b/src/kernel/test/test_cross_arch.cpp
-@@ -702,6 +702,7 @@ JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
-             // redirects to recover_smap (regs[17] = g_user_access_recover_ip).
-             kernel::g_user_access_recover_ip =
-                 reinterpret_cast<uint64_t>(&&recover_smap);
-+            NEXIOS_FAULT_RECOVERY_KEEP(recover_smap);
-             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-             reinterpret_cast<volatile uint32_t *>(user_va)[0] = 0xAB;
-             kernel::g_user_access_recover_ip = 0;
-diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
-index ac87f3f9..15910cdf 100644
---- a/src/kernel/test/test_syscall.cpp
-+++ b/src/kernel/test/test_syscall.cpp
-@@ -754,10 +754,7 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
- //           fault-recovery path (real #PF inside safe_copy, redirected to
- //           the recover label), while a mapped pointer in the same task
- //           succeeds — proving the success/failure split is the mapping,
--//           not the task.
--//           PARKED as stub (issue #149): the recovery resume loops
--//           silently; re-activate once #149 is fixed (keep the mapped
--//           control call — it is covered by the roundtrip test meanwhile).
-+//           not the task. Reactivated by the issue #149 keep-alive fix.
- // Input: Dispatched user task: getrlimit(2, 0x60000000) [user range,
- //        never mapped] then getrlimit(2, data+16) [mapped control].
- // Expect: Probe reaches EXIT; first returns -1 (fault recovered), second
-@@ -765,13 +762,19 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
- //         can reach.
- // Depends: kernel::safe_copy_to_user fault recovery (recover_to label)
- JARVIS_TEST(syscall_user_unmapped_fault, "PRE: none | POST: none") {
--    /* Pseudocode:
--     * 1. Defensive destroy of prior vectors (none live); build the probe:
--     *    call_a = getrlimit(2, 0x60000000), call_b = getrlimit(2, data+16).
--     * 2. Dispatch the user task; join boundedly on TERMINATED + exit 0.
--     * 3. Read back rets via phys translation BEFORE teardown.
--     * 4. terminate + drain; assert ran, ret_a == -1, ret_b == 0.
--     */
-+#if defined(CONFIG_ARCH_X86_64)
-+    uint64_t ret_a = 0;
-+    uint64_t ret_b = 0;
-+    uint8_t data[512] = {};
-+    uint64_t struct_va = kUserProbeDataVa + kUserProbeStructOff;
-+    bool ran = run_user_probe(45, 2, 0x60000000ULL, 45, 2, struct_va,
-+                              &ret_a, &ret_b, data);
-+    JARVIS_ASSERT(ran);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
-+    JARVIS_ASSERT_EQ(0ULL, ret_b);
-+#else
-+    JARVIS_TEST_PASS();
-+#endif
-     JARVIS_TEST_PASS();
- }
- 
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 82d8ad87..2da78eeb 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -1095,6 +1095,9 @@ static void build_canonical_path(const char* cwd, const char* target,
+         buf[i] = '\0';
+     }
+     // Normalize in-place: collapse //, resolve . and ..
++    // An absolute source keeps its leading '/' (issue #141): seed it before
++    // the first segment so re-joining never produces a root-relative string.
++    const bool absolute = (buf[0] == '/');
+     char stack[256];
+     size_t sp = 0;
+     const char* p = buf;
+@@ -1112,6 +1115,7 @@ static void build_canonical_path(const char* cwd, const char* target,
+             }
+             continue;
+         }
++        if (absolute && sp == 0) stack[sp++] = '/';
+         if (sp > 0 && stack[sp - 1] != '/') stack[sp++] = '/';
+         for (size_t i = 0; i < seg_len; ++i) stack[sp++] = start[i];
+     }
