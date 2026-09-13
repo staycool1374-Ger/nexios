@@ -1,366 +1,317 @@
-diff --git a/src/kernel/sync/notify.cpp b/src/kernel/sync/notify.cpp
-index 603ae33b..e0d4ecd5 100644
---- a/src/kernel/sync/notify.cpp
-+++ b/src/kernel/sync/notify.cpp
-@@ -22,6 +22,7 @@
- #include <kernel/sync/notify.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/sync/spinlock_guard.hpp>
-+#include <kernel/arch/io.hpp>
- 
- namespace kernel {
- namespace sync {
-@@ -99,31 +100,83 @@ errors::SyncError Notify::notify_err(uint64_t value) {
- }
- 
- /// @brief Block until notified. Returns the notifier's value.
-+///
-+/// Semaphore::wait() discipline (CODING_STYLE §11.1–§11.3, INV-2): the
-+/// waiter is registered and marked BLOCKED under the lock, the lock is
-+/// released before any scheduler call, the task is dequeued from the
-+/// ready queue, reschedule() arms the deferred switch, and the task
-+/// spins scheduler-mediated until the notifier wakes it.  A value that
-+/// arrived before the first wait is consumed without blocking, so an
-+/// ISR notify can never be lost when the handler has not dispatched
-+/// yet (issue #148: the old immediate-return path let
-+/// IrqThread::task_entry busy-spin wait→handler→wait at raised priority
-+/// and wedge the guest silently).
- uint64_t Notify::wait() {
-     auto *task = Scheduler::current_task();
-     if (!task)
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index d990fcda..6e614043 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -163,14 +163,17 @@ static constexpr size_t INITIAL_HEAP_SIZE =
+ static int count_strings(const char *const *arr) {
+     if (!arr)
          return 0;
++    // Hoisted above the keep-alive edge: the goto below must not cross a
++    // non-vacuous initialization (issue #149).
++    int str_count{};
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cnt);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_cnt);
+     arch::stac();
+-    int n = 0;
+-    while (arr[n])
+-        ++n;
++    while (arr[str_count])
++        ++str_count;
+     arch::clac();
+     g_user_access_recover_ip = 0;
+-    return n;
++    return str_count;
  
--    {
--        SpinLockGuard<SpinLock> guard(lock_);
--        if (waiter_ != nullptr)
--            return 0;
--
--        waiter_ = task;
--        waiter_gen_ = task->generation;
--        task->state = TaskState::BLOCKED;
--    } // lock released BEFORE reschedule: never hold a spinlock across a
--      // context switch.  reschedule() arms a deferred switch and re-enables
--      // IRQs; a timer tick before this frame unwinds would save the task
--      // holding lock_, and the ISR-side notify() would spin forever on it
--      // (threaded-IRQ keyboard deadlock).
-+    for (;;) {
-+        {
-+            SpinLockGuard<SpinLock> guard(lock_);
-+            if (waiter_ == nullptr) {
-+                if (notify_value_ != 0) {
-+                    uint64_t value = notify_value_;
-+                    notify_value_ = 0;
-+                    return value;
-+                }
-+                waiter_ = task;
-+                waiter_gen_ = task->generation;
-+                task->state = TaskState::BLOCKED;
-+                break;
-+            }
-+            // A waiter is already registered (re-entered wait while still
-+            // registered, or a foreign waiter): release the lock, yield,
-+            // and retry — never return without a reschedule (§11.3b).
-+        }
-+        Scheduler::reschedule();
-+        arch::pause();
-+    }
+ recover_cnt:
+     arch::clac();
+@@ -183,9 +186,11 @@ recover_cnt:
+ static uint64_t total_string_len(const char *const *arr) {
+     if (!arr)
+         return 0;
++    // Hoisted above the keep-alive edge (issue #149, see count_strings).
++    uint64_t total{};
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_len);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_len);
+     arch::stac();
+-    uint64_t total = 0;
+     for (int i = 0; arr[i]; ++i)
+         total += strlen(arr[i]) + 1;
+     arch::clac();
+@@ -204,6 +209,7 @@ static void copy_strings(uint8_t *dest, const char *const *arr) {
+     if (!arr)
+         return;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cpy);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_cpy);
+     arch::stac();
+     for (int i = 0; arr[i]; ++i) {
+         size_t len = strlen(arr[i]) + 1;
+@@ -417,6 +423,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
+     user_rsp = user_rsp - reinterpret_cast<uint64_t>(stack_top) +
+                mem::STACK_VADDR + arch::PAGE_SIZE + mem::STACK_SIZE;
  
-+    // Block OUTSIDE the lock (C-1): never hold a spinlock across the
-+    // deferred switch — the ISR-side notify() would spin forever on it.
-+    // Dequeue so a BLOCKED task is never physically queued (INV-2
-+    // desync — release-build live-lock if the switch applies late).
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
++    // Keep-alive edges for recover_envp/recover_argv (issue #149): they live
++    // here — not at their setups — because the gotos must not cross the
++    // argv/envp initializations above. Any reachable spot before the labels
++    // suffices; the edge originates from live code so the blocks survive.
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_envp);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_argv);
+     return user_rsp;
  
--    return notify_value_;
-+    // reschedule() is deferred (INV-4): keep running with state=BLOCKED
-+    // until the timer ISR applies the switch and notify() wakes us.
-+    // Spin-wait (mirrors Semaphore::wait).  If interrupts are off the
-+    // ISR cannot fire — roll back and leave without a value.
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        uint64_t value = notify_value_;
-+        notify_value_ = 0;
-+        return value;
-+    }
-+    {
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        if (waiter_ == task && waiter_gen_ == task->generation) {
-+            waiter_ = nullptr;
-+            waiter_gen_ = 0;
-+        }
-+    }
-+    task->state = TaskState::RUNNING;
-+    Scheduler::enqueue_ready(*task);
-+    return 0;
- }
+ recover_envp:
+diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
+index 541615f4..64f18c52 100644
+--- a/src/kernel/memory/checked_ptr.hpp
++++ b/src/kernel/memory/checked_ptr.hpp
+@@ -35,6 +35,28 @@ static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
+ ///        Page fault handler checks this and redirects here on fault.
+ extern "C" constinit uint64_t g_user_access_recover_ip;
  
- /// @brief Block until notified (error-returning overload).
-+///
-+/// Same Semaphore::wait_err() discipline as wait(): consume a pending
-+/// value without blocking, else register + BLOCKED under the lock and
-+/// block scheduler-mediated outside it.  A second waiter is rejected
-+/// with SYNC_ERR_ALREADY_WAITING; an interrupts-disabled caller rolls
-+/// back with SYNC_ERR_INTERRUPTED.
- errors::SyncError Notify::wait_err(uint64_t *out_value) {
-     auto *task = Scheduler::current_task();
-     if (!task)
-@@ -134,16 +187,42 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
-         if (waiter_ != nullptr)
-             return errors::SYNC_ERR_ALREADY_WAITING;
- 
-+        if (notify_value_ != 0) {
-+            if (out_value)
-+                *out_value = notify_value_;
-+            notify_value_ = 0;
-+            return errors::SYNC_ERR_OK;
-+        }
++/// @brief Opaque keep-alive edge for fault-recovery labels (issue #149).
++/// GCC deletes basic blocks unreachable by control flow even when their
++/// address is taken with &&label (verified at -O0/-Og/-O2: recover bodies
++/// absent binary-wide, labels resolve into the setup sequence, so a #PF
++/// resume re-arms and re-faults forever; only blocks rejoining hot code
++/// survive). A conditional goto through a value the compiler cannot fold
++/// (CR3 low 12 bits via volatile asm — always zero at runtime since the
++/// table root is page-aligned) forces emission with the label resolving
++/// to the real body. The condition is false at runtime; even if taken it
++/// only reaches the failure path (fail-closed, never fail-open).
++/// @note Place in reachable code before the label — either immediately after
++///       `g_user_access_recover_ip = &&label;`, or after the last initialized
++///       declaration when one sits between setup and label: the goto must not
++///       cross a non-vacuous initialization (hard error). Crossing
++///       clac/g=0/return tails is always safe.
++#define NEXIOS_FAULT_RECOVERY_KEEP(label)                                    \
++    do {                                                                     \
++        if ((arch::read_cr3() & 0xFFFULL) == 0xFFFULL) {                      \
++            goto label;                                                      \
++        }                                                                    \
++    } while (0)
 +
-         waiter_ = task;
-         waiter_gen_ = task->generation;
-         task->state = TaskState::BLOCKED;
-     } // lock released BEFORE reschedule (see wait())
+ /// @brief Check if a memory range lies entirely within user space.
+ /// @return true if the range is valid user-space memory.
+ // NOLINTBEGIN(performance-no-int-to-ptr,bugprone-narrowing-conversions)
+@@ -97,6 +119,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+         if (!valid())
+             return false;
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cf);
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_cf);
+         arch::stac();
+         memcpy(kernel_dst, unsafe_ptr(), count_ * sizeof(T));
+         arch::clac();
+@@ -115,6 +138,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+         if (!valid())
+             return false;
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_ct);
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_ct);
+         arch::stac();
+         memcpy(unsafe_ptr(), kernel_src, count_ * sizeof(T));
+         arch::clac();
+@@ -135,6 +159,9 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_rd);
+         arch::stac();
+         T value = unsafe_ptr()[index];
++        // Keep-alive sits after the last initialized declaration: the edge
++        // below crosses only clac/g=0/return (issue #149).
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_rd);
+         arch::clac();
+         g_user_access_recover_ip = 0;
+         return value;
+@@ -151,6 +178,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+         if (!valid())
+             return false;
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_wr);
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_wr);
+         arch::stac();
+         unsafe_ptr()[index] = value;
+         arch::clac();
+@@ -194,9 +222,12 @@ static inline bool is_user_string(const void *user_ptr,
+     uint64_t probe_cr3 = arch::read_cr3();
+     if (VMM::virt_to_phys_in_pml4(addr, probe_cr3) == 0)
+         return false;
++    // Hoisted above the keep-alive edge: the goto below must not cross a
++    // non-vacuous initialization (issue #149). The cast itself cannot fault.
++    auto *p = static_cast<const volatile char *>(user_ptr);
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_str_chk);
+     arch::stac();
+-    auto *p = static_cast<const volatile char *>(user_ptr);
+     for (uint64_t i = 0; i < max_len; ++i) {
+         if (p[i] == '\0') {
+             arch::clac();
+@@ -224,6 +255,7 @@ static inline bool strncpy_from_user(char *dst, const char *src,
+     if (!is_user_string(src, max_len))
+         return false;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_str);
+     arch::stac();
+     for (uint64_t i = 0; i < max_len; ++i) {
+         dst[i] = src[i];
+@@ -254,6 +286,7 @@ static inline bool safe_copy_from_user(T *dst, const T *src, uint64_t count) {
+     if (!is_user_range(src, count * sizeof(T)))
+         return false;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_from);
+     arch::stac();
+     memcpy(dst, src, count * sizeof(T));
+     arch::clac();
+@@ -274,6 +307,7 @@ static inline bool safe_copy_to_user(T *dst, const T *src, uint64_t count) {
+     if (!is_user_range(dst, count * sizeof(T)))
+         return false;
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_to);
+     arch::stac();
+     memcpy(dst, src, count * sizeof(T));
+     arch::clac();
+diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
+index 805c7e2e..bb711e5e 100644
+--- a/src/kernel/syscall/syscall_handlers_fs.cpp
++++ b/src/kernel/syscall/syscall_handlers_fs.cpp
+@@ -246,15 +246,19 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     // uses kernel buffers elsewhere, so stac cannot live inside the op).
+     // Arm fault recovery + stac around the call so a #PF on the user buffer
+     // returns -1 instead of panicking, and AC is cleared on every path.
++    // Split above the keep-alive edge: the goto below must not cross a
++    // non-vacuous initialization (issue #149).
++    int64_t read_result{};
+     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_read);
++    NEXIOS_FAULT_RECOVERY_KEEP(recover_read);
+     arch::stac();
+-    int64_t r =
++    read_result =
+         f->vnode->ops->read(*f->vnode, buf.unsafe_ptr(), count, f->offset);
+     arch::clac();
+     g_user_access_recover_ip = 0;
+-    if (r > 0)
+-        f->offset += static_cast<uint64_t>(r);
+-    return static_cast<uint64_t>(r >= 0 ? r : -1);
++    if (read_result > 0)
++        f->offset += static_cast<uint64_t>(read_result);
++    return static_cast<uint64_t>(read_result >= 0 ? read_result : -1);
  
-+    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
-+    Scheduler::dequeue_ready(*task);
-     Scheduler::reschedule();
+ recover_read:
+     arch::clac();
+diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
+index 28279db9..dd257717 100644
+--- a/src/kernel/syscall/syscall_handlers_misc.cpp
++++ b/src/kernel/syscall/syscall_handlers_misc.cpp
+@@ -418,6 +418,7 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+         // user write is stac-wrapped with fault recovery.
+         g_user_access_recover_ip =
+             reinterpret_cast<uint64_t>(&&recover_rand);
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_rand);
+         arch::stac();
+         random_fill(buf.unsafe_ptr(), static_cast<size_t>(arg1));
+         arch::clac();
+@@ -458,7 +459,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+         // MP-4 (SMAP): arm fault recovery for the user writes inside the
+         // for_each callback below.
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_klog);
+-    }
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_klog);    }
  
--    if (out_value)
--        *out_value = notify_value_;
--    return errors::SYNC_ERR_OK;
-+    if (arch::interrupts_enabled()) {
-+        while (task->state == TaskState::BLOCKED) {
-+            arch::pause();
-+        }
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        if (out_value)
-+            *out_value = notify_value_;
-+        notify_value_ = 0;
-+        return errors::SYNC_ERR_OK;
-+    }
-+    {
-+        SpinLockGuard<SpinLock> guard(lock_);
-+        if (waiter_ == task && waiter_gen_ == task->generation) {
-+            waiter_ = nullptr;
-+            waiter_gen_ = 0;
-+        }
-+    }
-+    task->state = TaskState::RUNNING;
-+    Scheduler::enqueue_ready(*task);
-+    return errors::SYNC_ERR_INTERRUPTED;
- }
- 
- /// @brief Check if notified without blocking.
-diff --git a/src/kernel/syscall/syscall_handlers_sync.cpp b/src/kernel/syscall/syscall_handlers_sync.cpp
-index 88f6a100..edee86d0 100644
---- a/src/kernel/syscall/syscall_handlers_sync.cpp
-+++ b/src/kernel/syscall/syscall_handlers_sync.cpp
-@@ -44,11 +44,20 @@ uint64_t Syscall::sys_notify_wait(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-     if (!cur)
-         return static_cast<uint64_t>(-1);
-     uint64_t value = cur->notify.wait();
--    // NOLINTNEXTLINE(performance-no-int-to-ptr)
--    auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
--    if (syscall_is_user_task() && !val_ptr.valid())
--        return static_cast<uint64_t>(-1);
--    val_ptr.write(value);
-+    if (syscall_is_user_task()) {
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
-+        if (!val_ptr.valid())
-+            return static_cast<uint64_t>(-1);
-+        val_ptr.write(value);
-+    } else if (arg0 != 0) {
-+        // Kernel caller (e.g. a test driver task): CheckedPtr::write is
-+        // fail-closed for non-user addresses, so a kernel out-pointer must
-+        // be stored directly (issue #148: the old Notify::wait +
-+        // try_wait-fixup masked this — the syscall never delivered).
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        *reinterpret_cast<uint64_t *>(arg0) = value;
-+    }
-     return 0;
- }
- 
-diff --git a/src/kernel/test/test_cap_irq_notify.cpp b/src/kernel/test/test_cap_irq_notify.cpp
-index f3e47cb7..66dee806 100644
---- a/src/kernel/test/test_cap_irq_notify.cpp
-+++ b/src/kernel/test/test_cap_irq_notify.cpp
-@@ -114,11 +114,13 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
-         while (!g_inject_done)
-             arch::pause();
-     }
--    // NOTIFY-driver blocking pattern: Notify::wait() registers us as the
--    // Notify's waiter, sets BLOCKED and arms a deferred reschedule — it does
--    // NOT spin (only IrqThread-style loops spin until a timer tick applies
--    // the switch).  Mirror sys_irq_wait's spin on state==BLOCKED so the task
--    // persists BLOCKED until the injected IRQ (or revoke) wakes it.
-+    // NOTIFY-driver blocking pattern (issue #148): Notify::wait()
-+    // registers us as the Notify's waiter, sets BLOCKED, dequeues from
-+    // the ready queue and arms a deferred reschedule, then spins
-+    // scheduler-mediated until the injected IRQ (or revoke) wakes it.
-+    // The outer spin below is then a no-op pass-through; it is kept so
-+    // the task persists BLOCKED even if a future wait() ever returns
-+    // early again.
-     g_notify_val = 0;
-     g_wait_ret =
-         Syscall::handle(static_cast<uint64_t>(SyscallNumber::NOTIFY_WAIT),
-@@ -134,11 +136,12 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
-         cur->state = TaskState::RUNNING;
-         Scheduler::enqueue_ready(*cur);
-     }
--    // Re-read the delivered value after the wake: the ISR may have delivered
--    // while we were descheduled mid-wait, in which case Notify::wait()
--    // returned a stale 0.  try_wait consumes non-zero pending values; a
--    // revoked sentinel (0) leaves g_notify_val 0 — both are asserted by the
--    // tests.
-+    // Re-read the delivered value after the wake: a notify that arrived
-+    // while descheduled stays pending until consumed.  Notify::wait()
-+    // already consumes it on the wake path, so try_wait is normally a
-+    // no-op here; it only fires if a second notify landed after the
-+    // wake.  A revoked sentinel (0) leaves g_notify_val 0 — both are
-+    // asserted by the tests.
-     uint64_t reval = 0;
-     if (cur->notify.try_wait(&reval)) {
-         g_notify_val = reval;
-diff --git a/src/kernel/test/test_kernel_top.cpp b/src/kernel/test/test_kernel_top.cpp
-index 727383cf..0904ef3a 100644
---- a/src/kernel/test/test_kernel_top.cpp
-+++ b/src/kernel/test/test_kernel_top.cpp
-@@ -31,18 +31,20 @@
- ///        delta calls Logger::fatal + panic.  The overflow test below
- ///        therefore asserts the *clamping* behaviour, not the panic path.
- /// @note  `IrqThread` teardown lives in `src/kernel/irq_thread.cpp`
--///        (`IrqThread::destroy`, issue #144); the live tests below drive
-+///        (`IrqThread::destroy`, issue #144); the tests below drive
- ///        create/try_push_data/for_vector/destroy with handler tasks at a
- ///        priority that never dispatches, and destroy each instance before
- ///        asserting, so no ResourceTracker task delta survives the test
--///        boundary.  The live-dispatch e2e (isr_entry + task_entry) is
--///        parked as a stub until issue #148 is fixed.
-+///        boundary.  The live-dispatch e2e (isr_entry + task_entry at
-+///        prio 50) was parked as a stub under issue #148 and reactivated
-+///        by its Notify::wait() fix.
- 
- #include <test.hpp>
- #include <logger.hpp>
- #include <kernel/arch/hal/irq_latency_histogram.hpp>
- #include <kernel/random.hpp>
- #include <kernel/arch/timer.hpp>
-+#include <kernel/arch/io.hpp>
- #include <kernel/log/ring_buffer.hpp>
- #include <kernel/arch/irq_guard.hpp>
- #include <kernel/irq_thread.hpp>
-@@ -261,8 +263,8 @@ constexpr uint8_t k_irq_thread_vector_c = 202;
- /// @brief Handler-task priority, deliberately BELOW the test task: handler
- ///        tasks never dispatch (the test never blocks), so create/ring/
- ///        destroy tests are fully deterministic with no timer-tick
--///        dependence.  The live-dispatch e2e is parked (issue #148) until
--///        the dispatch+notify/wake wedge is fixed.
-+///        dependence.  Only the live-dispatch e2e uses a priority above
-+///        the test task (issue #148).
- constexpr uint64_t k_irq_thread_prio = 5;
- 
- /// @brief Custom ISR ack: no real EOI, so tests never touch the interrupt
-@@ -280,6 +282,27 @@ void test_irq_handler_probe(uint64_t vector, uint64_t error_code,
-     (void)rip;
- }
- 
-+/// @brief Live-dispatch e2e probes (issue #148): cross-task flags, hence
-+///        atomic access on every side (CODING_STYLE §11.6).
-+uint64_t g_e2e_ack_count = 0;
-+uint64_t g_e2e_handler_ran = 0;
-+uint64_t g_e2e_handler_seen = 0;
-+
-+/// @brief Custom ISR ack for the e2e: counts invocations, no real EOI.
-+void test_irq_e2e_ack(uint8_t vector) {
-+    (void)vector;
-+    __atomic_add_fetch(&g_e2e_ack_count, 1, __ATOMIC_RELAXED);
-+}
-+
-+/// @brief Handler for the e2e: records the vector it was dispatched with.
-+void test_irq_e2e_handler(uint64_t vector, uint64_t error_code,
-+                          uint64_t rip) {
-+    (void)error_code;
-+    (void)rip;
-+    __atomic_store_n(&g_e2e_handler_seen, vector, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_e2e_handler_ran, 1, __ATOMIC_RELAXED);
-+}
-+
- // Runmode: kernel
- // Testidea: create() must reject a null handler without side effects, and
- //           for_vector()/destroy() must report absence for unknown vectors.
-@@ -364,28 +387,55 @@ JARVIS_TEST(kernel_irq_thread_ring_full_reject,
- // Testidea: End-to-end threaded-IRQ path — isr_entry runs the custom ack
- //           (no real EOI) and wakes the handler task; task_entry dispatches
- //           the registered handler in task context at higher priority.
--//           PARKED as stub (issue #148): live dispatch + notify/wake wedges
--//           the guest silently and flakily, so the design below waits for
--//           the race fix before it runs again.
--// Input: create(200, prio 50, probe handler, probe ack); wait until the
--//        handler task BLOCKEDs in its Notify wait; call isr_entry(200,0,0)
--//        directly; spin boundedly for the handler flag; destroy.
-+//           Reactivated by the issue #148 Notify::wait() fix: wait() now
-+//           blocks scheduler-mediated (Semaphore shape) and consumes a
-+//           notify that arrived before the first wait, so the dispatch +
-+//           notify/wake ordering is race-free in both directions.
-+// Input: create(200, prio 50, e2e handler, e2e ack); bounded settle spin
-+//        so ticks can dispatch the handler into its wait; direct
-+//        isr_entry(200,0,0); bounded spin for the handler flag; destroy.
- // Expect: Ack ran exactly once, handler observed vector 200, destroy
- //         removes the instance — all with no ResourceTracker task delta.
- // Depends: kernel::IrqThread::create/isr_entry/task_entry/destroy,
- //          Scheduler dispatch of a higher-priority task on timer ticks
- JARVIS_TEST(kernel_irq_thread_isr_ack_and_task_entry,
+     kernel::log::DmesgService::instance().for_each(
+         [&](const kernel::log::LogEntry &e) {
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index 6d228f5c..d589bd3a 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -135,6 +135,7 @@ static bool validate_argv_envp(const char *const *ptr, bool is_user_task,
+         const char *const *p = ptr;
+         size_t arg_count = 0;
+         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_exec);
++        NEXIOS_FAULT_RECOVERY_KEEP(recover_exec);
+         arch::stac();
+         while (*p) {
+             if (++arg_count > MAX_EXEC_ARGS) {
+diff --git a/src/kernel/test/test_checked_ptr_api.cpp b/src/kernel/test/test_checked_ptr_api.cpp
+index b5476c3f..1ec22416 100644
+--- a/src/kernel/test/test_checked_ptr_api.cpp
++++ b/src/kernel/test/test_checked_ptr_api.cpp
+@@ -327,12 +327,25 @@ JARVIS_TEST(checked_ptr_api_safe_copy_templates_fail_closed,
+ // Depends: safe_copy_from_user/safe_copy_to_user fault recovery
+ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
              "PRE: vfsd, iocd | POST: none") {
 -    /* Pseudocode:
--     * 1. Defensive destroy(200); reset ack/flag/vector probes.
--     * 2. create(200, prio 50, handler probe, ack probe); resolve instance.
--     * 3. Spin boundedly until the handler task BLOCKEDs in Notify::wait.
--     * 4. Call isr_entry(200, 0, 0) directly (custom ack, no real EOI).
--     * 5. Spin boundedly until the handler probe observes vector 200.
--     * 6. destroy(200) BEFORE asserting (asserts return on failure).
--     * 7. Assert created, quiescent, acks == 1, ran, seen == 200,
--     *    destroyed, for_vector == nullptr (tracker-clean via isolation).
+-     * 1. Plant 0xA5 sentinel in kernel_dst[16], pattern in kernel_src[16].
+-     * 2. from_ok = safe_copy_from_user(kernel_dst, 0x60000000, 16).
+-     * 3. to_ok = safe_copy_to_user(0x60000000, kernel_src, 16).
+-     * 4. Assert !from_ok && !to_ok and the sentinel is unchanged.
 -     */
-+    constexpr uint64_t k_dispatch_prio = 50;
-+    constexpr uint32_t k_settle_spins = 200000;
-+    constexpr uint32_t k_wake_spins = 500000;
-+    IrqThread::destroy(k_irq_thread_vector);
-+    __atomic_store_n(&g_e2e_ack_count, 0, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_e2e_handler_ran, 0, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_e2e_handler_seen, 0, __ATOMIC_RELAXED);
-+    bool created = IrqThread::create(k_irq_thread_vector, k_dispatch_prio,
-+                                     test_irq_e2e_handler, test_irq_e2e_ack);
-+    auto *inst = IrqThread::for_vector(k_irq_thread_vector);
-+    // Timing only, never asserted: let timer ticks dispatch the handler
-+    // into its Notify wait.  Either ordering is correct — a notify that
-+    // lands first stays pending and the first wait consumes it.
-+    for (uint32_t spin = 0; spin < k_settle_spins; ++spin) {
-+        arch::pause();
++    // Reactivated by the issue #149 keep-alive fix: the recover bodies now
++    // survive codegen, so a #PF inside the copy redirects to them.
++    uint8_t kernel_dst[16] = {};
++    uint8_t kernel_src[16] = {};
++    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
++        kernel_dst[idx] = 0xA5;
++        kernel_src[idx] = static_cast<uint8_t>(idx);
 +    }
-+    if (inst != nullptr) {
-+        IrqThread::isr_entry(k_irq_thread_vector, 0, 0);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *unmapped = reinterpret_cast<uint8_t *>(0x60000000ULL);
++    const bool from_ok =
++        safe_copy_from_user(kernel_dst, unmapped, sizeof(kernel_dst));
++    const bool to_ok =
++        safe_copy_to_user(unmapped, kernel_src, sizeof(kernel_src));
++    JARVIS_ASSERT(!from_ok);
++    JARVIS_ASSERT(!to_ok);
++    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
++        JARVIS_ASSERT_EQ(0xA5, kernel_dst[idx]);
 +    }
-+    for (uint32_t spin = 0;
-+         spin < k_wake_spins &&
-+         __atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 0;
-+         ++spin) {
-+        arch::pause();
-+    }
-+    // Teardown BEFORE asserting (asserts return on failure).
-+    bool destroyed = IrqThread::destroy(k_irq_thread_vector);
-+    auto *gone = IrqThread::for_vector(k_irq_thread_vector);
-+    JARVIS_ASSERT(created);
-+    JARVIS_ASSERT(inst != nullptr);
-+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_ack_count, __ATOMIC_RELAXED) == 1);
-+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 1);
-+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_seen, __ATOMIC_RELAXED) ==
-+                  k_irq_thread_vector);
-+    JARVIS_ASSERT(destroyed);
-+    JARVIS_ASSERT(gone == nullptr);
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_cross_arch.cpp b/src/kernel/test/test_cross_arch.cpp
+index c63f4170..0d569472 100644
+--- a/src/kernel/test/test_cross_arch.cpp
++++ b/src/kernel/test/test_cross_arch.cpp
+@@ -702,6 +702,7 @@ JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
+             // redirects to recover_smap (regs[17] = g_user_access_recover_ip).
+             kernel::g_user_access_recover_ip =
+                 reinterpret_cast<uint64_t>(&&recover_smap);
++            NEXIOS_FAULT_RECOVERY_KEEP(recover_smap);
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+             reinterpret_cast<volatile uint32_t *>(user_va)[0] = 0xAB;
+             kernel::g_user_access_recover_ip = 0;
+diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
+index ac87f3f9..15910cdf 100644
+--- a/src/kernel/test/test_syscall.cpp
++++ b/src/kernel/test/test_syscall.cpp
+@@ -754,10 +754,7 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
+ //           fault-recovery path (real #PF inside safe_copy, redirected to
+ //           the recover label), while a mapped pointer in the same task
+ //           succeeds — proving the success/failure split is the mapping,
+-//           not the task.
+-//           PARKED as stub (issue #149): the recovery resume loops
+-//           silently; re-activate once #149 is fixed (keep the mapped
+-//           control call — it is covered by the roundtrip test meanwhile).
++//           not the task. Reactivated by the issue #149 keep-alive fix.
+ // Input: Dispatched user task: getrlimit(2, 0x60000000) [user range,
+ //        never mapped] then getrlimit(2, data+16) [mapped control].
+ // Expect: Probe reaches EXIT; first returns -1 (fault recovered), second
+@@ -765,13 +762,19 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
+ //         can reach.
+ // Depends: kernel::safe_copy_to_user fault recovery (recover_to label)
+ JARVIS_TEST(syscall_user_unmapped_fault, "PRE: none | POST: none") {
+-    /* Pseudocode:
+-     * 1. Defensive destroy of prior vectors (none live); build the probe:
+-     *    call_a = getrlimit(2, 0x60000000), call_b = getrlimit(2, data+16).
+-     * 2. Dispatch the user task; join boundedly on TERMINATED + exit 0.
+-     * 3. Read back rets via phys translation BEFORE teardown.
+-     * 4. terminate + drain; assert ran, ret_a == -1, ret_b == 0.
+-     */
++#if defined(CONFIG_ARCH_X86_64)
++    uint64_t ret_a = 0;
++    uint64_t ret_b = 0;
++    uint8_t data[512] = {};
++    uint64_t struct_va = kUserProbeDataVa + kUserProbeStructOff;
++    bool ran = run_user_probe(45, 2, 0x60000000ULL, 45, 2, struct_va,
++                              &ret_a, &ret_b, data);
++    JARVIS_ASSERT(ran);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
++    JARVIS_ASSERT_EQ(0ULL, ret_b);
++#else
++    JARVIS_TEST_PASS();
++#endif
      JARVIS_TEST_PASS();
  }
  

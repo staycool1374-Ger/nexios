@@ -418,6 +418,7 @@ uint64_t Syscall::sys_getrandom(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         // user write is stac-wrapped with fault recovery.
         g_user_access_recover_ip =
             reinterpret_cast<uint64_t>(&&recover_rand);
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_rand);
         arch::stac();
         random_fill(buf.unsafe_ptr(), static_cast<size_t>(arg1));
         arch::clac();
@@ -458,7 +459,7 @@ uint64_t Syscall::sys_klog(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         // MP-4 (SMAP): arm fault recovery for the user writes inside the
         // for_each callback below.
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_klog);
-    }
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_klog);    }
 
     kernel::log::DmesgService::instance().for_each(
         [&](const kernel::log::LogEntry &e) {

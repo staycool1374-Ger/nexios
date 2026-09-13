@@ -35,6 +35,28 @@ static constexpr uint64_t USER_SPACE_LIMIT = 0x0000800000000000ULL;
 ///        Page fault handler checks this and redirects here on fault.
 extern "C" constinit uint64_t g_user_access_recover_ip;
 
+/// @brief Opaque keep-alive edge for fault-recovery labels (issue #149).
+/// GCC deletes basic blocks unreachable by control flow even when their
+/// address is taken with &&label (verified at -O0/-Og/-O2: recover bodies
+/// absent binary-wide, labels resolve into the setup sequence, so a #PF
+/// resume re-arms and re-faults forever; only blocks rejoining hot code
+/// survive). A conditional goto through a value the compiler cannot fold
+/// (CR3 low 12 bits via volatile asm — always zero at runtime since the
+/// table root is page-aligned) forces emission with the label resolving
+/// to the real body. The condition is false at runtime; even if taken it
+/// only reaches the failure path (fail-closed, never fail-open).
+/// @note Place in reachable code before the label — either immediately after
+///       `g_user_access_recover_ip = &&label;`, or after the last initialized
+///       declaration when one sits between setup and label: the goto must not
+///       cross a non-vacuous initialization (hard error). Crossing
+///       clac/g=0/return tails is always safe.
+#define NEXIOS_FAULT_RECOVERY_KEEP(label)                                    \
+    do {                                                                     \
+        if ((arch::read_cr3() & 0xFFFULL) == 0xFFFULL) {                      \
+            goto label;                                                      \
+        }                                                                    \
+    } while (0)
+
 /// @brief Check if a memory range lies entirely within user space.
 /// @return true if the range is valid user-space memory.
 // NOLINTBEGIN(performance-no-int-to-ptr,bugprone-narrowing-conversions)
@@ -97,6 +119,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
         if (!valid())
             return false;
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cf);
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_cf);
         arch::stac();
         memcpy(kernel_dst, unsafe_ptr(), count_ * sizeof(T));
         arch::clac();
@@ -115,6 +138,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
         if (!valid())
             return false;
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_ct);
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_ct);
         arch::stac();
         memcpy(unsafe_ptr(), kernel_src, count_ * sizeof(T));
         arch::clac();
@@ -135,6 +159,9 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_rd);
         arch::stac();
         T value = unsafe_ptr()[index];
+        // Keep-alive sits after the last initialized declaration: the edge
+        // below crosses only clac/g=0/return (issue #149).
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_rd);
         arch::clac();
         g_user_access_recover_ip = 0;
         return value;
@@ -151,6 +178,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
         if (!valid())
             return false;
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_wr);
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_wr);
         arch::stac();
         unsafe_ptr()[index] = value;
         arch::clac();
@@ -194,9 +222,12 @@ static inline bool is_user_string(const void *user_ptr,
     uint64_t probe_cr3 = arch::read_cr3();
     if (VMM::virt_to_phys_in_pml4(addr, probe_cr3) == 0)
         return false;
-    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
-    arch::stac();
+    // Hoisted above the keep-alive edge: the goto below must not cross a
+    // non-vacuous initialization (issue #149). The cast itself cannot fault.
     auto *p = static_cast<const volatile char *>(user_ptr);
+    g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str_chk);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_str_chk);
+    arch::stac();
     for (uint64_t i = 0; i < max_len; ++i) {
         if (p[i] == '\0') {
             arch::clac();
@@ -224,6 +255,7 @@ static inline bool strncpy_from_user(char *dst, const char *src,
     if (!is_user_string(src, max_len))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_str);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_str);
     arch::stac();
     for (uint64_t i = 0; i < max_len; ++i) {
         dst[i] = src[i];
@@ -254,6 +286,7 @@ static inline bool safe_copy_from_user(T *dst, const T *src, uint64_t count) {
     if (!is_user_range(src, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_from);
     arch::stac();
     memcpy(dst, src, count * sizeof(T));
     arch::clac();
@@ -274,6 +307,7 @@ static inline bool safe_copy_to_user(T *dst, const T *src, uint64_t count) {
     if (!is_user_range(dst, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_to);
     arch::stac();
     memcpy(dst, src, count * sizeof(T));
     arch::clac();

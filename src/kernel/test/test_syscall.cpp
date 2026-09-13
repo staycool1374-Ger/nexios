@@ -754,10 +754,7 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
 //           fault-recovery path (real #PF inside safe_copy, redirected to
 //           the recover label), while a mapped pointer in the same task
 //           succeeds — proving the success/failure split is the mapping,
-//           not the task.
-//           PARKED as stub (issue #149): the recovery resume loops
-//           silently; re-activate once #149 is fixed (keep the mapped
-//           control call — it is covered by the roundtrip test meanwhile).
+//           not the task. Reactivated by the issue #149 keep-alive fix.
 // Input: Dispatched user task: getrlimit(2, 0x60000000) [user range,
 //        never mapped] then getrlimit(2, data+16) [mapped control].
 // Expect: Probe reaches EXIT; first returns -1 (fault recovered), second
@@ -765,13 +762,19 @@ JARVIS_TEST(syscall_user_copy_reject, "PRE: none | POST: none") {
 //         can reach.
 // Depends: kernel::safe_copy_to_user fault recovery (recover_to label)
 JARVIS_TEST(syscall_user_unmapped_fault, "PRE: none | POST: none") {
-    /* Pseudocode:
-     * 1. Defensive destroy of prior vectors (none live); build the probe:
-     *    call_a = getrlimit(2, 0x60000000), call_b = getrlimit(2, data+16).
-     * 2. Dispatch the user task; join boundedly on TERMINATED + exit 0.
-     * 3. Read back rets via phys translation BEFORE teardown.
-     * 4. terminate + drain; assert ran, ret_a == -1, ret_b == 0.
-     */
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    uint64_t struct_va = kUserProbeDataVa + kUserProbeStructOff;
+    bool ran = run_user_probe(45, 2, 0x60000000ULL, 45, 2, struct_va,
+                              &ret_a, &ret_b, data);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
+    JARVIS_ASSERT_EQ(0ULL, ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
     JARVIS_TEST_PASS();
 }
 

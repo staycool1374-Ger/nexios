@@ -246,15 +246,19 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // uses kernel buffers elsewhere, so stac cannot live inside the op).
     // Arm fault recovery + stac around the call so a #PF on the user buffer
     // returns -1 instead of panicking, and AC is cleared on every path.
+    // Split above the keep-alive edge: the goto below must not cross a
+    // non-vacuous initialization (issue #149).
+    int64_t read_result{};
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_read);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_read);
     arch::stac();
-    int64_t r =
+    read_result =
         f->vnode->ops->read(*f->vnode, buf.unsafe_ptr(), count, f->offset);
     arch::clac();
     g_user_access_recover_ip = 0;
-    if (r > 0)
-        f->offset += static_cast<uint64_t>(r);
-    return static_cast<uint64_t>(r >= 0 ? r : -1);
+    if (read_result > 0)
+        f->offset += static_cast<uint64_t>(read_result);
+    return static_cast<uint64_t>(read_result >= 0 ? read_result : -1);
 
 recover_read:
     arch::clac();

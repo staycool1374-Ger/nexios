@@ -135,6 +135,7 @@ static bool validate_argv_envp(const char *const *ptr, bool is_user_task,
         const char *const *p = ptr;
         size_t arg_count = 0;
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_exec);
+        NEXIOS_FAULT_RECOVERY_KEEP(recover_exec);
         arch::stac();
         while (*p) {
             if (++arg_count > MAX_EXEC_ARGS) {

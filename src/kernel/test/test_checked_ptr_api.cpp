@@ -327,12 +327,25 @@ JARVIS_TEST(checked_ptr_api_safe_copy_templates_fail_closed,
 // Depends: safe_copy_from_user/safe_copy_to_user fault recovery
 JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
             "PRE: vfsd, iocd | POST: none") {
-    /* Pseudocode:
-     * 1. Plant 0xA5 sentinel in kernel_dst[16], pattern in kernel_src[16].
-     * 2. from_ok = safe_copy_from_user(kernel_dst, 0x60000000, 16).
-     * 3. to_ok = safe_copy_to_user(0x60000000, kernel_src, 16).
-     * 4. Assert !from_ok && !to_ok and the sentinel is unchanged.
-     */
+    // Reactivated by the issue #149 keep-alive fix: the recover bodies now
+    // survive codegen, so a #PF inside the copy redirects to them.
+    uint8_t kernel_dst[16] = {};
+    uint8_t kernel_src[16] = {};
+    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
+        kernel_dst[idx] = 0xA5;
+        kernel_src[idx] = static_cast<uint8_t>(idx);
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *unmapped = reinterpret_cast<uint8_t *>(0x60000000ULL);
+    const bool from_ok =
+        safe_copy_from_user(kernel_dst, unmapped, sizeof(kernel_dst));
+    const bool to_ok =
+        safe_copy_to_user(unmapped, kernel_src, sizeof(kernel_src));
+    JARVIS_ASSERT(!from_ok);
+    JARVIS_ASSERT(!to_ok);
+    for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
+        JARVIS_ASSERT_EQ(0xA5, kernel_dst[idx]);
+    }
     JARVIS_TEST_PASS();
 }
 

@@ -702,6 +702,7 @@ JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
             // redirects to recover_smap (regs[17] = g_user_access_recover_ip).
             kernel::g_user_access_recover_ip =
                 reinterpret_cast<uint64_t>(&&recover_smap);
+            NEXIOS_FAULT_RECOVERY_KEEP(recover_smap);
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             reinterpret_cast<volatile uint32_t *>(user_va)[0] = 0xAB;
             kernel::g_user_access_recover_ip = 0;

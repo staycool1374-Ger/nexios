@@ -163,14 +163,17 @@ static constexpr size_t INITIAL_HEAP_SIZE =
 static int count_strings(const char *const *arr) {
     if (!arr)
         return 0;
+    // Hoisted above the keep-alive edge: the goto below must not cross a
+    // non-vacuous initialization (issue #149).
+    int str_count{};
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cnt);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_cnt);
     arch::stac();
-    int n = 0;
-    while (arr[n])
-        ++n;
+    while (arr[str_count])
+        ++str_count;
     arch::clac();
     g_user_access_recover_ip = 0;
-    return n;
+    return str_count;
 
 recover_cnt:
     arch::clac();
@@ -183,9 +186,11 @@ recover_cnt:
 static uint64_t total_string_len(const char *const *arr) {
     if (!arr)
         return 0;
+    // Hoisted above the keep-alive edge (issue #149, see count_strings).
+    uint64_t total{};
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_len);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_len);
     arch::stac();
-    uint64_t total = 0;
     for (int i = 0; arr[i]; ++i)
         total += strlen(arr[i]) + 1;
     arch::clac();
@@ -204,6 +209,7 @@ static void copy_strings(uint8_t *dest, const char *const *arr) {
     if (!arr)
         return;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cpy);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_cpy);
     arch::stac();
     for (int i = 0; arr[i]; ++i) {
         size_t len = strlen(arr[i]) + 1;
@@ -417,6 +423,12 @@ static uint64_t setup_user_stack(uint64_t ustack_phys, const char *const *argv,
     user_rsp = user_rsp - reinterpret_cast<uint64_t>(stack_top) +
                mem::STACK_VADDR + arch::PAGE_SIZE + mem::STACK_SIZE;
 
+    // Keep-alive edges for recover_envp/recover_argv (issue #149): they live
+    // here — not at their setups — because the gotos must not cross the
+    // argv/envp initializations above. Any reachable spot before the labels
+    // suffices; the edge originates from live code so the blocks survive.
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_envp);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_argv);
     return user_rsp;
 
 recover_envp:
