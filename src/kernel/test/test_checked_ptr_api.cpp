@@ -90,17 +90,19 @@ SweepResult sweep(T *user_ptr, uint64_t count) {
     result.valid = direct.valid() || from_factory.valid();
     result.unsafe_is_source = direct.unsafe_ptr() == user_ptr;
 
-    T storage{};
+    T storage[8]{}; // issue #150: scratch must cover count (max 8);
+                      // a 1-element scratch overflows the stack (and trips
+                      // -Werror=stringop-overflow in release -O2 builds)
 
     T observed = direct.read(0);
-    result.read_is_default = memcmp(&observed, &storage, sizeof(T)) == 0;
+    result.read_is_default = memcmp(&observed, &storage[0], sizeof(T)) == 0;
 
     if constexpr (!TypeIsConst<T>::value) {
-        result.copy_from = direct.copy_from(&storage);
-        result.copy_to = direct.copy_to(&storage);
-        result.write = direct.write(storage, 0);
-        (void)safe_copy_from_user(&storage, user_ptr, count);
-        (void)safe_copy_to_user(user_ptr, &storage, count);
+        result.copy_from = direct.copy_from(&storage[0]);
+        result.copy_to = direct.copy_to(&storage[0]);
+        result.write = direct.write(storage[0], 0);
+        (void)safe_copy_from_user(&storage[0], user_ptr, count);
+        (void)safe_copy_to_user(user_ptr, &storage[0], count);
     }
 
     return result;
