@@ -44,11 +44,20 @@ uint64_t Syscall::sys_notify_wait(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (!cur)
         return static_cast<uint64_t>(-1);
     uint64_t value = cur->notify.wait();
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
-    if (syscall_is_user_task() && !val_ptr.valid())
-        return static_cast<uint64_t>(-1);
-    val_ptr.write(value);
+    if (syscall_is_user_task()) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
+        if (!val_ptr.valid())
+            return static_cast<uint64_t>(-1);
+        val_ptr.write(value);
+    } else if (arg0 != 0) {
+        // Kernel caller (e.g. a test driver task): CheckedPtr::write is
+        // fail-closed for non-user addresses, so a kernel out-pointer must
+        // be stored directly (issue #148: the old Notify::wait +
+        // try_wait-fixup masked this — the syscall never delivered).
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        *reinterpret_cast<uint64_t *>(arg0) = value;
+    }
     return 0;
 }
 

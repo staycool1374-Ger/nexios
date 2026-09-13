@@ -114,11 +114,13 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
         while (!g_inject_done)
             arch::pause();
     }
-    // NOTIFY-driver blocking pattern: Notify::wait() registers us as the
-    // Notify's waiter, sets BLOCKED and arms a deferred reschedule — it does
-    // NOT spin (only IrqThread-style loops spin until a timer tick applies
-    // the switch).  Mirror sys_irq_wait's spin on state==BLOCKED so the task
-    // persists BLOCKED until the injected IRQ (or revoke) wakes it.
+    // NOTIFY-driver blocking pattern (issue #148): Notify::wait()
+    // registers us as the Notify's waiter, sets BLOCKED, dequeues from
+    // the ready queue and arms a deferred reschedule, then spins
+    // scheduler-mediated until the injected IRQ (or revoke) wakes it.
+    // The outer spin below is then a no-op pass-through; it is kept so
+    // the task persists BLOCKED even if a future wait() ever returns
+    // early again.
     g_notify_val = 0;
     g_wait_ret =
         Syscall::handle(static_cast<uint64_t>(SyscallNumber::NOTIFY_WAIT),
@@ -134,11 +136,12 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
         cur->state = TaskState::RUNNING;
         Scheduler::enqueue_ready(*cur);
     }
-    // Re-read the delivered value after the wake: the ISR may have delivered
-    // while we were descheduled mid-wait, in which case Notify::wait()
-    // returned a stale 0.  try_wait consumes non-zero pending values; a
-    // revoked sentinel (0) leaves g_notify_val 0 — both are asserted by the
-    // tests.
+    // Re-read the delivered value after the wake: a notify that arrived
+    // while descheduled stays pending until consumed.  Notify::wait()
+    // already consumes it on the wake path, so try_wait is normally a
+    // no-op here; it only fires if a second notify landed after the
+    // wake.  A revoked sentinel (0) leaves g_notify_val 0 — both are
+    // asserted by the tests.
     uint64_t reval = 0;
     if (cur->notify.try_wait(&reval)) {
         g_notify_val = reval;

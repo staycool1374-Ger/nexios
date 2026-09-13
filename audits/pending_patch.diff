@@ -1,1090 +1,366 @@
-diff --git a/Makefile b/Makefile
-index 759d9608..0c8d4623 100644
---- a/Makefile
-+++ b/Makefile
-@@ -659,7 +659,7 @@ profile-class: CXX := x86_64-elf-g++
- profile-class: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
-                        -Wno-type-limits -Wno-unused-but-set-variable \
-                        -Wno-class-memaccess \
--                       -DCONFIG_DEBUG
-+                       -DCONFIG_DEBUG -DCONFIG_PROFILING
- profile-class: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
- 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profile-class)'
- 	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
-@@ -671,14 +671,104 @@ profile-class: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld
- 	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
- 	@printf '  %-7s %s\n' 'PROFILE' 'Booting in QEMU for class $(CLASS)…'
- 	mkdir -p build/profiling/$(CLASS)
--	$(QEMU_SYSTEM) -cdrom $(DEBUG_ISO) -m 256M -serial file:build/profiling/$(CLASS)/samples.raw \
--	    $(QEMU_NET) -boot order=d -no-reboot -device isa-debug-exit \
-+	$(QEMU_SYSTEM) -cdrom $(DEBUG_ISO) -m 256M \
-+	    -chardev stdio,id=dbg,mux=on \
-+	    -serial chardev:dbg -monitor chardev:dbg \
-+	    -debugcon file:build/profiling/$(CLASS)/samples.raw \
-+	    $(QEMU_NET) $(QEMU_ARCH_FLAGS) \
-+	    -boot order=d -no-reboot -device isa-debug-exit \
- 	    -drive if=pflash,format=raw,readonly=on,file=$(QEMU_UEFI) 2>&1 | \
- 	    tee build/profiling/$(CLASS)/qemu.log
- 	@printf '  %-7s %s\n' 'PROFILE' 'Extracting samples for class $(CLASS)…'
- 	python3 tools/extract_samples.py build/profiling/$(CLASS)/samples.raw build/profiling/$(CLASS)
- endif
- 
-+# ------------------------------------------------------------------------------
-+# Dynamic test coverage — function-level (issue #122, phase B)
-+#
-+# One instrumented kernel (-finstrument-functions) is built once and booted
-+# once per test class.  Every run serialises the executed-function set over
-+# COM1 to build/coverage/<class>/serial.raw; tools/coverage_report.py unions
-+# the per-class sets and reports coverage per source file / per area.
-+#
-+#   make coverage-build                # build the instrumented kernel once
-+#   make coverage-class CLASS=safe     # run one class and capture its dump
-+#   make coverage                      # build + run COVERAGE_CLASSES + merge
-+# ------------------------------------------------------------------------------
-+COVERAGE_DIR       := build/coverage
-+COVERAGE_MAX_FUNCS ?= 16384
-+COVERAGE_TIMEOUT   ?= 300
-+COVERAGE_CLASSES   ?= safe basic_lib basic_atomic scheduler_core ipc_core
-+# The coverage handler must not instrument itself (self-measurement noise on
-+# every dump byte).  Nothing else is excluded: an excluded file would be
-+# reported as uncovered even when it runs.
-+COVERAGE_EXCLUDES  := src/kernel/gcov/,gcov_handler.cpp
-+COVERAGE_FLAGS     := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
-+                      -g -Og -fno-inline -fno-inline-functions \
-+                      -fno-omit-frame-pointer -DCONFIG_DEBUG -DCONFIG_COVERAGE \
-+                      -DCONFIG_COVERAGE_MAX_FUNCS=$(COVERAGE_MAX_FUNCS) \
-+                      -finstrument-functions \
-+                      -finstrument-functions-exclude-file-list=$(COVERAGE_EXCLUDES) \
-+                      -Wno-type-limits -Wno-unused-but-set-variable \
-+                      -Wno-class-memaccess
-+
-+ifneq ($(ARCH),x86_64)
-+coverage-build coverage-class coverage:
-+	@printf '  %-7s %s\n' 'ERROR' 'Coverage only supported on x86_64 (arch=$(ARCH))'; exit 1
-+else
-+coverage-build: CXX := x86_64-elf-g++
-+coverage-build: CXXFLAGS := $(COVERAGE_FLAGS)
-+coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
-+	@printf '  %-7s %s\n' 'LD' 'kernel.elf (coverage)'
-+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ)
-+	cp $(KERNEL) iso/boot/kernel.elf
-+	@mkdir -p $(dir $(DEBUG_ISO)) $(COVERAGE_DIR) $(dir $(BUILD_STAMP))
-+	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
-+	cp $(KERNEL) $(COVERAGE_DIR)/kernel.elf
-+	@echo coverage > $(BUILD_STAMP)
-+	@printf '  %-7s %s\n' 'COVERAGE' 'Instrumented ISO: $(DEBUG_ISO)'
-+
-+# Relink-only step: the objects already carry the instrumentation, only the
-+# initrd (test-config.txt) and therefore the link layout change per class.
-+coverage-class: CXX := x86_64-elf-g++
-+coverage-class: CXXFLAGS := $(COVERAGE_FLAGS)
-+coverage-class:
-+	@if [ -z "$(CLASS)" ]; then echo "ERROR: CLASS not set. Usage: make coverage-class CLASS=safe"; exit 1; fi
-+	@mkdir -p $(COVERAGE_DIR)/$(CLASS)
-+	@printf '%s\n' "$(CLASS)" > initrd/tests/test-config.txt
-+	@printf '  %-7s %s\n' 'COVERAGE' 'Relinking for class $(CLASS)…'
-+	@$(MAKE) --no-print-directory $(INITRD_OBJ) $(KERNEL)
-+	cp $(KERNEL) iso/boot/kernel.elf
-+	cp $(KERNEL) $(COVERAGE_DIR)/$(CLASS)/kernel.elf
-+	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
-+	@printf '  %-7s %s\n' 'COVERAGE' 'Booting class $(CLASS)…'
-+	if ! command -v gtimeout >/dev/null 2>&1; then \
-+	    echo "gtimeout missing (install coreutils)."; exit 1; \
-+	fi; \
-+	if ! printf '%s' "$(QEMU_FLAGS)" | grep -q -- '-serial chardev:dbg'; then \
-+	    echo "ERROR: QEMU_FLAGS has no '-serial chardev:dbg' to redirect"; exit 1; \
-+	fi; \
-+	_COV_FLAGS=$$(echo "$(QEMU_FLAGS)" | sed 's|-serial chardev:dbg|-serial file:$(COVERAGE_DIR)/$(CLASS)/serial.raw|'); \
-+	gtimeout $(COVERAGE_TIMEOUT) $(QEMU_SYSTEM) $$_COV_FLAGS -display none \
-+	    -no-reboot $(QEMU_DEBUG_EXIT) > $(COVERAGE_DIR)/$(CLASS)/qemu.log 2>&1 || true
-+	@if [ ! -s $(COVERAGE_DIR)/$(CLASS)/serial.raw ]; then \
-+	    echo "ERROR: no serial capture for class $(CLASS)"; exit 1; \
-+	fi
-+	@printf '  %-7s %s\n' 'COVERAGE' 'Capture: $(COVERAGE_DIR)/$(CLASS)/serial.raw'
-+
-+coverage:
-+	@mkdir -p $(COVERAGE_DIR)
-+	@cp initrd/tests/test-config.txt $(COVERAGE_DIR)/.test-config.bak 2>/dev/null || \
-+	    printf 'safe\n' > $(COVERAGE_DIR)/.test-config.bak
-+	@$(MAKE) --no-print-directory coverage-build
-+	@for c in $(COVERAGE_CLASSES); do \
-+	    $(MAKE) --no-print-directory coverage-class CLASS=$$c || exit 1; \
-+	done
-+	@python3 tools/coverage_report.py --dir $(COVERAGE_DIR) --out $(COVERAGE_DIR)
-+	@cp $(COVERAGE_DIR)/.test-config.bak initrd/tests/test-config.txt
-+	@printf '  %-7s %s\n' 'COVERAGE' 'Report: $(COVERAGE_DIR)/report.html'
-+endif
-+
- # ------------------------------------------------------------------------------
- # QEMU / Test targets
- # ------------------------------------------------------------------------------
-diff --git a/src/kernel/gcov/gcov_handler.cpp b/src/kernel/gcov/gcov_handler.cpp
-index f8fb58a4..98d112fc 100644
---- a/src/kernel/gcov/gcov_handler.cpp
-+++ b/src/kernel/gcov/gcov_handler.cpp
-@@ -17,48 +17,121 @@
-  */
- 
- /// @file gcov_handler.cpp
--/// @brief GCOV profiling support — function-entry instrumentation and serial
--/// flush.
-+/// @brief Dynamic function-level coverage — GCC `-finstrument-functions`
-+/// entry hook plus the framed serial dump of the executed-function set.
-+///
-+/// Registration IS the coverage signal: a function appears in the dump if
-+/// and only if it was entered at least once.  The "not covered" set is
-+/// derived host-side from the ELF symbol universe
-+/// (tools/coverage_report.py), because a kernel cannot know which functions
-+/// exist in files it never executes.
-+///
-+/// Wire format (all little-endian) — see docs/specs/coverage.md:
-+/// @code
-+///   "\n@@COVBEGIN@@\n"
-+///   "FUNC" u32 count
-+///   count * (u64 addr, u8 called)      // called is always 1 (wire compat)
-+///   "STAT" u32 registered u32 dropped u32 checksum
-+///   "END!"
-+///   "\n@@COVEND@@\n"
-+/// @endcode
-+/// A capture is only valid when both sentinels and the checksum are intact;
-+/// a truncated dump emits "@@COVABORT@@" instead of the end sentinel.
- 
--#include <types.hpp>
-+#include <kernel/gcov/gcov_handler.hpp>
- #include <kernel/arch/io.hpp>
- #include <constants.hpp>
- 
- extern "C" {
- 
--#define MAX_FUNCTIONS 4096
-+#ifdef CONFIG_COVERAGE
-+#ifndef CONFIG_COVERAGE_MAX_FUNCS
-+/// @brief Default table capacity for the coverage build (overridable).
-+#define CONFIG_COVERAGE_MAX_FUNCS 16384
-+#endif
-+/// @brief Capacity of the executed-function table (coverage build).
-+static constexpr uint32_t MAX_FUNCS = CONFIG_COVERAGE_MAX_FUNCS;
-+#elif defined(CONFIG_PROFILING)
-+/// @brief Capacity of the executed-function table (instrumented profiling).
-+static constexpr uint32_t MAX_FUNCS = 4096;
-+#else
-+/// @brief No -finstrument-functions: the table has no producer, so it is kept
-+/// minimal to avoid growing the production BSS.
-+static constexpr uint32_t MAX_FUNCS = 256;
-+#endif
-+
-+/// @brief Open-addressing slots — power of two, load factor <= 0.5.
-+static constexpr uint32_t HASH_SLOTS = MAX_FUNCS * 2;
-+/// @brief Sentinel for "function not registered" (table full / probe exhausted).
-+static constexpr uint32_t NO_INDEX = 0xFFFFFFFFu;
-+/// @brief Linear probe bound — keeps the hook O(1) and bounded.  At 50 % load
-+/// linear probing forms ~log2(n) clusters, so the bound must exceed that or a
-+/// healthy run would report spurious drops.
-+static constexpr uint32_t MAX_PROBE = 32;
-+/// @brief Bounded COM1 poll count; a stuck UART must not hang shutdown.
-+static constexpr uint32_t SERIAL_POLL_LIMIT = 2000000;
-+
-+static_assert((HASH_SLOTS & (HASH_SLOTS - 1)) == 0,
-+              "HASH_SLOTS must be a power of two");
- 
--static uint64_t called_functions[MAX_FUNCTIONS / 64];
--static uint64_t func_addrs[MAX_FUNCTIONS];
-+/// @brief Executed function addresses, indexed 0..func_count-1.
-+static uint64_t func_addrs[MAX_FUNCS];
-+/// @brief Slot -> index+1 map (0 == empty).
-+static uint32_t hash_slots[HASH_SLOTS];
-+/// @brief Number of registered functions (claimed atomically).
- static uint32_t func_count = 0;
-+/// @brief Functions rejected because the table was full (fail-closed).
-+static uint32_t dropped_funcs = 0;
- 
--/// @brief Find or register a function address in the profiling table.
--/// @param func_addr  Address of the function being tracked.
--/// @return Index into func_addrs / called_functions arrays.
-+/// @brief Hash a function address to a slot index.
-+/// @param addr Function entry address (4-byte aligned, so >>4 keeps entropy).
-+/// @return Slot index in [0, HASH_SLOTS).
-+static uint32_t __attribute__((no_instrument_function))
-+slot_for(uint64_t addr) {
-+    uint32_t mixed = static_cast<uint32_t>(addr >> 4) * 2654435761u;
-+    uint32_t high = static_cast<uint32_t>(addr >> 32) * 40503u;
-+    return (mixed ^ high) & (HASH_SLOTS - 1);
-+}
-+
-+/// @brief Register a function address, or return its existing index.
-+/// @param func_addr Function entry address.
-+/// @return Index in func_addrs, or NO_INDEX when the table is full or the
-+/// probe sequence is exhausted (never mis-attributes to index 0).
- static uint32_t __attribute__((no_instrument_function))
- find_or_add_func(uint64_t func_addr) {
--    for (uint32_t i = 0; i < func_count; i++) {
--        if (func_addrs[i] == func_addr)
--            return i;
--    }
--    if (func_count < MAX_FUNCTIONS) {
--        func_addrs[func_count] = func_addr;
--        return func_count++;
-+    uint32_t slot = slot_for(func_addr);
-+    for (uint32_t probe = 0; probe < MAX_PROBE; ++probe) {
-+        uint32_t idx = (slot + probe) & (HASH_SLOTS - 1);
-+        uint32_t entry = hash_slots[idx];
-+        if (entry != 0) {
-+            if (func_addrs[entry - 1] == func_addr)
-+                return entry - 1;
-+            continue;
-+        }
-+        uint32_t next = __atomic_fetch_add(&func_count, 1, __ATOMIC_RELAXED);
-+        if (next >= MAX_FUNCS) {
-+            __atomic_fetch_add(&dropped_funcs, 1, __ATOMIC_RELAXED);
-+            return NO_INDEX;
-+        }
-+        func_addrs[next] = func_addr;
-+        hash_slots[idx] = next + 1;
-+        return next;
-     }
--    return 0;
-+    __atomic_fetch_add(&dropped_funcs, 1, __ATOMIC_RELAXED);
-+    return NO_INDEX;
- }
- 
--/// @brief GCC instrumentation hook — called on every function entry.
--/// Marks the function as called in the called_functions bitmap.
-+/// @brief GCC instrumentation hook — called on every instrumented function entry.
- /// @param func   Address of the entered function.
- /// @param caller Address of the call site (unused).
- void __attribute__((no_instrument_function)) __cyg_profile_func_enter(
-     void *func, void *caller) { // NOLINT(bugprone-reserved-identifier,
-                                 // bugprone-easily-swappable-parameters)
-     (void)caller;
--    uint64_t addr = reinterpret_cast<uint64_t>(func);
--    uint32_t idx = find_or_add_func(addr);
--    called_functions[idx / 64] |= (1ULL << (idx % 64));
-+    // A concurrent entry from IRQ context can only produce a duplicate slot
-+    // (each claimant gets its own index from the atomic counter); the host
-+    // unions addresses, so no sample is lost and no entry is corrupted.
-+    (void)find_or_add_func(reinterpret_cast<uint64_t>(func));
- }
- 
- /// @brief GCC instrumentation hook — called on every function exit (no-op).
-@@ -72,42 +145,107 @@ __cyg_profile_func_exit(void *func,
-     (void)caller;
- }
- 
--/// @brief Flush profiling data to the serial port.
--/// Sends magic header 'FUNC', function count, and (addr, called) pairs
--/// over COM1 for the host-side extract_gcda.py script to reassemble.
--void __attribute__((no_instrument_function)) gcov_flush_to_serial() {
- #if defined(CONFIG_ARCH_X86_64)
--    uint8_t magic[4] = {'F', 'U', 'N', 'C'};
--    for (int i = 0; i < 4; ++i) {
--        while ((arch::inb(arch::COM1 + 5) & 0x20) == 0)
--            ;
--        arch::outb(arch::COM1, magic[i]);
-+
-+/// @brief Emit one byte over COM1 with a bounded wait for TX-ready.
-+/// @param byte Byte to transmit.
-+/// @return true when the byte was written, false when the UART stalled.
-+static bool __attribute__((no_instrument_function)) serial_put(uint8_t byte) {
-+    for (uint32_t poll = 0; poll < SERIAL_POLL_LIMIT; ++poll) {
-+        if ((arch::inb(arch::COM1 + 5) & 0x20) != 0) {
-+            arch::outb(arch::COM1, byte);
-+            return true;
-+        }
-+    }
-+    return false;
-+}
-+
-+/// @brief Emit a NUL-terminated string over COM1.
-+/// @param text String to transmit.
-+/// @return false as soon as one byte could not be written.
-+static bool __attribute__((no_instrument_function))
-+serial_puts(const char *text) {
-+    for (const char *cursor = text; *cursor != '\0'; ++cursor) {
-+        if (!serial_put(static_cast<uint8_t>(*cursor)))
-+            return false;
-     }
-+    return true;
-+}
- 
--    uint32_t total = func_count;
--    for (int i = 0; i < 4; ++i) {
--        while ((arch::inb(arch::COM1 + 5) & 0x20) == 0)
--            ;
--        arch::outb(arch::COM1, (total >> (i * 8)) & 0xFF);
-+/// @brief Emit a 32-bit value little-endian, folding it into @p checksum.
-+static bool __attribute__((no_instrument_function))
-+serial_put_u32(uint32_t value, uint32_t &checksum) {
-+    for (uint32_t shift = 0; shift < 32; shift += 8) {
-+        uint8_t byte = static_cast<uint8_t>((value >> shift) & 0xFFu);
-+        checksum += byte;
-+        if (!serial_put(byte))
-+            return false;
-     }
-+    return true;
-+}
-+
-+/// @brief Emit a 64-bit value little-endian, folding it into @p checksum.
-+static bool __attribute__((no_instrument_function))
-+serial_put_u64(uint64_t value, uint32_t &checksum) {
-+    for (uint32_t shift = 0; shift < 64; shift += 8) {
-+        uint8_t byte = static_cast<uint8_t>((value >> shift) & 0xFFu);
-+        checksum += byte;
-+        if (!serial_put(byte))
-+            return false;
-+    }
-+    return true;
-+}
- 
--    for (uint32_t i = 0; i < func_count; ++i) {
--        uint64_t addr = func_addrs[i];
--        uint32_t called = (called_functions[i / 64] >> (i % 64)) & 1;
--        for (int j = 0; j < 8; ++j) {
--            while ((arch::inb(arch::COM1 + 5) & 0x20) == 0)
--                ;
--            arch::outb(arch::COM1, (addr >> (j * 8)) & 0xFF);
-+/// @brief Serialise the executed-function set over COM1 (framed + checksummed).
-+/// Never blocks unbounded: a stalled UART emits the abort sentinel instead of
-+/// the end sentinel so the host rejects the capture.
-+void __attribute__((no_instrument_function)) gcov_flush_to_serial() {
-+    uint32_t count = __atomic_load_n(&func_count, __ATOMIC_RELAXED);
-+    if (count > MAX_FUNCS)
-+        count = MAX_FUNCS;
-+
-+    uint32_t checksum = 0;
-+    bool ok = serial_puts("\n@@COVBEGIN@@\n");
-+    if (ok)
-+        ok = serial_puts("FUNC");
-+    if (ok)
-+        ok = serial_put_u32(count, checksum);
-+    for (uint32_t i = 0; ok && i < count; ++i) {
-+        ok = serial_put_u64(func_addrs[i], checksum);
-+        if (ok) {
-+            // Wire-compat "called" byte: registration already implies called.
-+            checksum += 1u;
-+            ok = serial_put(1u);
-         }
--        while ((arch::inb(arch::COM1 + 5) & 0x20) == 0)
--            ;
--        arch::outb(arch::COM1, called & 0xFF);
-     }
--#else
--    (void)func_count;
-+    if (ok)
-+        ok = serial_puts("STAT");
-+    if (ok) {
-+        uint32_t trailing = __atomic_load_n(&func_count, __ATOMIC_RELAXED);
-+        ok = serial_put_u32(trailing, checksum);
-+    }
-+    if (ok)
-+        ok = serial_put_u32(__atomic_load_n(&dropped_funcs, __ATOMIC_RELAXED),
-+                            checksum);
-+    if (ok)
-+        ok = serial_put_u32(checksum, checksum);
-+    if (ok)
-+        ok = serial_puts("END!");
-+    if (ok)
-+        ok = serial_puts("\n@@COVEND@@\n");
-+    if (!ok)
-+        (void)serial_puts("\n@@COVABORT@@\n");
-+}
-+
-+#else // !CONFIG_ARCH_X86_64
-+
-+void __attribute__((no_instrument_function)) gcov_flush_to_serial() {
-     (void)func_addrs;
--    (void)called_functions;
--#endif
-+    (void)hash_slots;
-+    (void)func_count;
-+    (void)dropped_funcs;
- }
- 
--} // extern "C"
-\ No newline at end of file
-+#endif // CONFIG_ARCH_X86_64
-+
-+} // extern "C"
-diff --git a/src/kernel/gcov/gcov_handler.hpp b/src/kernel/gcov/gcov_handler.hpp
-new file mode 100644
-index 00000000..fb30926d
---- /dev/null
-+++ b/src/kernel/gcov/gcov_handler.hpp
-@@ -0,0 +1,34 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file gcov_handler.hpp
-+/// @brief Dynamic function-level coverage — executed-function table and the
-+/// framed serial dump consumed by tools/coverage_report.py (issue #122).
-+
-+#pragma once
-+
-+#include <types.hpp>
-+
-+extern "C" {
-+
-+/// @brief Serialise the executed-function set over COM1.
-+/// Emits a framed, checksummed record (see docs/specs/coverage.md).
-+/// Safe to call with interrupts disabled; never blocks unbounded.
-+void gcov_flush_to_serial();
-+
-+} // extern "C"
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 046f8407..04a4ce96 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -752,6 +752,22 @@
-     {65536, 16384, 65536, 65536, 65536, 65536, 65536, 65536}
- #endif
- 
-+// Instrumented (coverage) builds call the profiling hook on every function
-+// entry, which deepens every frame.  The 16 KiB tier-1 stack overflows on the
-+// deepest task paths (issue #122), so all tiers are doubled here.  Guarded so
-+// production builds keep the audited sizes.
-+#ifdef CONFIG_COVERAGE
-+#undef CONFIG_STACK_SIZE
-+#define CONFIG_STACK_SIZE 131072
-+#undef CONFIG_STACK_SIZE_TABLE
-+#define CONFIG_STACK_SIZE_TABLE                                                \
-+    {131072, 65536, 131072, 131072, 131072, 131072, 131072, 131072}
-+// alloc_kslot() bump-allocates from this fixed window; with doubled stacks the
-+// default 16 MiB would halve the number of concurrent kernel stacks.
-+#undef CONFIG_KSTACK_WINDOW_SIZE
-+#define CONFIG_KSTACK_WINDOW_SIZE 0x2000000ULL // 32 MiB
-+#endif
-+
- /// Maximum number of zombies in the zombie list before the on_tick watchdog
- /// force-flushes.  0 disables the watchdog (idle-only cleanup).
- /// Default: 32.
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index e90a9d80..7a1140a3 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -105,7 +105,12 @@ namespace kernel {
- /// an infinite hlt loop, leaving the task RUNNING forever and deadlocking
- /// any caller that waits for termination (ipc_blocking test hang).
- #if defined(CONFIG_ARCH_X86_64)
--static void _task_trampoline(void (*entry)()) {
-+// NOT instrumented (coverage builds): _task_trampoline is entered by the
-+// context switch with a synthetic frame — there is no return address above
-+// RBP, so the -finstrument-functions hook would read the unmapped stack top
-+// and page-fault before the task ever runs (issue #122).
-+static void __attribute__((no_instrument_function))
-+_task_trampoline(void (*entry)()) {
-     entry();
-     auto *self = Scheduler::current_task();
-     if (self)
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 3ff4aca3..d9dd6209 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -1151,8 +1151,12 @@ void snapshot_restore(const char *test_name) {
-                                 Logger::raw_write("\n");
-                                 continue;
-                             }
--                            // Validate size is reasonable (not beyond stack end)
--                            if (kstart + saved_size > kend || saved_size > 65536) {
-+                            // Validate size is reasonable (not beyond stack
-+                            // end).  The bound tracks CONFIG_STACK_SIZE so
-+                            // instrumented (coverage) builds with deeper
-+                            // stacks do not reject every snapshot entry.
-+                            if (kstart + saved_size > kend ||
-+                                saved_size > CONFIG_STACK_SIZE) {
-                                 Logger::raw_write("[KSTACK] invalid saved_size=");
-                                 Logger::print_dec(saved_size);
-                                 Logger::raw_write(" in test \"");
-diff --git a/src/lib/test.cpp b/src/lib/test.cpp
-index 006a3165..473e70c6 100644
---- a/src/lib/test.cpp
-+++ b/src/lib/test.cpp
-@@ -36,7 +36,10 @@
- #include <kernel/arch/timer.hpp>
- 
- #ifdef CONFIG_PROFILING
--extern "C" void gcov_flush_to_serial();
-+#include <kernel/profiling/sampler.hpp>
-+#endif
-+#if defined(CONFIG_PROFILING) || defined(CONFIG_COVERAGE)
-+#include <kernel/gcov/gcov_handler.hpp>
- #endif
+diff --git a/src/kernel/sync/notify.cpp b/src/kernel/sync/notify.cpp
+index 603ae33b..e0d4ecd5 100644
+--- a/src/kernel/sync/notify.cpp
++++ b/src/kernel/sync/notify.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/sync/notify.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/arch/io.hpp>
  
  namespace kernel {
-@@ -491,6 +494,11 @@ void run_filtered(uint8_t required_flags, bool use_isolation) {
-         Logger::warn("No tests matched flags 0x%x", required_flags);
-     }
- 
-+#ifdef CONFIG_PROFILING
-+    // Dump profiling samples at the end of the test class
-+    kernel::test::profiling_dump_samples();
-+#endif
-+
-     print_report(start_ns, end_ns);
- 
- #if CONFIG_DEADLINE_MONITOR_TASK
-@@ -540,6 +548,43 @@ void run_release() {
-         while ((arch::inb(COM1_LSR) & 0x20) == 0) { }
-         while ((arch::inb(COM1_LSR) & 0x40) == 0) { }
-     }
-+#ifdef CONFIG_COVERAGE
-+    // Dump the executed-function set BEFORE QEMU is signalled to exit: the
-+    // ACPI sleep write below tears the VM down immediately (the dump would
-+    // be lost).  Interrupts are already disabled (see arch::cli() above), so
-+    // the table cannot change while it is serialised.
-+    gcov_flush_to_serial();
-+#endif
-+
-+#ifdef CONFIG_PROFILING
-+    // Debug marker before dump
-+    arch::outb(0x3F8, '[');
-+    arch::outb(0x3F8, 'D');
-+    arch::outb(0x3F8, 'U');
-+    arch::outb(0x3F8, 'M');
-+    arch::outb(0x3F8, 'P');
-+    arch::outb(0x3F8, ']');
-+    // Add timeout to prevent infinite blocking
-+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x20) == 0); ++timeout) { arch::io_wait(); }
-+    
-+    gcov_flush_to_serial();
-+    kernel::profiling::Sampler::dump_to_serial();
-+    // Drain serial TX FIFO after dumping samples to ensure output is flushed
-+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x40) == 0); ++timeout) { arch::io_wait(); }
-+    // Reduced delay
-+    for (int i = 0; i < 50000; ++i) { arch::io_wait(); }
-+    
-+    // Debug marker after dump
-+    arch::outb(0x3F8, '[');
-+    arch::outb(0x3F8, 'D');
-+    arch::outb(0x3F8, 'O');
-+    arch::outb(0x3F8, 'N');
-+    arch::outb(0x3F8, 'E');
-+    arch::outb(0x3F8, ']');
-+    for (int timeout = 0; timeout < 10000 && ((arch::inb(0x3FD) & 0x40) == 0); ++timeout) { arch::io_wait(); }
-+    for (int i = 0; i < 50000; ++i) { arch::io_wait(); }
-+#endif
-+
-     // Signal QEMU to exit via multiple methods with io_wait() between
-     // attempts to ensure each out* instruction completes.  Even if none
-     // work (e.g. UEFI intercepts legacy ports), the Makefile kills QEMU
-@@ -549,11 +594,7 @@ void run_release() {
-     arch::io_wait();
-     arch::outw(arch::QEMU_SHUTDOWN_PORT, 0x2000);
-     arch::io_wait();
--    
--#ifdef CONFIG_PROFILING
--    gcov_flush_to_serial();
--#endif
--    
-+
-     arch::qemu_debug_exit(static_cast<uint8_t>(result));
-     arch::io_wait();
-     // Keyboard controller reset (triple fault -> QEMU exit with -no-reboot)
-@@ -594,6 +635,115 @@ void run_registered(uint8_t required_flags) {
-     }
+ namespace sync {
+@@ -99,31 +100,83 @@ errors::SyncError Notify::notify_err(uint64_t value) {
  }
  
-+#ifdef CONFIG_PROFILING
-+/// @brief Dump profiling samples to debugcon (0xE9) which is muxed with COM1.
-+/// Can be called explicitly by test framework when test class completes.
-+void profiling_dump_samples() {
-+    // Also write to COM1 so it appears in serial capture
-+    static constexpr uint16_t COM1 = 0x3F8;
-+    static constexpr uint16_t COM1_LSR = 0x3FD;
-+    static constexpr uint32_t SERIAL_DRAIN_POLL_LIMIT = 100000;
-+    
-+    // Wait for COM1 TX FIFO ready (bounded: a stalled UART must never hang
-+    // the shutdown path; CODING_STYLE section 6 fully-bounded loops).
-+    for (uint32_t poll = 0;
-+         poll < SERIAL_DRAIN_POLL_LIMIT &&
-+             ((arch::inb(COM1_LSR) & 0x20) == 0);
-+         ++poll) {
-+        arch::io_wait();
+ /// @brief Block until notified. Returns the notifier's value.
++///
++/// Semaphore::wait() discipline (CODING_STYLE §11.1–§11.3, INV-2): the
++/// waiter is registered and marked BLOCKED under the lock, the lock is
++/// released before any scheduler call, the task is dequeued from the
++/// ready queue, reschedule() arms the deferred switch, and the task
++/// spins scheduler-mediated until the notifier wakes it.  A value that
++/// arrived before the first wait is consumed without blocking, so an
++/// ISR notify can never be lost when the handler has not dispatched
++/// yet (issue #148: the old immediate-return path let
++/// IrqThread::task_entry busy-spin wait→handler→wait at raised priority
++/// and wedge the guest silently).
+ uint64_t Notify::wait() {
+     auto *task = Scheduler::current_task();
+     if (!task)
+         return 0;
+ 
+-    {
+-        SpinLockGuard<SpinLock> guard(lock_);
+-        if (waiter_ != nullptr)
+-            return 0;
+-
+-        waiter_ = task;
+-        waiter_gen_ = task->generation;
+-        task->state = TaskState::BLOCKED;
+-    } // lock released BEFORE reschedule: never hold a spinlock across a
+-      // context switch.  reschedule() arms a deferred switch and re-enables
+-      // IRQs; a timer tick before this frame unwinds would save the task
+-      // holding lock_, and the ISR-side notify() would spin forever on it
+-      // (threaded-IRQ keyboard deadlock).
++    for (;;) {
++        {
++            SpinLockGuard<SpinLock> guard(lock_);
++            if (waiter_ == nullptr) {
++                if (notify_value_ != 0) {
++                    uint64_t value = notify_value_;
++                    notify_value_ = 0;
++                    return value;
++                }
++                waiter_ = task;
++                waiter_gen_ = task->generation;
++                task->state = TaskState::BLOCKED;
++                break;
++            }
++            // A waiter is already registered (re-entered wait while still
++            // registered, or a foreign waiter): release the lock, yield,
++            // and retry — never return without a reschedule (§11.3b).
++        }
++        Scheduler::reschedule();
++        arch::pause();
 +    }
-+    
-+    // Very visible marker before dump
-+    arch::outb(COM1, '\\');
-+    arch::outb(COM1, 'n');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'P');
-+    arch::outb(COM1, 'R');
-+    arch::outb(COM1, 'O');
-+    arch::outb(COM1, 'F');
-+    arch::outb(COM1, 'I');
-+    arch::outb(COM1, 'L');
-+    arch::outb(COM1, 'I');
-+    arch::outb(COM1, 'N');
-+    arch::outb(COM1, 'G');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'D');
-+    arch::outb(COM1, 'U');
-+    arch::outb(COM1, 'M');
-+    arch::outb(COM1, 'P');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'S');
-+    arch::outb(COM1, 'T');
-+    arch::outb(COM1, 'A');
-+    arch::outb(COM1, 'R');
-+    arch::outb(COM1, 'T');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '\\');
-+    arch::outb(COM1, 'n');
-+    
-+    arch::outb(0xE9, '[');
-+    arch::outb(0xE9, 'D');
-+    arch::outb(0xE9, 'U');
-+    arch::outb(0xE9, 'M');
-+    arch::outb(0xE9, 'P');
-+    arch::outb(0xE9, ']');
-+    
-+    gcov_flush_to_serial();
-+    kernel::profiling::Sampler::dump_to_serial();
-+    
-+    // Very visible marker after dump
-+    for (uint32_t poll = 0;
-+         poll < SERIAL_DRAIN_POLL_LIMIT &&
-+             ((arch::inb(COM1_LSR) & 0x20) == 0);
-+         ++poll) {
-+        arch::io_wait();
+ 
++    // Block OUTSIDE the lock (C-1): never hold a spinlock across the
++    // deferred switch — the ISR-side notify() would spin forever on it.
++    // Dequeue so a BLOCKED task is never physically queued (INV-2
++    // desync — release-build live-lock if the switch applies late).
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
+ 
+-    return notify_value_;
++    // reschedule() is deferred (INV-4): keep running with state=BLOCKED
++    // until the timer ISR applies the switch and notify() wakes us.
++    // Spin-wait (mirrors Semaphore::wait).  If interrupts are off the
++    // ISR cannot fire — roll back and leave without a value.
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++        SpinLockGuard<SpinLock> guard(lock_);
++        uint64_t value = notify_value_;
++        notify_value_ = 0;
++        return value;
 +    }
-+    arch::outb(COM1, '\\');
-+    arch::outb(COM1, 'n');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'P');
-+    arch::outb(COM1, 'R');
-+    arch::outb(COM1, 'O');
-+    arch::outb(COM1, 'F');
-+    arch::outb(COM1, 'I');
-+    arch::outb(COM1, 'L');
-+    arch::outb(COM1, 'I');
-+    arch::outb(COM1, 'N');
-+    arch::outb(COM1, 'G');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'D');
-+    arch::outb(COM1, 'U');
-+    arch::outb(COM1, 'M');
-+    arch::outb(COM1, 'P');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, 'E');
-+    arch::outb(COM1, 'N');
-+    arch::outb(COM1, 'D');
-+    arch::outb(COM1, ' ');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '=');
-+    arch::outb(COM1, '\\');
-+    arch::outb(COM1, 'n');
-+    
-+    arch::outb(0xE9, '[');
-+    arch::outb(0xE9, 'D');
-+    arch::outb(0xE9, 'O');
-+    arch::outb(0xE9, 'N');
-+    arch::outb(0xE9, 'E');
-+    arch::outb(0xE9, ']');
++    {
++        SpinLockGuard<SpinLock> guard(lock_);
++        if (waiter_ == task && waiter_gen_ == task->generation) {
++            waiter_ = nullptr;
++            waiter_gen_ = 0;
++        }
++    }
++    task->state = TaskState::RUNNING;
++    Scheduler::enqueue_ready(*task);
++    return 0;
+ }
+ 
+ /// @brief Block until notified (error-returning overload).
++///
++/// Same Semaphore::wait_err() discipline as wait(): consume a pending
++/// value without blocking, else register + BLOCKED under the lock and
++/// block scheduler-mediated outside it.  A second waiter is rejected
++/// with SYNC_ERR_ALREADY_WAITING; an interrupts-disabled caller rolls
++/// back with SYNC_ERR_INTERRUPTED.
+ errors::SyncError Notify::wait_err(uint64_t *out_value) {
+     auto *task = Scheduler::current_task();
+     if (!task)
+@@ -134,16 +187,42 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
+         if (waiter_ != nullptr)
+             return errors::SYNC_ERR_ALREADY_WAITING;
+ 
++        if (notify_value_ != 0) {
++            if (out_value)
++                *out_value = notify_value_;
++            notify_value_ = 0;
++            return errors::SYNC_ERR_OK;
++        }
++
+         waiter_ = task;
+         waiter_gen_ = task->generation;
+         task->state = TaskState::BLOCKED;
+     } // lock released BEFORE reschedule (see wait())
+ 
++    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
++    Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
+ 
+-    if (out_value)
+-        *out_value = notify_value_;
+-    return errors::SYNC_ERR_OK;
++    if (arch::interrupts_enabled()) {
++        while (task->state == TaskState::BLOCKED) {
++            arch::pause();
++        }
++        SpinLockGuard<SpinLock> guard(lock_);
++        if (out_value)
++            *out_value = notify_value_;
++        notify_value_ = 0;
++        return errors::SYNC_ERR_OK;
++    }
++    {
++        SpinLockGuard<SpinLock> guard(lock_);
++        if (waiter_ == task && waiter_gen_ == task->generation) {
++            waiter_ = nullptr;
++            waiter_gen_ = 0;
++        }
++    }
++    task->state = TaskState::RUNNING;
++    Scheduler::enqueue_ready(*task);
++    return errors::SYNC_ERR_INTERRUPTED;
+ }
+ 
+ /// @brief Check if notified without blocking.
+diff --git a/src/kernel/syscall/syscall_handlers_sync.cpp b/src/kernel/syscall/syscall_handlers_sync.cpp
+index 88f6a100..edee86d0 100644
+--- a/src/kernel/syscall/syscall_handlers_sync.cpp
++++ b/src/kernel/syscall/syscall_handlers_sync.cpp
+@@ -44,11 +44,20 @@ uint64_t Syscall::sys_notify_wait(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+     if (!cur)
+         return static_cast<uint64_t>(-1);
+     uint64_t value = cur->notify.wait();
+-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-    auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
+-    if (syscall_is_user_task() && !val_ptr.valid())
+-        return static_cast<uint64_t>(-1);
+-    val_ptr.write(value);
++    if (syscall_is_user_task()) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto val_ptr = checked(reinterpret_cast<uint64_t *>(arg0));
++        if (!val_ptr.valid())
++            return static_cast<uint64_t>(-1);
++        val_ptr.write(value);
++    } else if (arg0 != 0) {
++        // Kernel caller (e.g. a test driver task): CheckedPtr::write is
++        // fail-closed for non-user addresses, so a kernel out-pointer must
++        // be stored directly (issue #148: the old Notify::wait +
++        // try_wait-fixup masked this — the syscall never delivered).
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        *reinterpret_cast<uint64_t *>(arg0) = value;
++    }
+     return 0;
+ }
+ 
+diff --git a/src/kernel/test/test_cap_irq_notify.cpp b/src/kernel/test/test_cap_irq_notify.cpp
+index f3e47cb7..66dee806 100644
+--- a/src/kernel/test/test_cap_irq_notify.cpp
++++ b/src/kernel/test/test_cap_irq_notify.cpp
+@@ -114,11 +114,13 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
+         while (!g_inject_done)
+             arch::pause();
+     }
+-    // NOTIFY-driver blocking pattern: Notify::wait() registers us as the
+-    // Notify's waiter, sets BLOCKED and arms a deferred reschedule — it does
+-    // NOT spin (only IrqThread-style loops spin until a timer tick applies
+-    // the switch).  Mirror sys_irq_wait's spin on state==BLOCKED so the task
+-    // persists BLOCKED until the injected IRQ (or revoke) wakes it.
++    // NOTIFY-driver blocking pattern (issue #148): Notify::wait()
++    // registers us as the Notify's waiter, sets BLOCKED, dequeues from
++    // the ready queue and arms a deferred reschedule, then spins
++    // scheduler-mediated until the injected IRQ (or revoke) wakes it.
++    // The outer spin below is then a no-op pass-through; it is kept so
++    // the task persists BLOCKED even if a future wait() ever returns
++    // early again.
+     g_notify_val = 0;
+     g_wait_ret =
+         Syscall::handle(static_cast<uint64_t>(SyscallNumber::NOTIFY_WAIT),
+@@ -134,11 +136,12 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
+         cur->state = TaskState::RUNNING;
+         Scheduler::enqueue_ready(*cur);
+     }
+-    // Re-read the delivered value after the wake: the ISR may have delivered
+-    // while we were descheduled mid-wait, in which case Notify::wait()
+-    // returned a stale 0.  try_wait consumes non-zero pending values; a
+-    // revoked sentinel (0) leaves g_notify_val 0 — both are asserted by the
+-    // tests.
++    // Re-read the delivered value after the wake: a notify that arrived
++    // while descheduled stays pending until consumed.  Notify::wait()
++    // already consumes it on the wake path, so try_wait is normally a
++    // no-op here; it only fires if a second notify landed after the
++    // wake.  A revoked sentinel (0) leaves g_notify_val 0 — both are
++    // asserted by the tests.
+     uint64_t reval = 0;
+     if (cur->notify.try_wait(&reval)) {
+         g_notify_val = reval;
+diff --git a/src/kernel/test/test_kernel_top.cpp b/src/kernel/test/test_kernel_top.cpp
+index 727383cf..0904ef3a 100644
+--- a/src/kernel/test/test_kernel_top.cpp
++++ b/src/kernel/test/test_kernel_top.cpp
+@@ -31,18 +31,20 @@
+ ///        delta calls Logger::fatal + panic.  The overflow test below
+ ///        therefore asserts the *clamping* behaviour, not the panic path.
+ /// @note  `IrqThread` teardown lives in `src/kernel/irq_thread.cpp`
+-///        (`IrqThread::destroy`, issue #144); the live tests below drive
++///        (`IrqThread::destroy`, issue #144); the tests below drive
+ ///        create/try_push_data/for_vector/destroy with handler tasks at a
+ ///        priority that never dispatches, and destroy each instance before
+ ///        asserting, so no ResourceTracker task delta survives the test
+-///        boundary.  The live-dispatch e2e (isr_entry + task_entry) is
+-///        parked as a stub until issue #148 is fixed.
++///        boundary.  The live-dispatch e2e (isr_entry + task_entry at
++///        prio 50) was parked as a stub under issue #148 and reactivated
++///        by its Notify::wait() fix.
+ 
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/arch/hal/irq_latency_histogram.hpp>
+ #include <kernel/random.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/arch/io.hpp>
+ #include <kernel/log/ring_buffer.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+ #include <kernel/irq_thread.hpp>
+@@ -261,8 +263,8 @@ constexpr uint8_t k_irq_thread_vector_c = 202;
+ /// @brief Handler-task priority, deliberately BELOW the test task: handler
+ ///        tasks never dispatch (the test never blocks), so create/ring/
+ ///        destroy tests are fully deterministic with no timer-tick
+-///        dependence.  The live-dispatch e2e is parked (issue #148) until
+-///        the dispatch+notify/wake wedge is fixed.
++///        dependence.  Only the live-dispatch e2e uses a priority above
++///        the test task (issue #148).
+ constexpr uint64_t k_irq_thread_prio = 5;
+ 
+ /// @brief Custom ISR ack: no real EOI, so tests never touch the interrupt
+@@ -280,6 +282,27 @@ void test_irq_handler_probe(uint64_t vector, uint64_t error_code,
+     (void)rip;
+ }
+ 
++/// @brief Live-dispatch e2e probes (issue #148): cross-task flags, hence
++///        atomic access on every side (CODING_STYLE §11.6).
++uint64_t g_e2e_ack_count = 0;
++uint64_t g_e2e_handler_ran = 0;
++uint64_t g_e2e_handler_seen = 0;
++
++/// @brief Custom ISR ack for the e2e: counts invocations, no real EOI.
++void test_irq_e2e_ack(uint8_t vector) {
++    (void)vector;
++    __atomic_add_fetch(&g_e2e_ack_count, 1, __ATOMIC_RELAXED);
 +}
-+#endif
 +
- void set_class_auto_shutdown(bool enabled) {
-     kernel::gs::set_class_auto_shutdown(enabled);
++/// @brief Handler for the e2e: records the vector it was dispatched with.
++void test_irq_e2e_handler(uint64_t vector, uint64_t error_code,
++                          uint64_t rip) {
++    (void)error_code;
++    (void)rip;
++    __atomic_store_n(&g_e2e_handler_seen, vector, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_e2e_handler_ran, 1, __ATOMIC_RELAXED);
++}
++
+ // Runmode: kernel
+ // Testidea: create() must reject a null handler without side effects, and
+ //           for_vector()/destroy() must report absence for unknown vectors.
+@@ -364,28 +387,55 @@ JARVIS_TEST(kernel_irq_thread_ring_full_reject,
+ // Testidea: End-to-end threaded-IRQ path — isr_entry runs the custom ack
+ //           (no real EOI) and wakes the handler task; task_entry dispatches
+ //           the registered handler in task context at higher priority.
+-//           PARKED as stub (issue #148): live dispatch + notify/wake wedges
+-//           the guest silently and flakily, so the design below waits for
+-//           the race fix before it runs again.
+-// Input: create(200, prio 50, probe handler, probe ack); wait until the
+-//        handler task BLOCKEDs in its Notify wait; call isr_entry(200,0,0)
+-//        directly; spin boundedly for the handler flag; destroy.
++//           Reactivated by the issue #148 Notify::wait() fix: wait() now
++//           blocks scheduler-mediated (Semaphore shape) and consumes a
++//           notify that arrived before the first wait, so the dispatch +
++//           notify/wake ordering is race-free in both directions.
++// Input: create(200, prio 50, e2e handler, e2e ack); bounded settle spin
++//        so ticks can dispatch the handler into its wait; direct
++//        isr_entry(200,0,0); bounded spin for the handler flag; destroy.
+ // Expect: Ack ran exactly once, handler observed vector 200, destroy
+ //         removes the instance — all with no ResourceTracker task delta.
+ // Depends: kernel::IrqThread::create/isr_entry/task_entry/destroy,
+ //          Scheduler dispatch of a higher-priority task on timer ticks
+ JARVIS_TEST(kernel_irq_thread_isr_ack_and_task_entry,
+             "PRE: vfsd, iocd | POST: none") {
+-    /* Pseudocode:
+-     * 1. Defensive destroy(200); reset ack/flag/vector probes.
+-     * 2. create(200, prio 50, handler probe, ack probe); resolve instance.
+-     * 3. Spin boundedly until the handler task BLOCKEDs in Notify::wait.
+-     * 4. Call isr_entry(200, 0, 0) directly (custom ack, no real EOI).
+-     * 5. Spin boundedly until the handler probe observes vector 200.
+-     * 6. destroy(200) BEFORE asserting (asserts return on failure).
+-     * 7. Assert created, quiescent, acks == 1, ran, seen == 200,
+-     *    destroyed, for_vector == nullptr (tracker-clean via isolation).
+-     */
++    constexpr uint64_t k_dispatch_prio = 50;
++    constexpr uint32_t k_settle_spins = 200000;
++    constexpr uint32_t k_wake_spins = 500000;
++    IrqThread::destroy(k_irq_thread_vector);
++    __atomic_store_n(&g_e2e_ack_count, 0, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_e2e_handler_ran, 0, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_e2e_handler_seen, 0, __ATOMIC_RELAXED);
++    bool created = IrqThread::create(k_irq_thread_vector, k_dispatch_prio,
++                                     test_irq_e2e_handler, test_irq_e2e_ack);
++    auto *inst = IrqThread::for_vector(k_irq_thread_vector);
++    // Timing only, never asserted: let timer ticks dispatch the handler
++    // into its Notify wait.  Either ordering is correct — a notify that
++    // lands first stays pending and the first wait consumes it.
++    for (uint32_t spin = 0; spin < k_settle_spins; ++spin) {
++        arch::pause();
++    }
++    if (inst != nullptr) {
++        IrqThread::isr_entry(k_irq_thread_vector, 0, 0);
++    }
++    for (uint32_t spin = 0;
++         spin < k_wake_spins &&
++         __atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 0;
++         ++spin) {
++        arch::pause();
++    }
++    // Teardown BEFORE asserting (asserts return on failure).
++    bool destroyed = IrqThread::destroy(k_irq_thread_vector);
++    auto *gone = IrqThread::for_vector(k_irq_thread_vector);
++    JARVIS_ASSERT(created);
++    JARVIS_ASSERT(inst != nullptr);
++    JARVIS_ASSERT(__atomic_load_n(&g_e2e_ack_count, __ATOMIC_RELAXED) == 1);
++    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 1);
++    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_seen, __ATOMIC_RELAXED) ==
++                  k_irq_thread_vector);
++    JARVIS_ASSERT(destroyed);
++    JARVIS_ASSERT(gone == nullptr);
+     JARVIS_TEST_PASS();
  }
-diff --git a/tools/coverage_report.py b/tools/coverage_report.py
-new file mode 100644
-index 00000000..0d0a3561
---- /dev/null
-+++ b/tools/coverage_report.py
-@@ -0,0 +1,373 @@
-+#!/usr/bin/env python3
-+"""Merge per-class dynamic coverage captures into one report (issue #122).
-+
-+The kernel is built with ``-finstrument-functions``; every boot dumps the set
-+of functions that were actually entered (see docs/specs/coverage.md for the
-+frame format).  This script
-+
-+  1. parses every ``build/coverage/<class>/serial.raw`` frame (checksummed),
-+  2. resolves the executed addresses against that class' ``kernel.elf``,
-+  3. unions the per-class results by (source file, function name),
-+  4. builds the function universe from the ELF symbol table and attributes it
-+     to source files with ``addr2line``,
-+  5. reports coverage per area and per file, worst first.
-+
-+Usage:
-+    python3 tools/coverage_report.py --dir build/coverage --out build/coverage
-+"""
-+import argparse
-+import bisect
-+import html
-+import os
-+import re
-+import struct
-+import subprocess
-+import sys
-+
-+BEGIN = b"@@COVBEGIN@@\n"
-+END = b"\n@@COVEND@@\n"
-+ABORT = b"@@COVABORT@@"
-+NM = "x86_64-elf-nm"
-+ADDR2LINE = "x86_64-elf-addr2line"
-+FUNC_TYPES = ("T", "t", "W", "w")
-+
-+
-+class Frame:
-+    """One parsed coverage frame."""
-+
-+    def __init__(self, path, addrs, registered, dropped, valid, note):
-+        self.path = path
-+        self.name = os.path.basename(os.path.dirname(path))
-+        self.elf = ""
-+        self.addrs = addrs
-+        self.registered = registered
-+        self.dropped = dropped
-+        self.valid = valid
-+        self.note = note
-+
-+
-+def parse_frame(path, blob):
-+    """Extract the executed-address set from one serial capture."""
-+    start = blob.find(BEGIN)
-+    if start < 0:
-+        return Frame(path, set(), 0, 0, False, "no @@COVBEGIN@@ sentinel")
-+    if blob.find(ABORT) >= 0:
-+        return Frame(path, set(), 0, 0, False, "kernel reported @@COVABORT@@")
-+    start += len(BEGIN)
-+    stop = blob.find(END, start)
-+    if stop < 0:
-+        return Frame(path, set(), 0, 0, False, "no @@COVEND@@ sentinel")
-+    body = blob[start:stop]
-+    if len(body) < 12 or body[0:4] != b"FUNC":
-+        return Frame(path, set(), 0, 0, False, "frame does not start with FUNC")
-+    count = struct.unpack("<I", body[4:8])[0]
-+    offset = 8
-+    addrs = set()
-+    checksum = 0
-+    for byte in body[4:8]:
-+        checksum += byte
-+    for _ in range(count):
-+        if offset + 9 > len(body):
-+            return Frame(path, set(), 0, 0, False, "truncated entry stream")
-+        addr = struct.unpack("<Q", body[offset:offset + 8])[0]
-+        for byte in body[offset:offset + 9]:
-+            checksum += byte
-+        addrs.add(addr)
-+        offset += 9
-+    if body[offset:offset + 4] != b"STAT":
-+        return Frame(path, set(), 0, 0, False, "missing STAT trailer")
-+    offset += 4
-+    registered, dropped, emitted = struct.unpack("<III", body[offset:offset + 12])
-+    for byte in body[offset:offset + 8]:
-+        checksum += byte
-+    if (checksum & 0xFFFFFFFF) != emitted:
-+        return Frame(path, set(), 0, 0, False, "checksum mismatch")
-+    return Frame(path, addrs, registered, dropped, True, "ok")
-+
-+
-+def load_symbols(elf):
-+    """Return (sorted addresses, parallel name list) of defined functions."""
-+    proc = subprocess.run([NM, "-n", elf], capture_output=True, text=True)
-+    if proc.returncode != 0:
-+        print(f"  nm failed for {elf}: {proc.stderr.strip()}")
-+        return [], []
-+    addrs, names = [], []
-+    for line in proc.stdout.splitlines():
-+        parts = line.split()
-+        if len(parts) < 3 or parts[1] not in FUNC_TYPES:
-+            continue
-+        try:
-+            addr = int(parts[0], 16)
-+        except ValueError:
-+            continue
-+        addrs.append(addr)
-+        names.append(" ".join(parts[2:]))
-+    return addrs, names
-+
-+
-+def lookup_symbol(addrs, addr):
-+    """Map an address to the symbol that contains it (addr <= x < next)."""
-+    if not addrs:
-+        return None
-+    idx = bisect.bisect_right(addrs, addr) - 1
-+    if idx < 0:
-+        return None
-+    return idx
-+
-+
-+def attribute(elf, addrs):
-+    """Return list of (function name, source file) for the given addresses."""
-+    if not addrs:
-+        return []
-+    query = "".join(f"{a:x}\n" for a in addrs)
-+    proc = subprocess.run([ADDR2LINE, "-e", elf, "-f", "-C"],
-+                          input=query, capture_output=True, text=True)
-+    if proc.returncode != 0:
-+        print(f"  addr2line failed for {elf}: {proc.stderr.strip()}")
-+        return []
-+    lines = proc.stdout.splitlines()
-+    out = []
-+    for i in range(0, len(lines) - 1, 2):
-+        name = lines[i].strip()
-+        loc = lines[i + 1].strip()
-+        src = loc.split(":")[0]
-+        out.append((name, src))
-+    return out
-+
-+
-+def area_of(src, is_test):
-+    """Classify a source path into an area bucket."""
-+    norm = src.replace("\\", "/")
-+    while norm.startswith("./") or norm.startswith("../"):
-+        norm = norm[3:]
-+    if is_test:
-+        return "kernel/test"
-+    marker = norm.find("src/")
-+    if marker < 0:
-+        return "other"
-+    rest = norm[marker + 4:]
-+    parts = rest.split("/")
-+    if parts[0] == "kernel":
-+        if len(parts) == 1:
-+            return "kernel"
-+        # A top-level file (src/kernel/foo.cpp) is its own path segment but
-+        # not its own area — only real subdirectories form areas.
-+        if "." in parts[1]:
-+            return "kernel"
-+        return f"kernel/{parts[1]}"
-+    if parts[0] == "lib":
-+        return "lib"
-+    return parts[0]
-+
-+
-+def main():
-+    parser = argparse.ArgumentParser()
-+    parser.add_argument("--dir", required=True, help="build/coverage root")
-+    parser.add_argument("--out", required=True, help="report output directory")
-+    parser.add_argument("--allow-truncated", action="store_true",
-+                        help="merge even when a capture failed validation")
-+    args = parser.parse_args()
-+
-+    root = args.dir
-+    classes = sorted(d for d in os.listdir(root)
-+                     if os.path.isdir(os.path.join(root, d)))
-+    frames = []
-+    for name in classes:
-+        raw = os.path.join(root, name, "serial.raw")
-+        elf = os.path.join(root, name, "kernel.elf")
-+        if not (os.path.exists(raw) and os.path.exists(elf)):
-+            continue
-+        with open(raw, "rb") as handle:
-+            frame = parse_frame(raw, handle.read())
-+        frame.name = name
-+        frame.elf = elf
-+        frames.append(frame)
-+        status = "ok" if frame.valid else f"INVALID ({frame.note})"
-+        print(f"  {name:<24} {len(frame.addrs):>6} functions  {status}")
-+
-+    if not frames:
-+        print("Error: no build/coverage/<class>/serial.raw captures found")
-+        return 1
-+
-+    bad = [f for f in frames if not f.valid]
-+    if bad and not args.allow_truncated:
-+        print("Error: invalid captures present — "
-+              "re-run those classes or pass --allow-truncated")
-+        return 1
-+    if any(f.dropped for f in frames if f.valid):
-+        print("Error: coverage table overflowed (dropped > 0) — "
-+              "raise COVERAGE_MAX_FUNCS and re-run")
-+        return 1
-+
-+    # Union per class, keyed by (source file, function name) — relinking
-+    # shifts addresses, so names/files are the stable identity.
-+    covered = {}          # (src, func) -> set of classes
-+    universe = {}         # (src, func) -> True
-+    for frame in frames:
-+        if not frame.valid:
-+            continue
-+        sym_addrs, sym_names = load_symbols(frame.elf)
-+        idxs = [lookup_symbol(sym_addrs, a) for a in frame.addrs]
-+        resolved = set(i for i in idxs if i is not None)
-+        # Universe first (all defined functions), then coverage.
-+        table = attribute(frame.elf, sym_addrs)
-+        for i, (name, src) in enumerate(table):
-+            if src == "??" or not src:
-+                continue
-+            is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
-+            key = (src, sym_names[i] if i < len(sym_names) else name,
-+                   area_of(src, is_test))
-+            universe[key] = True
-+        for i in resolved:
-+            if i >= len(table):
-+                continue
-+            name, src = table[i]
-+            if src == "??" or not src:
-+                continue
-+            is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
-+            key = (src, sym_names[i] if i < len(sym_names) else name,
-+                   area_of(src, is_test))
-+            universe[key] = True
-+            covered.setdefault(key, set()).add(frame.name)
-+
-+    if not universe:
-+        print("Error: no source-attributable functions found (missing -g?)")
-+        return 1
-+
-+    def bucket(items, only_kernel):
-+        total, cov = {}, {}
-+        for key in items:
-+            src, _, area = key
-+            if only_kernel and (area == "kernel/test" or area == "other"):
-+                continue
-+            total[area] = total.get(area, 0) + 1
-+            if key in covered:
-+                cov[area] = cov.get(area, 0) + 1
-+        return total, cov
-+
-+    total_area, cov_area = bucket(universe, True)
-+    total_all, cov_all = bucket(universe, False)
-+
-+    file_total, file_cov = {}, {}
-+    for key in universe:
-+        src = key[0]
-+        file_total[src] = file_total.get(src, 0) + 1
-+        if key in covered:
-+            file_cov[src] = file_cov.get(src, 0) + 1
-+
-+    def pct(num, den):
-+        return (num / den * 100.0) if den else 0.0
-+
-+    grand_total = sum(total_area.values())
-+    grand_cov = sum(cov_area.values())
-+
-+    lines = []
-+    lines.append("# Dynamic test coverage (function level)\n")
-+    lines.append(f"Classes merged: {len([f for f in frames if f.valid])} "
-+                 f"({', '.join(f.name for f in frames if f.valid)})\n")
-+    lines.append(f"Kernel functions executed: **{grand_cov}/{grand_total} "
-+                 f"({pct(grand_cov, grand_total):.1f}%)** "
-+                 f"(excludes test code and unmapped symbols)\n")
-+    if "kernel/test" in total_all:
-+        lines.append(f"Test-code functions executed: "
-+                     f"{cov_all.get('kernel/test', 0)}/"
-+                     f"{total_all['kernel/test']} (informational)\n")
-+    lines.append("Note: `kernel/gcov` is the coverage handler itself — it is "
-+                 "deliberately excluded from instrumentation, so 0% there is "
-+                 "expected.\n")
-+    lines.append("\n## Coverage per area (worst first)\n")
-+    lines.append("| Area | Covered | Total | % |")
-+    lines.append("|---|---:|---:|---:|")
-+    for area in sorted(total_area, key=lambda a: pct(cov_area.get(a, 0),
-+                                                     total_area[a])):
-+        lines.append(f"| {area} | {cov_area.get(area, 0)} | {total_area[area]} | "
-+                     f"{pct(cov_area.get(area, 0), total_area[area]):.1f}% |")
-+    def shorten(path):
-+        """Render an absolute build path as a repo-relative one."""
-+        idx = path.find("src/")
-+        return path[idx:] if idx >= 0 else path
-+
-+    lines.append("\n## Least covered files (kernel, worst 40)\n")
-+    lines.append("| File | Covered | Total | % |")
-+    lines.append("|---|---:|---:|---:|")
-+    ranked = sorted(
-+        (f for f in file_total if not f.startswith("src/kernel/test")),
-+        key=lambda f: pct(file_cov.get(f, 0), file_total[f]))
-+    for src in ranked[:40]:
-+        lines.append(f"| `{shorten(src)}` | {file_cov.get(src, 0)} | "
-+                     f"{file_total[src]} | "
-+                     f"{pct(file_cov.get(src, 0), file_total[src]):.1f}% |")
-+
-+    gaps = sorted(
-+        ((file_total[f] - file_cov.get(f, 0), f) for f in file_total
-+         if not f.startswith("src/kernel/test")),
-+        reverse=True)
-+    lines.append("\n## Largest absolute gaps (kernel, top 25)\n")
-+    lines.append("| File | Uncovered | Covered | Total |")
-+    lines.append("|---|---:|---:|---:|")
-+    for gap, src in gaps[:25]:
-+        if gap <= 0:
-+            break
-+        lines.append(f"| `{shorten(src)}` | {gap} | {file_cov.get(src, 0)} | "
-+                     f"{file_total[src]} |")
-+    zero = [f for f in ranked if file_cov.get(f, 0) == 0]
-+    lines.append(f"\n## Files with 0% coverage: {len(zero)}\n")
-+    for src in zero:
-+        lines.append(f"- `{src}` ({file_total[src]} functions)")
-+
-+    os.makedirs(args.out, exist_ok=True)
-+    md_path = os.path.join(args.out, "report.md")
-+    with open(md_path, "w") as handle:
-+        handle.write("\n".join(lines) + "\n")
-+
-+    def rows(mapping, totals):
-+        out = ""
-+        for key in sorted(totals, key=lambda k: pct(mapping.get(k, 0),
-+                                                    totals[k])):
-+            value = pct(mapping.get(key, 0), totals[key])
-+            color = "#f44336" if value < 25 else (
-+                "#ff9800" if value < 75 else "#4CAF50")
-+            out += (f'<tr><td><code>{html.escape(str(key))}</code></td>'
-+                    f"<td>{mapping.get(key, 0)}</td><td>{totals[key]}</td>"
-+                    f'<td style="color:{color}">{value:.1f}%</td></tr>\n')
-+        return out
-+
-+    html_doc = f"""<!DOCTYPE html>
-+<html lang="en">
-+<head><meta charset="utf-8"><title>NexIOS dynamic coverage</title>
-+<style>
-+body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:20px}}
-+table {{border-collapse:collapse;width:100%}}
-+th,td {{text-align:left;padding:6px;border-bottom:1px solid #ddd}}
-+th {{background:#333;color:#fff}}
-+</style></head>
-+<body>
-+<h1>NexIOS dynamic coverage (function level)</h1>
-+<p>Kernel functions executed: <b>{grand_cov}/{grand_total}
-+({pct(grand_cov, grand_total):.1f}%)</b></p>
-+<h2>Per area</h2>
-+<table><tr><th>Area</th><th>Covered</th><th>Total</th><th>%</th></tr>
-+{rows(cov_area, total_area)}
-+</table>
-+<h2>Per file (worst 100)</h2>
-+<table><tr><th>File</th><th>Covered</th><th>Total</th><th>%</th></tr>
-+{rows({f: file_cov.get(f, 0) for f in ranked[:100]},
-+      {f: file_total[f] for f in ranked[:100]})}
-+</table>
-+</body></html>"""
-+    html_path = os.path.join(args.out, "report.html")
-+    with open(html_path, "w") as handle:
-+        handle.write(html_doc)
-+
-+    print(f"\nKernel coverage: {grand_cov}/{grand_total} functions "
-+          f"({pct(grand_cov, grand_total):.1f}%)")
-+    for area in sorted(total_area, key=lambda a: pct(cov_area.get(a, 0),
-+                                                     total_area[a]))[:12]:
-+        print(f"  {area:<28} {cov_area.get(area, 0):>5}/{total_area[area]:<5} "
-+              f"{pct(cov_area.get(area, 0), total_area[area]):5.1f}%")
-+    print(f"\nReport: {md_path}\nReport: {html_path}")
-+    return 0
-+
-+
-+if __name__ == "__main__":
-+    sys.exit(main())
+ 

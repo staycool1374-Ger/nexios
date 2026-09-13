@@ -31,18 +31,20 @@
 ///        delta calls Logger::fatal + panic.  The overflow test below
 ///        therefore asserts the *clamping* behaviour, not the panic path.
 /// @note  `IrqThread` teardown lives in `src/kernel/irq_thread.cpp`
-///        (`IrqThread::destroy`, issue #144); the live tests below drive
+///        (`IrqThread::destroy`, issue #144); the tests below drive
 ///        create/try_push_data/for_vector/destroy with handler tasks at a
 ///        priority that never dispatches, and destroy each instance before
 ///        asserting, so no ResourceTracker task delta survives the test
-///        boundary.  The live-dispatch e2e (isr_entry + task_entry) is
-///        parked as a stub until issue #148 is fixed.
+///        boundary.  The live-dispatch e2e (isr_entry + task_entry at
+///        prio 50) was parked as a stub under issue #148 and reactivated
+///        by its Notify::wait() fix.
 
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/arch/hal/irq_latency_histogram.hpp>
 #include <kernel/random.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/io.hpp>
 #include <kernel/log/ring_buffer.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/irq_thread.hpp>
@@ -261,8 +263,8 @@ constexpr uint8_t k_irq_thread_vector_c = 202;
 /// @brief Handler-task priority, deliberately BELOW the test task: handler
 ///        tasks never dispatch (the test never blocks), so create/ring/
 ///        destroy tests are fully deterministic with no timer-tick
-///        dependence.  The live-dispatch e2e is parked (issue #148) until
-///        the dispatch+notify/wake wedge is fixed.
+///        dependence.  Only the live-dispatch e2e uses a priority above
+///        the test task (issue #148).
 constexpr uint64_t k_irq_thread_prio = 5;
 
 /// @brief Custom ISR ack: no real EOI, so tests never touch the interrupt
@@ -278,6 +280,27 @@ void test_irq_handler_probe(uint64_t vector, uint64_t error_code,
     (void)vector;
     (void)error_code;
     (void)rip;
+}
+
+/// @brief Live-dispatch e2e probes (issue #148): cross-task flags, hence
+///        atomic access on every side (CODING_STYLE §11.6).
+uint64_t g_e2e_ack_count = 0;
+uint64_t g_e2e_handler_ran = 0;
+uint64_t g_e2e_handler_seen = 0;
+
+/// @brief Custom ISR ack for the e2e: counts invocations, no real EOI.
+void test_irq_e2e_ack(uint8_t vector) {
+    (void)vector;
+    __atomic_add_fetch(&g_e2e_ack_count, 1, __ATOMIC_RELAXED);
+}
+
+/// @brief Handler for the e2e: records the vector it was dispatched with.
+void test_irq_e2e_handler(uint64_t vector, uint64_t error_code,
+                          uint64_t rip) {
+    (void)error_code;
+    (void)rip;
+    __atomic_store_n(&g_e2e_handler_seen, vector, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_e2e_handler_ran, 1, __ATOMIC_RELAXED);
 }
 
 // Runmode: kernel
@@ -364,28 +387,55 @@ JARVIS_TEST(kernel_irq_thread_ring_full_reject,
 // Testidea: End-to-end threaded-IRQ path — isr_entry runs the custom ack
 //           (no real EOI) and wakes the handler task; task_entry dispatches
 //           the registered handler in task context at higher priority.
-//           PARKED as stub (issue #148): live dispatch + notify/wake wedges
-//           the guest silently and flakily, so the design below waits for
-//           the race fix before it runs again.
-// Input: create(200, prio 50, probe handler, probe ack); wait until the
-//        handler task BLOCKEDs in its Notify wait; call isr_entry(200,0,0)
-//        directly; spin boundedly for the handler flag; destroy.
+//           Reactivated by the issue #148 Notify::wait() fix: wait() now
+//           blocks scheduler-mediated (Semaphore shape) and consumes a
+//           notify that arrived before the first wait, so the dispatch +
+//           notify/wake ordering is race-free in both directions.
+// Input: create(200, prio 50, e2e handler, e2e ack); bounded settle spin
+//        so ticks can dispatch the handler into its wait; direct
+//        isr_entry(200,0,0); bounded spin for the handler flag; destroy.
 // Expect: Ack ran exactly once, handler observed vector 200, destroy
 //         removes the instance — all with no ResourceTracker task delta.
 // Depends: kernel::IrqThread::create/isr_entry/task_entry/destroy,
 //          Scheduler dispatch of a higher-priority task on timer ticks
 JARVIS_TEST(kernel_irq_thread_isr_ack_and_task_entry,
             "PRE: vfsd, iocd | POST: none") {
-    /* Pseudocode:
-     * 1. Defensive destroy(200); reset ack/flag/vector probes.
-     * 2. create(200, prio 50, handler probe, ack probe); resolve instance.
-     * 3. Spin boundedly until the handler task BLOCKEDs in Notify::wait.
-     * 4. Call isr_entry(200, 0, 0) directly (custom ack, no real EOI).
-     * 5. Spin boundedly until the handler probe observes vector 200.
-     * 6. destroy(200) BEFORE asserting (asserts return on failure).
-     * 7. Assert created, quiescent, acks == 1, ran, seen == 200,
-     *    destroyed, for_vector == nullptr (tracker-clean via isolation).
-     */
+    constexpr uint64_t k_dispatch_prio = 50;
+    constexpr uint32_t k_settle_spins = 200000;
+    constexpr uint32_t k_wake_spins = 500000;
+    IrqThread::destroy(k_irq_thread_vector);
+    __atomic_store_n(&g_e2e_ack_count, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_e2e_handler_ran, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_e2e_handler_seen, 0, __ATOMIC_RELAXED);
+    bool created = IrqThread::create(k_irq_thread_vector, k_dispatch_prio,
+                                     test_irq_e2e_handler, test_irq_e2e_ack);
+    auto *inst = IrqThread::for_vector(k_irq_thread_vector);
+    // Timing only, never asserted: let timer ticks dispatch the handler
+    // into its Notify wait.  Either ordering is correct — a notify that
+    // lands first stays pending and the first wait consumes it.
+    for (uint32_t spin = 0; spin < k_settle_spins; ++spin) {
+        arch::pause();
+    }
+    if (inst != nullptr) {
+        IrqThread::isr_entry(k_irq_thread_vector, 0, 0);
+    }
+    for (uint32_t spin = 0;
+         spin < k_wake_spins &&
+         __atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 0;
+         ++spin) {
+        arch::pause();
+    }
+    // Teardown BEFORE asserting (asserts return on failure).
+    bool destroyed = IrqThread::destroy(k_irq_thread_vector);
+    auto *gone = IrqThread::for_vector(k_irq_thread_vector);
+    JARVIS_ASSERT(created);
+    JARVIS_ASSERT(inst != nullptr);
+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_ack_count, __ATOMIC_RELAXED) == 1);
+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_ran, __ATOMIC_RELAXED) == 1);
+    JARVIS_ASSERT(__atomic_load_n(&g_e2e_handler_seen, __ATOMIC_RELAXED) ==
+                  k_irq_thread_vector);
+    JARVIS_ASSERT(destroyed);
+    JARVIS_ASSERT(gone == nullptr);
     JARVIS_TEST_PASS();
 }
 

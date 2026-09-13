@@ -22,6 +22,7 @@
 #include <kernel/sync/notify.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/io.hpp>
 
 namespace kernel {
 namespace sync {
@@ -99,31 +100,83 @@ errors::SyncError Notify::notify_err(uint64_t value) {
 }
 
 /// @brief Block until notified. Returns the notifier's value.
+///
+/// Semaphore::wait() discipline (CODING_STYLE §11.1–§11.3, INV-2): the
+/// waiter is registered and marked BLOCKED under the lock, the lock is
+/// released before any scheduler call, the task is dequeued from the
+/// ready queue, reschedule() arms the deferred switch, and the task
+/// spins scheduler-mediated until the notifier wakes it.  A value that
+/// arrived before the first wait is consumed without blocking, so an
+/// ISR notify can never be lost when the handler has not dispatched
+/// yet (issue #148: the old immediate-return path let
+/// IrqThread::task_entry busy-spin wait→handler→wait at raised priority
+/// and wedge the guest silently).
 uint64_t Notify::wait() {
     auto *task = Scheduler::current_task();
     if (!task)
         return 0;
 
-    {
-        SpinLockGuard<SpinLock> guard(lock_);
-        if (waiter_ != nullptr)
-            return 0;
+    for (;;) {
+        {
+            SpinLockGuard<SpinLock> guard(lock_);
+            if (waiter_ == nullptr) {
+                if (notify_value_ != 0) {
+                    uint64_t value = notify_value_;
+                    notify_value_ = 0;
+                    return value;
+                }
+                waiter_ = task;
+                waiter_gen_ = task->generation;
+                task->state = TaskState::BLOCKED;
+                break;
+            }
+            // A waiter is already registered (re-entered wait while still
+            // registered, or a foreign waiter): release the lock, yield,
+            // and retry — never return without a reschedule (§11.3b).
+        }
+        Scheduler::reschedule();
+        arch::pause();
+    }
 
-        waiter_ = task;
-        waiter_gen_ = task->generation;
-        task->state = TaskState::BLOCKED;
-    } // lock released BEFORE reschedule: never hold a spinlock across a
-      // context switch.  reschedule() arms a deferred switch and re-enables
-      // IRQs; a timer tick before this frame unwinds would save the task
-      // holding lock_, and the ISR-side notify() would spin forever on it
-      // (threaded-IRQ keyboard deadlock).
-
+    // Block OUTSIDE the lock (C-1): never hold a spinlock across the
+    // deferred switch — the ISR-side notify() would spin forever on it.
+    // Dequeue so a BLOCKED task is never physically queued (INV-2
+    // desync — release-build live-lock if the switch applies late).
+    Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
-    return notify_value_;
+    // reschedule() is deferred (INV-4): keep running with state=BLOCKED
+    // until the timer ISR applies the switch and notify() wakes us.
+    // Spin-wait (mirrors Semaphore::wait).  If interrupts are off the
+    // ISR cannot fire — roll back and leave without a value.
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+        SpinLockGuard<SpinLock> guard(lock_);
+        uint64_t value = notify_value_;
+        notify_value_ = 0;
+        return value;
+    }
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (waiter_ == task && waiter_gen_ == task->generation) {
+            waiter_ = nullptr;
+            waiter_gen_ = 0;
+        }
+    }
+    task->state = TaskState::RUNNING;
+    Scheduler::enqueue_ready(*task);
+    return 0;
 }
 
 /// @brief Block until notified (error-returning overload).
+///
+/// Same Semaphore::wait_err() discipline as wait(): consume a pending
+/// value without blocking, else register + BLOCKED under the lock and
+/// block scheduler-mediated outside it.  A second waiter is rejected
+/// with SYNC_ERR_ALREADY_WAITING; an interrupts-disabled caller rolls
+/// back with SYNC_ERR_INTERRUPTED.
 errors::SyncError Notify::wait_err(uint64_t *out_value) {
     auto *task = Scheduler::current_task();
     if (!task)
@@ -134,16 +187,42 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
         if (waiter_ != nullptr)
             return errors::SYNC_ERR_ALREADY_WAITING;
 
+        if (notify_value_ != 0) {
+            if (out_value)
+                *out_value = notify_value_;
+            notify_value_ = 0;
+            return errors::SYNC_ERR_OK;
+        }
+
         waiter_ = task;
         waiter_gen_ = task->generation;
         task->state = TaskState::BLOCKED;
     } // lock released BEFORE reschedule (see wait())
 
+    // Same lock-scope / dequeue discipline as wait() (C-1/C-2).
+    Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
-    if (out_value)
-        *out_value = notify_value_;
-    return errors::SYNC_ERR_OK;
+    if (arch::interrupts_enabled()) {
+        while (task->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (out_value)
+            *out_value = notify_value_;
+        notify_value_ = 0;
+        return errors::SYNC_ERR_OK;
+    }
+    {
+        SpinLockGuard<SpinLock> guard(lock_);
+        if (waiter_ == task && waiter_gen_ == task->generation) {
+            waiter_ = nullptr;
+            waiter_gen_ = 0;
+        }
+    }
+    task->state = TaskState::RUNNING;
+    Scheduler::enqueue_ready(*task);
+    return errors::SYNC_ERR_INTERRUPTED;
 }
 
 /// @brief Check if notified without blocking.
