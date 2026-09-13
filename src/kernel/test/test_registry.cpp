@@ -208,6 +208,9 @@ void register_keyboard_decode_tests();
 void register_gdt_layout_tests();
 void register_serial_logic_tests();
 void register_acpi_parse_tests();
+void register_smp_madt_tests();
+void register_smp_ipi_tests();
+void register_smp_bringup_tests();
 #endif
 void register_virtio_blk_req_tests();
 void register_ahci_deep_tests();
@@ -503,6 +506,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_gdt_layout", []() { register_gdt_layout_tests(); }},
     {"hal_serial_logic", []() { register_serial_logic_tests(); }},
     {"acpi_parse", []() { register_acpi_parse_tests(); }},
+    {"smp_madt", []() { register_smp_madt_tests(); }},
+    {"smp_ipi", []() { register_smp_ipi_tests(); }},
+    {"smp_bringup", []() { register_smp_bringup_tests(); }},
 #endif
 
     // -- drivers: device driver framework and controllers --
@@ -727,6 +733,9 @@ static void register_all_tests() {
     register_gdt_layout_tests();
     register_serial_logic_tests();
     register_acpi_parse_tests();
+    register_smp_madt_tests();
+    register_smp_ipi_tests();
+    register_smp_bringup_tests();
 #endif
     register_buildsystem_tests();
     register_config_checks_tests();

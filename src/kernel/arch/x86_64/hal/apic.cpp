@@ -71,6 +71,32 @@ static void ioapic_redirect(uint8_t irq, uint8_t vector, bool masked) {
 
 bool APIC::is_apic_supported() { return caps().apic; }
 
+void APIC::enable_local() {
+    auto wr = [&](uint32_t off, uint32_t v) {
+        if (mode_ == MODE_X2) wrmsr(x2apic_msr(off), v);
+        else lapic_wr(off, v);
+    };
+    auto rd = [&](uint32_t off) -> uint32_t {
+        if (mode_ == MODE_X2)
+            return static_cast<uint32_t>(rdmsr(x2apic_msr(off)));
+        return lapic_rd(off);
+    };
+    // Spurious vector + enable.
+    wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
+    // Mask all LVT entries.
+    wr(REG_LVT_TIMER,   LVT_MASKED);
+    wr(REG_LVT_THERMAL, LVT_MASKED);
+    wr(REG_LVT_PERFMON, LVT_MASKED);
+    wr(REG_LVT_LINT0,   LVT_MASKED);
+    wr(REG_LVT_LINT1,   LVT_MASKED);
+    wr(REG_LVT_ERROR,   LVT_MASKED);
+    // Clear error status.
+    wr(REG_ESR, 0);
+    rd(REG_ESR);
+    // TPR = 0 (accept all interrupt priorities).
+    wr(REG_TPR, 0);
+}
+
 bool APIC::map_mmio() {
     auto map = [](uint64_t phys) {
         kernel::VMM::map_page(arch::HHDM_OFFSET + phys, phys, false);
@@ -99,34 +125,10 @@ bool APIC::init() {
     wrmsr(MSR_APIC_BASE, base);
     mode_ = x2 ? MODE_X2 : MODE_XAPIC;
 
-    auto wr = [&](uint32_t off, uint32_t v) {
-        if (x2) wrmsr(x2apic_msr(off), v);
-        else    lapic_wr(off, v);
-    };
-    auto rd = [&](uint32_t off) -> uint32_t {
-        if (x2) return static_cast<uint32_t>(rdmsr(x2apic_msr(off)));
-        else    return lapic_rd(off);
-    };
+    // ── 2. Local APIC enable (shared with init_ap) ───────────────────────
+    enable_local();
 
-    // ── 2. Spurious vector + enable ──────────────────────────────────────
-    wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
-
-    // ── 3. Mask all LVT entries ──────────────────────────────────────────
-    wr(REG_LVT_TIMER,   LVT_MASKED);
-    wr(REG_LVT_THERMAL, LVT_MASKED);
-    wr(REG_LVT_PERFMON, LVT_MASKED);
-    wr(REG_LVT_LINT0,   LVT_MASKED);
-    wr(REG_LVT_LINT1,   LVT_MASKED);
-    wr(REG_LVT_ERROR,   LVT_MASKED);
-
-    // ── 4. Clear error status ────────────────────────────────────────────
-    wr(REG_ESR, 0);
-    rd(REG_ESR);
-
-    // ── 5. TPR = 0 (accept all interrupt priorities) ─────────────────────
-    wr(REG_TPR, 0);
-
-    // ── 6. I/O APIC: route legacy IRQs ───────────────────────────────────
+    // ── 3. I/O APIC: route legacy IRQs ───────────────────────────────────
     arch::ioapic_redirect(0, 32, false);
     arch::ioapic_redirect(1, 33, false);
     for (int i = 2; i < 16; ++i)
@@ -184,7 +186,61 @@ uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic
 uint32_t APIC::lapic_id() {
     if (!enabled_) return 0;
     uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
-    return id >> 24;
+    // x2APIC ID MSR carries the full 32-bit ID in bits 31:0; xAPIC packs
+    // the 8-bit ID in bits 31:24 (issue #25 B3: >>24 aliases IDs > 255).
+    return (mode_ == MODE_X2) ? id : id >> 24;
+}
+
+bool APIC::send_ipi(uint32_t lapic_id, uint8_t vector, IpiMode mode) {
+    if (!enabled_) return false;
+    // ICR_LOW layout: [7:0] vector, [10:8] delivery mode, [11] dest mode
+    // (0 = physical), [14] level (1 = assert), [15] trigger (0 = edge).
+    uint32_t low = 0;
+    switch (mode) {
+        case IpiMode::INIT_ASSERT:   low = 0x4500; break; // 101 << 8 | 1 << 14
+        case IpiMode::INIT_DEASSERT: low = 0x8500; break; // 101 << 8, level 0
+        case IpiMode::SIPI:          low = 0x4600 | vector; break;
+        case IpiMode::FIXED:         low = static_cast<uint32_t>(vector); break;
+    }
+    if (mode_ == MODE_X2) {
+        // x2APIC: single 64-bit ICR MSR (0x830), 32-bit destination.
+        wrmsr(x2apic_msr(REG_ICR_LOW),
+              (static_cast<uint64_t>(lapic_id) << 32) | low);
+    } else {
+        // xAPIC: 8-bit destination in ICR_HIGH[31:24], then command.
+        lapic_wr(REG_ICR_HIGH, (lapic_id & 0xFFU) << 24);
+        lapic_wr(REG_ICR_LOW, low);
+    }
+    // Bounded delivery-status poll (bit 12 clears once the local APIC
+    // accepted the command — no recipient required for INIT/SIPI send).
+    for (int i = 0; i < 10000; ++i) {
+        uint32_t status = (mode_ == MODE_X2)
+                              ? static_cast<uint32_t>(
+                                    rdmsr(x2apic_msr(REG_ICR_LOW)))
+                              : lapic_rd(REG_ICR_LOW);
+        if ((status & (1U << 12)) == 0)
+            return true;
+        asm volatile("pause");
+    }
+    return false;
+}
+
+void APIC::init_ap() {
+    if (!enabled_) return;
+    // IA32_APIC_BASE is PER-CPU: the AP comes out of INIT in reset state
+    // (xAPIC, possibly disabled) regardless of the BSP's mode.  Mirror the
+    // BSP's mode choice (mode_ is authoritative — IPI addressing assumes
+    // both CPUs share it) BEFORE any x2APIC MSR touch: writing x2 MSRs
+    // with x2APIC disabled #GPs, and the AP has no IDT (triple fault).
+    uint64_t base = rdmsr(MSR_APIC_BASE);
+    base |= APIC_BASE_ENABLE;
+    if (mode_ == MODE_X2)
+        base |= APIC_BASE_X2APIC;
+    else
+        base &= ~APIC_BASE_X2APIC;
+    wrmsr(MSR_APIC_BASE, base);
+    // Local APIC only — the I/O APIC routing stays BSP-owned.
+    enable_local();
 }
 
 void APIC::timer_init(uint32_t frequency_hz) {

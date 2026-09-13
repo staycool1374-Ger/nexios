@@ -21,7 +21,7 @@
 /// @file percpu.hpp
 /// @brief Per-CPU state block (issue #94).  One 4 KiB page per logical CPU,
 /// indexed by LAPIC ID / logical CPU ID.  Accessed via GS_BASE (x86_64).
-/// Single-core build: CONFIG_MAX_CPUS == 1, GS_BASE points at per_cpu[0].
+/// CONFIG_MAX_CPUS pages; the BSP owns index 0, APs own 1...n (issue #25).
 
 #pragma once
 
@@ -33,9 +33,10 @@
 namespace arch {
 
 /// @brief Maximum number of logical CPUs supported.
-/// Single-core builds keep this at 1.
+/// Issue #25 Phase B: sized for AP bring-up (SMP); scheduling stays
+/// BSP-only until Phase C.
 #ifndef CONFIG_MAX_CPUS
-#define CONFIG_MAX_CPUS 1
+#define CONFIG_MAX_CPUS 8
 #endif
 
 /// @brief Per-CPU state block (4 KiB-aligned, one page per logical CPU).

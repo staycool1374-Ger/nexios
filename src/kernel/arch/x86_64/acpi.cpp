@@ -17,14 +17,16 @@
  */
 
 /// @file acpi.cpp
-/// @brief ACPI DMAR discovery implementation (issue #9).  The boot page
-/// tables identity-map only the first 128 MiB, but QEMU places ACPI tables
-/// near the top of RAM, so every accessed page is explicitly mapped on
-/// demand (HHDM + VMM::map_page, APIC/framebuffer pattern).  Every table
-/// access is bounds-checked against the declared length and every signature
-/// + checksum is validated before the data is trusted (fail-closed probe).
+/// @brief ACPI table discovery implementation (issues #9 DMAR, #25 MADT).
+///        The boot page tables identity-map only the first 128 MiB, but QEMU
+///        places ACPI tables near the top of RAM, so every accessed page is
+///        explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer
+///        pattern).  Every table access is bounds-checked against the declared
+///        length and every signature + checksum is validated before the data
+///        is trusted (fail-closed probe).
 
 #include <kernel/arch/x86_64/acpi.hpp>
+#include <kernel/arch/x86_64/madt.hpp>
 
 #include <kernel/multiboot2.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -95,6 +97,8 @@ constexpr uint32_t kXsdtSig = 0x54445358U; // "XSDT"
 constexpr uint32_t kRsdtSig = 0x54445352U; // "RSDT"
 /// @brief "DMAR" signature.
 constexpr uint32_t kDmarSig = 0x52414D44U; // "DMAR"
+/// @brief "APIC" (MADT) signature.
+constexpr uint32_t kMadtSig = 0x43495041U; // "APIC"
 
 /// @brief ACPI RSDP v2 layout (offset 0 = signature).
 struct RsdpLayout {
@@ -241,6 +245,66 @@ dmar::DmarInfo parse_dmar(uint64_t dmar_phys) {
     return out; // DMAR valid but no DRHD — found=false
 }
 
+/// @brief Parses the MADT for enabled local APICs (issue #25, Phase B).
+/// @return MadtInfo: found + IDs, or malformed on bad structure.
+///         Type-0 (LAPIC) and type-9 (x2APIC LAPIC) entries with flags
+///         bit 0 set are recorded, capped at MADT_MAX_CPUS; disabled
+///         entries are skipped, never woken.
+kernel::acpi::MadtInfo parse_madt(uint64_t madt_phys) {
+    kernel::acpi::MadtInfo out{};
+    if (phys_sig(madt_phys) != kMadtSig)
+        return out; // found=false — not a MADT
+    uint32_t length = phys_read32(madt_phys + 4);
+    // 36-byte ACPI header + 8-byte MADT header (lapic_addr + flags).
+    if (length < 44 || length > 4096) {
+        out.malformed = true;
+        return out;
+    }
+    uint8_t sum = 0;
+    for (uint32_t i = 0; i < length; ++i)
+        sum = static_cast<uint8_t>(sum + phys_read8(madt_phys + i));
+    if (sum != 0) {
+        out.malformed = true;
+        return out;
+    }
+    uint64_t pos = madt_phys + 44;
+    uint64_t end = madt_phys + length;
+    while (pos + 2 <= end) {
+        uint8_t type = phys_read8(pos);
+        uint8_t struct_len = phys_read8(pos + 1);
+        if (struct_len < 2 || pos + struct_len > end) {
+            out.malformed = true;
+            return out;
+        }
+        if (type == 0) { // Processor Local APIC
+            if (struct_len < 8) {
+                out.malformed = true;
+                return out;
+            }
+            uint32_t flags = phys_read32(pos + 4);
+            if ((flags & 0x1U) != 0 &&
+                out.ncpus < MADT_MAX_CPUS) {
+                out.lapic_ids[out.ncpus] = phys_read8(pos + 3);
+                ++out.ncpus;
+            }
+        } else if (type == 9) { // Processor Local x2APIC
+            if (struct_len < 16) {
+                out.malformed = true;
+                return out;
+            }
+            uint32_t flags = phys_read32(pos + 8);
+            if ((flags & 0x1U) != 0 &&
+                out.ncpus < MADT_MAX_CPUS) {
+                out.lapic_ids[out.ncpus] = phys_read32(pos + 4);
+                ++out.ncpus;
+            }
+        }
+        pos += struct_len;
+    }
+    out.found = out.ncpus > 0;
+    return out;
+}
+
 } // namespace
 
 dmar::DmarInfo scan_dmar() {
@@ -266,3 +330,32 @@ dmar::DmarInfo scan_dmar() {
 }
 
 } // namespace kernel::iommu::acpi
+
+namespace kernel::acpi {
+
+MadtInfo scan_madt() {
+    // Helpers live in kernel::iommu::acpi's anonymous namespace (shared
+    // with the DMAR walk above — same fail-closed discipline, no shared
+    // mutable state); reach them by qualification.
+    namespace ia = kernel::iommu::acpi;
+    uint64_t rsdp = ia::locate_rsdp();
+    if (rsdp == 0)
+        return {};
+    uint8_t revision = ia::phys_read8(rsdp + 15);
+    uint64_t madt = 0;
+    if (revision >= 2) {
+        uint64_t xsdt = ia::phys_read64(rsdp + 24);
+        if (xsdt != 0)
+            madt = ia::find_acpi_table(xsdt, true, ia::kMadtSig);
+    }
+    if (madt == 0) {
+        uint64_t rsdt = ia::phys_read32(rsdp + 16);
+        if (rsdt != 0)
+            madt = ia::find_acpi_table(rsdt, false, ia::kMadtSig);
+    }
+    if (madt == 0)
+        return {};
+    return ia::parse_madt(madt);
+}
+
+} // namespace kernel::acpi

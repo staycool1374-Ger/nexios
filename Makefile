@@ -319,6 +319,14 @@ QEMU_FLAGS := -m 256M \
                 -device ide-hd,drive=ahci_scratch,bus=ahci0.1,unit=0
 endif
 
+# SMP bring-up variant (issue #25, Phase B4): class=smp_bringup boots the
+# default SeaBIOS machine with -smp 2, so the MADT lists BSP + 1 AP and
+# bring_up() wakes + parks it.  All other classes run single-CPU (the
+# bring-up is a staged-blob no-op there).
+ifeq ($(CLASS),smp_bringup)
+QEMU_FLAGS += -smp 2
+endif
+
 # Deterministic real-time measurement (issue #101): the stress_hrt / hrt
 # classes measure hard-RT latency with RELATIVE bounds (stress vs a measured
 # baseline), which are valid under standard TCG timing.  The issue's requested

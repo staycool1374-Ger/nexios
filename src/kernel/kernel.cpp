@@ -65,6 +65,8 @@
 #include <kernel/random.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
+#include <kernel/arch/x86_64/madt.hpp>
+#include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
@@ -715,6 +717,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         }
     }
 
+    // Issue #25 (Phase B3): claim the AP trampoline block BEFORE any PMM
+    // allocation (VMM page tables take low pages first-come).  bring_up()
+    // copies the blob + wakes APs much later; without this the block is
+    // already owned and the AP would execute garbage (triple-fault reset).
+#if defined(CONFIG_ARCH_X86_64)
+    kernel::smp::reserve_block_early();
+#endif
+
     // v0.4.0 MP-1.5: the per-kernel-task private-data window must not overlap
     // anything the boot kernel PML4 maps — a task that maps a page there gets
     // TRUE cross-task isolation, not an aliased kernel mapping.
@@ -735,6 +745,18 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         arch::APIC::init();
         // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
         arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
+    }
+    // Issue #25 (Phase B1): scan the MADT for enabled local APICs (log
+    // only — AP bring-up lands in Phase B3; single-CPU runs list 1 CPU).
+    {
+        kernel::acpi::MadtInfo madt = kernel::acpi::scan_madt();
+        debug_write("[BOOT] MADT: found=");
+        debug_write(madt.found ? "yes" : "no");
+        debug_write(" malformed=");
+        debug_write(madt.malformed ? "yes" : "no");
+        debug_write(" ncpus=");
+        debug_write_hex(madt.ncpus);
+        debug_write("\n");
     }
 #endif // CONFIG_ARCH_X86_64
     if (kernel::gs::boot_info().cmdline[0]) {
@@ -946,6 +968,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::profiling::Sampler::set_enabled(true);
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+
+    // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent
+    // no-op (MADT ncpus <= 1 or unusable trampoline block).
+#if defined(CONFIG_ARCH_X86_64)
+    kernel::smp::bring_up();
+#endif
 
     // Phase-2 (issue #9): probe for a live VT-d remapping unit via the ACPI
     // DMAR table.  Presence here only records the unit — DMA translation is

@@ -114,6 +114,36 @@ FAT32_IMG      := build/fat32.img
 FAT32_OBJ      := build/fat32/fat32_img.o
 
 # ------------------------------------------------------------------------------
+# AP trampoline blob (issue #25, Phase B3, x86_64 only)
+# ------------------------------------------------------------------------------
+# The AP startup code must execute at physical 0x7000 in 16-bit real mode,
+# so it is assembled position-locked (nasm -f bin, org 0x7000) and embedded
+# as a raw binary object (objcopy -I binary pattern, like the initrd).  The
+# .nasm extension keeps it out of the generic *.asm ELF rule above.
+ifeq ($(ARCH),x86_64)
+AP_TRAMPOLINE_SRC := src/kernel/arch/x86_64/boot/ap_trampoline.nasm
+AP_TRAMPOLINE_BIN := build/ap_trampoline.bin
+AP_TRAMPOLINE_OBJ := build/arch/ap_trampoline.o
+EXTRA_LINK_OBJ    := $(AP_TRAMPOLINE_OBJ)
+
+$(AP_TRAMPOLINE_BIN): $(AP_TRAMPOLINE_SRC)
+	@mkdir -p $(dir $@)
+	@printf '  %-7s %s\n' 'NASM' '$@'
+	$(AS) -f bin -o $@ $<
+
+$(AP_TRAMPOLINE_OBJ): $(AP_TRAMPOLINE_BIN)
+	@mkdir -p $(dir $@)
+	@printf '  %-7s %s\n' 'OBJCOPY' '$@'
+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
+	    --redefine-sym _binary_build_ap_trampoline_bin_start=_binary_ap_trampoline_start \
+	    --redefine-sym _binary_build_ap_trampoline_bin_end=_binary_ap_trampoline_end \
+	    --redefine-sym _binary_build_ap_trampoline_bin_size=_binary_ap_trampoline_size \
+	    $< $@
+else
+EXTRA_LINK_OBJ    :=
+endif
+
+# ------------------------------------------------------------------------------
 # Pattern rules
 # ------------------------------------------------------------------------------
 # NOTE: GNU Make 3.81 cannot resolve prerequisites for `.cpp.o` / `.c.o`
@@ -237,18 +267,18 @@ $(FAT32_OBJ): $(FAT32_IMG)
 check-arch:
 	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
 
-$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) check-arch linker/linker_$(ARCH).ld
+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
 
-$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) check-arch linker/linker_$(ARCH).ld
+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"

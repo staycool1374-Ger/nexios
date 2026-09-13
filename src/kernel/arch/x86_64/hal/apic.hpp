@@ -54,6 +54,28 @@ public:
     /// @return LAPIC ID, or 0 if the APIC is not initialised.
     static uint32_t lapic_id();
 
+    /// @brief IPI delivery modes for send_ipi (issue #25, Phase B2).
+    enum class IpiMode : uint8_t {
+        INIT_ASSERT,   ///< INIT, level assert (AP reset vector arm).
+        INIT_DEASSERT, ///< INIT, level deassert (completes the INIT pulse).
+        SIPI,          ///< Startup IPI — vector byte is the 4 KiB page index.
+        FIXED,         ///< Fixed delivery — vector runs the IDT handler.
+    };
+
+    /// @brief Send an inter-processor interrupt to a LAPIC.
+    /// INIT/SIPI drive AP bring-up; FIXED targets a running CPU's IDT.
+    /// @param lapic_id Destination LAPIC ID (8-bit xAPIC, 32-bit x2APIC).
+    /// @param vector   Vector byte (SIPI page index / FIXED IDT vector).
+    /// @param mode     Delivery mode.
+    /// @return true when the local APIC accepted the command
+    ///         (delivery-status clear within the bounded poll).
+    static bool send_ipi(uint32_t lapic_id, uint8_t vector, IpiMode mode);
+
+    /// @brief Enable only the LOCAL APIC on an application processor.
+    /// Programs SVR + masked LVTs + TPR 0 (the BSP-owned I/O APIC routing
+    /// is left untouched).  Called by ap_main on each woken AP.
+    static void init_ap();
+
     /// @brief Map APIC/I/O-APIC MMIO pages via VMM.
     /// Must be called after VMM::init() but before APIC::init().
     static bool map_mmio();
@@ -137,6 +159,9 @@ private:
     static uint32_t ioapic_read(uint32_t reg_sel);
     static void ioapic_redirect(uint8_t irq, uint8_t vector, bool mask);
     static uint32_t calibrate_bus_hz();
+    /// @brief Program SVR + masked LVTs + ESR clear + TPR 0 on the LOCAL
+    ///        APIC (shared by init() and init_ap(); never touches I/O APIC).
+    static void enable_local();
 };
 
 } // namespace arch

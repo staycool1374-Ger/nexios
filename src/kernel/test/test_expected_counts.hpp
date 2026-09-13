@@ -110,6 +110,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
     {"hal_serial_logic",       6,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar
     {"acpi_parse",             3,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity
+    {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
+    {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
+    {"smp_bringup",            3,   0,       0      },  // AP bring-up (issue #25 Phase B4): blob layout, staged block memcmp, parked count == MADT APs
     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
     {"ahci_live",              3,   0,       0      },  // real AHCI command path on q35+ICH9 variant (issue #108): probe, roundtrip, isolation — NOT in all
