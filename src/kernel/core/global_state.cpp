@@ -65,13 +65,22 @@ uint64_t scheduler_load_kstack_top = 0;
 uint64_t scheduler_switch_generation = 0;
 uint64_t scheduler_kernel_cr3 = 0;
 bool scheduler_need_resched = false;
+// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
+// fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
+// accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
+// plain definitions here until their per-CPU migration.
+#if !defined(CONFIG_ARCH_X86_64)
 uint64_t isr_nesting_depth = 0;
 uint64_t irq_entry_tsc = 0;
+#endif
 uint64_t scheduler_corruption_count = 0;
 uint64_t deadline_detection_integrity = 0;
 // Tracks which task's FPU state is currently in the registers (declared in
 // scheduler.hpp's extern "C" block).
+// Issue #25 (Phase A): x86_64 definition lives in per_cpu[0] (gs:0x30).
+#if !defined(CONFIG_ARCH_X86_64)
 kernel::TaskControlBlock *fpu_owner = nullptr;
+#endif
 // Highest isr_nesting_depth observed inside the #NM handler (issue #93,
 // INV-FPU2 pin).  Reset in test_isolate restore; tests assert it stays
 // <= baseline + 1 across a #NM storm (an interrupt-gate #NM can never nest a

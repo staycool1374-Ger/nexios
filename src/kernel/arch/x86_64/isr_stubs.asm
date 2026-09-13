@@ -17,6 +17,9 @@
 extern handle_interrupt_c
 extern scheduler_save_rsp_to
 extern scheduler_load_rsp_from
+; Issue #25 (Phase A): isr_nesting_depth / irq_entry_tsc live in per_cpu[0]
+; (linker aliases in linker_x86_64.ld); isr_common below uses gs:0x20 /
+; gs:0x28 for them, never [rel] (INV-PC2).
 extern scheduler_load_cr3_from
 extern scheduler_load_kstack_base
 extern scheduler_load_kstack_top
@@ -30,8 +33,6 @@ extern scheduler_abort_switch_fixup
 extern scheduler_diag_pre_save
 extern scheduler_diag_depth_skip
 extern scheduler_diag_rsp_abort
-extern isr_nesting_depth
-extern irq_entry_tsc
 
 ; Uniform-frame discipline (exception-table-audit.md §3.2): every vector
 ; reaches isr_common with an 8-byte vector + 8-byte error slot at [rsp]/[rsp+8].
@@ -117,7 +118,7 @@ ISR_NOERR i
 
 section .text
 isr_common:
-    inc qword [rel isr_nesting_depth]
+    inc qword [gs:0x20]
 
     ; Capture TSC at ISR entry — rdtsc clobbers RAX and RDX
     push rax
@@ -125,7 +126,7 @@ isr_common:
     rdtsc
     shl rdx, 32
     or  rax, rdx
-    mov [rel irq_entry_tsc], rax
+    mov [gs:0x28], rax
     pop rdx
     pop rax
 
@@ -149,7 +150,7 @@ isr_common:
     mov rsi, [rsp + 16*8]
     mov rdx, [rsp + 17*8]
     mov rcx, rsp
-    mov r8, [rel irq_entry_tsc]
+    mov r8, [gs:0x28]
 
     call handle_interrupt_c
 
@@ -160,7 +161,7 @@ isr_common:
 
     ; Perform context switch at any nesting depth ≤ 2 (normal = 1, SYSCALL+timer = 2).
     ; Deeper nesting (≥ 3) indicates a bug — skip to avoid stack corruption.
-    cmp qword [rel isr_nesting_depth], 2
+    cmp qword [gs:0x20], 2
     jbe .depth_ok
     ; H2 depth-skip audit (cold: fires only when a pending apply is skipped due
     ; to excessive ISR nesting).  Preserve every GPR .restore pops.
@@ -353,7 +354,7 @@ isr_common:
     ; Reset nesting depth — the old task may have had a pending SYSCALL
     ; (depth=1) that was absorbed by the context switch.  The new task
     ; must start from a clean depth so its own ISRs nest correctly.
-    mov qword [rel isr_nesting_depth], 1
+    mov qword [gs:0x20], 1
 
     ; Load the next task's CR3.  If no CR3 was published for this switch
     ; (kernel/harness context) or it was consumed, fall back to the static
@@ -429,7 +430,7 @@ isr_common:
     pop r15
 
     add rsp, 16
-    dec qword [rel isr_nesting_depth]
+    dec qword [gs:0x20]
     iretq
 
 global __isr_vector

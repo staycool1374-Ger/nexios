@@ -50,6 +50,10 @@ public:
     /// @brief Check whether the CPU supports an APIC.
     static bool is_apic_supported();
 
+    /// @brief Read this CPU's LAPIC ID (bits 24-31 of the ID register).
+    /// @return LAPIC ID, or 0 if the APIC is not initialised.
+    static uint32_t lapic_id();
+
     /// @brief Map APIC/I/O-APIC MMIO pages via VMM.
     /// Must be called after VMM::init() but before APIC::init().
     static bool map_mmio();

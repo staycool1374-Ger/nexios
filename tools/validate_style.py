@@ -411,6 +411,36 @@ class ForbiddenChecker(Checker):
 
 
 # ---------------------------------------------------------------------------
+# 6b. Per-CPU asm (INV-PC2, issue #25) — isr_nesting_depth / irq_entry_tsc
+#     must be accessed gs-relative in x86_64 ISR asm, never [rel].  The
+#     deferred-switch atoms (scheduler_save_rsp_to, ...) stay [rel] by
+#     design and are intentionally NOT matched here.
+# ---------------------------------------------------------------------------
+
+class PerCpuAsmChecker(Checker):
+    name = "percpu_asm"
+    severity = "error"
+
+    _patterns: list[tuple[re.Pattern, str]] = [
+        (re.compile(r"\[\s*rel\s+isr_nesting_depth\s*\]"),
+         "isr_nesting_depth must be gs-relative ([gs:0x20]) in ISR asm (INV-PC2)"),
+        (re.compile(r"\[\s*rel\s+irq_entry_tsc\s*\]"),
+         "irq_entry_tsc must be gs-relative ([gs:0x28]) in ISR asm (INV-PC2)"),
+    ]
+
+    def check_file(self, rel_path: str, text: str) -> None:
+        if not rel_path.endswith((".asm", ".S", ".s")):
+            return
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith(";") or stripped.startswith("#"):
+                continue
+            for pat, msg in self._patterns:
+                if pat.search(line):
+                    self.add(rel_path, line_no, msg)
+
+
+# ---------------------------------------------------------------------------
 # 7. Test structure
 # ---------------------------------------------------------------------------
 
@@ -1098,6 +1128,7 @@ def main() -> int:
         MemoryChecker(cfg),
         LoopBoundsChecker(cfg),
         ForbiddenChecker(cfg),
+        PerCpuAsmChecker(cfg),
         TestStructureChecker(cfg),
         FormattingChecker(cfg),
         ConstCorrectnessChecker(cfg),

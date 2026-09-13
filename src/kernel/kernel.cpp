@@ -63,6 +63,9 @@
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/vfs/initrd_fs.hpp>
 #include <kernel/random.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#endif
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
 #include <kernel/vfs/tmpfs.hpp>
@@ -530,6 +533,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::GDT::init();
     arch::GDT::load();
 #if defined(CONFIG_ARCH_X86_64)
+    // Issue #25 (Phase A): point GS_BASE at per_cpu[0] before any ISR can
+    // run.  LAPIC ID is filled in once the APIC is up (see below); the
+    // isr_stubs.asm gs:0x20/0x28 slots are valid immediately (zeroed).
+    arch::percpu_init_bsp(0);
+#endif
+#if defined(CONFIG_ARCH_X86_64)
     extern const uint64_t kernel_stack_top;
     arch::GDT::set_tss_rsp0(kernel_stack_top);
 
@@ -724,6 +733,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     if (arch::APIC::is_apic_supported()) {
         arch::APIC::map_mmio();
         arch::APIC::init();
+        // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
+        arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
     }
 #endif // CONFIG_ARCH_X86_64
     if (kernel::gs::boot_info().cmdline[0]) {

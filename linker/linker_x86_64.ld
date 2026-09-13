@@ -129,4 +129,15 @@ SECTIONS
 
     kernel_phys_end = ALIGN(phys_lma + SIZEOF(.stack_guard), 4K);
     kernel_virt_end = ALIGN(., 4K);
+
+    /* Issue #25 (Phase A): isr_nesting_depth / irq_entry_tsc / fpu_owner
+       live in per_cpu[0] (arch::PerCpu offsets 0x20 / 0x28 / 0x30).
+       _ZN4arch7per_cpuE is the mangled name of arch::per_cpu.
+       C++ keeps extern declarations only (see scheduler.hpp); isr_stubs.asm
+       uses gs:0x20 / gs:0x28.  KEEP THE OFFSETS IN SYNC with
+       src/kernel/arch/x86_64/hal/percpu.hpp — test_per_cpu asserts the
+       alias identity at runtime. */
+    isr_nesting_depth = _ZN4arch7per_cpuE + 0x20;
+    irq_entry_tsc = _ZN4arch7per_cpuE + 0x28;
+    fpu_owner = _ZN4arch7per_cpuE + 0x30;
 }

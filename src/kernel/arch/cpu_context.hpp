@@ -45,8 +45,6 @@ struct CpuContext {
     ///        RSP-ownership scan in switch_to_task remains authoritative; this
     ///        cache is only published atomically.
     TaskControlBlock *current = nullptr;
-    /// @brief ISR re-entrancy depth (asm inc/dec + C++ atomic reset/read).
-    uint64_t isr_nesting_depth = 0;
     /// @brief Per-CPU tick counter (timer ISR RMW; readers use atomic load).
     uint64_t ticks = 0;
     /// @brief Last tick an actual context switch ran (debug).

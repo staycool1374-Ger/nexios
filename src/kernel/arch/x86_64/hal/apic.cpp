@@ -181,6 +181,12 @@ static uint64_t ns_to_tsc_delta(uint64_t ns) {
 void APIC::x2_write(uint32_t off, uint32_t v) { wrmsr(x2apic_msr(off), v); }
 uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic_msr(off))); }
 
+uint32_t APIC::lapic_id() {
+    if (!enabled_) return 0;
+    uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
+    return id >> 24;
+}
+
 void APIC::timer_init(uint32_t frequency_hz) {
     if (!enabled_) return;
     auto wr = [&](uint32_t off, uint32_t v) {

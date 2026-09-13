@@ -1,78 +1,435 @@
-diff --git a/src/kernel/test/test_shell_commands.cpp b/src/kernel/test/test_shell_commands.cpp
-index d9c7a8b8..9fb64cc4 100644
---- a/src/kernel/test/test_shell_commands.cpp
-+++ b/src/kernel/test/test_shell_commands.cpp
-@@ -480,9 +480,8 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
-     char pwd[k_capture_size];
-     run_shell("pwd", pwd, sizeof(pwd));
+diff --git a/linker/linker_x86_64.ld b/linker/linker_x86_64.ld
+index 4f1f911c..4e65250b 100644
+--- a/linker/linker_x86_64.ld
++++ b/linker/linker_x86_64.ld
+@@ -129,4 +129,15 @@ SECTIONS
  
--    // `cd /` restores the canonical root exactly (see the leading-slash
--    // defect note in shell_cd_error_paths_and_pwd — the root case is the one
--    // path the normalizer still renders absolutely).
-+    // `cd /` restores the canonical root exactly (absolute targets keep
-+    // their leading '/' per issue #141).
-     bool at_root_exact =
-         pwd[0] == '/' && (pwd[1] == '\n' || pwd[1] == '\0');
- 
-@@ -501,9 +500,9 @@ JARVIS_TEST(shell_directory_stack_lifo, "PRE: vfsd, iocd | POST: none") {
- // Input: Shell::execute("cd /no-such-dir-zz"), ("cd /dev/tty"),
- //        ("cd /tmp"), ("pwd"), ("cd /"), ("pwd").
- // Expect: "no such directory" and "not a directory" respectively; pwd shows
--//         the tmp directory after the successful cd (rendered without the
--//         leading '/' — see the defect note below) and exactly "/" after the
--//         restore.
-+//         exactly "/tmp" after the successful cd and exactly "/" after the
-+//         restore (issue #141 fixed: absolute targets keep their leading
-+//         '/').
- // Depends: service::Shell, vfs::resolve
- JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
-     ensure_standard_mounts();
-@@ -522,20 +521,17 @@ JARVIS_TEST(shell_cd_error_paths_and_pwd, "PRE: vfsd, iocd | POST: none") {
-     char at_root[k_capture_size];
-     run_shell("pwd", at_root, sizeof(at_root));
- 
--    // NOTE (defect found by this test, reported as a kernel bug): for an
--    // absolute target below the root, `build_canonical_path()` strips the
--    // leading '/' — the normalizer skips every leading separator and only
--    // re-inserts a '/' *between* segments, never before the first one.  So
--    // `cd /tmp` leaves the canonical cwd as "tmp" and `pwd` prints "tmp".
--    // The DATA contract asserted here is therefore "the cwd ends at the
--    // target directory", not "the cwd is the absolute path".
--    bool in_tmp_ok = has(in_tmp, "tmp");
-+    // Absolute targets keep their leading '/' (issue #141 fixed): the
-+    // canonical cwd after `cd /tmp` is exactly "/tmp".
-+    bool in_tmp_exact = in_tmp[0] == '/' && in_tmp[1] == 't' &&
-+                        in_tmp[2] == 'm' && in_tmp[3] == 'p' &&
-+                        (in_tmp[4] == '\n' || in_tmp[4] == '\0');
-     bool at_root_exact =
-         at_root[0] == '/' && (at_root[1] == '\n' || at_root[1] == '\0');
- 
-     JARVIS_ASSERT(has(missing, "no such directory"));
-     JARVIS_ASSERT(has(notdir, "not a directory"));
--    JARVIS_ASSERT(in_tmp_ok);
-+    JARVIS_ASSERT(in_tmp_exact);
-     JARVIS_ASSERT(at_root_exact);
-     JARVIS_TEST_PASS();
+     kernel_phys_end = ALIGN(phys_lma + SIZEOF(.stack_guard), 4K);
+     kernel_virt_end = ALIGN(., 4K);
++
++    /* Issue #25 (Phase A): isr_nesting_depth / irq_entry_tsc / fpu_owner
++       live in per_cpu[0] (arch::PerCpu offsets 0x20 / 0x28 / 0x30).
++       _ZN4arch7per_cpuE is the mangled name of arch::per_cpu.
++       C++ keeps extern declarations only (see scheduler.hpp); isr_stubs.asm
++       uses gs:0x20 / gs:0x28.  KEEP THE OFFSETS IN SYNC with
++       src/kernel/arch/x86_64/hal/percpu.hpp — test_per_cpu asserts the
++       alias identity at runtime. */
++    isr_nesting_depth = _ZN4arch7per_cpuE + 0x20;
++    irq_entry_tsc = _ZN4arch7per_cpuE + 0x28;
++    fpu_owner = _ZN4arch7per_cpuE + 0x30;
  }
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index 82d8ad87..2da78eeb 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -1095,6 +1095,9 @@ static void build_canonical_path(const char* cwd, const char* target,
-         buf[i] = '\0';
+\ No newline at end of file
+diff --git a/src/kernel/arch/cpu_context.hpp b/src/kernel/arch/cpu_context.hpp
+index 2dcd304c..eba6ac05 100644
+--- a/src/kernel/arch/cpu_context.hpp
++++ b/src/kernel/arch/cpu_context.hpp
+@@ -45,8 +45,6 @@ struct CpuContext {
+     ///        RSP-ownership scan in switch_to_task remains authoritative; this
+     ///        cache is only published atomically.
+     TaskControlBlock *current = nullptr;
+-    /// @brief ISR re-entrancy depth (asm inc/dec + C++ atomic reset/read).
+-    uint64_t isr_nesting_depth = 0;
+     /// @brief Per-CPU tick counter (timer ISR RMW; readers use atomic load).
+     uint64_t ticks = 0;
+     /// @brief Last tick an actual context switch ran (debug).
+diff --git a/src/kernel/arch/x86_64/hal/apic.cpp b/src/kernel/arch/x86_64/hal/apic.cpp
+index 491692ee..b43a3f7f 100644
+--- a/src/kernel/arch/x86_64/hal/apic.cpp
++++ b/src/kernel/arch/x86_64/hal/apic.cpp
+@@ -181,6 +181,12 @@ static uint64_t ns_to_tsc_delta(uint64_t ns) {
+ void APIC::x2_write(uint32_t off, uint32_t v) { wrmsr(x2apic_msr(off), v); }
+ uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic_msr(off))); }
+ 
++uint32_t APIC::lapic_id() {
++    if (!enabled_) return 0;
++    uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
++    return id >> 24;
++}
++
+ void APIC::timer_init(uint32_t frequency_hz) {
+     if (!enabled_) return;
+     auto wr = [&](uint32_t off, uint32_t v) {
+diff --git a/src/kernel/arch/x86_64/hal/apic.hpp b/src/kernel/arch/x86_64/hal/apic.hpp
+index 639e941e..94ddf31b 100644
+--- a/src/kernel/arch/x86_64/hal/apic.hpp
++++ b/src/kernel/arch/x86_64/hal/apic.hpp
+@@ -50,6 +50,10 @@ public:
+     /// @brief Check whether the CPU supports an APIC.
+     static bool is_apic_supported();
+ 
++    /// @brief Read this CPU's LAPIC ID (bits 24-31 of the ID register).
++    /// @return LAPIC ID, or 0 if the APIC is not initialised.
++    static uint32_t lapic_id();
++
+     /// @brief Map APIC/I/O-APIC MMIO pages via VMM.
+     /// Must be called after VMM::init() but before APIC::init().
+     static bool map_mmio();
+diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
+index 44d6fe4e..b78cfe9a 100644
+--- a/src/kernel/arch/x86_64/isr_stubs.asm
++++ b/src/kernel/arch/x86_64/isr_stubs.asm
+@@ -17,6 +17,9 @@
+ extern handle_interrupt_c
+ extern scheduler_save_rsp_to
+ extern scheduler_load_rsp_from
++; Issue #25 (Phase A): isr_nesting_depth / irq_entry_tsc live in per_cpu[0]
++; (linker aliases in linker_x86_64.ld); isr_common below uses gs:0x20 /
++; gs:0x28 for them, never [rel] (INV-PC2).
+ extern scheduler_load_cr3_from
+ extern scheduler_load_kstack_base
+ extern scheduler_load_kstack_top
+@@ -30,8 +33,6 @@ extern scheduler_abort_switch_fixup
+ extern scheduler_diag_pre_save
+ extern scheduler_diag_depth_skip
+ extern scheduler_diag_rsp_abort
+-extern isr_nesting_depth
+-extern irq_entry_tsc
+ 
+ ; Uniform-frame discipline (exception-table-audit.md §3.2): every vector
+ ; reaches isr_common with an 8-byte vector + 8-byte error slot at [rsp]/[rsp+8].
+@@ -117,7 +118,7 @@ ISR_NOERR i
+ 
+ section .text
+ isr_common:
+-    inc qword [rel isr_nesting_depth]
++    inc qword [gs:0x20]
+ 
+     ; Capture TSC at ISR entry — rdtsc clobbers RAX and RDX
+     push rax
+@@ -125,7 +126,7 @@ isr_common:
+     rdtsc
+     shl rdx, 32
+     or  rax, rdx
+-    mov [rel irq_entry_tsc], rax
++    mov [gs:0x28], rax
+     pop rdx
+     pop rax
+ 
+@@ -149,7 +150,7 @@ isr_common:
+     mov rsi, [rsp + 16*8]
+     mov rdx, [rsp + 17*8]
+     mov rcx, rsp
+-    mov r8, [rel irq_entry_tsc]
++    mov r8, [gs:0x28]
+ 
+     call handle_interrupt_c
+ 
+@@ -160,7 +161,7 @@ isr_common:
+ 
+     ; Perform context switch at any nesting depth ≤ 2 (normal = 1, SYSCALL+timer = 2).
+     ; Deeper nesting (≥ 3) indicates a bug — skip to avoid stack corruption.
+-    cmp qword [rel isr_nesting_depth], 2
++    cmp qword [gs:0x20], 2
+     jbe .depth_ok
+     ; H2 depth-skip audit (cold: fires only when a pending apply is skipped due
+     ; to excessive ISR nesting).  Preserve every GPR .restore pops.
+@@ -353,7 +354,7 @@ isr_common:
+     ; Reset nesting depth — the old task may have had a pending SYSCALL
+     ; (depth=1) that was absorbed by the context switch.  The new task
+     ; must start from a clean depth so its own ISRs nest correctly.
+-    mov qword [rel isr_nesting_depth], 1
++    mov qword [gs:0x20], 1
+ 
+     ; Load the next task's CR3.  If no CR3 was published for this switch
+     ; (kernel/harness context) or it was consumed, fall back to the static
+@@ -429,7 +430,7 @@ isr_common:
+     pop r15
+ 
+     add rsp, 16
+-    dec qword [rel isr_nesting_depth]
++    dec qword [gs:0x20]
+     iretq
+ 
+ global __isr_vector
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 4e91df49..cad55eb5 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -65,13 +65,22 @@ uint64_t scheduler_load_kstack_top = 0;
+ uint64_t scheduler_switch_generation = 0;
+ uint64_t scheduler_kernel_cr3 = 0;
+ bool scheduler_need_resched = false;
++// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
++// fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
++// accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
++// plain definitions here until their per-CPU migration.
++#if !defined(CONFIG_ARCH_X86_64)
+ uint64_t isr_nesting_depth = 0;
+ uint64_t irq_entry_tsc = 0;
++#endif
+ uint64_t scheduler_corruption_count = 0;
+ uint64_t deadline_detection_integrity = 0;
+ // Tracks which task's FPU state is currently in the registers (declared in
+ // scheduler.hpp's extern "C" block).
++// Issue #25 (Phase A): x86_64 definition lives in per_cpu[0] (gs:0x30).
++#if !defined(CONFIG_ARCH_X86_64)
+ kernel::TaskControlBlock *fpu_owner = nullptr;
++#endif
+ // Highest isr_nesting_depth observed inside the #NM handler (issue #93,
+ // INV-FPU2 pin).  Reset in test_isolate restore; tests assert it stays
+ // <= baseline + 1 across a #NM storm (an interrupt-gate #NM can never nest a
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 1910f3bf..f05ce498 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -63,6 +63,9 @@
+ #include <kernel/daemon/daemon_mgr.hpp>
+ #include <kernel/vfs/initrd_fs.hpp>
+ #include <kernel/random.hpp>
++#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/x86_64/hal/percpu.hpp>
++#endif
+ #include <kernel/vfs/devfs.hpp>
+ #include <kernel/vfs/procfs.hpp>
+ #include <kernel/vfs/tmpfs.hpp>
+@@ -529,6 +532,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     debug_write("[BOOT] Arch init...\n");
+     arch::GDT::init();
+     arch::GDT::load();
++#if defined(CONFIG_ARCH_X86_64)
++    // Issue #25 (Phase A): point GS_BASE at per_cpu[0] before any ISR can
++    // run.  LAPIC ID is filled in once the APIC is up (see below); the
++    // isr_stubs.asm gs:0x20/0x28 slots are valid immediately (zeroed).
++    arch::percpu_init_bsp(0);
++#endif
+ #if defined(CONFIG_ARCH_X86_64)
+     extern const uint64_t kernel_stack_top;
+     arch::GDT::set_tss_rsp0(kernel_stack_top);
+@@ -724,6 +733,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     if (arch::APIC::is_apic_supported()) {
+         arch::APIC::map_mmio();
+         arch::APIC::init();
++        // Issue #25 (Phase A): record the BSP LAPIC ID in its PerCpu page.
++        arch::per_cpu[0].lapic_id = arch::APIC::lapic_id();
      }
-     // Normalize in-place: collapse //, resolve . and ..
-+    // An absolute source keeps its leading '/' (issue #141): seed it before
-+    // the first segment so re-joining never produces a root-relative string.
-+    const bool absolute = (buf[0] == '/');
-     char stack[256];
-     size_t sp = 0;
-     const char* p = buf;
-@@ -1112,6 +1115,7 @@ static void build_canonical_path(const char* cwd, const char* target,
-             }
-             continue;
-         }
-+        if (absolute && sp == 0) stack[sp++] = '/';
-         if (sp > 0 && stack[sp - 1] != '/') stack[sp++] = '/';
-         for (size_t i = 0; i < seg_len; ++i) stack[sp++] = start[i];
-     }
+ #endif // CONFIG_ARCH_X86_64
+     if (kernel::gs::boot_info().cmdline[0]) {
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 6597fe68..fb898b75 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -200,6 +200,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
+     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
+     {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
++    {"per_cpu",               3,  0,       0      },  // Per-CPU foundation (issue #25): frozen slot offsets, BSP identity, nesting-depth live storage
+     {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
+     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+diff --git a/src/kernel/test/test_per_cpu.cpp b/src/kernel/test/test_per_cpu.cpp
+new file mode 100644
+index 00000000..33449bfb
+--- /dev/null
++++ b/src/kernel/test/test_per_cpu.cpp
+@@ -0,0 +1,134 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_per_cpu.cpp
++/// @brief Per-CPU foundation tests (issue #25, Phase A): GS_BASE wiring,
++///        frozen slot offsets, BSP identity, nesting-depth live storage.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/arch/irq_guard.hpp>
++
++#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/x86_64/hal/percpu.hpp>
++
++// irq_entry_tsc has no C++ extern declaration (asm-only datum); declare it
++// here to assert the linker-alias identity (issue #25).
++extern "C" uint64_t irq_entry_tsc;
++#endif
++
++using namespace kernel;
++
++// Runmode: kernel
++// Testidea: The PerCpu slot offsets frozen by the SMP design are honored by
++//           the struct layout, so asm gs:0xXX accesses hit the right fields.
++// Input: offsetof checks against the spec §3.1 table.
++// Expect: user_rsp 0x00, kernel_rsp 0x08, cpu_id 0x10, lapic_id 0x18,
++//         isr_nesting_depth 0x20, irq_entry_tsc 0x28, fpu_owner 0x30,
++//         current_task 0x38; sizeof(PerCpu) == 4096.
++// Depends: arch::PerCpu layout (issue #25)
++JARVIS_TEST(per_cpu_slot_offsets_frozen, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    arch::PerCpu &pc = arch::per_cpu[0];
++    const auto *base = reinterpret_cast<const uint64_t *>(&pc);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.user_rsp) == base + 0);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.kernel_rsp) ==
++                  base + 1);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.cpu_id) == base + 2);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.lapic_id) == base + 3);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.isr_nesting_depth) ==
++                  base + 4);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.irq_entry_tsc) ==
++                  base + 5);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.fpu_owner) ==
++                  base + 6);
++    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.current_task) ==
++                  base + 7);
++    JARVIS_ASSERT(sizeof(arch::PerCpu) == 4096);
++    // Linker-alias identity (issue #25): the legacy extern symbols resolve
++    // to the per_cpu[0] fields (linker_x86_64.ld).
++    JARVIS_ASSERT(&pc.isr_nesting_depth == &isr_nesting_depth);
++    JARVIS_ASSERT(&pc.irq_entry_tsc == &irq_entry_tsc);
++    JARVIS_ASSERT(
++        reinterpret_cast<uint64_t>(&pc.fpu_owner) ==
++        reinterpret_cast<uint64_t>(&fpu_owner));
++#else
++    JARVIS_TEST_PASS();
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: On the single-core build the BSP owns per_cpu[0]: cpu_id is 0,
++//           per_cpu_current() resolves to &per_cpu[0], and GS_BASE points at
++//           it (set by percpu_init_bsp during boot).
++// Input: Read arch::cpu_id(), arch::per_cpu_current(), RDMSR(GS_BASE).
++// Expect: cpu_id == 0, current == &per_cpu[0], GS_BASE == &per_cpu[0].
++// Depends: arch::percpu_init_bsp boot wiring (issue #25)
++JARVIS_TEST(per_cpu_bsp_identity, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_ASSERT(arch::cpu_id() == 0);
++    JARVIS_ASSERT(arch::per_cpu_current() == &arch::per_cpu[0]);
++    uint64_t lo = 0;
++    uint64_t hi = 0;
++    asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xC0000101));
++    uint64_t gs_base = lo | (hi << 32);
++    JARVIS_ASSERT(gs_base ==
++                  reinterpret_cast<uint64_t>(&arch::per_cpu[0]));
++#else
++    JARVIS_TEST_PASS();
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The gs:0x20 slot is live storage for the nesting depth: a value
++//           written through the C++ accessor reads back through a gs:0x20
++//           load, proving GS_BASE routes ISR asm at the migrated field.
++// Input: Save depth, write a sentinel via per_cpu_current(), load gs:0x20.
++// Expect: gs-loaded value equals the sentinel; depth restored afterwards.
++// Depends: arch::per_cpu_current, gs:0x20 slot (issue #25)
++JARVIS_TEST(per_cpu_nesting_depth_live, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    constexpr uint64_t k_sentinel = 0xA5A5A5A5A5A5A5A5ULL;
++    auto *pc = arch::per_cpu_current();
++    uint64_t saved = pc->isr_nesting_depth;
++    uint64_t via_gs = 0;
++    {
++        // Freeze ticks across the sentinel window: a timer ISR would see
++        // the sentinel in its depth guard (harmless skip, but avoid it).
++        arch::IrqGuard irq_guard{};
++        pc->isr_nesting_depth = k_sentinel;
++        asm volatile("mov %%gs:0x20, %0" : "=r"(via_gs));
++        pc->isr_nesting_depth = saved;
++    }
++    JARVIS_ASSERT(via_gs == k_sentinel);
++    JARVIS_ASSERT(pc->isr_nesting_depth == saved);
++#else
++    JARVIS_TEST_PASS();
++#endif
++    JARVIS_TEST_PASS();
++}
++
++void register_per_cpu_tests() {
++    Logger::info("Registering per-CPU foundation tests");
++    JARVIS_REGISTER_TEST(per_cpu_slot_offsets_frozen);
++    JARVIS_REGISTER_TEST(per_cpu_bsp_identity);
++    JARVIS_REGISTER_TEST(per_cpu_nesting_depth_live);
++}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index a88daee5..8cb5e6de 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -117,6 +117,7 @@ void register_shell_interaction_tests();
+ void register_debug_dump_tests();
+ void register_profiler_sampler_tests();
+ void register_kernel_top_tests();
++void register_per_cpu_tests();
+ void register_sync_err_api_tests();
+ void register_checked_ptr_api_tests();
+ void register_memory_integrity_tests();
+@@ -460,6 +461,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+      }},
+     {"memory_checked_ptr", []() { register_checked_ptr_tests(); }},
+     {"kernel_top", []() { register_kernel_top_tests(); }},
++    {"per_cpu", []() { register_per_cpu_tests(); }},
+     {"synchronization_err_api", []() { register_sync_err_api_tests(); }},
+     {"memory_checked_ptr_api", []() { register_checked_ptr_api_tests(); }},
+     {"memory_integrity", []() { register_memory_integrity_tests(); }},
+@@ -709,6 +711,7 @@ static void register_all_tests() {
+     register_profiler_sampler_tests();
+     register_checked_ptr_api_tests();
+     register_kernel_top_tests();
++    register_per_cpu_tests();
+     register_sync_err_api_tests();
+     register_memory_integrity_tests();
+     register_irq_guard_tests();
+diff --git a/tools/validate_style.py b/tools/validate_style.py
+index 2013ed01..a2183e15 100644
+--- a/tools/validate_style.py
++++ b/tools/validate_style.py
+@@ -410,6 +410,36 @@ class ForbiddenChecker(Checker):
+                 self.add(rel_path, get_line(text, m.start()), msg)
+ 
+ 
++# ---------------------------------------------------------------------------
++# 6b. Per-CPU asm (INV-PC2, issue #25) — isr_nesting_depth / irq_entry_tsc
++#     must be accessed gs-relative in x86_64 ISR asm, never [rel].  The
++#     deferred-switch atoms (scheduler_save_rsp_to, ...) stay [rel] by
++#     design and are intentionally NOT matched here.
++# ---------------------------------------------------------------------------
++
++class PerCpuAsmChecker(Checker):
++    name = "percpu_asm"
++    severity = "error"
++
++    _patterns: list[tuple[re.Pattern, str]] = [
++        (re.compile(r"\[\s*rel\s+isr_nesting_depth\s*\]"),
++         "isr_nesting_depth must be gs-relative ([gs:0x20]) in ISR asm (INV-PC2)"),
++        (re.compile(r"\[\s*rel\s+irq_entry_tsc\s*\]"),
++         "irq_entry_tsc must be gs-relative ([gs:0x28]) in ISR asm (INV-PC2)"),
++    ]
++
++    def check_file(self, rel_path: str, text: str) -> None:
++        if not rel_path.endswith((".asm", ".S", ".s")):
++            return
++        for line_no, line in enumerate(text.splitlines(), start=1):
++            stripped = line.strip()
++            if stripped.startswith(";") or stripped.startswith("#"):
++                continue
++            for pat, msg in self._patterns:
++                if pat.search(line):
++                    self.add(rel_path, line_no, msg)
++
++
+ # ---------------------------------------------------------------------------
+ # 7. Test structure
+ # ---------------------------------------------------------------------------
+@@ -1098,6 +1128,7 @@ def main() -> int:
+         MemoryChecker(cfg),
+         LoopBoundsChecker(cfg),
+         ForbiddenChecker(cfg),
++        PerCpuAsmChecker(cfg),
+         TestStructureChecker(cfg),
+         FormattingChecker(cfg),
+         ConstCorrectnessChecker(cfg),

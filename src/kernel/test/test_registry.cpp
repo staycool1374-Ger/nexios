@@ -117,6 +117,7 @@ void register_shell_interaction_tests();
 void register_debug_dump_tests();
 void register_profiler_sampler_tests();
 void register_kernel_top_tests();
+void register_per_cpu_tests();
 void register_sync_err_api_tests();
 void register_checked_ptr_api_tests();
 void register_memory_integrity_tests();
@@ -460,6 +461,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      }},
     {"memory_checked_ptr", []() { register_checked_ptr_tests(); }},
     {"kernel_top", []() { register_kernel_top_tests(); }},
+    {"per_cpu", []() { register_per_cpu_tests(); }},
     {"synchronization_err_api", []() { register_sync_err_api_tests(); }},
     {"memory_checked_ptr_api", []() { register_checked_ptr_api_tests(); }},
     {"memory_integrity", []() { register_memory_integrity_tests(); }},
@@ -709,6 +711,7 @@ static void register_all_tests() {
     register_profiler_sampler_tests();
     register_checked_ptr_api_tests();
     register_kernel_top_tests();
+    register_per_cpu_tests();
     register_sync_err_api_tests();
     register_memory_integrity_tests();
     register_irq_guard_tests();
