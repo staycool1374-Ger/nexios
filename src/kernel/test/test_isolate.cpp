@@ -783,7 +783,10 @@ void snapshot_restore(const char *test_name) {
     // ---- HHDM PD restore (before PMM restore) ----
     // Only runs when a test actually modified HHDM page tables.
     // PD[1..511] are restored (PD[0] maps the PD page itself).
-    if (VMM::hhdm_was_modified()) {
+    // Issue #60: atomic take (not check-then-clear) — a set landing
+    // after the exchange stays set, so the next restore over-restores
+    // (safe) instead of skipping (stale mappings leak).
+    if (VMM::take_hhdm_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
             auto *nu_p = reinterpret_cast<uint64_t *>(
@@ -829,17 +832,17 @@ void snapshot_restore(const char *test_name) {
                 }
             }
         }
-        VMM::clear_hhdm_modified();
     }
 
     // ---- Identity PD restore (before PMM restore) ----
     // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
-    // PD_IDENTITY phys 0x3000).  Gated on identity_was_modified(): low-VA
+    // PD_IDENTITY phys 0x3000).  Gated on the atomic take: low-VA
     // map_page/unmap_page (pml4_idx < PML4_USER_COUNT) never sets
     // hhdm_modified_, so the HHDM-PD gate above cannot cover these splits.
     // Split PT pages are reclaimed by the page-table pool restore that runs
     // later (off_pt_pool), so this block only restores the PD entries.
-    if (VMM::identity_was_modified()) {
+    // (Issue #60: same take-instead-of-check-then-clear as above.)
+    if (VMM::take_identity_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
             uint64_t nu_ident = *reinterpret_cast<uint64_t *>(
@@ -867,7 +870,6 @@ void snapshot_restore(const char *test_name) {
                 }
             }
         }
-        VMM::clear_identity_modified();
     }
 
     // ---- PMM ----

@@ -314,6 +314,9 @@ class VMM {
   public:
     /// @brief Set to true when a test modifies kernel-space page tables
     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
+    ///        Plain bool with __atomic_* access: set-true is idempotent
+    ///        (no lost update), and restore takes it with an exchange
+    ///        (issue #60 VAR-17 SMP re-audit).
     static bool hhdm_modified_;
 
     /// @brief Set to true when a test modifies the LOW identity map
@@ -322,23 +325,38 @@ class VMM {
     static bool identity_modified_;
 
     /// @brief Returns true if any test has modified the HHDM page tables
-    ///        since the last clear_hhdm_modified() call.
+    ///        since the last clear/take call (acquire: pairs with the
+    ///        release store in map_page).
     static bool hhdm_was_modified() {
-        return hhdm_modified_;
+        return __atomic_load_n(&hhdm_modified_, __ATOMIC_ACQUIRE);
     }
     /// @brief Reset the HHDM modification flag (called after PD restore).
     static void clear_hhdm_modified() {
-        hhdm_modified_ = false;
+        __atomic_store_n(&hhdm_modified_, false, __ATOMIC_RELEASE);
+    }
+    /// @brief Atomically take the HHDM flag: returns the previous value
+    ///        and clears it in one step, so a set landing after the take
+    ///        is preserved for the next restore (fail-safe over-restore
+    ///        instead of fail-dangerous skip).  Used by snapshot_restore.
+    static bool take_hhdm_modified() {
+        return __atomic_exchange_n(&hhdm_modified_, false,
+                                   __ATOMIC_ACQ_REL);
     }
 
     /// @brief Returns true if any test has modified the low identity page
-    ///        tables since the last clear_identity_modified() call.
+    ///        tables since the last clear/take call.
     static bool identity_was_modified() {
-        return identity_modified_;
+        return __atomic_load_n(&identity_modified_, __ATOMIC_ACQUIRE);
     }
     /// @brief Reset the identity modification flag (called after PD restore).
     static void clear_identity_modified() {
-        identity_modified_ = false;
+        __atomic_store_n(&identity_modified_, false, __ATOMIC_RELEASE);
+    }
+    /// @brief Atomically take the identity flag (same contract as the
+    ///        HHDM take above).  Used by snapshot_restore.
+    static bool take_identity_modified() {
+        return __atomic_exchange_n(&identity_modified_, false,
+                                   __ATOMIC_ACQ_REL);
     }
 
   private:

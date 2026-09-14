@@ -1,1329 +1,252 @@
-diff --git a/audits/report-2026-09-14T15-30-35Z.md b/audits/report-2026-09-14T15-30-35Z.md
-new file mode 100644
-index 00000000..8464de76
---- /dev/null
-+++ b/audits/report-2026-09-14T15-30-35Z.md
-@@ -0,0 +1,27 @@
-+# AUDIT REPORT 2026-09-14T15-30-35Z
-+PATCH: audits/pending_patch.diff
-+FILES: docs/specs/apic-tpr.md
-+
-+## FINDINGS
-+- [S2] docs/specs/apic-tpr.md:§3.1 — timer-vector move edit list incomplete: pci.cpp:537 bitmap entry and test_cap_msix.cpp:212-220 expectations hardcoded 64 (allocator would hand the tick vector to a device; test would fail post-move)
-+  WHY: Verified by grep — claim_slot uses the symbol (auto-moves) but the pci bitmap and the msix test do not.
-+  STATUS: fixed in-spec before this report (edit list now enumerates all three sites + auto-move notes).
-+- [S2] docs/specs/apic-tpr.md:§3.6 — ISR prologue re-assert ungated: writing LAPIC MMIO/MSR with the APIC disabled (PIT fallback path) faults inside the ISR
-+  WHY: enable_local is APIC-only; the PIT path never maps LAPIC MMIO, so an unconditional re-assert is a guaranteed #PF-in-ISR on APIC-less boots.
-+  STATUS: fixed in-spec (gate on APIC::is_enabled(), x86_64 only).
-+- [S3] docs/specs/apic-tpr.md:§3.5 — TprGuard placed in irq_guard.hpp risks an include cycle (needs APIC + PerCpu decls; irq_guard.hpp is pervasively included)
-+  WHY: percpu.hpp pulls task.hpp; widening irq_guard.hpp's dependencies invites a cycle.
-+  STATUS: fixed in-spec (own header src/kernel/arch/hal/tpr_guard.hpp).
-+- [S3] docs/specs/apic-tpr.md:§3.4 — setter rejection mode unspecified; tree convention (send_ipi) is bool
-+  WHY: Unspecified error signalling drifts toward ENSURE-on-reachable-input (CODING_STYLE §5 violation risk).
-+  STATUS: fixed in-spec (returns bool, false = rejected).
-+- [S3] docs/specs/apic-tpr.md:§3.7 — snapshot wording asserted unverified PerCpu POD coverage
-+  WHY: C1 added SchedPerCpuPod; PerCpu-array snapshot coverage was not verified.
-+  STATUS: fixed in-spec (extend test_isolate POD with the 8 shadows).
-+- [S3] docs/specs/apic-tpr.md:§3.1 — planner's x2APIC TPR address 0x880 repeated nowhere in spec; verified correct 0x808 via x2apic_msr(off) = 0x800 + (off >> 4)
-+  WHY: A raw-0x880 implementation would program a reserved MSR (#GP in ISR context).
-+  STATUS: spec mandates the shared mode-gated wr()/rd() path, never raw MSRs.
-+
-+Positive checks: check-7 retrieval artifacts present on #26 (graphify 117-node query + vault 0-match dispositions posted); class table honors INV-TPR5 (timer 0xE0 + IPI 0xEC above all raised classes ≤ 0xD0); EOI-before-restore ordered on all consuming paths; TPR-never-replaces-IF stated normatively; riscv64/aarch64 explicitly out of scope.
-+
-+DECISION: APPROVED
-diff --git a/audits/report-2026-09-14T16-12-10Z.md b/audits/report-2026-09-14T16-12-10Z.md
-new file mode 100644
-index 00000000..8f14f464
---- /dev/null
-+++ b/audits/report-2026-09-14T16-12-10Z.md
-@@ -0,0 +1,30 @@
-+# AUDIT REPORT 2026-09-14T16-12-10Z
-+PATCH: audits/pending_patch.diff
-+FILES: src/kernel/arch/x86_64/hal/apic.hpp, src/kernel/arch/x86_64/hal/apic.cpp, src/kernel/arch/x86_64/hal/percpu.hpp, src/kernel/arch/x86_64/hal/percpu.cpp, src/kernel/arch/hal/tpr_guard.hpp, src/kernel/arch/x86_64/hal/timer.cpp, src/kernel/arch/x86_64/hal/smp.cpp, src/kernel/arch/x86_64/isr_stubs.asm, src/kernel/kernel.cpp, src/kernel/task/scheduler.cpp, src/kernel/arch/pci.cpp, src/kernel/test/test_apic_tpr.cpp, src/kernel/test/test_cap_msix.cpp, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_isolate.cpp, src/kernel/test/test_registry.cpp, src/kernel/arch/riscv64/timer.cpp, docs/specs/apic-tpr.md
-+
-+## FINDINGS
-+- [S2] src/kernel/arch/hal/tpr_guard.hpp:ctor — raise/shadow pair not atomic vs interrupts unless the caller holds IF=0; a nested ISR prologue could re-assert HW from the stale shadow mid-raise (HW/shadow diverge until the next ISR)
-+  WHY: TPR narrowing without IF=0 admits a preempting vector between the HW write and the shadow write, defeating the guard's own bookkeeping.
-+  STATUS: fixed pre-report — ctor now ENSUREs !interrupts_enabled() on x86_64 (INV-TPR2 enforced in code, fail-stop on misuse).
-+- [S3] src/kernel/arch/x86_64/hal/apic.cpp:enable_local — set_tpr_class() is fail-closed while !enabled_ but init() sets enabled_=true only after enable_local(), silently skipping the ACCEPT_ALL write (deviation from the unconditional raw write it replaced)
-+  WHY: Verified by reading init() order; QEMU reset TPR happens to be 0 so this was latently harmless, but the commit-point semantics must not depend on reset values.
-+  STATUS: fixed pre-report — enable_local uses reg_wr directly; spec §3.4 amended.
-+- [S3] src/kernel/arch/x86_64/isr_stubs.asm:nested-apply guard — cmp rax, 64 hardcoded the old timer vector; with the tick at 0xE0 a task blocked in a syscall hlt-loop strands its voluntary arm (RMS early-returns on the pending arm every tick: total boot stall, reproduced as safe-class TIMEOUT, bisected to the constant)
-+  WHY: The deferred-switch design relies on nested-tick apply for hlt-blocked tasks; the move silently removed it.
-+  STATUS: fixed pre-report — cmp rax, 0xE0 with a comment documenting the hlt-loop dependency; safe 133/133 re-verified with 0xE0 live.
-+- [S3] src/kernel/kernel.cpp:handle_interrupt_c tail — IrqDelivery/IrqThread/0x80 early returns bypass the tail TPR restore
-+  WHY: Audited safe — none of those paths raise TPR (guards self-restore; isr_entry/ack never raise), and the next ISR prologue heals any future violation.
-+  STATUS: accepted, no change.
-+- [S3] test/cap_msix + pci bitmap + claim_slot timer-64 references — updated to the 0xE0 symbol/literal; vector 64 becomes an ordinary claimable MSI-X vector (in-window, unreserved)
-+  WHY: Verified claim_slot/irq_delivery use the symbol (auto-move); only pci.cpp:537 and the msix test hardcoded 64.
-+  STATUS: fixed pre-report; cap_msix 13/13 green.
-+- [S3] planner STEP-15 (idt.cpp vector reservations) superseded — IDT installs all-256 gates from __isr_vector; reservations live in the pci bitmap + claim_slot, both updated
-+  WHY: No idt.cpp change exists or is needed; stub table covers 32-255 via %rep.
-+  STATUS: accepted, noted for the issue thread.
-+- [S3] drive-by (rule-mandated, pre-existing): scheduler.cpp validate_iret_frame f unused on riscv64 (2 sites → [[maybe_unused]]); riscv64/timer.cpp handle_irq() arity + unused ip
-+  WHY: riscv64 -Werror build failed at HEAD-independent code; AGENTS.md forbids dismissing failures as pre-existing.
-+  STATUS: fixed pre-report; riscv64 + aarch64 + x86_64 builds green.
-+
-+Positive checks: zero dynamic allocation on touched paths; no lock-order change (no new locks; TPR accessors lock-free HW); no test-assertion weakening (msix assert strengthened to the symbol); preprocessor symmetry verified per file (non-x86 snapshot layout only grows 64 B, save/restore loops x86-guarded); check-7 retrieval artifacts on #26; EOI-before-restore ordered after PIC EOI; MODE_NONE paths no-op without touching unmapped MMIO (tpr_raise/restore early-return on !enabled_).
-+
-+DECISION: APPROVED
-diff --git a/audits/report-2026-09-14T16-40-00Z.md b/audits/report-2026-09-14T16-40-00Z.md
-new file mode 100644
-index 00000000..09d048b8
---- /dev/null
-+++ b/audits/report-2026-09-14T16-40-00Z.md
-@@ -0,0 +1,13 @@
-+# AUDIT REPORT 2026-09-14T16-40-00Z (addendum to 16-12-10Z)
-+PATCH: audits/pending_patch.diff
-+FILES: src/kernel/test/test_sched_affinity.cpp (only delta since 16-12-10Z)
-+
-+## FINDINGS
-+- [S3] src/kernel/test/test_sched_affinity.cpp:56-156 — three placement tests (default_mask, lowest_bit_targets, requeue_moves) asserted ready-queue placement without IRQ exclusion; a timer tick between enqueue and is_queued_on dispatches the fresh task (RUNNING, not queued) and fails the assert
-+  WHY: Same race the tree's own cookbook Rule 2 documents for o1_scheduler (guard register+select); exposed under `all` by the timing-phase shift from the new apic_tpr class (standalone 6/6 green, suite red 1-2/1274).
-+  STATUS: fixed pre-report — whole enqueue/affinity/assert sequences under one IrqGuard in all three tests + doc-block notes (test-sanctity: doc-block and impl changed together); debug all 1274/1274 re-verified on the final tree, release all 85/85 re-verified.
-+- [S3] Change discipline verified for the addendum delta: no kernel behavior change (test file only; IrqGuard cli/sti nesting is safe; destroy_test_task under guard matches the o1 SimpleTaskPtr pattern).
-+
-+Positive checks: final-tree gates — make build green, check-style Errors 0, debug all 1274/1274, release all 85/85, x86_64/aarch64/riscv64 builds green; test-history.txt rows appended per class run; no TEMP/DIAG/BISECT leftovers (grep-verified); retrieval artifacts on #26 (graphify + vault + dispositions).
-+
-+DECISION: APPROVED
-diff --git a/docs/specs/apic-tpr.md b/docs/specs/apic-tpr.md
-new file mode 100644
-index 00000000..6b7003e7
---- /dev/null
-+++ b/docs/specs/apic-tpr.md
-@@ -0,0 +1,200 @@
-+# APIC TPR-Based Interrupt Prioritization & Core-State Isolation
-+
-+**Doc ID:** NEX-SPEC-2026-09-14-001
-+**Status:** APPROVED (SIL 3 spec audit `audits/report-2026-09-14T15-30-35Z.md`,
-+2×S2 + 4×S3 found and fixed in-spec)
-+**Milestone target:** v0.4.4 — issue #26
-+**Related:** `docs/specs/per-cpu-smp.md` §3.4 (C1 scope — untouched except
-+a pointer), issue #25 (per-CPU/SMP), issue #27 (per-CPU asm checker INV-PC2).
-+
-+## 1. Current State (verified 2026-09-14)
-+
-+- `REG_TPR = 0x080`, `REG_PPR = 0x0A0` exist
-+  (`src/kernel/arch/x86_64/hal/apic.hpp:103-105`) but no code reads them.
-+- `APIC::enable_local()` (`apic.cpp:74`) programs TPR = 0 (accept-all) via
-+  function-local `wr`/`rd` lambdas (mode-gated x2APIC-MS R/`x2apic_msr(off)`
-+  = `0x800 + (off >> 4)` — hence TPR = MSR **0x808**, not 0x880 — else xAPIC
-+  MMIO). No other TPR touch exists in the tree.
-+- Tick source: `CONFIG_USE_APIC_TIMER = 1` + APIC enabled ⇒ the **APIC timer
-+  drives the system tick** (`timer.cpp:51`); the PIT is not programmed.
-+  `APIC_TIMER_VECTOR = 64` (priority class 0x4), `SCHED_VECTOR = 0xEC`
-+  (class 0xE), syscall `0x80` (trap), spurious `0xFF`.
-+- All non-timer LVTs are masked at init (`apic.cpp:88-92`); only the timer
-+  LVT is live. `isr_nesting_depth` is per-CPU at `gs:0x20` (#27).
-+- `PerCpu` has `reserved[475]` free (`percpu.hpp:74`); next slot is `gs:0x40`.
-+
-+## 2. Problem
-+
-+Raising TPR is the only way to mask a *priority band* of external
-+interrupts without `cli` (which masks everything, including the tick).
-+Today every critical section uses `cli`/`IrqGuard`, so a long IPC or
-+scheduler section delays even the highest-priority device IRQs, and there
-+is no way to say "mask PIC + background MSI-X, keep timer + SCHED IPI".
-+
-+Constraint (verified, blocking): the live tick is the APIC timer at
-+**vector 64 / class 0x4**. Any raised class ≥ 0x40 would mask the tick ⇒
-+tick loss ⇒ RMS starvation. So either raised classes stay below 0x40
-+(guts the feature: only the PIC band becomes maskable) or the timer
-+moves above all raised classes. This spec chooses the move.
-+
-+## 3. Design
-+
-+### 3.1 Vector map change
-+
-+`APIC_TIMER_VECTOR`: **64 → 0xE0** (class 0xE). One-constant change; all
-+kernel users are symbolic (`APIC::APIC_TIMER_VECTOR`) except three
-+hardcoded-64 sites that move with it (audited 2026-09-14):
-+`src/kernel/arch/x86_64/hal/apic.hpp:88` (the constant + its comment),
-+`src/kernel/arch/pci.cpp:537` (`g_vector_used[64]` bitmap entry — without
-+this the allocator could hand the tick vector to a device),
-+`src/kernel/test/test_cap_msix.cpp:212-220` (comment + `claim_slot(64)<0`
-+assertion → `0xE0`; vector 64 itself becomes an ordinary claimable MSI-X
-+vector). `IrqDelivery::claim_slot` (`irq_delivery.cpp:123`) and
-+`IrqDelivery::isr_entry` (`irq_delivery.cpp:123`-adjacent) use the symbol
-+and move automatically — no edit. Generated `docs/doxygen/html/*` is
-+rebuilt by the release flow, never edited.
-+
-+Resulting fixed map (classes = vector bits 7:4; delivery iff
-+vector-class > TPR-class):
-+
-+| Vector | Class | Role | Maskable? |
-+|---|---|---|---|
-+| 0–31 | — | CPU exceptions (TPR never gates faults/NMI) | never |
-+| 32 | 0x3 | PIT (legacy fallback path only) | only when LAPIC on |
-+| 33–47 | 0x3–0x4 | PIC via I/O APIC | yes (≥ PIC class) |
-+| 48–0xDF | 0x3–0xD | PCI/MSI-X allocations (`g_vector_used`) | yes (band-dependent) |
-+| 0x80 | 0x8 | Syscall trap (`INT n` — TPR never gates software interrupts) | never |
-+| 0xE0 | 0xE | APIC timer = system tick | **never** (above all raised classes) |
-+| 0xEC | 0xE | SCHED IPI (mailbox drain + reschedule arm) | never below SCHED class |
-+| 0xEF | 0xE | self-test vector | n/a |
-+| 0xFF | 0xF | Spurious | never |
-+
-+`SCHED_VECTOR = 0xEC` is unchanged (class 0xE > SCHED class 0xD0 ⇒ an IPI
-+is always deliverable while a CPU sits at or below the SCHED class).
-+
-+### 3.2 TPR classes
-+
-+```cpp
-+TPR_CLASS_ACCEPT_ALL = 0x00,  // reset/idle state — everything deliverable
-+TPR_CLASS_PIC        = 0x30,  // mask legacy PIC band (≤ class 3)
-+TPR_CLASS_IPC        = 0x70,  // + mask background MSI-X below 0x80
-+TPR_CLASS_SCHED      = 0xD0,  // + mask all below 0xE0 (timer + IPI survive)
-+```
-+
-+Sub-class bits (3:0) are forced to 0 on every write. No class ≥ 0xE0 may
-+ever be programmed (static rule; a `TPR_CLASS_MAX = 0xD0` bound + ENSURE
-+on the setter input range — reachable bad input returns an error code,
-+per CODING_STYLE §5; only the *impossible* (post-mask violation) ENSUREs).
-+
-+### 3.3 Per-CPU shadow (`tpr_shadow`, `gs:0x40`)
-+
-+- New `PerCpu` field `uint64_t tpr_shadow` at `gs:0x40` (`reserved` 475 →
-+  474; 483-u64 total + `static_assert` unchanged). **C++-only** (via
-+  `per_cpu_current()` / `cpu_index()`); no asm access, no linker alias.
-+- The shadow is the single source of truth for the intended class.
-+  Hardware TPR is re-asserted from the shadow at: `enable_local`,
-+  `init_ap`, ISR prologue (on mismatch), ISR tail, quiesce transitions.
-+- Own-CPU writes only, under IF=0. No cross-CPU TPR/shadow write exists
-+  (INV-TPR1/4). `MODE_NONE` (LAPIC off) ⇒ accessors are no-ops returning
-+  ACCEPT_ALL (PIT fallback path has no TPR hardware).
-+
-+### 3.4 Accessor API (`APIC::`, `apic.hpp`/`apic.cpp`, x86_64-only)
-+
-+- Hoist the `enable_local` `wr`/`rd` lambdas to file-static mode-gated
-+  helpers (identical mapping) so all paths share one tested route.
-+- `set_tpr_class(uint8_t cls)` — mask to 0xF0, return false (reject) for
-+  `> TPR_CLASS_MAX` (bool convention follows `send_ipi`).
-+- `get_tpr_class()` / `get_ppr()` — mode-gated read of `REG_TPR`/`REG_PPR`.
-+  PPR is diagnostic-only (read-only hardware: max(TPR, highest ISR)).
-+- `tpr_raise(cls)` — write only when `cls` exceeds current (monotonic up).
-+- `tpr_restore(cls)` — write only when lowering (monotonic down).
-+- All `noexcept`, no allocation, no loops (bounded single MMIO/MSR).
-+- `enable_local` / `init_ap` keep ACCEPT_ALL via direct `reg_wr` (not the
-+  setter: `enabled_` is committed by `init()` only after `enable_local`
-+  runs, and the setter is fail-closed while off — the original code wrote
-+  TPR=0 unconditionally here); SVR/LVT/ESR order unchanged.
-+
-+### 3.5 `TprGuard` (new `src/kernel/arch/hal/tpr_guard.hpp`)
-+
-+RAII: ctor saves own-CPU shadow, `tpr_raise(cls)`, updates shadow;
-+dtor `tpr_restore(saved)` + shadow write-back. Non-copyable,
-+non-movable, `[[nodiscard]]`. Lives in its OWN header (not inside
-+`irq_guard.hpp`): it needs the `APIC` + `PerCpu` declarations and
-+`irq_guard.hpp` is too widely included to take those dependencies
-+(include-cycle risk). **Does NOT replace `IrqGuard`**: every
-+`TprGuard` use site keeps its existing `scheduler_lock_` + IF=0
-+discipline (INV-TPR2); TPR only narrows *which* vectors may preempt.
-+Documented `cli`-vs-TPR rule: `cli` = mask everything (keep for
-+lock-holding sections); TPR = mask a band (for long IRQ-tolerant
-+sections that must still tick).
-+
-+### 3.6 ISR prologue / tail (`handle_interrupt_c`, `kernel.cpp:1462`)
-+
-+- Prologue (after vector decode, before `IrqDelivery` dispatch): when the
-+  local APIC is enabled (`APIC::is_enabled()`, x86_64 only — never touch
-+  LAPIC MMIO/MSRs when disabled), assert hardware TPR == calling-CPU
-+  shadow; re-assert from shadow on mismatch (stale-TPR self-heal).
-+  PPR sampled to entry diagnostics only.
-+- Tail: existing dispatch + **EOI first, TPR-restore second** on every
-+  consuming path (generic tail incl. PIC EOI for 32–47, SCHED IPI
-+  handler, `IrqThread` custom-ack path). Restore-before-EOI would
-+  re-deliver the same vector ⇒ double EOI (INV-TPR7).
-+- `IrqDelivery::isr_entry` keeps slot-lock serialize + single EOI; adds
-+  the class rule: PIC-kind 33–47 run at/below `TPR_CLASS_PIC`, MSI-X
-+  48+ at/below caller shadow; no vector remapping. Threaded handlers
-+  inherit the ISR shadow and must not raise except via `TprGuard`.
-+- Timer paths (`timer.cpp` BSP/AP branches) assert shadow ACCEPT_ALL on
-+  entry and restore before return; TSC-deadline/periodic re-arm stays
-+  outside any raised region.
-+
-+### 3.7 SMP / quiesce / snapshot interaction (#25 C1 constraints hold)
-+
-+- `ap_main`: after GS_BASE + IDT + `enable_local`, assert shadow and
-+  hardware TPR are ACCEPT_ALL before `sti` (AP FPU tripwire unchanged).
-+- `quiesce_enter`/`quiesce_exit`: re-assert ACCEPT_ALL on the calling
-+  CPU's shadow + hardware (own-CPU only); arm-cancel order unchanged.
-+- `send_ipi` ICR poll: no TPR change across the bounded poll; mailbox
-+  publish/drain/generation protocol unchanged.
-+- Test snapshot/restore extends the `test_isolate` POD with the 8 per-CPU
-+  shadows (bounded, `CONFIG_MAX_CPUS` u64s).
-+
-+## 4. What TPR does NOT do (non-goals)
-+
-+- Never replaces IF=0 + `scheduler_lock_` at task-context lock sites, nor
-+  `try_lock` + skip-and-retry at ISR sites.
-+- Exceptions, NMI, SMI, `INT n` (syscall 0x80) are not gateable by TPR
-+  (hardware rule) — the design does not rely on masking them.
-+- No remote-CPU TPR programming (would break core isolation).
-+- riscv64/aarch64: untouched (no LAPIC; deferred with their SMP, as #27).
-+
-+## 5. Test strategy (stub-first, new class `apic_tpr`)
-+
-+1. Shadow defaults ACCEPT_ALL on BSP and AP (`percpu_init_*`).
-+2. `set`/`raise`/`restore` round-trip via **both** x2APIC and xAPIC paths
-+   (mode injected as existing tests do); sub-class bits forced zero;
-+   `> MAX` rejected.
-+3. PPR read does not mutate TPR.
-+4. Prologue mismatch re-asserts from shadow (unit-level via accessor
-+   sequence; live ISR coverage via existing timer/IRQ classes).
-+5. `PerCpu` still exactly one page; `gs:0x40` offset frozen like 0x20.
-+6. Regressions: `per_cpu`, `sched_affinity`, `smp_sched` (smp2),
-+   `smp_bringup`, `irq_delivery`, `irq_threaded`, `hal_apic`,
-+   `hal_timer`, `timing_core`, `safe`/`selftest`, then debug `all` +
-+   release `all`.
-+
-+## 6. Invariants (normative)
-+
-+- **INV-TPR1:** per-LAPIC state; own-CPU writes only; `mode_` stays
-+  BSP-authoritative, mirrored by `init_ap` before any x2 touch.
-+- **INV-TPR2:** TPR never replaces IF; lock discipline unchanged.
-+- **INV-TPR3:** class semantics = vector bits 7:4; delivery iff vector
-+  class > TPR class; PPR = max(TPR, top ISR), diagnostic only.
-+- **INV-TPR4:** shadow is source of truth; HW re-asserted from it at
-+  enable/init/prologue/tail/quiesce; own-CPU + IF=0 only.
-+- **INV-TPR5:** timer 0xE0 and IPI 0xEC are class 0xE, above every
-+  raised class (≤ 0xD0) — the tick and cross-CPU wake are unmaskable.
-+- **INV-TPR6:** vectors 0–31, 0x80, 0xEC, 0xFF keep existing behavior;
-+  `IrqDelivery` claim window unchanged.
-+- **INV-TPR7:** EOI-before-restore on every consuming path.
-+- **INV-TPR8:** #25 C1 AP constraints (CPU0 user clamp, FPU tripwire,
-+  shared IDT before `sti`, start-gate/quiesce order) unchanged.
-diff --git a/src/kernel/arch/hal/tpr_guard.hpp b/src/kernel/arch/hal/tpr_guard.hpp
-new file mode 100644
-index 00000000..3943febb
---- /dev/null
-+++ b/src/kernel/arch/hal/tpr_guard.hpp
-@@ -0,0 +1,106 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file tpr_guard.hpp
-+/// @brief RAII TPR-class raise — mask an interrupt priority band on
-+/// construction, restore the saved class on destruction (issue #26).
-+/// Own header (NOT inside irq_guard.hpp): needs the APIC + PerCpu
-+/// declarations, which irq_guard.hpp must not depend on.
-+/// See docs/specs/apic-tpr.md §3.5.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+#include <assert.hpp>
-+#include <kernel/arch/hal/io.hpp>
-+#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/apic.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#endif
-+
-+namespace arch {
-+
-+/// @brief RAII guard that raises the calling CPU's TPR to a priority
-+///        class on construction and restores the saved class on
-+///        destruction.  Never replaces IrqGuard: callers keep their
-+///        existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR
-+///        only narrows which vectors may preempt.  No-op when the
-+///        LAPIC is off (accessors are fail-closed).
-+class [[nodiscard]] TprGuard {
-+  public:
-+    /// @brief Raise the own-CPU TPR class, saving the previous class.
-+    /// @param cls Target class (only bits 7:4 used; > MAX is rejected
-+    ///        and leaves the class unchanged).
-+    explicit TprGuard(uint8_t cls) noexcept : saved_(current_class()) {
-+#if defined(CONFIG_ARCH_X86_64)
-+        // INV-TPR2 enforced: the raise/shadow pair is only atomic vs
-+        // interrupts under IF=0.  TPR narrows which vectors may preempt;
-+        // it never replaces the caller's lock + cli discipline.
-+        ENSURE(!interrupts_enabled());
-+#endif
-+        raise(cls);
-+    }
-+
-+    /// @brief Restore the class saved at construction.
-+    ~TprGuard() noexcept {
-+        restore(saved_);
-+    }
-+
-+    TprGuard(const TprGuard &) = delete;
-+    TprGuard &operator=(const TprGuard &) = delete;
-+    TprGuard(TprGuard &&) = delete;
-+    TprGuard &operator=(TprGuard &&) = delete;
-+
-+  private:
-+    /// @brief Saved own-CPU class from before the guard.
-+    uint8_t saved_;
-+
-+    /// @brief Read the own-CPU intended class (shadow on x86_64).
-+    static uint8_t current_class() noexcept {
-+#if defined(CONFIG_ARCH_X86_64)
-+        return static_cast<uint8_t>(
-+            per_cpu_current()->tpr_shadow & 0xF0U);
-+#else
-+        return 0;
-+#endif
-+    }
-+
-+    /// @brief Raise HW + shadow; records the new class in the shadow.
-+    static void raise(uint8_t cls) noexcept {
-+#if defined(CONFIG_ARCH_X86_64)
-+        APIC::tpr_raise(cls);
-+        per_cpu_current()->tpr_shadow =
-+            static_cast<uint64_t>(APIC::get_tpr_class());
-+#else
-+        (void)cls;
-+#endif
-+    }
-+
-+    /// @brief Restore HW + shadow to a previously saved class.
-+    static void restore(uint8_t cls) noexcept {
-+#if defined(CONFIG_ARCH_X86_64)
-+        APIC::tpr_restore(cls);
-+        per_cpu_current()->tpr_shadow =
-+            static_cast<uint64_t>(APIC::get_tpr_class());
-+#else
-+        (void)cls;
-+#endif
-+    }
-+};
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/pci.cpp b/src/kernel/arch/pci.cpp
-index 34f04302..3b7af477 100644
---- a/src/kernel/arch/pci.cpp
-+++ b/src/kernel/arch/pci.cpp
-@@ -534,7 +534,9 @@ static void init_vector_alloc() {
-     for (int i = 32; i < 48; ++i)
-         g_vector_used[i] = true; // PIC IRQs
-     g_vector_used[0x80] = true;  // SYSCALL
--    g_vector_used[64] = true;    // xAPIC scheduler timer (APIC_TIMER_VECTOR)
-+    // xAPIC scheduler timer (APIC::APIC_TIMER_VECTOR; 0xE0 since #26 —
-+    // keep in sync, this TU stays arch-neutral so the value is literal).
-+    g_vector_used[0xE0] = true;
-     g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
-     g_vector_init = true;
- }
-diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
-index a2748bf8..d103e265 100644
---- a/src/kernel/arch/riscv64/timer.cpp
-+++ b/src/kernel/arch/riscv64/timer.cpp
-@@ -36,7 +36,7 @@ void Timer::init(uint32_t frequency_hz) {
-     set_frequency(frequency_hz);
-     IDT::register_handler(InterruptVector::TIMER,
-                           [](uint64_t, uint64_t, uint64_t) {
--                              handle_irq();
-+                              handle_irq(0);
-                               kernel::Scheduler::on_tick();
-                           });
- }
-@@ -76,8 +76,9 @@ uint64_t Timer::ns() {
- }
- 
- /// @brief Handle a timer interrupt: increment tick count and re-arm via SBI.
--/// @param ip Instruction pointer from interrupt frame.
--void Timer::handle_irq(uint64_t ip) {
-+/// @param ip Instruction pointer from interrupt frame (unused on riscv64 —
-+///        no sampler hook; kept for the shared Timer interface).
-+void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
-     ticks_ = ticks_ + 1;
-     // Re-arm timer via SBI
-     uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);
-diff --git a/src/kernel/arch/x86_64/hal/apic.cpp b/src/kernel/arch/x86_64/hal/apic.cpp
-index 19be09de..07a47c4b 100644
---- a/src/kernel/arch/x86_64/hal/apic.cpp
-+++ b/src/kernel/arch/x86_64/hal/apic.cpp
-@@ -72,29 +72,22 @@ static void ioapic_redirect(uint8_t irq, uint8_t vector, bool masked) {
- bool APIC::is_apic_supported() { return caps().apic; }
- 
- void APIC::enable_local() {
--    auto wr = [&](uint32_t off, uint32_t v) {
--        if (mode_ == MODE_X2) wrmsr(x2apic_msr(off), v);
--        else lapic_wr(off, v);
--    };
--    auto rd = [&](uint32_t off) -> uint32_t {
--        if (mode_ == MODE_X2)
--            return static_cast<uint32_t>(rdmsr(x2apic_msr(off)));
--        return lapic_rd(off);
--    };
-+    // TPR accept-all.  Direct reg_wr (not set_tpr_class): enabled_ is set
-+    // by init() only AFTER this runs, and the setter is fail-closed while
-+    // !enabled_ — the original code wrote TPR=0 unconditionally here.
-+    reg_wr(REG_TPR, TPR_CLASS_ACCEPT_ALL);
-     // Spurious vector + enable.
--    wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
-+    reg_wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
-     // Mask all LVT entries.
--    wr(REG_LVT_TIMER,   LVT_MASKED);
--    wr(REG_LVT_THERMAL, LVT_MASKED);
--    wr(REG_LVT_PERFMON, LVT_MASKED);
--    wr(REG_LVT_LINT0,   LVT_MASKED);
--    wr(REG_LVT_LINT1,   LVT_MASKED);
--    wr(REG_LVT_ERROR,   LVT_MASKED);
-+    reg_wr(REG_LVT_TIMER,   LVT_MASKED);
-+    reg_wr(REG_LVT_THERMAL, LVT_MASKED);
-+    reg_wr(REG_LVT_PERFMON, LVT_MASKED);
-+    reg_wr(REG_LVT_LINT0,   LVT_MASKED);
-+    reg_wr(REG_LVT_LINT1,   LVT_MASKED);
-+    reg_wr(REG_LVT_ERROR,   LVT_MASKED);
-     // Clear error status.
--    wr(REG_ESR, 0);
--    rd(REG_ESR);
--    // TPR = 0 (accept all interrupt priorities).
--    wr(REG_TPR, 0);
-+    reg_wr(REG_ESR, 0);
-+    reg_rd(REG_ESR);
- }
- 
- bool APIC::map_mmio() {
-@@ -183,6 +176,71 @@ static uint64_t ns_to_tsc_delta(uint64_t ns) {
- void APIC::x2_write(uint32_t off, uint32_t v) { wrmsr(x2apic_msr(off), v); }
- uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic_msr(off))); }
- 
-+// ─── TPR-based interrupt prioritization (issue #26) ─────────────────────────
-+
-+void APIC::reg_wr(uint32_t off, uint32_t v) {
-+    if (mode_ == MODE_X2) {
-+        x2_write(off, v);
-+    } else {
-+        lapic_wr(off, v);
-+    }
-+}
-+
-+uint32_t APIC::reg_rd(uint32_t off) {
-+    if (mode_ == MODE_X2) {
-+        return x2_read(off);
-+    }
-+    return lapic_rd(off);
-+}
-+
-+bool APIC::set_tpr_class(uint8_t cls) {
-+    if (!enabled_ || (cls & 0xF0U) > TPR_CLASS_MAX) {
-+        return false;
-+    }
-+    reg_wr(REG_TPR, cls & 0xF0U);
-+    return true;
-+}
-+
-+uint8_t APIC::get_tpr_class() {
-+    if (!enabled_) {
-+        return TPR_CLASS_ACCEPT_ALL;
-+    }
-+    return static_cast<uint8_t>(reg_rd(REG_TPR) & 0xF0U);
-+}
-+
-+uint8_t APIC::get_ppr() {
-+    if (!enabled_) {
-+        return TPR_CLASS_ACCEPT_ALL;
-+    }
-+    return static_cast<uint8_t>(reg_rd(REG_PPR) & 0xF0U);
-+}
-+
-+void APIC::tpr_raise(uint8_t cls) {
-+    if (!enabled_) {
-+        return;
-+    }
-+    uint8_t target = cls & 0xF0U;
-+    if (target > TPR_CLASS_MAX) {
-+        return;
-+    }
-+    if (target > get_tpr_class()) {
-+        reg_wr(REG_TPR, target);
-+    }
-+}
-+
-+void APIC::tpr_restore(uint8_t cls) {
-+    if (!enabled_) {
-+        return;
-+    }
-+    uint8_t target = cls & 0xF0U;
-+    if (target > TPR_CLASS_MAX) {
-+        return;
-+    }
-+    if (target < get_tpr_class()) {
-+        reg_wr(REG_TPR, target);
-+    }
-+}
-+
- uint32_t APIC::lapic_id() {
-     if (!enabled_) return 0;
-     uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
-@@ -213,6 +271,9 @@ bool APIC::send_ipi(uint32_t lapic_id, uint8_t vector, IpiMode mode) {
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 7fb96e6e..7b0af1d7 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -281,14 +281,17 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+         Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+                      "(pml4_idx=%zu) — PD restore will clean up",
+                      virt_addr, pml4_idx);
+-        hhdm_modified_ = true;
++        // Issue #60: release store — pairs with the acquire take in
++        // snapshot_restore (a concurrent set can never be lost).
++        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
      }
-     // Bounded delivery-status poll (bit 12 clears once the local APIC
-     // accepted the command — no recipient required for INIT/SIPI send).
-+    // Issue #26: no TPR change across this poll (the IPI must be
-+    // deliverable at any caller class; SCHED_VECTOR 0xEC is class 0xE,
-+    // above TPR_CLASS_MAX).
-     for (int i = 0; i < 10000; ++i) {
-         uint32_t status = (mode_ == MODE_X2)
-                               ? static_cast<uint32_t>(
-diff --git a/src/kernel/arch/x86_64/hal/apic.hpp b/src/kernel/arch/x86_64/hal/apic.hpp
-index 0aae0644..e212b1c5 100644
---- a/src/kernel/arch/x86_64/hal/apic.hpp
-+++ b/src/kernel/arch/x86_64/hal/apic.hpp
-@@ -50,6 +50,31 @@ public:
-     /// @brief Check whether the CPU supports an APIC.
-     static bool is_apic_supported();
- 
-+    // ─── TPR-based interrupt prioritization (issue #26) ───────────────────
-+    // TPR classes are vector-priority bands (class = vector bits 7:4);
-+    // an external interrupt is delivered iff its class exceeds the TPR
-+    // class.  The tick (0xE0) and SCHED IPI (0xEC) are class 0xE, above
-+    // every raised class, so they are never maskable (INV-TPR5).
-+    static constexpr uint8_t TPR_CLASS_ACCEPT_ALL = 0x00;
-+    static constexpr uint8_t TPR_CLASS_PIC        = 0x30;
-+    static constexpr uint8_t TPR_CLASS_IPC        = 0x70;
-+    static constexpr uint8_t TPR_CLASS_SCHED      = 0xD0;
-+    static constexpr uint8_t TPR_CLASS_MAX        = TPR_CLASS_SCHED;
-+
-+    /// @brief Program a TPR class (sub-class bits forced to 0).
-+    /// No-op when the LAPIC is off.  See docs/specs/apic-tpr.md §3.4.
-+    /// @param cls Class byte (only bits 7:4 used).
-+    /// @return false when cls exceeds TPR_CLASS_MAX (fail-closed).
-+    static bool set_tpr_class(uint8_t cls);
-+    /// @brief Read the current hardware TPR class (ACCEPT_ALL when off).
-+    static uint8_t get_tpr_class();
-+    /// @brief Read the PPR (diagnostic only; never mutates TPR).
-+    static uint8_t get_ppr();
-+    /// @brief Raise toward cls; writes only when cls exceeds current.
-+    static void tpr_raise(uint8_t cls);
-+    /// @brief Lower toward cls; writes only when cls is below current.
-+    static void tpr_restore(uint8_t cls);
-+
-     /// @brief Read this CPU's LAPIC ID (bits 24-31 of the ID register).
-     /// @return LAPIC ID, or 0 if the APIC is not initialised.
-     static uint32_t lapic_id();
-@@ -85,10 +110,12 @@ public:
-     /// @param mask true = mask, false = unmask.
-     static void mask_irq(uint8_t irq, bool mask);
- 
--    static constexpr uint8_t APIC_TIMER_VECTOR = 64;
-+    // Issue #26: moved 64 -> 0xE0 so the tick sits above every TPR class
-+    // (class 0xE > TPR_CLASS_MAX 0xD0 — unmaskable, INV-TPR5).
-+    static constexpr uint8_t APIC_TIMER_VECTOR = 0xE0;
-     /// @brief Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI
-     ///        telling the target CPU to drain its wake mailbox and arm its
--    ///        reschedule flag.  Free (timer 64, syscall 0x80, self-test
-+    ///        reschedule flag.  Free (timer 0xE0, syscall 0x80, self-test
-     ///        0xEF, spurious 0xFF).
-     static constexpr uint8_t SCHED_VECTOR = 0xEC;
- 
-@@ -158,8 +185,10 @@ private:
- 
-     static void x2_write(uint32_t off, uint32_t v);
-     static uint32_t x2_read(uint32_t off);
--    static void xapic_write(uint32_t off, uint32_t v);
--    static uint32_t xapic_read(uint32_t off);
-+    /// @brief Mode-gated LAPIC register write (x2APIC MSR else xAPIC MMIO).
-+    static void reg_wr(uint32_t off, uint32_t v);
-+    /// @brief Mode-gated LAPIC register read (x2APIC MSR else xAPIC MMIO).
-+    static uint32_t reg_rd(uint32_t off);
-     static void ioapic_write(uint32_t reg_sel, uint32_t v);
-     static uint32_t ioapic_read(uint32_t reg_sel);
-     static void ioapic_redirect(uint8_t irq, uint8_t vector, bool mask);
-diff --git a/src/kernel/arch/x86_64/hal/percpu.cpp b/src/kernel/arch/x86_64/hal/percpu.cpp
-index cdb03741..0e6686ee 100644
---- a/src/kernel/arch/x86_64/hal/percpu.cpp
-+++ b/src/kernel/arch/x86_64/hal/percpu.cpp
-@@ -1,5 +1,6 @@
- #include <kernel/arch/x86_64/hal/percpu.hpp>
- #include <kernel/arch/hal/msr.hpp>
-+#include <kernel/arch/apic.hpp>
- #include <constants.hpp>
- 
- namespace arch {
-@@ -18,6 +19,7 @@ void percpu_init_bsp(uint64_t bsp_lapic_id) {
-     pc.irq_entry_tsc = 0;
-     pc.fpu_owner = nullptr;
-     pc.current_task = nullptr;
-+    pc.tpr_shadow = APIC::TPR_CLASS_ACCEPT_ALL; // issue #26
- 
-     // Set GS_BASE MSR to point at this CPU's PerCpu page.
-     arch::wrmsr(arch::MSR_GS_BASE, reinterpret_cast<uint64_t>(&per_cpu[0]));
-@@ -38,6 +40,7 @@ void percpu_init_ap(uint64_t logical_id, uint64_t lapic_id) {
-     pc.irq_entry_tsc = 0;
-     pc.fpu_owner = nullptr;
-     pc.current_task = nullptr;
-+    pc.tpr_shadow = APIC::TPR_CLASS_ACCEPT_ALL; // issue #26
- 
-     // Set GS_BASE for this AP to point at its PerCpu page.
-     arch::wrmsr(arch::MSR_GS_BASE, reinterpret_cast<uint64_t>(&per_cpu[logical_id]));
-diff --git a/src/kernel/arch/x86_64/hal/percpu.hpp b/src/kernel/arch/x86_64/hal/percpu.hpp
-index 5f0b21cb..bce7950d 100644
---- a/src/kernel/arch/x86_64/hal/percpu.hpp
-+++ b/src/kernel/arch/x86_64/hal/percpu.hpp
-@@ -62,6 +62,11 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
-     void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
-                                 //   array, issue #25 C1; kept for layout)
- 
-+    // ─── Interrupt prioritization (issue #26) ──────────────────────────────
-+    // Own-CPU intended TPR class (source of truth; HW re-asserted from it).
-+    // C++-only via per_cpu_current()/cpu_index() — no asm access, no alias.
-+    uint64_t tpr_shadow;        // gs:0x40  — default TPR_CLASS_ACCEPT_ALL
-+
-     // ─── Deferred-switch atoms: NOT in this page ─────────────────────────────
-     // C1 stores them as Scheduler/global_state arrays indexed by CPU
-     // (arch-neutral C++; riscv asm keeps working via array base == [0]).
-@@ -71,7 +76,7 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
-     // NOTE: explicit fields total 483 u64s; alignas(PAGE_SIZE) tail-pads
-     // sizeof to 4096 (enforced by the static_assert below).  Keep the
-     // explicit total constant when adding fields (shrink reserved).
--    uint64_t reserved[475];
-+    uint64_t reserved[474];
- };
- 
- static_assert(sizeof(PerCpu) == arch::PAGE_SIZE,
-diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
-index 4cfae0c8..b00eca8d 100644
---- a/src/kernel/arch/x86_64/hal/smp.cpp
-+++ b/src/kernel/arch/x86_64/hal/smp.cpp
-@@ -38,6 +38,7 @@
- #include <kernel/memory/vmm.hpp>
- #include <kernel/memory/pmm.hpp>
- #include <kernel/kernel.hpp>
-+#include <assert.hpp>
- #include <kernel/bootparams.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
-@@ -258,6 +259,12 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
-     // Interrupts are and stay disabled until the scheduler entry below.
-     arch::percpu_init_ap(logical_id, lapic_id);
-     arch::APIC::init_ap();
-+    // Issue #26: both init paths establish TPR ACCEPT_ALL; a mismatch
-+    // here means the per-CPU isolation contract is broken by construction.
-+    ENSURE(arch::per_cpu_current()->tpr_shadow ==
-+           arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    ENSURE(arch::APIC::get_tpr_class() ==
-+           arch::APIC::TPR_CLASS_ACCEPT_ALL);
-     ap_ready[logical_id] = 1;
- 
-     // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,
-diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
-index 888b3f49..ff7bc68c 100644
---- a/src/kernel/arch/x86_64/hal/timer.cpp
-+++ b/src/kernel/arch/x86_64/hal/timer.cpp
-@@ -24,6 +24,7 @@
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/idt.hpp>
- #include <kernel/arch/apic.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/arch/idt.hpp>
- #include <kernel/profiling/sampler.hpp>
-@@ -50,6 +51,15 @@ void Timer::init(uint32_t frequency_hz) {
-         // The handler increments ticks and calls the scheduler.
-         IDT::register_handler_raw(APIC::APIC_TIMER_VECTOR,
-                                   [](uint64_t, uint64_t, uint64_t rip) {
-+                                      // Issue #26: the tick never runs
-+                                      // raised — heal any stale class on
-+                                      // entry (covers BSP + AP branches;
-+                                      // the ISR tail restores from the
-+                                      // shadow before return).
-+                                      arch::per_cpu_current()->tpr_shadow =
-+                                          APIC::TPR_CLASS_ACCEPT_ALL;
-+                                      APIC::tpr_restore(
-+                                          APIC::TPR_CLASS_ACCEPT_ALL);
-                                       if (arch::cpu_index() != 0) {
-                                           kernel::Scheduler::ap_tick();
-                                           if (arch::APIC::is_timer_active())
-diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
-index d5128dd3..31412acf 100644
---- a/src/kernel/arch/x86_64/isr_stubs.asm
-+++ b/src/kernel/arch/x86_64/isr_stubs.asm
-@@ -182,7 +182,12 @@ isr_common:
-     mov rax, [rsp + 15*8]
-     cmp rax, 32
-     je .apply_allowed
--    cmp rax, 64
-+    ; Issue #26: APIC timer vector moved 64 -> 0xE0 (INV-TPR5).  A nested
-+    ; tick MUST apply here: a task blocked in a syscall hlt-loop publishes
-+    ; its voluntary arm and only a depth-1 epilogue could otherwise apply
-+    ; it — the hlt-loop never reaches one, so without this the arm strands
-+    ; (RMS sees the pending arm and returns early every tick: total stall).
-+    cmp rax, 0xE0
-     jne .restore
- .apply_allowed:
-     lea rax, [rel scheduler_save_rsp_to]
-diff --git a/src/kernel/irq_delivery.cpp b/src/kernel/irq_delivery.cpp
-index 0b1274db..c9786be3 100644
---- a/src/kernel/irq_delivery.cpp
-+++ b/src/kernel/irq_delivery.cpp
-@@ -259,6 +259,10 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
- 
-     // EOI exactly once for the consumed vector (the caller returns early, so
-     // the handle_interrupt_c tail EOI never double-fires).
-+    // Issue #26 class rule: this path never raises TPR itself.  PIC-kind
-+    // vectors (33-47) are served at/below TPR_CLASS_PIC and MSI-X vectors
-+    // at/below the caller's shadow; any band narrowing inside a handler
-+    // uses TprGuard (RAII, self-restoring).
- #if defined(CONFIG_ARCH_X86_64)
-     if (arch::APIC::is_enabled()) {
-         arch::APIC::eoi();
-diff --git a/src/kernel/irq_thread.cpp b/src/kernel/irq_thread.cpp
-index f33c404d..b0797694 100644
---- a/src/kernel/irq_thread.cpp
-+++ b/src/kernel/irq_thread.cpp
-@@ -162,6 +162,8 @@ void IrqThread::isr_entry(uint8_t vector, uint64_t error_code, uint64_t rip) {
-     //    On x86_64 this sends PIC EOI; APIC EOI is handled separately
-     //    via a custom isr_ack in the keyboard (and future) registration.
-     //    On AArch64 this calls GIC EOI; on RISC-V this calls PLIC complete.
-+    //    Issue #26: threaded handlers inherit the interrupted context's
-+    //    TPR shadow and must not raise except via TprGuard (RAII).
-     if (irqt->isr_ack_) {
-         irqt->isr_ack_(vector);
-     } else {
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index e0e132f9..0e2d1009 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1466,6 +1466,21 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-     (void)entry_tsc;
- #endif
- #if defined(CONFIG_ARCH_X86_64)
-+    // Issue #26: TPR self-heal.  The per-CPU shadow is the source of
-+    // truth; a mismatch (stale HW after snapshot restore on an AP, or a
-+    // non-guard raise) is re-asserted here.  tpr_clean lets the tail skip
-+    // its restore write on the hot path.  Never touches LAPIC HW when
-+    // the APIC is off (PIT fallback has no TPR register).
-+    bool tpr_clean = true;
-+    uint8_t tpr_want = arch::APIC::TPR_CLASS_ACCEPT_ALL;
-+    if (arch::APIC::is_enabled()) {
-+        tpr_want = static_cast<uint8_t>(
-+            arch::per_cpu_current()->tpr_shadow & 0xF0U);
-+        if (arch::APIC::get_tpr_class() != tpr_want) {
-+            arch::APIC::set_tpr_class(tpr_want);
-+            tpr_clean = false;
-+        }
-+    }
-     // #NM (Device Not Available, vector 7) — lazy FPU/SSE context switch
-     if (vector == 7) {
-         auto *current = kernel::Scheduler::current_task();
-@@ -1745,6 +1760,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-             outb(arch::PIC2_CMD, 0x20);
+     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
+     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
+     // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
+     // pml4_idx >= PML4_USER_COUNT).
+     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        identity_modified_ = true;
++        // Issue #60: release store (see hhdm site above).
++        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
      }
  
-+    // Issue #26 INV-TPR7: EOI first (above), TPR restore second.  The
-+    // restore is skipped when the prologue found HW == shadow and no
-+    // handler raised outside a TprGuard (guards restore themselves).
-+    if (!tpr_clean) {
-+        arch::APIC::set_tpr_class(tpr_want);
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+@@ -408,7 +411,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     }
+     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
+     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+-        identity_modified_ = true;
++        // Issue #60: release store (see map_page sites above).
++        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+     }
+ 
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index cc096d33..e643bf2b 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -314,6 +314,9 @@ class VMM {
+   public:
+     /// @brief Set to true when a test modifies kernel-space page tables
+     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
++    ///        Plain bool with __atomic_* access: set-true is idempotent
++    ///        (no lost update), and restore takes it with an exchange
++    ///        (issue #60 VAR-17 SMP re-audit).
+     static bool hhdm_modified_;
+ 
+     /// @brief Set to true when a test modifies the LOW identity map
+@@ -322,23 +325,38 @@ class VMM {
+     static bool identity_modified_;
+ 
+     /// @brief Returns true if any test has modified the HHDM page tables
+-    ///        since the last clear_hhdm_modified() call.
++    ///        since the last clear/take call (acquire: pairs with the
++    ///        release store in map_page).
+     static bool hhdm_was_modified() {
+-        return hhdm_modified_;
++        return __atomic_load_n(&hhdm_modified_, __ATOMIC_ACQUIRE);
+     }
+     /// @brief Reset the HHDM modification flag (called after PD restore).
+     static void clear_hhdm_modified() {
+-        hhdm_modified_ = false;
++        __atomic_store_n(&hhdm_modified_, false, __ATOMIC_RELEASE);
 +    }
-+
-     // Record IRQ latency histogram for hardware IRQs (vectors 32-47).
- #if CONFIG_IRQ_LATENCY_HISTOGRAM
-     if (vector >= 32 && vector < 48) {
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 74b577e5..e26af690 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -48,6 +48,9 @@ extern "C" void debug_write_dec(uint64_t value);
- #include <kernel/driver/iocd.hpp>
- #include <kernel/arch/apic.hpp>
- #if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#endif
-+#if defined(CONFIG_ARCH_X86_64)
- #include <kernel/arch/x86_64/hal/smp.hpp>
- #endif
++    /// @brief Atomically take the HHDM flag: returns the previous value
++    ///        and clears it in one step, so a set landing after the take
++    ///        is preserved for the next restore (fail-safe over-restore
++    ///        instead of fail-dangerous skip).  Used by snapshot_restore.
++    static bool take_hhdm_modified() {
++        return __atomic_exchange_n(&hhdm_modified_, false,
++                                   __ATOMIC_ACQ_REL);
+     }
  
-@@ -430,10 +433,22 @@ void Scheduler::quiesce_enter() noexcept {
-     __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
-     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-         cancel_pending_switch_cpu(c);
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Issue #26: a quiesced world must not resume masked — re-assert the
-+    // calling CPU's class to ACCEPT_ALL (own-CPU only, INV-TPR1).
-+    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
-+    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+#endif
- }
- 
- void Scheduler::quiesce_exit() noexcept {
-     __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Same re-assert on the way out: teardown paths must not leak a
-+    // raised class into the resumed world.
-+    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
-+    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+#endif
- }
- 
- /// @brief Number of CPUs currently up (BSP + parked/running APs).
-@@ -710,7 +725,11 @@ void Scheduler::drain_zombie_list() noexcept {
-     for (;;) {
-         TaskControlBlock *task;
-         {
--            arch::IrqGuard irq_guard{};
-+    // Issue #26: reschedule() never raises TPR itself.  The IrqGuard
-+    // below stays mandatory (TPR never replaces IF=0, INV-TPR2); a
-+    // caller that additionally needs band masking wraps the section
-+    // in TprGuard (which ENSUREs IF=0 at construction).
-+    arch::IrqGuard irq_guard{};
-             SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
-             task = zombie_head_;
-             if (!task)
-@@ -2727,7 +2746,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-               (nsp < nbase || nsp >= next.kernel_stack_top)) ||
-               (npg != 0 && (npg & 0xFFF) != 0));
-         if (!bad) {
--            const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
-+            // riscv64 has no frame-validation branch below (x86_64 iret /
-+            // aarch64 ELR+SPSR only) — the pointer is unused there.
-+            [[maybe_unused]] const uint64_t *f =
-+                reinterpret_cast<const uint64_t *>(nsp);
- #if defined(CONFIG_ARCH_X86_64)
-             uint64_t f_rflags = 0;
-             // The iret frame sits above the saved register frame.  Two valid
-@@ -2956,6 +2978,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
- // ---------------------------------------------------------------------------
- 
- void Scheduler::rate_monotonic_schedule() noexcept {
-+    // Issue #26: RMS never raises TPR itself.  It tolerates preemption
-+    // only from strictly higher classes (the tick at 0xE0 is above every
-+    // raised class, INV-TPR5); the try_lock + skip discipline below is
-+    // unchanged by TPR state.
-     if (all_tasks_.size() <= 1)
-         return;
- 
-@@ -3125,7 +3151,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
-                  (next->page_table_ != 0 &&
-                   (next->page_table_ & 0xFFF) != 0));
-             if (!bad) {
--                const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
-+                // Unused on riscv64 (no validation branch below).
-+                [[maybe_unused]] const uint64_t *f =
-+                    reinterpret_cast<const uint64_t *>(nsp);
- #if defined(CONFIG_ARCH_X86_64)
-                 uint64_t rip_a = f[IRET_RIP_IDX], cs_a = f[IRET_CS_IDX],
-                          rsp_a = f[IRET_RSP_IDX], ss_a = f[IRET_SS_IDX];
-diff --git a/src/kernel/test/test_apic_tpr.cpp b/src/kernel/test/test_apic_tpr.cpp
-new file mode 100644
-index 00000000..f227ac24
---- /dev/null
-+++ b/src/kernel/test/test_apic_tpr.cpp
-@@ -0,0 +1,173 @@
-+/// @file test_apic_tpr.cpp
-+/// @brief Tests for APIC TPR-based interrupt prioritization (issue #26).
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/nexios_config.h>
-+#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/apic.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/hal/tpr_guard.hpp>
-+#include <kernel/irq_delivery.hpp>
-+#endif
-+
-+using namespace kernel;
-+
-+#if defined(CONFIG_ARCH_X86_64)
-+
-+// Runmode: kernel
-+// Testidea: Per-CPU TPR shadow defaults to ACCEPT_ALL with frozen gs:0x40.
-+/* Pseudocode: read per_cpu[cpu].tpr_shadow == 0; assert field offset 0x40. */
-+// Input: none (percpu_init_* ran at boot).
-+// Expect: shadow ACCEPT_ALL on BSP; &tpr_shadow == page + 0x40.
-+// Depends: arch::per_cpu, percpu_init_bsp/ap
-+JARVIS_TEST(apic_tpr_shadow_defaults, "PRE: isolate | POST: none") {
-+    arch::PerCpu &pc = arch::per_cpu[0];
-+    const auto *base = reinterpret_cast<const uint64_t *>(&pc);
-+    JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.tpr_shadow) ==
-+                  base + 8);
-+    JARVIS_ASSERT(sizeof(arch::PerCpu) == 4096);
-+    JARVIS_ASSERT(pc.tpr_shadow == arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: set/raise/restore round-trip; sub-class bits forced zero.
-+/* Pseudocode: set IPC -> get==0x70; raise SCHED -> 0xD0; raise PIC (no-op);
-+   restore ACCEPT_ALL; set(0xFF...)->false; set(0xE0)->false. */
-+// Input: none.
-+// Expect: monotonic raise/restore honored; over-MAX rejected; low bits 0.
-+// Depends: arch::APIC TPR accessors
-+JARVIS_TEST(apic_tpr_set_raise_restore, "PRE: isolate | POST: none") {
-+    if (!arch::APIC::is_enabled()) {
-+        Logger::warn("APIC not enabled — skipping");
-+        JARVIS_TEST_PASS();
-+        return;
+     /// @brief Returns true if any test has modified the low identity page
+-    ///        tables since the last clear_identity_modified() call.
++    ///        tables since the last clear/take call.
+     static bool identity_was_modified() {
+-        return identity_modified_;
++        return __atomic_load_n(&identity_modified_, __ATOMIC_ACQUIRE);
+     }
+     /// @brief Reset the identity modification flag (called after PD restore).
+     static void clear_identity_modified() {
+-        identity_modified_ = false;
++        __atomic_store_n(&identity_modified_, false, __ATOMIC_RELEASE);
 +    }
-+    // Deterministic window: no ISR may interleave between the MMIO
-+    // accesses (a tick would only re-assert the tracked shadow, but cli
-+    // removes all doubt and the window is a few MMIO reads).
-+    arch::IrqGuard irq_guard{};
-+    JARVIS_ASSERT(arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_IPC));
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() == arch::APIC::TPR_CLASS_IPC);
-+    // Sub-class bits forced to zero.
-+    JARVIS_ASSERT(arch::APIC::set_tpr_class(0x71));
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() == arch::APIC::TPR_CLASS_IPC);
-+    // Monotonic raise: lowering via raise() is a no-op.
-+    arch::APIC::tpr_raise(arch::APIC::TPR_CLASS_PIC);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() == arch::APIC::TPR_CLASS_IPC);
-+    arch::APIC::tpr_raise(arch::APIC::TPR_CLASS_SCHED);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_SCHED);
-+    // Monotonic restore: raising via restore() is a no-op.
-+    arch::APIC::tpr_restore(arch::APIC::TPR_CLASS_IPC);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_IPC);
-+    // Over-MAX inputs are rejected fail-closed (HW untouched).
-+    JARVIS_ASSERT(!arch::APIC::set_tpr_class(0xE0));
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_IPC);
-+    arch::APIC::tpr_raise(0xE0);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_IPC);
-+    arch::APIC::tpr_restore(0xE0);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_IPC);
-+    // Leave HW as found (cookbook Rule 5 analogue for interrupt state).
-+    arch::APIC::tpr_restore(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: PPR read is diagnostic-only and never mutates TPR.
-+/* Pseudocode: set IPC; read PPR twice; get_tpr_class still IPC. */
-+// Input: none.
-+// Expect: PPR reads stable; TPR unchanged.
-+// Depends: arch::APIC::get_ppr
-+JARVIS_TEST(apic_tpr_ppr_read_only, "PRE: isolate | POST: none") {
-+    if (!arch::APIC::is_enabled()) {
-+        Logger::warn("APIC not enabled — skipping");
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    // cli window: an interleaving tick ISR would legitimately raise the
-+    // PPR to the timer class, so exact-value assertions need stillness.
-+    arch::IrqGuard irq_guard{};
-+    JARVIS_ASSERT(arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_IPC));
-+    uint8_t ppr0 = arch::APIC::get_ppr();
-+    uint8_t ppr1 = arch::APIC::get_ppr();
-+    JARVIS_ASSERT(ppr0 == ppr1);
-+    JARVIS_ASSERT(ppr0 == arch::APIC::TPR_CLASS_IPC);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_IPC);
-+    arch::APIC::tpr_restore(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: TprGuard raises on scope entry, restores on exit (nested).
-+/* Pseudocode: guard(PIC) -> class PIC; nested guard(IPC) -> IPC; inner
-+   exit -> PIC; outer exit -> ACCEPT_ALL. */
-+// Input: none.
-+// Expect: LIFO class restore; shadow tracks HW at each step.
-+// Depends: arch::TprGuard
-+JARVIS_TEST(apic_tpr_guard_nesting, "PRE: isolate | POST: none") {
-+    if (!arch::APIC::is_enabled()) {
-+        Logger::warn("APIC not enabled — skipping");
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    arch::IrqGuard irq_guard{};
-+    {
-+        arch::TprGuard outer(arch::APIC::TPR_CLASS_PIC);
-+        JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                      arch::APIC::TPR_CLASS_PIC);
-+        {
-+            arch::TprGuard inner(arch::APIC::TPR_CLASS_IPC);
-+            JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                          arch::APIC::TPR_CLASS_IPC);
-+        }
-+        JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                      arch::APIC::TPR_CLASS_PIC);
-+    }
-+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
-+                  arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_ASSERT(arch::per_cpu_current()->tpr_shadow ==
-+                  arch::APIC::TPR_CLASS_ACCEPT_ALL);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Timer vector reservation moved with APIC_TIMER_VECTOR.
-+/* Pseudocode: assert APIC_TIMER_VECTOR == 0xE0; claim_slot(0xE0) < 0. */
-+// Input: none.
-+// Expect: tick vector unclaimable; class 0xE above TPR_CLASS_MAX.
-+// Depends: arch::APIC, IrqDelivery::claim_slot
-+JARVIS_TEST(apic_tpr_timer_vector_reserved, "PRE: isolate | POST: none") {
-+    // INV-TPR5: the tick sits at class 0xE, above every raised class.
-+    JARVIS_ASSERT(arch::APIC::APIC_TIMER_VECTOR == 0xE0);
-+    JARVIS_ASSERT((arch::APIC::APIC_TIMER_VECTOR & 0xF0U) >
-+                  arch::APIC::TPR_CLASS_MAX);
-+    JARVIS_ASSERT((arch::APIC::SCHED_VECTOR & 0xF0U) >
-+                  arch::APIC::TPR_CLASS_MAX);
-+    // The tick vector is unclaimable (moved with the symbol, #26 audit).
-+    JARVIS_ASSERT(IrqDelivery::claim_slot(arch::APIC::APIC_TIMER_VECTOR) <
-+                  0);
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_apic_tpr_tests() {
-+    Logger::info("Registering APIC TPR tests");
-+    JARVIS_REGISTER_TEST(apic_tpr_shadow_defaults);
-+    JARVIS_REGISTER_TEST(apic_tpr_set_raise_restore);
-+    JARVIS_REGISTER_TEST(apic_tpr_ppr_read_only);
-+    JARVIS_REGISTER_TEST(apic_tpr_guard_nesting);
-+    JARVIS_REGISTER_TEST(apic_tpr_timer_vector_reserved);
-+}
-+
-+#endif // CONFIG_ARCH_X86_64
-diff --git a/src/kernel/test/test_cap_msix.cpp b/src/kernel/test/test_cap_msix.cpp
-index d76c0a75..998229fa 100644
---- a/src/kernel/test/test_cap_msix.cpp
-+++ b/src/kernel/test/test_cap_msix.cpp
-@@ -39,6 +39,9 @@
- #include <kernel/task/task.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/arch/pci.hpp>
-+#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/apic.hpp>
-+#endif
- #include <kernel/test/resource_tracker.hpp>
- #include "test_sched_helpers.hpp"
- #include "task_ptr.hpp"
-@@ -209,15 +212,17 @@ JARVIS_TEST(msix_cap_single_owner_vector, "PRE: none | POST: none") {
++    /// @brief Atomically take the identity flag (same contract as the
++    ///        HHDM take above).  Used by snapshot_restore.
++    static bool take_identity_modified() {
++        return __atomic_exchange_n(&identity_modified_, false,
++                                   __ATOMIC_ACQ_REL);
+     }
  
- // Runmode: kernel
- // Testidea: Kernel-reserved vectors inside the MSI-X window are never
--//           claimable (issue #10 S1): the xAPIC scheduler timer (64) and the
-+//           claimable (issue #10 S1): the xAPIC scheduler timer (0xE0
-+//           since issue #26) and the
- //           APIC spurious vector (0xFF) must fail closed in claim_slot — an
--//           armed slot at 64 would swallow the scheduler tick.
--// Input: claim_slot(64), claim_slot(0xFF), claim_slot(48)
--// Expect: 64 and 0xFF rejected; 48 accepted and released
-+//           armed slot at the timer vector would swallow the scheduler tick.
-+// Input: claim_slot(0xE0), claim_slot(0xFF), claim_slot(48)
-+// Expect: 0xE0 and 0xFF rejected; 48 accepted and released
- // Depends: kernel::IrqDelivery
- #if defined(CONFIG_ARCH_X86_64)
- JARVIS_TEST(msix_kernel_reserved_vectors_rejected, "PRE: none | POST: none") {
--    JARVIS_ASSERT(IrqDelivery::claim_slot(64) < 0);
-+    JARVIS_ASSERT(IrqDelivery::claim_slot(
-+                      arch::APIC::APIC_TIMER_VECTOR) < 0);
-     JARVIS_ASSERT(IrqDelivery::claim_slot(0xFF) < 0);
-     int16_t idx = IrqDelivery::claim_slot(48);
-     JARVIS_ASSERT(idx >= 0);
+   private:
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index d1ec0952..d1325db2 100644
+index d1325db2..40245db4 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -186,6 +186,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
-     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
-     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
-+    {"apic_tpr",              5,    0,       0      },  // TPR classes/shadow/guard/vector reservation (#26)
-     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
+@@ -161,7 +161,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
+     {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
+     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
+-    {"memory_vmm",           12,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143)
++    {"memory_vmm",           13,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60)
  
-     // drivers
+     // wcet / deadline
+     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
 diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index d8be2f71..6966ae59 100644
+index 6966ae59..5b83dac8 100644
 --- a/src/kernel/test/test_isolate.cpp
 +++ b/src/kernel/test/test_isolate.cpp
-@@ -37,6 +37,10 @@
- #include <kernel/memory/vmm.hpp>
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/irq_guard.hpp>
-+#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/apic.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#endif
- #include <kernel/arch/gdt.hpp>
- #include <kernel/arch/hal/iopb.hpp>
- #include <kernel/cap/mmio.hpp>
-@@ -159,9 +163,14 @@ static size_t off_sched_percpu() {
-     return off_sched_rqpod() +
-            CONFIG_MAX_CPUS * sizeof(ReadyQueuePOD);
- }
--static size_t off_daemon_entries() {
-+// Issue #26: per-CPU TPR shadows (one u64 per CPU, own-CPU semantics).
-+static size_t off_tpr_shadows() {
-     return off_sched_percpu() + sizeof(SchedPerCpuPod);
- }
-+static size_t off_daemon_entries() {
-+    return off_tpr_shadows() +
-+           CONFIG_MAX_CPUS * sizeof(uint64_t);
-+}
- static size_t off_daemon_num() {
-     return off_daemon_entries() +
-            daemon::MAX_DAEMONS * sizeof(daemon::DaemonEntry);
-@@ -444,6 +453,15 @@ bool snapshot_create() {
-         auto *percpu = reinterpret_cast<SchedPerCpuPod *>(
-             g_snapshot + off_sched_percpu());
-         Scheduler::capture_percpu(*percpu);
-+
-+#if defined(CONFIG_ARCH_X86_64)
-+        // Save per-CPU TPR shadows (issue #26).  Same quiesce+lock window
-+        // as the queues above; shadows are own-CPU-only by design.
-+        auto *shadows = reinterpret_cast<uint64_t *>(g_snapshot +
-+                                                     off_tpr_shadows());
-+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+            shadows[c] = arch::per_cpu[c].tpr_shadow;
-+#endif
-     }
- 
-     // ---- Daemon ----
-@@ -1090,6 +1108,21 @@ void snapshot_restore(const char *test_name) {
-                 g_snapshot + off_sched_percpu());
-             Scheduler::restore_percpu(*percpu);
+@@ -783,7 +783,10 @@ void snapshot_restore(const char *test_name) {
+     // ---- HHDM PD restore (before PMM restore) ----
+     // Only runs when a test actually modified HHDM page tables.
+     // PD[1..511] are restored (PD[0] maps the PD page itself).
+-    if (VMM::hhdm_was_modified()) {
++    // Issue #60: atomic take (not check-then-clear) — a set landing
++    // after the exchange stays set, so the next restore over-restores
++    // (safe) instead of skipping (stale mappings leak).
++    if (VMM::take_hhdm_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+             auto *nu_p = reinterpret_cast<uint64_t *>(
+@@ -829,17 +832,17 @@ void snapshot_restore(const char *test_name) {
+                 }
+             }
          }
-+
-+#if defined(CONFIG_ARCH_X86_64)
-+        // Restore per-CPU TPR shadows (issue #26).  Own-CPU hardware is
-+        // re-asserted now; remote CPUs self-heal at their next ISR
-+        // prologue (spec §3.6) — cross-CPU TPR writes are forbidden
-+        // (INV-TPR1).
-+        {
-+            const auto *shadows = reinterpret_cast<const uint64_t *>(
-+                g_snapshot + off_tpr_shadows());
-+            for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+                arch::per_cpu[c].tpr_shadow = shadows[c];
-+            arch::APIC::set_tpr_class(static_cast<uint8_t>(
-+                arch::per_cpu[arch::cpu_index()].tpr_shadow & 0xF0U));
-+        }
-+#endif
+-        VMM::clear_hhdm_modified();
      }
  
-     // ---- Re-identify current task by RSP match ----
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index a107a7b4..fe64a5f0 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -83,6 +83,7 @@ void register_atomic_context_switch_tests();
- void register_bench_syscall_latency_tests();
- void register_bench_irq_latency_tests();
- void register_apic_timer_tests();
-+void register_apic_tpr_tests();
- void register_jitter_tests();
- void register_idt_tests();
- void register_exc_table_tests();
-@@ -501,6 +502,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"exc_table", []() { register_exc_table_tests(); }},
-     {"hal_timer", []() { register_timer_tests(); }},
-     {"hal_apic", []() { register_apic_timer_tests(); }},
-+    {"apic_tpr", []() { register_apic_tpr_tests(); }},
-     {"hal_rtc", []() { register_rtc_tests(); }},
+     // ---- Identity PD restore (before PMM restore) ----
+     // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
+-    // PD_IDENTITY phys 0x3000).  Gated on identity_was_modified(): low-VA
++    // PD_IDENTITY phys 0x3000).  Gated on the atomic take: low-VA
+     // map_page/unmap_page (pml4_idx < PML4_USER_COUNT) never sets
+     // hhdm_modified_, so the HHDM-PD gate above cannot cover these splits.
+     // Split PT pages are reclaimed by the page-table pool restore that runs
+     // later (off_pt_pool), so this block only restores the PD entries.
+-    if (VMM::identity_was_modified()) {
++    // (Issue #60: same take-instead-of-check-then-clear as above.)
++    if (VMM::take_identity_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+             uint64_t nu_ident = *reinterpret_cast<uint64_t *>(
+@@ -867,7 +870,6 @@ void snapshot_restore(const char *test_name) {
+                 }
+             }
+         }
+-        VMM::clear_identity_modified();
+     }
+ 
+     // ---- PMM ----
+diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
+index 767d5738..4daddf17 100644
+--- a/src/kernel/test/test_vmm.cpp
++++ b/src/kernel/test/test_vmm.cpp
+@@ -373,6 +373,74 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
+     PMM::free_page(p);
+     JARVIS_TEST_PASS();
+ }
++
++// Runmode: kernel
++// Testidea: The VAR-17 take primitive closes the SMP read-clear gap
++//           (issue #60): take returns the previous value and clears
++//           atomically, so a set landing after the take is preserved
++//           for the next restore (fail-safe over-restore).
++// Input: clear/take on clean flags; map_page on a scratch HHDM VA (the
++//        real setter); take/was interleavings; manual PD restore.
++// Expect: take on clean is false; set→take true→was false→take false;
++//        set-after-take preserved; flags clean at exit.
++// Depends: VMM::take_*/was/clear_*, VMM::map_page HHDM setter (x86-only)
++JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
++    VMM::clear_hhdm_modified();
++    VMM::clear_identity_modified();
++    // Take on a clean flag fabricates nothing and is idempotent.
++    JARVIS_ASSERT(!VMM::take_hhdm_modified());
++    JARVIS_ASSERT(!VMM::take_identity_modified());
++    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++    // Set via the real setter: map a scratch HHDM page (2 MiB huge
++    // page at HHDM+0xA00000, same save/split/restore pattern as the
++    // regression test above).
++    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
++    uint64_t const PAGE_PRESENT = 1ULL << 0;
++    uint64_t const PAGE_HUGE = 1ULL << 7;
++    uint64_t kernel_pml4 = arch::read_cr3();
++    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (kernel_pml4 & ~0xFFFULL));
++    size_t pml4_i = static_cast<size_t>((scratch_va & (0x1FFULL << 39)) >> 39);
++    JARVIS_ASSERT(pml4[pml4_i] & PAGE_PRESENT);
++    auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (pml4[pml4_i] & ~0xFFFULL));
++    size_t pdpt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 30)) >> 30);
++    JARVIS_ASSERT(pdpt[pdpt_i] & PAGE_PRESENT);
++    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (pdpt[pdpt_i] & ~0xFFFULL));
++    size_t pd_i = static_cast<size_t>((scratch_va & (0x1FFULL << 21)) >> 21);
++    JARVIS_ASSERT(pd[pd_i] & PAGE_PRESENT);
++    JARVIS_ASSERT(pd[pd_i] & PAGE_HUGE);
++    uint64_t const saved_pd_entry = pd[pd_i];
++    uint64_t data_phys = PMM::alloc_page();
++    JARVIS_ASSERT(data_phys != 0);
++    VMM::map_page(scratch_va, data_phys, false);
++    // Round-trip through the real setter: set→take true→was false.
++    JARVIS_ASSERT(VMM::hhdm_was_modified());
++    JARVIS_ASSERT(VMM::take_hhdm_modified());
++    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++    JARVIS_ASSERT(!VMM::take_hhdm_modified());
++    // Set-after-take is preserved (the gap-closure property).
++    VMM::map_page(scratch_va, data_phys, false);
++    JARVIS_ASSERT(VMM::take_hhdm_modified());
++    // Restore the page-table state manually (regression pattern).
++    VMM::unmap_page(scratch_va);
++    size_t pt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 12)) >> 12);
++    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (pd[pd_i] & ~0xFFFULL));
++    pt[pt_i] = 0;
++    VMM::map_page(scratch_va, 0xA02000, false);
++    uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
++    PMM::free_page(pt_phys);
++    pd[pd_i] = saved_pd_entry;
++    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0xA00000);
++    PMM::free_page(data_phys);
++    // Leave the flags clean for the rest of the suite.
++    VMM::clear_hhdm_modified();
++    VMM::clear_identity_modified();
++    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++    JARVIS_TEST_PASS();
++}
+ #endif
+ 
+ // Runmode: kernel
+@@ -506,6 +574,7 @@ void register_vmm_tests() {
  #if defined(CONFIG_ARCH_X86_64)
-     {"hal_rtc_datetime", []() { register_rtc_datetime_tests(); }},
-@@ -673,6 +675,7 @@ static void register_all_tests() {
- 
-     // v0.3.4 tests
-     register_apic_timer_tests();
-+    register_apic_tpr_tests();
-     register_jitter_tests();
-     register_deadline_miss_tests();
-     register_wcet_overrun_tests();
-@@ -866,6 +869,7 @@ static void register_all_tests_first_half() {
- 
- // v0.3.4 tests
-       register_apic_timer_tests();
-+      register_apic_tpr_tests();
-       register_jitter_tests();
-       register_deadline_miss_tests();
-       register_wcet_overrun_tests();
-diff --git a/src/kernel/test/test_sched_affinity.cpp b/src/kernel/test/test_sched_affinity.cpp
-index e6537b5f..2d7e00f2 100644
---- a/src/kernel/test/test_sched_affinity.cpp
-+++ b/src/kernel/test/test_sched_affinity.cpp
-@@ -29,6 +29,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/memory/mempool.hpp>
-+#include <kernel/arch/irq_guard.hpp>
- 
- using namespace kernel;
- 
-@@ -53,10 +54,14 @@ void destroy_test_task(TaskControlBlock *t) {
- // Input: create() (no set_affinity), add_task().
- // Expect: cpu_affinity == 0x1; queued on 0, not on 1.
- // Depends: TCB ctor default, Scheduler::add_task targeting
-+// Note (issue #26): enqueue + placement asserts run under one IrqGuard
-+// (cookbook Rule 2) — a timer tick between add_task and is_queued_on
-+// would dispatch the fresh task and the placement assert would fail.
- JARVIS_TEST(sched_affinity_default_mask, "PRE: none | POST: none") {
-     auto *t = TaskControlBlock::create([]() {}, 10, 10);
-     JARVIS_ASSERT(t != nullptr);
-     JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), t->cpu_affinity);
-+    arch::IrqGuard irq_guard{};
-     Scheduler::add_task(*t);
-     JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
-     JARVIS_ASSERT(!Scheduler::is_queued_on(*t, 1));
-@@ -74,11 +79,15 @@ JARVIS_TEST(sched_affinity_default_mask, "PRE: none | POST: none") {
- // Input: add_task(), set_affinity(0x2), set_affinity(0x5).
- // Expect: Both clamp to 0x1, queued on 0 both times.
- // Depends: Scheduler::set_affinity clamp, is_queued_on
-+// Note (issue #26): whole enqueue/affinity/assert sequence under one
-+// IrqGuard (cookbook Rule 2) — a tick after enqueue_ready would dispatch
-+// the task and the placement asserts would fail.
- JARVIS_TEST(sched_affinity_lowest_bit_targets, "PRE: none | POST: none") {
-     auto *t = TaskControlBlock::create([]() {}, 10,
-                                        TaskControlBlock::NO_PERIOD);
-     JARVIS_ASSERT(t != nullptr);
-     t->state = TaskState::BLOCKED;
-+    arch::IrqGuard irq_guard{};
-     Scheduler::register_task(*t);
-     Scheduler::enqueue_ready(*t);
-     // Single-CPU config (this class runs on the default variant): only
-@@ -136,11 +145,14 @@ JARVIS_TEST(sched_affinity_user_clamp, "PRE: none | POST: none") {
- // Input: set_affinity(0x1), set_affinity(0x3) (clamps to 0x1).
- // Expect: Still queued on 0 only, mask 0x1.
- // Depends: Scheduler::set_affinity clamp path
-+// Note (issue #26): same cookbook-Rule-2 guard as above — placement
-+// asserts are only stable with ticks excluded.
- JARVIS_TEST(sched_affinity_requeue_moves, "PRE: none | POST: none") {
-     auto *t = TaskControlBlock::create([]() {}, 10,
-                                        TaskControlBlock::NO_PERIOD);
-     JARVIS_ASSERT(t != nullptr);
-     t->state = TaskState::BLOCKED;
-+    arch::IrqGuard irq_guard{};
-     Scheduler::register_task(*t);
-     Scheduler::enqueue_ready(*t);
-     JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
+     JARVIS_REGISTER_TEST(vmm_huge_page_split_regression);
+     JARVIS_REGISTER_TEST(vmm_hhdm_access_consistency);
++    JARVIS_REGISTER_TEST(vmm_hhdm_take_semantics);
+ #endif
+     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
+     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
 diff --git a/test-history.txt b/test-history.txt
-index cae00811..91f68066 100644
+index 91f68066..068e221f 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -885,3 +885,19 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-14 17:12:15 per_cpu PASSED: 3 FAILED: 0 TIME: 76ms
- 2026-09-14 17:12:15 sched_affinity PASSED: 6 FAILED: 0 TIME: 159ms
- 2026-09-14 17:12:15 smp_bringup PASSED: 3 FAILED: 0 TIME: 79ms
-+2026-09-14 17:57:05 safe PASSED: 133 FAILED: 0 TIME: 7081ms
-+2026-09-14 17:57:05 apic_tpr PASSED: 5 FAILED: 0 TIME: 487ms
-+2026-09-14 17:57:05 cap_msix PASSED: 13 FAILED: 0 TIME: 1694ms
-+2026-09-14 18:03:12 apic_tpr PASSED: 5 FAILED: 0 TIME: 489ms
-+2026-09-14 18:03:12 per_cpu PASSED: 3 FAILED: 0 TIME: 74ms
-+2026-09-14 18:03:12 hal_apic PASSED: 3 FAILED: 0 TIME: 373ms
-+2026-09-14 18:03:12 hal_timer PASSED: 5 FAILED: 0 TIME: 484ms
-+2026-09-14 18:03:12 sched_affinity PASSED: 6 FAILED: 0 TIME: 628ms
-+2026-09-14 18:03:12 smp_bringup PASSED: 3 FAILED: 0 TIME: 336ms
-+2026-09-14 18:03:12 smp_sched PASSED: 4 FAILED: 0 TIME: 551ms
-+2026-09-14 18:03:42 selftest PASSED: 133 FAILED: 0 TIME: 7439ms
-+2026-09-14 18:04:42 all PASSED: 1274 FAILED: 0 TIME: 102144ms
-+2026-09-14 18:05:58 all PASSED: 85 FAILED: 0 TIME: 16727ms
-+2026-09-14 18:18:59 sched_affinity PASSED: 6 FAILED: 0 TIME: 175ms
-+2026-09-14 18:18:59 all PASSED: 1274 FAILED: 0 TIME: 87878ms
-+2026-09-14 18:19:19 all PASSED: 85 FAILED: 0 TIME: 4154ms
+@@ -901,3 +901,9 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-14 18:18:59 sched_affinity PASSED: 6 FAILED: 0 TIME: 175ms
+ 2026-09-14 18:18:59 all PASSED: 1274 FAILED: 0 TIME: 87878ms
+ 2026-09-14 18:19:19 all PASSED: 85 FAILED: 0 TIME: 4154ms
++2026-09-14 18:58:11 memory_vmm PASSED: 13 FAILED: 0 TIME: 1222ms
++2026-09-14 18:58:36 selftest PASSED: 133 FAILED: 0 TIME: 6972ms
++2026-09-14 18:59:17 smp_bringup PASSED: 3 FAILED: 0 TIME: 310ms
++2026-09-14 18:59:17 smp_sched PASSED: 4 FAILED: 0 TIME: 138ms
++2026-09-14 19:00:31 all PASSED: 1275 FAILED: 0 TIME: 425351ms
++2026-09-14 19:01:34 all PASSED: 85 FAILED: 0 TIME: 4260ms

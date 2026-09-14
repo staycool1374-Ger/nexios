@@ -281,14 +281,17 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
         Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
                      "(pml4_idx=%zu) — PD restore will clean up",
                      virt_addr, pml4_idx);
-        hhdm_modified_ = true;
+        // Issue #60: release store — pairs with the acquire take in
+        // snapshot_restore (a concurrent set can never be lost).
+        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
     }
     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
     // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
     // pml4_idx >= PML4_USER_COUNT).
     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        identity_modified_ = true;
+        // Issue #60: release store (see hhdm site above).
+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
     }
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
@@ -408,7 +411,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
     }
     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
-        identity_modified_ = true;
+        // Issue #60: release store (see map_page sites above).
+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
     }
 
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);

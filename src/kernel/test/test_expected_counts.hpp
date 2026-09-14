@@ -161,7 +161,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
     {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-    {"memory_vmm",           12,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143)
+    {"memory_vmm",           13,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60)
 
     // wcet / deadline
     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet

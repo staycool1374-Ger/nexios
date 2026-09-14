@@ -373,6 +373,74 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     PMM::free_page(p);
     JARVIS_TEST_PASS();
 }
+
+// Runmode: kernel
+// Testidea: The VAR-17 take primitive closes the SMP read-clear gap
+//           (issue #60): take returns the previous value and clears
+//           atomically, so a set landing after the take is preserved
+//           for the next restore (fail-safe over-restore).
+// Input: clear/take on clean flags; map_page on a scratch HHDM VA (the
+//        real setter); take/was interleavings; manual PD restore.
+// Expect: take on clean is false; set→take true→was false→take false;
+//        set-after-take preserved; flags clean at exit.
+// Depends: VMM::take_*/was/clear_*, VMM::map_page HHDM setter (x86-only)
+JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
+    VMM::clear_hhdm_modified();
+    VMM::clear_identity_modified();
+    // Take on a clean flag fabricates nothing and is idempotent.
+    JARVIS_ASSERT(!VMM::take_hhdm_modified());
+    JARVIS_ASSERT(!VMM::take_identity_modified());
+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
+    // Set via the real setter: map a scratch HHDM page (2 MiB huge
+    // page at HHDM+0xA00000, same save/split/restore pattern as the
+    // regression test above).
+    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
+    uint64_t const PAGE_PRESENT = 1ULL << 0;
+    uint64_t const PAGE_HUGE = 1ULL << 7;
+    uint64_t kernel_pml4 = arch::read_cr3();
+    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (kernel_pml4 & ~0xFFFULL));
+    size_t pml4_i = static_cast<size_t>((scratch_va & (0x1FFULL << 39)) >> 39);
+    JARVIS_ASSERT(pml4[pml4_i] & PAGE_PRESENT);
+    auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (pml4[pml4_i] & ~0xFFFULL));
+    size_t pdpt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 30)) >> 30);
+    JARVIS_ASSERT(pdpt[pdpt_i] & PAGE_PRESENT);
+    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (pdpt[pdpt_i] & ~0xFFFULL));
+    size_t pd_i = static_cast<size_t>((scratch_va & (0x1FFULL << 21)) >> 21);
+    JARVIS_ASSERT(pd[pd_i] & PAGE_PRESENT);
+    JARVIS_ASSERT(pd[pd_i] & PAGE_HUGE);
+    uint64_t const saved_pd_entry = pd[pd_i];
+    uint64_t data_phys = PMM::alloc_page();
+    JARVIS_ASSERT(data_phys != 0);
+    VMM::map_page(scratch_va, data_phys, false);
+    // Round-trip through the real setter: set→take true→was false.
+    JARVIS_ASSERT(VMM::hhdm_was_modified());
+    JARVIS_ASSERT(VMM::take_hhdm_modified());
+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
+    JARVIS_ASSERT(!VMM::take_hhdm_modified());
+    // Set-after-take is preserved (the gap-closure property).
+    VMM::map_page(scratch_va, data_phys, false);
+    JARVIS_ASSERT(VMM::take_hhdm_modified());
+    // Restore the page-table state manually (regression pattern).
+    VMM::unmap_page(scratch_va);
+    size_t pt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 12)) >> 12);
+    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (pd[pd_i] & ~0xFFFULL));
+    pt[pt_i] = 0;
+    VMM::map_page(scratch_va, 0xA02000, false);
+    uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
+    PMM::free_page(pt_phys);
+    pd[pd_i] = saved_pd_entry;
+    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0xA00000);
+    PMM::free_page(data_phys);
+    // Leave the flags clean for the rest of the suite.
+    VMM::clear_hhdm_modified();
+    VMM::clear_identity_modified();
+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
+    JARVIS_TEST_PASS();
+}
 #endif
 
 // Runmode: kernel
@@ -506,6 +574,7 @@ void register_vmm_tests() {
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(vmm_huge_page_split_regression);
     JARVIS_REGISTER_TEST(vmm_hhdm_access_consistency);
+    JARVIS_REGISTER_TEST(vmm_hhdm_take_semantics);
 #endif
     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
