@@ -767,9 +767,9 @@ else
 coverage-build: CXX := x86_64-elf-g++
 coverage-build: CXXFLAGS := $(COVERAGE_FLAGS)
 coverage-build: LD_LIBS := $(COVERAGE_LD_LIBS)
-coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
+coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) linker/linker_$(ARCH).ld iso/boot
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (coverage)'
-	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(COVERAGE_LD_LIBS)
+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(COVERAGE_LD_LIBS)
 	cp $(KERNEL) iso/boot/kernel.elf
 	@mkdir -p $(dir $(DEBUG_ISO)) $(COVERAGE_DIR) $(dir $(BUILD_STAMP))
 	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null

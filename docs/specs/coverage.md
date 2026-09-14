@@ -1,7 +1,8 @@
 # Dynamic Test Coverage
 
 > Status: **Phase B implemented** (function-level, 2026-09-06, issue #122).
-> Phase A (line/branch level via real gcov) is designed but not implemented.
+> Phase A (line/branch level via real gcov) implemented 2026-09-14,
+> issue #147 (single-class, cross-class merge, lcov HTML, BRDA column).
 
 ## 1. Why
 
@@ -103,13 +104,31 @@ from instrumentation, so it always shows 0 %.
 - `make coverage-build` runs `clean`, which removes `build/` **including
   previous captures**.
 
-## 6. Phase A (designed, not implemented)
+## 6. Phase A (implemented, issue #147)
 
-The cross toolchain ships a freestanding-safe `libgcov.a` (only undefined
-symbol: `strlen`) and `gcov.h`, exporting `__gcov_info_to_gcda()` and
-`__gcov_filename_to_gcfn()`; `x86_64-elf-gcov`, `x86_64-elf-gcov-tool`
-(merge), `lcov` and `genhtml` are installed.  Plan: build with
-`-fprofile-arcs -ftest-coverage`, intercept `__gcov_init()` to collect the
-`gcov_info*` set, serialise each `.gcda` stream over COM1 with framing,
-reconstruct the files next to the `.gcno`s, then run `x86_64-elf-gcov` +
-`lcov`/`genhtml`; merge per-class runs with `x86_64-elf-gcov-tool merge`.
+Single-class line coverage works end to end (`make coverage-build
+COVERAGE_PHASE=line`, `make coverage-class CLASS=<c>`, `python3
+tools/gcov_line_report.py --dir build/coverage --out build/coverage`):
+framed+checksummed dump over COM1, host reconstruction next to the
+`.gcno`s, `x86_64-elf-gcov` text parse as the authoritative numbers
+(`line-report.md`), plus `lcov`/`genhtml` best-effort HTML.
+
+Cross-class merge works with plain `x86_64-elf-gcov-tool merge` — NO
+gcfn record needed (verified: identical basenames merge with exact
+counter sums).  The earlier Skip-all was a tool quirk, not a stream
+defect: gcov-tool 16.1 only processes TOP-LEVEL `*.gcda` files and
+silently Skips anything in subdirectories.  Since per-class trees
+mirror repo-relative paths (`build/...`), `merge_dirs()` folds each
+relative leaf directory separately into a mirrored output tree
+(per-file counter summation makes leaf folding byte-equivalent to a
+recursive merge).  An empty merge is an ERROR (fail-loud fallback to
+the first class).
+
+lcov 2.4 vs gcov 16.1 end-line skew is handled with
+`--ignore-errors mismatch,empty,source,path,inconsistent,unused`
+(capture) and `--ignore-errors source,inconsistent` (genhtml); no
+wrapper script needed.  `line-report.md` stays authoritative.
+
+Branch coverage: `summarise_with_gcov()` runs `gcov -b` and reports a
+`BrCoverage` column alongside lines (additive; line semantics
+unchanged).
