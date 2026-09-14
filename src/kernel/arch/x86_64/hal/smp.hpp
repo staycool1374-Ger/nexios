@@ -58,9 +58,17 @@ static constexpr uint64_t PARAM_ENTRY = 0x18;
 static constexpr uint64_t PARAM_LOGICAL = 0x20;
 static constexpr uint64_t PARAM_LAPIC = 0x28;
 
+/// @brief Sanity cap for the multiboot2 info relocation (issue #153):
+///        at most 8 pages (32 KiB) are ever copied out of the trampoline
+///        block.  Observed total_size is ~7512 bytes; anything larger is
+///        treated as malformed and parks with 0 APs.
+static constexpr uint64_t MB2_RELOC_MAX_PAGES = 8;
+
 /// @brief True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM
 ///        (multiboot2 memory map type 1) — the occupancy contract the
-///        fixed-address copy depends on.
+///        fixed-address copy depends on.  This checks the firmware map
+///        only: overlap with the LIVE multiboot info range is handled by
+///        the stomper (bring_up relocates the info first, issue #153).
 bool trampoline_block_usable();
 
 /// @brief Claim the trampoline block from PMM.  Must run right after

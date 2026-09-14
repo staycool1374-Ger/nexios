@@ -37,6 +37,8 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/memory/address.hpp>
+#include <kernel/multiboot2.hpp>
 #include <kernel/kernel.hpp>
 #include <assert.hpp>
 #include <kernel/bootparams.hpp>
@@ -108,6 +110,63 @@ void trampoline_write32(uint64_t field_off, uint32_t value) {
     *p = value;
 }
 
+/// @brief Relocate the live multiboot2 info out of the trampoline block
+///        (issue #153).  GRUB may place its info inside [TRAMPOLINE_ADDR,
+///        +4K): staging the blob would then overwrite total_size and every
+///        late mb2 reader (locate_rsdp/scan_dmar) walks garbage → #PF.
+///        On overlap the info is copied to PMM-held page(s) and both
+///        multiboot_info_ptr and the BootInfo mirror are repointed to the
+///        PHYSICAL copy (mb2 readers deref raw or add HHDM_OFFSET, so an
+///        HHDM virtual address would misroute them).
+/// @return true when staging may proceed (no overlap, relocated, or no
+///         live info); false when malformed/OOM — caller parks with 0 APs.
+bool relocate_mb2_out_of_trampoline() {
+    constexpr uint64_t kMb2Magic = 0x36D76289ULL;
+    constexpr uint64_t kBlockEnd = TRAMPOLINE_ADDR + 4096;
+    // Raw mb2 readers use the identity-mapped low window (PD_IDENTITY
+    // covers 0..128 MiB); the copy must live inside it.
+    constexpr uint64_t kIdentityLimit = 0x08000000ULL;
+    if (kernel::gs::get_multiboot_magic() != kMb2Magic)
+        return true;
+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
+    if (info_ptr == 0)
+        return true;
+    // Same raw read mb2_find_tag performs (readable here: the pre-staging
+    // scan_madt below already walked these tables under this PML4).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *info = reinterpret_cast<const volatile Multiboot2Info *>(info_ptr);
+    uint64_t total_size = info->total_size;
+    if (total_size < 8 || total_size > MB2_RELOC_MAX_PAGES * 4096)
+        return false;
+    uint64_t info_end = info_ptr + total_size;
+    if (info_end < info_ptr)
+        return false;  // wrap: malformed range
+    if (info_end <= TRAMPOLINE_ADDR || info_ptr >= kBlockEnd)
+        return true;  // disjoint: staging safe
+    uint64_t page_count = (total_size + 4095) / 4096;
+    uint64_t new_phys = kernel::PMM::alloc_contiguous(page_count);
+    if (new_phys == 0)
+        return false;
+    if (new_phys > UINT64_MAX - total_size)
+        return false;  // wrap: malformed range
+    if (new_phys + total_size > kIdentityLimit)
+        return false;  // outside the raw-readable window: park, keep page
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *dst =
+        reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET + new_phys);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *src = reinterpret_cast<const volatile uint8_t *>(info_ptr);
+    for (uint64_t i = 0; i < total_size; ++i)
+        dst[i] = src[i];
+    kernel::gs::WriteContext ctx{kernel::gs::StatePhase::BOOT, 0};
+    if (!kernel::gs::try_set_multiboot(kMb2Magic, new_phys, ctx))
+        return false;
+    kernel::gs::boot_info().multiboot_info = new_phys;
+    // The old info-range reservation is kept: after staging it protects
+    // the live trampoline code.  The new page is PMM-owned already.
+    return true;
+}
+
 } // namespace
 
 bool trampoline_block_usable() {
@@ -163,6 +222,15 @@ void bring_up() {
     if (!g_block_reserved) {
         kernel::Logger::warn(
             "SMP: trampoline block not reserved — parking with 0 APs");
+        return;
+    }
+    // Issue #153: the stomper relocates first — when GRUB's live
+    // multiboot info overlaps the block, staging would overwrite
+    // total_size and fault every late mb2 reader.  Relocation precedes
+    // the copy; failure parks with 0 APs (never stages over data).
+    if (!relocate_mb2_out_of_trampoline()) {
+        kernel::Logger::warn("SMP: multiboot info relocation failed — "
+                             "parking with 0 APs");
         return;
     }
     // Copy the position-locked blob to its org address (identity-mapped,

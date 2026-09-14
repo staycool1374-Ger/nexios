@@ -1,489 +1,265 @@
-diff --git a/Makefile b/Makefile
-index bbeb479a..7f2c7fe9 100644
---- a/Makefile
-+++ b/Makefile
-@@ -767,9 +767,9 @@ else
- coverage-build: CXX := x86_64-elf-g++
- coverage-build: CXXFLAGS := $(COVERAGE_FLAGS)
- coverage-build: LD_LIBS := $(COVERAGE_LD_LIBS)
--coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
-+coverage-build: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) linker/linker_$(ARCH).ld iso/boot
- 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (coverage)'
--	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(COVERAGE_LD_LIBS)
-+	$(LD) $(LDFLAGS) -o $(KERNEL) $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(COVERAGE_LD_LIBS)
- 	cp $(KERNEL) iso/boot/kernel.elf
- 	@mkdir -p $(dir $(DEBUG_ISO)) $(COVERAGE_DIR) $(dir $(BUILD_STAMP))
- 	@grub-mkrescue -o $(DEBUG_ISO) iso 2>/dev/null
-diff --git a/docs/specs/coverage.md b/docs/specs/coverage.md
-index de81bb36..3ef666f7 100644
---- a/docs/specs/coverage.md
-+++ b/docs/specs/coverage.md
-@@ -1,7 +1,8 @@
- # Dynamic Test Coverage
+diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
+index b00eca8d..873c873a 100644
+--- a/src/kernel/arch/x86_64/hal/smp.cpp
++++ b/src/kernel/arch/x86_64/hal/smp.cpp
+@@ -37,6 +37,8 @@
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/memory/address.hpp>
++#include <kernel/multiboot2.hpp>
+ #include <kernel/kernel.hpp>
+ #include <assert.hpp>
+ #include <kernel/bootparams.hpp>
+@@ -108,6 +110,61 @@ void trampoline_write32(uint64_t field_off, uint32_t value) {
+     *p = value;
+ }
  
- > Status: **Phase B implemented** (function-level, 2026-09-06, issue #122).
--> Phase A (line/branch level via real gcov) is designed but not implemented.
-+> Phase A (line/branch level via real gcov) implemented 2026-09-14,
-+> issue #147 (single-class, cross-class merge, lcov HTML, BRDA column).
++/// @brief Relocate the live multiboot2 info out of the trampoline block
++///        (issue #153).  GRUB may place its info inside [TRAMPOLINE_ADDR,
++///        +4K): staging the blob would then overwrite total_size and every
++///        late mb2 reader (locate_rsdp/scan_dmar) walks garbage → #PF.
++///        On overlap the info is copied to PMM-held page(s) and both
++///        multiboot_info_ptr and the BootInfo mirror are repointed to the
++///        PHYSICAL copy (mb2 readers deref raw or add HHDM_OFFSET, so an
++///        HHDM virtual address would misroute them).
++/// @return true when staging may proceed (no overlap, relocated, or no
++///         live info); false when malformed/OOM — caller parks with 0 APs.
++bool relocate_mb2_out_of_trampoline() {
++    constexpr uint64_t kMb2Magic = 0x36D76289ULL;
++    constexpr uint64_t kBlockEnd = TRAMPOLINE_ADDR + 4096;
++    // Raw mb2 readers use the identity-mapped low window (PD_IDENTITY
++    // covers 0..128 MiB); the copy must live inside it.
++    constexpr uint64_t kIdentityLimit = 0x08000000ULL;
++    if (kernel::gs::get_multiboot_magic() != kMb2Magic)
++        return true;
++    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
++    if (info_ptr == 0)
++        return true;
++    // Same raw read mb2_find_tag performs (readable here: the pre-staging
++    // scan_madt below already walked these tables under this PML4).
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *info = reinterpret_cast<const volatile Multiboot2Info *>(info_ptr);
++    uint64_t total_size = info->total_size;
++    if (total_size < 8 || total_size > MB2_RELOC_MAX_PAGES * 4096)
++        return false;
++    uint64_t info_end = info_ptr + total_size;
++    if (info_end < info_ptr)
++        return false;  // wrap: malformed range
++    if (info_end <= TRAMPOLINE_ADDR || info_ptr >= kBlockEnd)
++        return true;  // disjoint: staging safe
++    uint64_t page_count = (total_size + 4095) / 4096;
++    uint64_t new_phys = kernel::PMM::alloc_contiguous(page_count);
++    if (new_phys == 0)
++        return false;
++    if (new_phys + total_size > kIdentityLimit)
++        return false;  // outside the raw-readable window: park, keep page
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *dst =
++        reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET + new_phys);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *src = reinterpret_cast<const volatile uint8_t *>(info_ptr);
++    for (uint64_t i = 0; i < total_size; ++i)
++        dst[i] = src[i];
++    kernel::gs::WriteContext ctx{kernel::gs::StatePhase::BOOT, 0};
++    if (!kernel::gs::try_set_multiboot(kMb2Magic, new_phys, ctx))
++        return false;
++    kernel::gs::boot_info().multiboot_info = new_phys;
++    // The old info-range reservation is kept: after staging it protects
++    // the live trampoline code.  The new page is PMM-owned already.
++    return true;
++}
++
+ } // namespace
  
- ## 1. Why
+ bool trampoline_block_usable() {
+@@ -165,6 +222,15 @@ void bring_up() {
+             "SMP: trampoline block not reserved — parking with 0 APs");
+         return;
+     }
++    // Issue #153: the stomper relocates first — when GRUB's live
++    // multiboot info overlaps the block, staging would overwrite
++    // total_size and fault every late mb2 reader.  Relocation precedes
++    // the copy; failure parks with 0 APs (never stages over data).
++    if (!relocate_mb2_out_of_trampoline()) {
++        kernel::Logger::warn("SMP: multiboot info relocation failed — "
++                             "parking with 0 APs");
++        return;
++    }
+     // Copy the position-locked blob to its org address (identity-mapped,
+     // writable low RAM) BEFORE the CPU-count gate: the block then holds
+     // the blob on every boot, which the smp_bringup test verifies by
+diff --git a/src/kernel/arch/x86_64/hal/smp.hpp b/src/kernel/arch/x86_64/hal/smp.hpp
+index e0fdf8f2..0d896ae3 100644
+--- a/src/kernel/arch/x86_64/hal/smp.hpp
++++ b/src/kernel/arch/x86_64/hal/smp.hpp
+@@ -58,9 +58,17 @@ static constexpr uint64_t PARAM_ENTRY = 0x18;
+ static constexpr uint64_t PARAM_LOGICAL = 0x20;
+ static constexpr uint64_t PARAM_LAPIC = 0x28;
  
-@@ -103,13 +104,31 @@ from instrumentation, so it always shows 0 %.
- - `make coverage-build` runs `clean`, which removes `build/` **including
-   previous captures**.
++/// @brief Sanity cap for the multiboot2 info relocation (issue #153):
++///        at most 8 pages (32 KiB) are ever copied out of the trampoline
++///        block.  Observed total_size is ~7512 bytes; anything larger is
++///        treated as malformed and parks with 0 APs.
++static constexpr uint64_t MB2_RELOC_MAX_PAGES = 8;
++
+ /// @brief True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM
+ ///        (multiboot2 memory map type 1) — the occupancy contract the
+-///        fixed-address copy depends on.
++///        fixed-address copy depends on.  This checks the firmware map
++///        only: overlap with the LIVE multiboot info range is handled by
++///        the stomper (bring_up relocates the info first, issue #153).
+ bool trampoline_block_usable();
  
--## 6. Phase A (designed, not implemented)
--
--The cross toolchain ships a freestanding-safe `libgcov.a` (only undefined
--symbol: `strlen`) and `gcov.h`, exporting `__gcov_info_to_gcda()` and
--`__gcov_filename_to_gcfn()`; `x86_64-elf-gcov`, `x86_64-elf-gcov-tool`
--(merge), `lcov` and `genhtml` are installed.  Plan: build with
--`-fprofile-arcs -ftest-coverage`, intercept `__gcov_init()` to collect the
--`gcov_info*` set, serialise each `.gcda` stream over COM1 with framing,
--reconstruct the files next to the `.gcno`s, then run `x86_64-elf-gcov` +
--`lcov`/`genhtml`; merge per-class runs with `x86_64-elf-gcov-tool merge`.
-+## 6. Phase A (implemented, issue #147)
-+
-+Single-class line coverage works end to end (`make coverage-build
-+COVERAGE_PHASE=line`, `make coverage-class CLASS=<c>`, `python3
-+tools/gcov_line_report.py --dir build/coverage --out build/coverage`):
-+framed+checksummed dump over COM1, host reconstruction next to the
-+`.gcno`s, `x86_64-elf-gcov` text parse as the authoritative numbers
-+(`line-report.md`), plus `lcov`/`genhtml` best-effort HTML.
-+
-+Cross-class merge works with plain `x86_64-elf-gcov-tool merge` — NO
-+gcfn record needed (verified: identical basenames merge with exact
-+counter sums).  The earlier Skip-all was a tool quirk, not a stream
-+defect: gcov-tool 16.1 only processes TOP-LEVEL `*.gcda` files and
-+silently Skips anything in subdirectories.  Since per-class trees
-+mirror repo-relative paths (`build/...`), `merge_dirs()` folds each
-+relative leaf directory separately into a mirrored output tree
-+(per-file counter summation makes leaf folding byte-equivalent to a
-+recursive merge).  An empty merge is an ERROR (fail-loud fallback to
-+the first class).
-+
-+lcov 2.4 vs gcov 16.1 end-line skew is handled with
-+`--ignore-errors mismatch,empty,source,path,inconsistent,unused`
-+(capture) and `--ignore-errors source,inconsistent` (genhtml); no
-+wrapper script needed.  `line-report.md` stays authoritative.
-+
-+Branch coverage: `summarise_with_gcov()` runs `gcov -b` and reports a
-+`BrCoverage` column alongside lines (additive; line semantics
-+unchanged).
-diff --git a/tools/gcov_line_report.py b/tools/gcov_line_report.py
-index 78dcb913..0bb690c5 100644
---- a/tools/gcov_line_report.py
-+++ b/tools/gcov_line_report.py
-@@ -98,8 +98,28 @@ def write_gcda(frames, root, cwd):
-     return written
+ /// @brief Claim the trampoline block from PMM.  Must run right after
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 0e24bcd5..5e799faa 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+     {"selftest",            133,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                1238,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18)
++    {"all",                1240,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153)
  
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -113,7 +113,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"acpi_parse",             3,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity
+     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
+     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
+-    {"smp_bringup",            3,   0,       0      },  // AP bring-up (issue #25 Phase B4): blob layout, staged block memcmp, parked count == MADT APs
++    {"smp_bringup",            5,   0,       0      },  // AP bring-up (issue #25 Phase B4 + #153): blob layout, staged block memcmp, parked count == MADT APs, mb2 intact + relocated
+     {"sched_affinity",         6,   0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle
+     {"smp_sched",              5,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass)
+     {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
+diff --git a/src/kernel/test/test_smp_bringup.cpp b/src/kernel/test/test_smp_bringup.cpp
+index 01fad4b1..09414f91 100644
+--- a/src/kernel/test/test_smp_bringup.cpp
++++ b/src/kernel/test/test_smp_bringup.cpp
+@@ -39,6 +39,7 @@
+ #include <kernel/arch/x86_64/hal/apic.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/multiboot2.hpp>
++#include <kernel/core/global_state.hpp>
  
-+def _leaf_gcda_dirs(root):
-+    """Map relative dir -> sorted .gcda basenames for one class tree."""
-+    leaves = {}
-+    for dirpath, _dirnames, files in os.walk(root):
-+        gcdas = sorted(entry for entry in files if entry.endswith(".gcda"))
-+        if gcdas:
-+            leaves[os.path.relpath(dirpath, root)] = gcdas
-+    return leaves
-+
-+
- def merge_dirs(source_dirs, out_dir):
--    """Fold per-class gcda directories together with gcov-tool merge."""
-+    """Fold per-class gcda directories together with gcov-tool merge.
-+
-+    gcov-tool merge (gcov 16.1) only processes TOP-LEVEL *.gcda files:
-+    anything in a subdirectory is enumerated and then reported as
-+    "Skip" (verified: flat same-name pairs merge with exact counter
-+    sums, e.g. 327+291=618; nested pairs skip).  Our per-class trees
-+    mirror repo-relative paths (build/...), so merge each relative leaf
-+    directory separately into a mirrored output tree.  Merging is
-+    per-file (counter arrays summed per function id), therefore
-+    leaf-by-leaf folding is byte-equivalent to a recursive merge.
-+    """
-     if not source_dirs:
-         return None
-     if len(source_dirs) == 1:
-@@ -111,13 +131,26 @@ def merge_dirs(source_dirs, out_dir):
-         step_dir = os.path.join(out_dir + ".step%d" % index)
-         if os.path.exists(step_dir):
-             shutil.rmtree(step_dir)
--        os.makedirs(step_dir, exist_ok=True)
--        subprocess.run(
--            [GCOV_MERGE, "merge", current, nxt, "-o", step_dir],
--            check=True,
--            stdout=subprocess.DEVNULL,
--            stderr=subprocess.DEVNULL,
--        )
-+        current_leaves = _leaf_gcda_dirs(current)
-+        next_leaves = _leaf_gcda_dirs(nxt)
-+        for rel in sorted(set(current_leaves) | set(next_leaves)):
-+            first = os.path.join(current, rel)
-+            second = os.path.join(nxt, rel)
-+            dest = os.path.join(step_dir, rel)
-+            os.makedirs(dest, exist_ok=True)
-+            if os.path.isdir(first) and os.path.isdir(second):
-+                result = subprocess.run(
-+                    [GCOV_MERGE, "merge", first, second, "-o", dest],
-+                    stdout=subprocess.DEVNULL,
-+                    stderr=subprocess.DEVNULL,
-+                )
-+                if result.returncode != 0:
-+                    raise RuntimeError(
-+                        "gcov-tool merge failed for leaf %s" % rel)
-+            else:
-+                # Leaf exists on one side only: union, not merge.
-+                shutil.copytree(first if os.path.isdir(first) else second,
-+                                dest, dirs_exist_ok=True)
-         current = step_dir
+ using namespace kernel;
  
-     if os.path.exists(out_dir):
-@@ -128,6 +161,7 @@ def merge_dirs(source_dirs, out_dir):
+@@ -168,10 +169,104 @@ JARVIS_TEST(smp_bringup_ap_count_matches_madt, "PRE: iocd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
  
- GCOV_LINE_RE = re.compile(
-     r"^\s*(?P<count>-|\d+|[#$%]+)\s*:\s*(?P<line>\d+)\s*:")
-+GCOV_BRANCH_RE = re.compile(r"^\s*branch\s+\d+\s+(?P<taken>.*)$")
- 
- 
- def summarise_with_gcov(gcno_root, out_dir):
-@@ -146,14 +180,15 @@ def summarise_with_gcov(gcno_root, out_dir):
- 
-     # Run gcov from the directory holding the gcno/gcda pair: that is the only
-     # invocation form this toolchain reliably accepts (a separate -o output
--    # directory silently produces nothing).
-+    # directory silently produces nothing).  -b adds branch-probability
-+    # lines; line markers are unchanged, so line hit/miss semantics hold.
-     for root, _dirs, files in os.walk(gcno_root):
-         for entry in files:
-             if not entry.endswith(".gcno"):
-                 continue
-             if not os.path.exists(os.path.join(root, entry[:-5] + ".gcda")):
-                 continue
--            subprocess.run([GCOV, entry], cwd=root,
-+            subprocess.run([GCOV, "-b", entry], cwd=root,
-                            capture_output=True, check=False)
- 
-     for root, _dirs, files in os.walk(gcno_root):
-@@ -162,12 +197,20 @@ def summarise_with_gcov(gcno_root, out_dir):
-                 continue
-             source = None
-             hit = missed = 0
-+            branch_hit = branch_total = 0
-             with open(os.path.join(root, entry), "r",
-                       encoding="utf-8", errors="replace") as handle:
-                 for line in handle:
-                     if "Source:" in line and source is None:
-                         source = line.split("Source:", 1)[1].strip()
-                         continue
-+                    branch = GCOV_BRANCH_RE.match(line)
-+                    if branch:
-+                        # A branch counts as taken unless never executed.
-+                        branch_total += 1
-+                        if "never executed" not in branch.group("taken"):
-+                            branch_hit += 1
-+                        continue
-                     match = GCOV_LINE_RE.match(line)
-                     if not match:
-                         continue
-@@ -180,14 +223,17 @@ def summarise_with_gcov(gcno_root, out_dir):
-                         missed += 1
-             if source is None:
-                 source = entry[:-5]
--            previous = per_file.get(source, (0, 0, 0))
-+            previous = per_file.get(source, (0, 0, 0, 0, 0))
-             per_file[source] = (previous[0] + 1, previous[1] + hit,
--                                previous[2] + missed)
-+                                previous[2] + missed,
-+                                previous[3] + branch_hit,
-+                                previous[4] + branch_total)
- 
-     records = []
--    for source, (_parts, hit, missed) in per_file.items():
-+    for source, (_parts, hit, missed, branch_hit, branch_total) in \
-+            per_file.items():
-         total = hit + missed
--        records.append((source, hit, total))
-+        records.append((source, hit, total, branch_hit, branch_total))
-     return sorted(records, key=lambda item: item[0])
- 
- 
-@@ -233,12 +279,12 @@ def main():
-                        for _f in files if _f.endswith(".gcda")) if os.path.isdir(
-                            merged) else 0
-     if merged_files == 0:
--        # gcov-tool merge needs a gcfn record in each stream to match files
--        # across runs; without it every file is reported as "Skip".  Fall back
--        # to the first class so the report still carries real numbers.
--        log("WARNING: gcov-tool merge produced no files (gcfn record "
--            "missing from the dumped streams) - falling back to the first "
--            "class only. Cross-class merging is NOT applied.")
-+        # An empty merge is a hard error, never a silent single-class
-+        # report: the header below would otherwise masquerade one class
-+        # as merged.  Keep the first-class fallback so partial numbers
-+        # stay available, but say so loudly.
-+        log("ERROR: gcov-tool merge produced no files - falling back to "
-+            "the first class only. Cross-class merging is NOT applied.")
-         if os.path.exists(merged):
-             shutil.rmtree(merged)
-         shutil.copytree(per_class[0], merged)
-@@ -276,14 +322,19 @@ def main():
-             [LCOV, "--capture", "--directory", args.gcno_root,
-              "--gcov-tool", GCOV, "--output-file", info,
-              "--exclude", "*/coverage/*",
--             "--ignore-errors", "mismatch,empty,source,path"],
-+             "--ignore-errors", "mismatch,empty,source,path,inconsistent,"
-+                                "unused"],
-             check=False,
-         )
-     if os.path.exists(info) and shutil.which(GENHTML):
-+        # lcov 2.4 vs gcov 16.1 end-line skew (issue #147 follow-up C):
-+        # "inconsistent" records are skipped, "unused" covers the
-+        # coverage/* exclude when no such files remain.  line-report.md
-+        # (from gcov text output) stays authoritative; HTML is best-effort.
-         subprocess.run(
-             [GENHTML, info, "--output-directory",
-              os.path.join(args.out, "html"),
--             "--ignore-errors", "source", "--legend", "--title",
-+             "--ignore-errors", "source,inconsistent", "--legend", "--title",
-              "NexIOS line coverage"],
-             check=False,
-         )
-@@ -312,6 +363,10 @@ def main():
-     total_lines = sum(item[2] for item in records)
-     total_hit = sum(item[1] for item in records)
-     pct = (100.0 * total_hit / total_lines) if total_lines else 0.0
-+    total_branches = sum(item[4] for item in records)
-+    total_branches_hit = sum(item[3] for item in records)
-+    branch_pct = (100.0 * total_branches_hit / total_branches) \
-+        if total_branches else 0.0
- 
-     report = os.path.join(args.out, "line-report.md")
-     with open(report, "w", encoding="utf-8") as handle:
-@@ -321,18 +376,26 @@ def main():
-         handle.write("lcov info: `%s`  \nHTML tree: `%s`\n\n"
-                      % (info, os.path.join(args.out, "html")))
-         handle.write("## Totals\n\n")
--        handle.write("| Lines | Hit | Coverage |\n|---:|---:|---:|\n")
--        handle.write("| %d | %d | %.1f%% |\n\n"
--                     % (total_lines, total_hit, pct))
-+        handle.write("| Lines | Hit | Coverage | Branches | BrHit | BrCoverage |\n"
-+                     "|---:|---:|---:|---:|---:|---:|\n")
-+        handle.write("| %d | %d | %.1f%% | %d | %d | %.1f%% |\n\n"
-+                     % (total_lines, total_hit, pct, total_branches,
-+                        total_branches_hit, branch_pct))
-         handle.write("## Per file (worst first)\n\n")
--        handle.write("| File | Hit | Lines | % |\n|---|---:|---:|---:|\n")
--        for source, hit, found in sorted(
-+        handle.write("| File | Hit | Lines | % | BrHit | Br | Br% |\n"
-+                     "|---|---:|---:|---:|---:|---:|---:|\n")
-+        for source, hit, found, branch_hit, branch_total in sorted(
-                 records, key=lambda i: (i[2] and i[1] / i[2]) or 0.0):
-             if not found:
-                 continue
--            handle.write("| `%s` | %d | %d | %.1f%% |\n"
--                         % (source, hit, found, 100.0 * hit / found))
-+            branch = (100.0 * branch_hit / branch_total) if branch_total \
-+                else 0.0
-+            handle.write("| `%s` | %d | %d | %.1f%% | %d | %d | %.1f%% |\n"
-+                         % (source, hit, found, 100.0 * hit / found,
-+                            branch_hit, branch_total, branch))
-     log("\nLines: %d  Hit: %d  Coverage: %.1f%%" % (total_lines, total_hit, pct))
-+    log("Branches: %d  BrHit: %d  BrCoverage: %.1f%%"
-+        % (total_branches, total_branches_hit, branch_pct))
-     log("Report: %s" % report)
-     log("HTML:    %s" % os.path.join(args.out, "html"))
-     return 0
-diff --git a/tools/test_gcov_line_report.py b/tools/test_gcov_line_report.py
-new file mode 100644
-index 00000000..ce5a4b61
---- /dev/null
-+++ b/tools/test_gcov_line_report.py
-@@ -0,0 +1,188 @@
-+#!/usr/bin/env python3
-+"""Host unit tests for tools/gcov_line_report.py (issue #147).
++// Runmode: kernel
++// Testidea: Staging the trampoline must not destroy the multiboot info:
++//           after bring_up, total_size is sane and a bounded tag walk
++//           finds the memory-map tag (6) before the terminator.  On the
++//           old code this fails exactly when GRUB places info at 0x70000
++//           (total_size clobbered by the blob copy).
++// Input: Live multiboot_info_ptr read via the HHDM alias (test PML4s
++//        carry the kernel-half mapping; no active-PML4 mapping needed).
++// Expect: Non-GRUB boot: trivial pass.  GRUB boot: 8 <= total_size <=
++//         32 KiB, tag 6 found, walk terminates within the size bound.
++// Depends: smp::bring_up staging + relocate_mb2_out_of_trampoline (#153)
++JARVIS_TEST(smp_bringup_mb2_intact_after_staging, "PRE: iocd | POST: none") {
++    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
++        JARVIS_TEST_PASS();
++        return;
++    }
++    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
++    JARVIS_ASSERT(info_ptr != 0);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const volatile uint8_t *base =
++        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
++                                                   info_ptr);
++    uint64_t total_size = static_cast<uint64_t>(base[0]) |
++                          (static_cast<uint64_t>(base[1]) << 8) |
++                          (static_cast<uint64_t>(base[2]) << 16) |
++                          (static_cast<uint64_t>(base[3]) << 24);
++    JARVIS_ASSERT(total_size >= 8);
++    JARVIS_ASSERT(total_size <= smp::MB2_RELOC_MAX_PAGES * 4096);
++    bool found_memmap = false;
++    bool terminated = false;
++    for (uint64_t offset = 8; offset + 8 <= total_size;) {
++        uint64_t tag_off = offset;
++        uint32_t tag_type = static_cast<uint32_t>(base[tag_off]) |
++                            (static_cast<uint32_t>(base[tag_off + 1]) << 8) |
++                            (static_cast<uint32_t>(base[tag_off + 2]) << 16) |
++                            (static_cast<uint32_t>(base[tag_off + 3]) << 24);
++        uint32_t tag_size = static_cast<uint32_t>(base[tag_off + 4]) |
++                            (static_cast<uint32_t>(base[tag_off + 5]) << 8) |
++                            (static_cast<uint32_t>(base[tag_off + 6]) << 16) |
++                            (static_cast<uint32_t>(base[tag_off + 7]) << 24);
++        if (tag_type == 0) {
++            terminated = true;
++            break;
++        }
++        if (tag_type == 6)
++            found_memmap = true;
++        if (tag_size < 8)
++            break;
++        offset += (tag_size + 7) & ~7ULL;
++    }
++    JARVIS_ASSERT(terminated);
++    JARVIS_ASSERT(found_memmap);
++    JARVIS_TEST_PASS();
++}
 +
-+Regression cover for follow-up B: gcov-tool merge skips nested .gcda
-+files, so merge_dirs() must fold per leaf directory.  Uses the real
-+captured class trees under build/coverage when present, else skips.
-+Run: python3 tools/test_gcov_line_report.py
-+"""
++// Runmode: kernel
++// Testidea: The relocation invariant holds regardless of GRUB placement:
++//           the live info range never overlaps the trampoline block.  An
++//           insane total_size means bring_up must have parked (0 APs).
++// Input: Live multiboot pointer + size vs TRAMPOLINE_ADDR block.
++// Expect: Non-GRUB boot: trivial pass.  Sane size: disjoint ranges.
++//         Insane size: ap_count() == 0 (fail-closed park honored).
++// Depends: relocate_mb2_out_of_trampoline (#153), smp::ap_count
++JARVIS_TEST(smp_bringup_mb2_ptr_outside_trampoline, "PRE: iocd | POST: none") {
++    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
++        JARVIS_TEST_PASS();
++        return;
++    }
++    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
++    JARVIS_ASSERT(info_ptr != 0);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const volatile uint8_t *base =
++        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
++                                                   info_ptr);
++    uint64_t total_size = static_cast<uint64_t>(base[0]) |
++                          (static_cast<uint64_t>(base[1]) << 8) |
++                          (static_cast<uint64_t>(base[2]) << 16) |
++                          (static_cast<uint64_t>(base[3]) << 24);
++    if (total_size < 8 ||
++        total_size > smp::MB2_RELOC_MAX_PAGES * 4096) {
++        JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
++                         static_cast<uint64_t>(smp::ap_count()));
++        JARVIS_TEST_PASS();
++        return;
++    }
++    uint64_t info_end = info_ptr + total_size;
++    JARVIS_ASSERT(info_end > info_ptr);
++    JARVIS_ASSERT(info_end <= smp::TRAMPOLINE_ADDR ||
++                  info_ptr >= smp::TRAMPOLINE_ADDR + 4096);
++    JARVIS_TEST_PASS();
++}
 +
-+import os
-+import shutil
-+import struct
-+import subprocess
-+import sys
-+import tempfile
-+import unittest
-+
-+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-+
-+import gcov_line_report as glr
-+
-+COVERAGE_DIR = os.path.join(os.getcwd(), "build", "coverage")
-+
-+
-+def counter_values(path):
-+    """All COUNTERS u64 values in a .gcda file, in record order."""
-+    with open(path, "rb") as handle:
-+        data = handle.read()
-+    values = []
-+    off = 16  # magic, version, stamp, checksum
-+    while off + 8 <= len(data):
-+        tag, length = struct.unpack("<II", data[off:off + 8])
-+        payload = data[off + 8:off + 8 + length]
-+        if tag == 0x01A10000 and len(payload) == length:
-+            values.extend(struct.unpack("<%dQ" % (length // 8), payload))
-+        off += 8 + length
-+    return values
-+
-+
-+def needs_capture(test):
-+    """Skip unless both single-class captures exist."""
-+    for name in ("basic_lib", "kernel_top"):
-+        gcda = os.path.join(COVERAGE_DIR, name, "gcda")
-+        if not os.path.isdir(gcda):
-+            test.skipTest("missing capture: %s" % gcda)
-+    return test
-+
-+
-+class MergeDirsTest(unittest.TestCase):
-+    @needs_capture
-+    def test_two_class_merge_nonempty(self):
-+        """Two real class trees merge to the full file set (no fallback)."""
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            out = os.path.join(tmp, "merged")
-+            glr.merge_dirs(
-+                [os.path.join(COVERAGE_DIR, "basic_lib", "gcda"),
-+                 os.path.join(COVERAGE_DIR, "kernel_top", "gcda")],
-+                out)
-+            merged = [os.path.join(r, f)
-+                      for r, _d, fs in os.walk(out) for f in fs
-+                      if f.endswith(".gcda")]
-+            first = [os.path.join(r, f)
-+                     for r, _d, fs in
-+                     os.walk(os.path.join(COVERAGE_DIR, "basic_lib", "gcda"))
-+                     for f in fs if f.endswith(".gcda")]
-+            self.assertGreater(len(merged), 0)
-+            self.assertEqual(len(merged), len(first))
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+    @needs_capture
-+    def test_merge_sums_counters(self):
-+        """Merged counters equal the per-class sum (not first-wins)."""
-+        first = os.path.join(COVERAGE_DIR, "basic_lib", "gcda",
-+                             "build", "lib", "logger.gcda")
-+        second = os.path.join(COVERAGE_DIR, "kernel_top", "gcda",
-+                              "build", "lib", "logger.gcda")
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            first_dir = os.path.join(tmp, "a")
-+            second_dir = os.path.join(tmp, "b")
-+            os.makedirs(first_dir)
-+            os.makedirs(second_dir)
-+            shutil.copy(first, first_dir)
-+            shutil.copy(second, second_dir)
-+            out = os.path.join(tmp, "merged")
-+            glr.merge_dirs([first_dir, second_dir], out)
-+            merged_values = counter_values(
-+                os.path.join(out, "logger.gcda"))
-+            first_values = counter_values(os.path.join(first_dir,
-+                                                        "logger.gcda"))
-+            second_values = counter_values(os.path.join(second_dir,
-+                                                         "logger.gcda"))
-+            self.assertEqual(len(merged_values), len(first_values))
-+            self.assertTrue(any(value > 0 for value in merged_values),
-+                            "expected nonzero merged counters")
-+            for merged_value, first_value, second_value in zip(
-+                    merged_values, first_values, second_values):
-+                self.assertEqual(merged_value, first_value + second_value)
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+    def test_merge_union_single_side_leaf(self):
-+        """A leaf present on one side only is copied through (union)."""
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            first = os.path.join(tmp, "a", "sub")
-+            os.makedirs(first)
-+            with open(os.path.join(first, "only.gcda"), "wb") as handle:
-+                handle.write(b"sentinel")
-+            os.makedirs(os.path.join(tmp, "b"))
-+            out = os.path.join(tmp, "merged")
-+            glr.merge_dirs([os.path.join(tmp, "a"), os.path.join(tmp, "b")],
-+                           out)
-+            self.assertTrue(os.path.isfile(
-+                os.path.join(out, "sub", "only.gcda")))
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+    def test_leaf_helper_finds_only_gcda_dirs(self):
-+        """_leaf_gcda_dirs maps relative dirs holding .gcda files."""
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            os.makedirs(os.path.join(tmp, "x", "y"))
-+            open(os.path.join(tmp, "x", "y", "one.gcda"), "wb").close()
-+            open(os.path.join(tmp, "x", "note.txt"), "wb").close()
-+            leaves = glr._leaf_gcda_dirs(tmp)
-+            self.assertEqual(leaves, {os.path.join("x", "y"): ["one.gcda"]})
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+
-+class ParseCaptureTest(unittest.TestCase):
-+    def test_rejects_abort(self):
-+        """ABORT sentinel invalidates the whole capture."""
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            path = os.path.join(tmp, "serial.raw")
-+            with open(path, "wb") as handle:
-+                handle.write(b"@@GCDABEGIN@@\n@@GCDAABORT@@\n@@GCDAEND@@\n")
-+            self.assertIsNone(glr.parse_capture(path))
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+    def test_rejects_truncated_payload(self):
-+        """Declared length beyond available bytes invalidates the capture."""
-+        tmp = tempfile.mkdtemp()
-+        try:
-+            path = os.path.join(tmp, "serial.raw")
-+            with open(path, "wb") as handle:
-+                handle.write(b"@@GCDABEGIN@@\nGCOV:100:x.gcda\nshort\n"
-+                             b"@@GCDAEND@@\n")
-+            self.assertIsNone(glr.parse_capture(path))
-+        finally:
-+            shutil.rmtree(tmp, ignore_errors=True)
-+
-+
-+class BranchParseTest(unittest.TestCase):
-+    GCOV_SAMPLE = (
-+        "        -:    0:Source:sample.cpp\n"
-+        "        5:    1:int f(int x) {\n"
-+        "        5:    2:  if (x) {\n"
-+        "branch  0 taken 80%\n"
-+        "branch  1 taken 20%\n"
-+        "        1:    3:    return 1;\n"
-+        "    #####:    4:  }\n"
-+        "branch  2 never executed\n"
-+        "        -:    5:}\n"
-+    )
-+
-+    def test_branch_regex_counts(self):
-+        """BRDA lines: 3 total, 2 taken (never-executed excluded)."""
-+        taken = total = 0
-+        for line in self.GCOV_SAMPLE.splitlines():
-+            match = glr.GCOV_BRANCH_RE.match(line)
-+            if not match:
-+                continue
-+            total += 1
-+            if "never executed" not in match.group("taken"):
-+                taken += 1
-+        self.assertEqual(total, 3)
-+        self.assertEqual(taken, 2)
-+
-+
-+if __name__ == "__main__":
-+    subprocess.run([sys.executable, "-c", "pass"], check=True)
-+    unittest.main(verbosity=2)
+ void register_smp_bringup_tests() {
+     Logger::info("Registering smp bringup tests");
+     JARVIS_REGISTER_TEST(smp_bringup_blob_layout_sane);
+     JARVIS_REGISTER_TEST(smp_bringup_block_holds_blob);
+     JARVIS_REGISTER_TEST(smp_bringup_ap_count_matches_madt);
++    JARVIS_REGISTER_TEST(smp_bringup_mb2_intact_after_staging);
++    JARVIS_REGISTER_TEST(smp_bringup_mb2_ptr_outside_trampoline);
+ }
+ #endif // CONFIG_ARCH_X86_64
+diff --git a/test-history.txt b/test-history.txt
+index 7e5ad5cb..9b6236b2 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -935,3 +935,7 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 00:30:00 pml4_sync PASSED: 5 FAILED: 0 TIME: 120ms
+ 2026-09-15 00:38:00 per_cpu PASSED: 3 FAILED: 0 TIME: 72ms
+ 2026-09-15 00:52:00 all PASSED: 1346 FAILED: 0 TIME: 104049ms
++ all PASSED: 1346 FAILED: 0 TIME: 94412ms
++2026-09-15 01:20:00 smp_bringup PASSED: 5 FAILED: 0 TIME: 129ms
++2026-09-15 01:26:00 all PASSED: 85 FAILED: 0 TIME: 17061ms
++2026-09-15 01:30:00 all PASSED: 1348 FAILED: 0 TIME: 109246ms

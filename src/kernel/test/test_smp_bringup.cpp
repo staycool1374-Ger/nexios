@@ -39,6 +39,7 @@
 #include <kernel/arch/x86_64/hal/apic.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/multiboot2.hpp>
+#include <kernel/core/global_state.hpp>
 
 using namespace kernel;
 
@@ -168,10 +169,104 @@ JARVIS_TEST(smp_bringup_ap_count_matches_madt, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Staging the trampoline must not destroy the multiboot info:
+//           after bring_up, total_size is sane and a bounded tag walk
+//           finds the memory-map tag (6) before the terminator.  On the
+//           old code this fails exactly when GRUB places info at 0x70000
+//           (total_size clobbered by the blob copy).
+// Input: Live multiboot_info_ptr read via the HHDM alias (test PML4s
+//        carry the kernel-half mapping; no active-PML4 mapping needed).
+// Expect: Non-GRUB boot: trivial pass.  GRUB boot: 8 <= total_size <=
+//         32 KiB, tag 6 found, walk terminates within the size bound.
+// Depends: smp::bring_up staging + relocate_mb2_out_of_trampoline (#153)
+JARVIS_TEST(smp_bringup_mb2_intact_after_staging, "PRE: iocd | POST: none") {
+    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
+    JARVIS_ASSERT(info_ptr != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const volatile uint8_t *base =
+        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
+                                                   info_ptr);
+    uint64_t total_size = static_cast<uint64_t>(base[0]) |
+                          (static_cast<uint64_t>(base[1]) << 8) |
+                          (static_cast<uint64_t>(base[2]) << 16) |
+                          (static_cast<uint64_t>(base[3]) << 24);
+    JARVIS_ASSERT(total_size >= 8);
+    JARVIS_ASSERT(total_size <= smp::MB2_RELOC_MAX_PAGES * 4096);
+    bool found_memmap = false;
+    bool terminated = false;
+    for (uint64_t offset = 8; offset + 8 <= total_size;) {
+        uint64_t tag_off = offset;
+        uint32_t tag_type = static_cast<uint32_t>(base[tag_off]) |
+                            (static_cast<uint32_t>(base[tag_off + 1]) << 8) |
+                            (static_cast<uint32_t>(base[tag_off + 2]) << 16) |
+                            (static_cast<uint32_t>(base[tag_off + 3]) << 24);
+        uint32_t tag_size = static_cast<uint32_t>(base[tag_off + 4]) |
+                            (static_cast<uint32_t>(base[tag_off + 5]) << 8) |
+                            (static_cast<uint32_t>(base[tag_off + 6]) << 16) |
+                            (static_cast<uint32_t>(base[tag_off + 7]) << 24);
+        if (tag_type == 0) {
+            terminated = true;
+            break;
+        }
+        if (tag_type == 6)
+            found_memmap = true;
+        if (tag_size < 8)
+            break;
+        offset += (tag_size + 7) & ~7ULL;
+    }
+    JARVIS_ASSERT(terminated);
+    JARVIS_ASSERT(found_memmap);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The relocation invariant holds regardless of GRUB placement:
+//           the live info range never overlaps the trampoline block.  An
+//           insane total_size means bring_up must have parked (0 APs).
+// Input: Live multiboot pointer + size vs TRAMPOLINE_ADDR block.
+// Expect: Non-GRUB boot: trivial pass.  Sane size: disjoint ranges.
+//         Insane size: ap_count() == 0 (fail-closed park honored).
+// Depends: relocate_mb2_out_of_trampoline (#153), smp::ap_count
+JARVIS_TEST(smp_bringup_mb2_ptr_outside_trampoline, "PRE: iocd | POST: none") {
+    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
+    JARVIS_ASSERT(info_ptr != 0);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const volatile uint8_t *base =
+        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
+                                                   info_ptr);
+    uint64_t total_size = static_cast<uint64_t>(base[0]) |
+                          (static_cast<uint64_t>(base[1]) << 8) |
+                          (static_cast<uint64_t>(base[2]) << 16) |
+                          (static_cast<uint64_t>(base[3]) << 24);
+    if (total_size < 8 ||
+        total_size > smp::MB2_RELOC_MAX_PAGES * 4096) {
+        JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                         static_cast<uint64_t>(smp::ap_count()));
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint64_t info_end = info_ptr + total_size;
+    JARVIS_ASSERT(info_end > info_ptr);
+    JARVIS_ASSERT(info_end <= smp::TRAMPOLINE_ADDR ||
+                  info_ptr >= smp::TRAMPOLINE_ADDR + 4096);
+    JARVIS_TEST_PASS();
+}
+
 void register_smp_bringup_tests() {
     Logger::info("Registering smp bringup tests");
     JARVIS_REGISTER_TEST(smp_bringup_blob_layout_sane);
     JARVIS_REGISTER_TEST(smp_bringup_block_holds_blob);
     JARVIS_REGISTER_TEST(smp_bringup_ap_count_matches_madt);
+    JARVIS_REGISTER_TEST(smp_bringup_mb2_intact_after_staging);
+    JARVIS_REGISTER_TEST(smp_bringup_mb2_ptr_outside_trampoline);
 }
 #endif // CONFIG_ARCH_X86_64
