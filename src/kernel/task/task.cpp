@@ -22,6 +22,7 @@
 
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/elf/elf_shared.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <kernel/debug/dump.hpp>
@@ -1874,6 +1875,11 @@ void TaskControlBlock::cleanup() noexcept {
         // pager-mapped ledger PTE must never outlive the frames it references
         // (the pager owns the frames; the client's teardown unmaps them first).
         kernel::ipc::PagerRegistry::drain_task(*this);
+        // Issue #95: release acquired shared libs BEFORE free_user_pages —
+        // shared RO phys lifetime belongs to the cache (refcount); the
+        // blind per-pml4 teardown would otherwise double-free it.  The
+        // drain unmaps shared RO from this pml4 first.
+        kernel::elf::release_task_libs(this);
 
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot

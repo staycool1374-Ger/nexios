@@ -20,6 +20,7 @@
 /// @brief Background, preemptible, cancellable ELF loader implementation.
 
 #include <kernel/elf/elf_loader.hpp>
+#include <kernel/elf/elf_shared.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
@@ -82,6 +83,9 @@ TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
 TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
 char ElfLoader::msg_buf_[16][160] = {};
 uint32_t ElfLoader::msg_idx_ = 0;
+DepResolveContext ElfLoader::dep_ctx_ = {};
+uint64_t ElfLoader::exec_base_ = 0;
+uint64_t ElfLoader::exec_size_ = 0;
 
 /// @brief The loader task's entry: block on the wake semaphore, run one load
 ///        per accepted request, loop.  Idle = blocked (zero CPU).
@@ -189,6 +193,9 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
     // interactions.
     if (tcb->page_table_) {
         kernel::BufferPool::unmap_all(*tcb);
+        // Issue #95: release shared libs (unmap shared RO + drop
+        // refcounts) BEFORE the blind free_user_pages below.
+        kernel::elf::release_task_libs(tcb);
         // free_user_pages reclaims ALL user pages in the PML4 — including the
         // user stack and heap (mapped there by alloc_user_stack_and_heap).  Do
         // NOT free tcb->user_stack_ separately (double-free).
@@ -387,6 +394,23 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
 }
 
 void ElfLoader::cleanup_and_idle() {
+    // Issue #95: dep-request teardown (no-op for static loads: the
+    // context is zeroed).  Unmap shared RO from the dying pml4 FIRST
+    // (cache owns shared phys by refcount; the blind free below must
+    // not see it), then drop refcounts, then free retained buffers.
+    // Skipped when pml4_ is already gone (handoff-fail path destroys
+    // the TCB, which drains via release_task_libs instead).
+    if (pml4_ != 0) {
+        for (uint64_t i = 0; i < dep_ctx_.acquired_count; ++i) {
+            unmap_acquired_ro(pml4_, &dep_ctx_, i);
+        }
+    }
+    for (uint64_t i = 0; i < dep_ctx_.acquired_count; ++i) {
+        SharedLibCache::instance().release(dep_ctx_.acquired[i]);
+        dep_ctx_.acquired[i] = nullptr;
+    }
+    dep_ctx_.acquired_count = 0;
+    free_resolve_images(&dep_ctx_);
     if (pml4_) {
         VMM::free_user_pages(pml4_);
         PMM::free_page(pml4_);
@@ -480,6 +504,8 @@ void ElfLoader::run_load() {
         return;
     }
     state_ = LoadState::COPYING_SEGMENTS;
+    exec_base_ = 0;
+    exec_size_ = 0;
 
     // ---- COPYING_SEGMENTS ----
     while (seg_idx_ < hdr_.phnum) {
@@ -493,6 +519,20 @@ void ElfLoader::run_load() {
         }
         uint64_t vaddr_base = page_align_down(phdr->vaddr);
         uint64_t vaddr_end = page_align_up(phdr->vaddr + phdr->memsz);
+        // Issue #95: track the exec range for lib overlap checks
+        // (segments validated overflow-free in VALIDATING).
+        if (exec_size_ == 0) {
+            exec_base_ = vaddr_base;
+            exec_size_ = vaddr_end - vaddr_base;
+        } else {
+            if (vaddr_base < exec_base_) {
+                exec_size_ += exec_base_ - vaddr_base;
+                exec_base_ = vaddr_base;
+            }
+            if (vaddr_end > exec_base_ + exec_size_) {
+                exec_size_ = vaddr_end - exec_base_;
+            }
+        }
         uint64_t num_pages = (vaddr_end - vaddr_base) / arch::PAGE_SIZE;
         while (page_in_seg_ < num_pages) {
             uint64_t vaddr = vaddr_base + page_in_seg_ * arch::PAGE_SIZE;
@@ -544,6 +584,141 @@ void ElfLoader::run_load() {
         ++seg_idx_;
         page_in_seg_ = 0;
     }
+
+    // ---- LOADING_DEPS / LOADING_RELOC (issue #95) ----
+    // Static execs (no PT_DYNAMIC) skip both stages trivially.
+    {
+        bool has_dynamic = false;
+        for (uint16_t i = 0; i < hdr_.phnum; ++i) {
+            auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
+                phdr_image_ + sizeof(ELF64Header) +
+                static_cast<uint64_t>(i) * hdr_.phentsize);
+            if (phdr->type == PT_DYNAMIC) {
+                has_dynamic = true;
+                break;
+            }
+        }
+        if (has_dynamic) {
+            state_ = LoadState::LOADING_DEPS;
+            if (file_size_ == 0 || file_size_ > MAX_SO_FILE_SIZE) {
+                post_event(0xDB05, " failed: not enough memory", 0,
+                           PostKind::OTHER);
+                cleanup_and_idle();
+                return;
+            }
+            uint64_t npages =
+                (file_size_ + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+            uint64_t exec_buf = PMM::alloc_contiguous(npages);
+            if (!exec_buf) {
+                post_event(0xDB05, " failed: not enough memory", 0,
+                           PostKind::OTHER);
+                cleanup_and_idle();
+                return;
+            }
+            bool read_ok = true;
+            for (uint64_t i = 0; i < npages; ++i) {
+                uint64_t want = arch::PAGE_SIZE;
+                if (i + 1 == npages) {
+                    want = file_size_ - i * arch::PAGE_SIZE;
+                }
+                int64_t r = vn->ops->read(
+                    *vn,
+                    reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + exec_buf +
+                                                i * arch::PAGE_SIZE),
+                    want, i * arch::PAGE_SIZE);
+                if (r != static_cast<int64_t>(want)) {
+                    read_ok = false;
+                    break;
+                }
+                if (cancel_pending(gen)) {
+                    for (uint64_t j = 0; j < npages; ++j) {
+                        PMM::free_page(exec_buf + j * arch::PAGE_SIZE);
+                    }
+                    post_event(0xDB03, " canceled", 0, PostKind::OTHER);
+                    cleanup_and_idle();
+                    return;
+                }
+                Scheduler::reschedule();
+            }
+            if (!read_ok) {
+                for (uint64_t j = 0; j < npages; ++j) {
+                    PMM::free_page(exec_buf + j * arch::PAGE_SIZE);
+                }
+                post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
+                cleanup_and_idle();
+                return;
+            }
+            init_resolve_context(&dep_ctx_, pml4_, gen);
+            dep_ctx_.exec_base = exec_base_;
+            dep_ctx_.exec_size = exec_size_;
+            dep_ctx_.image_phys[0] = exec_buf; // Uniform teardown:
+            dep_ctx_.image_npages[0] = npages; // free_resolve_images
+                                               // frees the exec buffer
+                                               // on every path.
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            const auto *exec_img = reinterpret_cast<const ELF64Header *>(
+                arch::HHDM_OFFSET + exec_buf);
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            const uint8_t *exec_bytes = reinterpret_cast<const uint8_t *>(
+                arch::HHDM_OFFSET + exec_buf);
+            bool deps_ok = resolve_dependencies(exec_img, exec_bytes,
+                                                file_size_, &dep_ctx_, 0,
+                                                exec_base_);
+            state_ = LoadState::LOADING_RELOC;
+            bool reloc_ok = deps_ok && relocate_closure(&dep_ctx_);
+            // Error verbs carry the soname chain (0xDB08-0xDB0B).
+            if (!deps_ok || !reloc_ok) {
+                char verb[160] = {};
+                const char *prefix = " failed: ";
+                uint64_t code = 0xDB04;
+                switch (dep_ctx_.last_error) {
+                    case ElfError::NOT_FOUND:
+                        prefix = " failed: missing shared lib ";
+                        code = 0xDB08;
+                        break;
+                    case ElfError::LAYOUT:
+                        prefix = " failed: layout conflict ";
+                        code = 0xDB09;
+                        break;
+                    case ElfError::CYCLE:
+                    case ElfError::DEPTH:
+                        prefix = " failed: dep cycle/depth ";
+                        code = 0xDB0A;
+                        break;
+                    case ElfError::NOMEM:
+                        prefix = " failed: not enough memory";
+                        code = 0xDB05;
+                        break;
+                    case ElfError::CANCELED:
+                        prefix = " canceled";
+                        code = 0xDB03;
+                        break;
+                    default:
+                        prefix = " failed: invalid shared lib ";
+                        code = 0xDB0B;
+                        break;
+                }
+                uint64_t n = 0;
+                while (prefix[n] != '\0' && n < sizeof(verb) - 1) {
+                    verb[n] = prefix[n];
+                    ++n;
+                }
+                for (uint64_t i = 0; dep_ctx_.fail_chain[i] != '\0' &&
+                                    n < sizeof(verb) - 1;
+                     ++i) {
+                    verb[n++] = dep_ctx_.fail_chain[i];
+                }
+                verb[n] = '\0';
+                // Teardown (unmap shared RO, releases, buffers, pml4)
+                // lives in cleanup_and_idle; just report + run it.
+                post_event(code, verb, 0, PostKind::OTHER);
+                cleanup_and_idle();
+                return;
+            }
+    // Success path continues below; the retained buffers (exec +
+    // libs) are freed after the TCB handoff via free_resolve_images.
+        } // end if (has_dynamic): static execs skip deps/reloc entirely.
+    } // end Stage B/C block.
     state_ = LoadState::MAPPING;
 
     // ---- MAPPING (bounded: stack + heap + TCB) ----
@@ -578,8 +753,49 @@ void ElfLoader::run_load() {
         copy_bounded(tcb->name, slash, CONFIG_TASK_NAME_LEN);
         tcb->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
     }
+    // Issue #95: hand request-local acquired sonames to the completed
+    // TCB (owns the refcounts from here; released in TCB::cleanup or
+    // destroy_completed_tcb).  Fail closed when a name cannot be
+    // recorded exactly (a truncated copy could never match its cache
+    // key, leaking the refcount).
+    tcb->needed_lib_count = 0;
+    bool handoff_ok = true;
+    for (uint64_t i = 0;
+         i < dep_ctx_.acquired_count && i < TaskControlBlock::kMaxTaskLibs;
+         ++i) {
+        const char *s = dep_ctx_.acquired[i];
+        uint64_t n = 0;
+        while (s[n] != '\0' && n < TaskControlBlock::kMaxLibSoname) {
+            ++n;
+        }
+        if (n >= TaskControlBlock::kMaxLibSoname || s[n] != '\0') {
+            handoff_ok = false;
+            break;
+        }
+        for (uint64_t j = 0; j <= n; ++j) {
+            tcb->needed_libs[tcb->needed_lib_count][j] = s[j];
+        }
+        ++tcb->needed_lib_count;
+    }
+    if (!handoff_ok ||
+        dep_ctx_.acquired_count > TaskControlBlock::kMaxTaskLibs) {
+        // Reset the partial TCB list so destroy releases nothing;
+        // cleanup below drops every acquired refcount exactly once
+        // (unmap skipped: pml4_ is gone — destroy drained via the TCB).
+        tcb->needed_lib_count = 0;
+        destroy_completed_tcb(tcb);
+        pml4_ = 0; // Owned + freed by destroy; cleanup must not re-free.
+        post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
+        cleanup_and_idle();
+        return;
+    }
 
     completed_tcb_ = tcb;
+    // Ownership transfer complete: the TCB holds refcounts (released
+    // at task death); drop the request-local records + retained buffers
+    // WITHOUT releasing (that would steal the task's references).
+    free_resolve_images(&dep_ctx_);
+    dep_ctx_.acquired_count = 0;
     state_ = LoadState::DONE;
     uint64_t elapsed = arch::Timer::ticks() - start_ticks_;
     post_event(0xDB02, " completed successfully", elapsed, PostKind::COMPLETED);

@@ -193,6 +193,15 @@ class VMM {
     static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
                                     uint64_t virt_addr, uint64_t pml4_phys);
 
+    /// @brief Unmaps one user page previously mapped into @p pml4_phys
+    ///        (issue #95: shared-library RO pages must be unmapped —
+    ///        never freed — by each task teardown; the cache owns shared
+    ///        phys lifetime by refcount).  Clears the PT leaf and flushes
+    ///        the VA; huge entries and absent tables are left alone.
+    /// @param virt_addr Page-aligned virtual address to unmap.
+    /// @param pml4_phys Physical address of the target PML4.
+    static void unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys);
+
     /// @brief Translates a virtual address to a physical address
     /// using a specific PML4.
     /// @param virt_addr Virtual address to translate.

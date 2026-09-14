@@ -31,6 +31,7 @@
 #include <types.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/elf/elf.hpp>
+#include <kernel/elf/elf_shared.hpp>
 
 namespace kernel {
 namespace elf {
@@ -40,6 +41,8 @@ enum class LoadState : uint8_t {
     IDLE = 0,             ///< No load in flight; loader blocked on wake sem.
     VALIDATING,           ///< Open fd, read+validate header + phdrs.
     COPYING_SEGMENTS,     ///< Per-chunk read→alloc→map→copy.
+    LOADING_DEPS,         ///< Issue #95: DT_NEEDED recursive load.
+    LOADING_RELOC,        ///< Issue #95: post-order relocate pass.
     MAPPING,              ///< Stack+heap allocation + TCB finalize (bounded).
     DONE,                 ///< Completed; completed_tcb_ retained.
     FAILED,               ///< Error; cleanup already ran, about to be IDLE.
@@ -124,11 +127,16 @@ class ElfLoader {
     ///        finalize_loaded_task).  Skips all scheduler interactions.
     static void destroy_completed_tcb(TaskControlBlock *tcb);
 
+    /// @brief Per-validation-step cancel check (issue #95: shared by the
+    ///        dep-resolve backend in elf_shared.cpp).
+    static bool cancel_pending(uint64_t generation);
+
+    /// @brief Current load generation for DepResolveContext setup.
+    static uint64_t generation() { return load_generation_; }
+
   private:
     // One full load cycle; ends IDLE (or DONE-with-completed_tcb_).
     static void run_load();
-    // Per-chunk / per-validation-step cancel check.
-    static bool cancel_pending(uint64_t generation);
     // Single-owner cleanup; idempotent guards; ends IDLE.
     static void cleanup_and_idle();
     // Open the load file in the loader task's fd table.
@@ -159,6 +167,12 @@ class ElfLoader {
     static TaskControlBlock *completed_tcb_;
     static char msg_buf_[16][160];
     static uint32_t msg_idx_;
+    // Issue #95: per-request dep-resolve context (loader single-owner;
+    // lives across run_load phases so cleanup_and_idle can release it).
+    static DepResolveContext dep_ctx_;
+    // Exec mapped range from Stage A (for lib overlap checks).
+    static uint64_t exec_base_;
+    static uint64_t exec_size_;
 };
 
 /// @brief The loader task's entry (extern for scheduler).

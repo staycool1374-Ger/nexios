@@ -631,6 +631,64 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
 #endif
 }
 
+void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
+        return;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (pml4_phys & ~0xFFFULL));
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
+    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+    if (top[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
+        return; // 1 GiB block: not ours to clear.
+    }
+    auto *l1 = get_table(top, l0_idx, false);
+    if (!l1) {
+        return;
+    }
+    if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
+        return; // 2 MiB block: not ours to clear.
+    }
+    auto *l2 = get_table(l1, l1_idx, false);
+    if (!l2) {
+        return;
+    }
+    l2[l2_idx] = 0;
+#else
+    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
+    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+    auto *pdpt = get_table(top, pml4_idx, false);
+    if (!pdpt) {
+        return;
+    }
+    auto *pd = get_table(pdpt, pdpt_idx, false);
+    if (!pd) {
+        return;
+    }
+#if defined(CONFIG_ARCH_AARCH64)
+    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT) {
+        return; // Block entry: not ours to clear.
+    }
+#else
+    if (pd[pd_idx] & PAGE_HUGE) {
+        return; // Huge entry: not ours to clear.
+    }
+#endif
+    auto *pt = get_table(pd, pd_idx, false);
+    if (!pt) {
+        return;
+    }
+    pt[pt_idx] = 0;
+#endif
+    arch::ArchPageTable::tlb_flush(virt_addr);
+}
+
 /// @brief Create a new PML4: zeroes user entries, copies kernel entries.
 /// @return Physical address of new PML4, or 0 on failure.
 uint64_t VMM::clone_kernel_pml4() {

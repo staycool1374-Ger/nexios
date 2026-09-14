@@ -49,6 +49,7 @@ void register_signals_tests();
 void register_process_tests();
 void register_elf_tests();
 void register_elf_loader_tests();
+void register_elf_shared_tests();
 void register_checked_ptr_tests();
 void register_fstab_tests();
 void register_rtc_tests();
@@ -368,6 +369,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"process_lifecycle", []() { register_process_tests(); }},
     {"process_elf", []() { register_elf_tests(); }},
     {"elf_loader", []() { register_elf_loader_tests(); }},
+    {"elf_shared", []() { register_elf_shared_tests(); }},
     {"process_signals", []() { register_signals_tests(); }},
     {"process_rlimit", []() { register_rlimit_tests(); }},
     {"process_waitpid", []() { register_waitpid_tests(); }},
@@ -635,6 +637,7 @@ static void register_all_tests() {
     register_process_tests();
     register_elf_tests();
     register_elf_loader_tests();
+    register_elf_shared_tests();
     register_checked_ptr_tests();
     register_fstab_tests();
     register_rtc_tests();
@@ -831,6 +834,7 @@ static void register_all_tests_first_half() {
     register_process_tests();
     register_elf_tests();
     register_elf_loader_tests();
+    register_elf_shared_tests();
     register_checked_ptr_tests();
     register_fstab_tests();
     register_rtc_tests();

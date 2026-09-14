@@ -1,7 +1,7 @@
 # ELF Shared-Object Support — DT_NEEDED Resolution for User Images
 
 **Doc ID:** NEX-SPEC-2026-08-23-005
-**Status:** DRAFT
+**Status:** IMPLEMENTED (issue #95, 2026-09-14; deviations §7 below)
 **Milestone target:** v0.4.4 (after runelf lands)
 **Inspiration:** Cyjon `kernel/exec.asm` + `library/kernel_library` (~700
 lines total: ELF-from-storage load, then dependency resolution via section
@@ -109,3 +109,30 @@ no PT_DYNAMIC ⇒ Stage B/C skip trivially).
   symbols, LD_PRELOAD semantics, lazy PLT binding with lazy-fault overhead —
   eager binding chosen precisely because lazy faults wreck WCET analysis).
 - Kernel-side loading of shared objects into *kernel* address space.
+
+## 7. Implementation Notes (issue #95 — deviations from the paper)
+
+- Public API is context-based (`DepResolveContext`: pml4, exec range,
+  budget, generation, acquired list, retained images, fail chain); the
+  paper's bare signatures could not work (no caller existed to freeze
+  them). Entry points keep their names.
+- W^X is stronger than §2.3: lib segments map directly with final flags
+  (X iff PF_X), so no writable+X window ever exists; TEXTREL is rejected
+  instead of being worked around.
+- Base-0 (PIE-style) links additionally work via an explicit load bias
+  (mapped − linked); fixed links have bias 0.
+- DT_INIT is rejected outright; empty INIT/FINI arrays are accepted,
+  non-empty ones rejected (init execution would mean running untrusted
+  code in the loader).
+- `/lib` search is covered on its failure side in-test (the boot fs is
+  read-only initrd; fixtures use absolute paths); absolute passthrough
+  is covered end to end.
+- A 9th test (`loader_success_handoff`) covers the loader hook + TCB
+  handoff + destroy drain beyond the paper's 8.
+- New `VMM::unmap_page_in_pml4`: shared RO phys lifetime belongs to the
+  cache (refcount); every teardown unmaps-then-releases so the blind
+  `free_user_pages` never double-frees.
+- Bounds: 64 phys pages per lib (256 KiB), 4 MiB per file buffer,
+  64 MiB total per request, 8 sonames per request list.
+- riscv64 map/unmap set no HHDM/identity flags (pre-existing asymmetry,
+  issue #152); the take-based restore is arch-neutral.

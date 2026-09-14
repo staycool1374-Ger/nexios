@@ -1,252 +1,3459 @@
+diff --git a/docs/specs/elf-shared-libs.md b/docs/specs/elf-shared-libs.md
+index 6c4cd50a..74d14fd6 100644
+--- a/docs/specs/elf-shared-libs.md
++++ b/docs/specs/elf-shared-libs.md
+@@ -1,7 +1,7 @@
+ # ELF Shared-Object Support — DT_NEEDED Resolution for User Images
+ 
+ **Doc ID:** NEX-SPEC-2026-08-23-005
+-**Status:** DRAFT
++**Status:** IMPLEMENTED (issue #95, 2026-09-14; deviations §7 below)
+ **Milestone target:** v0.4.4 (after runelf lands)
+ **Inspiration:** Cyjon `kernel/exec.asm` + `library/kernel_library` (~700
+ lines total: ELF-from-storage load, then dependency resolution via section
+@@ -109,3 +109,30 @@ no PT_DYNAMIC ⇒ Stage B/C skip trivially).
+   symbols, LD_PRELOAD semantics, lazy PLT binding with lazy-fault overhead —
+   eager binding chosen precisely because lazy faults wreck WCET analysis).
+ - Kernel-side loading of shared objects into *kernel* address space.
++
++## 7. Implementation Notes (issue #95 — deviations from the paper)
++
++- Public API is context-based (`DepResolveContext`: pml4, exec range,
++  budget, generation, acquired list, retained images, fail chain); the
++  paper's bare signatures could not work (no caller existed to freeze
++  them). Entry points keep their names.
++- W^X is stronger than §2.3: lib segments map directly with final flags
++  (X iff PF_X), so no writable+X window ever exists; TEXTREL is rejected
++  instead of being worked around.
++- Base-0 (PIE-style) links additionally work via an explicit load bias
++  (mapped − linked); fixed links have bias 0.
++- DT_INIT is rejected outright; empty INIT/FINI arrays are accepted,
++  non-empty ones rejected (init execution would mean running untrusted
++  code in the loader).
++- `/lib` search is covered on its failure side in-test (the boot fs is
++  read-only initrd; fixtures use absolute paths); absolute passthrough
++  is covered end to end.
++- A 9th test (`loader_success_handoff`) covers the loader hook + TCB
++  handoff + destroy drain beyond the paper's 8.
++- New `VMM::unmap_page_in_pml4`: shared RO phys lifetime belongs to the
++  cache (refcount); every teardown unmaps-then-releases so the blind
++  `free_user_pages` never double-frees.
++- Bounds: 64 phys pages per lib (256 KiB), 4 MiB per file buffer,
++  64 MiB total per request, 8 sonames per request list.
++- riscv64 map/unmap set no HHDM/identity flags (pre-existing asymmetry,
++  issue #152); the take-based restore is arch-neutral.
+diff --git a/src/kernel/elf/elf.hpp b/src/kernel/elf/elf.hpp
+index e050ac62..62733e15 100644
+--- a/src/kernel/elf/elf.hpp
++++ b/src/kernel/elf/elf.hpp
+@@ -136,38 +136,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+                        const char *const *argv, const char *const *envp,
+                        uint64_t *regs, uint64_t file_size = 0);
+ 
+-/// @brief Load a shared object (.so) into the current task's address space.
+-///        Returns the load base address, or 0 on failure.
+-/// @param soname The shared object name (e.g. "libc.so").
+-/// @param pml4 The task's PML4 to map the library into.
+-/// @param[out] out_load_base Base address where the library was mapped.
+-/// @return true on success.
+-bool load_shared_object(const char *soname, uint64_t pml4,
+-                        uint64_t *out_load_base);
+-
+-/// @brief Resolve DT_NEEDED dependencies for an ELF binary, loading each
+-///        required shared object recursively.
+-/// @param hdr The main executable's ELF header (must have PT_DYNAMIC).
+-/// @param file_data Raw file data of the main executable.
+-/// @param file_size Size of the file data.
+-/// @param pml4 The task PML4 to map libraries into.
+-/// @param load_base Base load address of the main executable.
+-/// @return true on success, false on failure (missing lib, cycle, etc.).
+-bool resolve_dependencies(const ELF64Header *hdr, const uint8_t *file_data,
+-                          uint64_t file_size, uint64_t pml4,
+-                          uint64_t load_base);
+-
+-/// @brief Apply relocations for a loaded shared object.
+-/// @param phdr The PT_LOAD program header for the library.
+-/// @param dyn The PT_DYNAMIC program header for the library.
+-/// @param load_base Base address where the library was mapped.
+-/// @param pml4 The task PML4.
+-/// @param soname Library soname (for error reporting).
+-/// @return true on success.
+-bool apply_relocations(const ELF64ProgramHeader *phdr,
+-                       const ELF64ProgramHeader *dyn,
+-                       uint64_t load_base, uint64_t pml4,
+-                       const char *soname);
++// NOTE (issue #95): shared-object entry points (load_shared_object,
++// resolve_dependencies, apply_relocations) are declared canonically in
++// <kernel/elf/elf_shared.hpp> (already included above); they are NOT
++// re-declared here.
+ 
+ } // namespace elf
+ } // namespace kernel
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index 875080c4..989e370b 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -20,6 +20,7 @@
+ /// @brief Background, preemptible, cancellable ELF loader implementation.
+ 
+ #include <kernel/elf/elf_loader.hpp>
++#include <kernel/elf/elf_shared.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/memory/pmm.hpp>
+@@ -82,6 +83,9 @@ TaskControlBlock *ElfLoader::loader_tcb_ = nullptr;
+ TaskControlBlock *ElfLoader::completed_tcb_ = nullptr;
+ char ElfLoader::msg_buf_[16][160] = {};
+ uint32_t ElfLoader::msg_idx_ = 0;
++DepResolveContext ElfLoader::dep_ctx_ = {};
++uint64_t ElfLoader::exec_base_ = 0;
++uint64_t ElfLoader::exec_size_ = 0;
+ 
+ /// @brief The loader task's entry: block on the wake semaphore, run one load
+ ///        per accepted request, loop.  Idle = blocked (zero CPU).
+@@ -189,6 +193,9 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
+     // interactions.
+     if (tcb->page_table_) {
+         kernel::BufferPool::unmap_all(*tcb);
++        // Issue #95: release shared libs (unmap shared RO + drop
++        // refcounts) BEFORE the blind free_user_pages below.
++        kernel::elf::release_task_libs(tcb);
+         // free_user_pages reclaims ALL user pages in the PML4 — including the
+         // user stack and heap (mapped there by alloc_user_stack_and_heap).  Do
+         // NOT free tcb->user_stack_ separately (double-free).
+@@ -387,6 +394,23 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
+ }
+ 
+ void ElfLoader::cleanup_and_idle() {
++    // Issue #95: dep-request teardown (no-op for static loads: the
++    // context is zeroed).  Unmap shared RO from the dying pml4 FIRST
++    // (cache owns shared phys by refcount; the blind free below must
++    // not see it), then drop refcounts, then free retained buffers.
++    // Skipped when pml4_ is already gone (handoff-fail path destroys
++    // the TCB, which drains via release_task_libs instead).
++    if (pml4_ != 0) {
++        for (uint64_t i = 0; i < dep_ctx_.acquired_count; ++i) {
++            unmap_acquired_ro(pml4_, &dep_ctx_, i);
++        }
++    }
++    for (uint64_t i = 0; i < dep_ctx_.acquired_count; ++i) {
++        SharedLibCache::instance().release(dep_ctx_.acquired[i]);
++        dep_ctx_.acquired[i] = nullptr;
++    }
++    dep_ctx_.acquired_count = 0;
++    free_resolve_images(&dep_ctx_);
+     if (pml4_) {
+         VMM::free_user_pages(pml4_);
+         PMM::free_page(pml4_);
+@@ -480,6 +504,8 @@ void ElfLoader::run_load() {
+         return;
+     }
+     state_ = LoadState::COPYING_SEGMENTS;
++    exec_base_ = 0;
++    exec_size_ = 0;
+ 
+     // ---- COPYING_SEGMENTS ----
+     while (seg_idx_ < hdr_.phnum) {
+@@ -493,6 +519,20 @@ void ElfLoader::run_load() {
+         }
+         uint64_t vaddr_base = page_align_down(phdr->vaddr);
+         uint64_t vaddr_end = page_align_up(phdr->vaddr + phdr->memsz);
++        // Issue #95: track the exec range for lib overlap checks
++        // (segments validated overflow-free in VALIDATING).
++        if (exec_size_ == 0) {
++            exec_base_ = vaddr_base;
++            exec_size_ = vaddr_end - vaddr_base;
++        } else {
++            if (vaddr_base < exec_base_) {
++                exec_size_ += exec_base_ - vaddr_base;
++                exec_base_ = vaddr_base;
++            }
++            if (vaddr_end > exec_base_ + exec_size_) {
++                exec_size_ = vaddr_end - exec_base_;
++            }
++        }
+         uint64_t num_pages = (vaddr_end - vaddr_base) / arch::PAGE_SIZE;
+         while (page_in_seg_ < num_pages) {
+             uint64_t vaddr = vaddr_base + page_in_seg_ * arch::PAGE_SIZE;
+@@ -544,6 +584,141 @@ void ElfLoader::run_load() {
+         ++seg_idx_;
+         page_in_seg_ = 0;
+     }
++
++    // ---- LOADING_DEPS / LOADING_RELOC (issue #95) ----
++    // Static execs (no PT_DYNAMIC) skip both stages trivially.
++    {
++        bool has_dynamic = false;
++        for (uint16_t i = 0; i < hdr_.phnum; ++i) {
++            auto *phdr = reinterpret_cast<const ELF64ProgramHeader *>(
++                phdr_image_ + sizeof(ELF64Header) +
++                static_cast<uint64_t>(i) * hdr_.phentsize);
++            if (phdr->type == PT_DYNAMIC) {
++                has_dynamic = true;
++                break;
++            }
++        }
++        if (has_dynamic) {
++            state_ = LoadState::LOADING_DEPS;
++            if (file_size_ == 0 || file_size_ > MAX_SO_FILE_SIZE) {
++                post_event(0xDB05, " failed: not enough memory", 0,
++                           PostKind::OTHER);
++                cleanup_and_idle();
++                return;
++            }
++            uint64_t npages =
++                (file_size_ + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++            uint64_t exec_buf = PMM::alloc_contiguous(npages);
++            if (!exec_buf) {
++                post_event(0xDB05, " failed: not enough memory", 0,
++                           PostKind::OTHER);
++                cleanup_and_idle();
++                return;
++            }
++            bool read_ok = true;
++            for (uint64_t i = 0; i < npages; ++i) {
++                uint64_t want = arch::PAGE_SIZE;
++                if (i + 1 == npages) {
++                    want = file_size_ - i * arch::PAGE_SIZE;
++                }
++                int64_t r = vn->ops->read(
++                    *vn,
++                    reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + exec_buf +
++                                                i * arch::PAGE_SIZE),
++                    want, i * arch::PAGE_SIZE);
++                if (r != static_cast<int64_t>(want)) {
++                    read_ok = false;
++                    break;
++                }
++                if (cancel_pending(gen)) {
++                    for (uint64_t j = 0; j < npages; ++j) {
++                        PMM::free_page(exec_buf + j * arch::PAGE_SIZE);
++                    }
++                    post_event(0xDB03, " canceled", 0, PostKind::OTHER);
++                    cleanup_and_idle();
++                    return;
++                }
++                Scheduler::reschedule();
++            }
++            if (!read_ok) {
++                for (uint64_t j = 0; j < npages; ++j) {
++                    PMM::free_page(exec_buf + j * arch::PAGE_SIZE);
++                }
++                post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
++                cleanup_and_idle();
++                return;
++            }
++            init_resolve_context(&dep_ctx_, pml4_, gen);
++            dep_ctx_.exec_base = exec_base_;
++            dep_ctx_.exec_size = exec_size_;
++            dep_ctx_.image_phys[0] = exec_buf; // Uniform teardown:
++            dep_ctx_.image_npages[0] = npages; // free_resolve_images
++                                               // frees the exec buffer
++                                               // on every path.
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            const auto *exec_img = reinterpret_cast<const ELF64Header *>(
++                arch::HHDM_OFFSET + exec_buf);
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            const uint8_t *exec_bytes = reinterpret_cast<const uint8_t *>(
++                arch::HHDM_OFFSET + exec_buf);
++            bool deps_ok = resolve_dependencies(exec_img, exec_bytes,
++                                                file_size_, &dep_ctx_, 0,
++                                                exec_base_);
++            state_ = LoadState::LOADING_RELOC;
++            bool reloc_ok = deps_ok && relocate_closure(&dep_ctx_);
++            // Error verbs carry the soname chain (0xDB08-0xDB0B).
++            if (!deps_ok || !reloc_ok) {
++                char verb[160] = {};
++                const char *prefix = " failed: ";
++                uint64_t code = 0xDB04;
++                switch (dep_ctx_.last_error) {
++                    case ElfError::NOT_FOUND:
++                        prefix = " failed: missing shared lib ";
++                        code = 0xDB08;
++                        break;
++                    case ElfError::LAYOUT:
++                        prefix = " failed: layout conflict ";
++                        code = 0xDB09;
++                        break;
++                    case ElfError::CYCLE:
++                    case ElfError::DEPTH:
++                        prefix = " failed: dep cycle/depth ";
++                        code = 0xDB0A;
++                        break;
++                    case ElfError::NOMEM:
++                        prefix = " failed: not enough memory";
++                        code = 0xDB05;
++                        break;
++                    case ElfError::CANCELED:
++                        prefix = " canceled";
++                        code = 0xDB03;
++                        break;
++                    default:
++                        prefix = " failed: invalid shared lib ";
++                        code = 0xDB0B;
++                        break;
++                }
++                uint64_t n = 0;
++                while (prefix[n] != '\0' && n < sizeof(verb) - 1) {
++                    verb[n] = prefix[n];
++                    ++n;
++                }
++                for (uint64_t i = 0; dep_ctx_.fail_chain[i] != '\0' &&
++                                    n < sizeof(verb) - 1;
++                     ++i) {
++                    verb[n++] = dep_ctx_.fail_chain[i];
++                }
++                verb[n] = '\0';
++                // Teardown (unmap shared RO, releases, buffers, pml4)
++                // lives in cleanup_and_idle; just report + run it.
++                post_event(code, verb, 0, PostKind::OTHER);
++                cleanup_and_idle();
++                return;
++            }
++    // Success path continues below; the retained buffers (exec +
++    // libs) are freed after the TCB handoff via free_resolve_images.
++        } // end if (has_dynamic): static execs skip deps/reloc entirely.
++    } // end Stage B/C block.
+     state_ = LoadState::MAPPING;
+ 
+     // ---- MAPPING (bounded: stack + heap + TCB) ----
+@@ -578,8 +753,49 @@ void ElfLoader::run_load() {
+         copy_bounded(tcb->name, slash, CONFIG_TASK_NAME_LEN);
+         tcb->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
+     }
++    // Issue #95: hand request-local acquired sonames to the completed
++    // TCB (owns the refcounts from here; released in TCB::cleanup or
++    // destroy_completed_tcb).  Fail closed when a name cannot be
++    // recorded exactly (a truncated copy could never match its cache
++    // key, leaking the refcount).
++    tcb->needed_lib_count = 0;
++    bool handoff_ok = true;
++    for (uint64_t i = 0;
++         i < dep_ctx_.acquired_count && i < TaskControlBlock::kMaxTaskLibs;
++         ++i) {
++        const char *s = dep_ctx_.acquired[i];
++        uint64_t n = 0;
++        while (s[n] != '\0' && n < TaskControlBlock::kMaxLibSoname) {
++            ++n;
++        }
++        if (n >= TaskControlBlock::kMaxLibSoname || s[n] != '\0') {
++            handoff_ok = false;
++            break;
++        }
++        for (uint64_t j = 0; j <= n; ++j) {
++            tcb->needed_libs[tcb->needed_lib_count][j] = s[j];
++        }
++        ++tcb->needed_lib_count;
++    }
++    if (!handoff_ok ||
++        dep_ctx_.acquired_count > TaskControlBlock::kMaxTaskLibs) {
++        // Reset the partial TCB list so destroy releases nothing;
++        // cleanup below drops every acquired refcount exactly once
++        // (unmap skipped: pml4_ is gone — destroy drained via the TCB).
++        tcb->needed_lib_count = 0;
++        destroy_completed_tcb(tcb);
++        pml4_ = 0; // Owned + freed by destroy; cleanup must not re-free.
++        post_event(0xDB05, " failed: not enough memory", 0, PostKind::OTHER);
++        cleanup_and_idle();
++        return;
++    }
+ 
+     completed_tcb_ = tcb;
++    // Ownership transfer complete: the TCB holds refcounts (released
++    // at task death); drop the request-local records + retained buffers
++    // WITHOUT releasing (that would steal the task's references).
++    free_resolve_images(&dep_ctx_);
++    dep_ctx_.acquired_count = 0;
+     state_ = LoadState::DONE;
+     uint64_t elapsed = arch::Timer::ticks() - start_ticks_;
+     post_event(0xDB02, " completed successfully", elapsed, PostKind::COMPLETED);
+diff --git a/src/kernel/elf/elf_loader.hpp b/src/kernel/elf/elf_loader.hpp
+index e69fd5b2..0986b688 100644
+--- a/src/kernel/elf/elf_loader.hpp
++++ b/src/kernel/elf/elf_loader.hpp
+@@ -31,6 +31,7 @@
+ #include <types.hpp>
+ #include <kernel/sync/spinlock.hpp>
+ #include <kernel/elf/elf.hpp>
++#include <kernel/elf/elf_shared.hpp>
+ 
+ namespace kernel {
+ namespace elf {
+@@ -40,6 +41,8 @@ enum class LoadState : uint8_t {
+     IDLE = 0,             ///< No load in flight; loader blocked on wake sem.
+     VALIDATING,           ///< Open fd, read+validate header + phdrs.
+     COPYING_SEGMENTS,     ///< Per-chunk read→alloc→map→copy.
++    LOADING_DEPS,         ///< Issue #95: DT_NEEDED recursive load.
++    LOADING_RELOC,        ///< Issue #95: post-order relocate pass.
+     MAPPING,              ///< Stack+heap allocation + TCB finalize (bounded).
+     DONE,                 ///< Completed; completed_tcb_ retained.
+     FAILED,               ///< Error; cleanup already ran, about to be IDLE.
+@@ -124,11 +127,16 @@ class ElfLoader {
+     ///        finalize_loaded_task).  Skips all scheduler interactions.
+     static void destroy_completed_tcb(TaskControlBlock *tcb);
+ 
++    /// @brief Per-validation-step cancel check (issue #95: shared by the
++    ///        dep-resolve backend in elf_shared.cpp).
++    static bool cancel_pending(uint64_t generation);
++
++    /// @brief Current load generation for DepResolveContext setup.
++    static uint64_t generation() { return load_generation_; }
++
+   private:
+     // One full load cycle; ends IDLE (or DONE-with-completed_tcb_).
+     static void run_load();
+-    // Per-chunk / per-validation-step cancel check.
+-    static bool cancel_pending(uint64_t generation);
+     // Single-owner cleanup; idempotent guards; ends IDLE.
+     static void cleanup_and_idle();
+     // Open the load file in the loader task's fd table.
+@@ -159,6 +167,12 @@ class ElfLoader {
+     static TaskControlBlock *completed_tcb_;
+     static char msg_buf_[16][160];
+     static uint32_t msg_idx_;
++    // Issue #95: per-request dep-resolve context (loader single-owner;
++    // lives across run_load phases so cleanup_and_idle can release it).
++    static DepResolveContext dep_ctx_;
++    // Exec mapped range from Stage A (for lib overlap checks).
++    static uint64_t exec_base_;
++    static uint64_t exec_size_;
+ };
+ 
+ /// @brief The loader task's entry (extern for scheduler).
+diff --git a/src/kernel/elf/elf_shared.cpp b/src/kernel/elf/elf_shared.cpp
+new file mode 100644
+index 00000000..4ca1a6d1
+--- /dev/null
++++ b/src/kernel/elf/elf_shared.cpp
+@@ -0,0 +1,1548 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file elf_shared.cpp
++/// @brief Shared-object / dynamic linking implementation (issue #95).
++///        DT_NEEDED resolution, GOT/PLT fixups, relocation handling.
++
++#include <kernel/elf/elf_shared.hpp>
++#include <kernel/elf/elf.hpp>
++#include <kernel/elf/elf_loader.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/checked_ptr.hpp>
++#include <kernel/vfs/vfs.hpp>
++#include <constants.hpp>
++#include <logger.hpp>
++#include <string.hpp>
++
++namespace kernel {
++namespace elf {
++
++LoadedLibrary *SharedLibCache::find(const char *soname) {
++    if (!soname) {
++        return nullptr;
++    }
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] != '\0' &&
++            strcmp(libs_[i].soname, soname) == 0) {
++            return &libs_[i];
++        }
++    }
++    return nullptr;
++}
++
++LoadedLibrary *SharedLibCache::register_lib(const char *soname,
++                                            uint64_t load_base,
++                                            uint64_t load_size) {
++    if (!soname) {
++        return nullptr;
++    }
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] == '\0' && !libs_[i].in_progress) {
++            strncpy(libs_[i].soname, soname, sizeof(libs_[i].soname) - 1);
++            libs_[i].soname[sizeof(libs_[i].soname) - 1] = '\0';
++            libs_[i].load_base = load_base;
++            libs_[i].load_size = load_size;
++            libs_[i].refcount = 1;
++            libs_[i].in_progress = false;
++            return &libs_[i];
++        }
++    }
++    return nullptr;
++}
++
++void SharedLibCache::acquire(const char *soname) {
++    if (!soname) {
++        return;
++    }
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] != '\0' &&
++            strcmp(libs_[i].soname, soname) == 0) {
++            ++libs_[i].refcount;
++            return;
++        }
++    }
++}
++
++void SharedLibCache::release(const char *soname) {
++    if (!soname) {
++        return;
++    }
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] != '\0' &&
++            strcmp(libs_[i].soname, soname) == 0) {
++            if (libs_[i].in_progress) {
++                return;
++            }
++            // Last owner out frees the shared RO phys (RW copies are
++            // per-task and die with their own pml4 teardowns).  Every
++            // releaser unmaps shared RO from its own pml4 FIRST (see
++            // release_task_libs and the loader fail path), so at
++            // refcount 0 no mapping references these pages.
++            if (libs_[i].refcount == 1) {
++                uint32_t n = libs_[i].num_phys_pages;
++                if (n > MAX_LIB_PHYS_PAGES) {
++                    n = MAX_LIB_PHYS_PAGES;
++                }
++                for (uint32_t p = 0; p < n; ++p) {
++                    if ((libs_[i].writable_mask & (1ULL << p)) == 0) {
++                        PMM::free_page(libs_[i].phys_pages[p]);
++                    }
++                }
++            }
++            if (libs_[i].refcount > 0) {
++                --libs_[i].refcount;
++            }
++            if (libs_[i].refcount == 0) {
++                libs_[i].soname[0] = '\0';
++                libs_[i].load_base = 0;
++                libs_[i].load_size = 0;
++                libs_[i].file_size = 0;
++                libs_[i].writable_mask = 0;
++                libs_[i].num_phys_pages = 0;
++                for (size_t q = 0; q < MAX_LIB_PHYS_PAGES; ++q) {
++                    libs_[i].phys_pages[q] = 0;
++                }
++            }
++            return;
++        }
++    }
++}
++
++void SharedLibCache::clear_in_progress(const char *soname) {
++    if (!soname) {
++        return;
++    }
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] != '\0' &&
++            strcmp(libs_[i].soname, soname) == 0) {
++            libs_[i].in_progress = false;
++            return;
++        }
++    }
++}
++
++// ---- Stage B/C pipeline (issue #95) ----
++namespace {
++
++// Bounded string length (the global strlen is unbounded — never use it
++// on untrusted image bytes).
++uint64_t strnlen_capped(const char *s, uint64_t max) {
++    uint64_t n = 0;
++    while (n < max && s[n] != '\0') {
++        ++n;
++    }
++    return n;
++}
++
++// Fail-closed overlap: overflow on either end counts as overlap.
++bool ranges_overlap(uint64_t a_base, uint64_t a_size, uint64_t b_base,
++                    uint64_t b_size) {
++    if (a_size == 0 || b_size == 0) {
++        return false;
++    }
++    uint64_t a_end = a_base + a_size;
++    uint64_t b_end = b_base + b_size;
++    if (a_end < a_base || b_end < b_base) {
++        return true;
++    }
++    return a_base < b_end && b_base < a_end;
++}
++
++// Append "->soname" to the fail chain (bounded, always NUL-terminated).
++void chain_append(DepResolveContext *ctx, const char *soname) {
++    uint64_t len = strnlen_capped(ctx->fail_chain,
++                                   sizeof(ctx->fail_chain));
++    const char *arrow = "->";
++    for (uint64_t i = 0; arrow[i] != '\0'; ++i) {
++        if (len + 1 >= sizeof(ctx->fail_chain)) {
++            return;
++        }
++        ctx->fail_chain[len++] = arrow[i];
++    }
++    for (uint64_t i = 0; soname[i] != '\0'; ++i) {
++        if (len + 1 >= sizeof(ctx->fail_chain)) {
++            break;
++        }
++        ctx->fail_chain[len++] = soname[i];
++    }
++    ctx->fail_chain[len] = '\0';
++}
++
++// Count DT_NEEDED entries (get_needed caps silently; over-cap must fail).
++uint64_t count_needed(const DynView *view) {
++    uint64_t n = 0;
++    for (uint64_t i = 0; i < view->dyn_count; ++i) {
++        if (view->dyn[i].d_tag == DT_NEEDED) {
++            ++n;
++        }
++    }
++    return n;
++}
++
++// Write 8 bytes to a user VA mapped in a foreign pml4: validate the VA
++// range, walk the target tables (unmapped = fail), then write through
++// the HHDM alias.  CheckedPtr itself only covers the current address
++// space, so this is the cross-AS equivalent (validated + bounded).
++// NOLINTNEXTLINE(performance-no-int-to-ptr)
++bool target_write_u64(uint64_t pml4, uint64_t va, uint64_t value) {
++    if (va >= kernel::USER_SPACE_LIMIT) {
++        return false;
++    }
++    if ((va & 7U) != 0) {
++        return false;
++    }
++    uint64_t phys = VMM::virt_to_phys_in_pml4(va, pml4);
++    if (phys == 0) {
++        return false;
++    }
++    uint64_t alias = arch::HHDM_OFFSET + (phys & ~0xFFFULL) + (va & 0xFFFULL);
++    *reinterpret_cast<uint64_t *>(alias) = value;
++    return true;
++}
++
++// Free a PMM page run allocated for a file image buffer.
++void free_image_pages(uint64_t phys, uint64_t npages) {
++    for (uint64_t i = 0; i < npages; ++i) {
++        PMM::free_page(phys + i * arch::PAGE_SIZE);
++    }
++}
++
++// Release one request's retained image (cache slot bookkeeping is the
++// caller's job: clear_in_progress + release on failure paths).
++void drop_image(DepResolveContext *ctx, uint64_t idx) {
++    if (ctx->image_phys[idx] != 0) {
++        free_image_pages(ctx->image_phys[idx], ctx->image_npages[idx]);
++        ctx->image_phys[idx] = 0;
++        ctx->image_npages[idx] = 0;
++    }
++    ctx->images[idx] = nullptr;
++    ctx->image_sizes[idx] = 0;
++}
++
++} // namespace
++
++void free_resolve_images(DepResolveContext *ctx) {
++    if (!ctx) {
++        return;
++    }
++    for (uint64_t i = 0; i < ctx->image_count; ++i) {
++        drop_image(ctx, i);
++    }
++    ctx->image_count = 0;
++}
++
++void unmap_acquired_ro(uint64_t pml4, const DepResolveContext *ctx,
++                       uint64_t idx) {
++    if (!ctx || idx >= ctx->acquired_count) {
++        return;
++    }
++    LoadedLibrary *slot =
++        SharedLibCache::instance().find(ctx->acquired[idx]);
++    if (!slot) {
++        return;
++    }
++    uint64_t n = slot->num_phys_pages;
++    if (n > MAX_LIB_PHYS_PAGES) {
++        n = MAX_LIB_PHYS_PAGES;
++    }
++    for (uint64_t i = 0; i < n; ++i) {
++        if ((slot->writable_mask & (1ULL << i)) == 0) {
++            VMM::unmap_page_in_pml4(slot->load_base + i * arch::PAGE_SIZE,
++                                    pml4);
++        }
++    }
++}
++
++void release_task_libs(TaskControlBlock *tcb) {    if (!tcb || tcb->needed_lib_count == 0) {
++        return;
++    }
++    if (tcb->needed_lib_count > TaskControlBlock::kMaxTaskLibs) {
++        return; // Corrupt count: fail closed, leak refcounts loudly below.
++    }
++    for (uint64_t i = 0; i < tcb->needed_lib_count; ++i) {
++        LoadedLibrary *slot =
++            SharedLibCache::instance().find(tcb->needed_libs[i]);
++        if (slot) {
++            uint32_t n = slot->num_phys_pages;
++            if (n > MAX_LIB_PHYS_PAGES) {
++                n = MAX_LIB_PHYS_PAGES;
++            }
++            for (uint64_t p = 0; p < n; ++p) {
++                if ((slot->writable_mask & (1ULL << p)) == 0) {
++                    VMM::unmap_page_in_pml4(
++                        slot->load_base + p * arch::PAGE_SIZE,
++                        tcb->page_table_);
++                }
++            }
++            SharedLibCache::instance().release(tcb->needed_libs[i]);
++        }
++        tcb->needed_libs[i][0] = '\0';
++    }
++    tcb->needed_lib_count = 0;
++}
++
++LoadedLibrary *SharedLibCache::reserve(const char *soname,
++                                       bool *out_created) {
++    if (!soname || !out_created) {
++        return nullptr;
++    }
++    *out_created = false;
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] != '\0' &&
++            strcmp(libs_[i].soname, soname) == 0) {
++            return &libs_[i];
++        }
++    }
++    for (size_t i = 0; i < MAX_LOADED_LIBS; ++i) {
++        if (libs_[i].soname[0] == '\0' && !libs_[i].in_progress) {
++            strncpy(libs_[i].soname, soname, sizeof(libs_[i].soname) - 1);
++            libs_[i].soname[sizeof(libs_[i].soname) - 1] = '\0';
++            libs_[i].load_base = 0;
++            libs_[i].load_size = 0;
++            libs_[i].num_phys_pages = 0;
++            libs_[i].refcount = 0;
++            libs_[i].in_progress = true;
++            *out_created = true;
++            return &libs_[i];
++        }
++    }
++    return nullptr;
++}
++
++// Forward declarations for the mutually recursive Stage-B core.
++static ElfError load_one(const char *soname, DepResolveContext *ctx,
++                         uint64_t depth, uint64_t *out_base);
++static ElfError resolve_image(const ELF64Header *hdr, const uint8_t *image,
++                              uint64_t size, DepResolveContext *ctx,
++                              uint64_t depth, uint64_t load_base);
++static ElfError load_fresh(const char *name, LoadedLibrary *slot,
++                           DepResolveContext *ctx, uint64_t depth,
++                           uint64_t *out_base);
++static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
++                        const char *name, uint64_t *out_base);
++static bool page_file_bytes(const ELF64Header *hdr, const uint8_t *image,
++                            uint64_t size, uint64_t va, uint64_t *out_off,
++                            uint64_t *out_len, uint64_t *out_dst);
++
++namespace {
++
++// Overflow-safe range check: [off, off+len) must lie within [0, size).
++bool in_image(uint64_t off, uint64_t len, uint64_t size) {
++    if (len > size) {
++        return false;
++    }
++    if (off > size - len) {
++        return false;
++    }
++    return true;
++}
++
++// First program header of a type (phdr table itself bounds-checked).
++const ELF64ProgramHeader *find_phdr(const ELF64Header *hdr,
++                                    const uint8_t *image, uint64_t size,
++                                    uint32_t type) {
++    if (hdr->phnum > 64) {
++        return nullptr;
++    }
++    if (hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return nullptr;
++    }
++    uint64_t table = static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++    if (!in_image(hdr->phoff, table, size)) {
++        return nullptr;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type == type) {
++            return p;
++        }
++    }
++    return nullptr;
++}
++
++} // namespace
++
++// (va_to_offset and the dynamic-section readers follow the pipeline
++// bodies below; they only use in_image/find_phdr via internal calls.)
++static bool apply_view(const DynView *view, const uint8_t *image,
++                       uint64_t size, uint64_t load_base,
++                       DepResolveContext *ctx, const char *soname,
++                       const ELF64Header *hdr);
++
++// Read a whole vnode into a contiguous PMM run (size pre-bounded by the
++// caller).  Returns base phys, 0 on failure (OOM/read/cancel).
++static uint64_t read_image_pages(vfs::Vnode *vn, uint64_t size,
++                                 uint64_t *out_npages,
++                                 DepResolveContext *ctx) {
++    uint64_t npages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++    if (npages == 0 || npages > MAX_SO_FILE_SIZE / arch::PAGE_SIZE) {
++        return 0;
++    }
++    uint64_t base = PMM::alloc_contiguous(npages);
++    if (base == 0) {
++        return 0;
++    }
++    for (uint64_t i = 0; i < npages; ++i) {
++        uint64_t want = arch::PAGE_SIZE;
++        if (i + 1 == npages) {
++            want = size - i * arch::PAGE_SIZE;
++        }
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *dst = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + base +
++                                                i * arch::PAGE_SIZE);
++        int64_t r = vn->ops->read(*vn, dst, want, i * arch::PAGE_SIZE);
++        if (r != static_cast<int64_t>(want)) {
++            free_image_pages(base, npages);
++            return 0;
++        }
++        if (ElfLoader::cancel_pending(ctx->generation)) {
++            free_image_pages(base, npages);
++            return 0;
++        }
++        Scheduler::reschedule();
++    }
++    *out_npages = npages;
++    return base;
++}
++
++// Final executable flag of the PT_LOAD covering va (for hit-path maps).
++static bool page_executable(const ELF64Header *hdr, const uint8_t *image,
++                            uint64_t size, uint64_t va, bool *out_exec) {
++    if (hdr->phnum > 64 || hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return false;
++    }
++    uint64_t table = static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++    if (!in_image(hdr->phoff, table, size)) {
++        return false;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != PT_LOAD || p->memsz == 0) {
++            continue;
++        }
++        uint64_t start = p->vaddr & ~(arch::PAGE_SIZE - 1);
++        uint64_t end = (p->vaddr + p->memsz + arch::PAGE_SIZE - 1) &
++                       ~(arch::PAGE_SIZE - 1);
++        if (va >= start && va < end) {
++            *out_exec = (p->flags & PF_X) != 0;
++            return true;
++        }
++    }
++    return false;
++}
++
++// Cache-hit path: overlap + budget checks, map shared RO pages and
++// fresh RW copies (content re-read from the file), acquire, record.
++static ElfError map_hit(LoadedLibrary *slot, DepResolveContext *ctx,
++                        const char *name, uint64_t *out_base) {
++    if (ranges_overlap(ctx->exec_base, ctx->exec_size, slot->load_base,
++                       slot->load_size)) {
++        return ElfError::LAYOUT;
++    }
++    for (uint64_t i = 0; i < ctx->acquired_count; ++i) {
++        LoadedLibrary *s =
++            SharedLibCache::instance().find(ctx->acquired[i]);
++        if (s && s != slot &&
++            ranges_overlap(s->load_base, s->load_size, slot->load_base,
++                           slot->load_size)) {
++            return ElfError::LAYOUT;
++        }
++    }
++    if (ctx->budget_pages != 0 &&
++        ctx->mapped_bytes + slot->load_size >
++            ctx->budget_pages * arch::PAGE_SIZE) {
++        return ElfError::NOMEM;
++    }
++    if (ctx->mapped_bytes + slot->load_size > MAX_TOTAL_MAPPED) {
++        return ElfError::NOMEM;
++    }
++    // Re-read the file for RW page content (RO pages map shared phys).
++    char path[128];
++    if (name[0] == '/') {
++        strncpy(path, name, sizeof(path) - 1);
++    } else {
++        strncpy(path, LIB_SEARCH_DIR, sizeof(path) - 1);
++        path[sizeof(path) - 1] = '\0';
++        size_t d = strnlen_capped(path, sizeof(path));
++        size_t n = strnlen_capped(name, sizeof(path));
++        if (d + n + 1 > sizeof(path)) {
++            return ElfError::NOT_FOUND;
++        }
++        __builtin_memcpy(path + d, name, n + 1);
++    }
++    path[sizeof(path) - 1] = '\0';
++    vfs::Vnode *vn = vfs::resolve(path);
++    if (!vn || !vn->ops || !vn->ops->read || vn->size != slot->file_size) {
++        return ElfError::NOT_FOUND; // Missing or changed under us.
++    }
++    uint64_t npages = 0;
++    uint64_t buf = read_image_pages(vn, vn->size, &npages, ctx);
++    if (buf == 0) {
++        return ElfError::NOMEM;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint8_t *image =
++        reinterpret_cast<const uint8_t *>(arch::HHDM_OFFSET + buf);
++    const auto *hdr = reinterpret_cast<const ELF64Header *>(image);
++    ElfError err = ElfError::OK;
++    uint64_t va = slot->load_base;
++    uint64_t npg = slot->num_phys_pages;
++    if (npg > MAX_LIB_PHYS_PAGES) {
++        free_image_pages(buf, npages);
++        return ElfError::INVALID_ELF; // Corrupt slot: fail closed.
++    }
++    for (uint64_t i = 0; i < npg; ++i) {
++        uint64_t phys = 0;
++        if ((slot->writable_mask & (1ULL << i)) == 0) {
++            phys = slot->phys_pages[i]; // Share read-only page.
++        } else {
++            phys = PMM::alloc_user_page();
++            if (phys == 0) {
++                err = ElfError::NOMEM;
++                break;
++            }
++            // RW content via the segment map (fixed-layout invariant:
++            // same VA range as the original mapping).
++            uint64_t foff = 0;
++            uint64_t flen = 0;
++            uint64_t doff = 0;
++            if (!page_file_bytes(hdr, image, vn->size, va, &foff, &flen,
++                                 &doff)) {
++                PMM::free_page(phys);
++                err = ElfError::INVALID_ELF;
++                break;
++            }
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *dst =
++                reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
++            __builtin_memset(dst, 0, arch::PAGE_SIZE);
++            if (flen > 0) {
++                __builtin_memcpy(dst + doff, image + foff, flen);
++            }
++        }
++        // Final flags from the image's own PT_LOAD covering va.
++        bool exec = false;
++        if (!page_executable(hdr, image, vn->size, va, &exec)) {
++            if ((slot->writable_mask & (1ULL << i)) != 0) {
++                PMM::free_page(phys);
++            }
++            err = ElfError::INVALID_ELF;
++            break;
++        }
++        VMM::map_page_in_pml4(va, phys, true, exec, ctx->pml4);
++        if (VMM::virt_to_phys_in_pml4(va, ctx->pml4) != phys) {
++            if ((slot->writable_mask & (1ULL << i)) != 0) {
++                PMM::free_page(phys);
++            }
++            err = ElfError::NOMEM;
++            break;
++        }
++        va += arch::PAGE_SIZE;
++        if (ElfLoader::cancel_pending(ctx->generation)) {
++            err = ElfError::CANCELED;
++            break;
++        }
++        Scheduler::reschedule();
++    }
++    if (err != ElfError::OK) {
++        free_image_pages(buf, npages);
++        return err;
++    }
++    // Relocate the fresh RW copies for this task (same values: fixed
++    // addresses make the pass idempotent).  Registration precedes the
++    // reloc pass (mirrors load_fresh): symbol lookup needs this image
++    // in the closure.
++    DynView view{};
++    __builtin_memset(&view, 0, sizeof(view));
++    read_dynamic_section(hdr, image, vn->size, &view);
++    if (ctx->acquired_count >= MAX_LOADED_LIBS ||
++        ctx->image_count >= MAX_DEP_DEPTH + 1) {
++        free_image_pages(buf, npages);
++        SharedLibCache::instance().release(name);
++        return ElfError::NOMEM;
++    }
++    SharedLibCache::instance().acquire(name);
++    ctx->acquired[ctx->acquired_count++] = slot->soname;
++    ctx->images[ctx->image_count] = image;
++    ctx->image_sizes[ctx->image_count] = vn->size;
++    ctx->image_bases[ctx->image_count] = slot->load_base;
++    ctx->image_views[ctx->image_count] = view;
++    ctx->image_phys[ctx->image_count] = buf; // Retained for closure.
++    ctx->image_npages[ctx->image_count] = npages;
++    ++ctx->image_count;
++    if (view.dyn &&
++        !apply_view(&view, image, vn->size, slot->load_base, ctx, name,
++                    hdr)) {
++        // Undo this call's registration (entries are last): the caller
++        // treats a bare error as "nothing recorded", and the loader
++        // cleanup would otherwise release twice.  The retained buffer
++        // goes with the popped entry: free it here.
++        --ctx->image_count;
++        --ctx->acquired_count;
++        free_image_pages(buf, npages);
++        SharedLibCache::instance().release(name);
++        return ElfError::INVALID_ELF;
++    }
++    ctx->mapped_bytes += slot->load_size;
++    *out_base = slot->load_base;
++    return ElfError::OK;
++}
++
++// File coverage of one VA page: overlap of [va, va+4K) with the
++// file-backed prefix of the PT_LOAD covering va.  validate_segment (run
++// by the caller beforehand) proved the segment arithmetic overflow-free
++// and inside the image.
++static bool page_file_bytes(const ELF64Header *hdr, const uint8_t *image,
++                            uint64_t size, uint64_t va, uint64_t *out_off,
++                            uint64_t *out_len, uint64_t *out_dst) {
++    if (hdr->phnum > 64 || hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return false;
++    }
++    uint64_t table = static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++    if (!in_image(hdr->phoff, table, size)) {
++        return false;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != PT_LOAD || p->memsz == 0) {
++            continue;
++        }
++        uint64_t start = p->vaddr & ~(arch::PAGE_SIZE - 1);
++        uint64_t end = (p->vaddr + p->memsz + arch::PAGE_SIZE - 1) &
++                       ~(arch::PAGE_SIZE - 1);
++        if (va < start || va >= end) {
++            continue;
++        }
++        uint64_t lo = va < p->vaddr ? p->vaddr : va;
++        uint64_t body_end = p->vaddr + p->filesz;
++        uint64_t page_end = va + arch::PAGE_SIZE;
++        *out_off = 0;
++        *out_len = 0;
++        *out_dst = lo > va ? lo - va : 0;
++        if (lo < page_end && lo < body_end) {
++            uint64_t hi = page_end < body_end ? page_end : body_end;
++            *out_off = p->offset + (lo - p->vaddr);
++            *out_len = hi - lo;
++        }
++        return true;
++    }
++    return false;
++}
++
++// Compute the fixed load range of an image (min PT_LOAD vaddr, total).
++// Returns false on overflow or empty range.
++static bool image_range(const ELF64Header *hdr, const uint8_t *image,
++                        uint64_t size, uint64_t *out_base,
++                        uint64_t *out_total) {
++    uint64_t lo = 0;
++    uint64_t hi = 0;
++    bool any = false;
++    if (hdr->phnum > 64 || hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return false;
++    }
++    uint64_t table = static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++    if (table > size || hdr->phoff > size - table) {
++        return false;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != PT_LOAD || p->memsz == 0) {
++            continue;
++        }
++        uint64_t start = p->vaddr & ~(arch::PAGE_SIZE - 1);
++        uint64_t end = p->vaddr + p->memsz;
++        if (end < p->vaddr) {
++            return false;
++        }
++        end = (end + arch::PAGE_SIZE - 1) & ~(arch::PAGE_SIZE - 1);
++        if (end < p->vaddr) {
++            return false;
++        }
++        if (!any || start < lo) {
++            lo = start;
++        }
++        if (!any || end > hi) {
++            hi = end;
++        }
++        any = true;
++    }
++    if (!any || hi <= lo) {
++        return false;
++    }
++    *out_base = lo;
++    *out_total = hi - lo;
++    return true;
++}
++
++// Map one image page (fresh phys) with final flags; file_len bytes go
++// at dst_off, the rest is zeroed (bss / unaligned head).
++static ElfError map_one_page(DepResolveContext *ctx, uint64_t va,
++                             const uint8_t *image, uint64_t file_off,
++                             uint64_t file_len, uint64_t dst_off,
++                             bool executable, uint64_t *out_phys) {
++    uint64_t phys = PMM::alloc_user_page();
++    if (phys == 0) {
++        return ElfError::NOMEM;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *dst = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
++    __builtin_memset(dst, 0, arch::PAGE_SIZE);
++    if (file_len > 0) {
++        __builtin_memcpy(dst + dst_off, image + file_off, file_len);
++    }
++    VMM::map_page_in_pml4(va, phys, true, executable, ctx->pml4);
++    if (VMM::virt_to_phys_in_pml4(va, ctx->pml4) != phys) {
++        PMM::free_page(phys); // Silent table-alloc failure: fail closed.
++        return ElfError::NOMEM;
++    }
++    *out_phys = phys;
++    return ElfError::OK;
++}
++
++struct MapOut {
++    uint64_t phys[MAX_LIB_PHYS_PAGES];
++    uint64_t writable;
++    uint64_t count;
++};
++
++// Map all PT_LOADs of an image in VA order (= cache file-page order).
++static ElfError map_image(const ELF64Header *hdr, const uint8_t *image,
++                          uint64_t size, DepResolveContext *ctx,
++                          MapOut *out) {
++    out->count = 0;
++    out->writable = 0;
++    if (hdr->phnum > 64 || hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return ElfError::INVALID_ELF;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != PT_LOAD || p->memsz == 0) {
++            continue;
++        }
++        if (!validate_segment(p, size)) {
++            return ElfError::INVALID_ELF;
++        }
++        bool exec = (p->flags & PF_X) != 0;
++        bool write = (p->flags & PF_W) != 0;
++        uint64_t start = p->vaddr & ~(arch::PAGE_SIZE - 1);
++        uint64_t end = (p->vaddr + p->memsz + arch::PAGE_SIZE - 1) &
++                       ~(arch::PAGE_SIZE - 1);
++        for (uint64_t va = start; va < end; va += arch::PAGE_SIZE) {
++            if (out->count >= MAX_LIB_PHYS_PAGES) {
++                return ElfError::NOMEM; // Beyond the share cap.
++            }
++            // File coverage via the shared segment-map helper.
++            uint64_t file_off = 0;
++            uint64_t file_len = 0;
++            uint64_t dst_off = 0;
++            if (!page_file_bytes(hdr, image, size, va, &file_off,
++                                 &file_len, &dst_off)) {
++                return ElfError::INVALID_ELF;
++            }
++            uint64_t phys = 0;
++            ElfError e = map_one_page(ctx, va, image, file_off, file_len,
++                                      dst_off, exec, &phys);
++            if (e != ElfError::OK) {
++                return e;
++            }
++            out->phys[out->count] = phys;
++            if (write) {
++                out->writable |= 1ULL << out->count;
++            }
++            ++out->count;
++            if (ElfLoader::cancel_pending(ctx->generation)) {
++                return ElfError::CANCELED;
++            }
++            Scheduler::reschedule();
++        }
++    }
++    return ElfError::OK;
++}
++
++bool load_shared_object(const char *soname, DepResolveContext *ctx,
++                        uint64_t depth, uint64_t *out_load_base) {
++    if (!soname || soname[0] == '\0' || !ctx || !out_load_base) {
++        return false;
++    }
++    if (depth > MAX_DEP_DEPTH) {
++        chain_append(ctx, soname);
++        return false;
++    }
++    if (ElfLoader::cancel_pending(ctx->generation)) {
++        return false;
++    }
++    // Bounded local copy (dynstr already NUL-validated; belt-and-braces).
++    char name[128];
++    strncpy(name, soname, sizeof(name) - 1);
++    name[sizeof(name) - 1] = '\0';
++    bool created = false;
++    LoadedLibrary *slot = SharedLibCache::instance().reserve(name, &created);
++    if (!slot) {
++        chain_append(ctx, name);
++        return false;
++    }
++    if (!created) {
++        if (slot->in_progress) {
++            chain_append(ctx, name); // Cycle: ancestor still loading it.
++            return false;
++        }
++        if (load_one(name, ctx, depth, out_load_base) != ElfError::OK) {
++            // map_hit appends its own chain on terminal failure.
++            return false;
++        }
++        return true;
++    }
++    if (load_fresh(name, slot, ctx, depth, out_load_base) != ElfError::OK) {
++        chain_append(ctx, name);
++        SharedLibCache::instance().clear_in_progress(name);
++        SharedLibCache::instance().release(name);
++        return false;
++    }
++    return true;
++}
++
++// Fresh load of a reserved slot: discover, buffer, validate, overlap +
++// budget checks, map, fill slot, recurse into its own deps.
++static ElfError load_fresh(const char *name, LoadedLibrary *slot,
++                           DepResolveContext *ctx, uint64_t depth,
++                           uint64_t *out_base) {
++    char path[128];
++    if (name[0] == '/') {
++        strncpy(path, name, sizeof(path) - 1);
++    } else {
++        strncpy(path, LIB_SEARCH_DIR, sizeof(path) - 1);
++        path[sizeof(path) - 1] = '\0';
++        size_t d = strnlen_capped(path, sizeof(path));
++        size_t n = strnlen_capped(name, sizeof(path));
++        if (d + n + 1 > sizeof(path)) {
++            return ElfError::NOT_FOUND;
++        }
++        __builtin_memcpy(path + d, name, n + 1);
++    }
++    path[sizeof(path) - 1] = '\0';
++    vfs::Vnode *vn = vfs::resolve(path);
++    if (!vn || !vn->ops || !vn->ops->read) {
++        return ElfError::NOT_FOUND;
++    }
++    uint64_t size = vn->size;
++    if (size == 0 || size > MAX_SO_FILE_SIZE) {
++        return ElfError::NOMEM;
++    }
++    uint64_t npages = 0;
++    uint64_t buf = read_image_pages(vn, size, &npages, ctx);
++    if (buf == 0) {
++        return ElfError::NOMEM;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const uint8_t *image =
++        reinterpret_cast<const uint8_t *>(arch::HHDM_OFFSET + buf);
++    const auto *hdr = reinterpret_cast<const ELF64Header *>(image);
++    ElfError err = ElfError::INVALID_ELF;
++    if (validate_header(hdr) && hdr->type == ET_DYN) {
++        uint64_t base = 0;
++        uint64_t total = 0;
++        if (image_range(hdr, image, size, &base, &total) &&
++            !ranges_overlap(ctx->exec_base, ctx->exec_size, base, total) &&
++            !ranges_overlap(mem::STACK_VADDR, mem::STACK_SIZE, base,
++                            total) &&
++            !ranges_overlap(mem::HEAP_VADDR, mem::HEAP_SIZE, base, total)) {
++            bool clash = false;
++            for (uint64_t i = 0; i < ctx->acquired_count; ++i) {
++                LoadedLibrary *s =
++                    SharedLibCache::instance().find(ctx->acquired[i]);
++                if (s && ranges_overlap(s->load_base, s->load_size, base,
++                                        total)) {
++                    clash = true;
++                    break;
++                }
++            }
++            if (!clash &&
++                (ctx->budget_pages == 0 ||
++                 ctx->mapped_bytes + total <=
++                     ctx->budget_pages * arch::PAGE_SIZE) &&
++                ctx->mapped_bytes + total <= MAX_TOTAL_MAPPED) {
++                MapOut mapped{};
++                err = map_image(hdr, image, size, ctx, &mapped);
++                if (err == ElfError::OK) {
++                    DynView lib_view{};
++                    __builtin_memset(&lib_view, 0, sizeof(lib_view));
++                    read_dynamic_section(hdr, image, size, &lib_view);
++                    slot->load_base = base;
++                    slot->load_size = total;
++                    slot->file_size = size;
++                    slot->num_phys_pages = static_cast<uint32_t>(
++                        mapped.count);
++                    slot->writable_mask = mapped.writable;
++                    for (uint64_t i = 0; i < mapped.count; ++i) {
++                        slot->phys_pages[i] = mapped.phys[i];
++                    }
++                    slot->refcount = 1;
++                    // NOTE: in_progress stays true through dep recursion
++                    // below (cycle detection); cleared on success here,
++                    // or via clear_in_progress+release on failure.
++                    if (ctx->acquired_count < MAX_LOADED_LIBS &&
++                        ctx->image_count < MAX_DEP_DEPTH + 1) {
++                        ctx->acquired[ctx->acquired_count++] =
++                            slot->soname;
++                        ctx->images[ctx->image_count] = image;
++                        ctx->image_sizes[ctx->image_count] = size;
++                        ctx->image_bases[ctx->image_count] = base;
++                        ctx->image_views[ctx->image_count] = lib_view;
++                        ctx->image_phys[ctx->image_count] = buf;
++                        ctx->image_npages[ctx->image_count] = npages;
++                        ++ctx->image_count;
++                        ctx->mapped_bytes += total;
++                        *out_base = base;
++                        buf = 0; // Retained: owned by ctx now.
++                        err = resolve_image(
++                            hdr, image, size, ctx, depth, base);
++                        if (err == ElfError::OK) {
++                            slot->in_progress = false; // Fully loaded.
++                        }
++                    } else {
++                        err = ElfError::NOMEM;
++                    }
++                }
++            } else if (!clash) {
++                err = ElfError::NOMEM;
++            } else {
++                err = ElfError::LAYOUT;
++            }
++        } else {
++            err = ElfError::LAYOUT;
++        }
++    }
++    if (buf != 0) {
++        free_image_pages(buf, npages); // Not retained: failure path.
++    }
++    return err;
++}
++
++// Single-soname driver shared by the public entry and the recursion.
++static ElfError load_one(const char *soname, DepResolveContext *ctx,
++                         uint64_t depth, uint64_t *out_base) {
++    if (!soname || soname[0] == '\0' || !ctx || !out_base) {
++        return ElfError::INVALID_ELF;
++    }
++    if (depth > MAX_DEP_DEPTH) {
++        return ElfError::DEPTH;
++    }
++    if (ElfLoader::cancel_pending(ctx->generation)) {
++        return ElfError::CANCELED;
++    }
++    char name[128];
++    strncpy(name, soname, sizeof(name) - 1);
++    name[sizeof(name) - 1] = '\0';
++    bool created = false;
++    LoadedLibrary *slot = SharedLibCache::instance().reserve(name, &created);
++    if (!slot) {
++        return ElfError::NOMEM;
++    }
++    if (!created) {
++        if (slot->in_progress) {
++            return ElfError::CYCLE;
++        }
++        return map_hit(slot, ctx, name, out_base);
++    }
++    ElfError err = load_fresh(name, slot, ctx, depth, out_base);
++    if (err != ElfError::OK) {
++        SharedLibCache::instance().clear_in_progress(name);
++        SharedLibCache::instance().release(name);
++    }
++    return err;
++}
++
++static ElfError resolve_image(const ELF64Header *hdr, const uint8_t *image,
++                              uint64_t size, DepResolveContext *ctx,
++                              uint64_t depth, uint64_t load_base) {
++    if (!hdr || !image || !ctx || size == 0) {
++        return ElfError::INVALID_ELF;
++    }
++    DynView view{};
++    if (!read_dynamic_section(hdr, image, size, &view)) {
++        // Static image (no PT_DYNAMIC) resolves trivially.
++        return find_phdr(hdr, image, size, PT_DYNAMIC) == nullptr
++                   ? ElfError::OK
++                   : ElfError::INVALID_ELF;
++    }
++    if (count_needed(&view) > MAX_DEP_DEPTH) {
++        return ElfError::NOMEM;
++    }
++    const char *needed[MAX_DEP_DEPTH];
++    size_t n = get_needed(&view, needed);
++    for (size_t i = 0; i < n; ++i) {
++        uint64_t mark = strnlen_capped(ctx->fail_chain,
++                                       sizeof(ctx->fail_chain));
++        chain_append(ctx, needed[i]);
++        uint64_t base = 0;
++        ElfError err = load_one(needed[i], ctx, depth + 1, &base);
++        (void)base;
++        if (err != ElfError::OK) {
++            ctx->last_error = err;
++            return err;
++        }
++        ctx->fail_chain[mark] = '\0'; // Pop on success: exact failure path.
++    }
++    // NOTE: image registration in ctx.images[] is the CALLER's job
++    // (public resolve registers the exec, load_fresh registers each lib)
++    // so each image appears exactly once for the post-order reloc pass.
++    (void)load_base;
++    return ElfError::OK;
++}
++
++bool resolve_dependencies(const ELF64Header *hdr, const uint8_t *file_data,
++                          uint64_t file_size, DepResolveContext *ctx,
++                          uint64_t depth, uint64_t load_base) {
++    if (!hdr || !file_data || !ctx || file_size == 0) {
++        return false;
++    }
++    if (depth > MAX_DEP_DEPTH) {
++        return false;
++    }
++    // Register the exec image for the closure (images[0]); libs append
++    // their own entries in load_fresh/map_hit in acquired order, so
++    // images[j+1] always pairs with acquired[j] for dmesg labels.
++    DynView exec_view{};
++    __builtin_memset(&exec_view, 0, sizeof(exec_view));
++    read_dynamic_section(hdr, file_data, file_size, &exec_view);
++    if (ctx->image_count >= MAX_DEP_DEPTH + 1) {
++        return false;
++    }
++    ctx->images[ctx->image_count] = file_data;
++    ctx->image_sizes[ctx->image_count] = file_size;
++    ctx->image_bases[ctx->image_count] = load_base;
++    ctx->image_views[ctx->image_count] = exec_view;
++    ctx->image_phys[ctx->image_count] = 0; // Caller-owned (exec buffer).
++    ctx->image_npages[ctx->image_count] = 0;
++    ++ctx->image_count;
++    ElfError err = resolve_image(hdr, file_data, file_size, ctx, depth,
++                                 load_base);
++    if (err != ElfError::OK) {
++        ctx->last_error = err;
++        return false;
++    }
++    // Post-order relocate pass over the full closure (top level only;
++    // nested resolves leave relocation to the outermost call so each
++    // image is relocated exactly once).
++    if (depth == 0) {
++        return relocate_closure(ctx);
++    }
++    return true;
++}
++
++bool relocate_closure(DepResolveContext *ctx) {
++    if (!ctx) {
++        return false;
++    }
++    for (uint64_t i = 0; i < ctx->image_count; ++i) {
++        const auto *ihdr =
++            reinterpret_cast<const ELF64Header *>(ctx->images[i]);
++        const char *who = (i == 0) ? "exec" : ctx->acquired[i - 1];
++        if (!apply_relocations(ihdr, ctx->images[i], ctx->image_sizes[i],
++                               ctx->image_bases[i], ctx, who)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++// Look up one image's table for a GLOBAL/WEAK definition.
++// Returns 1 = defined (value set), 0 = not here, -1 = corrupt entry.
++static int64_t lookup_one(DepResolveContext *ctx, uint64_t idx,
++                          const char *name, uint64_t *out_value) {
++    const DynView *view = &ctx->image_views[idx];
++    if (!view->dyn || !view->symtab) {
++        return 0;
++    }
++    // Defined-symbol values are link-time VAs: add the defining image's
++    // load bias (mapped − linked; 0 for fixed-address images, nonzero
++    // for base-0 links).  Adding the mapped base unconditionally would
++    // double-count based links (observed 0xA00100).
++    const auto *hdr =
++        reinterpret_cast<const ELF64Header *>(ctx->images[idx]);
++    uint64_t link_base = 0;
++    uint64_t link_total = 0;
++    if (!image_range(hdr, ctx->images[idx], ctx->image_sizes[idx],
++                     &link_base, &link_total)) {
++        return -1;
++    }
++    uint64_t mapped = ctx->image_bases[idx];
++    if (mapped < link_base) {
++        return -1;
++    }
++    uint64_t bias = mapped - link_base;
++    for (uint64_t s = 0; s < view->sym_count; ++s) {
++        const ELF64Symbol *sym = &view->symtab[s];
++        uint64_t bind = (sym->st_info >> 4) & 0xF;
++        if (bind != 1 && bind != 2) {
++            continue; // LOCAL or odd: not interposable.
++        }
++        if (sym->st_name >= view->strsz) {
++            continue;
++        }
++        const char *sym_name = view->strtab + sym->st_name;
++        if (strnlen_capped(sym_name, view->strsz - sym->st_name) >=
++            view->strsz - sym->st_name) {
++            continue;
++        }
++        if (strcmp(sym_name, name) != 0) {
++            continue;
++        }
++        if (sym->st_shndx == 0) {
++            if (bind == 2) {
++                *out_value = 0; // WEAK undefined: resolves zero.
++                return 1;
++            }
++            continue; // UNDEF: keep searching.
++        }
++        if (sym->st_value > ~0ULL - bias) {
++            return -1;
++        }
++        *out_value = bias + sym->st_value;
++        return 1;
++    }
++    return 0;
++}
++
++// Look up a symbol closure-wide: own image first, then closure order.
++// Returns false when undefined everywhere (caller fails closed), except
++// WEAK-undefined which resolves to 0.
++static bool lookup_symbol(DepResolveContext *ctx, uint64_t self_idx,
++                          const char *name, uint64_t *out_value) {
++    if (self_idx < ctx->image_count) {
++        int64_t r = lookup_one(ctx, self_idx, name, out_value);
++        if (r != 0) {
++            return r > 0;
++        }
++    }
++    for (uint64_t k = 0; k < ctx->image_count; ++k) {
++        if (k == self_idx) {
++            continue;
++        }
++        int64_t r = lookup_one(ctx, k, name, out_value);
++        if (r != 0) {
++            return r > 0;
++        }
++    }
++    return false;
++}
++
++// Apply one RELA table (DT_RELA or DT_JMPREL, both RELA-form).
++// Fixed-address model (§2.2): images link at their load VAs, so the
++// load bias (mapped base − link base) is normally 0; base-0 (PIE-style)
++// images still relocate via the bias.  r_offset/d_ptr are link-time VAs.
++static bool apply_rela_table(const ELF64Rela *table, uint64_t count,
++                             const ELF64Header *hdr, const uint8_t *image,
++                             uint64_t size, uint64_t load_base,
++                             DepResolveContext *ctx, uint64_t self_idx,
++                             const char *soname) {
++    uint64_t link_base = 0;
++    uint64_t link_total = 0;
++    if (!image_range(hdr, image, size, &link_base, &link_total)) {
++        return false;
++    }
++    if (load_base < link_base) {
++        return false;
++    }
++    uint64_t bias = load_base - link_base;
++    for (uint64_t i = 0; i < count; ++i) {
++        uint64_t type = rela_type(table[i].r_info);
++        uint64_t sym = rela_sym(table[i].r_info);
++        if (table[i].r_offset > ~0ULL - bias) {
++            return false;
++        }
++        uint64_t target = table[i].r_offset + bias;
++        uint64_t value = 0;
++        if (type == R_X86_64_RELATIVE) {
++            if (sym != 0) {
++                return false;
++            }
++            if (table[i].r_addend < 0 ||
++                static_cast<uint64_t>(table[i].r_addend) > ~0ULL - bias) {
++                return false;
++            }
++            value = bias + static_cast<uint64_t>(table[i].r_addend);
++        } else if (type == R_X86_64_GLOB_DAT || type == R_X86_64_JUMP_SLOT ||
++                   type == R_X86_64_64) {
++            const DynView *self = &ctx->image_views[self_idx];
++            if (!self->dyn || !self->symtab || sym >= self->sym_count) {
++                return false;
++            }
++            const ELF64Symbol *s = &self->symtab[sym];
++            if (s->st_name >= self->strsz) {
++                return false;
++            }
++            const char *name = self->strtab + s->st_name;
++            if (strnlen_capped(name, self->strsz - s->st_name) >=
++                self->strsz - s->st_name) {
++                return false;
++            }
++            if (!lookup_symbol(ctx, self_idx, name, &value)) {
++                return false; // Undefined symbol: fail closed.
++            }
++        } else {
++            return false; // Outside the eager subset (COPY/PC32/...).
++        }
++        if (!target_write_u64(ctx->pml4, target, value)) {
++            return false; // Unmapped/out-of-range target.
++        }
++        (void)soname;
++    }
++    return true;
++}
++
++static bool apply_view(const DynView *view, const uint8_t *image,
++                       uint64_t size, uint64_t load_base,
++                       DepResolveContext *ctx, const char *soname,
++                       const ELF64Header *hdr) {
++    (void)image;
++    (void)size;
++    if (!view || !view->dyn || !ctx || !soname || !hdr) {
++        kernel::Logger::warn("elf_shared: apply_view null argument");
++        return false;
++    }
++    // This image must be registered in the closure for symbol lookup.
++    uint64_t self_idx = 0;
++    bool found = false;
++    for (uint64_t k = 0; k < ctx->image_count; ++k) {
++        if (ctx->image_bases[k] == load_base) {
++            self_idx = k;
++            found = true;
++            break;
++        }
++    }
++    if (!found) {
++        kernel::Logger::warn("elf_shared: image not in closure base=%lx",
++                             load_base);
++        return false;
++    }
++    // Non-empty init arrays need untrusted code execution: reject.
++    for (uint64_t i = 0; i < view->dyn_count; ++i) {
++        if (view->dyn[i].d_tag == DT_INIT) {
++            return false;
++        }
++        if ((view->dyn[i].d_tag == DT_INIT_ARRAY ||
++             view->dyn[i].d_tag == DT_FINI_ARRAY) &&
++            (i + 1 >= view->dyn_count ||
++             (view->dyn[i + 1].d_tag != DT_INIT_ARRAYSZ &&
++              view->dyn[i + 1].d_tag != DT_FINI_ARRAYSZ) ||
++             view->dyn[i + 1].d_val != 0)) {
++            // Non-empty init/fini array (or array without a proven-zero
++            // size successor): fail closed.  Empty arrays pass.
++            bool empty = false;
++            for (uint64_t j = 0; j < view->dyn_count; ++j) {
++                if ((view->dyn[i].d_tag == DT_INIT_ARRAY &&
++                     view->dyn[j].d_tag == DT_INIT_ARRAYSZ &&
++                     view->dyn[j].d_val == 0) ||
++                    (view->dyn[i].d_tag == DT_FINI_ARRAY &&
++                     view->dyn[j].d_tag == DT_FINI_ARRAYSZ &&
++                     view->dyn[j].d_val == 0)) {
++                    empty = true;
++                    break;
++                }
++            }
++            if (!empty) {
++                return false;
++            }
++        }
++    }
++    if (view->rela && view->relasz > 0) {
++        uint64_t count = view->relasz / view->relaent;
++        if (!apply_rela_table(view->rela, count, hdr, image, size,
++                              load_base, ctx, self_idx, soname)) {
++            return false;
++        }
++    }
++    if (view->jmprel && view->pltrelsz > 0) {
++        uint64_t count = view->pltrelsz / sizeof(ELF64Rela);
++        if (!apply_rela_table(view->jmprel, count, hdr, image, size,
++                              load_base, ctx, self_idx, soname)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++bool apply_relocations(const ELF64Header *hdr, const uint8_t *file_data,
++                       uint64_t file_size, uint64_t load_base,
++                       DepResolveContext *ctx, const char *soname) {
++    if (!hdr || !file_data || !ctx || !soname || file_size == 0) {
++        return false;
++    }
++    DynView view{};
++    if (!read_dynamic_section(hdr, file_data, file_size, &view)) {
++        // Static image: nothing to relocate.
++        return find_phdr(hdr, file_data, file_size, PT_DYNAMIC) == nullptr;
++    }
++    return apply_view(&view, file_data, file_size, load_base, ctx, soname,
++                      hdr);
++}
++
++namespace {
++
++// (in_image/find_phdr live in the pipeline block above and are reused
++// here; strnlen via strnlen_capped.)
++
++// Translate a runtime VA to a file offset via PT_LOAD segments (only the
++// file-backed prefix filesz, never bss tail).
++bool va_to_offset(const ELF64Header *hdr, const uint8_t *image,
++                  uint64_t size, uint64_t va, uint64_t *out_off) {
++    if (hdr->phnum > 64) {
++        return false;
++    }
++    if (hdr->phentsize < sizeof(ELF64ProgramHeader)) {
++        return false;
++    }
++    uint64_t table = static_cast<uint64_t>(hdr->phnum) * hdr->phentsize;
++    if (!in_image(hdr->phoff, table, size)) {
++        return false;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != PT_LOAD) {
++            continue;
++        }
++        if (va < p->vaddr) {
++            continue;
++        }
++        uint64_t rel = va - p->vaddr;
++        if (rel >= p->filesz) {
++            continue;
++        }
++        uint64_t off = p->offset + rel;
++        if (off < p->offset) {
++            return false;
++        }
++        *out_off = off;
++        return true;
++    }
++    return false;
++}
++
++// A dynstr offset is usable only if it starts a NUL-terminated string
++// fully inside [strtab, strtab+strsz).
++bool dynstr_ok(const char *strtab, uint64_t strsz, uint64_t off) {
++    if (off >= strsz) {
++        return false;
++    }
++    return strnlen_capped(strtab + off, strsz - off) < strsz - off;
++}
++
++} // namespace
++
++const char *get_soname(const DynView *view) {
++    if (!view || !view->dyn) {
++        return nullptr;
++    }
++    for (uint64_t i = 0; i < view->dyn_count; ++i) {
++        if (view->dyn[i].d_tag == DT_SONAME) {
++            uint64_t off = view->dyn[i].d_val;
++            if (!dynstr_ok(view->strtab, view->strsz, off)) {
++                return nullptr;
++            }
++            return view->strtab + off;
++        }
++    }
++    return nullptr;
++}
++
++size_t get_needed(const DynView *view, const char **needed) {
++    if (!view || !view->dyn || !needed) {
++        return 0;
++    }
++    size_t n = 0;
++    for (uint64_t i = 0; i < view->dyn_count; ++i) {
++        if (view->dyn[i].d_tag != DT_NEEDED) {
++            continue;
++        }
++        if (n >= MAX_DEP_DEPTH) {
++            return n;
++        }
++        uint64_t off = view->dyn[i].d_val;
++        if (!dynstr_ok(view->strtab, view->strsz, off)) {
++            return n;
++        }
++        needed[n++] = view->strtab + off;
++    }
++    return n;
++}
++
++bool read_dynamic_section(const ELF64Header *hdr, const uint8_t *file_data,
++                          uint64_t file_size, DynView *out_view) {
++    if (!hdr || !file_data || !out_view) {
++        return false;
++    }
++    __builtin_memset(out_view, 0, sizeof(DynView));
++    const ELF64ProgramHeader *dyn_phdr =
++        find_phdr(hdr, file_data, file_size, PT_DYNAMIC);
++    if (!dyn_phdr) {
++        return false; // Static image: no dynamic section, not an error.
++    }
++    if (dyn_phdr->filesz < sizeof(ELF64Dynamic)) {
++        return false;
++    }
++    if (!in_image(dyn_phdr->offset, dyn_phdr->filesz, file_size)) {
++        return false;
++    }
++    uint64_t count = dyn_phdr->filesz / sizeof(ELF64Dynamic);
++    if (count > 64) {
++        count = 64;
++    }
++    const auto *dyn = reinterpret_cast<const ELF64Dynamic *>(
++        file_data + dyn_phdr->offset);
++    out_view->dyn = dyn;
++    out_view->dyn_count = count;
++
++    // First pass: locate the string/symbol tables.
++    uint64_t strtab_va = 0;
++    uint64_t symtab_va = 0;
++    for (uint64_t i = 0; i < count; ++i) {
++        if (dyn[i].d_tag == DT_NULL) {
++            break;
++        }
++        switch (dyn[i].d_tag) {
++            case DT_STRTAB:
++                strtab_va = dyn[i].d_val;
++                break;
++            case DT_STRSZ:
++                out_view->strsz = dyn[i].d_val;
++                break;
++            case DT_SYMTAB:
++                symtab_va = dyn[i].d_val;
++                break;
++            case DT_SYMENT:
++                out_view->syment = dyn[i].d_val;
++                break;
++            default:
++                break;
++        }
++    }
++    if (strtab_va == 0 || out_view->strsz == 0) {
++        return false;
++    }
++    uint64_t str_off = 0;
++    if (!va_to_offset(hdr, file_data, file_size, strtab_va, &str_off)) {
++        return false;
++    }
++    if (!in_image(str_off, out_view->strsz, file_size)) {
++        return false;
++    }
++    out_view->strtab =
++        reinterpret_cast<const char *>(file_data + str_off);
++    if (symtab_va != 0) {
++        if (out_view->syment != sizeof(ELF64Symbol)) {
++            return false;
++        }
++        uint64_t sym_off = 0;
++        if (!va_to_offset(hdr, file_data, file_size, symtab_va, &sym_off)) {
++            return false;
++        }
++        if (sym_off >= file_size) {
++            return false;
++        }
++        out_view->symtab =
++            reinterpret_cast<const ELF64Symbol *>(file_data + sym_off);
++        out_view->sym_count = (file_size - sym_off) / out_view->syment;
++    }
++
++    // Second pass: relocation tables (strict subset: RELA with 24-byte
++    // entries; REL and odd sizes fail closed).
++    for (uint64_t i = 0; i < count; ++i) {
++        if (dyn[i].d_tag == DT_NULL) {
++            break;
++        }
++        uint64_t off = 0;
++        switch (dyn[i].d_tag) {
++            case DT_RELA:
++                if (!va_to_offset(hdr, file_data, file_size, dyn[i].d_val,
++                                  &off)) {
++                    return false;
++                }
++                out_view->rela =
++                    reinterpret_cast<const ELF64Rela *>(file_data + off);
++                break;
++            case DT_RELASZ:
++                out_view->relasz = dyn[i].d_val;
++                break;
++            case DT_RELAENT:
++                out_view->relaent = dyn[i].d_val;
++                break;
++            case DT_JMPREL:
++                if (!va_to_offset(hdr, file_data, file_size, dyn[i].d_val,
++                                  &off)) {
++                    return false;
++                }
++                out_view->jmprel =
++                    reinterpret_cast<const ELF64Rela *>(file_data + off);
++                break;
++            case DT_PLTRELSZ:
++                out_view->pltrelsz = dyn[i].d_val;
++                break;
++            case DT_PLTREL:
++                out_view->pltrel_type = dyn[i].d_val;
++                break;
++            case DT_TEXTREL:
++                return false; // Text relocations need WX: reject.
++            default:
++                break;
++        }
++    }
++    if (out_view->rela || out_view->relasz != 0) {
++        if (out_view->relaent != sizeof(ELF64Rela)) {
++            return false;
++        }
++        if (!out_view->rela ||
++            !in_image(reinterpret_cast<const uint8_t *>(out_view->rela) -
++                          file_data,
++                      out_view->relasz, file_size)) {
++            return false;
++        }
++    }
++    if (out_view->jmprel || out_view->pltrelsz != 0) {
++        if (out_view->pltrel_type != DT_RELA) {
++            return false; // REL PLT: unsupported subset.
++        }
++        if (!out_view->jmprel ||
++            !in_image(reinterpret_cast<const uint8_t *>(out_view->jmprel) -
++                          file_data,
++                      out_view->pltrelsz, file_size)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++} // namespace elf
++} // namespace kernel
+diff --git a/src/kernel/elf/elf_shared.hpp b/src/kernel/elf/elf_shared.hpp
+index 8e94763c..8b8801d8 100644
+--- a/src/kernel/elf/elf_shared.hpp
++++ b/src/kernel/elf/elf_shared.hpp
+@@ -33,6 +33,7 @@ namespace elf {
+ struct ELF64Header;
+ struct ELF64ProgramHeader;
+ } // namespace elf
++class TaskControlBlock;
+ } // namespace kernel
+ 
+ namespace kernel {
+@@ -105,17 +106,40 @@ struct ELF64Rel {
+     uint64_t r_info;   ///< Symbol index + relocation type.
+ } __attribute__((packed));
+ 
++/// @brief Shared-object loader error codes (issue #95).
++enum class ElfError : uint8_t {
++    OK = 0,
++    INVALID_ELF, ///< Malformed header/phdr/dynamic/reloc data.
++    LAYOUT,     ///< Fixed-vaddr overlap (no silent rebasing, §2.2).
++    NOT_FOUND,  ///< Soname not discoverable under /lib/.
++    NOMEM,      ///< Page alloc, cache-full, or phys-page bound hit.
++    DEPTH,      ///< DT_NEEDED recursion deeper than MAX_DEP_DEPTH.
++    CYCLE,      ///< Dependency cycle via in-progress set.
++    CANCELED,   ///< Loader cancel observed mid-request.
++};
++
++/// @brief Maximum phys pages tracked per cached library (64 = 256 KiB).
++static constexpr size_t MAX_LIB_PHYS_PAGES = 64;
++
+ /// @brief Loaded shared library entry (dedup cache).
+ struct LoadedLibrary {
+     char soname[128];   ///< Library soname (e.g., "libc.so").
+-    uint64_t load_base; ///< Base load address.
++    uint64_t load_base; ///< Fixed preferred base load address.
+     uint64_t load_size; ///< Total mapped size.
++    uint64_t file_size; ///< .so file size at load (hit verification).
++    uint64_t phys_pages[MAX_LIB_PHYS_PAGES]; ///< Shared phys, file order.
++    uint64_t writable_mask; ///< Bit i set = page i is RW (per-task copy
++                             ///< on cache hit; RO pages map shared phys).
++    uint32_t num_phys_pages; ///< Valid entries in phys_pages (≤ 64).
+     uint32_t refcount;  ///< Reference count for dedup.
+     bool in_progress;   ///< True while loading (cycle detection).
+ 
+     LoadedLibrary()
+-        : load_base(0), load_size(0), refcount(0), in_progress(false) {
++        : load_base(0), load_size(0), file_size(0), writable_mask(0),
++          num_phys_pages(0), refcount(0), in_progress(false) {
+         soname[0] = '\0';
++        for (size_t i = 0; i < MAX_LIB_PHYS_PAGES; ++i)
++            phys_pages[i] = 0;
+     }
+ };
+ 
+@@ -144,6 +168,13 @@ public:
+     /// @brief Increment refcount for a soname.
+     void acquire(const char *soname);
+ 
++    /// @brief Reserve a slot for a soname being loaded (cycle detection).
++    ///        Returns the existing slot when present (caller checks
++    ///        in_progress: true = cycle, false = cache hit), otherwise a
++    ///        fresh slot with in_progress=true and refcount=0, or nullptr
++    ///        when the cache is full.  out_created reports a fresh slot.
++    LoadedLibrary *reserve(const char *soname, bool *out_created);
++
+     /// @brief Decrement refcount; unload if zero and not in_progress.
+     void release(const char *soname);
+ 
+@@ -155,6 +186,103 @@ private:
+     kernel::sync::SpinLock lock_;
+ };
+ 
++/// @brief Parsed PT_DYNAMIC view (all pointers into the file image,
++///        bounds-checked at parse time; issue #95).
++struct DynView {
++    const ELF64Dynamic *dyn; ///< Dynamic array (file image).
++    uint64_t dyn_count;      ///< Entry count (capped).
++    const char *strtab;      ///< .dynstr (file image).
++    uint64_t strsz;          ///< .dynstr size.
++    const ELF64Symbol *symtab; ///< .dynsym (file image).
++    uint64_t sym_count;      ///< Symbol count (filesize-bounded).
++    uint64_t syment;         ///< Symbol entry size (must match).
++    const ELF64Rela *rela;   ///< DT_RELA table (file image, nullable).
++    uint64_t relasz;         ///< DT_RELA size.
++    uint64_t relaent;        ///< DT_RELA entry size.
++    const ELF64Rela *jmprel; ///< DT_JMPREL table (file image, nullable).
++    uint64_t pltrelsz;       ///< DT_JMPREL size.
++    uint64_t pltrel_type;    ///< DT_PLTREL (RELA expected).
++};
++
++/// @brief Maximum .so file size accepted for buffering (4 MiB).
++static constexpr uint64_t MAX_SO_FILE_SIZE = 4ULL * 1024 * 1024;
++
++/// @brief Maximum total bytes mapped per resolve request (64 MiB).
++static constexpr uint64_t MAX_TOTAL_MAPPED = 64ULL * 1024 * 1024;
++
++/// @brief Library search directory for non-absolute sonames.
++static constexpr const char *LIB_SEARCH_DIR = "/lib/";
++
++/// @brief Per-request dependency-resolution context (issue #95).
++///        Single instance per top-level resolve; passed by pointer
++///        through the bounded recursion (no global resolve state).
++///        Image buffers are retained until the post-order relocate pass
++///        finishes (closure symtab/strtab reads), then released.
++struct DepResolveContext {
++    uint64_t pml4;        ///< Target task PML4 (phys).
++    uint64_t exec_base;   ///< Main exec load base (overlap checks).
++    uint64_t exec_size;   ///< Main exec mapped size.
++    uint64_t mapped_bytes;///< Running total for the rlimit bound.
++    uint64_t budget_pages;///< Page budget (0 = unlimited).
++    uint64_t generation;  ///< Loader generation for cancel checks
++                           ///< (ElfLoader::generation(); 0 matches only
++                           ///< when no load ever ran — tests set it).
++    const char *acquired[MAX_DEP_DEPTH]; ///< Cache soname ptrs (stable:
++                                          ///< static slots, refcount > 0).
++    uint64_t acquired_count;
++    const uint8_t *images[MAX_DEP_DEPTH + 1]; ///< Retained file images
++                                               ///< ([0] = exec).
++    uint64_t image_sizes[MAX_DEP_DEPTH + 1];
++    uint64_t image_bases[MAX_DEP_DEPTH + 1]; ///< Runtime base per image.
++    DynView image_views[MAX_DEP_DEPTH + 1]; ///< Parsed dynamic per image.
++    uint64_t image_count;
++    uint64_t image_phys[MAX_DEP_DEPTH + 1]; ///< PMM buffer base per image
++                                             ///< (0 = caller-owned, e.g.
++                                             ///< the exec buffer).
++    uint64_t image_npages[MAX_DEP_DEPTH + 1];
++    ElfError last_error;  ///< Terminal error of a failed resolve.
++    char fail_chain[256]; ///< Soname chain for dmesg on failure.
++};
++
++/// @brief Zero-initialise a resolve context for a new request.
++/// @param ctx Context to initialise (all arrays cleared, counts zero).
++/// @param pml4 Target task PML4 (phys).
++/// @param generation Loader generation for cancel checks.
++inline void init_resolve_context(DepResolveContext *ctx, uint64_t pml4,
++                                 uint64_t generation) {
++    if (!ctx) {
++        return;
++    }
++    __builtin_memset(ctx, 0, sizeof(DepResolveContext));
++    ctx->pml4 = pml4;
++    ctx->generation = generation;
++}
++
++/// @brief Free PMM image buffers retained in a context (loader-owned
++///        entries only; caller-owned images[0] with image_phys 0 kept).
++/// @param ctx Context whose buffers to release (counts zeroed after).
++void free_resolve_images(DepResolveContext *ctx);
++
++/// @brief Unmap one acquired lib's shared RO pages from a pml4.
++///        Used by request-fail teardowns (loader + tests) before
++///        releasing: the blind free_user_pages that follows must not
++///        see (and double-free) cache-owned phys.
++/// @param pml4 Target pml4 being torn down.
++/// @param ctx Request context holding the acquired list.
++/// @param idx Index into ctx->acquired (no-op when out of range or the
++///        slot vanished).
++void unmap_acquired_ro(uint64_t pml4, const DepResolveContext *ctx,
++                       uint64_t idx);
++
++/// @brief Release a task's acquired shared libs at teardown (issue #95):
++///        unmap each lib's shared RO pages from the task's pml4 first
++///        (the cache owns shared phys by refcount; blind per-pml4
++///        teardown would double-free), then release refcounts and clear
++///        the task list.  Runs before page-table teardown in TCB::cleanup
++///        and destroy_completed_tcb paths.
++/// @param tcb Task whose lib list to drain (pml4 = tcb->page_table_).
++void release_task_libs(TaskControlBlock *tcb);
++
+ /// @brief Shared library state machine (for background loader extension).
+ enum class SharedLibState : uint8_t {
+     IDLE = 0,
+@@ -165,62 +293,69 @@ enum class SharedLibState : uint8_t {
+     CANCELED,
+ };
+ 
+-/// @brief Load a shared object (.so) into the current task's address space.
+-/// @param soname The shared object name (e.g. "libc.so").
+-/// @param pml4 The task's PML4 to map the library into.
+-/// @param[out] out_load_base Base address where the library was mapped.
+-/// @return true on success.
+-bool load_shared_object(const char *soname, uint64_t pml4,
+-                        uint64_t *out_load_base);
+-
+-/// @brief Resolve DT_NEEDED dependencies for an ELF binary, loading each
+-///        required shared object recursively.
+-/// @param hdr The main executable's ELF header (must have PT_DYNAMIC).
+-/// @param file_data Raw file data of the main executable.
+-/// @param file_size Size of the file data.
+-/// @param pml4 The task PML4 to map libraries into.
+-/// @param load_base Base load address of the main executable.
+-/// @return true on success, false on failure (missing lib, cycle, etc.).
++/// @brief Load a shared object (.so) into a task address space.
++/// @param soname Library soname (e.g. "libc.so"; absolute path used
++///        verbatim, otherwise resolved under /lib/).
++/// @param ctx Request context (pml4, budget, acquired list, fail chain).
++/// @param depth Current recursion depth (0 = top-level exec deps).
++/// @param[out] out_load_base Fixed base address the library was mapped at.
++/// @return true on success (cache hit or fresh load + recurse + reloc
++///         of the lib's own subtree deferred to the post-order pass).
++bool load_shared_object(const char *soname, DepResolveContext *ctx,
++                        uint64_t depth, uint64_t *out_load_base);
++
++/// @brief Resolve DT_NEEDED dependencies for a file image, loading each
++///        required shared object recursively (Stage B, issue #95).
++/// @param hdr Image ELF header (ET_EXEC or ET_DYN, PT_DYNAMIC optional —
++///        absent means static: success with no action).
++/// @param file_data Full file image in memory.
++/// @param file_size Image size (all parsing bounds-checked against it).
++/// @param ctx Request context (pre-filled: pml4, exec range, budget).
++/// @param depth Current recursion depth.
++/// @param load_base Runtime base of THIS image (fixed-address model).
++/// @return true on success, false on failure (fail_chain describes it).
+ bool resolve_dependencies(const ELF64Header *hdr, const uint8_t *file_data,
+-                          uint64_t file_size, uint64_t pml4,
+-                          uint64_t load_base);
+-
+-/// @brief Apply relocations for a loaded shared object.
+-/// @param phdr The PT_LOAD program header for the library.
+-/// @param dyn The PT_DYNAMIC program header for the library.
+-/// @param load_base Base address where the library was mapped.
+-/// @param pml4 The task PML4.
+-/// @param soname Library soname (for error reporting).
+-/// @return true on success.
+-bool apply_relocations(const ELF64ProgramHeader *phdr,
+-                       const ELF64ProgramHeader *dyn,
+-                       uint64_t load_base, uint64_t pml4,
+-                       const char *soname);
+-
+-/// @brief Extract soname from a DT_SONAME dynamic entry.
+-/// @param dyn Dynamic array.
+-/// @param strtab String table address.
+-/// @return soname string (offset in strtab), or nullptr.
+-const char *get_soname(const ELF64Dynamic *dyn, const char *strtab);
+-
+-/// @brief Extract DT_NEEDED names from dynamic section.
+-/// @param dyn Dynamic array.
+-/// @param strtab String table address.
+-/// @param needed Array to fill (size MAX_DEP_DEPTH).
+-/// @return Number of dependencies found.
+-size_t get_needed(const ELF64Dynamic *dyn, const char *strtab,
+-                  const char **needed);
+-
+-/// @brief Read dynamic section for a loaded library.
+-/// @param phdr PT_DYNAMIC program header.
+-/// @param load_base Library load base.
+-/// @param[out] out_dyn Dynamic array pointer.
+-/// @param[out] out_strtab String table address.
+-/// @return true on success.
+-bool read_dynamic_section(const ELF64ProgramHeader *phdr,
+-                          uint64_t load_base,
+-                          const ELF64Dynamic **out_dyn,
+-                          const char **out_strtab);
++                          uint64_t file_size, DepResolveContext *ctx,
++                          uint64_t depth, uint64_t load_base);
++
++/// @brief Apply eager relocations for one loaded image (Stage C).
++/// @param hdr Image ELF header.
++/// @param file_data Full file image in memory.
++/// @param file_size Image size.
++/// @param load_base Runtime base of this image.
++/// @param ctx Request context (closure = exec + acquired libs, with
++///        retained image buffers for symtab/strtab reads).
++/// @param soname Image soname (for error reporting).
++/// @return true on success (RELATIVE + GLOB_DAT/JUMP_SLOT/64 only;
++///         TEXTREL and other types fail closed).
++bool apply_relocations(const ELF64Header *hdr, const uint8_t *file_data,
++                       uint64_t file_size, uint64_t load_base,
++                       DepResolveContext *ctx, const char *soname);
++
++/// @brief Post-order relocate pass over a resolved closure (Stage C).
++///        Applies apply_relocations to every image in ctx (exec first).
++/// @param ctx Resolved request context.
++/// @return true when every image relocates cleanly.
++bool relocate_closure(DepResolveContext *ctx);
++
++/// @brief Extract soname from a parsed dynamic view (DT_SONAME).
++/// @return Pointer into the view's strtab, or nullptr if absent.
++const char *get_soname(const DynView *view);
++
++/// @brief Extract DT_NEEDED names from a parsed dynamic view.
++/// @param needed Output array (capacity MAX_DEP_DEPTH).
++/// @return Number of dependencies found (capped).
++size_t get_needed(const DynView *view, const char **needed);
++
++/// @brief Parse and validate the PT_DYNAMIC section of a file image.
++/// @param hdr Image ELF header.
++/// @param file_data Full file image in memory.
++/// @param file_size Image size (every pointer bounds-checked against it).
++/// @param[out] out_view Parsed view (pointers into file_data).
++/// @return true when PT_DYNAMIC exists and parses; false when absent
++///         (static image — not an error) or malformed (INVALID_ELF).
++bool read_dynamic_section(const ELF64Header *hdr, const uint8_t *file_data,
++                          uint64_t file_size, DynView *out_view);
+ 
+ /// @brief Relocation type extraction.
+ inline uint64_t rela_type(uint64_t r_info) {
 diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 7fb96e6e..7b0af1d7 100644
+index 7b0af1d7..2da4f876 100644
 --- a/src/kernel/memory/vmm.cpp
 +++ b/src/kernel/memory/vmm.cpp
-@@ -281,14 +281,17 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
-         Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
-                      "(pml4_idx=%zu) — PD restore will clean up",
-                      virt_addr, pml4_idx);
--        hhdm_modified_ = true;
-+        // Issue #60: release store — pairs with the acquire take in
-+        // snapshot_restore (a concurrent set can never be lost).
-+        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
-     }
-     // Low identity-map VAs (pml4_idx 0, PD_IDENTITY phys 0x3000): a map_page
-     // here splits a boot 2 MiB identity huge entry into a PT page.  Flag it so
-     // snapshot_restore restores PD_IDENTITY (the HHDM-PD gate only covers
-     // pml4_idx >= PML4_USER_COUNT).
-     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        identity_modified_ = true;
-+        // Issue #60: release store (see hhdm site above).
-+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-     }
+@@ -631,6 +631,64 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+ #endif
+ }
  
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
-@@ -408,7 +411,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
-     }
-     // Low identity-map VAs: flag for PD_IDENTITY restore (see map_page).
-     if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
--        identity_modified_ = true;
-+        // Issue #60: release store (see map_page sites above).
-+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
-     }
- 
-     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
++void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
++    if ((virt_addr & (arch::PAGE_SIZE - 1)) != 0) {
++        return;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *top = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                             (pml4_phys & ~0xFFFULL));
++#if defined(CONFIG_ARCH_RISCV64)
++    // Sv39 3-level walk (mirrors map_page_in_pml4 riscv branch).
++    size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
++    size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
++    size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
++    if (top[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
++        return; // 1 GiB block: not ours to clear.
++    }
++    auto *l1 = get_table(top, l0_idx, false);
++    if (!l1) {
++        return;
++    }
++    if (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
++        return; // 2 MiB block: not ours to clear.
++    }
++    auto *l2 = get_table(l1, l1_idx, false);
++    if (!l2) {
++        return;
++    }
++    l2[l2_idx] = 0;
++#else
++    size_t pml4_idx = arch::ArchPageTable::pml4_index(virt_addr);
++    size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
++    size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
++    size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
++    auto *pdpt = get_table(top, pml4_idx, false);
++    if (!pdpt) {
++        return;
++    }
++    auto *pd = get_table(pdpt, pdpt_idx, false);
++    if (!pd) {
++        return;
++    }
++#if defined(CONFIG_ARCH_AARCH64)
++    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT) {
++        return; // Block entry: not ours to clear.
++    }
++#else
++    if (pd[pd_idx] & PAGE_HUGE) {
++        return; // Huge entry: not ours to clear.
++    }
++#endif
++    auto *pt = get_table(pd, pd_idx, false);
++    if (!pt) {
++        return;
++    }
++    pt[pt_idx] = 0;
++#endif
++    arch::ArchPageTable::tlb_flush(virt_addr);
++}
++
+ /// @brief Create a new PML4: zeroes user entries, copies kernel entries.
+ /// @return Physical address of new PML4, or 0 on failure.
+ uint64_t VMM::clone_kernel_pml4() {
 diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index cc096d33..e643bf2b 100644
+index e643bf2b..1fda1d70 100644
 --- a/src/kernel/memory/vmm.hpp
 +++ b/src/kernel/memory/vmm.hpp
-@@ -314,6 +314,9 @@ class VMM {
-   public:
-     /// @brief Set to true when a test modifies kernel-space page tables
-     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
-+    ///        Plain bool with __atomic_* access: set-true is idempotent
-+    ///        (no lost update), and restore takes it with an exchange
-+    ///        (issue #60 VAR-17 SMP re-audit).
-     static bool hhdm_modified_;
+@@ -193,6 +193,15 @@ class VMM {
+     static void unmap_mmio_from_cap(class cap::MmioCap *mmio,
+                                     uint64_t virt_addr, uint64_t pml4_phys);
  
-     /// @brief Set to true when a test modifies the LOW identity map
-@@ -322,23 +325,38 @@ class VMM {
-     static bool identity_modified_;
++    /// @brief Unmaps one user page previously mapped into @p pml4_phys
++    ///        (issue #95: shared-library RO pages must be unmapped —
++    ///        never freed — by each task teardown; the cache owns shared
++    ///        phys lifetime by refcount).  Clears the PT leaf and flushes
++    ///        the VA; huge entries and absent tables are left alone.
++    /// @param virt_addr Page-aligned virtual address to unmap.
++    /// @param pml4_phys Physical address of the target PML4.
++    static void unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys);
++
+     /// @brief Translates a virtual address to a physical address
+     /// using a specific PML4.
+     /// @param virt_addr Virtual address to translate.
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 44dfe579..20a80ba2 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -22,6 +22,7 @@
  
-     /// @brief Returns true if any test has modified the HHDM page tables
--    ///        since the last clear_hhdm_modified() call.
-+    ///        since the last clear/take call (acquire: pairs with the
-+    ///        release store in map_page).
-     static bool hhdm_was_modified() {
--        return hhdm_modified_;
-+        return __atomic_load_n(&hhdm_modified_, __ATOMIC_ACQUIRE);
-     }
-     /// @brief Reset the HHDM modification flag (called after PD restore).
-     static void clear_hhdm_modified() {
--        hhdm_modified_ = false;
-+        __atomic_store_n(&hhdm_modified_, false, __ATOMIC_RELEASE);
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/elf/elf_shared.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
+ #include <kernel/task/sporadic_server.hpp>
+ #include <kernel/debug/dump.hpp>
+@@ -1874,6 +1875,11 @@ void TaskControlBlock::cleanup() noexcept {
+         // pager-mapped ledger PTE must never outlive the frames it references
+         // (the pager owns the frames; the client's teardown unmaps them first).
+         kernel::ipc::PagerRegistry::drain_task(*this);
++        // Issue #95: release acquired shared libs BEFORE free_user_pages —
++        // shared RO phys lifetime belongs to the cache (refcount); the
++        // blind per-pml4 teardown would otherwise double-free it.  The
++        // drain unmaps shared RO from this pml4 first.
++        kernel::elf::release_task_libs(this);
+ 
+         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
+         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index e98801c5..99d20b1e 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -245,6 +245,7 @@ struct TaskControlBlock {
+           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
+           program_break_start(0), kstack_low_water_(0), text_size_(0),
+           data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
++          needed_lib_count(0),
+           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
+           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
+           in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
+@@ -377,6 +378,16 @@ struct TaskControlBlock {
+     vfs::FdTable fd_table;
+     char cwd[CONFIG_VFS_MAX_PATH];
+     vfs::Vnode *cwd_vnode;
++    /// @brief Shared libs acquired for this task's mappings (issue #95):
++    ///        sonames owned in SharedLibCache.  Released — with shared RO
++    ///        pages unmapped first — in TCB::cleanup before page-table
++    ///        teardown (else the blind free_user_pages double-frees
++    ///        shared phys).  Zeroed by the TCB memset sites; count also
++    ///        in the ctor init-list for stack-constructed TCBs.
++    static constexpr size_t kMaxTaskLibs = 8;
++    static constexpr size_t kMaxLibSoname = 128;
++    uint64_t needed_lib_count;
++    char needed_libs[kMaxTaskLibs][kMaxLibSoname];
+     /// @brief Guards the cwd_vnode read-modify-write in sys_chdir (VULN-C5/C6).
+     sync::SpinLock cwd_lock_;
+ 
+diff --git a/src/kernel/test/test_elf_shared.cpp b/src/kernel/test/test_elf_shared.cpp
+new file mode 100644
+index 00000000..e1cf7538
+--- /dev/null
++++ b/src/kernel/test/test_elf_shared.cpp
+@@ -0,0 +1,973 @@
++/// @file test_elf_shared.cpp
++/// @brief Tests for ELF shared-object support (issue #95, spec
++///        docs/specs/elf-shared-libs.md §5).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/elf/elf.hpp>
++#include <kernel/elf/elf_shared.hpp>
++#include <kernel/elf/elf_loader.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/address.hpp>
++#include <kernel/vfs/vfs.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/test/test_isolate.hpp>
++#include <string.hpp>
++
++using namespace kernel;
++
++#if defined(CONFIG_ARCH_X86_64)
++
++namespace {
++
++// Fixed layout for synthetic fixtures (spec §2.2: link at fixed VA).
++// The boot fs (/) is read-only initrd, so fixtures live on tmpfs under
++// /tmp and DT_NEEDED carries absolute paths (passthrough discovery);
++// the /lib search branch is covered on its failure side (missing lib).
++constexpr uint64_t kLibBase = 0x500000;
++constexpr uint64_t kLibText = 0x500000;
++constexpr uint64_t kLibData = 0x501000;
++constexpr uint64_t kLibFunc = 0x500100; // myfunc VA (in TEXT).
++constexpr uint64_t kLibGot = 0x501000;  // GOT slot VA (in DATA).
++constexpr uint64_t kExecBase = 0x400000;
++constexpr uint64_t kExecGot = 0x401000; // Exec GOT slot VA.
++
++// dynstr: "\0<soname>\0myfunc\0" — soname at 1, myfunc after it.
++constexpr uint64_t kSonameOff = 1;
++
++uint64_t write_file(const char *path, const uint8_t *data, uint64_t size) {
++    kernel::test::mark_vfs_touched();
++    int ret = vfs::create(path, 0);
++    if (ret != 0) {
++        return 0;
 +    }
-+    /// @brief Atomically take the HHDM flag: returns the previous value
-+    ///        and clears it in one step, so a set landing after the take
-+    ///        is preserved for the next restore (fail-safe over-restore
-+    ///        instead of fail-dangerous skip).  Used by snapshot_restore.
-+    static bool take_hhdm_modified() {
-+        return __atomic_exchange_n(&hhdm_modified_, false,
-+                                   __ATOMIC_ACQ_REL);
-     }
- 
-     /// @brief Returns true if any test has modified the low identity page
--    ///        tables since the last clear_identity_modified() call.
-+    ///        tables since the last clear/take call.
-     static bool identity_was_modified() {
--        return identity_modified_;
-+        return __atomic_load_n(&identity_modified_, __ATOMIC_ACQUIRE);
-     }
-     /// @brief Reset the identity modification flag (called after PD restore).
-     static void clear_identity_modified() {
--        identity_modified_ = false;
-+        __atomic_store_n(&identity_modified_, false, __ATOMIC_RELEASE);
++    vfs::Vnode *file = vfs::resolve(path);
++    if (!file || !file->ops || !file->ops->write) {
++        return 0;
 +    }
-+    /// @brief Atomically take the identity flag (same contract as the
-+    ///        HHDM take above).  Used by snapshot_restore.
-+    static bool take_identity_modified() {
-+        return __atomic_exchange_n(&identity_modified_, false,
-+                                   __ATOMIC_ACQ_REL);
-     }
- 
-   private:
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index d1325db2..40245db4 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -161,7 +161,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
-     {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
-     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
--    {"memory_vmm",           12,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143)
-+    {"memory_vmm",           13,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60)
- 
-     // wcet / deadline
-     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 6966ae59..5b83dac8 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -783,7 +783,10 @@ void snapshot_restore(const char *test_name) {
-     // ---- HHDM PD restore (before PMM restore) ----
-     // Only runs when a test actually modified HHDM page tables.
-     // PD[1..511] are restored (PD[0] maps the PD page itself).
--    if (VMM::hhdm_was_modified()) {
-+    // Issue #60: atomic take (not check-then-clear) — a set landing
-+    // after the exchange stays set, so the next restore over-restores
-+    // (safe) instead of skipping (stale mappings leak).
-+    if (VMM::take_hhdm_modified()) {
-         uint64_t pml4_phys = VMM::get_kernel_pml4();
-         if (pml4_phys) {
-             auto *nu_p = reinterpret_cast<uint64_t *>(
-@@ -829,17 +832,17 @@ void snapshot_restore(const char *test_name) {
-                 }
-             }
-         }
--        VMM::clear_hhdm_modified();
-     }
- 
-     // ---- Identity PD restore (before PMM restore) ----
-     // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
--    // PD_IDENTITY phys 0x3000).  Gated on identity_was_modified(): low-VA
-+    // PD_IDENTITY phys 0x3000).  Gated on the atomic take: low-VA
-     // map_page/unmap_page (pml4_idx < PML4_USER_COUNT) never sets
-     // hhdm_modified_, so the HHDM-PD gate above cannot cover these splits.
-     // Split PT pages are reclaimed by the page-table pool restore that runs
-     // later (off_pt_pool), so this block only restores the PD entries.
--    if (VMM::identity_was_modified()) {
-+    // (Issue #60: same take-instead-of-check-then-clear as above.)
-+    if (VMM::take_identity_modified()) {
-         uint64_t pml4_phys = VMM::get_kernel_pml4();
-         if (pml4_phys) {
-             uint64_t nu_ident = *reinterpret_cast<uint64_t *>(
-@@ -867,7 +870,6 @@ void snapshot_restore(const char *test_name) {
-                 }
-             }
-         }
--        VMM::clear_identity_modified();
-     }
- 
-     // ---- PMM ----
-diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
-index 767d5738..4daddf17 100644
---- a/src/kernel/test/test_vmm.cpp
-+++ b/src/kernel/test/test_vmm.cpp
-@@ -373,6 +373,74 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
-     PMM::free_page(p);
-     JARVIS_TEST_PASS();
- }
++    int64_t written = file->ops->write(*file, data, size, 0);
++    return static_cast<uint64_t>(written);
++}
++
++/// @brief Parametric synthetic shared object (ET_DYN, fixed base).
++struct SoSpec {
++    const char *soname;   // Absolute path (also DT_SONAME).
++    const char *needs[4]; // DT_NEEDED list.
++    uint64_t nneeds;
++    uint64_t base;        // Fixed link/load base.
++    bool has_func;        // Export "myfunc" at base+0x100.
++    bool has_got_reloc;   // RELATIVE GOT slot at base+0x1000 -> base+0x100.
++};
++
++/// @brief Parametric synthetic executable (ET_EXEC, fixed base).
++struct ExecSpec {
++    const char *needs[4]; // DT_NEEDED list.
++    uint64_t nneeds;
++    uint64_t base;        // Fixed link/load base (0x400000).
++    bool want_jump;       // JMPREL GLOB_DAT myfunc -> GOT at base+0x1000.
++};
++
++// DATA-page layout for synthetic images (all file offsets relative to
++// the DATA file page at image+0x2000; VAs = data_va + offset).
++constexpr uint64_t kDynstrOff = 0x0;
++constexpr uint64_t kDynsymOff = 0x200;
++constexpr uint64_t kRelaOff = 0x300;
++constexpr uint64_t kJmprelOff = 0x380;
++constexpr uint64_t kDynOff = 0x400;
++constexpr uint64_t kMaxSynSyms = 8;
++
++/// @brief Emit dynstr (soname/needed names + optional myfunc), dynsym,
++///        RELA/JMPREL and DYNAMIC into a DATA file page.
++/// @return DYNAMIC entry count (for PT_DYNAMIC filesz), 0 on overflow.
++uint64_t emit_dynamic(uint8_t *data_page, uint64_t data_va, const char *soname,
++                      const char *const *needs, uint64_t nneeds,
++                      bool is_exec, bool has_func, bool has_got_reloc,
++                      bool want_jump, uint64_t base) {
++    // dynstr.
++    uint64_t spos = 1;
++    char *str = reinterpret_cast<char *>(data_page + kDynstrOff);
++    str[0] = '\0';
++    uint64_t soname_off = 0;
++    if (soname) {
++        soname_off = spos;
++        for (uint64_t i = 0;; ++i) {
++            if (spos >= kDynsymOff) {
++                return 0;
++            }
++            str[spos++] = soname[i];
++            if (soname[i] == '\0') {
++                break;
++            }
++        }
++    }
++    uint64_t needed_off[4] = {0, 0, 0, 0};
++    for (uint64_t k = 0; k < nneeds && k < 4; ++k) {
++        needed_off[k] = spos;
++        for (uint64_t i = 0;; ++i) {
++            if (spos >= kDynsymOff) {
++                return 0;
++            }
++            str[spos++] = needs[k][i];
++            if (needs[k][i] == '\0') {
++                break;
++            }
++        }
++    }
++    uint64_t myfunc_off = 0;
++    if (has_func || want_jump) {
++        myfunc_off = spos;
++        const char *symname = "myfunc";
++        for (uint64_t i = 0;; ++i) {
++            if (spos >= kDynsymOff) {
++                return 0;
++            }
++            str[spos++] = symname[i];
++            if (symname[i] == '\0') {
++                break;
++            }
++        }
++    }
++    uint64_t strsz = spos;
++    // dynsym: null + myfunc (GLOBAL FUNC).
++    auto *sym = reinterpret_cast<elf::ELF64Symbol *>(data_page + kDynsymOff);
++    __builtin_memset(sym, 0, 2 * sizeof(elf::ELF64Symbol));
++    uint64_t nsyms = 1;
++    if (has_func || want_jump) {
++        sym[1].st_name = static_cast<uint32_t>(myfunc_off);
++        sym[1].st_info = (1 << 4) | 2;
++        sym[1].st_shndx = has_func ? 1 : 0; // Defined vs UNDEF.
++        // Fixed-address model: link-time st_value is absolute.
++        sym[1].st_value = has_func ? base + 0x100 : 0;
++        nsyms = 2;
++    }
++    // RELA: RELATIVE GOT slot (lib data page start) -> func VA.
++    uint64_t nrela = 0;
++    if (has_got_reloc) {
++        auto *rela = reinterpret_cast<elf::ELF64Rela *>(data_page + kRelaOff);
++        rela->r_offset = data_va;
++        rela->r_info = (static_cast<uint64_t>(0) << 32) | 8;
++        rela->r_addend = static_cast<int64_t>(data_va - 0x1000 + 0x100);
++        nrela = 1;
++    }
++    // JMPREL: GLOB_DAT myfunc -> GOT slot (exec data page start).
++    uint64_t njmp = 0;
++    if (want_jump) {
++        auto *jmp = reinterpret_cast<elf::ELF64Rela *>(data_page + kJmprelOff);
++        jmp->r_offset = data_va;
++        jmp->r_info = (static_cast<uint64_t>(1) << 32) | 7;
++        jmp->r_addend = 0;
++        njmp = 1;
++    }
++    // DYNAMIC.
++    auto *dyn = reinterpret_cast<elf::ELF64Dynamic *>(data_page + kDynOff);
++    uint64_t di = 0;
++    auto put = [&](int64_t tag, uint64_t val) {
++        dyn[di].d_tag = tag;
++        dyn[di].d_val = val;
++        ++di;
++    };
++    if (soname && !is_exec) {
++        put(elf::DT_SONAME, soname_off);
++    }
++    for (uint64_t k = 0; k < nneeds && k < 4; ++k) {
++        put(elf::DT_NEEDED, needed_off[k]);
++    }
++    put(elf::DT_STRTAB, data_va + kDynstrOff);
++    put(elf::DT_STRSZ, strsz);
++    put(elf::DT_SYMTAB, data_va + kDynsymOff);
++    put(elf::DT_SYMENT, sizeof(elf::ELF64Symbol));
++    if (nrela > 0) {
++        put(elf::DT_RELA, data_va + kRelaOff);
++        put(elf::DT_RELASZ, nrela * sizeof(elf::ELF64Rela));
++        put(elf::DT_RELAENT, sizeof(elf::ELF64Rela));
++    }
++    if (njmp > 0) {
++        put(elf::DT_JMPREL, data_va + kJmprelOff);
++        put(elf::DT_PLTRELSZ, njmp * sizeof(elf::ELF64Rela));
++        put(elf::DT_PLTREL, elf::DT_RELA);
++    }
++    put(elf::DT_NULL, 0);
++    (void)nsyms;
++    return di;
++}
++
++/// @brief Build a synthetic ET_DYN into buf (TEXT + DATA file pages).
++/// @return File size (0x3000), 0 on overflow.
++uint64_t build_so(uint8_t *buf, const SoSpec &spec) {
++    __builtin_memset(buf, 0, 0x3000);
++    auto *hdr = reinterpret_cast<elf::ELF64Header *>(buf);
++    hdr->ident[0] = 0x7F;
++    hdr->ident[1] = 'E';
++    hdr->ident[2] = 'L';
++    hdr->ident[3] = 'F';
++    hdr->ident[4] = 2;
++    hdr->ident[5] = 1;
++    hdr->type = elf::ET_DYN;
++    hdr->machine = 0x3E;
++    hdr->version = 1;
++    hdr->entry = 0;
++    hdr->phoff = sizeof(elf::ELF64Header);
++    hdr->ehsize = sizeof(elf::ELF64Header);
++    hdr->phentsize = sizeof(elf::ELF64ProgramHeader);
++    hdr->phnum = 3;
++    auto *ph = reinterpret_cast<elf::ELF64ProgramHeader *>(
++        buf + sizeof(elf::ELF64Header));
++    uint64_t text_va = spec.base;
++    uint64_t data_va = spec.base + 0x1000;
++    ph[0].type = elf::PT_LOAD;
++    ph[0].flags = elf::PF_R | elf::PF_X;
++    ph[0].offset = 0x1000;
++    ph[0].vaddr = text_va;
++    ph[0].paddr = text_va;
++    ph[0].filesz = 0x1000;
++    ph[0].memsz = 0x1000;
++    ph[0].align = 0x1000;
++    ph[1].type = elf::PT_LOAD;
++    ph[1].flags = elf::PF_R | elf::PF_W;
++    ph[1].offset = 0x2000;
++    ph[1].vaddr = data_va;
++    ph[1].paddr = data_va;
++    ph[1].filesz = 0x1000;
++    ph[1].memsz = 0x1000;
++    ph[1].align = 0x1000;
++    for (uint64_t i = 0; i < 0x1000; ++i) {
++        buf[0x1000 + i] = 0x90;
++    }
++    uint64_t ndyn = emit_dynamic(buf + 0x2000, data_va, spec.soname,
++                                 spec.needs, spec.nneeds, false,
++                                 spec.has_func, spec.has_got_reloc, false,
++                                 spec.base);
++    if (ndyn == 0) {
++        return 0;
++    }
++    ph[2].type = elf::PT_DYNAMIC;
++    ph[2].flags = elf::PF_R | elf::PF_W;
++    ph[2].offset = 0x2000 + kDynOff;
++    ph[2].vaddr = data_va + kDynOff;
++    ph[2].paddr = data_va + kDynOff;
++    ph[2].filesz = ndyn * 16;
++    ph[2].memsz = ndyn * 16;
++    ph[2].align = 8;
++    return 0x3000;
++}
++
++/// @brief Build a synthetic ET_EXEC into buf.
++/// @return File size (0x3000), 0 on overflow.
++uint64_t build_exec(uint8_t *buf, const ExecSpec &spec) {
++    __builtin_memset(buf, 0, 0x3000);
++    auto *hdr = reinterpret_cast<elf::ELF64Header *>(buf);
++    hdr->ident[0] = 0x7F;
++    hdr->ident[1] = 'E';
++    hdr->ident[2] = 'L';
++    hdr->ident[3] = 'F';
++    hdr->ident[4] = 2;
++    hdr->ident[5] = 1;
++    hdr->type = elf::ET_EXEC;
++    hdr->machine = 0x3E;
++    hdr->version = 1;
++    hdr->entry = spec.base;
++    hdr->phoff = sizeof(elf::ELF64Header);
++    hdr->ehsize = sizeof(elf::ELF64Header);
++    hdr->phentsize = sizeof(elf::ELF64ProgramHeader);
++    hdr->phnum = 3;
++    auto *ph = reinterpret_cast<elf::ELF64ProgramHeader *>(
++        buf + sizeof(elf::ELF64Header));
++    uint64_t data_va = spec.base + 0x1000;
++    ph[0].type = elf::PT_LOAD;
++    ph[0].flags = elf::PF_R | elf::PF_X;
++    ph[0].offset = 0x1000;
++    ph[0].vaddr = spec.base;
++    ph[0].paddr = spec.base;
++    ph[0].filesz = 0x1000;
++    ph[0].memsz = 0x1000;
++    ph[0].align = 0x1000;
++    ph[1].type = elf::PT_LOAD;
++    ph[1].flags = elf::PF_R | elf::PF_W;
++    ph[1].offset = 0x2000;
++    ph[1].vaddr = data_va;
++    ph[1].paddr = data_va;
++    ph[1].filesz = 0x1000;
++    ph[1].memsz = 0x1000;
++    ph[1].align = 0x1000;
++    for (uint64_t i = 0; i < 0x1000; ++i) {
++        buf[0x1000 + i] = 0x90;
++    }
++    uint64_t ndyn = emit_dynamic(buf + 0x2000, data_va, nullptr, spec.needs,
++                                 spec.nneeds, true, false, false,
++                                 spec.want_jump, spec.base);
++    if (ndyn == 0) {
++        return 0;
++    }
++    ph[2].type = elf::PT_DYNAMIC;
++    ph[2].flags = elf::PF_R | elf::PF_W;
++    ph[2].offset = 0x2000 + kDynOff;
++    ph[2].vaddr = data_va + kDynOff;
++    ph[2].paddr = data_va + kDynOff;
++    ph[2].filesz = ndyn * 16;
++    ph[2].memsz = ndyn * 16;
++    ph[2].align = 8;
++    return 0x3000;
++}
++/// @brief Bounded substring search (fail-chain content asserts).
++bool chain_contains(const char *haystack, const char *needle) {
++    uint64_t hlen = 0;
++    while (haystack[hlen] != '\0' && hlen < 256) {
++        ++hlen;
++    }
++    uint64_t nlen = 0;
++    while (needle[nlen] != '\0' && nlen < 64) {
++        ++nlen;
++    }
++    if (nlen == 0 || nlen > hlen) {
++        return false;
++    }
++    for (uint64_t i = 0; i + nlen <= hlen; ++i) {
++        uint64_t j = 0;
++        while (j < nlen && haystack[i + j] == needle[j]) {
++            ++j;
++        }
++        if (j == nlen) {
++            return true;
++        }
++    }
++    return false;
++}
++
++/// @brief Read a PT leaf for a VA in a foreign pml4 (W^X asserts).
++///        Walks PML4->PDPT->PD->PT via HHDM; huge/missing entries fail.
++uint64_t read_leaf_pte(uint64_t pml4, uint64_t va, bool *ok) {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *l3 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (pml4 & ~0xFFFULL));
++    uint64_t i3 = (va >> 39) & 0x1FF;
++    uint64_t i2 = (va >> 30) & 0x1FF;
++    uint64_t i1 = (va >> 21) & 0x1FF;
++    uint64_t i0 = (va >> 12) & 0x1FF;
++    if ((l3[i3] & 1) == 0) {
++        *ok = false;
++        return 0;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (l3[i3] & ~0xFFFULL));
++    if ((l2[i2] & 1) == 0) {
++        *ok = false;
++        return 0;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (l2[i2] & ~0xFFFULL));
++    if ((l1[i1] & 1) == 0 || (l1[i1] & (1ULL << 7)) != 0) {
++        *ok = false; // Missing or huge: not a PT leaf.
++        return 0;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                            (l1[i1] & ~0xFFFULL));
++    *ok = true;
++    return l0[i0];
++}
++
++/// @brief Read a u64 from a foreign pml4 via HHDM (test observation).
++uint64_t read_target_u64(uint64_t pml4, uint64_t va, bool *ok) {
++    uint64_t phys = VMM::virt_to_phys_in_pml4(va, pml4);
++    if (phys == 0) {
++        *ok = false;
++        return 0;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *p = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                           (phys & ~0xFFFULL) +
++                                           (va & 0xFFFULL));
++    *ok = true;
++    return *p;
++}
++
++/// @brief Map an exec image's PT_LOADs into a scratch pml4 (mini Stage A:
++///        the loader maps the exec before Stage B/C run).
++/// @return true on success.
++bool map_exec_image(const elf::ELF64Header *hdr, const uint8_t *image,
++                    uint64_t size, uint64_t pml4) {
++    if (hdr->phnum > 64) {
++        return false;
++    }
++    for (uint64_t i = 0; i < hdr->phnum; ++i) {
++        const auto *p = reinterpret_cast<const elf::ELF64ProgramHeader *>(
++            image + hdr->phoff + i * hdr->phentsize);
++        if (p->type != elf::PT_LOAD || p->memsz == 0) {
++            continue;
++        }
++        if (p->offset > size || p->filesz > size - p->offset) {
++            return false;
++        }
++        bool exec = (p->flags & elf::PF_X) != 0;
++        uint64_t start = p->vaddr & ~(arch::PAGE_SIZE - 1);
++        uint64_t end = (p->vaddr + p->memsz + arch::PAGE_SIZE - 1) &
++                       ~(arch::PAGE_SIZE - 1);
++        for (uint64_t va = start; va < end; va += arch::PAGE_SIZE) {
++            uint64_t phys = PMM::alloc_user_page();
++            if (phys == 0) {
++                return false;
++            }
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *dst =
++                reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
++            __builtin_memset(dst, 0, arch::PAGE_SIZE);
++            uint64_t lo = va < p->vaddr ? p->vaddr : va;
++            uint64_t body_end = p->vaddr + p->filesz;
++            if (lo < va + arch::PAGE_SIZE && lo < body_end) {
++                uint64_t hi = va + arch::PAGE_SIZE < body_end
++                                  ? va + arch::PAGE_SIZE
++                                  : body_end;
++                __builtin_memcpy(dst + (lo - va),
++                                 image + p->offset + (lo - p->vaddr),
++                                 hi - lo);
++            }
++            VMM::map_page_in_pml4(va, phys, true, exec, pml4);
++            if (VMM::virt_to_phys_in_pml4(va, pml4) != phys) {
++                PMM::free_page(phys);
++                return false;
++            }
++        }
++    }
++    return true;
++}
++
++} // namespace
++
++#endif // CONFIG_ARCH_X86_64
 +
 +// Runmode: kernel
-+// Testidea: The VAR-17 take primitive closes the SMP read-clear gap
-+//           (issue #60): take returns the previous value and clears
-+//           atomically, so a set landing after the take is preserved
-+//           for the next restore (fail-safe over-restore).
-+// Input: clear/take on clean flags; map_page on a scratch HHDM VA (the
-+//        real setter); take/was interleavings; manual PD restore.
-+// Expect: take on clean is false; set→take true→was false→take false;
-+//        set-after-take preserved; flags clean at exit.
-+// Depends: VMM::take_*/was/clear_*, VMM::map_page HHDM setter (x86-only)
-+JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
-+    VMM::clear_hhdm_modified();
-+    VMM::clear_identity_modified();
-+    // Take on a clean flag fabricates nothing and is idempotent.
-+    JARVIS_ASSERT(!VMM::take_hhdm_modified());
-+    JARVIS_ASSERT(!VMM::take_identity_modified());
-+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
-+    // Set via the real setter: map a scratch HHDM page (2 MiB huge
-+    // page at HHDM+0xA00000, same save/split/restore pattern as the
-+    // regression test above).
-+    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
-+    uint64_t const PAGE_PRESENT = 1ULL << 0;
-+    uint64_t const PAGE_HUGE = 1ULL << 7;
-+    uint64_t kernel_pml4 = arch::read_cr3();
-+    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                              (kernel_pml4 & ~0xFFFULL));
-+    size_t pml4_i = static_cast<size_t>((scratch_va & (0x1FFULL << 39)) >> 39);
-+    JARVIS_ASSERT(pml4[pml4_i] & PAGE_PRESENT);
-+    auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                              (pml4[pml4_i] & ~0xFFFULL));
-+    size_t pdpt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 30)) >> 30);
-+    JARVIS_ASSERT(pdpt[pdpt_i] & PAGE_PRESENT);
-+    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                            (pdpt[pdpt_i] & ~0xFFFULL));
-+    size_t pd_i = static_cast<size_t>((scratch_va & (0x1FFULL << 21)) >> 21);
-+    JARVIS_ASSERT(pd[pd_i] & PAGE_PRESENT);
-+    JARVIS_ASSERT(pd[pd_i] & PAGE_HUGE);
-+    uint64_t const saved_pd_entry = pd[pd_i];
-+    uint64_t data_phys = PMM::alloc_page();
-+    JARVIS_ASSERT(data_phys != 0);
-+    VMM::map_page(scratch_va, data_phys, false);
-+    // Round-trip through the real setter: set→take true→was false.
-+    JARVIS_ASSERT(VMM::hhdm_was_modified());
-+    JARVIS_ASSERT(VMM::take_hhdm_modified());
-+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
-+    JARVIS_ASSERT(!VMM::take_hhdm_modified());
-+    // Set-after-take is preserved (the gap-closure property).
-+    VMM::map_page(scratch_va, data_phys, false);
-+    JARVIS_ASSERT(VMM::take_hhdm_modified());
-+    // Restore the page-table state manually (regression pattern).
-+    VMM::unmap_page(scratch_va);
-+    size_t pt_i = static_cast<size_t>((scratch_va & (0x1FFULL << 12)) >> 12);
-+    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                            (pd[pd_i] & ~0xFFFULL));
-+    pt[pt_i] = 0;
-+    VMM::map_page(scratch_va, 0xA02000, false);
-+    uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
-+    PMM::free_page(pt_phys);
-+    pd[pd_i] = saved_pd_entry;
-+    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0xA00000);
-+    PMM::free_page(data_phys);
-+    // Leave the flags clean for the rest of the suite.
-+    VMM::clear_hhdm_modified();
-+    VMM::clear_identity_modified();
-+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++// Testidea: Exec with one DT_NEEDED; both images mapped, GOT points at lib.
++/* Pseudocode: build libfoo.so + exec needing it; run loader; assert both
++   mapped and GOT entry == lib symbol VA. */
++// Input: synthetic .so + exec in tmpfs /lib + /tmp.
++// Expect: DONE; GOT entry resolves to the lib symbol.
++// Depends: resolve_dependencies, apply_relocations, loader hook
++JARVIS_TEST(elf_shared_single_lib_resolution, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_image[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kSoname[] = "/tmp/elfshared/libfoo.so";
++    SoSpec lib_spec = {kSoname, {nullptr, nullptr, nullptr, nullptr}, 0,
++                       kLibBase, true, true};
++    uint64_t lib_size = build_so(lib_image, lib_spec);
++    JARVIS_ASSERT(lib_size == 0x3000);
++    ExecSpec exec_spec = {{kSoname, nullptr, nullptr, nullptr}, 1, kExecBase,
++                          true};
++    uint64_t exec_size = build_exec(exec_image, exec_spec);
++    JARVIS_ASSERT(exec_size == 0x3000);
++    vfs::mkdir("/tmp/elfshared", 0);
++    JARVIS_ASSERT(write_file("/tmp/elfshared/libfoo.so", lib_image,
++                             lib_size) == lib_size);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    // Mini Stage A: the loader maps the exec before dep-resolve runs.
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, exec_size, pml4));
++    elf::DepResolveContext ctx;
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    JARVIS_ASSERT(elf::resolve_dependencies(exec_hdr, exec_image, exec_size,
++                                            &ctx, 0, 0x400000));
++    // Both GOTs resolve to the lib symbol.
++    bool ok = false;
++    JARVIS_ASSERT(read_target_u64(pml4, kExecGot, &ok) == kLibFunc);
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT(read_target_u64(pml4, kLibGot, &ok) == kLibFunc);
++    JARVIS_ASSERT(ok);
++    // Teardown: drain refcounts, free buffers + scratch tables, unlink.
++    for (uint64_t i = 0; i < ctx.acquired_count; ++i) {
++        elf::SharedLibCache::instance().release(ctx.acquired[i]);
++    }
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink("/tmp/elfshared/libfoo.so");
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
 +    JARVIS_TEST_PASS();
 +}
- #endif
- 
- // Runmode: kernel
-@@ -506,6 +574,7 @@ void register_vmm_tests() {
- #if defined(CONFIG_ARCH_X86_64)
-     JARVIS_REGISTER_TEST(vmm_huge_page_split_regression);
-     JARVIS_REGISTER_TEST(vmm_hhdm_access_consistency);
-+    JARVIS_REGISTER_TEST(vmm_hhdm_take_semantics);
- #endif
-     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
-     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
++
++// Runmode: kernel
++// Testidea: Second exec needing the same soname maps no extra lib pages.
++/* Pseudocode: load execA (needs libfoo) then execB (needs libfoo);
++   assert PMM free-page delta zero for lib pages; refcount drains to 0. */
++// Input: two execs sharing one soname.
++// Expect: shared phys pages; refcount 2 then 0 after teardown.
++// Depends: SharedLibCache dedup + refcount
++JARVIS_TEST(elf_shared_dedup_two_execs_same_soname,
++            "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_image[0x3000];
++    static uint8_t exec_a[0x3000];
++    static uint8_t exec_b[0x3000];
++    static const char kSoname[] = "/tmp/elfshared2/libfoo.so";
++    SoSpec lib_spec = {kSoname, {nullptr, nullptr, nullptr, nullptr}, 0,
++                       kLibBase, true, true};
++    JARVIS_ASSERT(build_so(lib_image, lib_spec) == 0x3000);
++    ExecSpec ea = {{kSoname, nullptr, nullptr, nullptr}, 1, kExecBase, true};
++    JARVIS_ASSERT(build_exec(exec_a, ea) == 0x3000);
++    ExecSpec eb = {{kSoname, nullptr, nullptr, nullptr}, 1, 0x410000, true};
++    JARVIS_ASSERT(build_exec(exec_b, eb) == 0x3000);
++    vfs::mkdir("/tmp/elfshared2", 0);
++    // Whole measured section under one IrqGuard: PMM free_memory is
++    // global, and the load path yields (reschedule) — without frozen
++    // ticks a concurrent daemon allocation would perturb the delta.
++    // Fixture files are created inside the window so their blocks
++    // (allocated at write, freed at unlink) balance inside it too.
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    JARVIS_ASSERT(write_file(kSoname, lib_image, 0x3000) == 0x3000);
++    uint64_t pa = VMM::clone_kernel_pml4();
++    uint64_t pb = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pa != 0 && pb != 0);
++    auto *ha = reinterpret_cast<elf::ELF64Header *>(exec_a);
++    auto *hb = reinterpret_cast<elf::ELF64Header *>(exec_b);
++    JARVIS_ASSERT(map_exec_image(ha, exec_a, 0x3000, pa));
++    JARVIS_ASSERT(map_exec_image(hb, exec_b, 0x3000, pb));
++    static elf::DepResolveContext cxa;
++    static elf::DepResolveContext cxb;
++    elf::init_resolve_context(&cxa, pa, elf::ElfLoader::generation());
++    elf::init_resolve_context(&cxb, pb, elf::ElfLoader::generation());
++    JARVIS_ASSERT(elf::resolve_dependencies(ha, exec_a, 0x3000, &cxa, 0,
++                                            kExecBase));
++    JARVIS_ASSERT(elf::resolve_dependencies(hb, exec_b, 0x3000, &cxb, 0,
++                                            0x410000));
++    // Both GOTs resolve; the second load shared the lib pages.
++    bool ok = false;
++    JARVIS_ASSERT(read_target_u64(pa, kExecGot, &ok) == kLibFunc);
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT(read_target_u64(pb, 0x411000, &ok) == kLibFunc);
++    JARVIS_ASSERT(ok);
++    auto *slot = elf::SharedLibCache::instance().find(kSoname);
++    JARVIS_ASSERT(slot != nullptr);
++    JARVIS_ASSERT(slot->refcount == 2);
++    // execB hit-shared the lib TEXT: unmap it from pb BEFORE any
++    // teardown (pa's blind per-pml4 teardown frees the shared phys
++    // exactly once; pb must not see it).  Uses the production helper.
++    JARVIS_ASSERT(cxb.acquired_count == 1);
++    elf::unmap_acquired_ro(pb, &cxb, 0);
++    // Drain one owner: still cached for the other.
++    for (uint64_t i = 0; i < cxa.acquired_count; ++i) {
++        elf::SharedLibCache::instance().release(cxa.acquired[i]);
++    }
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kSoname) != nullptr);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kSoname)->refcount ==
++                  1);
++    for (uint64_t i = 0; i < cxb.acquired_count; ++i) {
++        elf::SharedLibCache::instance().release(cxb.acquired[i]);
++    }
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kSoname) == nullptr);
++    elf::free_resolve_images(&cxa);
++    elf::free_resolve_images(&cxb);
++    VMM::free_user_pages(pa);
++    PMM::free_page(pa);
++    VMM::free_user_pages(pb);
++    PMM::free_page(pb);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kSoname);
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Missing .so fails cleanly with zero page delta.
++// Input: exec needing libmissing.so (absent from /lib).
++// Expect: null TCB; zero PMM delta; dmesg names the soname.
++// Depends: dep-resolve NOT_FOUND path
++JARVIS_TEST(elf_shared_missing_lib_fails_cleanly,
++            "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t exec_image[0x3000];
++    static const char kMissing[] = "/tmp/elfshared3/libmissing.so";
++    ExecSpec ee = {{kMissing, nullptr, nullptr, nullptr}, 1, kExecBase,
++                   false};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, 0x3000, pml4));
++    static elf::DepResolveContext ctx;
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    JARVIS_ASSERT(!elf::resolve_dependencies(exec_hdr, exec_image, 0x3000,
++                                             &ctx, 0, kExecBase));
++    // The fail chain names the missing soname (the loader posts this
++    // chain to dmesg; direct calls assert the mechanism).
++    JARVIS_ASSERT(chain_contains(ctx.fail_chain, "libmissing.so"));
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kMissing) ==
++                  nullptr);
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A needs B needs A is rejected as a cycle.
++// Input: liba.so needing libb.so needing liba.so.
++// Expect: INVALID_ELF; refcounts 0; cache empty.
++// Depends: in-progress cycle set
++JARVIS_TEST(elf_shared_cycle_detected, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_a[0x3000];
++    static uint8_t lib_b[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kA[] = "/tmp/elfshared4/liba.so";
++    static const char kB[] = "/tmp/elfshared4/libb.so";
++    SoSpec sa = {kA, {kB, nullptr, nullptr, nullptr}, 1, 0x510000, false,
++                 false};
++    JARVIS_ASSERT(build_so(lib_a, sa) == 0x3000);
++    SoSpec sb = {kB, {kA, nullptr, nullptr, nullptr}, 1, 0x520000, false,
++                 false};
++    JARVIS_ASSERT(build_so(lib_b, sb) == 0x3000);
++    ExecSpec ee = {{kA, nullptr, nullptr, nullptr}, 1, kExecBase, false};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    // Frozen ticks + fixtures inside the window (see dedup note).
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    vfs::mkdir("/tmp/elfshared4", 0);
++    JARVIS_ASSERT(write_file(kA, lib_a, 0x3000) == 0x3000);
++    JARVIS_ASSERT(write_file(kB, lib_b, 0x3000) == 0x3000);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, 0x3000, pml4));
++    static elf::DepResolveContext ctx;
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    JARVIS_ASSERT(!elf::resolve_dependencies(exec_hdr, exec_image, 0x3000,
++                                             &ctx, 0, kExecBase));
++    // Failed request leaves no cache residue (in-progress cleared,
++    // refcounts drained by the fail path).
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kA) == nullptr);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kB) == nullptr);
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kA);
++    vfs::unlink(kB);
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Dependency chains deeper than 8 are rejected.
++// Input: 9-deep DT_NEEDED chain.
++// Expect: rejected with DEPTH; no partial mappings leak.
++// Depends: MAX_DEP_DEPTH guard
++JARVIS_TEST(elf_shared_depth_cap, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t img[0x3000];
++    static uint8_t exec_image[0x3000];
++    static char paths[9][32];
++    // Chain exec -> l1 -> ... -> l9 (9 libs deep; the 9th exceeds the cap).
++    for (uint64_t i = 0; i < 9; ++i) {
++        const char *prefix = "/tmp/elfshared5/l";
++        uint64_t p = 0;
++        while (prefix[p] != '\0') {
++            paths[i][p] = prefix[p];
++            ++p;
++        }
++        paths[i][p++] = static_cast<char>('1' + i);
++        paths[i][p++] = '.';
++        paths[i][p++] = 's';
++        paths[i][p++] = 'o';
++        paths[i][p] = '\0';
++    }
++    vfs::mkdir("/tmp/elfshared5", 0);
++    // Frozen ticks first; fixtures are created inside the window so
++    // their blocks (allocated at write, freed at unlink) balance too.
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    for (uint64_t i = 0; i < 9; ++i) {
++        const char *next = (i + 1 < 9) ? paths[i + 1] : nullptr;
++        const char *needs[4] = {nullptr, nullptr, nullptr, nullptr};
++        uint64_t nneeds = 0;
++        if (next) {
++            needs[0] = next;
++            nneeds = 1;
++        }
++        SoSpec spec = {paths[i], {needs[0], nullptr, nullptr, nullptr},
++                       nneeds, 0x510000 + i * 0x10000, false, false};
++        JARVIS_ASSERT(build_so(img, spec) == 0x3000);
++        JARVIS_ASSERT(write_file(paths[i], img, 0x3000) == 0x3000);
++    }
++    ExecSpec ee = {{paths[0], nullptr, nullptr, nullptr}, 1, kExecBase,
++                   false};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, 0x3000, pml4));
++    static elf::DepResolveContext ctx;
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    JARVIS_ASSERT(!elf::resolve_dependencies(exec_hdr, exec_image, 0x3000,
++                                             &ctx, 0, kExecBase));
++    for (uint64_t i = 0; i < 9; ++i) {
++        JARVIS_ASSERT(elf::SharedLibCache::instance().find(paths[i]) ==
++                      nullptr);
++    }
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    kernel::test::mark_vfs_touched();
++    for (uint64_t i = 0; i < 9; ++i) {
++        vfs::unlink(paths[i]);
++    }
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cancel mid Stage-B releases partial acquisitions.
++// Input: slow multi-lib load + request_cancel during LOADING_DEPS.
++// Expect: loader IDLE; partial libs refcounted out; refcounts 0.
++// Depends: cancel path + release discipline
++JARVIS_TEST(elf_shared_cancel_during_deps, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_a[0x3000];
++    static uint8_t lib_b[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kA[] = "/tmp/elfshared6/liba.so";
++    static const char kB[] = "/tmp/elfshared6/libb.so";
++    static const char kApp[] = "/tmp/elfshared6/app.elf";
++    SoSpec sa = {kA, {nullptr, nullptr, nullptr, nullptr}, 0, 0x510000,
++                 true, true};
++    JARVIS_ASSERT(build_so(lib_a, sa) == 0x3000);
++    SoSpec sb = {kB, {nullptr, nullptr, nullptr, nullptr}, 0, 0x520000,
++                 true, true};
++    JARVIS_ASSERT(build_so(lib_b, sb) == 0x3000);
++    ExecSpec ee = {{kA, kB, nullptr, nullptr}, 2, kExecBase, true};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    vfs::mkdir("/tmp/elfshared6", 0);
++    JARVIS_ASSERT(write_file(kA, lib_a, 0x3000) == 0x3000);
++    JARVIS_ASSERT(write_file(kB, lib_b, 0x3000) == 0x3000);
++    JARVIS_ASSERT(write_file(kApp, exec_image, 0x3000) == 0x3000);
++    elf::ElfLoader::reset();
++    JARVIS_ASSERT(elf::ElfLoader::request_load(kApp) ==
++                  elf::LoadResult::OK);
++    // Yield so the loader progresses (cancel may land in Stage A, B,
++    // or C — the invariant below holds for every phase).
++    for (int i = 0; i < 3; ++i) {
++        Scheduler::reschedule();
++    }
++    JARVIS_ASSERT(elf::ElfLoader::request_cancel() ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    // Invariant on every cancel path: IDLE, no completed TCB, no
++    // retained refcounts (partial acquisitions released).
++    JARVIS_ASSERT(elf::ElfLoader::state() == elf::LoadState::IDLE);
++    JARVIS_ASSERT(elf::ElfLoader::take_completed() == nullptr);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kA) == nullptr);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kB) == nullptr);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kA);
++    vfs::unlink(kB);
++    vfs::unlink(kApp);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Post-DONE page dump shows RX/RO (W^X restored).
++// Input: successful shared load.
++// Expect: text RX, data RO/NX via PTE walk.
++// Depends: Stage-C re-protect
++JARVIS_TEST(elf_shared_wx_restored_after_reloc,
++            "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_image[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kSoname[] = "/tmp/elfshared7/libfoo.so";
++    SoSpec lib_spec = {kSoname, {nullptr, nullptr, nullptr, nullptr}, 0,
++                       kLibBase, true, true};
++    JARVIS_ASSERT(build_so(lib_image, lib_spec) == 0x3000);
++    ExecSpec ee = {{kSoname, nullptr, nullptr, nullptr}, 1, kExecBase, true};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    vfs::mkdir("/tmp/elfshared7", 0);
++    JARVIS_ASSERT(write_file(kSoname, lib_image, 0x3000) == 0x3000);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, 0x3000, pml4));
++    static elf::DepResolveContext ctx;
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    JARVIS_ASSERT(elf::resolve_dependencies(exec_hdr, exec_image, 0x3000,
++                                            &ctx, 0, kExecBase));
++    // Post-reloc PTE dump: text RX (P+X, NX clear), data RW+NX.
++    constexpr uint64_t kNx = 1ULL << 63;
++    constexpr uint64_t kW = 1ULL << 1;
++    bool ok = false;
++    uint64_t text_pte = read_leaf_pte(pml4, kLibBase, &ok);
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT((text_pte & 1) != 0);
++    JARVIS_ASSERT((text_pte & kNx) == 0);
++    uint64_t data_pte = read_leaf_pte(pml4, kLibBase + 0x1000, &ok);
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT((data_pte & 1) != 0);
++    JARVIS_ASSERT((data_pte & kW) != 0);
++    JARVIS_ASSERT((data_pte & kNx) != 0);
++    for (uint64_t i = 0; i < ctx.acquired_count; ++i) {
++        elf::SharedLibCache::instance().release(ctx.acquired[i]);
++    }
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kSoname);
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Overlapping preferred bases are rejected with LAYOUT.
++// Input: lib whose fixed vaddr overlaps the exec segments.
++// Expect: LAYOUT failure; null TCB; nothing mapped.
++// Depends: fixed-address overlap check
++JARVIS_TEST(elf_shared_layout_conflict, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_image[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kSoname[] = "/tmp/elfshared8/libevil.so";
++    // Lib linked at the exec's own base: fixed-address overlap.
++    SoSpec lib_spec = {kSoname, {nullptr, nullptr, nullptr, nullptr}, 0,
++                       kExecBase, false, false};
++    JARVIS_ASSERT(build_so(lib_image, lib_spec) == 0x3000);
++    ExecSpec ee = {{kSoname, nullptr, nullptr, nullptr}, 1, kExecBase, false};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    arch::IrqGuard pm_quiet{};
++    uint64_t free_before = PMM::free_memory();
++    vfs::mkdir("/tmp/elfshared8", 0);
++    JARVIS_ASSERT(write_file(kSoname, lib_image, 0x3000) == 0x3000);
++    uint64_t pml4 = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(pml4 != 0);
++    auto *exec_hdr = reinterpret_cast<elf::ELF64Header *>(exec_image);
++    JARVIS_ASSERT(map_exec_image(exec_hdr, exec_image, 0x3000, pml4));
++    static elf::DepResolveContext ctx;
++    // Exec range registered for overlap checks (the loader fills these
++    // from its Stage-A range; direct tests set them explicitly).
++    elf::init_resolve_context(&ctx, pml4, elf::ElfLoader::generation());
++    ctx.exec_base = kExecBase;
++    ctx.exec_size = 0x2000;
++    JARVIS_ASSERT(!elf::resolve_dependencies(exec_hdr, exec_image, 0x3000,
++                                             &ctx, 0, kExecBase));
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kSoname) ==
++                  nullptr);
++    elf::free_resolve_images(&ctx);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kSoname);
++    JARVIS_ASSERT(PMM::free_memory() == free_before);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Loader-level dynamic load succeeds end to end: TCB handoff
++//           records both sonames; both GOTs resolve in the task pml4;
++//           destroy_completed_tcb drains refcounts (release_task_libs).
++// Input: app needing liba+libb via request_load; take + destroy.
++// Expect: DONE TCB with needed_lib_count 2; GOTs correct; cache empty
++//         after destroy; zero tracker delta.
++// Depends: loader hook, TCB handoff, destroy drain
++JARVIS_TEST(elf_shared_loader_success_handoff, "PRE: isolate | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    static uint8_t lib_a[0x3000];
++    static uint8_t lib_b[0x3000];
++    static uint8_t exec_image[0x3000];
++    static const char kA[] = "/tmp/elfshared9/liba.so";
++    static const char kB[] = "/tmp/elfshared9/libb.so";
++    static const char kApp[] = "/tmp/elfshared9/app.elf";
++    SoSpec sa = {kA, {nullptr, nullptr, nullptr, nullptr}, 0, 0x510000,
++                 true, true};
++    JARVIS_ASSERT(build_so(lib_a, sa) == 0x3000);
++    SoSpec sb = {kB, {nullptr, nullptr, nullptr, nullptr}, 0, 0x520000,
++                 true, true};
++    JARVIS_ASSERT(build_so(lib_b, sb) == 0x3000);
++    ExecSpec ee = {{kA, kB, nullptr, nullptr}, 2, kExecBase, true};
++    JARVIS_ASSERT(build_exec(exec_image, ee) == 0x3000);
++    vfs::mkdir("/tmp/elfshared9", 0);
++    JARVIS_ASSERT(write_file(kA, lib_a, 0x3000) == 0x3000);
++    JARVIS_ASSERT(write_file(kB, lib_b, 0x3000) == 0x3000);
++    JARVIS_ASSERT(write_file(kApp, exec_image, 0x3000) == 0x3000);
++    elf::ElfLoader::reset();
++    JARVIS_ASSERT(elf::ElfLoader::request_load(kApp) ==
++                  elf::LoadResult::OK);
++    elf::ElfLoader::wait_loader_idle();
++    auto *t = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(t->page_table_ != 0);
++    JARVIS_ASSERT(t->needed_lib_count == 2);
++    {
++        bool has_a = false;
++        bool has_b = false;
++        for (uint64_t i = 0; i < t->needed_lib_count; ++i) {
++            if (strcmp(t->needed_libs[i], kA) == 0) {
++                has_a = true;
++            }
++            if (strcmp(t->needed_libs[i], kB) == 0) {
++                has_b = true;
++            }
++        }
++        JARVIS_ASSERT(has_a && has_b);
++    }
++    bool ok = false;
++    JARVIS_ASSERT(read_target_u64(t->page_table_, kExecGot, &ok) ==
++                  0x510100);
++    JARVIS_ASSERT(ok);
++    elf::ElfLoader::destroy_completed_tcb(t);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kA) == nullptr);
++    JARVIS_ASSERT(elf::SharedLibCache::instance().find(kB) == nullptr);
++    kernel::test::mark_vfs_touched();
++    vfs::unlink(kA);
++    vfs::unlink(kB);
++    vfs::unlink(kApp);
++#else
++    Logger::warn("elf_shared test skipped (not x86_64)");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++void register_elf_shared_tests() {
++    Logger::info("Registering ELF shared-object tests");
++    JARVIS_REGISTER_TEST(elf_shared_single_lib_resolution);
++    JARVIS_REGISTER_TEST(elf_shared_dedup_two_execs_same_soname);
++    JARVIS_REGISTER_TEST(elf_shared_missing_lib_fails_cleanly);
++    JARVIS_REGISTER_TEST(elf_shared_cycle_detected);
++    JARVIS_REGISTER_TEST(elf_shared_depth_cap);
++    JARVIS_REGISTER_TEST(elf_shared_cancel_during_deps);
++    JARVIS_REGISTER_TEST(elf_shared_wx_restored_after_reloc);
++    JARVIS_REGISTER_TEST(elf_shared_layout_conflict);
++    JARVIS_REGISTER_TEST(elf_shared_loader_success_handoff);
++}
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 40245db4..a59441f3 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -75,6 +75,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
+     {"elf_loader",            8,    0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield)
++    {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
+     {"process_signals",       8,    0,       0      },  // signal delivery/handling
+     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index fe64a5f0..4f56ecd9 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -49,6 +49,7 @@ void register_signals_tests();
+ void register_process_tests();
+ void register_elf_tests();
+ void register_elf_loader_tests();
++void register_elf_shared_tests();
+ void register_checked_ptr_tests();
+ void register_fstab_tests();
+ void register_rtc_tests();
+@@ -368,6 +369,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"process_lifecycle", []() { register_process_tests(); }},
+     {"process_elf", []() { register_elf_tests(); }},
+     {"elf_loader", []() { register_elf_loader_tests(); }},
++    {"elf_shared", []() { register_elf_shared_tests(); }},
+     {"process_signals", []() { register_signals_tests(); }},
+     {"process_rlimit", []() { register_rlimit_tests(); }},
+     {"process_waitpid", []() { register_waitpid_tests(); }},
+@@ -635,6 +637,7 @@ static void register_all_tests() {
+     register_process_tests();
+     register_elf_tests();
+     register_elf_loader_tests();
++    register_elf_shared_tests();
+     register_checked_ptr_tests();
+     register_fstab_tests();
+     register_rtc_tests();
+@@ -831,6 +834,7 @@ static void register_all_tests_first_half() {
+     register_process_tests();
+     register_elf_tests();
+     register_elf_loader_tests();
++    register_elf_shared_tests();
+     register_checked_ptr_tests();
+     register_fstab_tests();
+     register_rtc_tests();
 diff --git a/test-history.txt b/test-history.txt
-index 91f68066..068e221f 100644
+index 068e221f..f679df94 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -901,3 +901,9 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-14 18:18:59 sched_affinity PASSED: 6 FAILED: 0 TIME: 175ms
- 2026-09-14 18:18:59 all PASSED: 1274 FAILED: 0 TIME: 87878ms
- 2026-09-14 18:19:19 all PASSED: 85 FAILED: 0 TIME: 4154ms
-+2026-09-14 18:58:11 memory_vmm PASSED: 13 FAILED: 0 TIME: 1222ms
-+2026-09-14 18:58:36 selftest PASSED: 133 FAILED: 0 TIME: 6972ms
-+2026-09-14 18:59:17 smp_bringup PASSED: 3 FAILED: 0 TIME: 310ms
-+2026-09-14 18:59:17 smp_sched PASSED: 4 FAILED: 0 TIME: 138ms
-+2026-09-14 19:00:31 all PASSED: 1275 FAILED: 0 TIME: 425351ms
-+2026-09-14 19:01:34 all PASSED: 85 FAILED: 0 TIME: 4260ms
+@@ -907,3 +907,11 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-14 18:59:17 smp_sched PASSED: 4 FAILED: 0 TIME: 138ms
+ 2026-09-14 19:00:31 all PASSED: 1275 FAILED: 0 TIME: 425351ms
+ 2026-09-14 19:01:34 all PASSED: 85 FAILED: 0 TIME: 4260ms
++2026-09-14 20:45:14 elf_shared PASSED: 9 FAILED: 0 TIME: 367ms
++2026-09-14 20:46:53 process_elf PASSED: 9 FAILED: 0 TIME: 214ms
++2026-09-14 20:46:53 safe PASSED: 133 FAILED: 0 TIME: 6996ms
++2026-09-14 20:47:59 all PASSED: 1284 FAILED: 0 TIME: 409805ms
++2026-09-14 20:48:50 all PASSED: 85 FAILED: 0 TIME: 17010ms
++2026-09-14 20:59:44 elf_shared PASSED: 9 FAILED: 0 TIME: 348ms
++2026-09-14 21:01:12 all PASSED: 1284 FAILED: 0 TIME: 101793ms
++2026-09-14 21:02:06 all PASSED: 85 FAILED: 0 TIME: 16974ms

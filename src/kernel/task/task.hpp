@@ -245,6 +245,7 @@ struct TaskControlBlock {
           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
           program_break_start(0), kstack_low_water_(0), text_size_(0),
           data_size_(0), bss_size_(0), fd_table({}), cwd_vnode(nullptr),
+          needed_lib_count(0),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
           in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
@@ -377,6 +378,16 @@ struct TaskControlBlock {
     vfs::FdTable fd_table;
     char cwd[CONFIG_VFS_MAX_PATH];
     vfs::Vnode *cwd_vnode;
+    /// @brief Shared libs acquired for this task's mappings (issue #95):
+    ///        sonames owned in SharedLibCache.  Released — with shared RO
+    ///        pages unmapped first — in TCB::cleanup before page-table
+    ///        teardown (else the blind free_user_pages double-frees
+    ///        shared phys).  Zeroed by the TCB memset sites; count also
+    ///        in the ctor init-list for stack-constructed TCBs.
+    static constexpr size_t kMaxTaskLibs = 8;
+    static constexpr size_t kMaxLibSoname = 128;
+    uint64_t needed_lib_count;
+    char needed_libs[kMaxTaskLibs][kMaxLibSoname];
     /// @brief Guards the cwd_vnode read-modify-write in sys_chdir (VULN-C5/C6).
     sync::SpinLock cwd_lock_;
 

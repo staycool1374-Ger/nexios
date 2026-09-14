@@ -33,6 +33,7 @@ namespace elf {
 struct ELF64Header;
 struct ELF64ProgramHeader;
 } // namespace elf
+class TaskControlBlock;
 } // namespace kernel
 
 namespace kernel {
@@ -105,17 +106,40 @@ struct ELF64Rel {
     uint64_t r_info;   ///< Symbol index + relocation type.
 } __attribute__((packed));
 
+/// @brief Shared-object loader error codes (issue #95).
+enum class ElfError : uint8_t {
+    OK = 0,
+    INVALID_ELF, ///< Malformed header/phdr/dynamic/reloc data.
+    LAYOUT,     ///< Fixed-vaddr overlap (no silent rebasing, §2.2).
+    NOT_FOUND,  ///< Soname not discoverable under /lib/.
+    NOMEM,      ///< Page alloc, cache-full, or phys-page bound hit.
+    DEPTH,      ///< DT_NEEDED recursion deeper than MAX_DEP_DEPTH.
+    CYCLE,      ///< Dependency cycle via in-progress set.
+    CANCELED,   ///< Loader cancel observed mid-request.
+};
+
+/// @brief Maximum phys pages tracked per cached library (64 = 256 KiB).
+static constexpr size_t MAX_LIB_PHYS_PAGES = 64;
+
 /// @brief Loaded shared library entry (dedup cache).
 struct LoadedLibrary {
     char soname[128];   ///< Library soname (e.g., "libc.so").
-    uint64_t load_base; ///< Base load address.
+    uint64_t load_base; ///< Fixed preferred base load address.
     uint64_t load_size; ///< Total mapped size.
+    uint64_t file_size; ///< .so file size at load (hit verification).
+    uint64_t phys_pages[MAX_LIB_PHYS_PAGES]; ///< Shared phys, file order.
+    uint64_t writable_mask; ///< Bit i set = page i is RW (per-task copy
+                             ///< on cache hit; RO pages map shared phys).
+    uint32_t num_phys_pages; ///< Valid entries in phys_pages (≤ 64).
     uint32_t refcount;  ///< Reference count for dedup.
     bool in_progress;   ///< True while loading (cycle detection).
 
     LoadedLibrary()
-        : load_base(0), load_size(0), refcount(0), in_progress(false) {
+        : load_base(0), load_size(0), file_size(0), writable_mask(0),
+          num_phys_pages(0), refcount(0), in_progress(false) {
         soname[0] = '\0';
+        for (size_t i = 0; i < MAX_LIB_PHYS_PAGES; ++i)
+            phys_pages[i] = 0;
     }
 };
 
@@ -144,6 +168,13 @@ public:
     /// @brief Increment refcount for a soname.
     void acquire(const char *soname);
 
+    /// @brief Reserve a slot for a soname being loaded (cycle detection).
+    ///        Returns the existing slot when present (caller checks
+    ///        in_progress: true = cycle, false = cache hit), otherwise a
+    ///        fresh slot with in_progress=true and refcount=0, or nullptr
+    ///        when the cache is full.  out_created reports a fresh slot.
+    LoadedLibrary *reserve(const char *soname, bool *out_created);
+
     /// @brief Decrement refcount; unload if zero and not in_progress.
     void release(const char *soname);
 
@@ -155,6 +186,103 @@ private:
     kernel::sync::SpinLock lock_;
 };
 
+/// @brief Parsed PT_DYNAMIC view (all pointers into the file image,
+///        bounds-checked at parse time; issue #95).
+struct DynView {
+    const ELF64Dynamic *dyn; ///< Dynamic array (file image).
+    uint64_t dyn_count;      ///< Entry count (capped).
+    const char *strtab;      ///< .dynstr (file image).
+    uint64_t strsz;          ///< .dynstr size.
+    const ELF64Symbol *symtab; ///< .dynsym (file image).
+    uint64_t sym_count;      ///< Symbol count (filesize-bounded).
+    uint64_t syment;         ///< Symbol entry size (must match).
+    const ELF64Rela *rela;   ///< DT_RELA table (file image, nullable).
+    uint64_t relasz;         ///< DT_RELA size.
+    uint64_t relaent;        ///< DT_RELA entry size.
+    const ELF64Rela *jmprel; ///< DT_JMPREL table (file image, nullable).
+    uint64_t pltrelsz;       ///< DT_JMPREL size.
+    uint64_t pltrel_type;    ///< DT_PLTREL (RELA expected).
+};
+
+/// @brief Maximum .so file size accepted for buffering (4 MiB).
+static constexpr uint64_t MAX_SO_FILE_SIZE = 4ULL * 1024 * 1024;
+
+/// @brief Maximum total bytes mapped per resolve request (64 MiB).
+static constexpr uint64_t MAX_TOTAL_MAPPED = 64ULL * 1024 * 1024;
+
+/// @brief Library search directory for non-absolute sonames.
+static constexpr const char *LIB_SEARCH_DIR = "/lib/";
+
+/// @brief Per-request dependency-resolution context (issue #95).
+///        Single instance per top-level resolve; passed by pointer
+///        through the bounded recursion (no global resolve state).
+///        Image buffers are retained until the post-order relocate pass
+///        finishes (closure symtab/strtab reads), then released.
+struct DepResolveContext {
+    uint64_t pml4;        ///< Target task PML4 (phys).
+    uint64_t exec_base;   ///< Main exec load base (overlap checks).
+    uint64_t exec_size;   ///< Main exec mapped size.
+    uint64_t mapped_bytes;///< Running total for the rlimit bound.
+    uint64_t budget_pages;///< Page budget (0 = unlimited).
+    uint64_t generation;  ///< Loader generation for cancel checks
+                           ///< (ElfLoader::generation(); 0 matches only
+                           ///< when no load ever ran — tests set it).
+    const char *acquired[MAX_DEP_DEPTH]; ///< Cache soname ptrs (stable:
+                                          ///< static slots, refcount > 0).
+    uint64_t acquired_count;
+    const uint8_t *images[MAX_DEP_DEPTH + 1]; ///< Retained file images
+                                               ///< ([0] = exec).
+    uint64_t image_sizes[MAX_DEP_DEPTH + 1];
+    uint64_t image_bases[MAX_DEP_DEPTH + 1]; ///< Runtime base per image.
+    DynView image_views[MAX_DEP_DEPTH + 1]; ///< Parsed dynamic per image.
+    uint64_t image_count;
+    uint64_t image_phys[MAX_DEP_DEPTH + 1]; ///< PMM buffer base per image
+                                             ///< (0 = caller-owned, e.g.
+                                             ///< the exec buffer).
+    uint64_t image_npages[MAX_DEP_DEPTH + 1];
+    ElfError last_error;  ///< Terminal error of a failed resolve.
+    char fail_chain[256]; ///< Soname chain for dmesg on failure.
+};
+
+/// @brief Zero-initialise a resolve context for a new request.
+/// @param ctx Context to initialise (all arrays cleared, counts zero).
+/// @param pml4 Target task PML4 (phys).
+/// @param generation Loader generation for cancel checks.
+inline void init_resolve_context(DepResolveContext *ctx, uint64_t pml4,
+                                 uint64_t generation) {
+    if (!ctx) {
+        return;
+    }
+    __builtin_memset(ctx, 0, sizeof(DepResolveContext));
+    ctx->pml4 = pml4;
+    ctx->generation = generation;
+}
+
+/// @brief Free PMM image buffers retained in a context (loader-owned
+///        entries only; caller-owned images[0] with image_phys 0 kept).
+/// @param ctx Context whose buffers to release (counts zeroed after).
+void free_resolve_images(DepResolveContext *ctx);
+
+/// @brief Unmap one acquired lib's shared RO pages from a pml4.
+///        Used by request-fail teardowns (loader + tests) before
+///        releasing: the blind free_user_pages that follows must not
+///        see (and double-free) cache-owned phys.
+/// @param pml4 Target pml4 being torn down.
+/// @param ctx Request context holding the acquired list.
+/// @param idx Index into ctx->acquired (no-op when out of range or the
+///        slot vanished).
+void unmap_acquired_ro(uint64_t pml4, const DepResolveContext *ctx,
+                       uint64_t idx);
+
+/// @brief Release a task's acquired shared libs at teardown (issue #95):
+///        unmap each lib's shared RO pages from the task's pml4 first
+///        (the cache owns shared phys by refcount; blind per-pml4
+///        teardown would double-free), then release refcounts and clear
+///        the task list.  Runs before page-table teardown in TCB::cleanup
+///        and destroy_completed_tcb paths.
+/// @param tcb Task whose lib list to drain (pml4 = tcb->page_table_).
+void release_task_libs(TaskControlBlock *tcb);
+
 /// @brief Shared library state machine (for background loader extension).
 enum class SharedLibState : uint8_t {
     IDLE = 0,
@@ -165,62 +293,69 @@ enum class SharedLibState : uint8_t {
     CANCELED,
 };
 
-/// @brief Load a shared object (.so) into the current task's address space.
-/// @param soname The shared object name (e.g. "libc.so").
-/// @param pml4 The task's PML4 to map the library into.
-/// @param[out] out_load_base Base address where the library was mapped.
-/// @return true on success.
-bool load_shared_object(const char *soname, uint64_t pml4,
-                        uint64_t *out_load_base);
+/// @brief Load a shared object (.so) into a task address space.
+/// @param soname Library soname (e.g. "libc.so"; absolute path used
+///        verbatim, otherwise resolved under /lib/).
+/// @param ctx Request context (pml4, budget, acquired list, fail chain).
+/// @param depth Current recursion depth (0 = top-level exec deps).
+/// @param[out] out_load_base Fixed base address the library was mapped at.
+/// @return true on success (cache hit or fresh load + recurse + reloc
+///         of the lib's own subtree deferred to the post-order pass).
+bool load_shared_object(const char *soname, DepResolveContext *ctx,
+                        uint64_t depth, uint64_t *out_load_base);
 
-/// @brief Resolve DT_NEEDED dependencies for an ELF binary, loading each
-///        required shared object recursively.
-/// @param hdr The main executable's ELF header (must have PT_DYNAMIC).
-/// @param file_data Raw file data of the main executable.
-/// @param file_size Size of the file data.
-/// @param pml4 The task PML4 to map libraries into.
-/// @param load_base Base load address of the main executable.
-/// @return true on success, false on failure (missing lib, cycle, etc.).
+/// @brief Resolve DT_NEEDED dependencies for a file image, loading each
+///        required shared object recursively (Stage B, issue #95).
+/// @param hdr Image ELF header (ET_EXEC or ET_DYN, PT_DYNAMIC optional —
+///        absent means static: success with no action).
+/// @param file_data Full file image in memory.
+/// @param file_size Image size (all parsing bounds-checked against it).
+/// @param ctx Request context (pre-filled: pml4, exec range, budget).
+/// @param depth Current recursion depth.
+/// @param load_base Runtime base of THIS image (fixed-address model).
+/// @return true on success, false on failure (fail_chain describes it).
 bool resolve_dependencies(const ELF64Header *hdr, const uint8_t *file_data,
-                          uint64_t file_size, uint64_t pml4,
-                          uint64_t load_base);
+                          uint64_t file_size, DepResolveContext *ctx,
+                          uint64_t depth, uint64_t load_base);
 
-/// @brief Apply relocations for a loaded shared object.
-/// @param phdr The PT_LOAD program header for the library.
-/// @param dyn The PT_DYNAMIC program header for the library.
-/// @param load_base Base address where the library was mapped.
-/// @param pml4 The task PML4.
-/// @param soname Library soname (for error reporting).
-/// @return true on success.
-bool apply_relocations(const ELF64ProgramHeader *phdr,
-                       const ELF64ProgramHeader *dyn,
-                       uint64_t load_base, uint64_t pml4,
-                       const char *soname);
+/// @brief Apply eager relocations for one loaded image (Stage C).
+/// @param hdr Image ELF header.
+/// @param file_data Full file image in memory.
+/// @param file_size Image size.
+/// @param load_base Runtime base of this image.
+/// @param ctx Request context (closure = exec + acquired libs, with
+///        retained image buffers for symtab/strtab reads).
+/// @param soname Image soname (for error reporting).
+/// @return true on success (RELATIVE + GLOB_DAT/JUMP_SLOT/64 only;
+///         TEXTREL and other types fail closed).
+bool apply_relocations(const ELF64Header *hdr, const uint8_t *file_data,
+                       uint64_t file_size, uint64_t load_base,
+                       DepResolveContext *ctx, const char *soname);
 
-/// @brief Extract soname from a DT_SONAME dynamic entry.
-/// @param dyn Dynamic array.
-/// @param strtab String table address.
-/// @return soname string (offset in strtab), or nullptr.
-const char *get_soname(const ELF64Dynamic *dyn, const char *strtab);
+/// @brief Post-order relocate pass over a resolved closure (Stage C).
+///        Applies apply_relocations to every image in ctx (exec first).
+/// @param ctx Resolved request context.
+/// @return true when every image relocates cleanly.
+bool relocate_closure(DepResolveContext *ctx);
 
-/// @brief Extract DT_NEEDED names from dynamic section.
-/// @param dyn Dynamic array.
-/// @param strtab String table address.
-/// @param needed Array to fill (size MAX_DEP_DEPTH).
-/// @return Number of dependencies found.
-size_t get_needed(const ELF64Dynamic *dyn, const char *strtab,
-                  const char **needed);
+/// @brief Extract soname from a parsed dynamic view (DT_SONAME).
+/// @return Pointer into the view's strtab, or nullptr if absent.
+const char *get_soname(const DynView *view);
 
-/// @brief Read dynamic section for a loaded library.
-/// @param phdr PT_DYNAMIC program header.
-/// @param load_base Library load base.
-/// @param[out] out_dyn Dynamic array pointer.
-/// @param[out] out_strtab String table address.
-/// @return true on success.
-bool read_dynamic_section(const ELF64ProgramHeader *phdr,
-                          uint64_t load_base,
-                          const ELF64Dynamic **out_dyn,
-                          const char **out_strtab);
+/// @brief Extract DT_NEEDED names from a parsed dynamic view.
+/// @param needed Output array (capacity MAX_DEP_DEPTH).
+/// @return Number of dependencies found (capped).
+size_t get_needed(const DynView *view, const char **needed);
+
+/// @brief Parse and validate the PT_DYNAMIC section of a file image.
+/// @param hdr Image ELF header.
+/// @param file_data Full file image in memory.
+/// @param file_size Image size (every pointer bounds-checked against it).
+/// @param[out] out_view Parsed view (pointers into file_data).
+/// @return true when PT_DYNAMIC exists and parses; false when absent
+///         (static image — not an error) or malformed (INVALID_ELF).
+bool read_dynamic_section(const ELF64Header *hdr, const uint8_t *file_data,
+                          uint64_t file_size, DynView *out_view);
 
 /// @brief Relocation type extraction.
 inline uint64_t rela_type(uint64_t r_info) {
