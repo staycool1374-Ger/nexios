@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -291,8 +291,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall_8h_sou
 <div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    <span class="keywordflow">return</span> __syscall5(<a class="code hl_define" href="syscall_8h.html#a0ab4c59a00bbb0748e2a79162fd25a0b">SYS_HALT</a>, 0, 0, 0, 0);</div>
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>}</div>
 <div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span> </div>
-<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span>* sys_brk(<span class="keywordtype">void</span>* <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) {</div>
-<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <span class="keywordtype">long</span> ret = __syscall5(<a class="code hl_define" href="syscall_8h.html#a268eadd4d5fd87c310df80c449fd8568">SYS_BRK</a>, (<span class="keywordtype">long</span>)<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>, 0, 0, 0);</div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keywordtype">void</span>* sys_brk(<span class="keywordtype">void</span>* addr) {</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>    <span class="keywordtype">long</span> ret = __syscall5(<a class="code hl_define" href="syscall_8h.html#a268eadd4d5fd87c310df80c449fd8568">SYS_BRK</a>, (<span class="keywordtype">long</span>)addr, 0, 0, 0);</div>
 <div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span>    <span class="keywordflow">return</span> (<span class="keywordtype">void</span>*)ret;</div>
 <div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>}</div>
 <div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span> </div>
@@ -399,7 +399,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('syscall_8h_sou
 <div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00278" name="l00278"></a><span class="lineno">  278</span> </div>
 <div class="line"><a id="l00279" name="l00279"></a><span class="lineno">  279</span><span class="preprocessor">#endif</span></div>
-<div class="ttc" id="agcov__handler_8cpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:59</div></div>
 <div class="ttc" id="astructrlimit_html"><div class="ttname"><a href="structrlimit.html">rlimit</a></div><div class="ttdef"><b>Definition</b> syscall.h:28</div></div>
 <div class="ttc" id="astructrlimit_html_a02c6f4ab9c085c0e5996eb290aeaf503"><div class="ttname"><a href="structrlimit.html#a02c6f4ab9c085c0e5996eb290aeaf503">rlimit::rlim_max</a></div><div class="ttdeci">unsigned long rlim_max</div><div class="ttdef"><b>Definition</b> syscall.h:30</div></div>
 <div class="ttc" id="astructrlimit_html_a6c3802c1608a72db4898cbeb84f55fa5"><div class="ttname"><a href="structrlimit.html#a6c3802c1608a72db4898cbeb84f55fa5">rlimit::rlim_cur</a></div><div class="ttdeci">unsigned long rlim_cur</div><div class="ttdef"><b>Definition</b> syscall.h:29</div></div>

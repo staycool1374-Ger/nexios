@@ -26,9 +26,14 @@ var searchData=
   ['tm_5fyear_23',['tm_year',['../structtm.html#a33adf78fd6476b2120ce3b9c4a852053',1,'tm']]],
   ['tmpfs_5ffs_24',['tmpfs_fs',['../namespacekernel_1_1vfs.html#a2b378cb7928ca3f7781737c9987aa29d',1,'kernel::vfs']]],
   ['totalsize_25',['totalsize',['../structfdt__header.html#ae28958c408cc1b7e27e5d0f4bc15b807',1,'fdt_header']]],
-  ['tsc_5fdeadline_26',['tsc_deadline',['../structarch_1_1_caps.html#a914bf740687792fcea35c4d3953957a8',1,'arch::Caps']]],
-  ['tv_5fnsec_27',['tv_nsec',['../structtimespec.html#ae3c7510dafa8cbcaede866ed13c99683',1,'timespec']]],
-  ['tv_5fsec_28',['tv_sec',['../structkernel_1_1_timeval.html#a0d1d39804671c892ef5f52e6c6a90d37',1,'kernel::Timeval::tv_sec'],['../struct_timeval.html#a96e1d06815ac17f4f1fa46ff6b00a4d0',1,'Timeval::tv_sec'],['../structtimeval.html#aef6ddab1064c430758f9f913b7e4a21e',1,'timeval::tv_sec'],['../structtimespec.html#afc3302668d7cb5952f590da69fdd4955',1,'timespec::tv_sec']]],
-  ['tv_5fusec_29',['tv_usec',['../structkernel_1_1_timeval.html#ae5a942f568e2f001ea880702e97570d8',1,'kernel::Timeval::tv_usec'],['../struct_timeval.html#a145ac8da0909412beb80e140522f9625',1,'Timeval::tv_usec'],['../structtimeval.html#a810bf8fcd58e255a5c1896d19538b86a',1,'timeval::tv_usec']]],
-  ['type_30',['type',['../structkernel_1_1cap_1_1_c_slot.html#aade7f0e66c87a00eda4080bc1b81af4b',1,'kernel::cap::CSlot']]]
+  ['tpr_5fclass_5faccept_5fall_26',['TPR_CLASS_ACCEPT_ALL',['../classarch_1_1_a_p_i_c.html#a8064163a68d47d44de243b30a2115ad8',1,'arch::APIC']]],
+  ['tpr_5fclass_5fipc_27',['TPR_CLASS_IPC',['../classarch_1_1_a_p_i_c.html#ae8fa1c9f74794b84e84d416cdc5c0e85',1,'arch::APIC']]],
+  ['tpr_5fclass_5fmax_28',['TPR_CLASS_MAX',['../classarch_1_1_a_p_i_c.html#a32ec0f8547f4e3e6b64f01d2d5e2c1b7',1,'arch::APIC']]],
+  ['tpr_5fclass_5fpic_29',['TPR_CLASS_PIC',['../classarch_1_1_a_p_i_c.html#ae39006fc90dce99cd9e516596534eddf',1,'arch::APIC']]],
+  ['tpr_5fclass_5fsched_30',['TPR_CLASS_SCHED',['../classarch_1_1_a_p_i_c.html#ab241402171ad0535f0412d3d77b7c5ed',1,'arch::APIC']]],
+  ['tsc_5fdeadline_31',['tsc_deadline',['../structarch_1_1_caps.html#a914bf740687792fcea35c4d3953957a8',1,'arch::Caps']]],
+  ['tv_5fnsec_32',['tv_nsec',['../structtimespec.html#ae3c7510dafa8cbcaede866ed13c99683',1,'timespec']]],
+  ['tv_5fsec_33',['tv_sec',['../structkernel_1_1_timeval.html#a0d1d39804671c892ef5f52e6c6a90d37',1,'kernel::Timeval::tv_sec'],['../struct_timeval.html#a96e1d06815ac17f4f1fa46ff6b00a4d0',1,'Timeval::tv_sec'],['../structtimeval.html#aef6ddab1064c430758f9f913b7e4a21e',1,'timeval::tv_sec'],['../structtimespec.html#afc3302668d7cb5952f590da69fdd4955',1,'timespec::tv_sec']]],
+  ['tv_5fusec_34',['tv_usec',['../structkernel_1_1_timeval.html#ae5a942f568e2f001ea880702e97570d8',1,'kernel::Timeval::tv_usec'],['../struct_timeval.html#a145ac8da0909412beb80e140522f9625',1,'Timeval::tv_usec'],['../structtimeval.html#a810bf8fcd58e255a5c1896d19538b86a',1,'timeval::tv_usec']]],
+  ['type_35',['type',['../structkernel_1_1cap_1_1_c_slot.html#aade7f0e66c87a00eda4080bc1b81af4b',1,'kernel::cap::CSlot']]]
 ];

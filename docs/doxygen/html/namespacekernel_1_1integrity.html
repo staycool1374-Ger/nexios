@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:ad8c610ebd258a2fd322fa982b5dccaff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process the next 4 KiB chunk of the .text CRC scan. When the scan completes, compares the computed CRC against the expected value stored by the linker. Panics on mismatch.  <br /></td></tr>
 <tr class="memitem:ad55063ee7b6bc1542af1172a729102cb" id="r_ad55063ee7b6bc1542af1172a729102cb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad55063ee7b6bc1542af1172a729102cb">idle_task_main</a> ()</td></tr>
 <tr class="memdesc:ad55063ee7b6bc1542af1172a729102cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle task entry point — continuously verifies section markers and processes code CRC chunks between HLT instructions.  <br /></td></tr>
+<tr class="memitem:a25523b42cdf666f04fc00417ec829955" id="r_a25523b42cdf666f04fc00417ec829955"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a25523b42cdf666f04fc00417ec829955">ap_idle_main</a> ()</td></tr>
+<tr class="memdesc:a25523b42cdf666f04fc00417ec829955"><td class="mdescLeft">&#160;</td><td class="mdescRight">AP idle task entry point (issue #25 C1): halt ONLY. Deliberately NOT cleanup_step(): the kernel allocators (MemPool/PMM/VMM) are single-core (no exclusion) until a later phase, so only the BSP idle reaps (identical reclamation behavior to pre-C1). An AP freeing memory concurrently with BSP allocation corrupts the heaps — proven by GDB (AP in PMM::rebuild_free_list).  <br /></td></tr>
 <tr class="memitem:a701ded0ede17a2bd566d1bd87905467e" id="r_a701ded0ede17a2bd566d1bd87905467e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a701ded0ede17a2bd566d1bd87905467e">__attribute__</a> ((section(&quot;.marker.text.start&quot;), used)) extern const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> _m_text_start</td></tr>
 <tr class="memdesc:a701ded0ede17a2bd566d1bd87905467e"><td class="mdescLeft">&#160;</td><td class="mdescRight">.text section start marker — encoded "TXT_STRT".  <br /></td></tr>
 <tr class="memitem:ac34d27f6c1120dc709c4df41e174d6ac" id="r_ac34d27f6c1120dc709c4df41e174d6ac"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac34d27f6c1120dc709c4df41e174d6ac">__attribute__</a> ((section(&quot;.marker.text.end&quot;), used)) extern const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> _m_text_end</td></tr>
@@ -344,6 +346,25 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>.text section start marker — encoded "TXT_STRT". </p>
+
+</div>
+</div>
+<a id="a25523b42cdf666f04fc00417ec829955" name="a25523b42cdf666f04fc00417ec829955"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25523b42cdf666f04fc00417ec829955">&#9670;&#160;</a></span>ap_idle_main()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::integrity::ap_idle_main </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>AP idle task entry point (issue #25 C1): halt ONLY. Deliberately NOT cleanup_step(): the kernel allocators (MemPool/PMM/VMM) are single-core (no exclusion) until a later phase, so only the BSP idle reaps (identical reclamation behavior to pre-C1). An AP freeing memory concurrently with BSP allocation corrupts the heaps — proven by GDB (AP in PMM::rebuild_free_list). </p>
 
 </div>
 </div>

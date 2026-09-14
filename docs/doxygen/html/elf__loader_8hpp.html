@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('elf__loader_8h
 <div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="spinlock_8hpp_source.html">kernel/sync/spinlock.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="elf_8hpp_source.html">kernel/elf/elf.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="elf__shared_8hpp_source.html">kernel/elf/elf_shared.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for elf_loader.hpp:</div>
 <div class="dyncontent">
@@ -155,11 +156,14 @@ Enumerations</h2></td></tr>
 &#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aa5daf7f2ebbba4975d61dab1c40188c7">kernel::elf::IDLE</a> = 0
 , <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aff9726ecf722ce2a076e7cf705a073f7">kernel::elf::VALIDATING</a>
 , <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9">kernel::elf::COPYING_SEGMENTS</a>
-, <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2fa399f11879d3347f324fe703fb9f97">kernel::elf::MAPPING</a>
+, <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ac7a989271cecd011fcc6b30615bebcbe">kernel::elf::LOADING_DEPS</a>
 , <br />
-&#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2ba22e58ca17bb728d522bba36cf8350">kernel::elf::DONE</a>
+&#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a54f9be01bf02b6c78b84213e312d0767">kernel::elf::LOADING_RELOC</a>
+, <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2fa399f11879d3347f324fe703fb9f97">kernel::elf::MAPPING</a>
+, <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2ba22e58ca17bb728d522bba36cf8350">kernel::elf::DONE</a>
 , <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419">kernel::elf::FAILED</a>
-, <a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926">kernel::elf::CANCELED</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ad4539bffb6062bdcbd7e7cc1b1228926">kernel::elf::CANCELED</a>
 <br />
  }</td></tr>
 <tr class="memdesc:a8f59bba1cd5bc9a93b5bd73e7c43bce5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Loader state (public for tests / shell).  <a href="namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5">More...</a><br /></td></tr>

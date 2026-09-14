@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.3 | **Last Release:** v0.4.3 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.3)
+**Build:** v0.4.4 | **Last Release:** v0.4.4 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.4)
 
 > **This file is no longer the work tracker.** Open bugs and features live as
 > GitHub Issues (repo `staycool1374-Ger/nexios`); progress is kept consistent
@@ -12,20 +12,10 @@
 - **Reference-Enforced Tasks:** When manipulating task blocks or IPC endpoints within the new init system or system calls, strictly enforce reference passing over raw pointers to prevent dangling lookups.
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
-## Active Development — v0.4.4
+## Active Development — v0.4.5
 
-v0.4.3 RELEASED (2026-09-05) — Test-Coverage Completion milestone:
-All 1147 debug tests / 85 release tests passing. AhciDriver PMM alloc fix
-(unblocks ahci_live), aarch64 build fix (iommu.cpp unused-variable),
-syscall_handlers_irq x86-only guards. Details in `ROADMAP_done.md`.
-
-**Current work items — tracked as GitHub Issues in [Milestone v0.4.4](https://github.com/staycool1374-Ger/nexios/milestone/2):**
-| Issue | Item |
-|---|---|
-| [#92](https://github.com/staycool1374-Ger/nexios/issues/92) | Syscall fastpath — static asm jump table (design: `docs/specs/syscall-fastpath.md`) |
-| [#93](https://github.com/staycool1374-Ger/nexios/issues/93) | FPU/SIMD context — fixed-offset save areas, lazy FPU (design: `docs/specs/fpu-context.md`) |
-| [#85](https://github.com/staycool1374-Ger/nexios/issues/85) | Test coverage: v0.4.x (18 modules) — Phase 5 SMP test-class checklist |
-| [#91](https://github.com/staycool1374-Ger/nexios/issues/91) | Exception table audit — #VE/#HV error-code classification (S1) |
+**Current work items — tracked as GitHub Issues in [Milestone v0.4.5](https://github.com/staycool1374-Ger/nexios/milestone/4).**
+See `ROADMAP_done.md` for the v0.4.4 release record.
 
 ## Past Releases
 

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -169,7 +169,7 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Safe test helpers for scheduler operations (set_current, reschedule). </p>
-<p>Tests run under the INIT task (IF=1). The timer ISR fires rate_monotonic_schedule(), which can consume stale context-switch globals or undo set_current() via <a class="el" href="scheduler_8cpp.html#aa045e907eeb1893918a7f28260eed3d6" title="Handle a synchronous exception from EL0 that is not an SVC (aarch64, called from vectors....">scheduler_on_context_switch()</a>. These helpers disable interrupts to prevent ISR interference.</p>
+<p>Tests run under the INIT task (IF=1). The timer ISR fires rate_monotonic_schedule(), which can consume stale context-switch globals or undo set_current() via scheduler_on_context_switch(). These helpers disable interrupts to prevent ISR interference.</p>
 <p>Use yield_as() for "set_current + reschedule" pairs. Use ScopedCurrentTask for scoped current-task changes (NO blocking ops). Use raw <a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804" title="Sets the current running task.">Scheduler::set_current()</a> for blocking operations or deliberate preemption-simulation tests. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="adaf685bd992e296e30fb7358c5f28b9a" name="adaf685bd992e296e30fb7358c5f28b9a"></a>

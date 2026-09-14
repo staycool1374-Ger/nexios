@@ -11,6 +11,8 @@ var elf__loader_8hpp =
       [ "kernel::elf::LoadState::IDLE", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aa5daf7f2ebbba4975d61dab1c40188c7", null ],
       [ "kernel::elf::LoadState::VALIDATING", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5aff9726ecf722ce2a076e7cf705a073f7", null ],
       [ "kernel::elf::LoadState::COPYING_SEGMENTS", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9", null ],
+      [ "kernel::elf::LoadState::LOADING_DEPS", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ac7a989271cecd011fcc6b30615bebcbe", null ],
+      [ "kernel::elf::LoadState::LOADING_RELOC", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a54f9be01bf02b6c78b84213e312d0767", null ],
       [ "kernel::elf::LoadState::MAPPING", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2fa399f11879d3347f324fe703fb9f97", null ],
       [ "kernel::elf::LoadState::DONE", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a2ba22e58ca17bb728d522bba36cf8350", null ],
       [ "kernel::elf::LoadState::FAILED", "namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5ab9e14d9b2886bcff408b85aefa780419", null ],

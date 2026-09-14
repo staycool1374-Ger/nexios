@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -119,9 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('acpi_8cpp.html
 </div><!--header-->
 <div class="contents">
 
-<p>ACPI DMAR discovery implementation (issue #9). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature.  
+<p>ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature + checksum is validated before the data is trusted (fail-closed probe).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="acpi_8hpp_source.html">kernel/arch/x86_64/acpi.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="madt_8hpp_source.html">kernel/arch/x86_64/madt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="multiboot2_8hpp_source.html">kernel/multiboot2.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
@@ -137,17 +138,17 @@ Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
 <tr class="memitem:kernel_3A_3Aiommu" id="r_kernel_3A_3Aiommu"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iommu.html">kernel::iommu</a></td></tr>
 <tr class="memitem:kernel_3A_3Aiommu_3A_3Aacpi" id="r_kernel_3A_3Aiommu_3A_3Aacpi"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iommu_1_1acpi.html">kernel::iommu::acpi</a></td></tr>
+<tr class="memitem:kernel_3A_3Aacpi" id="r_kernel_3A_3Aacpi"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1acpi.html">kernel::acpi</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a14227bd55a0a99963fccbf00842e006e" id="r_a14227bd55a0a99963fccbf00842e006e"><td class="memItemLeft"><a class="el" href="structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html">dmar::DmarInfo</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1iommu_1_1acpi.html#a14227bd55a0a99963fccbf00842e006e">kernel::iommu::acpi::scan_dmar</a> ()</td></tr>
 <tr class="memdesc:a14227bd55a0a99963fccbf00842e006e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Scans multiboot2 ACPI tags and the DMAR table for the first remapping unit. Returns a pure-data result (no pointers into the tables survive the call). Thread-safe by construction (no shared state; the tables are static boot firmware data).  <br /></td></tr>
+<tr class="memitem:ad11896c1645411f4dd0f8fabe906c6d3" id="r_ad11896c1645411f4dd0f8fabe906c6d3"><td class="memItemLeft"><a class="el" href="structkernel_1_1acpi_1_1_madt_info.html">MadtInfo</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1acpi.html#ad11896c1645411f4dd0f8fabe906c6d3">kernel::acpi::scan_madt</a> ()</td></tr>
+<tr class="memdesc:ad11896c1645411f4dd0f8fabe906c6d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Scans multiboot2 ACPI tags and the MADT for enabled local APICs. Handles type-0 (LAPIC) and type-9 (x2APIC) entries; disabled entries (flags bit 0 clear) are skipped. Thread-safe by construction (no shared state; firmware tables are static).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>ACPI DMAR discovery implementation (issue #9). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature. </p>
-<ul>
-<li>checksum is validated before the data is trusted (fail-closed probe). </li>
-</ul>
+<div class="textblock"><p>ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature + checksum is validated before the data is trusted (fail-closed probe). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

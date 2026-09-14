@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -168,18 +168,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('integrity_8hpp
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1integrity.html#ac9e6d983b60e0f3c8f772b3c4d5fe9c9">reset_crc_state</a>();</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1integrity.html#ad8c610ebd258a2fd322fa982b5dccaff">crc_process_chunk</a>();</div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1integrity.html#ad55063ee7b6bc1542af1172a729102cb">idle_task_main</a>();</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span> </div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>} <span class="comment">// namespace integrity</span></div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1integrity.html#a25523b42cdf666f04fc00417ec829955">ap_idle_main</a>();</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span> </div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>} <span class="comment">// namespace integrity</span></div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html"><div class="ttname"><a href="namespacekernel_1_1integrity.html">kernel::integrity</a></div><div class="ttdef"><b>Definition</b> integrity.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_a0912016436aa515459dee605cde9079a"><div class="ttname"><a href="namespacekernel_1_1integrity.html#a0912016436aa515459dee605cde9079a">kernel::integrity::_text_end</a></div><div class="ttdeci">uint64_t _text_end[]</div></div>
+<div class="ttc" id="anamespacekernel_1_1integrity_html_a25523b42cdf666f04fc00417ec829955"><div class="ttname"><a href="namespacekernel_1_1integrity.html#a25523b42cdf666f04fc00417ec829955">kernel::integrity::ap_idle_main</a></div><div class="ttdeci">void ap_idle_main()</div><div class="ttdoc">AP idle task entry point (issue #25 C1): halt ONLY. Deliberately NOT cleanup_step(): the kernel alloc...</div><div class="ttdef"><b>Definition</b> integrity.cpp:172</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_a59bcf541e40b053372b6fb8decd1afeb"><div class="ttname"><a href="namespacekernel_1_1integrity.html#a59bcf541e40b053372b6fb8decd1afeb">kernel::integrity::check_section_markers</a></div><div class="ttdeci">void check_section_markers()</div><div class="ttdoc">Verify section markers — compares each linker-placed magic constant against its expected ASCII tag....</div><div class="ttdef"><b>Definition</b> integrity.cpp:50</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_a656a8b22401d14c937c2a6354ca43fea"><div class="ttname"><a href="namespacekernel_1_1integrity.html#a656a8b22401d14c937c2a6354ca43fea">kernel::integrity::_text_start</a></div><div class="ttdeci">uint64_t _text_start[]</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_aa25210e27ff62940b580f8ba6e9b59b0"><div class="ttname"><a href="namespacekernel_1_1integrity.html#aa25210e27ff62940b580f8ba6e9b59b0">kernel::integrity::_expected_code_crc</a></div><div class="ttdeci">uint64_t _expected_code_crc[]</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_ac9e6d983b60e0f3c8f772b3c4d5fe9c9"><div class="ttname"><a href="namespacekernel_1_1integrity.html#ac9e6d983b60e0f3c8f772b3c4d5fe9c9">kernel::integrity::reset_crc_state</a></div><div class="ttdeci">void reset_crc_state()</div><div class="ttdoc">Reset CRC accumulator, offset, and completion flags for a fresh scan.</div><div class="ttdef"><b>Definition</b> integrity.cpp:84</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_ad55063ee7b6bc1542af1172a729102cb"><div class="ttname"><a href="namespacekernel_1_1integrity.html#ad55063ee7b6bc1542af1172a729102cb">kernel::integrity::idle_task_main</a></div><div class="ttdeci">void idle_task_main()</div><div class="ttdoc">Idle task entry point — continuously verifies section markers and processes code CRC chunks between H...</div><div class="ttdef"><b>Definition</b> integrity.cpp:151</div></div>
 <div class="ttc" id="anamespacekernel_1_1integrity_html_ad8c610ebd258a2fd322fa982b5dccaff"><div class="ttname"><a href="namespacekernel_1_1integrity.html#ad8c610ebd258a2fd322fa982b5dccaff">kernel::integrity::crc_process_chunk</a></div><div class="ttdeci">bool crc_process_chunk()</div><div class="ttdoc">Process the next 4 KiB chunk of the .text CRC scan. When the scan completes, compares the computed CR...</div><div class="ttdef"><b>Definition</b> integrity.cpp:106</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>
 </div><!-- fragment --></div><!-- contents -->

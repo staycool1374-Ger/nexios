@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mutex_8hpp_sou
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    Mutex()</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>        : owner_(nullptr), holder_priority_(0), lock_count_(0),</div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>          priority_ceiling_(0), wait_count_(0) {</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>          initialized_(<a class="code hl_variable" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>), priority_ceiling_(0), wait_count_(0) {</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    }</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>();</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <span class="keywordtype">void</span> <a class="code hl_function" href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">init</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ceiling);</div>
@@ -205,12 +205,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mutex_8hpp_sou
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span> </div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>} <span class="comment">// namespace sync</span></div>
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>} <span class="comment">// namespace kernel</span></div>
+<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1229</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:29</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a6281f0779a982cc0f19a98b36495e7b3"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs::init_err</a></div><div class="ttdeci">VfsError init_err()</div><div class="ttdoc">Initialize the VFS subsystem with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:452</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
-<div class="ttc" id="anexios__config_8h_html_aa6208ddf66cdb8a09ee562e3f461be1c"><div class="ttname"><a href="nexios__config_8h.html#aa6208ddf66cdb8a09ee562e3f461be1c">CONFIG_SYNC_MAX_WAITERS</a></div><div class="ttdeci">#define CONFIG_SYNC_MAX_WAITERS</div><div class="ttdef"><b>Definition</b> nexios_config.h:271</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anexios__config_8h_html_aa6208ddf66cdb8a09ee562e3f461be1c"><div class="ttname"><a href="nexios__config_8h.html#aa6208ddf66cdb8a09ee562e3f461be1c">CONFIG_SYNC_MAX_WAITERS</a></div><div class="ttdeci">#define CONFIG_SYNC_MAX_WAITERS</div><div class="ttdef"><b>Definition</b> nexios_config.h:277</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>
 <div class="ttc" id="aspinlock__guard_8hpp_html"><div class="ttname"><a href="spinlock__guard_8hpp.html">spinlock_guard.hpp</a></div></div>
 <div class="ttc" id="async__errors_8hpp_html"><div class="ttname"><a href="sync__errors_8hpp.html">sync_errors.hpp</a></div><div class="ttdoc">Synchronisation error codes (X-macro table with human-readable strings).</div></div>

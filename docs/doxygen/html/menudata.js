@@ -180,6 +180,7 @@ var menudata={children:[
 {text:"w",url:"functions_vars_w.html#index_w"},
 {text:"x",url:"functions_vars_x.html#index_x"}]},
 {text:"Typedefs",url:"functions_type.html"},
+{text:"Enumerations",url:"functions_enum.html"},
 {text:"Related Symbols",url:"functions_rela.html"}]}]},
 {text:"Files",url:"files.html",children:[
 {text:"File List",url:"files.html"},
@@ -241,6 +242,7 @@ var menudata={children:[
 {text:"e",url:"globals_vars.html#index_e"},
 {text:"f",url:"globals_vars.html#index_f"},
 {text:"g",url:"globals_vars.html#index_g"},
+{text:"h",url:"globals_vars.html#index_h"},
 {text:"i",url:"globals_vars.html#index_i"},
 {text:"k",url:"globals_vars.html#index_k"},
 {text:"m",url:"globals_vars.html#index_m"},

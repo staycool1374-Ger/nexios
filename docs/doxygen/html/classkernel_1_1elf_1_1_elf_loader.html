@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -154,6 +154,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a34f023f52654f67830d355c1a6d5ffb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">The loader task's main loop (scheduler entry via the free elf_loader_task_main bridge). Blocks on the wake semaphore, runs one load per accepted request.  <br /></td></tr>
 <tr class="memitem:a4c2fef2ceece51afc3092a2a8ac33495" id="r_a4c2fef2ceece51afc3092a2a8ac33495"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4c2fef2ceece51afc3092a2a8ac33495">destroy_completed_tcb</a> (TaskControlBlock *tcb)</td></tr>
 <tr class="memdesc:a4c2fef2ceece51afc3092a2a8ac33495"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tear down a completed-but-never-scheduled TCB (built by finalize_loaded_task). Skips all scheduler interactions.  <br /></td></tr>
+<tr class="memitem:a825e445a84f991d8223d85d59be220f3" id="r_a825e445a84f991d8223d85d59be220f3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a825e445a84f991d8223d85d59be220f3">cancel_pending</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> generation)</td></tr>
+<tr class="memdesc:a825e445a84f991d8223d85d59be220f3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-validation-step cancel check (issue #95: shared by the dep-resolve backend in <a class="el" href="elf__shared_8cpp.html" title="Shared-object / dynamic linking implementation (issue #95). DT_NEEDED resolution, GOT/PLT fixups,...">elf_shared.cpp</a>).  <br /></td></tr>
+<tr class="memitem:a829f0d3ed8bed38faa92180dafc1ed36" id="r_a829f0d3ed8bed38faa92180dafc1ed36"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a829f0d3ed8bed38faa92180dafc1ed36">generation</a> ()</td></tr>
+<tr class="memdesc:a829f0d3ed8bed38faa92180dafc1ed36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current load generation for DepResolveContext setup.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -165,6 +169,39 @@ Static Public Attributes</h2></td></tr>
 <div class="textblock"><p>Background ELF loader singleton. </p>
 <p>Threading model: the shell task only sets request parameters / flags under the spinlock and posts the wake semaphore; the loader task performs all chunk work and is the single owner of every resource it allocates. No lock is ever held across <span class="tt"><a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch.">Scheduler::reschedule()</a></span>. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="a825e445a84f991d8223d85d59be220f3" name="a825e445a84f991d8223d85d59be220f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a825e445a84f991d8223d85d59be220f3">&#9670;&#160;</a></span>cancel_pending()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::elf::ElfLoader::cancel_pending </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>generation</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-validation-step cancel check (issue #95: shared by the dep-resolve backend in <a class="el" href="elf__shared_8cpp.html" title="Shared-object / dynamic linking implementation (issue #95). DT_NEEDED resolution, GOT/PLT fixups,...">elf_shared.cpp</a>). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a825e445a84f991d8223d85d59be220f3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a id="ab2b19b522ee9bb6e2c02173f2b3d552d" name="ab2b19b522ee9bb6e2c02173f2b3d552d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab2b19b522ee9bb6e2c02173f2b3d552d">&#9670;&#160;</a></span>current_path()</h2>
 
@@ -221,7 +258,7 @@ Static Public Attributes</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a4c2fef2ceece51afc3092a2a8ac33495_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a4c2fef2ceece51afc3092a2a8ac33495_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -254,8 +291,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_aeb702b84e85d5ec931afc3ed8acce71c_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_aeb702b84e85d5ec931afc3ed8acce71c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
+
+</div>
+</div>
+<a id="a829f0d3ed8bed38faa92180dafc1ed36" name="a829f0d3ed8bed38faa92180dafc1ed36"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a829f0d3ed8bed38faa92180dafc1ed36">&#9670;&#160;</a></span>generation()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::elf::ElfLoader::generation </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Current load generation for DepResolveContext setup. </p>
 
 </div>
 </div>
@@ -287,7 +351,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a2004c846d94d4d05e7bb58ea3e9fd8a1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -347,7 +411,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ad4b037529a02716f60ffd23d522db9ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -380,7 +444,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a0b136e926533436c58605666ec2ffc38_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -467,7 +531,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_a34f023f52654f67830d355c1a6d5ffb7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -500,7 +564,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph.png" border="0" usemap="#aclasskernel_1_1elf_1_1_elf_loader_ab8245317359afbf1038319328b3e5523_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>

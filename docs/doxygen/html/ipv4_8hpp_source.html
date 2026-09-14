@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -150,20 +150,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipv4_8hpp_sour
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> IPV4_MAX_HEADER_LEN = 60;</div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="keyword">struct </span>Ipv4Addr {</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[IPV4_ADDR_LEN]; </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>    <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> addr[IPV4_ADDR_LEN]; </div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span> </div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    <span class="keywordtype">bool</span> operator==(<span class="keyword">const</span> Ipv4Addr &amp;o)<span class="keyword"> const </span>{</div>
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>        <span class="keywordflow">for</span> (<span class="keywordtype">size_t</span> i = 0; i &lt; IPV4_ADDR_LEN; ++i)</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>            <span class="keywordflow">if</span> (<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[i] != o.addr[i])</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>            <span class="keywordflow">if</span> (addr[i] != o.addr[i])</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>                <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>        <span class="keywordflow">return</span> <span class="keyword">true</span>;</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    }</div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> as_u32()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        <span class="keywordflow">return</span> (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[0]) &lt;&lt; 24) |</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>               (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[1]) &lt;&lt; 16) |</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>               (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[2]) &lt;&lt; 8) |</div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>               <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>[3]);</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>        <span class="keywordflow">return</span> (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(addr[0]) &lt;&lt; 24) |</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>               (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(addr[1]) &lt;&lt; 16) |</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>               (<span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(addr[2]) &lt;&lt; 8) |</div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>               <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a><span class="keyword">&gt;</span>(addr[3]);</div>
 <div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>    }</div>
 <div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span> </div>
 <div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>    <span class="keyword">static</span> Ipv4Addr from_u32(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> v) {</div>
@@ -209,7 +209,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipv4_8hpp_sour
 <div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>}</div>
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span> </div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>} <span class="comment">// namespace net</span></div>
-<div class="ttc" id="agcov__handler_8cpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:59</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a00c53aee04ed1b36b1a86a010b49ef61"><div class="ttname"><a href="namespaceinitrd.html#a00c53aee04ed1b36b1a86a010b49ef61">initrd::__attribute__</a></div><div class="ttdeci">struct initrd::CpioNewcHeader __attribute__((packed))</div></div>
 <div class="ttc" id="anamespacenet_html"><div class="ttname"><a href="namespacenet.html">net</a></div><div class="ttdef"><b>Definition</b> global_state.hpp:59</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

@@ -6,6 +6,5 @@ var test__atomic__context__switch_8cpp =
     [ "JARVIS_TEST", "test__atomic__context__switch_8cpp.html#a87a4783c33c3393d113a617afe48e334", null ],
     [ "JARVIS_TEST", "test__atomic__context__switch_8cpp.html#a849c2dd060dec313ee29743c3e1f5a03", null ],
     [ "JARVIS_TEST", "test__atomic__context__switch_8cpp.html#a6c52230ab8742f6a30210239fdac0325", null ],
-    [ "register_atomic_context_switch_tests", "test__atomic__context__switch_8cpp.html#aebaaa6526f61ba6b96a3fecf4103dabf", null ],
-    [ "scheduler_on_context_switch", "test__atomic__context__switch_8cpp.html#aa045e907eeb1893918a7f28260eed3d6", null ]
+    [ "register_atomic_context_switch_tests", "test__atomic__context__switch_8cpp.html#aebaaa6526f61ba6b96a3fecf4103dabf", null ]
 ];

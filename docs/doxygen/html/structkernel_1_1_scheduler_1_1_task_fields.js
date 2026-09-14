@@ -4,6 +4,7 @@ var structkernel_1_1_scheduler_1_1_task_fields =
     [ "alarm_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#a27309f0e9bc19f99776057140c067efe", null ],
     [ "base_priority", "structkernel_1_1_scheduler_1_1_task_fields.html#a97ae0ecfb669f8f11d73315c2d128390", null ],
     [ "context", "structkernel_1_1_scheduler_1_1_task_fields.html#acc617a3c02f77a652a45be6ccb81a0a6", null ],
+    [ "cpu_affinity", "structkernel_1_1_scheduler_1_1_task_fields.html#a3749b14b62fad5b1f55b4281964ad10a", null ],
     [ "deadline_miss_count", "structkernel_1_1_scheduler_1_1_task_fields.html#a40d4650306ca6e046b2191e7e6b00bf8", null ],
     [ "deadline_missed", "structkernel_1_1_scheduler_1_1_task_fields.html#aa9502cbe1536e5fdfb0304fccd2229e6", null ],
     [ "deadline_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#af342e08b29409d1cca26c72b5ecba7bb", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,8 @@ Data Structures</h2></td></tr>
 <tr class="memitem:Caps" id="r_Caps"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_caps.html">Caps</a></td></tr>
 <tr class="memitem:QemuDebugcon" id="r_QemuDebugcon"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_qemu_debugcon.html">QemuDebugcon</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal, lock-free writer to the QEMU debugcon device (I/O port 0xE9). On non-x86_64 targets every method is a no-op so the class can be called unconditionally from shared logging code.  <a href="classarch_1_1_qemu_debugcon.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TprGuard" id="r_TprGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_tpr_guard.html">TprGuard</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -146,6 +148,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a46488b8cc19b71e9d4bd3d8ea44603e4" id="r_a46488b8cc19b71e9d4bd3d8ea44603e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a46488b8cc19b71e9d4bd3d8ea44603e4">exception_entry</a> (void)</td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af44c28e0176ac64b504464bbd30f31b2">handle_gic_irq</a> (void)</td></tr>
 <tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
+<tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac53772566e53832b14ccedb8d6ae2d4e">cpu_index</a> () noexcept</td></tr>
+<tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
 <tr class="memitem:abf043d19ff557eda98a5f62a99c78568" id="r_abf043d19ff557eda98a5f62a99c78568"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abf043d19ff557eda98a5f62a99c78568">iopb_claim</a> (kernel::TaskControlBlock &amp;)</td></tr>
 <tr class="memitem:a43e6d91ea884caad134906534ca1f4d0" id="r_a43e6d91ea884caad134906534ca1f4d0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a43e6d91ea884caad134906534ca1f4d0">iopb_release</a> (kernel::TaskControlBlock &amp;)</td></tr>
 <tr class="memitem:a2c4c9fbb4236aa0576c8efa8c1c3dec9" id="r_a2c4c9fbb4236aa0576c8efa8c1c3dec9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a2c4c9fbb4236aa0576c8efa8c1c3dec9">iopb_grant_range</a> (kernel::TaskControlBlock &amp;, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>)</td></tr>
@@ -181,6 +185,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a8dcc3bc98dc325b9ed085730ea58aaec" id="r_a8dcc3bc98dc325b9ed085730ea58aaec"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8dcc3bc98dc325b9ed085730ea58aaec">plic_complete</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> intid)</td></tr>
 <tr class="memitem:abcb80cfbe5c335ca7659697f28452a7b" id="r_abcb80cfbe5c335ca7659697f28452a7b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abcb80cfbe5c335ca7659697f28452a7b">handle_plic_trap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:ade82e23d3659eed529a27355052fcdac" id="r_ade82e23d3659eed529a27355052fcdac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade82e23d3659eed529a27355052fcdac">handle_kernel_exception</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stval)</td></tr>
+<tr class="memitem:aa083df7d97e20366e210c1f978abed5d" id="r_aa083df7d97e20366e210c1f978abed5d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa083df7d97e20366e210c1f978abed5d">percpu_init_bsp</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bsp_lapic_id)</td></tr>
+<tr class="memitem:ae41ccc115f18da2b4a867210a1a99cd0" id="r_ae41ccc115f18da2b4a867210a1a99cd0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae41ccc115f18da2b4a867210a1a99cd0">percpu_init_ap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> logical_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> lapic_id)</td></tr>
 <tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1888fb8a7b37d30dec1c191cacb1fbf2">virtio_map_mmio</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> bar, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> offset, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> length, VirtioMmio &amp;mmio_out, PciBdf bdf)</td></tr>
 <tr class="memitem:a12155265301dd4e78b8ed8523ff7353f" id="r_a12155265301dd4e78b8ed8523ff7353f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a12155265301dd4e78b8ed8523ff7353f">virtio_find_device</a> (<a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> device_id, VirtioTransport &amp;transport)</td></tr>
 <tr class="memitem:a270fa39795ea158dfa9285d6eb472e3f" id="r_a270fa39795ea158dfa9285d6eb472e3f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a270fa39795ea158dfa9285d6eb472e3f">virtio_init_transport</a> (VirtioTransport &amp;transport)</td></tr>
@@ -248,6 +254,7 @@ Variables</h2></td></tr>
 <tr class="memitem:aa595a02252ff6e7295062c376298dfea" id="r_aa595a02252ff6e7295062c376298dfea"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa595a02252ff6e7295062c376298dfea">IRQ_KEYBOARD</a> = 12</td></tr>
 <tr class="memitem:aabce4ce1e12afd68caf560773edc154f" id="r_aabce4ce1e12afd68caf560773edc154f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aabce4ce1e12afd68caf560773edc154f">__isr_vector</a> []</td></tr>
 <tr class="memdesc:aabce4ce1e12afd68caf560773edc154f"><td class="mdescLeft">&#160;</td><td class="mdescRight">External ISR vector table defined in the linker or assembly entry point.  <br /></td></tr>
+<tr class="memitem:a74ee5e38b6239c12f5cadd479e625d7d" id="r_a74ee5e38b6239c12f5cadd479e625d7d"><td class="memItemLeft">PerCpu&#160;</td><td class="memItemRight"><a class="el" href="#a74ee5e38b6239c12f5cadd479e625d7d">per_cpu</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:a57c6bb74fdc3ee11eecab91b0142e95b" id="r_a57c6bb74fdc3ee11eecab91b0142e95b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a57c6bb74fdc3ee11eecab91b0142e95b">HHDM_OFFSET</a> = CONFIG_HHDM_OFFSET</td></tr>
 <tr class="memdesc:a57c6bb74fdc3ee11eecab91b0142e95b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Higher-half offset: convert physical → kernel-visible virtual.  <br /></td></tr>
 <tr class="memitem:ae0a5af75fabcbd33d35318bdc4f59957" id="r_ae0a5af75fabcbd33d35318bdc4f59957"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae0a5af75fabcbd33d35318bdc4f59957">HHDM_WINDOW_SIZE</a> = 128_MiB</td></tr>
@@ -294,6 +301,33 @@ Variables</h2></td></tr>
 <p>Memory map (QEMU virt): PLIC_BASE = 0x0C00_0000 Priority = base + 0x0000_0000 (one 4-byte word per source) Pending = base + 0x0000_1000 Enable = base + 0x0000_2000 (one bit per source) Threshold = base + 0x0020_0000 Claim/Complete= base + 0x0020_0004</p>
 <p>IRQ map (QEMU virt): 0 = reserved 1-8 = virtio-mmio devices 9 = (unused) 10 = UART 11 = (unused) 12 = keyboard (PS/2) </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="ac53772566e53832b14ccedb8d6ae2d4e" name="ac53772566e53832b14ccedb8d6ae2d4e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac53772566e53832b14ccedb8d6ae2d4e">&#9670;&#160;</a></span>cpu_index()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::cpu_index </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Current CPU index — single-core archs are always CPU 0. </p>
+
+</div>
+</div>
 <a id="a46488b8cc19b71e9d4bd3d8ea44603e4" name="a46488b8cc19b71e9d4bd3d8ea44603e4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a46488b8cc19b71e9d4bd3d8ea44603e4">&#9670;&#160;</a></span>exception_entry()</h2>
 
@@ -1395,6 +1429,44 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="namespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph.png" border="0" usemap="#anamespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 16 -->
 </div>
+
+</div>
+</div>
+<a id="ae41ccc115f18da2b4a867210a1a99cd0" name="ae41ccc115f18da2b4a867210a1a99cd0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae41ccc115f18da2b4a867210a1a99cd0">&#9670;&#160;</a></span>percpu_init_ap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::percpu_init_ap </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>logical_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>lapic_id</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa083df7d97e20366e210c1f978abed5d" name="aa083df7d97e20366e210c1f978abed5d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa083df7d97e20366e210c1f978abed5d">&#9670;&#160;</a></span>percpu_init_bsp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::percpu_init_bsp </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>bsp_lapic_id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -3157,6 +3229,20 @@ Here is the call graph for this function:</div>
 <span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
   </tr>
 </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a74ee5e38b6239c12f5cadd479e625d7d" name="a74ee5e38b6239c12f5cadd479e625d7d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a74ee5e38b6239c12f5cadd479e625d7d">&#9670;&#160;</a></span>per_cpu</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">PerCpu arch::per_cpu[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td>
+        </tr>
+      </table>
 </div><div class="memdoc">
 
 </div>

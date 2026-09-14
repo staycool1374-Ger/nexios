@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('multiboot2_8hp
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="keyword">struct </span>FramebufferTag {</div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> type;</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> size;</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>;</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr;</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> pitch;</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> width;</div>
 <div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> height;</div>
@@ -192,21 +192,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('multiboot2_8hp
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keyword">auto</span> *info = <span class="keyword">reinterpret_cast&lt;</span>Multiboot2Info *<span class="keyword">&gt;</span>(</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>        <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a><span class="keyword">&gt;</span>(<a class="code hl_variable" href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a>));</div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span> </div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a> = <a class="code hl_variable" href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a> + 8;</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordflow">while</span> (<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr &lt; multiboot_info_ptr + info-&gt;</a>total_size) {</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr = <a class="code hl_variable" href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a> + 8;</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordflow">while</span> (addr &lt; multiboot_info_ptr + info-&gt;total_size) {</div>
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>        <span class="comment">// NOLINTNEXTLINE(performance-no-int-to-ptr)</span></div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        <span class="keyword">auto</span> *tag = <span class="keyword">reinterpret_cast&lt;</span>Multiboot2Tag *<span class="keyword">&gt;</span>(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>);</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        <span class="keyword">auto</span> *tag = <span class="keyword">reinterpret_cast&lt;</span>Multiboot2Tag *<span class="keyword">&gt;</span>(addr);</div>
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>        <span class="keywordflow">if</span> (tag-&gt;type == 0)</div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>            <span class="keywordflow">break</span>;</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>        <span class="keywordflow">if</span> (tag-&gt;type == type)</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>            <span class="keywordflow">return</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>;</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>        <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a> += (tag-&gt;size + 7) &amp; ~7;</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>            <span class="keywordflow">return</span> addr;</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>        addr += (tag-&gt;size + 7) &amp; ~7;</div>
 <div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    }</div>
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="keywordflow">return</span> 0;</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>}</div>
-<div class="ttc" id="agcov__handler_8cpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:59</div></div>
-<div class="ttc" id="aglobal__state_8cpp_html_a16fea7346fbc792334a098eb9b61c77a"><div class="ttname"><a href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a></div><div class="ttdeci">uint64_t multiboot_magic</div><div class="ttdef"><b>Definition</b> global_state.cpp:39</div></div>
-<div class="ttc" id="aglobal__state_8cpp_html_a2e435e25065d40cbea1df681ebafede9"><div class="ttname"><a href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a></div><div class="ttdeci">uint64_t multiboot_info_ptr</div><div class="ttdef"><b>Definition</b> global_state.cpp:40</div></div>
+<div class="ttc" id="aglobal__state_8cpp_html_a16fea7346fbc792334a098eb9b61c77a"><div class="ttname"><a href="global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a></div><div class="ttdeci">uint64_t multiboot_magic</div><div class="ttdef"><b>Definition</b> global_state.cpp:46</div></div>
+<div class="ttc" id="aglobal__state_8cpp_html_a2e435e25065d40cbea1df681ebafede9"><div class="ttname"><a href="global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a></div><div class="ttdeci">uint64_t multiboot_info_ptr</div><div class="ttdef"><b>Definition</b> global_state.cpp:47</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>

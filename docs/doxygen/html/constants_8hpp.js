@@ -36,5 +36,6 @@ var constants_8hpp =
     [ "arch::RAM_BASE_FALLBACK", "namespacearch.html#aebf4e2fccb4c8c343da664bcdccc6a91", null ],
     [ "mem::STACK_SIZE", "namespacemem.html#a710467a64fb906235a4120c91987afab", null ],
     [ "mem::STACK_VADDR", "namespacemem.html#aa37da75950fcac32199a40638151c163", null ],
+    [ "UINT32_MAX", "constants_8hpp.html#a6dc3d5894cc08990629f0d006af81ad6", null ],
     [ "UINT64_MAX", "constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db", null ]
 ];

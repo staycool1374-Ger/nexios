@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -134,8 +134,6 @@ Collaboration diagram for kernel::CpuContext:</div>
 Data Fields</h2></td></tr>
 <tr class="memitem:a6fc2e17fe50ebb47643b65870bbfa109" id="r_a6fc2e17fe50ebb47643b65870bbfa109"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a6fc2e17fe50ebb47643b65870bbfa109">current</a> = nullptr</td></tr>
 <tr class="memdesc:a6fc2e17fe50ebb47643b65870bbfa109"><td class="mdescLeft">&#160;</td><td class="mdescRight">The physically-running task (per-CPU cache). INV-1: the RSP-ownership scan in switch_to_task remains authoritative; this cache is only published atomically.  <br /></td></tr>
-<tr class="memitem:aa924234f3ea16f826e2cc01b6b84b840" id="r_aa924234f3ea16f826e2cc01b6b84b840"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa924234f3ea16f826e2cc01b6b84b840">isr_nesting_depth</a> = 0</td></tr>
-<tr class="memdesc:aa924234f3ea16f826e2cc01b6b84b840"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR re-entrancy depth (asm inc/dec + C++ atomic reset/read).  <br /></td></tr>
 <tr class="memitem:a01ddf0f07e15307e0251a3414a25aec5" id="r_a01ddf0f07e15307e0251a3414a25aec5"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01ddf0f07e15307e0251a3414a25aec5">ticks</a> = 0</td></tr>
 <tr class="memdesc:a01ddf0f07e15307e0251a3414a25aec5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU tick counter (timer ISR RMW; readers use atomic load).  <br /></td></tr>
 <tr class="memitem:a85714e17216d98d919ac6223f1559a6b" id="r_a85714e17216d98d919ac6223f1559a6b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a85714e17216d98d919ac6223f1559a6b">last_switch_tick</a> = 0</td></tr>
@@ -159,22 +157,6 @@ Data Fields</h2></td></tr>
 </div><div class="memdoc">
 
 <p>The physically-running task (per-CPU cache). INV-1: the RSP-ownership scan in switch_to_task remains authoritative; this cache is only published atomically. </p>
-
-</div>
-</div>
-<a id="aa924234f3ea16f826e2cc01b6b84b840" name="aa924234f3ea16f826e2cc01b6b84b840"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa924234f3ea16f826e2cc01b6b84b840">&#9670;&#160;</a></span>isr_nesting_depth</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::CpuContext::isr_nesting_depth = 0</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>ISR re-entrancy depth (asm inc/dec + C++ atomic reset/read). </p>
 
 </div>
 </div>

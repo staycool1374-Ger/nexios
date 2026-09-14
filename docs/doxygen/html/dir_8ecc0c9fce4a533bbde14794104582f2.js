@@ -18,5 +18,6 @@ var dir_8ecc0c9fce4a533bbde14794104582f2 =
     [ "rand.hpp", "hal_2rand_8hpp.html", null ],
     [ "rtc.hpp", "hal_2rtc_8hpp.html", null ],
     [ "serial.hpp", "hal_2serial_8hpp.html", null ],
-    [ "timer.hpp", "hal_2timer_8hpp.html", null ]
+    [ "timer.hpp", "hal_2timer_8hpp.html", null ],
+    [ "tpr_guard.hpp", "tpr__guard_8hpp.html", "tpr__guard_8hpp" ]
 ];

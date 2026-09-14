@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -128,7 +128,7 @@ Directory dependency graph for iommu:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
 <tr class="memitem:dmar_2Ehpp" id="r_dmar_2Ehpp"><td class="memItemLeft"><a href="dmar_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dmar_8hpp.html">dmar.hpp</a></td></tr>
-<tr class="memdesc:dmar_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure-data result of the ACPI DMAR table scan (issue #9, phase-2 live VT-d). The parser (<a class="el" href="acpi_8cpp.html" title="ACPI DMAR discovery implementation (issue #9). The boot page tables identity-map only the first 128 M...">arch/x86_64/acpi.cpp</a>) fills this bounded struct; IoMmuManager consumes it. Deliberately a value type — no pointers into the ACPI tables survive the parse (the tables live in low memory that test isolation may rewind). <br /></td></tr>
+<tr class="memdesc:dmar_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure-data result of the ACPI DMAR table scan (issue #9, phase-2 live VT-d). The parser (<a class="el" href="acpi_8cpp.html" title="ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map onl...">arch/x86_64/acpi.cpp</a>) fills this bounded struct; IoMmuManager consumes it. Deliberately a value type — no pointers into the ACPI tables survive the parse (the tables live in low memory that test isolation may rewind). <br /></td></tr>
 <tr class="memitem:iommu_2Ecpp" id="r_iommu_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="iommu_2iommu_8cpp.html">iommu.cpp</a></td></tr>
 <tr class="memdesc:iommu_2iommu_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IoMmuManager implementation (issues #4 + #9). All state is static and bounded (.bss tables + per-domain PMM SL pages). Single-owner page discipline: every SL page belongs to exactly one domain and is freed exactly once — either by cascade-free during unmap/rollback or by domain_destroy walking only still-occupied mapping records. PMM returns unzeroed memory, so EVERY table page is memset(0) before use (a stale R/W entry would grant DMA to recycled frames). <br /></td></tr>
 <tr class="memitem:iommu_2Ehpp" id="r_iommu_2Ehpp"><td class="memItemLeft"><a href="iommu_2iommu_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="iommu_2iommu_8hpp.html">iommu.hpp</a></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -132,11 +132,13 @@ Directories</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
 <tr class="memitem:acpi_2Ecpp" id="r_acpi_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="acpi_8cpp.html">acpi.cpp</a></td></tr>
-<tr class="memdesc:acpi_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ACPI DMAR discovery implementation (issue #9). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature. <br /></td></tr>
+<tr class="memdesc:acpi_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature + checksum is validated before the data is trusted (fail-closed probe). <br /></td></tr>
 <tr class="memitem:acpi_2Ehpp" id="r_acpi_2Ehpp"><td class="memItemLeft"><a href="acpi_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="acpi_8hpp.html">acpi.hpp</a></td></tr>
 <tr class="memdesc:acpi_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal ACPI/DMAR discovery for live VT-d (issue #9, phase-2). GRUB provides the RSDP through multiboot2 tags 14 (ACPI old / RSDP v1) and 15 (ACPI new / RSDP v2); the parser validates the checksum, walks RSDT/XSDT to the DMAR table and extracts the first DRHD remapping-unit base. Fail-closed: any malformed / checksum-mismatched table yields an empty DmarInfo (a corrupt table must never program an IOMMU). x86_64-only. <br /></td></tr>
 <tr class="memitem:keyboard_2Ecpp" id="r_keyboard_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="keyboard_8cpp.html">keyboard.cpp</a></td></tr>
 <tr class="memdesc:keyboard_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PS/2 keyboard driver — translates scancodes to ASCII characters and manages a ring-buffer input queue. <br /></td></tr>
+<tr class="memitem:madt_2Ehpp" id="r_madt_2Ehpp"><td class="memItemLeft"><a href="madt_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="madt_8hpp.html">madt.hpp</a></td></tr>
+<tr class="memdesc:madt_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure-data result of the ACPI MADT scan (issue #25, Phase B). The parser (<a class="el" href="acpi_8cpp.html" title="ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map onl...">arch/x86_64/acpi.cpp</a>) fills this bounded struct; the SMP bring-up (<a class="el" href="smp_8cpp.html" title="SMP AP bring-up implementation (issue #25, Phase B3). Copies the position-locked trampoline blob to p...">hal/smp.cpp</a>) consumes it. Deliberately a value type — no pointers into the ACPI tables survive the parse (the tables live in firmware memory that test isolation may rewind). x86_64-only. <br /></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2rtc_8cpp.html">rtc.cpp</a></td></tr>
 <tr class="memdesc:x86__64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">CMOS Real-Time Clock driver — reads and configures the RTC for timekeeping. <br /></td></tr>
 <tr class="memitem:serial_2Ecpp" id="r_serial_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2serial_8cpp.html">serial.cpp</a></td></tr>

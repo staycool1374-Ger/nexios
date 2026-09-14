@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cpu__context_8
 <p>Per-CPU execution context (PfA-B, Phase 8 SMP groundwork).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="types_8hpp_source.html">types.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="nexios__config_8h_source.html">kernel/nexios_config.h</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for cpu_context.hpp:</div>
 <div class="dyncontent">
@@ -144,12 +145,25 @@ Data Structures</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
+<tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
+<tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a> () noexcept</td></tr>
+<tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
+<tr class="memitem:a20a07952a9e22c0be3a6711567475133" id="r_a20a07952a9e22c0be3a6711567475133"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a20a07952a9e22c0be3a6711567475133">kernel::cpu_ctx</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu)</td></tr>
+<tr class="memdesc:a20a07952a9e22c0be3a6711567475133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/snapshot paths can scan all CPUs' <span class="tt">current</span> (spare-any-current, capture). First touch is on the BSP during boot (single-threaded; -fno-threadsafe-statics safe).  <br /></td></tr>
 <tr class="memitem:a777bca6dec383faa735ebe34c5bdf749" id="r_a777bca6dec383faa735ebe34c5bdf749"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749">kernel::current_cpu</a> ()</td></tr>
 <tr class="memdesc:a777bca6dec383faa735ebe34c5bdf749"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current CPU's execution context.  <br /></td></tr>
+<tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20">kernel::isr_nesting_own</a> ()</td></tr>
+<tr class="memdesc:a0571e17de31b74de7a47a25459361c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU ISR nesting depth (single-core archs: the plain global).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48">kernel::isr_nesting_depth</a></td></tr>
+<tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Per-CPU execution context (PfA-B, Phase 8 SMP groundwork). </p>

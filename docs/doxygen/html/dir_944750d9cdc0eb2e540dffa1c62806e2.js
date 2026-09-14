@@ -9,6 +9,10 @@ var dir_944750d9cdc0eb2e540dffa1c62806e2 =
     [ "iopb.cpp", "iopb_8cpp.html", null ],
     [ "msr_impl.hpp", "x86__64_2hal_2msr__impl_8hpp.html", null ],
     [ "page_table_impl.hpp", "x86__64_2hal_2page__table__impl_8hpp.html", null ],
+    [ "percpu.cpp", "percpu_8cpp.html", "percpu_8cpp" ],
+    [ "percpu.hpp", "percpu_8hpp.html", null ],
     [ "rand_impl.hpp", "x86__64_2hal_2rand__impl_8hpp.html", null ],
+    [ "smp.cpp", "smp_8cpp.html", "smp_8cpp" ],
+    [ "smp.hpp", "smp_8hpp.html", "smp_8hpp" ],
     [ "timer.cpp", "x86__64_2hal_2timer_8cpp.html", null ]
 ];

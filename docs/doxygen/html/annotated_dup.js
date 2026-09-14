@@ -1,9 +1,10 @@
 var annotated_dup =
 [
     [ "arch", "namespacearch.html", [
-      [ "APIC", "classarch_1_1_a_p_i_c.html", null ],
+      [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
       [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
-      [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ]
+      [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
+      [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ]
     ] ],
     [ "crypto", "namespacecrypto.html", [
       [ "ChaChaState", "structcrypto_1_1_cha_cha_state.html", "structcrypto_1_1_cha_cha_state" ]
@@ -14,6 +15,9 @@ var annotated_dup =
       [ "InitrdFile", "structinitrd_1_1_initrd_file.html", "structinitrd_1_1_initrd_file" ]
     ] ],
     [ "kernel", "namespacekernel.html", [
+      [ "acpi", "namespacekernel_1_1acpi.html", [
+        [ "MadtInfo", "structkernel_1_1acpi_1_1_madt_info.html", "structkernel_1_1acpi_1_1_madt_info" ]
+      ] ],
       [ "cap", "namespacekernel_1_1cap.html", [
         [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
         [ "CSlot", "structkernel_1_1cap_1_1_c_slot.html", "structkernel_1_1cap_1_1_c_slot" ],
@@ -31,7 +35,8 @@ var annotated_dup =
         [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ]
       ] ],
       [ "elf", "namespacekernel_1_1elf.html", [
-        [ "ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ]
+        [ "ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ],
+        [ "MapOut", "structkernel_1_1elf_1_1_map_out.html", "structkernel_1_1elf_1_1_map_out" ]
       ] ],
       [ "gs", "namespacekernel_1_1gs.html", [
         [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ]
@@ -55,6 +60,9 @@ var annotated_dup =
       [ "log", "namespacekernel_1_1log.html", [
         [ "LogEntry", "structkernel_1_1log_1_1_log_entry.html", "structkernel_1_1log_1_1_log_entry" ],
         [ "DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", "classkernel_1_1log_1_1_dmesg_service" ]
+      ] ],
+      [ "profiling", "namespacekernel_1_1profiling.html", [
+        [ "Sampler", "classkernel_1_1profiling_1_1_sampler.html", null ]
       ] ],
       [ "shm", "namespacekernel_1_1shm.html", [
         [ "SharedRingHeader", "structkernel_1_1shm_1_1_shared_ring_header.html", "structkernel_1_1shm_1_1_shared_ring_header" ]
@@ -100,6 +108,7 @@ var annotated_dup =
       [ "ReadyQueueManager", "classkernel_1_1_ready_queue_manager.html", "classkernel_1_1_ready_queue_manager" ],
       [ "ReadyQueuePOD", "structkernel_1_1_ready_queue_p_o_d.html", "structkernel_1_1_ready_queue_p_o_d" ],
       [ "Rlimit", "structkernel_1_1_rlimit.html", "structkernel_1_1_rlimit" ],
+      [ "SchedPerCpuPod", "structkernel_1_1_sched_per_cpu_pod.html", "structkernel_1_1_sched_per_cpu_pod" ],
       [ "Scheduler", "classkernel_1_1_scheduler.html", "classkernel_1_1_scheduler" ],
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
       [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
@@ -137,6 +146,7 @@ var annotated_dup =
     [ "remove_reference&lt; T &amp;&amp; &gt;", "structremove__reference_3_01_t_01_6_6_01_4.html", "structremove__reference_3_01_t_01_6_6_01_4" ],
     [ "Rlimit", "struct_rlimit.html", "struct_rlimit" ],
     [ "rlimit", "structrlimit.html", "structrlimit" ],
+    [ "Sampler", "class_sampler.html", null ],
     [ "ScopeGuard", "class_scope_guard.html", "class_scope_guard" ],
     [ "SimpleTaskDeleter", "struct_simple_task_deleter.html", "struct_simple_task_deleter" ],
     [ "SpinLockGuard", "class_spin_lock_guard.html", "class_spin_lock_guard" ],

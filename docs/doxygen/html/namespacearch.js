@@ -1,8 +1,10 @@
 var namespacearch =
 [
-    [ "APIC", "classarch_1_1_a_p_i_c.html", null ],
+    [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
     [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
     [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
+    [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ],
+    [ "cpu_index", "namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e", null ],
     [ "exception_entry", "namespacearch.html#a46488b8cc19b71e9d4bd3d8ea44603e4", null ],
     [ "gic_v3_read_iar", "namespacearch.html#abe825a3f67343b75c57efa83cb71feec", null ],
     [ "gic_v3_set_igrpen1", "namespacearch.html#a0e66b1a01d873e894c6676c2d63657c4", null ],
@@ -46,6 +48,8 @@ var namespacearch =
     [ "pci_program_msix_entry", "namespacearch.html#a7b9a139f7af44bc665d24c1731c6f19c", null ],
     [ "pci_read_device_info", "namespacearch.html#a8fd92f41ff58ee30a496023a66c4482f", null ],
     [ "pci_scan_all", "namespacearch.html#adf555b81d7d72b5c61d212eaf1aa1e69", null ],
+    [ "percpu_init_ap", "namespacearch.html#ae41ccc115f18da2b4a867210a1a99cd0", null ],
+    [ "percpu_init_bsp", "namespacearch.html#aa083df7d97e20366e210c1f978abed5d", null ],
     [ "plic_claim", "namespacearch.html#ad8cf1975e657fd548aa97fd3c37f812e", null ],
     [ "plic_complete", "namespacearch.html#a8dcc3bc98dc325b9ed085730ea58aaec", null ],
     [ "plic_enable_reg", "namespacearch.html#a6807f252e313e023fb6310b60223e4f6", null ],
@@ -123,6 +127,7 @@ var namespacearch =
     [ "IRQ_VIRTIO4", "namespacearch.html#a9c39a084cebdfc926cd28dd5ac4bd7f1", null ],
     [ "PAGE_SIZE", "namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af", null ],
     [ "PAGE_SIZE_2M", "namespacearch.html#a9c04cc6adc05ff5fdca738fe926d5fa3", null ],
+    [ "per_cpu", "namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d", null ],
     [ "PL031_BASE", "namespacearch.html#a8330daf1138ba3f2466d81406d1ab6c0", null ],
     [ "PL031_DATA", "namespacearch.html#a585a77a747cf6637b9dfc9119564b96f", null ],
     [ "PLIC_BASE", "namespacearch.html#a430ef23b1e75c1574e6b7147df85da0a", null ],

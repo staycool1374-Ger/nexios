@@ -8,5 +8,6 @@ var searchData=
   ['_7escopeguard_5',['~ScopeGuard',['../class_scope_guard.html#a09de18ca9299f746a645bd8567b0a108',1,'ScopeGuard']]],
   ['_7espinlockguard_6',['~SpinLockGuard',['../class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c',1,'SpinLockGuard']]],
   ['_7etestbase_7',['~TestBase',['../classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a',1,'kernel::test::TestBase']]],
-  ['_7euniqueptr_8',['~UniquePtr',['../class_unique_ptr.html#a391fe31b50f16071462d1e4968d35e8c',1,'UniquePtr']]]
+  ['_7etprguard_8',['~TprGuard',['../classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213',1,'arch::TprGuard']]],
+  ['_7euniqueptr_9',['~UniquePtr',['../class_unique_ptr.html#a391fe31b50f16071462d1e4968d35e8c',1,'UniquePtr']]]
 ];

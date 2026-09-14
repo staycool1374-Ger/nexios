@@ -1,7 +1,7 @@
 var searchData=
 [
   ['id_0',['id',['../structkernel_1_1_scheduler_1_1_task_fields.html#a07e1d4833f77b1a0063ff8052e7643a3',1,'kernel::Scheduler::TaskFields']]],
-  ['idx_1',['idx',['../structkernel_1_1_scheduler_1_1_task_iter.html#adce55c15a181b553c9350f64d11d5c4d',1,'kernel::Scheduler::TaskIter::idx'],['../gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6',1,'idx:&#160;gcov_handler.cpp']]],
+  ['idx_1',['idx',['../structkernel_1_1_scheduler_1_1_task_iter.html#adce55c15a181b553c9350f64d11d5c4d',1,'kernel::Scheduler::TaskIter']]],
   ['in_5fready_5fqueue_2',['in_ready_queue',['../structkernel_1_1_scheduler_1_1_task_fields.html#a60135de4e18f5dd456e5ed869e5df9e2',1,'kernel::Scheduler::TaskFields']]],
   ['include_5fpci_5fall_3',['include_pci_all',['../structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html#a71e30ef1d97196b6da9e82d24fa90b2e',1,'kernel::iommu::dmar::RemappingUnit']]],
   ['initial_4',['INITIAL',['../classkernel_1_1_c_r_c32.html#ad3b73507e9c32b7ed204fa8f86c6c285',1,'kernel::CRC32']]],
@@ -26,5 +26,5 @@ var searchData=
   ['irq_5fvirtio4_23',['IRQ_VIRTIO4',['../namespacearch.html#a9c39a084cebdfc926cd28dd5ac4bd7f1',1,'arch']]],
   ['is_5fdir_24',['is_dir',['../structinitrd_1_1_initrd_entry.html#a48e95a6e7d3e3e0f77113e60847c9670',1,'initrd::InitrdEntry']]],
   ['is_5fuser_25',['is_user',['../classkernel_1_1cap_1_1_frame_cap.html#a9b8bba20072966fe71fd381c24201b25',1,'kernel::cap::FrameCap::is_user'],['../classkernel_1_1cap_1_1_untyped_mem.html#a75d0d58fcc87227e654d2255e72ec231',1,'kernel::cap::UntypedMem::is_user']]],
-  ['isr_5fnesting_5fdepth_26',['isr_nesting_depth',['../structkernel_1_1_cpu_context.html#aa924234f3ea16f826e2cc01b6b84b840',1,'kernel::CpuContext::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp'],['../namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48',1,'kernel::isr_nesting_depth']]]
+  ['isr_5fnesting_5fdepth_26',['isr_nesting_depth',['../namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48',1,'kernel::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp']]]
 ];

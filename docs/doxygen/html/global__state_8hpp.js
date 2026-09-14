@@ -1,6 +1,7 @@
 var global__state_8hpp =
 [
     [ "kernel::gs::WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ],
+    [ "H2_REC", "global__state_8hpp.html#a9347125ae567ba5097e323ce1d5f8066", null ],
     [ "kernel::gs::StatePhase", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaa", [
       [ "kernel::gs::StatePhase::PRE_BOOT", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaab72a24f2df728fea75ea045bd9bafb0f", null ],
       [ "kernel::gs::StatePhase::BOOT", "namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaadf9a77cdc2fe29972274b189cf7bac7c", null ],
@@ -30,6 +31,12 @@ var global__state_8hpp =
     [ "kernel::gs::get_vfs_touched", "namespacekernel_1_1gs.html#a26b3222119b54a05a88b1bb89400d361", null ],
     [ "kernel::gs::mark_vfs_touched", "namespacekernel_1_1gs.html#afbd6163e26ae3ece51b4c4196567b218", null ],
     [ "kernel::gs::reset_canary_trip", "namespacekernel_1_1gs.html#ad0afd06497bb9e68ab9e52b1687f079c", null ],
+    [ "kernel::gs::scheduler_abort_switch_fixup", "namespacekernel_1_1gs.html#a365cc933f3230032561eeee65168855d", null ],
+    [ "kernel::gs::scheduler_diag_depth_skip", "namespacekernel_1_1gs.html#a598aa1b4a1b4e3baed2631e0d36a8f5b", null ],
+    [ "kernel::gs::scheduler_diag_pre_save", "namespacekernel_1_1gs.html#aee556e421f2dc94871b4e534b3f667f6", null ],
+    [ "kernel::gs::scheduler_on_context_switch", "namespacekernel_1_1gs.html#ae914fdd81199b73041a51cd4f195d0d4", null ],
+    [ "kernel::gs::scheduler_record_skip", "namespacekernel_1_1gs.html#a2a343ec5f79f66bee72041750892bdb7", null ],
+    [ "kernel::gs::scheduler_validate_pending_switch", "namespacekernel_1_1gs.html#ab0941f6755ee6bd78c9ca27146643f67", null ],
     [ "kernel::gs::set_canary_trip", "namespacekernel_1_1gs.html#a4a8fe12d27aa5831712becc1f446e600", null ],
     [ "kernel::gs::set_class_auto_shutdown", "namespacekernel_1_1gs.html#a38634c00471ef5b7ec391e2bdfabde54", null ],
     [ "kernel::gs::set_current_class", "namespacekernel_1_1gs.html#ab2ff7045674fc89c0609d4d296f58930", null ],
@@ -40,5 +47,9 @@ var global__state_8hpp =
     [ "kernel::gs::try_set_multiboot", "namespacekernel_1_1gs.html#ad022293607976a01f2705ab26d5f1e69", null ],
     [ "kernel::gs::try_set_nic", "namespacekernel_1_1gs.html#af7d35e270dec4bdcec35118534857dac", null ],
     [ "kernel::gs::user_access_recover_ip", "namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693", null ],
-    [ "kernel::gs::verify_and_write", "namespacekernel_1_1gs.html#aa31f97c76439bba6660bced29b435c61", null ]
+    [ "kernel::gs::verify_and_write", "namespacekernel_1_1gs.html#aa31f97c76439bba6660bced29b435c61", null ],
+    [ "_stack_end", "global__state_8hpp.html#aa4c3a4a82848848b44540d9841a3dccc", null ],
+    [ "_stack_start", "global__state_8hpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1", null ],
+    [ "H2_EV_REENQ", "global__state_8hpp.html#a3bb3e3740ffbdc8b400344f6079e8055", null ],
+    [ "H2_EV_SKIP", "global__state_8hpp.html#a9d2d36ac9371e47ea14a3de29f819bdf", null ]
 ];

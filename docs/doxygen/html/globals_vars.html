@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 
 <div class="contents">
 <div class="textblock">Here is a list of all variables with links to the files they belong to:</div><br/>
-<div class="qindex"><a class="qindex" href="#index_a">A</a><div class="alphasepar"></div><a class="qindex" href="#index_c">C</a><div class="alphasepar"></div><a class="qindex" href="#index_d">D</a><div class="alphasepar"></div><a class="qindex" href="#index_e">E</a><div class="alphasepar"></div><a class="qindex" href="#index_f">F</a><div class="alphasepar"></div><a class="qindex" href="#index_g">G</a><div class="alphasepar"></div><a class="qindex" href="#index_i">I</a><div class="alphasepar"></div><a class="qindex" href="#index_k">K</a><div class="alphasepar"></div><a class="qindex" href="#index_m">M</a><div class="alphasepar"></div><a class="qindex" href="#index_n">N</a><div class="alphasepar"></div><a class="qindex" href="#index_q">Q</a><div class="alphasepar"></div><a class="qindex" href="#index_r">R</a><div class="alphasepar"></div><a class="qindex" href="#index_s">S</a><div class="alphasepar"></div><a class="qindex" href="#index_u">U</a><div class="alphasepar"></div><a class="qindex" href="#index__">_</a></div>
+<div class="qindex"><a class="qindex" href="#index_a">A</a><div class="alphasepar"></div><a class="qindex" href="#index_c">C</a><div class="alphasepar"></div><a class="qindex" href="#index_d">D</a><div class="alphasepar"></div><a class="qindex" href="#index_e">E</a><div class="alphasepar"></div><a class="qindex" href="#index_f">F</a><div class="alphasepar"></div><a class="qindex" href="#index_g">G</a><div class="alphasepar"></div><a class="qindex" href="#index_h">H</a><div class="alphasepar"></div><a class="qindex" href="#index_i">I</a><div class="alphasepar"></div><a class="qindex" href="#index_k">K</a><div class="alphasepar"></div><a class="qindex" href="#index_m">M</a><div class="alphasepar"></div><a class="qindex" href="#index_n">N</a><div class="alphasepar"></div><a class="qindex" href="#index_q">Q</a><div class="alphasepar"></div><a class="qindex" href="#index_r">R</a><div class="alphasepar"></div><a class="qindex" href="#index_s">S</a><div class="alphasepar"></div><a class="qindex" href="#index_u">U</a><div class="alphasepar"></div><a class="qindex" href="#index__">_</a></div>
 
 
 <h3 class="doxsection"><a id="index__5F" name="index__5F"></a>- _ -</h3><ul>
@@ -124,13 +124,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <li>_binary_build_fat32_img_start&#160;:&#160;<a class="el" href="test__fat32_8cpp.html#af0dadebcbfb328170184e327e268aec3">test_fat32.cpp</a>, <a class="el" href="test__vfs__fat32_8cpp.html#af0dadebcbfb328170184e327e268aec3">test_vfs_fat32.cpp</a></li>
 <li>_binary_initrd_cpio_end&#160;:&#160;<a class="el" href="kernel_8cpp.html#a2c38eb4c3a51bab012a31eb7f42d54c0">kernel.cpp</a></li>
 <li>_binary_initrd_cpio_start&#160;:&#160;<a class="el" href="kernel_8cpp.html#a53b789d98a238ce07c0629d6ba055cff">kernel.cpp</a></li>
-<li>_stack_end&#160;:&#160;<a class="el" href="scheduler_8cpp.html#aa4c3a4a82848848b44540d9841a3dccc">scheduler.cpp</a></li>
-<li>_stack_start&#160;:&#160;<a class="el" href="scheduler_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1">scheduler.cpp</a></li>
+<li>_stack_end&#160;:&#160;<a class="el" href="global__state_8cpp.html#aa4c3a4a82848848b44540d9841a3dccc">global_state.cpp</a>, <a class="el" href="global__state_8hpp.html#aa4c3a4a82848848b44540d9841a3dccc">global_state.hpp</a>, <a class="el" href="scheduler_8cpp.html#aa4c3a4a82848848b44540d9841a3dccc">scheduler.cpp</a></li>
+<li>_stack_start&#160;:&#160;<a class="el" href="global__state_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1">global_state.cpp</a>, <a class="el" href="global__state_8hpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1">global_state.hpp</a>, <a class="el" href="scheduler_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1">scheduler.cpp</a></li>
 </ul>
 
 
 <h3 class="doxsection"><a id="index_a" name="index_a"></a>- a -</h3><ul>
-<li>addr&#160;:&#160;<a class="el" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">gcov_handler.cpp</a></li>
 <li>adopt_lock&#160;:&#160;<a class="el" href="spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017">spinlock_guard.hpp</a></li>
 </ul>
 
@@ -179,19 +178,31 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 
 
 <h3 class="doxsection"><a id="index_g" name="index_g"></a>- g -</h3><ul>
+<li>g_e2e_ack_count&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#a0500deea992377ead0888810a6af0337">test_kernel_top.cpp</a></li>
+<li>g_e2e_handler_ran&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#ad91790ce25108827a992cabc49d2c471">test_kernel_top.cpp</a></li>
+<li>g_e2e_handler_seen&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#a3bb42943764ad2fc795086b8d147e5d9">test_kernel_top.cpp</a></li>
 <li>generated_tests&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aed8e7ca5b470a2d98eca89d4c2f3e8e0">test_registry.gen.hpp</a></li>
 <li>generated_tests_count&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2e28db5aa04917fdba864c113c58b4fa">test_registry.gen.hpp</a></li>
 </ul>
 
 
+<h3 class="doxsection"><a id="index_h" name="index_h"></a>- h -</h3><ul>
+<li>H2_EV_REENQ&#160;:&#160;<a class="el" href="global__state_8hpp.html#a3bb3e3740ffbdc8b400344f6079e8055">global_state.hpp</a></li>
+<li>H2_EV_SKIP&#160;:&#160;<a class="el" href="global__state_8hpp.html#a9d2d36ac9371e47ea14a3de29f819bdf">global_state.hpp</a></li>
+</ul>
+
+
 <h3 class="doxsection"><a id="index_i" name="index_i"></a>- i -</h3><ul>
-<li>idx&#160;:&#160;<a class="el" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">gcov_handler.cpp</a></li>
 <li>irq_entry_tsc&#160;:&#160;<a class="el" href="global__state_8cpp.html#aeb543e504861746afd26a43391444494">global_state.cpp</a></li>
 <li>isr_nesting_depth&#160;:&#160;<a class="el" href="global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926">global_state.cpp</a></li>
 </ul>
 
 
 <h3 class="doxsection"><a id="index_k" name="index_k"></a>- k -</h3><ul>
+<li>k_irq_thread_prio&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#aff59d5e3197aecaa71ed2dae861c550b">test_kernel_top.cpp</a></li>
+<li>k_irq_thread_vector&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#aaab86eba0a8ab303e47cb791e26eadf1">test_kernel_top.cpp</a></li>
+<li>k_irq_thread_vector_b&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#aaae41df07e13e764813958d13a52d742">test_kernel_top.cpp</a></li>
+<li>k_irq_thread_vector_c&#160;:&#160;<a class="el" href="test__kernel__top_8cpp.html#a812a987b9abaf85af6875520833bbc88">test_kernel_top.cpp</a></li>
 <li>kernel_virt_end&#160;:&#160;<a class="el" href="kernel_8cpp.html#acf393da2fe85b8d9fa8cd83ff83a6a0c">kernel.cpp</a></li>
 </ul>
 
@@ -232,19 +243,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_vars.h
 <h3 class="doxsection"><a id="index_s" name="index_s"></a>- s -</h3><ul>
 <li>scheduler_corruption_count&#160;:&#160;<a class="el" href="global__state_8cpp.html#a0f9de4949789f8c2d559e134c0bca614">global_state.cpp</a></li>
 <li>scheduler_kernel_cr3&#160;:&#160;<a class="el" href="global__state_8cpp.html#acf3d43b7766a9a34a8eb7c6020ca4be8">global_state.cpp</a></li>
-<li>scheduler_load_cr3_from&#160;:&#160;<a class="el" href="global__state_8cpp.html#a267d71f6467066b1a2df5d1c390f014a">global_state.cpp</a></li>
-<li>scheduler_load_kstack_base&#160;:&#160;<a class="el" href="global__state_8cpp.html#a026faf3c3debae610cdbc4ebbc41295d">global_state.cpp</a></li>
-<li>scheduler_load_kstack_top&#160;:&#160;<a class="el" href="global__state_8cpp.html#a44b5cc49c445a145e3b4d20712ec2360">global_state.cpp</a></li>
-<li>scheduler_load_rsp_from&#160;:&#160;<a class="el" href="global__state_8cpp.html#a0bfda50437b4177036ebf965a8ae9735">global_state.cpp</a></li>
-<li>scheduler_need_resched&#160;:&#160;<a class="el" href="global__state_8cpp.html#a0cd8a9e394bdaa6d815168f5208a85fa">global_state.cpp</a></li>
-<li>scheduler_next_task_id&#160;:&#160;<a class="el" href="global__state_8cpp.html#ac624c3223df92f059074d6001ef70e60">global_state.cpp</a></li>
-<li>scheduler_save_rsp_to&#160;:&#160;<a class="el" href="global__state_8cpp.html#aa7ffada5937bf60f2ad11eb7c57a9dcc">global_state.cpp</a></li>
-<li>scheduler_switch_generation&#160;:&#160;<a class="el" href="global__state_8cpp.html#a358324b930c3d48b8613572314e94320">global_state.cpp</a></li>
+<li>scheduler_load_cr3_from&#160;:&#160;<a class="el" href="global__state_8cpp.html#a3942c1b7ed6d3a34d02d0b5e09309586">global_state.cpp</a></li>
+<li>scheduler_load_kstack_base&#160;:&#160;<a class="el" href="global__state_8cpp.html#a4b408757cb3f937ec09d754ff766532f">global_state.cpp</a></li>
+<li>scheduler_load_kstack_top&#160;:&#160;<a class="el" href="global__state_8cpp.html#aa12fc4739f30cc4f74bd51a3f03347bd">global_state.cpp</a></li>
+<li>scheduler_load_rsp_from&#160;:&#160;<a class="el" href="global__state_8cpp.html#ae16355f40464ea93fcb085be94200e13">global_state.cpp</a></li>
+<li>scheduler_need_resched&#160;:&#160;<a class="el" href="global__state_8cpp.html#aa2763d16430feb1ccac97ac767dfd600">global_state.cpp</a></li>
+<li>scheduler_next_task_id&#160;:&#160;<a class="el" href="global__state_8cpp.html#a89c74440ba970f0b411b2e92af44475f">global_state.cpp</a></li>
+<li>scheduler_save_rsp_to&#160;:&#160;<a class="el" href="global__state_8cpp.html#ab55c0952c6a6486565047a5258b4f41c">global_state.cpp</a></li>
+<li>scheduler_switch_generation&#160;:&#160;<a class="el" href="global__state_8cpp.html#aedf2e7110b4a691b7072cd7e69a83743">global_state.cpp</a></li>
 <li>status&#160;:&#160;<a class="el" href="test__virtio__blk__req_8cpp.html#ade818037fd6c985038ff29656089758d">test_virtio_blk_req.cpp</a></li>
 </ul>
 
 
 <h3 class="doxsection"><a id="index_u" name="index_u"></a>- u -</h3><ul>
+<li>UINT32_MAX&#160;:&#160;<a class="el" href="constants_8hpp.html#a6dc3d5894cc08990629f0d006af81ad6">constants.hpp</a></li>
 <li>UINT64_MAX&#160;:&#160;<a class="el" href="constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db">constants.hpp</a></li>
 </ul>
 </div><!-- contents -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -147,6 +147,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:ad8c610ebd258a2fd322fa982b5dccaff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process the next 4 KiB chunk of the .text CRC scan. When the scan completes, compares the computed CRC against the expected value stored by the linker. Panics on mismatch.  <br /></td></tr>
 <tr class="memitem:ad55063ee7b6bc1542af1172a729102cb" id="r_ad55063ee7b6bc1542af1172a729102cb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1integrity.html#ad55063ee7b6bc1542af1172a729102cb">kernel::integrity::idle_task_main</a> ()</td></tr>
 <tr class="memdesc:ad55063ee7b6bc1542af1172a729102cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle task entry point — continuously verifies section markers and processes code CRC chunks between HLT instructions.  <br /></td></tr>
+<tr class="memitem:a25523b42cdf666f04fc00417ec829955" id="r_a25523b42cdf666f04fc00417ec829955"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1integrity.html#a25523b42cdf666f04fc00417ec829955">kernel::integrity::ap_idle_main</a> ()</td></tr>
+<tr class="memdesc:a25523b42cdf666f04fc00417ec829955"><td class="mdescLeft">&#160;</td><td class="mdescRight">AP idle task entry point (issue #25 C1): halt ONLY. Deliberately NOT cleanup_step(): the kernel allocators (MemPool/PMM/VMM) are single-core (no exclusion) until a later phase, so only the BSP idle reaps (identical reclamation behavior to pre-C1). An AP freeing memory concurrently with BSP allocation corrupts the heaps — proven by GDB (AP in PMM::rebuild_free_list).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>

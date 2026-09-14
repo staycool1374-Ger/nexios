@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -186,6 +186,20 @@ Functions</h2></td></tr>
 <tr class="memdesc:aaddae13cb0e072b6574b9aca8667b99a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current FAT32 partition instance (nullptr when no FAT32 device is mounted). Written at boot by the block-driver probe and by tests. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
 <tr class="memitem:a5323c145779af0abf16bd29a28939306" id="r_a5323c145779af0abf16bd29a28939306"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5323c145779af0abf16bd29a28939306">try_set_fat32_partition</a> (kernel::fat32::Fat32Partition *p) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a5323c145779af0abf16bd29a28939306"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the FAT32 partition instance. Rejected unless <code class="param">p</code> is null or lies in the kernel half (&gt;= CONFIG_HHDM_OFFSET) — guards against writing a user-space / garbage pointer.  <br /></td></tr>
+<tr class="memitem:ae914fdd81199b73041a51cd4f195d0d4" id="r_ae914fdd81199b73041a51cd4f195d0d4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae914fdd81199b73041a51cd4f195d0d4">scheduler_on_context_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae914fdd81199b73041a51cd4f195d0d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Context-switch bridge called from isr_stubs.asm to apply the deferred task switch. Reads scheduler_next_task_id, updates current_task(), clears the arm, and performs canary/IPC checks.  <br /></td></tr>
+<tr class="memitem:aee556e421f2dc94871b4e534b3f667f6" id="r_aee556e421f2dc94871b4e534b3f667f6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aee556e421f2dc94871b4e534b3f667f6">scheduler_diag_pre_save</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aee556e421f2dc94871b4e534b3f667f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue pre-save hook (isr_stubs.asm). Fires on every ISR entry that might attempt a deferred-switch apply. Records the generation captured at ISR entry. Cold path (debug only).  <br /></td></tr>
+<tr class="memitem:a598aa1b4a1b4e3baed2631e0d36a8f5b" id="r_a598aa1b4a1b4e3baed2631e0d36a8f5b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a598aa1b4a1b4e3baed2631e0d36a8f5b">scheduler_diag_depth_skip</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a598aa1b4a1b4e3baed2631e0d36a8f5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue depth-skip hook (isr_stubs.asm:133-134). Fires when a pending deferred-switch apply is skipped because the ISR nesting depth exceeds 2. Cold path. Dumps the arm target + the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).  <br /></td></tr>
+<tr class="memitem:a5a75e966869ec2eddc1779530a731635" id="r_a5a75e966869ec2eddc1779530a731635"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5a75e966869ec2eddc1779530a731635">scheduler_diag_rsp_abort</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a5a75e966869ec2eddc1779530a731635"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275). Fires when a pending deferred-switch apply is aborted because the loaded RSP lies outside [scheduler_load_kstack_base, top) — the asm-side stale/foreign-frame guard. Cold path. Dumps the rejected RSP, the kstack range, the arm target, and the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).  <br /></td></tr>
+<tr class="memitem:a2a343ec5f79f66bee72041750892bdb7" id="r_a2a343ec5f79f66bee72041750892bdb7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2a343ec5f79f66bee72041750892bdb7">scheduler_record_skip</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> captured_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> current_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a2a343ec5f79f66bee72041750892bdb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that captured generation <code class="param">captured_gen</code> at entry found it changed before its epilogue, so it skipped applying the deferred switch — leaving the dequeued target stranded until the next tick. H2 ring event.  <br /></td></tr>
+<tr class="memitem:ab0941f6755ee6bd78c9ca27146643f67" id="r_ab0941f6755ee6bd78c9ca27146643f67"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ab0941f6755ee6bd78c9ca27146643f67">scheduler_validate_pending_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ab0941f6755ee6bd78c9ca27146643f67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply-side liveness + ownership re-check for the deferred switch (called from isr_stubs.asm BEFORE <span class="tt">mov rsp,[load_rsp_from]</span>). The arm side (switch_to_task) validates the target's frame at publish time, but the arm can survive past its ISR (nested-ISR depth guard or generation-skip) into a later ISR, and in between the target task can be terminated/freed (IRQs on) or the published RSP can drift from the target's CURRENT kernel stack (snapshot restore / free+reuse). The [H2W] orphan-displacement fires when the apply then iretq's onto the freed/foreign RSP (find_task(id)==null → current-cache lag → [H2W] harness displacement). This re-checks BOTH liveness (id_table_) AND ownership (the published RSP lies inside the target's live kernel_stack, or the harness boot stack) with IRQs disabled — so no task-context removal can interleave — and aborts (clear atoms + bump generation) on any mismatch.  <br /></td></tr>
+<tr class="memitem:a365cc933f3230032561eeee65168855d" id="r_a365cc933f3230032561eeee65168855d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a365cc933f3230032561eeee65168855d">scheduler_abort_switch_fixup</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a365cc933f3230032561eeee65168855d"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue callback for the <span class="tt">.abort_switch</span> path (isr_stubs.asm): the deferred switch was refused because its load RSP fell outside the dispatched task's kernel stack. The arm side may have already repointed TSS.RSP0 at the aborted <span class="tt">next</span> task's kernel stack top (<a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>:1991, user-task dispatch). Rebind RSP0 to the CONTINUING task's own kernel stack so the next ring-3→ring-0 transition (int $0x80 trap gate) cannot push its iretq frame onto a freed/foreign stack. Harmless for ring-0-only runs (no privilege transition ever consumes RSP0).  <br /></td></tr>
 <tr class="memitem:accbc52b084b9b7dcc227841d9229f240" id="r_accbc52b084b9b7dcc227841d9229f240"><td class="memItemLeft">::net::Nic *&#160;</td><td class="memItemRight"><a class="el" href="#accbc52b084b9b7dcc227841d9229f240">get_nic</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:accbc52b084b9b7dcc227841d9229f240"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current NIC instance (nullptr before net_init / without a device). Written once at boot; read by the shell network commands. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
 <tr class="memitem:af7d35e270dec4bdcec35118534857dac" id="r_af7d35e270dec4bdcec35118534857dac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af7d35e270dec4bdcec35118534857dac">try_set_nic</a> (::net::Nic *nic) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -682,6 +696,253 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="a365cc933f3230032561eeee65168855d" name="a365cc933f3230032561eeee65168855d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a365cc933f3230032561eeee65168855d">&#9670;&#160;</a></span>scheduler_abort_switch_fixup()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_abort_switch_fixup </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>ISR-epilogue callback for the <span class="tt">.abort_switch</span> path (isr_stubs.asm): the deferred switch was refused because its load RSP fell outside the dispatched task's kernel stack. The arm side may have already repointed TSS.RSP0 at the aborted <span class="tt">next</span> task's kernel stack top (<a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>:1991, user-task dispatch). Rebind RSP0 to the CONTINUING task's own kernel stack so the next ring-3→ring-0 transition (int $0x80 trap gate) cannot push its iretq frame onto a freed/foreign stack. Harmless for ring-0-only runs (no privilege transition ever consumes RSP0). </p>
+<dl class="section note"><dt>Note</dt><dd>Runs with IRQs disabled (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_a365cc933f3230032561eeee65168855d_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a365cc933f3230032561eeee65168855d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a598aa1b4a1b4e3baed2631e0d36a8f5b" name="a598aa1b4a1b4e3baed2631e0d36a8f5b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a598aa1b4a1b4e3baed2631e0d36a8f5b">&#9670;&#160;</a></span>scheduler_diag_depth_skip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_diag_depth_skip </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>ISR-epilogue depth-skip hook (isr_stubs.asm:133-134). Fires when a pending deferred-switch apply is skipped because the ISR nesting depth exceeds 2. Cold path. Dumps the arm target + the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis). </p>
+<dl class="section note"><dt>Note</dt><dd>Runs with IF=0 (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_a598aa1b4a1b4e3baed2631e0d36a8f5b_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a598aa1b4a1b4e3baed2631e0d36a8f5b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="aee556e421f2dc94871b4e534b3f667f6" name="aee556e421f2dc94871b4e534b3f667f6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee556e421f2dc94871b4e534b3f667f6">&#9670;&#160;</a></span>scheduler_diag_pre_save()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_diag_pre_save </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>ISR-epilogue pre-save hook (isr_stubs.asm). Fires on every ISR entry that might attempt a deferred-switch apply. Records the generation captured at ISR entry. Cold path (debug only). </p>
+<p>ISR-entry pre-save hook (isr_stubs.asm:217-220). Fires on every ISR entry, recording the interrupted task's RSP before any context switch. Verifies the interrupted task's RSP lies within its kernel stack. If the check fails, logs a detailed report (current task, RSP, stack bounds, all other tasks owning that RSP) — evidence for H2. Runs with IF=0 (interrupt gate); must not re-enable IRQs.</p>
+<dl class="section note"><dt>Note</dt><dd>Runs with IF=0 (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_aee556e421f2dc94871b4e534b3f667f6_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_aee556e421f2dc94871b4e534b3f667f6_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a5a75e966869ec2eddc1779530a731635" name="a5a75e966869ec2eddc1779530a731635"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a75e966869ec2eddc1779530a731635">&#9670;&#160;</a></span>scheduler_diag_rsp_abort()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_diag_rsp_abort </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275). Fires when a pending deferred-switch apply is aborted because the loaded RSP lies outside [scheduler_load_kstack_base, top) — the asm-side stale/foreign-frame guard. Cold path. Dumps the rejected RSP, the kstack range, the arm target, and the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis). </p>
+<dl class="section note"><dt>Note</dt><dd>Runs with IF=0 (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_a5a75e966869ec2eddc1779530a731635_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a5a75e966869ec2eddc1779530a731635_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="ae914fdd81199b73041a51cd4f195d0d4" name="ae914fdd81199b73041a51cd4f195d0d4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae914fdd81199b73041a51cd4f195d0d4">&#9670;&#160;</a></span>scheduler_on_context_switch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_on_context_switch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Context-switch bridge called from isr_stubs.asm to apply the deferred task switch. Reads scheduler_next_task_id, updates current_task(), clears the arm, and performs canary/IPC checks. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_ae914fdd81199b73041a51cd4f195d0d4_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_ae914fdd81199b73041a51cd4f195d0d4_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a2a343ec5f79f66bee72041750892bdb7" name="a2a343ec5f79f66bee72041750892bdb7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a343ec5f79f66bee72041750892bdb7">&#9670;&#160;</a></span>scheduler_record_skip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::gs::scheduler_record_skip </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>captured_gen</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>current_gen</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that captured generation <code class="param">captured_gen</code> at entry found it changed before its epilogue, so it skipped applying the deferred switch — leaving the dequeued target stranded until the next tick. H2 ring event. </p>
+<p>ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275). Fires when a pending deferred-switch apply is aborted because the loaded RSP lies outside [scheduler_load_kstack_base, top) — the asm-side stale/foreign-frame guard. Cold path. Dumps the rejected RSP, the kstack range, the arm target, and the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).</p>
+<dl class="section note"><dt>Note</dt><dd>Runs with IF=0 (interrupt gate); must not re-enable IRQs.</dd>
+<dd>
+Runs with IF=0 (interrupt gate); must not re-enable IRQs.</dd></dl>
+<p>ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that captured generation <code class="param">captured_gen</code> at entry found it changed before its epilogue, so it skipped applying the deferred switch — leaving the dequeued target stranded until the next tick. H2 ring event. </p><dl class="section note"><dt>Note</dt><dd>Runs with IF=0 (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_a2a343ec5f79f66bee72041750892bdb7_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a2a343ec5f79f66bee72041750892bdb7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="ab0941f6755ee6bd78c9ca27146643f67" name="ab0941f6755ee6bd78c9ca27146643f67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab0941f6755ee6bd78c9ca27146643f67">&#9670;&#160;</a></span>scheduler_validate_pending_switch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">int kernel::gs::scheduler_validate_pending_switch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Apply-side liveness + ownership re-check for the deferred switch (called from isr_stubs.asm BEFORE <span class="tt">mov rsp,[load_rsp_from]</span>). The arm side (switch_to_task) validates the target's frame at publish time, but the arm can survive past its ISR (nested-ISR depth guard or generation-skip) into a later ISR, and in between the target task can be terminated/freed (IRQs on) or the published RSP can drift from the target's CURRENT kernel stack (snapshot restore / free+reuse). The [H2W] orphan-displacement fires when the apply then iretq's onto the freed/foreign RSP (find_task(id)==null → current-cache lag → [H2W] harness displacement). This re-checks BOTH liveness (id_table_) AND ownership (the published RSP lies inside the target's live kernel_stack, or the harness boot stack) with IRQs disabled — so no task-context removal can interleave — and aborts (clear atoms + bump generation) on any mismatch. </p>
+<dl class="section return"><dt>Returns</dt><dd>1 = apply the switch, 0 = abort it (atoms already invalidated). </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Runs with IRQs disabled (interrupt gate); must not re-enable IRQs. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1gs_ab0941f6755ee6bd78c9ca27146643f67_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_ab0941f6755ee6bd78c9ca27146643f67_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
 <a id="a4a8fe12d27aa5831712becc1f446e600" name="a4a8fe12d27aa5831712becc1f446e600"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a4a8fe12d27aa5831712becc1f446e600">&#9670;&#160;</a></span>set_canary_trip()</h2>
 
@@ -852,7 +1113,7 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1gs_a082fe817e23eb1e7d79c41af031da04e_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_a082fe817e23eb1e7d79c41af031da04e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -1035,7 +1296,7 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1gs_aa31f97c76439bba6660bced29b435c61_cgraph.png" border="0" usemap="#anamespacekernel_1_1gs_aa31f97c76439bba6660bced29b435c61_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 8 -->
 </div>
 
 </div>

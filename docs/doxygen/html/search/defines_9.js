@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['max_5ffunctions_0',['MAX_FUNCTIONS',['../gcov__handler_8cpp.html#ad1654ced9bcc36245fe19075b868c1ae',1,'gcov_handler.cpp']]]
+  ['madt_5fmax_5fcpus_0',['MADT_MAX_CPUS',['../madt_8hpp.html#a69976ac879c8e8fca164b29acf54b675',1,'madt.hpp']]]
 ];

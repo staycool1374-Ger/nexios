@@ -5,7 +5,8 @@ var searchData=
   ['waiting_5fchild_5fpid_2',['waiting_child_pid',['../structkernel_1_1_scheduler_1_1_task_fields.html#a7f67f7194f39c7f8417c1839bf46c44c',1,'kernel::Scheduler::TaskFields']]],
   ['waiting_5fchild_5fstatus_3',['waiting_child_status',['../structkernel_1_1_scheduler_1_1_task_fields.html#abea76adbdcd55bcde7d4ef877d045a84',1,'kernel::Scheduler::TaskFields']]],
   ['width_4',['width',['../structservice_1_1_framebuffer_info.html#a580af621e2f16f41bc64ac03ba5807d3',1,'service::FramebufferInfo']]],
-  ['write_5fclosed_5',['write_closed',['../structkernel_1_1vfs_1_1_pipe_buffer.html#a6d680699587040ef5d23eff5093940e4',1,'kernel::vfs::PipeBuffer']]],
-  ['write_5fpos_6',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
-  ['writer_5ftask_5fid_7',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
+  ['writable_5',['writable',['../structkernel_1_1elf_1_1_map_out.html#a2c973ceb5fb56d243f3c94fcb8d1ff6e',1,'kernel::elf::MapOut']]],
+  ['write_5fclosed_6',['write_closed',['../structkernel_1_1vfs_1_1_pipe_buffer.html#a6d680699587040ef5d23eff5093940e4',1,'kernel::vfs::PipeBuffer']]],
+  ['write_5fpos_7',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
+  ['writer_5ftask_5fid_8',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
 ];

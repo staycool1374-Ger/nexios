@@ -78,6 +78,7 @@ var nexios__config_8h =
     [ "CONFIG_KERNEL_PRIV_DATA_BASE", "nexios__config_8h.html#a2526193a2bf2cb59e84e1d640af1a29f", null ],
     [ "CONFIG_KSTACK_WINDOW_BASE", "nexios__config_8h.html#a5412009bb80bc2aac94e2a2121f9a02f", null ],
     [ "CONFIG_KSTACK_WINDOW_SIZE", "nexios__config_8h.html#a0bef3e0da616c80c28e1f7671b03401d", null ],
+    [ "CONFIG_MAX_CPUS", "nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6", null ],
     [ "CONFIG_MAX_DAEMONS", "nexios__config_8h.html#a2c580044f067f2f953c3bdd1471189c6", null ],
     [ "CONFIG_MAX_DRIVERS", "nexios__config_8h.html#a932ae61284ebb00cdf5c763d479b47fd", null ],
     [ "CONFIG_MAX_FDS", "nexios__config_8h.html#a6522d992928275f4e75859915cec5b84", null ],

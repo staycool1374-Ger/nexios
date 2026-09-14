@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -130,6 +130,15 @@ Collaboration diagram for arch::APIC:</div>
 <!-- MAP 0 -->
 </div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-types" class="groupheader"><a id="pub-types" name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:a6b06edfa4ecc78977b1dfc0025eddc64" id="r_a6b06edfa4ecc78977b1dfc0025eddc64"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64">IpiMode</a> : uint8_t { <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64a71ef4d8288b2456a67082e8b5d1fcc8d">INIT_ASSERT</a>
+, <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64af464308a0da3667895905deeb6347a79">INIT_DEASSERT</a>
+, <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86">SIPI</a>
+, <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7">FIXED</a>
+ }</td></tr>
+<tr class="memdesc:a6b06edfa4ecc78977b1dfc0025eddc64"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPI delivery modes for send_ipi (issue #25, Phase B2).  <a href="#a6b06edfa4ecc78977b1dfc0025eddc64">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:ab249fe370f75c1368059078e6c88f6d9" id="r_ab249fe370f75c1368059078e6c88f6d9"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ab249fe370f75c1368059078e6c88f6d9">init</a> ()</td></tr>
@@ -154,6 +163,22 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a7c7c1235ef15b4b2bf4ff551470327af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the current <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> timer count.  <br /></td></tr>
 <tr class="memitem:a6cf29bb7b88440859780745585d13e3e" id="r_a6cf29bb7b88440859780745585d13e3e"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a6cf29bb7b88440859780745585d13e3e">is_apic_supported</a> ()</td></tr>
 <tr class="memdesc:a6cf29bb7b88440859780745585d13e3e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the CPU supports an <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>.  <br /></td></tr>
+<tr class="memitem:ad903889e8587ca2fa1a27d87d06b375c" id="r_ad903889e8587ca2fa1a27d87d06b375c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ad903889e8587ca2fa1a27d87d06b375c">set_tpr_class</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> cls)</td></tr>
+<tr class="memdesc:ad903889e8587ca2fa1a27d87d06b375c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program a TPR class (sub-class bits forced to 0). No-op when the LAPIC is off. See docs/specs/apic-tpr.md §3.4.  <br /></td></tr>
+<tr class="memitem:a80de8535337d66f30f91810b1880cbb4" id="r_a80de8535337d66f30f91810b1880cbb4"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a80de8535337d66f30f91810b1880cbb4">get_tpr_class</a> ()</td></tr>
+<tr class="memdesc:a80de8535337d66f30f91810b1880cbb4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the current hardware TPR class (ACCEPT_ALL when off).  <br /></td></tr>
+<tr class="memitem:a190226e971b40c56ec1f0553055dec56" id="r_a190226e971b40c56ec1f0553055dec56"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a190226e971b40c56ec1f0553055dec56">get_ppr</a> ()</td></tr>
+<tr class="memdesc:a190226e971b40c56ec1f0553055dec56"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the PPR (diagnostic only; never mutates TPR).  <br /></td></tr>
+<tr class="memitem:ab63f9b0cbcbcbb282fa17edc51886485" id="r_ab63f9b0cbcbcbb282fa17edc51886485"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab63f9b0cbcbcbb282fa17edc51886485">tpr_raise</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> cls)</td></tr>
+<tr class="memdesc:ab63f9b0cbcbcbb282fa17edc51886485"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raise toward cls; writes only when cls exceeds current.  <br /></td></tr>
+<tr class="memitem:a13f2ec36d9a52f4c7dff5f9cc7610aa1" id="r_a13f2ec36d9a52f4c7dff5f9cc7610aa1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a13f2ec36d9a52f4c7dff5f9cc7610aa1">tpr_restore</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> cls)</td></tr>
+<tr class="memdesc:a13f2ec36d9a52f4c7dff5f9cc7610aa1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lower toward cls; writes only when cls is below current.  <br /></td></tr>
+<tr class="memitem:a2fd7d265e1290ebdd9f5207ee8cd387a" id="r_a2fd7d265e1290ebdd9f5207ee8cd387a"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2fd7d265e1290ebdd9f5207ee8cd387a">lapic_id</a> ()</td></tr>
+<tr class="memdesc:a2fd7d265e1290ebdd9f5207ee8cd387a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read this CPU's LAPIC ID (bits 24-31 of the ID register).  <br /></td></tr>
+<tr class="memitem:a2955b5b89ac50be8c8896d91a9d6b2f4" id="r_a2955b5b89ac50be8c8896d91a9d6b2f4"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a2955b5b89ac50be8c8896d91a9d6b2f4">send_ipi</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> lapic_id, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> vector, <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64">IpiMode</a> mode)</td></tr>
+<tr class="memdesc:a2955b5b89ac50be8c8896d91a9d6b2f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's IDT.  <br /></td></tr>
+<tr class="memitem:ade44e2717815ffe8f655514c2d394be6" id="r_ade44e2717815ffe8f655514c2d394be6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ade44e2717815ffe8f655514c2d394be6">init_ap</a> ()</td></tr>
+<tr class="memdesc:ade44e2717815ffe8f655514c2d394be6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable only the LOCAL <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> on an application processor. Programs SVR + masked LVTs + TPR 0 (the BSP-owned I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> routing is left untouched). Called by ap_main on each woken AP.  <br /></td></tr>
 <tr class="memitem:a12b1c16e3b9a9b899aa22d653cb77a9a" id="r_a12b1c16e3b9a9b899aa22d653cb77a9a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a12b1c16e3b9a9b899aa22d653cb77a9a">map_mmio</a> ()</td></tr>
 <tr class="memdesc:a12b1c16e3b9a9b899aa22d653cb77a9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Map APIC/I/O-APIC MMIO pages via VMM. Must be called after VMM::init() but before <a class="el" href="#ab249fe370f75c1368059078e6c88f6d9" title="Initialise the local APIC (x2APIC MSR or xAPIC MMIO).">APIC::init()</a>.  <br /></td></tr>
 <tr class="memitem:ab73eaa743edd148689d4f2d3342cac24" id="r_ab73eaa743edd148689d4f2d3342cac24"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab73eaa743edd148689d4f2d3342cac24">mask_irq</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> irq, bool mask)</td></tr>
@@ -161,11 +186,53 @@ Static Public Member Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
-<tr class="memitem:a979dd51d337cf5460d62951dae759652" id="r_a979dd51d337cf5460d62951dae759652"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a979dd51d337cf5460d62951dae759652">APIC_TIMER_VECTOR</a> = 64</td></tr>
+<tr class="memitem:a8064163a68d47d44de243b30a2115ad8" id="r_a8064163a68d47d44de243b30a2115ad8"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8064163a68d47d44de243b30a2115ad8">TPR_CLASS_ACCEPT_ALL</a> = 0x00</td></tr>
+<tr class="memitem:ae39006fc90dce99cd9e516596534eddf" id="r_ae39006fc90dce99cd9e516596534eddf"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae39006fc90dce99cd9e516596534eddf">TPR_CLASS_PIC</a> = 0x30</td></tr>
+<tr class="memitem:ae8fa1c9f74794b84e84d416cdc5c0e85" id="r_ae8fa1c9f74794b84e84d416cdc5c0e85"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae8fa1c9f74794b84e84d416cdc5c0e85">TPR_CLASS_IPC</a> = 0x70</td></tr>
+<tr class="memitem:ab241402171ad0535f0412d3d77b7c5ed" id="r_ab241402171ad0535f0412d3d77b7c5ed"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab241402171ad0535f0412d3d77b7c5ed">TPR_CLASS_SCHED</a> = 0xD0</td></tr>
+<tr class="memitem:a32ec0f8547f4e3e6b64f01d2d5e2c1b7" id="r_a32ec0f8547f4e3e6b64f01d2d5e2c1b7"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a32ec0f8547f4e3e6b64f01d2d5e2c1b7">TPR_CLASS_MAX</a> = <a class="el" href="#ab241402171ad0535f0412d3d77b7c5ed">TPR_CLASS_SCHED</a></td></tr>
+<tr class="memitem:a979dd51d337cf5460d62951dae759652" id="r_a979dd51d337cf5460d62951dae759652"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a979dd51d337cf5460d62951dae759652">APIC_TIMER_VECTOR</a> = 0xE0</td></tr>
+<tr class="memitem:a119fe66aa1954384cb4b6d51758e73f2" id="r_a119fe66aa1954384cb4b6d51758e73f2"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a119fe66aa1954384cb4b6d51758e73f2">SCHED_VECTOR</a> = 0xEC</td></tr>
+<tr class="memdesc:a119fe66aa1954384cb4b6d51758e73f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>x86_64 <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> driver — Local <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> (xAPIC + x2APIC), I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>, timer. </p>
-</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+</div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
+<a id="a6b06edfa4ecc78977b1dfc0025eddc64" name="a6b06edfa4ecc78977b1dfc0025eddc64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b06edfa4ecc78977b1dfc0025eddc64">&#9670;&#160;</a></span>IpiMode</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64">arch::APIC::IpiMode</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>IPI delivery modes for send_ipi (issue #25, Phase B2). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64a71ef4d8288b2456a67082e8b5d1fcc8d" name="a6b06edfa4ecc78977b1dfc0025eddc64a71ef4d8288b2456a67082e8b5d1fcc8d"></a>INIT_ASSERT&#160;</td><td class="fielddoc"><p>INIT, level assert (AP reset vector arm). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64af464308a0da3667895905deeb6347a79" name="a6b06edfa4ecc78977b1dfc0025eddc64af464308a0da3667895905deeb6347a79"></a>INIT_DEASSERT&#160;</td><td class="fielddoc"><p>INIT, level deassert (completes the INIT pulse). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86" name="a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86"></a>SIPI&#160;</td><td class="fielddoc"><p>Startup IPI — vector byte is the 4 KiB page index. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7" name="a6b06edfa4ecc78977b1dfc0025eddc64ac6e6dc18b53b4c2681394b9d8aefcec7"></a>FIXED&#160;</td><td class="fielddoc"><p>Fixed delivery — vector runs the IDT handler. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
 <a id="a3b30327b9bac7df8de30b112b7b117d2" name="a3b30327b9bac7df8de30b112b7b117d2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3b30327b9bac7df8de30b112b7b117d2">&#9670;&#160;</a></span>eoi()</h2>
 
@@ -190,6 +257,60 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Send End-Of-Interrupt (no-op if <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> not initialised). </p>
+
+</div>
+</div>
+<a id="a190226e971b40c56ec1f0553055dec56" name="a190226e971b40c56ec1f0553055dec56"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a190226e971b40c56ec1f0553055dec56">&#9670;&#160;</a></span>get_ppr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::get_ppr </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the PPR (diagnostic only; never mutates TPR). </p>
+
+</div>
+</div>
+<a id="a80de8535337d66f30f91810b1880cbb4" name="a80de8535337d66f30f91810b1880cbb4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a80de8535337d66f30f91810b1880cbb4">&#9670;&#160;</a></span>get_tpr_class()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::get_tpr_class </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the current hardware TPR class (ACCEPT_ALL when off). </p>
 
 </div>
 </div>
@@ -224,6 +345,33 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classarch_1_1_a_p_i_c_ab249fe370f75c1368059078e6c88f6d9_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_ab249fe370f75c1368059078e6c88f6d9_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="ade44e2717815ffe8f655514c2d394be6" name="ade44e2717815ffe8f655514c2d394be6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade44e2717815ffe8f655514c2d394be6">&#9670;&#160;</a></span>init_ap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::APIC::init_ap </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Enable only the LOCAL <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> on an application processor. Programs SVR + masked LVTs + TPR 0 (the BSP-owned I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> routing is left untouched). Called by ap_main on each woken AP. </p>
 
 </div>
 </div>
@@ -308,6 +456,34 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a2fd7d265e1290ebdd9f5207ee8cd387a" name="a2fd7d265e1290ebdd9f5207ee8cd387a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2fd7d265e1290ebdd9f5207ee8cd387a">&#9670;&#160;</a></span>lapic_id()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> arch::APIC::lapic_id </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read this CPU's LAPIC ID (bits 24-31 of the ID register). </p>
+<dl class="section return"><dt>Returns</dt><dd>LAPIC ID, or 0 if the <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> is not initialised. </dd></dl>
+
+</div>
+</div>
 <a id="a12b1c16e3b9a9b899aa22d653cb77a9a" name="a12b1c16e3b9a9b899aa22d653cb77a9a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a12b1c16e3b9a9b899aa22d653cb77a9a">&#9670;&#160;</a></span>map_mmio()</h2>
 
@@ -370,6 +546,57 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a2955b5b89ac50be8c8896d91a9d6b2f4" name="a2955b5b89ac50be8c8896d91a9d6b2f4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2955b5b89ac50be8c8896d91a9d6b2f4">&#9670;&#160;</a></span>send_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::APIC::send_ipi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>lapic_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>vector</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#a6b06edfa4ecc78977b1dfc0025eddc64">IpiMode</a></td>          <td class="paramname"><span class="paramname"><em>mode</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Send an inter-processor interrupt to a LAPIC. INIT/SIPI drive AP bring-up; FIXED targets a running CPU's IDT. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">lapic_id</td><td>Destination LAPIC ID (8-bit xAPIC, 32-bit x2APIC). </td></tr>
+    <tr><td class="paramname">vector</td><td>Vector byte (SIPI page index / FIXED IDT vector). </td></tr>
+    <tr><td class="paramname">mode</td><td>Delivery mode. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the local <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> accepted the command (delivery-status clear within the bounded poll). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_a_p_i_c_a2955b5b89ac50be8c8896d91a9d6b2f4_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_a2955b5b89ac50be8c8896d91a9d6b2f4_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -439,6 +666,40 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad903889e8587ca2fa1a27d87d06b375c" name="ad903889e8587ca2fa1a27d87d06b375c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad903889e8587ca2fa1a27d87d06b375c">&#9670;&#160;</a></span>set_tpr_class()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::APIC::set_tpr_class </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>cls</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Program a TPR class (sub-class bits forced to 0). No-op when the LAPIC is off. See docs/specs/apic-tpr.md §3.4. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cls</td><td>Class byte (only bits 7:4 used). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>false when cls exceeds TPR_CLASS_MAX (fail-closed). </dd></dl>
+
+</div>
+</div>
 <a id="a7c7c1235ef15b4b2bf4ff551470327af" name="a7c7c1235ef15b4b2bf4ff551470327af"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7c7c1235ef15b4b2bf4ff551470327af">&#9670;&#160;</a></span>timer_current_count()</h2>
 
@@ -500,7 +761,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_af7e4a0e6659cd8f7a49f6c08c269f321_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_af7e4a0e6659cd8f7a49f6c08c269f321_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -559,6 +820,72 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ab63f9b0cbcbcbb282fa17edc51886485" name="ab63f9b0cbcbcbb282fa17edc51886485"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab63f9b0cbcbcbb282fa17edc51886485">&#9670;&#160;</a></span>tpr_raise()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::APIC::tpr_raise </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>cls</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Raise toward cls; writes only when cls exceeds current. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_a_p_i_c_ab63f9b0cbcbcbb282fa17edc51886485_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_ab63f9b0cbcbcbb282fa17edc51886485_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a13f2ec36d9a52f4c7dff5f9cc7610aa1" name="a13f2ec36d9a52f4c7dff5f9cc7610aa1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a13f2ec36d9a52f4c7dff5f9cc7610aa1">&#9670;&#160;</a></span>tpr_restore()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::APIC::tpr_restore </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>cls</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Lower toward cls; writes only when cls is below current. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_a_p_i_c_a13f2ec36d9a52f4c7dff5f9cc7610aa1_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_a13f2ec36d9a52f4c7dff5f9cc7610aa1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
 <a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
 <a id="a979dd51d337cf5460d62951dae759652" name="a979dd51d337cf5460d62951dae759652"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a979dd51d337cf5460d62951dae759652">&#9670;&#160;</a></span>APIC_TIMER_VECTOR</h2>
@@ -570,7 +897,141 @@ Here is the call graph for this function:</div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::APIC_TIMER_VECTOR = 64</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::APIC_TIMER_VECTOR = 0xE0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a119fe66aa1954384cb4b6d51758e73f2" name="a119fe66aa1954384cb4b6d51758e73f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a119fe66aa1954384cb4b6d51758e73f2">&#9670;&#160;</a></span>SCHED_VECTOR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::SCHED_VECTOR = 0xEC</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF). </p>
+
+</div>
+</div>
+<a id="a8064163a68d47d44de243b30a2115ad8" name="a8064163a68d47d44de243b30a2115ad8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8064163a68d47d44de243b30a2115ad8">&#9670;&#160;</a></span>TPR_CLASS_ACCEPT_ALL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::TPR_CLASS_ACCEPT_ALL = 0x00</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae8fa1c9f74794b84e84d416cdc5c0e85" name="ae8fa1c9f74794b84e84d416cdc5c0e85"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8fa1c9f74794b84e84d416cdc5c0e85">&#9670;&#160;</a></span>TPR_CLASS_IPC</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::TPR_CLASS_IPC = 0x70</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a32ec0f8547f4e3e6b64f01d2d5e2c1b7" name="a32ec0f8547f4e3e6b64f01d2d5e2c1b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32ec0f8547f4e3e6b64f01d2d5e2c1b7">&#9670;&#160;</a></span>TPR_CLASS_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::TPR_CLASS_MAX = <a class="el" href="#ab241402171ad0535f0412d3d77b7c5ed">TPR_CLASS_SCHED</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae39006fc90dce99cd9e516596534eddf" name="ae39006fc90dce99cd9e516596534eddf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae39006fc90dce99cd9e516596534eddf">&#9670;&#160;</a></span>TPR_CLASS_PIC</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::TPR_CLASS_PIC = 0x30</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab241402171ad0535f0412d3d77b7c5ed" name="ab241402171ad0535f0412d3d77b7c5ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab241402171ad0535f0412d3d77b7c5ed">&#9670;&#160;</a></span>TPR_CLASS_SCHED</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::TPR_CLASS_SCHED = 0xD0</td>
         </tr>
       </table>
   </td>

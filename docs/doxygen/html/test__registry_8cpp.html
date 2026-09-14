@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -151,6 +151,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:ae1d5232fbf708fd2680b373e55efe60e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub — Process tests are not supported on non-x86_64 architectures.  <br /></td></tr>
 <tr class="memitem:a42bbc14efc4b99cea2f9a618c9b3ab15" id="r_a42bbc14efc4b99cea2f9a618c9b3ab15"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a42bbc14efc4b99cea2f9a618c9b3ab15">register_elf_tests</a> ()</td></tr>
 <tr class="memitem:a0338f2914f09b1a403ce2f2f2ef9f97c" id="r_a0338f2914f09b1a403ce2f2f2ef9f97c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0338f2914f09b1a403ce2f2f2ef9f97c">register_elf_loader_tests</a> ()</td></tr>
+<tr class="memitem:aa5078f82fd254b291e6a49b7b7defdf1" id="r_aa5078f82fd254b291e6a49b7b7defdf1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa5078f82fd254b291e6a49b7b7defdf1">register_elf_shared_tests</a> ()</td></tr>
 <tr class="memitem:a926311e0b338d8504d5253fa3326de7f" id="r_a926311e0b338d8504d5253fa3326de7f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a926311e0b338d8504d5253fa3326de7f">register_checked_ptr_tests</a> ()</td></tr>
 <tr class="memitem:af185b244a9ac0c01774f73d5143dab90" id="r_af185b244a9ac0c01774f73d5143dab90"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af185b244a9ac0c01774f73d5143dab90">register_fstab_tests</a> ()</td></tr>
 <tr class="memitem:aae15a79ba7cb568b6210f193130060ba" id="r_aae15a79ba7cb568b6210f193130060ba"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aae15a79ba7cb568b6210f193130060ba">register_rtc_tests</a> ()</td></tr>
@@ -186,6 +187,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a4e4dbb1efb98e26b9383bee21164f709" id="r_a4e4dbb1efb98e26b9383bee21164f709"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4e4dbb1efb98e26b9383bee21164f709">register_bench_syscall_latency_tests</a> ()</td></tr>
 <tr class="memitem:ace55408832580798c22c0b745a5d00e0" id="r_ace55408832580798c22c0b745a5d00e0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ace55408832580798c22c0b745a5d00e0">register_bench_irq_latency_tests</a> ()</td></tr>
 <tr class="memitem:acbb397aa4fe9893a954076c64f88bf82" id="r_acbb397aa4fe9893a954076c64f88bf82"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acbb397aa4fe9893a954076c64f88bf82">register_apic_timer_tests</a> ()</td></tr>
+<tr class="memitem:a9f887fb5f0a4271a1f54f84a48c93506" id="r_a9f887fb5f0a4271a1f54f84a48c93506"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9f887fb5f0a4271a1f54f84a48c93506">register_apic_tpr_tests</a> ()</td></tr>
 <tr class="memitem:a2407a554b127dc17ebd530e4c6e7202d" id="r_a2407a554b127dc17ebd530e4c6e7202d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2407a554b127dc17ebd530e4c6e7202d">register_jitter_tests</a> ()</td></tr>
 <tr class="memitem:a5c1a54812368e4ac2f814c6a1ef88e24" id="r_a5c1a54812368e4ac2f814c6a1ef88e24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5c1a54812368e4ac2f814c6a1ef88e24">register_idt_tests</a> ()</td></tr>
 <tr class="memdesc:a5c1a54812368e4ac2f814c6a1ef88e24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub — IDT tests are not supported on non-x86_64 architectures.  <br /></td></tr>
@@ -225,6 +227,15 @@ Functions</h2></td></tr>
 <tr class="memitem:a8c0b4862fd46d0d76247fae9245ff900" id="r_a8c0b4862fd46d0d76247fae9245ff900"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8c0b4862fd46d0d76247fae9245ff900">register_textutils_tests</a> ()</td></tr>
 <tr class="memitem:a13714cd376989323d066b68000c5ca93" id="r_a13714cd376989323d066b68000c5ca93"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a13714cd376989323d066b68000c5ca93">register_shell_interaction_tests</a> ()</td></tr>
 <tr class="memdesc:a13714cd376989323d066b68000c5ca93"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub — Shell interaction tests are not supported on non-x86_64 architectures.  <br /></td></tr>
+<tr class="memitem:aeb521b4391bd0f6b7391b5b9de63b5a0" id="r_aeb521b4391bd0f6b7391b5b9de63b5a0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aeb521b4391bd0f6b7391b5b9de63b5a0">register_debug_dump_tests</a> ()</td></tr>
+<tr class="memitem:a31479d0716e242456eea8f63446f0e36" id="r_a31479d0716e242456eea8f63446f0e36"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a31479d0716e242456eea8f63446f0e36">register_profiler_sampler_tests</a> ()</td></tr>
+<tr class="memitem:a064ea1d0e8953ed783b55e14b39dd6f3" id="r_a064ea1d0e8953ed783b55e14b39dd6f3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a064ea1d0e8953ed783b55e14b39dd6f3">register_kernel_top_tests</a> ()</td></tr>
+<tr class="memitem:adaf35f35a28bc0401ddbde6a7300c81c" id="r_adaf35f35a28bc0401ddbde6a7300c81c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#adaf35f35a28bc0401ddbde6a7300c81c">register_per_cpu_tests</a> ()</td></tr>
+<tr class="memitem:ae00cf80fcea7ee043cba32202d01acda" id="r_ae00cf80fcea7ee043cba32202d01acda"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae00cf80fcea7ee043cba32202d01acda">register_sync_err_api_tests</a> ()</td></tr>
+<tr class="memitem:a35149511255b02c2b61fb1cb5aa4ae43" id="r_a35149511255b02c2b61fb1cb5aa4ae43"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a35149511255b02c2b61fb1cb5aa4ae43">register_checked_ptr_api_tests</a> ()</td></tr>
+<tr class="memitem:a53211d94da013fdf6f660ff887ca352c" id="r_a53211d94da013fdf6f660ff887ca352c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a53211d94da013fdf6f660ff887ca352c">register_memory_integrity_tests</a> ()</td></tr>
+<tr class="memitem:afcbdc688eadf4b00f85924d2147b59a2" id="r_afcbdc688eadf4b00f85924d2147b59a2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afcbdc688eadf4b00f85924d2147b59a2">register_shell_commands_tests</a> ()</td></tr>
+<tr class="memitem:a0c458b019fbd948d622dac41e89f94b3" id="r_a0c458b019fbd948d622dac41e89f94b3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0c458b019fbd948d622dac41e89f94b3">register_services_framework_tests</a> ()</td></tr>
 <tr class="memitem:a8a67428271a63c18c997c69a5e1c27ba" id="r_a8a67428271a63c18c997c69a5e1c27ba"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8a67428271a63c18c997c69a5e1c27ba">register_irq_guard_tests</a> ()</td></tr>
 <tr class="memitem:a095aba4e9e7cc11cf7e5e9d48b2d28a3" id="r_a095aba4e9e7cc11cf7e5e9d48b2d28a3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a095aba4e9e7cc11cf7e5e9d48b2d28a3">register_shell_redirect_tests</a> ()</td></tr>
 <tr class="memitem:a0aa04608f5608ad916b21f1d7639fce8" id="r_a0aa04608f5608ad916b21f1d7639fce8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0aa04608f5608ad916b21f1d7639fce8">register_klog_tests</a> ()</td></tr>
@@ -315,6 +326,10 @@ Functions</h2></td></tr>
 <tr class="memitem:a8d2c6b1344ea5162ac1800b3dfb66878" id="r_a8d2c6b1344ea5162ac1800b3dfb66878"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8d2c6b1344ea5162ac1800b3dfb66878">register_initrd_parser_tests</a> ()</td></tr>
 <tr class="memitem:a1a997999d49a717648c2541292a369e9" id="r_a1a997999d49a717648c2541292a369e9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1a997999d49a717648c2541292a369e9">register_vfs_procfs_tests</a> ()</td></tr>
 <tr class="memitem:a17eb9a2439a7ceab2d8c790457ff0933" id="r_a17eb9a2439a7ceab2d8c790457ff0933"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a17eb9a2439a7ceab2d8c790457ff0933">register_vfs_tmpfs_corrupt_tests</a> ()</td></tr>
+<tr class="memitem:a181b226ba6094376c461c3581cc20747" id="r_a181b226ba6094376c461c3581cc20747"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a181b226ba6094376c461c3581cc20747">register_devfs_tests</a> ()</td></tr>
+<tr class="memitem:a4caf1bddaa2301eb83d9374efff4a434" id="r_a4caf1bddaa2301eb83d9374efff4a434"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4caf1bddaa2301eb83d9374efff4a434">register_procfs_ops_tests</a> ()</td></tr>
+<tr class="memitem:a3d2e8cc6e0557511ba2ec18473b2ced2" id="r_a3d2e8cc6e0557511ba2ec18473b2ced2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3d2e8cc6e0557511ba2ec18473b2ced2">register_initrd_fs_tests</a> ()</td></tr>
+<tr class="memitem:ac42f50b65b2285e63219c64b601d579b" id="r_ac42f50b65b2285e63219c64b601d579b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac42f50b65b2285e63219c64b601d579b">register_vfs_errors_tests</a> ()</td></tr>
 <tr class="memitem:aeae93eacd3ee33b4488ce0264a593b37" id="r_aeae93eacd3ee33b4488ce0264a593b37"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aeae93eacd3ee33b4488ce0264a593b37">register_pipe_blocking_tests</a> ()</td></tr>
 <tr class="memitem:a01e3dc40dcf69708e2be05c4302a058f" id="r_a01e3dc40dcf69708e2be05c4302a058f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a01e3dc40dcf69708e2be05c4302a058f">__attribute__</a> ((weak)) void register_external_test_classes()</td></tr>
 </table>
@@ -392,6 +407,23 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="test__registry_8cpp_acbb397aa4fe9893a954076c64f88bf82_cgraph.png" border="0" usemap="#atest__registry_8cpp_acbb397aa4fe9893a954076c64f88bf82_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="a9f887fb5f0a4271a1f54f84a48c93506" name="a9f887fb5f0a4271a1f54f84a48c93506"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f887fb5f0a4271a1f54f84a48c93506">&#9670;&#160;</a></span>register_apic_tpr_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_apic_tpr_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -887,6 +919,29 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a35149511255b02c2b61fb1cb5aa4ae43" name="a35149511255b02c2b61fb1cb5aa4ae43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a35149511255b02c2b61fb1cb5aa4ae43">&#9670;&#160;</a></span>register_checked_ptr_api_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_checked_ptr_api_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a35149511255b02c2b61fb1cb5aa4ae43_cgraph.png" border="0" usemap="#atest__registry_8cpp_a35149511255b02c2b61fb1cb5aa4ae43_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
 <a id="a926311e0b338d8504d5253fa3326de7f" name="a926311e0b338d8504d5253fa3326de7f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a926311e0b338d8504d5253fa3326de7f">&#9670;&#160;</a></span>register_checked_ptr_tests()</h2>
 
@@ -905,7 +960,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a926311e0b338d8504d5253fa3326de7f_cgraph.png" border="0" usemap="#atest__registry_8cpp_a926311e0b338d8504d5253fa3326de7f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -928,7 +983,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a1f3b5c5faec65c7c6e017cd029921fc4_cgraph.png" border="0" usemap="#atest__registry_8cpp_a1f3b5c5faec65c7c6e017cd029921fc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -951,7 +1006,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa8ad3f799634c9bf5f1a1580d604a61c_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa8ad3f799634c9bf5f1a1580d604a61c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -974,7 +1029,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab83bebb02e17a73823e833ff4719caa4_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab83bebb02e17a73823e833ff4719caa4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -997,7 +1052,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2869ae06e47101f041dbf01bd18e051c_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2869ae06e47101f041dbf01bd18e051c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1037,7 +1092,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3d6fc4e035d5bfe0c8ea665fdc11d1d8_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3d6fc4e035d5bfe0c8ea665fdc11d1d8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -1060,7 +1115,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a7d0bf1cfc05383d34d52b0b74509d180_cgraph.png" border="0" usemap="#atest__registry_8cpp_a7d0bf1cfc05383d34d52b0b74509d180_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 26 -->
+</div>
+
+</div>
+</div>
+<a id="aeb521b4391bd0f6b7391b5b9de63b5a0" name="aeb521b4391bd0f6b7391b5b9de63b5a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeb521b4391bd0f6b7391b5b9de63b5a0">&#9670;&#160;</a></span>register_debug_dump_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_debug_dump_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_aeb521b4391bd0f6b7391b5b9de63b5a0_cgraph.png" border="0" usemap="#atest__registry_8cpp_aeb521b4391bd0f6b7391b5b9de63b5a0_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -1083,7 +1161,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_af7799ded87d74784946e93e698c080fa_cgraph.png" border="0" usemap="#atest__registry_8cpp_af7799ded87d74784946e93e698c080fa_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 28 -->
+</div>
+
+</div>
+</div>
+<a id="a181b226ba6094376c461c3581cc20747" name="a181b226ba6094376c461c3581cc20747"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a181b226ba6094376c461c3581cc20747">&#9670;&#160;</a></span>register_devfs_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_devfs_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a181b226ba6094376c461c3581cc20747_cgraph.png" border="0" usemap="#atest__registry_8cpp_a181b226ba6094376c461c3581cc20747_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -1106,7 +1207,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a490b6a4d27e09f053c9fe737b5a8d80b_cgraph.png" border="0" usemap="#atest__registry_8cpp_a490b6a4d27e09f053c9fe737b5a8d80b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -1129,7 +1230,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_abfa960f0ad03fa1e771a8c9a4a5d4868_cgraph.png" border="0" usemap="#atest__registry_8cpp_abfa960f0ad03fa1e771a8c9a4a5d4868_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -1152,7 +1253,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_af936af2ecbdca9446ddb4b9b4d3e24ea_cgraph.png" border="0" usemap="#atest__registry_8cpp_af936af2ecbdca9446ddb4b9b4d3e24ea_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -1175,7 +1276,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a0338f2914f09b1a403ce2f2f2ef9f97c_cgraph.png" border="0" usemap="#atest__registry_8cpp_a0338f2914f09b1a403ce2f2f2ef9f97c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 33 -->
+</div>
+
+</div>
+</div>
+<a id="aa5078f82fd254b291e6a49b7b7defdf1" name="aa5078f82fd254b291e6a49b7b7defdf1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa5078f82fd254b291e6a49b7b7defdf1">&#9670;&#160;</a></span>register_elf_shared_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_elf_shared_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_aa5078f82fd254b291e6a49b7b7defdf1_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa5078f82fd254b291e6a49b7b7defdf1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 34 -->
 </div>
 
 </div>
@@ -1198,7 +1322,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a42bbc14efc4b99cea2f9a618c9b3ab15_cgraph.png" border="0" usemap="#atest__registry_8cpp_a42bbc14efc4b99cea2f9a618c9b3ab15_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 35 -->
 </div>
 
 </div>
@@ -1238,7 +1362,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3ed097dbc31b6e554bccae58bc68b8c5_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3ed097dbc31b6e554bccae58bc68b8c5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 36 -->
 </div>
 
 </div>
@@ -1261,7 +1385,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a483d7be201b2ba8fbebde2c428e763b5_cgraph.png" border="0" usemap="#atest__registry_8cpp_a483d7be201b2ba8fbebde2c428e763b5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 37 -->
 </div>
 
 </div>
@@ -1286,7 +1410,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa59c860ec78de1ec56ff1fcac00994dd_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa59c860ec78de1ec56ff1fcac00994dd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 38 -->
 </div>
 
 </div>
@@ -1309,7 +1433,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a172027f8522e33f6ad26739fcfc342b1_cgraph.png" border="0" usemap="#atest__registry_8cpp_a172027f8522e33f6ad26739fcfc342b1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 39 -->
 </div>
 
 </div>
@@ -1334,7 +1458,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a07bf5de326f03950b4012c1b42f5c171_cgraph.png" border="0" usemap="#atest__registry_8cpp_a07bf5de326f03950b4012c1b42f5c171_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 40 -->
 </div>
 
 </div>
@@ -1359,7 +1483,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a782a4d8da57d29e671b70c1a7870f9a8_cgraph.png" border="0" usemap="#atest__registry_8cpp_a782a4d8da57d29e671b70c1a7870f9a8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 41 -->
 </div>
 
 </div>
@@ -1384,7 +1508,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab69bd5c81e5dc927d22eeaaa2c80e226_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab69bd5c81e5dc927d22eeaaa2c80e226_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 38 -->
+<!-- MAP 42 -->
 </div>
 
 </div>
@@ -1409,7 +1533,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3ab66b0eea8703db9755ada9d14e2ff8_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3ab66b0eea8703db9755ada9d14e2ff8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 39 -->
+<!-- MAP 43 -->
 </div>
 
 </div>
@@ -1432,7 +1556,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ac111094de6d6e84b76c97c3f86dc85b3_cgraph.png" border="0" usemap="#atest__registry_8cpp_ac111094de6d6e84b76c97c3f86dc85b3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 40 -->
+<!-- MAP 44 -->
 </div>
 
 </div>
@@ -1455,7 +1579,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a38cf6ea4c764224f982841b76981686e_cgraph.png" border="0" usemap="#atest__registry_8cpp_a38cf6ea4c764224f982841b76981686e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 41 -->
+<!-- MAP 45 -->
 </div>
 
 </div>
@@ -1478,7 +1602,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_af185b244a9ac0c01774f73d5143dab90_cgraph.png" border="0" usemap="#atest__registry_8cpp_af185b244a9ac0c01774f73d5143dab90_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 42 -->
+<!-- MAP 46 -->
 </div>
 
 </div>
@@ -1501,7 +1625,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a39c5492f5cb625ae1422d6db2bde1aff_cgraph.png" border="0" usemap="#atest__registry_8cpp_a39c5492f5cb625ae1422d6db2bde1aff_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 43 -->
+<!-- MAP 47 -->
 </div>
 
 </div>
@@ -1524,7 +1648,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2216e41bebc7922c50a3516076f1df2f_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2216e41bebc7922c50a3516076f1df2f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 44 -->
+<!-- MAP 48 -->
 </div>
 
 </div>
@@ -1547,7 +1671,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a5104721730b433394b71ca409ad08ff9_cgraph.png" border="0" usemap="#atest__registry_8cpp_a5104721730b433394b71ca409ad08ff9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 45 -->
+<!-- MAP 49 -->
 </div>
 
 </div>
@@ -1570,7 +1694,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ae2966546ac319c5dfbff1d33edca0727_cgraph.png" border="0" usemap="#atest__registry_8cpp_ae2966546ac319c5dfbff1d33edca0727_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 46 -->
+<!-- MAP 50 -->
 </div>
 
 </div>
@@ -1593,7 +1717,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab57495346cf6a9645e73855474b4b1c3_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab57495346cf6a9645e73855474b4b1c3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 47 -->
+<!-- MAP 51 -->
 </div>
 
 </div>
@@ -1616,7 +1740,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a645af4258b4bc86c512ad62632a308c5_cgraph.png" border="0" usemap="#atest__registry_8cpp_a645af4258b4bc86c512ad62632a308c5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 48 -->
+<!-- MAP 52 -->
 </div>
 
 </div>
@@ -1641,7 +1765,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a5c1a54812368e4ac2f814c6a1ef88e24_cgraph.png" border="0" usemap="#atest__registry_8cpp_a5c1a54812368e4ac2f814c6a1ef88e24_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 49 -->
+<!-- MAP 53 -->
 </div>
 
 </div>
@@ -1664,7 +1788,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3bae1291956ab44e315fd8f23439e4f2_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3bae1291956ab44e315fd8f23439e4f2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 50 -->
+<!-- MAP 54 -->
 </div>
 
 </div>
@@ -1687,7 +1811,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa9c45cfc10c8edeb722e2df6b13b9267_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa9c45cfc10c8edeb722e2df6b13b9267_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 51 -->
+<!-- MAP 55 -->
+</div>
+
+</div>
+</div>
+<a id="a3d2e8cc6e0557511ba2ec18473b2ced2" name="a3d2e8cc6e0557511ba2ec18473b2ced2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d2e8cc6e0557511ba2ec18473b2ced2">&#9670;&#160;</a></span>register_initrd_fs_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_initrd_fs_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a3d2e8cc6e0557511ba2ec18473b2ced2_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3d2e8cc6e0557511ba2ec18473b2ced2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 56 -->
 </div>
 
 </div>
@@ -1710,7 +1857,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a8d2c6b1344ea5162ac1800b3dfb66878_cgraph.png" border="0" usemap="#atest__registry_8cpp_a8d2c6b1344ea5162ac1800b3dfb66878_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 52 -->
+<!-- MAP 57 -->
 </div>
 
 </div>
@@ -1733,7 +1880,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a1e141c8be86050c9e3767514b07444ce_cgraph.png" border="0" usemap="#atest__registry_8cpp_a1e141c8be86050c9e3767514b07444ce_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 53 -->
+<!-- MAP 58 -->
 </div>
 
 </div>
@@ -1773,7 +1920,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a6b06fc63a6878f1ddf1d5a1a54e6702f_cgraph.png" border="0" usemap="#atest__registry_8cpp_a6b06fc63a6878f1ddf1d5a1a54e6702f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 54 -->
+<!-- MAP 59 -->
 </div>
 
 </div>
@@ -1796,7 +1943,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a851262f95b2f4d707d69c7b86e87aea7_cgraph.png" border="0" usemap="#atest__registry_8cpp_a851262f95b2f4d707d69c7b86e87aea7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 55 -->
+<!-- MAP 60 -->
 </div>
 
 </div>
@@ -1819,7 +1966,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a73644207c66ae8b0b5efa77fdc3629e6_cgraph.png" border="0" usemap="#atest__registry_8cpp_a73644207c66ae8b0b5efa77fdc3629e6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 56 -->
+<!-- MAP 61 -->
 </div>
 
 </div>
@@ -1842,7 +1989,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aeb94d4eba1757f91f6961761cd26cf2a_cgraph.png" border="0" usemap="#atest__registry_8cpp_aeb94d4eba1757f91f6961761cd26cf2a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 57 -->
+<!-- MAP 62 -->
 </div>
 
 </div>
@@ -1865,7 +2012,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a06729e409915245214ed22f278e5101e_cgraph.png" border="0" usemap="#atest__registry_8cpp_a06729e409915245214ed22f278e5101e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 58 -->
+<!-- MAP 63 -->
 </div>
 
 </div>
@@ -1888,7 +2035,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_afe441c8e887115786c3195a2b25101e3_cgraph.png" border="0" usemap="#atest__registry_8cpp_afe441c8e887115786c3195a2b25101e3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 59 -->
+<!-- MAP 64 -->
 </div>
 
 </div>
@@ -1911,7 +2058,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aea2cc6fcaa63ce684711707b45a0cd90_cgraph.png" border="0" usemap="#atest__registry_8cpp_aea2cc6fcaa63ce684711707b45a0cd90_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 60 -->
+<!-- MAP 65 -->
 </div>
 
 </div>
@@ -1934,7 +2081,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a8a67428271a63c18c997c69a5e1c27ba_cgraph.png" border="0" usemap="#atest__registry_8cpp_a8a67428271a63c18c997c69a5e1c27ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 61 -->
+<!-- MAP 66 -->
 </div>
 
 </div>
@@ -1957,7 +2104,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a63074404865535ef01a8f787766f56d1_cgraph.png" border="0" usemap="#atest__registry_8cpp_a63074404865535ef01a8f787766f56d1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 62 -->
+<!-- MAP 67 -->
 </div>
 
 </div>
@@ -1980,7 +2127,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2407a554b127dc17ebd530e4c6e7202d_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2407a554b127dc17ebd530e4c6e7202d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 63 -->
+<!-- MAP 68 -->
 </div>
 
 </div>
@@ -2002,6 +2149,29 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a064ea1d0e8953ed783b55e14b39dd6f3" name="a064ea1d0e8953ed783b55e14b39dd6f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a064ea1d0e8953ed783b55e14b39dd6f3">&#9670;&#160;</a></span>register_kernel_top_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_kernel_top_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a064ea1d0e8953ed783b55e14b39dd6f3_cgraph.png" border="0" usemap="#atest__registry_8cpp_a064ea1d0e8953ed783b55e14b39dd6f3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 69 -->
+</div>
+
+</div>
+</div>
 <a id="a0aa04608f5608ad916b21f1d7639fce8" name="a0aa04608f5608ad916b21f1d7639fce8"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0aa04608f5608ad916b21f1d7639fce8">&#9670;&#160;</a></span>register_klog_tests()</h2>
 
@@ -2020,7 +2190,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a0aa04608f5608ad916b21f1d7639fce8_cgraph.png" border="0" usemap="#atest__registry_8cpp_a0aa04608f5608ad916b21f1d7639fce8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 64 -->
+<!-- MAP 70 -->
 </div>
 
 </div>
@@ -2043,7 +2213,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2fa7dc32a9171f5a88916fc03bc5b0f2_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2fa7dc32a9171f5a88916fc03bc5b0f2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 65 -->
+<!-- MAP 71 -->
 </div>
 
 </div>
@@ -2066,7 +2236,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a4a43589b3fd0ab8e11bbbfa2b1bc4d23_cgraph.png" border="0" usemap="#atest__registry_8cpp_a4a43589b3fd0ab8e11bbbfa2b1bc4d23_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 66 -->
+<!-- MAP 72 -->
 </div>
 
 </div>
@@ -2089,7 +2259,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2178c2241b17f9314f48a154c3277a06_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2178c2241b17f9314f48a154c3277a06_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 67 -->
+<!-- MAP 73 -->
 </div>
 
 </div>
@@ -2112,7 +2282,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa1ee33b231f0a8f36f0d702c8c6a2964_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa1ee33b231f0a8f36f0d702c8c6a2964_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 68 -->
+<!-- MAP 74 -->
 </div>
 
 </div>
@@ -2135,7 +2305,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a6e6a23384e544b30cc89801cda93004e_cgraph.png" border="0" usemap="#atest__registry_8cpp_a6e6a23384e544b30cc89801cda93004e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 69 -->
+<!-- MAP 75 -->
 </div>
 
 </div>
@@ -2158,7 +2328,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a9858aae624aec016a3e8e624e4520d11_cgraph.png" border="0" usemap="#atest__registry_8cpp_a9858aae624aec016a3e8e624e4520d11_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 70 -->
+<!-- MAP 76 -->
+</div>
+
+</div>
+</div>
+<a id="a53211d94da013fdf6f660ff887ca352c" name="a53211d94da013fdf6f660ff887ca352c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53211d94da013fdf6f660ff887ca352c">&#9670;&#160;</a></span>register_memory_integrity_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_memory_integrity_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a53211d94da013fdf6f660ff887ca352c_cgraph.png" border="0" usemap="#atest__registry_8cpp_a53211d94da013fdf6f660ff887ca352c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 77 -->
 </div>
 
 </div>
@@ -2198,7 +2391,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a97dbf7fa08cded21c5847ca266ee50b8_cgraph.png" border="0" usemap="#atest__registry_8cpp_a97dbf7fa08cded21c5847ca266ee50b8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 71 -->
+<!-- MAP 78 -->
 </div>
 
 </div>
@@ -2221,7 +2414,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aaf07f2925f10df31499682002e797ee1_cgraph.png" border="0" usemap="#atest__registry_8cpp_aaf07f2925f10df31499682002e797ee1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 72 -->
+<!-- MAP 79 -->
 </div>
 
 </div>
@@ -2244,7 +2437,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a608be4a19c7cb1927fad7852bf8aafe4_cgraph.png" border="0" usemap="#atest__registry_8cpp_a608be4a19c7cb1927fad7852bf8aafe4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 73 -->
+<!-- MAP 80 -->
 </div>
 
 </div>
@@ -2267,7 +2460,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a486eb39dbd206a6841aa7a1786be3a3a_cgraph.png" border="0" usemap="#atest__registry_8cpp_a486eb39dbd206a6841aa7a1786be3a3a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 74 -->
+<!-- MAP 81 -->
 </div>
 
 </div>
@@ -2290,7 +2483,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ade24476dd1e8a7d4134412386ff1523b_cgraph.png" border="0" usemap="#atest__registry_8cpp_ade24476dd1e8a7d4134412386ff1523b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 75 -->
+<!-- MAP 82 -->
 </div>
 
 </div>
@@ -2313,7 +2506,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_adb58faeccbfac4fd1b4abf3a6b14ee30_cgraph.png" border="0" usemap="#atest__registry_8cpp_adb58faeccbfac4fd1b4abf3a6b14ee30_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 76 -->
+<!-- MAP 83 -->
 </div>
 
 </div>
@@ -2336,7 +2529,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a0b8d0e8243778a6d3a24408a5bacc276_cgraph.png" border="0" usemap="#atest__registry_8cpp_a0b8d0e8243778a6d3a24408a5bacc276_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 77 -->
+<!-- MAP 84 -->
 </div>
 
 </div>
@@ -2359,7 +2552,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a882bc1cfddaa745b0bf04765daecc004_cgraph.png" border="0" usemap="#atest__registry_8cpp_a882bc1cfddaa745b0bf04765daecc004_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 78 -->
+<!-- MAP 85 -->
 </div>
 
 </div>
@@ -2382,7 +2575,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a67af3f79fcdc7071ba8e4fd5cf81e319_cgraph.png" border="0" usemap="#atest__registry_8cpp_a67af3f79fcdc7071ba8e4fd5cf81e319_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 79 -->
+<!-- MAP 86 -->
 </div>
 
 </div>
@@ -2405,7 +2598,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ac22e85d1db6f07970537bc1f825e2d87_cgraph.png" border="0" usemap="#atest__registry_8cpp_ac22e85d1db6f07970537bc1f825e2d87_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 80 -->
+<!-- MAP 87 -->
 </div>
 
 </div>
@@ -2430,7 +2623,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a6685cde06dcd80a022800c8644c2bfe9_cgraph.png" border="0" usemap="#atest__registry_8cpp_a6685cde06dcd80a022800c8644c2bfe9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 81 -->
+<!-- MAP 88 -->
 </div>
 
 </div>
@@ -2453,7 +2646,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a36279b2077243df3747fb884f78f14c1_cgraph.png" border="0" usemap="#atest__registry_8cpp_a36279b2077243df3747fb884f78f14c1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 82 -->
+<!-- MAP 89 -->
+</div>
+
+</div>
+</div>
+<a id="adaf35f35a28bc0401ddbde6a7300c81c" name="adaf35f35a28bc0401ddbde6a7300c81c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adaf35f35a28bc0401ddbde6a7300c81c">&#9670;&#160;</a></span>register_per_cpu_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_per_cpu_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_adaf35f35a28bc0401ddbde6a7300c81c_cgraph.png" border="0" usemap="#atest__registry_8cpp_adaf35f35a28bc0401ddbde6a7300c81c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 90 -->
 </div>
 
 </div>
@@ -2476,7 +2692,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ac35c6ec8bc88d371b6124c8a5f4bad37_cgraph.png" border="0" usemap="#atest__registry_8cpp_ac35c6ec8bc88d371b6124c8a5f4bad37_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 83 -->
+<!-- MAP 91 -->
 </div>
 
 </div>
@@ -2499,7 +2715,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aeae93eacd3ee33b4488ce0264a593b37_cgraph.png" border="0" usemap="#atest__registry_8cpp_aeae93eacd3ee33b4488ce0264a593b37_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 84 -->
+<!-- MAP 92 -->
 </div>
 
 </div>
@@ -2522,7 +2738,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_adedb39a6dbfaced54507719df6da09ca_cgraph.png" border="0" usemap="#atest__registry_8cpp_adedb39a6dbfaced54507719df6da09ca_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 85 -->
+<!-- MAP 93 -->
 </div>
 
 </div>
@@ -2547,7 +2763,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph.png" border="0" usemap="#atest__registry_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 86 -->
+<!-- MAP 94 -->
 </div>
 
 </div>
@@ -2570,7 +2786,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a211f27122b0ca43dee5fbbfe29063a71_cgraph.png" border="0" usemap="#atest__registry_8cpp_a211f27122b0ca43dee5fbbfe29063a71_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 87 -->
+<!-- MAP 95 -->
 </div>
 
 </div>
@@ -2593,7 +2809,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a388292e1dc52b00229908b1a1af126d6_cgraph.png" border="0" usemap="#atest__registry_8cpp_a388292e1dc52b00229908b1a1af126d6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 88 -->
+<!-- MAP 96 -->
 </div>
 
 </div>
@@ -2616,7 +2832,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ada6f8792de8a2c493439ab8a8bf56e57_cgraph.png" border="0" usemap="#atest__registry_8cpp_ada6f8792de8a2c493439ab8a8bf56e57_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 89 -->
+<!-- MAP 97 -->
 </div>
 
 </div>
@@ -2639,7 +2855,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a6f2ecbee69fbcf76a5cb7e8d91e60a72_cgraph.png" border="0" usemap="#atest__registry_8cpp_a6f2ecbee69fbcf76a5cb7e8d91e60a72_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 90 -->
+<!-- MAP 98 -->
 </div>
 
 </div>
@@ -2664,7 +2880,53 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ae1d5232fbf708fd2680b373e55efe60e_cgraph.png" border="0" usemap="#atest__registry_8cpp_ae1d5232fbf708fd2680b373e55efe60e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 91 -->
+<!-- MAP 99 -->
+</div>
+
+</div>
+</div>
+<a id="a4caf1bddaa2301eb83d9374efff4a434" name="a4caf1bddaa2301eb83d9374efff4a434"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4caf1bddaa2301eb83d9374efff4a434">&#9670;&#160;</a></span>register_procfs_ops_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_procfs_ops_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a4caf1bddaa2301eb83d9374efff4a434_cgraph.png" border="0" usemap="#atest__registry_8cpp_a4caf1bddaa2301eb83d9374efff4a434_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 100 -->
+</div>
+
+</div>
+</div>
+<a id="a31479d0716e242456eea8f63446f0e36" name="a31479d0716e242456eea8f63446f0e36"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31479d0716e242456eea8f63446f0e36">&#9670;&#160;</a></span>register_profiler_sampler_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_profiler_sampler_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a31479d0716e242456eea8f63446f0e36_cgraph.png" border="0" usemap="#atest__registry_8cpp_a31479d0716e242456eea8f63446f0e36_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 101 -->
 </div>
 
 </div>
@@ -2687,7 +2949,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a97cfd5a3f13caa816ef978a606eed18e_cgraph.png" border="0" usemap="#atest__registry_8cpp_a97cfd5a3f13caa816ef978a606eed18e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 92 -->
+<!-- MAP 102 -->
 </div>
 
 </div>
@@ -2710,7 +2972,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa9f37bd5f1eb1bb0acbb8ed99fdc5a33_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa9f37bd5f1eb1bb0acbb8ed99fdc5a33_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 93 -->
+<!-- MAP 103 -->
 </div>
 
 </div>
@@ -2733,7 +2995,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a4921c33ddb21c6cce3124ac1516af0f0_cgraph.png" border="0" usemap="#atest__registry_8cpp_a4921c33ddb21c6cce3124ac1516af0f0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 94 -->
+<!-- MAP 104 -->
 </div>
 
 </div>
@@ -2756,7 +3018,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a4e4961379b117d52c765ce07d2ed20bd_cgraph.png" border="0" usemap="#atest__registry_8cpp_a4e4961379b117d52c765ce07d2ed20bd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 95 -->
+<!-- MAP 105 -->
 </div>
 
 </div>
@@ -2779,7 +3041,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a4c3a53abbb4aea0332ffd22960866e0e_cgraph.png" border="0" usemap="#atest__registry_8cpp_a4c3a53abbb4aea0332ffd22960866e0e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 96 -->
+<!-- MAP 106 -->
 </div>
 
 </div>
@@ -2802,7 +3064,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3d518bed95e93e3a73a4dd4542056939_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3d518bed95e93e3a73a4dd4542056939_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 97 -->
+<!-- MAP 107 -->
 </div>
 
 </div>
@@ -2825,7 +3087,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aeb1330b7631274eb38eda1e6884311eb_cgraph.png" border="0" usemap="#atest__registry_8cpp_aeb1330b7631274eb38eda1e6884311eb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 98 -->
+<!-- MAP 108 -->
 </div>
 
 </div>
@@ -2848,7 +3110,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a766305e82a091800bb2b9ea6ba6270cb_cgraph.png" border="0" usemap="#atest__registry_8cpp_a766305e82a091800bb2b9ea6ba6270cb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 99 -->
+<!-- MAP 109 -->
 </div>
 
 </div>
@@ -2873,7 +3135,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aae15a79ba7cb568b6210f193130060ba_cgraph.png" border="0" usemap="#atest__registry_8cpp_aae15a79ba7cb568b6210f193130060ba_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 100 -->
+<!-- MAP 110 -->
 </div>
 
 </div>
@@ -2896,7 +3158,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a9f63f855a126bf6e374477913c4ce351_cgraph.png" border="0" usemap="#atest__registry_8cpp_a9f63f855a126bf6e374477913c4ce351_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 101 -->
+<!-- MAP 111 -->
 </div>
 
 </div>
@@ -2919,7 +3181,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ae0cab941a0788e5de9d47d450ab148c0_cgraph.png" border="0" usemap="#atest__registry_8cpp_ae0cab941a0788e5de9d47d450ab148c0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 102 -->
+<!-- MAP 112 -->
 </div>
 
 </div>
@@ -2942,7 +3204,53 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_adab8bea979879efe3bb30bffdc20fbf1_cgraph.png" border="0" usemap="#atest__registry_8cpp_adab8bea979879efe3bb30bffdc20fbf1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 103 -->
+<!-- MAP 113 -->
+</div>
+
+</div>
+</div>
+<a id="a0c458b019fbd948d622dac41e89f94b3" name="a0c458b019fbd948d622dac41e89f94b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c458b019fbd948d622dac41e89f94b3">&#9670;&#160;</a></span>register_services_framework_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_services_framework_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_a0c458b019fbd948d622dac41e89f94b3_cgraph.png" border="0" usemap="#atest__registry_8cpp_a0c458b019fbd948d622dac41e89f94b3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 114 -->
+</div>
+
+</div>
+</div>
+<a id="afcbdc688eadf4b00f85924d2147b59a2" name="afcbdc688eadf4b00f85924d2147b59a2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afcbdc688eadf4b00f85924d2147b59a2">&#9670;&#160;</a></span>register_shell_commands_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_shell_commands_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_afcbdc688eadf4b00f85924d2147b59a2_cgraph.png" border="0" usemap="#atest__registry_8cpp_afcbdc688eadf4b00f85924d2147b59a2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 115 -->
 </div>
 
 </div>
@@ -2967,7 +3275,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a13714cd376989323d066b68000c5ca93_cgraph.png" border="0" usemap="#atest__registry_8cpp_a13714cd376989323d066b68000c5ca93_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 104 -->
+<!-- MAP 116 -->
 </div>
 
 </div>
@@ -2990,7 +3298,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a095aba4e9e7cc11cf7e5e9d48b2d28a3_cgraph.png" border="0" usemap="#atest__registry_8cpp_a095aba4e9e7cc11cf7e5e9d48b2d28a3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 105 -->
+<!-- MAP 117 -->
 </div>
 
 </div>
@@ -3013,7 +3321,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab74ca935473e30643560ee99398e534a_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab74ca935473e30643560ee99398e534a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 106 -->
+<!-- MAP 118 -->
 </div>
 
 </div>
@@ -3036,7 +3344,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab8539b253931ffb0e4e3228972a47964_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab8539b253931ffb0e4e3228972a47964_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 107 -->
+<!-- MAP 119 -->
 </div>
 
 </div>
@@ -3059,7 +3367,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ade4093dcc724796ef80f333f6053a36a_cgraph.png" border="0" usemap="#atest__registry_8cpp_ade4093dcc724796ef80f333f6053a36a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 108 -->
+<!-- MAP 120 -->
 </div>
 
 </div>
@@ -3082,7 +3390,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_af5272ee0e6889e72a620623b02795e51_cgraph.png" border="0" usemap="#atest__registry_8cpp_af5272ee0e6889e72a620623b02795e51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 109 -->
+<!-- MAP 121 -->
 </div>
 
 </div>
@@ -3105,7 +3413,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a82baf45408fbebc2f60aa7aa462ead9b_cgraph.png" border="0" usemap="#atest__registry_8cpp_a82baf45408fbebc2f60aa7aa462ead9b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 110 -->
+<!-- MAP 122 -->
 </div>
 
 </div>
@@ -3128,7 +3436,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ace58f8d4cd1934b3d07473c3dc8b96b5_cgraph.png" border="0" usemap="#atest__registry_8cpp_ace58f8d4cd1934b3d07473c3dc8b96b5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 111 -->
+<!-- MAP 123 -->
 </div>
 
 </div>
@@ -3151,7 +3459,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a734f830d29601d9a3639ef538528fcd1_cgraph.png" border="0" usemap="#atest__registry_8cpp_a734f830d29601d9a3639ef538528fcd1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 112 -->
+<!-- MAP 124 -->
 </div>
 
 </div>
@@ -3174,7 +3482,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a465d0a1793fbe7178f27f6bf4c16445c_cgraph.png" border="0" usemap="#atest__registry_8cpp_a465d0a1793fbe7178f27f6bf4c16445c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 113 -->
+<!-- MAP 125 -->
 </div>
 
 </div>
@@ -3197,7 +3505,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a16eb105ce399cff6f8072eea1051cba7_cgraph.png" border="0" usemap="#atest__registry_8cpp_a16eb105ce399cff6f8072eea1051cba7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 114 -->
+<!-- MAP 126 -->
 </div>
 
 </div>
@@ -3220,7 +3528,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a80c729bcf212eaa73d84d83f215f32b4_cgraph.png" border="0" usemap="#atest__registry_8cpp_a80c729bcf212eaa73d84d83f215f32b4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 115 -->
+<!-- MAP 127 -->
 </div>
 
 </div>
@@ -3243,7 +3551,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ad475ef5cd357a8889a2d02cafc5b5074_cgraph.png" border="0" usemap="#atest__registry_8cpp_ad475ef5cd357a8889a2d02cafc5b5074_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 116 -->
+<!-- MAP 128 -->
 </div>
 
 </div>
@@ -3266,7 +3574,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3a13123d733a21589d63918003457298_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3a13123d733a21589d63918003457298_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 117 -->
+<!-- MAP 129 -->
 </div>
 
 </div>
@@ -3289,7 +3597,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a5c76eee2ff807bcf3b8d2c8e95b93037_cgraph.png" border="0" usemap="#atest__registry_8cpp_a5c76eee2ff807bcf3b8d2c8e95b93037_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 118 -->
+<!-- MAP 130 -->
+</div>
+
+</div>
+</div>
+<a id="ae00cf80fcea7ee043cba32202d01acda" name="ae00cf80fcea7ee043cba32202d01acda"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae00cf80fcea7ee043cba32202d01acda">&#9670;&#160;</a></span>register_sync_err_api_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_sync_err_api_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_ae00cf80fcea7ee043cba32202d01acda_cgraph.png" border="0" usemap="#atest__registry_8cpp_ae00cf80fcea7ee043cba32202d01acda_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 131 -->
 </div>
 
 </div>
@@ -3312,7 +3643,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a5637c889ee724a7d201995cdb2ed9d22_cgraph.png" border="0" usemap="#atest__registry_8cpp_a5637c889ee724a7d201995cdb2ed9d22_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 119 -->
+<!-- MAP 132 -->
 </div>
 
 </div>
@@ -3335,7 +3666,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ac672c552826532f15bea69eada29ea43_cgraph.png" border="0" usemap="#atest__registry_8cpp_ac672c552826532f15bea69eada29ea43_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 120 -->
+<!-- MAP 133 -->
 </div>
 
 </div>
@@ -3358,7 +3689,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a55d556ff57d85f8b5f058302d943612c_cgraph.png" border="0" usemap="#atest__registry_8cpp_a55d556ff57d85f8b5f058302d943612c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 121 -->
+<!-- MAP 134 -->
 </div>
 
 </div>
@@ -3381,7 +3712,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aec041e930fe1b1be252ec7112c16ccfa_cgraph.png" border="0" usemap="#atest__registry_8cpp_aec041e930fe1b1be252ec7112c16ccfa_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 122 -->
+<!-- MAP 135 -->
 </div>
 
 </div>
@@ -3404,7 +3735,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a760b1bb1ad01243987c780aef0197bc2_cgraph.png" border="0" usemap="#atest__registry_8cpp_a760b1bb1ad01243987c780aef0197bc2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 123 -->
+<!-- MAP 136 -->
 </div>
 
 </div>
@@ -3429,7 +3760,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a5ceb5bd7cd243830f61b4e6d18eaafc5_cgraph.png" border="0" usemap="#atest__registry_8cpp_a5ceb5bd7cd243830f61b4e6d18eaafc5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 124 -->
+<!-- MAP 137 -->
 </div>
 
 </div>
@@ -3469,7 +3800,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_abc5a0e532053cb787b4c26fa0eebf321_cgraph.png" border="0" usemap="#atest__registry_8cpp_abc5a0e532053cb787b4c26fa0eebf321_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 125 -->
+<!-- MAP 138 -->
 </div>
 
 </div>
@@ -3492,7 +3823,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a8c0b4862fd46d0d76247fae9245ff900_cgraph.png" border="0" usemap="#atest__registry_8cpp_a8c0b4862fd46d0d76247fae9245ff900_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 126 -->
+<!-- MAP 139 -->
 </div>
 
 </div>
@@ -3515,7 +3846,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a3f4c2592c00b4acd661a99641afcf35b_cgraph.png" border="0" usemap="#atest__registry_8cpp_a3f4c2592c00b4acd661a99641afcf35b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 127 -->
+<!-- MAP 140 -->
 </div>
 
 </div>
@@ -3538,7 +3869,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ae0544e73b7c51711f6ab21c285e927f8_cgraph.png" border="0" usemap="#atest__registry_8cpp_ae0544e73b7c51711f6ab21c285e927f8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 128 -->
+<!-- MAP 141 -->
 </div>
 
 </div>
@@ -3561,7 +3892,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a86ab2eaf80161ed7af2b13d1a85e7888_cgraph.png" border="0" usemap="#atest__registry_8cpp_a86ab2eaf80161ed7af2b13d1a85e7888_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 129 -->
+<!-- MAP 142 -->
 </div>
 
 </div>
@@ -3584,7 +3915,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a915cd65fb9053891c403ebf3bcb8d1de_cgraph.png" border="0" usemap="#atest__registry_8cpp_a915cd65fb9053891c403ebf3bcb8d1de_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 130 -->
+<!-- MAP 143 -->
 </div>
 
 </div>
@@ -3607,7 +3938,30 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a95b2a3fec631c5ebe391a769a00daaf7_cgraph.png" border="0" usemap="#atest__registry_8cpp_a95b2a3fec631c5ebe391a769a00daaf7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 131 -->
+<!-- MAP 144 -->
+</div>
+
+</div>
+</div>
+<a id="ac42f50b65b2285e63219c64b601d579b" name="ac42f50b65b2285e63219c64b601d579b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac42f50b65b2285e63219c64b601d579b">&#9670;&#160;</a></span>register_vfs_errors_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_vfs_errors_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__registry_8cpp_ac42f50b65b2285e63219c64b601d579b_cgraph.png" border="0" usemap="#atest__registry_8cpp_ac42f50b65b2285e63219c64b601d579b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 145 -->
 </div>
 
 </div>
@@ -3630,7 +3984,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab5ef63c93bc34341748ffda2beb673b7_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab5ef63c93bc34341748ffda2beb673b7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 132 -->
+<!-- MAP 146 -->
 </div>
 
 </div>
@@ -3653,7 +4007,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a1a997999d49a717648c2541292a369e9_cgraph.png" border="0" usemap="#atest__registry_8cpp_a1a997999d49a717648c2541292a369e9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 133 -->
+<!-- MAP 147 -->
 </div>
 
 </div>
@@ -3676,7 +4030,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a61db377fe984787e19074e47a87ba3db_cgraph.png" border="0" usemap="#atest__registry_8cpp_a61db377fe984787e19074e47a87ba3db_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 134 -->
+<!-- MAP 148 -->
 </div>
 
 </div>
@@ -3699,7 +4053,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a17eb9a2439a7ceab2d8c790457ff0933_cgraph.png" border="0" usemap="#atest__registry_8cpp_a17eb9a2439a7ceab2d8c790457ff0933_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 135 -->
+<!-- MAP 149 -->
 </div>
 
 </div>
@@ -3724,7 +4078,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph.png" border="0" usemap="#atest__registry_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 136 -->
+<!-- MAP 150 -->
 </div>
 
 </div>
@@ -3747,7 +4101,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a46d0b883ad2ac8f2b3e938dfca3d1eb0_cgraph.png" border="0" usemap="#atest__registry_8cpp_a46d0b883ad2ac8f2b3e938dfca3d1eb0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 137 -->
+<!-- MAP 151 -->
 </div>
 
 </div>
@@ -3770,7 +4124,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a19a5b38977096d64e4753e28834bd2b1_cgraph.png" border="0" usemap="#atest__registry_8cpp_a19a5b38977096d64e4753e28834bd2b1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 138 -->
+<!-- MAP 152 -->
 </div>
 
 </div>
@@ -3795,7 +4149,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a61e37195860bf4a23fe7d568eb51c735_cgraph.png" border="0" usemap="#atest__registry_8cpp_a61e37195860bf4a23fe7d568eb51c735_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 139 -->
+<!-- MAP 153 -->
 </div>
 
 </div>
@@ -3818,7 +4172,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_ab039ea1d1bf1b4ff96a90765af430dae_cgraph.png" border="0" usemap="#atest__registry_8cpp_ab039ea1d1bf1b4ff96a90765af430dae_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 140 -->
+<!-- MAP 154 -->
 </div>
 
 </div>
@@ -3841,7 +4195,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a0c04e1be6dff5d2e2cb370b41dbf82ef_cgraph.png" border="0" usemap="#atest__registry_8cpp_a0c04e1be6dff5d2e2cb370b41dbf82ef_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 141 -->
+<!-- MAP 155 -->
 </div>
 
 </div>
@@ -3864,7 +4218,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a36b18682c8a49f8006ca5f651daaf90a_cgraph.png" border="0" usemap="#atest__registry_8cpp_a36b18682c8a49f8006ca5f651daaf90a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 142 -->
+<!-- MAP 156 -->
 </div>
 
 </div>
@@ -3887,7 +4241,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aa8c2a395545e38dc933007de776ce477_cgraph.png" border="0" usemap="#atest__registry_8cpp_aa8c2a395545e38dc933007de776ce477_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 143 -->
+<!-- MAP 157 -->
 </div>
 
 </div>
@@ -3910,7 +4264,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_a853f018ba08d6aa906e5ca927dcb4b0b_cgraph.png" border="0" usemap="#atest__registry_8cpp_a853f018ba08d6aa906e5ca927dcb4b0b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 144 -->
+<!-- MAP 158 -->
 </div>
 
 </div>
@@ -3933,7 +4287,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_aefc578d12e78a691daeb17cf2145e4c7_cgraph.png" border="0" usemap="#atest__registry_8cpp_aefc578d12e78a691daeb17cf2145e4c7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 145 -->
+<!-- MAP 159 -->
 </div>
 
 </div>
@@ -3956,7 +4310,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8cpp_abeb9433623bc41979597c1441aec2729_cgraph.png" border="0" usemap="#atest__registry_8cpp_abeb9433623bc41979597c1441aec2729_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 146 -->
+<!-- MAP 160 -->
 </div>
 
 </div>

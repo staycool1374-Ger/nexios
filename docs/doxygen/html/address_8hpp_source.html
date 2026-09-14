@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>  <span class="keyword">public</span>:</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>    <span class="keyword">constexpr</span> PhysicalAddress() noexcept : addr_(0) {</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>    }</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keyword">explicit</span> <span class="keyword">constexpr</span> PhysicalAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> : addr_(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) {</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keyword">explicit</span> <span class="keyword">constexpr</span> PhysicalAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> : addr_(addr) {</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>    }</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span></div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span>    [[nodiscard]] <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value() const noexcept {</div>
@@ -161,8 +161,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        <span class="keywordflow">return</span> addr_ == 0;</div>
 <div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>    }</div>
 <div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span> </div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keyword">constexpr</span> PhysicalAddress &amp;operator=(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        addr_ = <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>;</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>    <span class="keyword">constexpr</span> PhysicalAddress &amp;operator=(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>        addr_ = addr;</div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>        <span class="keywordflow">return</span> *<span class="keyword">this</span>;</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    }</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> operator==(PhysicalAddress other) <span class="keyword">const</span> <span class="keyword">noexcept</span> {</div>
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>  <span class="keyword">public</span>:</div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>    <span class="keyword">constexpr</span> VirtualAddress() noexcept : addr_(0) {</div>
 <div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    }</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">explicit</span> <span class="keyword">constexpr</span> VirtualAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> : addr_(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) {</div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">explicit</span> <span class="keyword">constexpr</span> VirtualAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a> : addr_(addr) {</div>
 <div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    }</div>
 <div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span></div>
 <div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    [[nodiscard]] <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value() const noexcept {</div>
@@ -218,8 +218,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>        <span class="keywordflow">return</span> addr_ &lt; 0x0000800000000000ULL;</div>
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    }</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span> </div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    <span class="keyword">constexpr</span> VirtualAddress &amp;operator=(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        addr_ = <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>;</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    <span class="keyword">constexpr</span> VirtualAddress &amp;operator=(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        addr_ = addr;</div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>        <span class="keywordflow">return</span> *<span class="keyword">this</span>;</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    }</div>
 <div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    <span class="keyword">constexpr</span> <span class="keywordtype">bool</span> operator==(VirtualAddress other) <span class="keyword">const</span> <span class="keyword">noexcept</span> {</div>
@@ -263,8 +263,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span><span class="keyword">class </span>PageAddress : <span class="keyword">public</span> PhysicalAddress {</div>
 <div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>  <span class="keyword">public</span>:</div>
 <div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>    <span class="keyword">constexpr</span> PageAddress() noexcept = default;</div>
-<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    explicit constexpr PageAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>) noexcept</div>
-<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>        : PhysicalAddress(<a class="code hl_variable" href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a> &amp; ~0xFFFULL) {</div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    explicit constexpr PageAddress(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) noexcept</div>
+<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>        : PhysicalAddress(addr &amp; ~0xFFFULL) {</div>
 <div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>    }</div>
 <div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    <span class="keyword">explicit</span> <span class="keyword">constexpr</span> PageAddress(PhysicalAddress phys) <a class="code hl_variable" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></div>
 <div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>        : PhysicalAddress(phys.value() &amp; ~0xFFFULL) {</div>
@@ -279,9 +279,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('address_8hpp_s
 <div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>};</div>
 <div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span> </div>
 <div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="agcov__handler_8cpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:59</div></div>
-<div class="ttc" id="anamespacearch_html_a57c6bb74fdc3ee11eecab91b0142e95b"><div class="ttname"><a href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a></div><div class="ttdeci">constexpr uint64_t HHDM_OFFSET</div><div class="ttdoc">Higher-half offset: convert physical → kernel-visible virtual.</div><div class="ttdef"><b>Definition</b> constants.hpp:38</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
+<div class="ttc" id="anamespacearch_html_a57c6bb74fdc3ee11eecab91b0142e95b"><div class="ttname"><a href="namespacearch.html#a57c6bb74fdc3ee11eecab91b0142e95b">arch::HHDM_OFFSET</a></div><div class="ttdeci">constexpr uint64_t HHDM_OFFSET</div><div class="ttdoc">Higher-half offset: convert physical → kernel-visible virtual.</div><div class="ttdef"><b>Definition</b> constants.hpp:39</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>

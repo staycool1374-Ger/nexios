@@ -3,7 +3,7 @@ var searchData=
   ['a_0',['a',['../struct_test_struct.html#a5402eb099ce14f4b385441077a11c2a6',1,'TestStruct']]],
   ['aarch64_1',['aarch64',['../structkernel_1_1test_1_1_expected_counts.html#a9cf2a40449dfa71af19aac1319d06c81',1,'kernel::test::ExpectedCounts']]],
   ['action_2',['action',['../structkernel_1_1_exception_signal_map.html#a31b74c0c27df363adb093881168f8980',1,'kernel::ExceptionSignalMap']]],
-  ['addr_3',['addr',['../structservice_1_1_framebuffer_info.html#a40cab68a862429ccdad4418c3f5b424b',1,'service::FramebufferInfo::addr'],['../gcov__handler_8cpp.html#a0e89cf6b9f6cd3125470b1bed2b823df',1,'addr:&#160;gcov_handler.cpp']]],
+  ['addr_3',['addr',['../structservice_1_1_framebuffer_info.html#a40cab68a862429ccdad4418c3f5b424b',1,'service::FramebufferInfo']]],
   ['address_4',['address',['../structfdt__reserve__entry.html#a5d99f03842d9621cb73129e38f5a2029',1,'fdt_reserve_entry']]],
   ['adopt_5flock_5',['adopt_lock',['../spinlock__guard_8hpp.html#ae87541999d37878249d8fbb062bd6017',1,'spinlock_guard.hpp']]],
   ['alarm_5farmed_6',['alarm_armed',['../structkernel_1_1_scheduler_1_1_task_fields.html#a19746974d73ea97c73607c45ffd757db',1,'kernel::Scheduler::TaskFields']]],

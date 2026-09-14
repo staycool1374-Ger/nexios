@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -164,6 +164,8 @@ Files</h2></td></tr>
 <tr class="memdesc:hal_2serial_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Serial port (UART) driver — architecture-agnostic interface. <br /></td></tr>
 <tr class="memitem:timer_2Ehpp" id="r_timer_2Ehpp"><td class="memItemLeft"><a href="hal_2timer_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="hal_2timer_8hpp.html">timer.hpp</a></td></tr>
 <tr class="memdesc:hal_2timer_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timer abstraction — PIT+TSC (x86_64), generic timer (AArch64), timer (RISC-V). <br /></td></tr>
+<tr class="memitem:tpr_5Fguard_2Ehpp" id="r_tpr_5Fguard_2Ehpp"><td class="memItemLeft"><a href="tpr__guard_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="tpr__guard_8hpp.html">tpr_guard.hpp</a></td></tr>
+<tr class="memdesc:tpr__guard_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII TPR-class raise — mask an interrupt priority band on construction, restore the saved class on destruction (issue #26). Own header (NOT inside irq_guard.hpp): needs the APIC + PerCpu declarations, which irq_guard.hpp must not depend on. See docs/specs/apic-tpr.md §3.5. <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

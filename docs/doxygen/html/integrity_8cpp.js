@@ -1,5 +1,6 @@
 var integrity_8cpp =
 [
+    [ "kernel::integrity::ap_idle_main", "namespacekernel_1_1integrity.html#a25523b42cdf666f04fc00417ec829955", null ],
     [ "kernel::integrity::check_section_markers", "namespacekernel_1_1integrity.html#a59bcf541e40b053372b6fb8decd1afeb", null ],
     [ "kernel::integrity::crc_process_chunk", "namespacekernel_1_1integrity.html#ad8c610ebd258a2fd322fa982b5dccaff", null ],
     [ "kernel::integrity::idle_task_main", "namespacekernel_1_1integrity.html#ad55063ee7b6bc1542af1172a729102cb", null ],

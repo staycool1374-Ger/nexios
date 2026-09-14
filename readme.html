@@ -130,7 +130,7 @@ Ring 3 via a <code>int 0x82</code> syscall gate (47 syscalls). The
 architecture is mid-transition toward a <strong>capability-based
 microkernel</strong>, where drivers, VFS, and block I/O are externalised
 to sandboxed Ring 3 servers communicating through IPC capabilities.</p>
-<p>Current version: <strong>v0.4.2</strong> — User-Space Infrastructure (Untyped allocator, IRQ/MMIO/IOMMU/MSI-X caps, VT-d live DMA protection).
+<p>Current version: <strong>v0.4.4</strong> — APIC + SMP / ELF shared objects (per-CPU foundation, SMP bring-up, TPR prioritization, ELF DT_NEEDED shared objects, Phase A gcov line coverage, v0.4.x test coverage).
 O(1) priority bitmap scheduler, bounded WCET, hard real-time compliance.</p>
 <hr />
 <h2 id="why-nexios">Why NexIOS</h2>

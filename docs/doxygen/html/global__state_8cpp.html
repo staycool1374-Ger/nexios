@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -123,7 +123,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('global__state_
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="global__state_8hpp_source.html">kernel/core/global_state.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="gdt_8hpp_source.html">kernel/arch/gdt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler__errors_8hpp_source.html">kernel/task/scheduler_errors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">lib/constants.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for global_state.cpp:</div>
@@ -180,6 +183,20 @@ Functions</h2></td></tr>
 <tr class="memdesc:aaddae13cb0e072b6574b9aca8667b99a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current FAT32 partition instance (nullptr when no FAT32 device is mounted). Written at boot by the block-driver probe and by tests. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
 <tr class="memitem:a5323c145779af0abf16bd29a28939306" id="r_a5323c145779af0abf16bd29a28939306"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a5323c145779af0abf16bd29a28939306">kernel::gs::try_set_fat32_partition</a> (kernel::fat32::Fat32Partition *p) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a5323c145779af0abf16bd29a28939306"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the FAT32 partition instance. Rejected unless <code class="param">p</code> is null or lies in the kernel half (&gt;= CONFIG_HHDM_OFFSET) — guards against writing a user-space / garbage pointer.  <br /></td></tr>
+<tr class="memitem:ae914fdd81199b73041a51cd4f195d0d4" id="r_ae914fdd81199b73041a51cd4f195d0d4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#ae914fdd81199b73041a51cd4f195d0d4">kernel::gs::scheduler_on_context_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae914fdd81199b73041a51cd4f195d0d4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Context-switch bridge called from isr_stubs.asm to apply the deferred task switch. Reads scheduler_next_task_id, updates current_task(), clears the arm, and performs canary/IPC checks.  <br /></td></tr>
+<tr class="memitem:aee556e421f2dc94871b4e534b3f667f6" id="r_aee556e421f2dc94871b4e534b3f667f6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#aee556e421f2dc94871b4e534b3f667f6">kernel::gs::scheduler_diag_pre_save</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aee556e421f2dc94871b4e534b3f667f6"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue pre-save hook (isr_stubs.asm). Fires on every ISR entry that might attempt a deferred-switch apply. Records the generation captured at ISR entry. Cold path (debug only).  <br /></td></tr>
+<tr class="memitem:a598aa1b4a1b4e3baed2631e0d36a8f5b" id="r_a598aa1b4a1b4e3baed2631e0d36a8f5b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a598aa1b4a1b4e3baed2631e0d36a8f5b">kernel::gs::scheduler_diag_depth_skip</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a598aa1b4a1b4e3baed2631e0d36a8f5b"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue depth-skip hook (isr_stubs.asm:133-134). Fires when a pending deferred-switch apply is skipped because the ISR nesting depth exceeds 2. Cold path. Dumps the arm target + the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).  <br /></td></tr>
+<tr class="memitem:a5a75e966869ec2eddc1779530a731635" id="r_a5a75e966869ec2eddc1779530a731635"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a5a75e966869ec2eddc1779530a731635">kernel::gs::scheduler_diag_rsp_abort</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a5a75e966869ec2eddc1779530a731635"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275). Fires when a pending deferred-switch apply is aborted because the loaded RSP lies outside [scheduler_load_kstack_base, top) — the asm-side stale/foreign-frame guard. Cold path. Dumps the rejected RSP, the kstack range, the arm target, and the RFLAGS the interrupted task will return to (H2 IF=0 freeze hypothesis).  <br /></td></tr>
+<tr class="memitem:a2a343ec5f79f66bee72041750892bdb7" id="r_a2a343ec5f79f66bee72041750892bdb7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a2a343ec5f79f66bee72041750892bdb7">kernel::gs::scheduler_record_skip</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> captured_gen, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> current_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a2a343ec5f79f66bee72041750892bdb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that captured generation <code class="param">captured_gen</code> at entry found it changed before its epilogue, so it skipped applying the deferred switch — leaving the dequeued target stranded until the next tick. H2 ring event.  <br /></td></tr>
+<tr class="memitem:ab0941f6755ee6bd78c9ca27146643f67" id="r_ab0941f6755ee6bd78c9ca27146643f67"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#ab0941f6755ee6bd78c9ca27146643f67">kernel::gs::scheduler_validate_pending_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ab0941f6755ee6bd78c9ca27146643f67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply-side liveness + ownership re-check for the deferred switch (called from isr_stubs.asm BEFORE <span class="tt">mov rsp,[load_rsp_from]</span>). The arm side (switch_to_task) validates the target's frame at publish time, but the arm can survive past its ISR (nested-ISR depth guard or generation-skip) into a later ISR, and in between the target task can be terminated/freed (IRQs on) or the published RSP can drift from the target's CURRENT kernel stack (snapshot restore / free+reuse). The [H2W] orphan-displacement fires when the apply then iretq's onto the freed/foreign RSP (find_task(id)==null → current-cache lag → [H2W] harness displacement). This re-checks BOTH liveness (id_table_) AND ownership (the published RSP lies inside the target's live kernel_stack, or the harness boot stack) with IRQs disabled — so no task-context removal can interleave — and aborts (clear atoms + bump generation) on any mismatch.  <br /></td></tr>
+<tr class="memitem:a365cc933f3230032561eeee65168855d" id="r_a365cc933f3230032561eeee65168855d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#a365cc933f3230032561eeee65168855d">kernel::gs::scheduler_abort_switch_fixup</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a365cc933f3230032561eeee65168855d"><td class="mdescLeft">&#160;</td><td class="mdescRight">ISR-epilogue callback for the <span class="tt">.abort_switch</span> path (isr_stubs.asm): the deferred switch was refused because its load RSP fell outside the dispatched task's kernel stack. The arm side may have already repointed TSS.RSP0 at the aborted <span class="tt">next</span> task's kernel stack top (<a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>:1991, user-task dispatch). Rebind RSP0 to the CONTINUING task's own kernel stack so the next ring-3→ring-0 transition (int $0x80 trap gate) cannot push its iretq frame onto a freed/foreign stack. Harmless for ring-0-only runs (no privilege transition ever consumes RSP0).  <br /></td></tr>
 <tr class="memitem:accbc52b084b9b7dcc227841d9229f240" id="r_accbc52b084b9b7dcc227841d9229f240"><td class="memItemLeft">::net::Nic *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#accbc52b084b9b7dcc227841d9229f240">kernel::gs::get_nic</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:accbc52b084b9b7dcc227841d9229f240"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current NIC instance (nullptr before net_init / without a device). Written once at boot; read by the shell network commands. RANGE_CHECKED: must be null or a kernel-half address.  <br /></td></tr>
 <tr class="memitem:af7d35e270dec4bdcec35118534857dac" id="r_af7d35e270dec4bdcec35118534857dac"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1gs.html#af7d35e270dec4bdcec35118534857dac">kernel::gs::try_set_nic</a> (::net::Nic *nic) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -189,17 +206,19 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
+<tr class="memitem:a6563155e2fea5b3d4feb0ca6027ce7d1" id="r_a6563155e2fea5b3d4feb0ca6027ce7d1"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a6563155e2fea5b3d4feb0ca6027ce7d1">_stack_start</a> []</td></tr>
+<tr class="memitem:aa4c3a4a82848848b44540d9841a3dccc" id="r_aa4c3a4a82848848b44540d9841a3dccc"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#aa4c3a4a82848848b44540d9841a3dccc">_stack_end</a> []</td></tr>
 <tr class="memitem:a16fea7346fbc792334a098eb9b61c77a" id="r_a16fea7346fbc792334a098eb9b61c77a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a16fea7346fbc792334a098eb9b61c77a">multiboot_magic</a> = 0</td></tr>
 <tr class="memitem:a2e435e25065d40cbea1df681ebafede9" id="r_a2e435e25065d40cbea1df681ebafede9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2e435e25065d40cbea1df681ebafede9">multiboot_info_ptr</a> = 0</td></tr>
-<tr class="memitem:aa7ffada5937bf60f2ad11eb7c57a9dcc" id="r_aa7ffada5937bf60f2ad11eb7c57a9dcc"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa7ffada5937bf60f2ad11eb7c57a9dcc">scheduler_save_rsp_to</a> = nullptr</td></tr>
-<tr class="memitem:a0bfda50437b4177036ebf965a8ae9735" id="r_a0bfda50437b4177036ebf965a8ae9735"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0bfda50437b4177036ebf965a8ae9735">scheduler_load_rsp_from</a> = 0</td></tr>
-<tr class="memitem:a267d71f6467066b1a2df5d1c390f014a" id="r_a267d71f6467066b1a2df5d1c390f014a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a267d71f6467066b1a2df5d1c390f014a">scheduler_load_cr3_from</a> = 0</td></tr>
-<tr class="memitem:ac624c3223df92f059074d6001ef70e60" id="r_ac624c3223df92f059074d6001ef70e60"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac624c3223df92f059074d6001ef70e60">scheduler_next_task_id</a> = <a class="el" href="constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db">UINT64_MAX</a></td></tr>
-<tr class="memitem:a026faf3c3debae610cdbc4ebbc41295d" id="r_a026faf3c3debae610cdbc4ebbc41295d"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a026faf3c3debae610cdbc4ebbc41295d">scheduler_load_kstack_base</a> = 0</td></tr>
-<tr class="memitem:a44b5cc49c445a145e3b4d20712ec2360" id="r_a44b5cc49c445a145e3b4d20712ec2360"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a44b5cc49c445a145e3b4d20712ec2360">scheduler_load_kstack_top</a> = 0</td></tr>
-<tr class="memitem:a358324b930c3d48b8613572314e94320" id="r_a358324b930c3d48b8613572314e94320"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a358324b930c3d48b8613572314e94320">scheduler_switch_generation</a> = 0</td></tr>
+<tr class="memitem:ab55c0952c6a6486565047a5258b4f41c" id="r_ab55c0952c6a6486565047a5258b4f41c"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ab55c0952c6a6486565047a5258b4f41c">scheduler_save_rsp_to</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:ae16355f40464ea93fcb085be94200e13" id="r_ae16355f40464ea93fcb085be94200e13"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae16355f40464ea93fcb085be94200e13">scheduler_load_rsp_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:a3942c1b7ed6d3a34d02d0b5e09309586" id="r_a3942c1b7ed6d3a34d02d0b5e09309586"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3942c1b7ed6d3a34d02d0b5e09309586">scheduler_load_cr3_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:a89c74440ba970f0b411b2e92af44475f" id="r_a89c74440ba970f0b411b2e92af44475f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a89c74440ba970f0b411b2e92af44475f">scheduler_next_task_id</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:a4b408757cb3f937ec09d754ff766532f" id="r_a4b408757cb3f937ec09d754ff766532f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4b408757cb3f937ec09d754ff766532f">scheduler_load_kstack_base</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:aa12fc4739f30cc4f74bd51a3f03347bd" id="r_aa12fc4739f30cc4f74bd51a3f03347bd"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa12fc4739f30cc4f74bd51a3f03347bd">scheduler_load_kstack_top</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:aedf2e7110b4a691b7072cd7e69a83743" id="r_aedf2e7110b4a691b7072cd7e69a83743"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aedf2e7110b4a691b7072cd7e69a83743">scheduler_switch_generation</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
 <tr class="memitem:acf3d43b7766a9a34a8eb7c6020ca4be8" id="r_acf3d43b7766a9a34a8eb7c6020ca4be8"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acf3d43b7766a9a34a8eb7c6020ca4be8">scheduler_kernel_cr3</a> = 0</td></tr>
-<tr class="memitem:a0cd8a9e394bdaa6d815168f5208a85fa" id="r_a0cd8a9e394bdaa6d815168f5208a85fa"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0cd8a9e394bdaa6d815168f5208a85fa">scheduler_need_resched</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:aa2763d16430feb1ccac97ac767dfd600" id="r_aa2763d16430feb1ccac97ac767dfd600"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa2763d16430feb1ccac97ac767dfd600">scheduler_need_resched</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
 <tr class="memitem:a749dfb81c6c748a8fe63fae0d81f2926" id="r_a749dfb81c6c748a8fe63fae0d81f2926"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a749dfb81c6c748a8fe63fae0d81f2926">isr_nesting_depth</a> = 0</td></tr>
 <tr class="memitem:aeb543e504861746afd26a43391444494" id="r_aeb543e504861746afd26a43391444494"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb543e504861746afd26a43391444494">irq_entry_tsc</a> = 0</td></tr>
 <tr class="memitem:a0f9de4949789f8c2d559e134c0bca614" id="r_a0f9de4949789f8c2d559e134c0bca614"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0f9de4949789f8c2d559e134c0bca614">scheduler_corruption_count</a> = 0</td></tr>
@@ -223,6 +242,50 @@ Variables</h2></td></tr>
 <div class="textblock"><p>Single definition point for all cross-TU kernel globals. </p>
 <p>Every symbol defined here has exactly one owner file (this one). Symbols are defined at the SAME scope as their historical extern declarations so existing consumers keep linking; the gs:: accessors are the sanctioned way to read/write them. </p>
 </div><a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="aa4c3a4a82848848b44540d9841a3dccc" name="aa4c3a4a82848848b44540d9841a3dccc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa4c3a4a82848848b44540d9841a3dccc">&#9670;&#160;</a></span>_stack_end</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">char _stack_end[]</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6563155e2fea5b3d4feb0ca6027ce7d1" name="a6563155e2fea5b3d4feb0ca6027ce7d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6563155e2fea5b3d4feb0ca6027ce7d1">&#9670;&#160;</a></span>_stack_start</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">char _stack_start[]</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a836cef767155acb24511242c71a483c2" name="a836cef767155acb24511242c71a483c2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a836cef767155acb24511242c71a483c2">&#9670;&#160;</a></span>deadline_detection_integrity</h2>
 
@@ -349,112 +412,112 @@ Variables</h2></td></tr>
 
 </div>
 </div>
-<a id="a267d71f6467066b1a2df5d1c390f014a" name="a267d71f6467066b1a2df5d1c390f014a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a267d71f6467066b1a2df5d1c390f014a">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
+<a id="a3942c1b7ed6d3a34d02d0b5e09309586" name="a3942c1b7ed6d3a34d02d0b5e09309586"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3942c1b7ed6d3a34d02d0b5e09309586">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_cr3_from = 0</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_cr3_from[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a026faf3c3debae610cdbc4ebbc41295d" name="a026faf3c3debae610cdbc4ebbc41295d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a026faf3c3debae610cdbc4ebbc41295d">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
+<a id="a4b408757cb3f937ec09d754ff766532f" name="a4b408757cb3f937ec09d754ff766532f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4b408757cb3f937ec09d754ff766532f">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_base = 0</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_base[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a44b5cc49c445a145e3b4d20712ec2360" name="a44b5cc49c445a145e3b4d20712ec2360"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a44b5cc49c445a145e3b4d20712ec2360">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
+<a id="aa12fc4739f30cc4f74bd51a3f03347bd" name="aa12fc4739f30cc4f74bd51a3f03347bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa12fc4739f30cc4f74bd51a3f03347bd">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_top = 0</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_kstack_top[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a0bfda50437b4177036ebf965a8ae9735" name="a0bfda50437b4177036ebf965a8ae9735"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0bfda50437b4177036ebf965a8ae9735">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
+<a id="ae16355f40464ea93fcb085be94200e13" name="ae16355f40464ea93fcb085be94200e13"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae16355f40464ea93fcb085be94200e13">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_rsp_from = 0</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_load_rsp_from[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a0cd8a9e394bdaa6d815168f5208a85fa" name="a0cd8a9e394bdaa6d815168f5208a85fa"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0cd8a9e394bdaa6d815168f5208a85fa">&#9670;&#160;</a></span>scheduler_need_resched</h2>
+<a id="aa2763d16430feb1ccac97ac767dfd600" name="aa2763d16430feb1ccac97ac767dfd600"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa2763d16430feb1ccac97ac767dfd600">&#9670;&#160;</a></span>scheduler_need_resched</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">bool scheduler_need_resched = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+          <td class="memname">bool scheduler_need_resched[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="ac624c3223df92f059074d6001ef70e60" name="ac624c3223df92f059074d6001ef70e60"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac624c3223df92f059074d6001ef70e60">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
+<a id="a89c74440ba970f0b411b2e92af44475f" name="a89c74440ba970f0b411b2e92af44475f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a89c74440ba970f0b411b2e92af44475f">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_next_task_id = <a class="el" href="constants_8hpp.html#a5e5cc8e5f3f386f8eb0ab1012de4f0db">UINT64_MAX</a></td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_next_task_id[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="aa7ffada5937bf60f2ad11eb7c57a9dcc" name="aa7ffada5937bf60f2ad11eb7c57a9dcc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa7ffada5937bf60f2ad11eb7c57a9dcc">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
+<a id="ab55c0952c6a6486565047a5258b4f41c" name="ab55c0952c6a6486565047a5258b4f41c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab55c0952c6a6486565047a5258b4f41c">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* scheduler_save_rsp_to = nullptr</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* scheduler_save_rsp_to[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a358324b930c3d48b8613572314e94320" name="a358324b930c3d48b8613572314e94320"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a358324b930c3d48b8613572314e94320">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
+<a id="aedf2e7110b4a691b7072cd7e69a83743" name="aedf2e7110b4a691b7072cd7e69a83743"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aedf2e7110b4a691b7072cd7e69a83743">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_switch_generation = 0</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scheduler_switch_generation[<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -121,6 +121,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
+<tr class="memitem:acpi" id="r_acpi"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1acpi.html">acpi</a></td></tr>
 <tr class="memitem:block" id="r_block"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">block</a></td></tr>
 <tr class="memitem:cap" id="r_cap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">cap</a></td></tr>
 <tr class="memitem:daemon" id="r_daemon"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html">daemon</a></td></tr>
@@ -138,7 +139,9 @@ Namespaces</h2></td></tr>
 <tr class="memitem:ipc" id="r_ipc"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1ipc.html">ipc</a></td></tr>
 <tr class="memitem:log" id="r_log"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1log.html">log</a></td></tr>
 <tr class="memitem:net" id="r_net"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1net.html">net</a></td></tr>
+<tr class="memitem:profiling" id="r_profiling"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1profiling.html">profiling</a></td></tr>
 <tr class="memitem:shm" id="r_shm"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1shm.html">shm</a></td></tr>
+<tr class="memitem:smp" id="r_smp"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1smp.html">smp</a></td></tr>
 <tr class="memitem:sync" id="r_sync"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1sync.html">sync</a></td></tr>
 <tr class="memitem:task" id="r_task"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html">task</a></td></tr>
 <tr class="memitem:test" id="r_test"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html">test</a></td></tr>
@@ -174,6 +177,8 @@ Data Structures</h2></td></tr>
 <tr class="memitem:ReadyQueuePOD" id="r_ReadyQueuePOD"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_ready_queue_p_o_d.html">ReadyQueuePOD</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">POD snapshot of the full <a class="el" href="classkernel_1_1_ready_queue_manager.html" title="O(1) priority-ordered ready queue. Uses a bitmap (PriorityMap) to track non-empty priority levels and...">ReadyQueueManager</a> state. All fields are plain data; memcpy-safe by construction.  <a href="structkernel_1_1_ready_queue_p_o_d.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Rlimit" id="r_Rlimit"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_rlimit.html">Rlimit</a></td></tr>
+<tr class="memitem:SchedPerCpuPod" id="r_SchedPerCpuPod"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_sched_per_cpu_pod.html">SchedPerCpuPod</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">POD snapshot of all per-CPU scheduler runtime (issue #25 C1). Plain data; memcpy-safe. Captured under quiesce + global lock.  <a href="structkernel_1_1_sched_per_cpu_pod.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Scheduler" id="r_Scheduler"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scheduler.html">Scheduler</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="classkernel_1_1_scheduler.html#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0).  <a href="classkernel_1_1_scheduler.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SchedulerConfig" id="r_SchedulerConfig"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a></td></tr>
@@ -283,8 +288,12 @@ Enumerations</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a20a07952a9e22c0be3a6711567475133" id="r_a20a07952a9e22c0be3a6711567475133"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a20a07952a9e22c0be3a6711567475133">cpu_ctx</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu)</td></tr>
+<tr class="memdesc:a20a07952a9e22c0be3a6711567475133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/snapshot paths can scan all CPUs' <span class="tt">current</span> (spare-any-current, capture). First touch is on the BSP during boot (single-threaded; -fno-threadsafe-statics safe).  <br /></td></tr>
 <tr class="memitem:a777bca6dec383faa735ebe34c5bdf749" id="r_a777bca6dec383faa735ebe34c5bdf749"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a777bca6dec383faa735ebe34c5bdf749">current_cpu</a> ()</td></tr>
 <tr class="memdesc:a777bca6dec383faa735ebe34c5bdf749"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current CPU's execution context.  <br /></td></tr>
+<tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a0571e17de31b74de7a47a25459361c20">isr_nesting_own</a> ()</td></tr>
+<tr class="memdesc:a0571e17de31b74de7a47a25459361c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU ISR nesting depth (single-core archs: the plain global).  <br /></td></tr>
 <tr class="memitem:a03570b332ae94bd1acee2152e83dadd8" id="r_a03570b332ae94bd1acee2152e83dadd8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a03570b332ae94bd1acee2152e83dadd8">random_init</a> ()</td></tr>
 <tr class="memitem:a3a9da091bb2229af08f856b08498fa51" id="r_a3a9da091bb2229af08f856b08498fa51"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9da091bb2229af08f856b08498fa51">random_fill</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
 <tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
@@ -303,8 +312,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
 <tr class="memitem:a1dae18e023980d3a17ebc183f9986bd3" id="r_a1dae18e023980d3a17ebc183f9986bd3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1dae18e023980d3a17ebc183f9986bd3">for</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> p=0;p&lt; num_priorities;++p)</td></tr>
-<tr class="memitem:a477db93fbbdf2a6d3cfc20606a525044" id="r_a477db93fbbdf2a6d3cfc20606a525044"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a477db93fbbdf2a6d3cfc20606a525044">canary_check_in_scheduler_hooks</a> (TaskControlBlock *task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> rip)</td></tr>
-<tr class="memdesc:a477db93fbbdf2a6d3cfc20606a525044"><td class="mdescLeft">&#160;</td><td class="mdescRight">MP-3 canary sampling for the scheduler hooks (issue #92 canary relocation). Verifies the user-segment canaries of a task that is about to run (context switch) or currently running (timer tick). Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a pure page-table read (no locks, no allocation) — safe in ISR/tick context. Test mode latches g_canary_trip (the harness survives); production panics. This restores corruption detection for FAST syscalls, which no longer consult canaries on entry.  <br /></td></tr>
 <tr class="memitem:abb9b26c8d76b814b9ed2a3c78bad290e" id="r_abb9b26c8d76b814b9ed2a3c78bad290e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abb9b26c8d76b814b9ed2a3c78bad290e">init_task_common</a> (TaskControlBlock &amp;tcb)</td></tr>
 <tr class="memitem:a25626431fd5ef9ee4a6698a65b1f0895" id="r_a25626431fd5ef9ee4a6698a65b1f0895"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895">kslot_snapshot_bytes</a> ()</td></tr>
 <tr class="memitem:afa5566867274b1950bc3ed7acc375508" id="r_afa5566867274b1950bc3ed7acc375508"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa5566867274b1950bc3ed7acc375508">kslot_snapshot_capture</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst)</td></tr>
@@ -345,6 +352,8 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
+<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
+<tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>.  <br /></td></tr>
 <tr class="memitem:a82642ef1de738764f4ab5b0e505b50ac" id="r_a82642ef1de738764f4ab5b0e505b50ac"><td class="memItemLeft">BootInfo&#160;</td><td class="memItemRight"><a class="el" href="#a82642ef1de738764f4ab5b0e505b50ac">g_boot_info</a> {}</td></tr>
 <tr class="memitem:a602102cf72c2d245437f6dfb539c71eb" id="r_a602102cf72c2d245437f6dfb539c71eb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a602102cf72c2d245437f6dfb539c71eb">g_boot_epoch</a> = 0</td></tr>
 <tr class="memitem:a9710cee4bf56525b356e96332529a5a7" id="r_a9710cee4bf56525b356e96332529a5a7"><td class="memItemLeft">CanaryTrip&#160;</td><td class="memItemRight"><a class="el" href="#a9710cee4bf56525b356e96332529a5a7">g_canary_trip</a> {}</td></tr>
@@ -365,31 +374,24 @@ Variables</h2></td></tr>
 <tr class="memitem:a3bc3a31c6af358bc14fd59ca1ec1d75e" id="r_a3bc3a31c6af358bc14fd59ca1ec1d75e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3bc3a31c6af358bc14fd59ca1ec1d75e">return</a></td></tr>
 <tr class="memitem:a6d73afdfa1f338f65d85c38585f1e1f2" id="r_a6d73afdfa1f338f65d85c38585f1e1f2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6d73afdfa1f338f65d85c38585f1e1f2">H2_EV_ARM</a> = 1</td></tr>
 <tr class="memitem:a810111e89e31e78c3e32f99355db7234" id="r_a810111e89e31e78c3e32f99355db7234"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a810111e89e31e78c3e32f99355db7234">H2_EV_APPLY</a> = 2</td></tr>
-<tr class="memitem:a4257e9fd5d09c0baf1cd2301d27355be" id="r_a4257e9fd5d09c0baf1cd2301d27355be"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4257e9fd5d09c0baf1cd2301d27355be">H2_EV_SKIP</a> = 3</td></tr>
 <tr class="memitem:afb3fbd193a09fbd36b7f12f104aec2e7" id="r_afb3fbd193a09fbd36b7f12f104aec2e7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afb3fbd193a09fbd36b7f12f104aec2e7">H2_EV_CLR_RMS</a> = 4</td></tr>
 <tr class="memitem:aed0b1c34672fd84a78533c4247ea343f" id="r_aed0b1c34672fd84a78533c4247ea343f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aed0b1c34672fd84a78533c4247ea343f">H2_EV_CLR_SET</a> = 5</td></tr>
 <tr class="memitem:a574a90ebc327d46aa6aab426a829176b" id="r_a574a90ebc327d46aa6aab426a829176b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a574a90ebc327d46aa6aab426a829176b">H2_EV_CLR_MISC</a> = 6</td></tr>
 <tr class="memitem:ae4d880161f4292f9476f0da08c2493c7" id="r_ae4d880161f4292f9476f0da08c2493c7"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae4d880161f4292f9476f0da08c2493c7">H2_EV_IDLE_ARM</a> = 7</td></tr>
-<tr class="memitem:aaf4c44145fd44721026b6f4c4b6466e6" id="r_aaf4c44145fd44721026b6f4c4b6466e6"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aaf4c44145fd44721026b6f4c4b6466e6">H2_EV_REENQ</a> = 8</td></tr>
-<tr class="memitem:ac4b024e5b458938ba17df793943eedef" id="r_ac4b024e5b458938ba17df793943eedef"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac4b024e5b458938ba17df793943eedef">scheduler_save_rsp_to</a></td></tr>
-<tr class="memdesc:ac4b024e5b458938ba17df793943eedef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address to save the current RSP into during context switch. Accessed atomically from C++; read/written by isr_stubs.asm.  <br /></td></tr>
-<tr class="memitem:ac3698635a1028c993bb17376f59935c1" id="r_ac3698635a1028c993bb17376f59935c1"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac3698635a1028c993bb17376f59935c1">scheduler_load_rsp_from</a></td></tr>
-<tr class="memdesc:ac3698635a1028c993bb17376f59935c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">RSP value to load during context switch restore.  <br /></td></tr>
-<tr class="memitem:a8717ed879e07d6e261b521940de70ee7" id="r_a8717ed879e07d6e261b521940de70ee7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8717ed879e07d6e261b521940de70ee7">scheduler_load_cr3_from</a></td></tr>
-<tr class="memdesc:a8717ed879e07d6e261b521940de70ee7"><td class="mdescLeft">&#160;</td><td class="mdescRight">CR3 value to load during context switch restore (0 = don't load).  <br /></td></tr>
-<tr class="memitem:ab2187af236405c0bcefe647b4a33398e" id="r_ab2187af236405c0bcefe647b4a33398e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2187af236405c0bcefe647b4a33398e">scheduler_next_task_id</a></td></tr>
-<tr class="memdesc:ab2187af236405c0bcefe647b4a33398e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task ID to set as current after the context switch completes.  <br /></td></tr>
-<tr class="memitem:ab66b635cab196ea26d2cfaaf47fc59b6" id="r_ab66b635cab196ea26d2cfaaf47fc59b6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab66b635cab196ea26d2cfaaf47fc59b6">scheduler_load_kstack_base</a></td></tr>
-<tr class="memdesc:ab66b635cab196ea26d2cfaaf47fc59b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
-<tr class="memitem:a3e81dd1c530d5febe94bf37000962f09" id="r_a3e81dd1c530d5febe94bf37000962f09"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3e81dd1c530d5febe94bf37000962f09">scheduler_load_kstack_top</a></td></tr>
-<tr class="memitem:a963403eae4c53dac69cc7db142c47c81" id="r_a963403eae4c53dac69cc7db142c47c81"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a963403eae4c53dac69cc7db142c47c81">scheduler_switch_generation</a></td></tr>
-<tr class="memdesc:a963403eae4c53dac69cc7db142c47c81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generation sequence counter for the deferred-switch pair. A publisher bumps it after writing load_rsp_from / load_cr3_from and before arming scheduler_save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair.  <br /></td></tr>
+<tr class="memitem:a8817c181097f042b8820d9cee86cc4b7" id="r_a8817c181097f042b8820d9cee86cc4b7"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a8817c181097f042b8820d9cee86cc4b7">scheduler_save_rsp_to</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a8817c181097f042b8820d9cee86cc4b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot).  <br /></td></tr>
+<tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a37bdeed47659d598826673faf0480073"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
+<tr class="memitem:a687798275dc6880000977475427d7f60" id="r_a687798275dc6880000977475427d7f60"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a687798275dc6880000977475427d7f60">scheduler_load_kstack_top</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a7f4d2c64ad76e92277ca6d410d650da4" id="r_a7f4d2c64ad76e92277ca6d410d650da4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7f4d2c64ad76e92277ca6d410d650da4">scheduler_switch_generation</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a7f4d2c64ad76e92277ca6d410d650da4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU generation sequence counter for the deferred-switch pair (publish-then-bump-then-arm protocol; asm re-verifies before apply).  <br /></td></tr>
 <tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a45c7ed02104a8f2dc79052a0301a16c3">scheduler_kernel_cr3</a></td></tr>
 <tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
-<tr class="memitem:afb20072a8fd62f005a14dbdf87038f27" id="r_afb20072a8fd62f005a14dbdf87038f27"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb20072a8fd62f005a14dbdf87038f27">scheduler_need_resched</a></td></tr>
-<tr class="memdesc:afb20072a8fd62f005a14dbdf87038f27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reschedule request flag. Set by task-context callers (reschedule(), terminate(), yield_as) to ask the timer ISR to (re)publish a deferred switch. The timer ISR is the SOLE publisher of the deferred switch (see rate_monotonic_schedule), so there is exactly one writer of the switch buffer per tick — eliminating the two-publisher race where a task-context reschedule() and the timer ISR's rate_monotonic_schedule both called switch_to_task and the last writer before the epilogue won, starving the other's selection.  <br /></td></tr>
-<tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
-<tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth. Incremented at each ISR entry, decremented before iretq. Checked by on_tick() to detect nested timer interrupts and skip re-entrant scheduler ops.  <br /></td></tr>
+<tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:afb68be65bad6d813cd555b20b9500a4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU reschedule request flag (task-context producers; each CPU's timer ISR is the sole publisher of its own switch buffer — the single-writer-per-tick discipline from the two-publisher fix).  <br /></td></tr>
 <tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
 <tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
@@ -1128,43 +1130,6 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a477db93fbbdf2a6d3cfc20606a525044" name="a477db93fbbdf2a6d3cfc20606a525044"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a477db93fbbdf2a6d3cfc20606a525044">&#9670;&#160;</a></span>canary_check_in_scheduler_hooks()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">bool kernel::canary_check_in_scheduler_hooks </td>
-          <td>(</td>
-          <td class="paramtype">TaskControlBlock *</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>rip</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>MP-3 canary sampling for the scheduler hooks (issue #92 canary relocation). Verifies the user-segment canaries of a task that is about to run (context switch) or currently running (timer tick). Runs only for user tasks, only under CONFIG_CANARY_GUARD, and is a pure page-table read (no locks, no allocation) — safe in ISR/tick context. Test mode latches g_canary_trip (the harness survives); production panics. This restores corruption detection for FAST syscalls, which no longer consult canaries on entry. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">task</td><td>Task to verify (must be magic-valid). </td></tr>
-    <tr><td class="paramname">rip</td><td>Approximate fault RIP for the latch (0 in scheduler hooks). </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>true if verified (or no user task / no canary check enabled). </dd></dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_a477db93fbbdf2a6d3cfc20606a525044_cgraph.png" border="0" usemap="#anamespacekernel_a477db93fbbdf2a6d3cfc20606a525044_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
-</div>
-
-</div>
-</div>
 <a id="a59203fb708dcb70f7046b645fb81052e" name="a59203fb708dcb70f7046b645fb81052e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a59203fb708dcb70f7046b645fb81052e">&#9670;&#160;</a></span>canary_check_on_full_path()</h2>
 
@@ -1192,7 +1157,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.png" border="0" usemap="#anamespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 0 -->
 </div>
 
 </div>
@@ -1236,7 +1201,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -1317,6 +1282,33 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a20a07952a9e22c0be3a6711567475133" name="a20a07952a9e22c0be3a6711567475133"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a20a07952a9e22c0be3a6711567475133">&#9670;&#160;</a></span>cpu_ctx()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp; kernel::cpu_ctx </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/snapshot paths can scan all CPUs' <span class="tt">current</span> (spare-any-current, capture). First touch is on the BSP during boot (single-threaded; -fno-threadsafe-statics safe). </p>
+
+</div>
+</div>
 <a id="a777bca6dec383faa735ebe34c5bdf749" name="a777bca6dec383faa735ebe34c5bdf749"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a777bca6dec383faa735ebe34c5bdf749">&#9670;&#160;</a></span>current_cpu()</h2>
 
@@ -1341,7 +1333,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns the current CPU's execution context. </p>
-<p>Single-core today: a single static instance. Phase 8 threads this through the per-CPU GS base (x86_64) / TPIDR (aarch64) / tp (riscv64). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph.png" border="0" usemap="#anamespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -1407,6 +1404,33 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 4 -->
 </div>
+
+</div>
+</div>
+<a id="a0571e17de31b74de7a47a25459361c20" name="a0571e17de31b74de7a47a25459361c20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0571e17de31b74de7a47a25459361c20">&#9670;&#160;</a></span>isr_nesting_own()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp; kernel::isr_nesting_own </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Own-CPU ISR nesting depth (single-core archs: the plain global). </p>
 
 </div>
 </div>
@@ -2345,50 +2369,6 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="aaf4c44145fd44721026b6f4c4b6466e6" name="aaf4c44145fd44721026b6f4c4b6466e6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aaf4c44145fd44721026b6f4c4b6466e6">&#9670;&#160;</a></span>H2_EV_REENQ</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_REENQ = 8</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="a4257e9fd5d09c0baf1cd2301d27355be" name="a4257e9fd5d09c0baf1cd2301d27355be"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4257e9fd5d09c0baf1cd2301d27355be">&#9670;&#160;</a></span>H2_EV_SKIP</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::H2_EV_SKIP = 3</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-</div>
-</div>
 <a id="aec37532c2fb1a123d928e41e13297533" name="aec37532c2fb1a123d928e41e13297533"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aec37532c2fb1a123d928e41e13297533">&#9670;&#160;</a></span>head</h2>
 
@@ -2468,22 +2448,14 @@ template&lt;typename T&gt; </div>
 
 <div class="memitem">
 <div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
       <table class="memname">
         <tr>
           <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::isr_nesting_depth</td>
         </tr>
       </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
-  </tr>
-</table>
 </div><div class="memdoc">
 
-<p>Current ISR nesting depth. Incremented at each ISR entry, decremented before iretq. Checked by on_tick() to detect nested timer interrupts and skip re-entrant scheduler ops. </p>
+<p>Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>. </p>
 
 </div>
 </div>
@@ -2614,8 +2586,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="a8717ed879e07d6e261b521940de70ee7" name="a8717ed879e07d6e261b521940de70ee7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8717ed879e07d6e261b521940de70ee7">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
+<a id="ab2ec048806a6cd223e72e927ab792e6b" name="ab2ec048806a6cd223e72e927ab792e6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2ec048806a6cd223e72e927ab792e6b">&#9670;&#160;</a></span>scheduler_load_cr3_from</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2634,12 +2606,10 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>CR3 value to load during context switch restore (0 = don't load). </p>
-
 </div>
 </div>
-<a id="ab66b635cab196ea26d2cfaaf47fc59b6" name="ab66b635cab196ea26d2cfaaf47fc59b6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab66b635cab196ea26d2cfaaf47fc59b6">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
+<a id="a37bdeed47659d598826673faf0480073" name="a37bdeed47659d598826673faf0480073"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37bdeed47659d598826673faf0480073">&#9670;&#160;</a></span>scheduler_load_kstack_base</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2659,11 +2629,12 @@ template&lt;typename T&gt; </div>
 </div><div class="memdoc">
 
 <p>Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq. </p>
+<p>Kernel-stack range of the task being dispatched (per-CPU). isr_stubs.asm verifies the load RSP lies within range before iretq. </p>
 
 </div>
 </div>
-<a id="a3e81dd1c530d5febe94bf37000962f09" name="a3e81dd1c530d5febe94bf37000962f09"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3e81dd1c530d5febe94bf37000962f09">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
+<a id="a687798275dc6880000977475427d7f60" name="a687798275dc6880000977475427d7f60"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a687798275dc6880000977475427d7f60">&#9670;&#160;</a></span>scheduler_load_kstack_top</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2684,8 +2655,8 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="ac3698635a1028c993bb17376f59935c1" name="ac3698635a1028c993bb17376f59935c1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac3698635a1028c993bb17376f59935c1">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
+<a id="abc2636a4499534ec927314c4986490c9" name="abc2636a4499534ec927314c4986490c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abc2636a4499534ec927314c4986490c9">&#9670;&#160;</a></span>scheduler_load_rsp_from</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2704,12 +2675,10 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>RSP value to load during context switch restore. </p>
-
 </div>
 </div>
-<a id="afb20072a8fd62f005a14dbdf87038f27" name="afb20072a8fd62f005a14dbdf87038f27"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#afb20072a8fd62f005a14dbdf87038f27">&#9670;&#160;</a></span>scheduler_need_resched</h2>
+<a id="afb68be65bad6d813cd555b20b9500a4f" name="afb68be65bad6d813cd555b20b9500a4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb68be65bad6d813cd555b20b9500a4f">&#9670;&#160;</a></span>scheduler_need_resched</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2728,12 +2697,12 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Reschedule request flag. Set by task-context callers (reschedule(), terminate(), yield_as) to ask the timer ISR to (re)publish a deferred switch. The timer ISR is the SOLE publisher of the deferred switch (see rate_monotonic_schedule), so there is exactly one writer of the switch buffer per tick — eliminating the two-publisher race where a task-context reschedule() and the timer ISR's rate_monotonic_schedule both called switch_to_task and the last writer before the epilogue won, starving the other's selection. </p>
+<p>Per-CPU reschedule request flag (task-context producers; each CPU's timer ISR is the sole publisher of its own switch buffer — the single-writer-per-tick discipline from the two-publisher fix). </p>
 
 </div>
 </div>
-<a id="ab2187af236405c0bcefe647b4a33398e" name="ab2187af236405c0bcefe647b4a33398e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab2187af236405c0bcefe647b4a33398e">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
+<a id="a34491a1a1dfdbb4bc359f8110d283e93" name="a34491a1a1dfdbb4bc359f8110d283e93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a34491a1a1dfdbb4bc359f8110d283e93">&#9670;&#160;</a></span>scheduler_next_task_id</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2752,12 +2721,10 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Task ID to set as current after the context switch completes. </p>
-
 </div>
 </div>
-<a id="ac4b024e5b458938ba17df793943eedef" name="ac4b024e5b458938ba17df793943eedef"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac4b024e5b458938ba17df793943eedef">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
+<a id="a8817c181097f042b8820d9cee86cc4b7" name="a8817c181097f042b8820d9cee86cc4b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8817c181097f042b8820d9cee86cc4b7">&#9670;&#160;</a></span>scheduler_save_rsp_to</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2766,7 +2733,7 @@ template&lt;typename T&gt; </div>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>* kernel::scheduler_save_rsp_to</td>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> * kernel::scheduler_save_rsp_to</td>
         </tr>
       </table>
   </td>
@@ -2776,12 +2743,12 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Address to save the current RSP into during context switch. Accessed atomically from C++; read/written by isr_stubs.asm. </p>
+<p>Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot). </p>
 
 </div>
 </div>
-<a id="a963403eae4c53dac69cc7db142c47c81" name="a963403eae4c53dac69cc7db142c47c81"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a963403eae4c53dac69cc7db142c47c81">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
+<a id="a7f4d2c64ad76e92277ca6d410d650da4" name="a7f4d2c64ad76e92277ca6d410d650da4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f4d2c64ad76e92277ca6d410d650da4">&#9670;&#160;</a></span>scheduler_switch_generation</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2800,7 +2767,7 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Generation sequence counter for the deferred-switch pair. A publisher bumps it after writing load_rsp_from / load_cr3_from and before arming scheduler_save_rsp_to; isr_stubs.asm captures it and re-verifies before applying so a timer ISR never applies a half-written / superseded pair. </p>
+<p>Per-CPU generation sequence counter for the deferred-switch pair (publish-then-bump-then-arm protocol; asm re-verifies before apply). </p>
 
 </div>
 </div>

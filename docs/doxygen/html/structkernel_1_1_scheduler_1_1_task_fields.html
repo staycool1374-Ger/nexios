@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -163,6 +163,8 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a79d3a773fa7cb12eb78681ed6fc4cdb6" id="r_a79d3a773fa7cb12eb78681ed6fc4cdb6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a79d3a773fa7cb12eb78681ed6fc4cdb6">runq_prev</a></td></tr>
 <tr class="memitem:a60135de4e18f5dd456e5ed869e5df9e2" id="r_a60135de4e18f5dd456e5ed869e5df9e2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a60135de4e18f5dd456e5ed869e5df9e2">in_ready_queue</a></td></tr>
 <tr class="memitem:a619ff100b5e520327d028414753a1bb6" id="r_a619ff100b5e520327d028414753a1bb6"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a619ff100b5e520327d028414753a1bb6">rq_priority</a></td></tr>
+<tr class="memitem:a3749b14b62fad5b1f55b4281964ad10a" id="r_a3749b14b62fad5b1f55b4281964ad10a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3749b14b62fad5b1f55b4281964ad10a">cpu_affinity</a></td></tr>
+<tr class="memdesc:a3749b14b62fad5b1f55b4281964ad10a"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU affinity bitmask (issue #25 C1).  <br /></td></tr>
 <tr class="memitem:af3b53e828391b6112b1484dca370cb69" id="r_af3b53e828391b6112b1484dca370cb69"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3b53e828391b6112b1484dca370cb69">iopb_slot</a></td></tr>
 <tr class="memdesc:af3b53e828391b6112b1484dca370cb69"><td class="mdescLeft">&#160;</td><td class="mdescRight">I/O permission bitmap pool slot (issue #3).  <br /></td></tr>
 </table>
@@ -224,6 +226,22 @@ Data Fields</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Full register context (critical: rsp). </p>
+
+</div>
+</div>
+<a id="a3749b14b62fad5b1f55b4281964ad10a" name="a3749b14b62fad5b1f55b4281964ad10a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3749b14b62fad5b1f55b4281964ad10a">&#9670;&#160;</a></span>cpu_affinity</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::cpu_affinity</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>CPU affinity bitmask (issue #25 C1). </p>
 
 </div>
 </div>

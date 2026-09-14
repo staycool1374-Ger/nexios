@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -216,10 +216,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('shm__ring_8hpp
 <div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span></div>
 <div class="foldopen" id="foldopen00122" data-start="{" data-end="}">
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno"><a class="line" href="namespacekernel_1_1shm.html#afb8c80f2e5b1d459647f20396b565227">  122</a></span><span class="keyword">inline</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *<a class="code hl_function" href="namespacekernel_1_1shm.html#afb8c80f2e5b1d459647f20396b565227">shm_ring_elem</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1shm_1_1_shared_ring_header.html">SharedRingHeader</a> *header,</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>                              <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data_base, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>                              <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data_base, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> idx) {</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> <a class="code hl_namespace" href="namespacekernel_1_1cap.html">cap</a> = __atomic_load_n(&amp;header-&gt;<a class="code hl_variable" href="structkernel_1_1shm_1_1_shared_ring_header.html#a3fc0c0eb30186ce665025c3b87918747">capacity</a>, __ATOMIC_ACQUIRE);</div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> esz = __atomic_load_n(&amp;header-&gt;<a class="code hl_variable" href="structkernel_1_1shm_1_1_shared_ring_header.html#a00e33d7fcb272e642d115b26e46aa6d0">element_size</a>, __ATOMIC_ACQUIRE);</div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> off = (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> * esz) &amp; (<a class="code hl_namespace" href="namespacekernel_1_1cap.html">cap</a> - 1);</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>    <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> off = (idx * esz) &amp; (<a class="code hl_namespace" href="namespacekernel_1_1cap.html">cap</a> - 1);</div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keywordflow">return</span> data_base + off;</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>}</div>
 </div>
@@ -261,9 +261,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('shm__ring_8hpp
 <div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>} <span class="comment">// namespace kernel::shm</span></div>
 </div>
 <div class="ttc" id="aconstants_8hpp_html"><div class="ttname"><a href="constants_8hpp.html">constants.hpp</a></div><div class="ttdoc">Central hardware and memory-layout constants (no magic numbers).</div></div>
-<div class="ttc" id="agcov__handler_8cpp_html_a1f658a7d21dc9b85b8009cedb0a1aef6"><div class="ttname"><a href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a></div><div class="ttdeci">uint32_t idx</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:60</div></div>
 <div class="ttc" id="aio_8hpp_html"><div class="ttname"><a href="io_8hpp.html">io.hpp</a></div></div>
-<div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:62</div></div>
+<div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:63</div></div>
 <div class="ttc" id="anamespacekernel_1_1cap_html"><div class="ttname"><a href="namespacekernel_1_1cap.html">kernel::cap</a></div><div class="ttdef"><b>Definition</b> cap.cpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1shm_html"><div class="ttname"><a href="namespacekernel_1_1shm.html">kernel::shm</a></div><div class="ttdef"><b>Definition</b> shm_ring.hpp:34</div></div>
 <div class="ttc" id="anamespacekernel_1_1shm_html_a3654b2130e95f25cef1c32c2a01c698e"><div class="ttname"><a href="namespacekernel_1_1shm.html#a3654b2130e95f25cef1c32c2a01c698e">kernel::shm::SHM_RING_MAGIC</a></div><div class="ttdeci">constexpr uint64_t SHM_RING_MAGIC</div><div class="ttdoc">Magic identifying a valid shared ring header (0x4E4558 &#39;NEX&#39; + 0x52494E47 &#39;RING&#39;).</div><div class="ttdef"><b>Definition</b> shm_ring.hpp:38</div></div>

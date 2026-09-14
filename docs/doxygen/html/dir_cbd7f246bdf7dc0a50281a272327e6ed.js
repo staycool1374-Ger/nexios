@@ -14,6 +14,7 @@ var dir_cbd7f246bdf7dc0a50281a272327e6ed =
     [ "log", "dir_9292ec01c084bdf1c45f7481a0aba272.html", "dir_9292ec01c084bdf1c45f7481a0aba272" ],
     [ "memory", "dir_cfddc3e4738eb751c9ecb1dcd81b4d56.html", "dir_cfddc3e4738eb751c9ecb1dcd81b4d56" ],
     [ "net", "dir_7d5a55bffd9f0b5a19cf98f012f1d84d.html", "dir_7d5a55bffd9f0b5a19cf98f012f1d84d" ],
+    [ "profiling", "dir_4f18bd1e31e1b6100c4f8d18e8404ac2.html", "dir_4f18bd1e31e1b6100c4f8d18e8404ac2" ],
     [ "sync", "dir_0bad16966a5a8d1438c9252d5a62da0f.html", "dir_0bad16966a5a8d1438c9252d5a62da0f" ],
     [ "syscall", "dir_86f15235f1dbace123bd765dedac1e4b.html", "dir_86f15235f1dbace123bd765dedac1e4b" ],
     [ "task", "dir_507c9ec95be9a201f49444d5da26e8a6.html", "dir_507c9ec95be9a201f49444d5da26e8a6" ],

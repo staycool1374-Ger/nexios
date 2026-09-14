@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -143,8 +143,15 @@ Files</h2></td></tr>
 <tr class="memdesc:x86__64_2hal_2msr__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 Model-Specific Register (MSR) read/write — RDMSR, WRMSR, and common MSR constants. <br /></td></tr>
 <tr class="memitem:page_5Ftable_5Fimpl_2Ehpp" id="r_page_5Ftable_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="x86__64_2hal_2page__table__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2page__table__impl_8hpp.html">page_table_impl.hpp</a></td></tr>
 <tr class="memdesc:x86__64_2hal_2page__table__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 page-table management — CR3 activation and TLB invalidation wrappers. <br /></td></tr>
+<tr class="memitem:percpu_2Ecpp" id="r_percpu_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="percpu_8cpp.html">percpu.cpp</a></td></tr>
+<tr class="memitem:percpu_2Ehpp" id="r_percpu_2Ehpp"><td class="memItemLeft"><a href="percpu_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="percpu_8hpp.html">percpu.hpp</a></td></tr>
+<tr class="memdesc:percpu_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU state block (issue #94). One 4 KiB page per logical CPU, indexed by LAPIC ID / logical CPU ID. Accessed via GS_BASE (x86_64). CONFIG_MAX_CPUS pages; the BSP owns index 0, APs own 1...n (issue #25). <br /></td></tr>
 <tr class="memitem:rand_5Fimpl_2Ehpp" id="r_rand_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="x86__64_2hal_2rand__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2rand__impl_8hpp.html">rand_impl.hpp</a></td></tr>
 <tr class="memdesc:x86__64_2hal_2rand__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 RDRAND and RDSEED instructions — hardware random number generation. <br /></td></tr>
+<tr class="memitem:smp_2Ecpp" id="r_smp_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="smp_8cpp.html">smp.cpp</a></td></tr>
+<tr class="memdesc:smp_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">SMP AP bring-up implementation (issue #25, Phase B3). Copies the position-locked trampoline blob to physical 0x70000, fills the param block per AP, and runs the INIT/SIPI sequence with TSC-bounded waits. Woken APs park in ap_main() (Phase C adds scheduling). Runs once at boot under interrupt guard; any failure parks with zero APs or panics naming the LAPIC ID. <br /></td></tr>
+<tr class="memitem:smp_2Ehpp" id="r_smp_2Ehpp"><td class="memItemLeft"><a href="smp_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="smp_8hpp.html">smp.hpp</a></td></tr>
+<tr class="memdesc:smp_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">SMP AP bring-up (issue #25, Phase B). The BSP copies the position-locked trampoline blob to physical 0x70000, fills the param block, and wakes each MADT-listed AP with INIT + SIPI; woken APs run ap_main() (per-CPU init + LAPIC enable) and park in a halt loop (scheduling on APs is Phase C). Single-CPU runs (MADT ncpus &lt;= 1 or block unusable) are a silent no-op. x86_64-only. <br /></td></tr>
 <tr class="memitem:timer_2Ecpp" id="r_timer_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2hal_2timer_8cpp.html">timer.cpp</a></td></tr>
 <tr class="memdesc:x86__64_2hal_2timer_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PIT (Programmable Interval Timer) driver — generates periodic ticks and calibrates the TSC. <br /></td></tr>
 </table>

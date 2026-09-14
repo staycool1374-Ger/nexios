@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -205,10 +205,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ready__queue__
 <div class="ttc" id="aclasskernel_1_1_ready_queue_manager_html_ad9860837c2ece684ae95b9de3727a584"><div class="ttname"><a href="classkernel_1_1_ready_queue_manager.html#ad9860837c2ece684ae95b9de3727a584">kernel::ReadyQueueManager::has_ready</a></div><div class="ttdeci">bool has_ready() const noexcept</div><div class="ttdoc">Returns true if any priority level has ready tasks.</div><div class="ttdef"><b>Definition</b> ready_queue_manager.hpp:49</div></div>
 <div class="ttc" id="aclasskernel_1_1_ready_queue_manager_html_adf2703f42a211a644adc440ae6fab7a1"><div class="ttname"><a href="classkernel_1_1_ready_queue_manager.html#adf2703f42a211a644adc440ae6fab7a1">kernel::ReadyQueueManager::enqueue</a></div><div class="ttdeci">void enqueue(TaskControlBlock &amp;tcb, uint64_t priority) noexcept</div><div class="ttdoc">Enqueues a TCB at the given priority level.</div><div class="ttdef"><b>Definition</b> ready_queue_manager.cpp:12</div></div>
 <div class="ttc" id="aclasskernel_1_1_task_queue_html"><div class="ttname"><a href="classkernel_1_1_task_queue.html">kernel::TaskQueue</a></div><div class="ttdoc">Intrusive doubly-linked list queue for TaskControlBlock. Operations are O(1), no dynamic allocation....</div><div class="ttdef"><b>Definition</b> task_queue.hpp:13</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_ac84f34d32e4683fb9c3f512c093068cf"><div class="ttname"><a href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:133</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
-<div class="ttc" id="anexios__config_8h_html_a560bec767ff9229f8b02270422f9109f"><div class="ttname"><a href="nexios__config_8h.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a></div><div class="ttdeci">#define CONFIG_PRIORITY_CEILING</div><div class="ttdef"><b>Definition</b> nexios_config.h:72</div></div>
+<div class="ttc" id="anexios__config_8h_html_a560bec767ff9229f8b02270422f9109f"><div class="ttname"><a href="nexios__config_8h.html#a560bec767ff9229f8b02270422f9109f">CONFIG_PRIORITY_CEILING</a></div><div class="ttdeci">#define CONFIG_PRIORITY_CEILING</div><div class="ttdef"><b>Definition</b> nexios_config.h:78</div></div>
 <div class="ttc" id="apriority__map_8hpp_html"><div class="ttname"><a href="priority__map_8hpp.html">priority_map.hpp</a></div><div class="ttdoc">Two-level bitmap for O(1) highest-priority lookup.</div></div>
 <div class="ttc" id="astructkernel_1_1_ready_queue_p_o_d_html"><div class="ttname"><a href="structkernel_1_1_ready_queue_p_o_d.html">kernel::ReadyQueuePOD</a></div><div class="ttdoc">POD snapshot of the full ReadyQueueManager state. All fields are plain data; memcpy-safe by construct...</div><div class="ttdef"><b>Definition</b> ready_queue_manager.hpp:16</div></div>
 <div class="ttc" id="astructkernel_1_1_ready_queue_p_o_d_html_a318bc49fef785fc0a3189cef55985f40"><div class="ttname"><a href="structkernel_1_1_ready_queue_p_o_d.html#a318bc49fef785fc0a3189cef55985f40">kernel::ReadyQueuePOD::queue_counts</a></div><div class="ttdeci">uint64_t queue_counts[CONFIG_PRIORITY_CEILING+1]</div><div class="ttdoc">Per-priority queue entry counts.</div><div class="ttdef"><b>Definition</b> ready_queue_manager.hpp:24</div></div>

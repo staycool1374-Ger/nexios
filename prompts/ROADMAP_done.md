@@ -1,5 +1,35 @@
 # Completed Roadmap Items
 
+## v0.4.4 — APIC + SMP / ELF shared objects (RELEASED 2026-09-15)
+
+**Purpose:** Per-CPU foundation + SMP bring-up skeleton, ELF DT_NEEDED
+shared-object support, v0.4.x test-coverage completion, Phase A gcov line
+coverage, release-blocking S1 boot fix. Milestone v0.4.4 has 0 open issues.
+
+- **Per-CPU + SMP bring-up** (#25 phases A–C1, #94) — per_cpu slots,
+  LAPIC-ID indexing, MADT discovery, INIT-SIPI-SIPI, AP parked tasks,
+  affinity + cross-CPU IPI wake, TPR prioritization (#26).
+- **ELF shared objects** (#95) — DT_NEEDED resolution + eager relocs.
+- **Syscall/FPU milestones** (#92, #93, #106, #105, #107, #11) — fastpath,
+  FPU/SIMD context, external pager, in-register IPC fastpath.
+- **Exception table audit** (#91) — #VE/#HV classification (S1).
+- **Test coverage v0.4.x** (#85) — all 18 modules have test files
+  (11 new classes, 62 tests: LAPIC, I/O APIC, core isolation, TPR live
+  block-and-hold, queue fanout, IRQ-guard contracts, AP-tick liveness,
+  IPI baseline, PML4 visibility; documented stubs where no kernel API
+  exists yet).
+- **Phase A gcov line coverage** (#123 acceptance via #147) — cross-class
+  merge (leaf-wise, no gcfn needed), lcov/genhtml HTML, BRDA column.
+- **S1 boot fix** (#153) — trampoline staging at 0x70000 clobbered GRUB
+  multiboot info (release-only page fault); bring_up relocates the info
+  to PMM-held pages on overlap, fail-closed park otherwise.
+
+Gates at completion (2026-09-15): debug `all` **1348/1348**, release
+`all` **85/85**, `make build` Errors 0. SIL 3 APPROVED per issue
+(#147, #153 audit reports under `audits/`).
+
+---
+
 ## v0.4.3 — Test-Coverage Completion (RELEASED 2026-09-05)
 
 **Purpose:** Complete test coverage for v0.4.x (11 new test classes, 76 tests),

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -128,7 +128,9 @@ Directory dependency graph for gcov:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
 <tr class="memitem:gcov_5Fhandler_2Ecpp" id="r_gcov_5Fhandler_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="gcov__handler_8cpp.html">gcov_handler.cpp</a></td></tr>
-<tr class="memdesc:gcov__handler_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">GCOV profiling support — function-entry instrumentation and serial flush. <br /></td></tr>
+<tr class="memdesc:gcov__handler_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dynamic function-level coverage — GCC <span class="tt">-finstrument-functions</span> entry hook plus the framed serial dump of the executed-function set. <br /></td></tr>
+<tr class="memitem:gcov_5Fhandler_2Ehpp" id="r_gcov_5Fhandler_2Ehpp"><td class="memItemLeft"><a href="gcov__handler_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="gcov__handler_8hpp.html">gcov_handler.hpp</a></td></tr>
+<tr class="memdesc:gcov__handler_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dynamic function-level coverage — executed-function table and the framed serial dump consumed by tools/coverage_report.py (issue #122). <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

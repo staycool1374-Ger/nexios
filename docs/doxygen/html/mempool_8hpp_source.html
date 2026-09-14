@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.3</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
    </div>
   </td>
  </tr>
@@ -163,16 +163,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>              first_free(0), initialized(<a class="code hl_variable" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a>) {</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>        }</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span></div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordtype">bool</span> is_block_freed(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>            <span class="keywordflow">return</span> freed_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] &amp; (1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        <span class="keywordtype">bool</span> is_block_freed(<span class="keywordtype">size_t</span> idx)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>            <span class="keywordflow">return</span> freed_bitmap[idx / 64] &amp; (1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        }</div>
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span></div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>        <span class="keywordtype">void</span> set_block_freed(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>            freed_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] |= (1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>        <span class="keywordtype">void</span> set_block_freed(<span class="keywordtype">size_t</span> idx) {</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>            freed_bitmap[idx / 64] |= (1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>        }</div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span></div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>        <span class="keywordtype">void</span> clear_block_freed(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>            freed_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] &amp;= ~(1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>        <span class="keywordtype">void</span> clear_block_freed(<span class="keywordtype">size_t</span> idx) {</div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>            freed_bitmap[idx / 64] &amp;= ~(1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>        }</div>
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span></div>
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>        <span class="keywordtype">void</span> copy_freed_bitmap(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *dst)<span class="keyword"> const </span>{</div>
@@ -198,16 +198,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>                pinned_bitmap[i] = 0;</div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        }</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span></div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>        <span class="keywordtype">bool</span> is_block_pinned(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>)<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>            <span class="keywordflow">return</span> pinned_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] &amp; (1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>        <span class="keywordtype">bool</span> is_block_pinned(<span class="keywordtype">size_t</span> idx)<span class="keyword"> const </span>{</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>            <span class="keywordflow">return</span> pinned_bitmap[idx / 64] &amp; (1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>        }</div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span></div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>        <span class="keywordtype">void</span> set_block_pinned(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>            pinned_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] |= (1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>        <span class="keywordtype">void</span> set_block_pinned(<span class="keywordtype">size_t</span> idx) {</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>            pinned_bitmap[idx / 64] |= (1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>        }</div>
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span></div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        <span class="keywordtype">void</span> clear_block_pinned(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>            pinned_bitmap[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> / 64] &amp;= ~(1ULL &lt;&lt; (<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a> % 64));</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        <span class="keywordtype">void</span> clear_block_pinned(<span class="keywordtype">size_t</span> idx) {</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>            pinned_bitmap[idx / 64] &amp;= ~(1ULL &lt;&lt; (idx % 64));</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>        }</div>
 <div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span> </div>
 <div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>      <span class="keyword">private</span>:</div>
@@ -244,11 +244,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> pool_count() {</div>
 <div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>        <span class="keywordflow">return</span> POOL_COUNT;</div>
 <div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>    }</div>
-<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> pool_free_count(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>) {</div>
-<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        <span class="keywordflow">return</span> pools_[<a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>].free_count;</div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> pool_free_count(<span class="keywordtype">size_t</span> idx) {</div>
+<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        <span class="keywordflow">return</span> pools_[idx].free_count;</div>
 <div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>    }</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> capture_pool_meta(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>, PoolMeta &amp;out);</div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore_pool_meta(<span class="keywordtype">size_t</span> <a class="code hl_variable" href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a>, <span class="keyword">const</span> PoolMeta &amp;meta);</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> capture_pool_meta(<span class="keywordtype">size_t</span> idx, PoolMeta &amp;out);</div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore_pool_meta(<span class="keywordtype">size_t</span> idx, <span class="keyword">const</span> PoolMeta &amp;meta);</div>
 <div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> capture_pool_data(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *dst);</div>
 <div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore_pool_data(<span class="keyword">const</span> <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *src);</div>
 <div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> pool_data_bytes();</div>
@@ -268,12 +268,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('mempool_8hpp_s
 <div class="line"><a id="l00241" name="l00241"></a><span class="lineno">  241</span>};</div>
 <div class="line"><a id="l00242" name="l00242"></a><span class="lineno">  242</span> </div>
 <div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="agcov__handler_8cpp_html_a1f658a7d21dc9b85b8009cedb0a1aef6"><div class="ttname"><a href="gcov__handler_8cpp.html#a1f658a7d21dc9b85b8009cedb0a1aef6">idx</a></div><div class="ttdeci">uint32_t idx</div><div class="ttdef"><b>Definition</b> gcov_handler.cpp:60</div></div>
-<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1177</div></div>
+<div class="ttc" id="akernel_8cpp_html_a5df37b7f02e5cdc7d9412b7f872b8e01"><div class="ttname"><a href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></div><div class="ttdeci">return false</div><div class="ttdef"><b>Definition</b> kernel.cpp:1229</div></div>
 <div class="ttc" id="amempool__errors_8hpp_html"><div class="ttname"><a href="mempool__errors_8hpp.html">mempool_errors.hpp</a></div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a6281f0779a982cc0f19a98b36495e7b3"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs::init_err</a></div><div class="ttdeci">VfsError init_err()</div><div class="ttdoc">Initialize the VFS subsystem with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:452</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:26</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="astdlib_8c_html_afbedc913aa4651b3c3b4b3aecd9b4711"><div class="ttname"><a href="stdlib_8c.html#afbedc913aa4651b3c3b4b3aecd9b4711">free</a></div><div class="ttdeci">void free(void *ptr)</div><div class="ttdef"><b>Definition</b> stdlib.c:56</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
