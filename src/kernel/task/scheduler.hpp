@@ -879,11 +879,16 @@ extern uint64_t scheduler_kernel_cr3;
 ///        the single-writer-per-tick discipline from the two-publisher fix).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
-/// @brief Current ISR nesting depth.  Incremented at each ISR entry,
-///        decremented before iretq.  Checked by on_tick() to detect
-///        nested timer interrupts and skip re-entrant scheduler ops.
+/// @brief Current ISR nesting depth (single-core archs ONLY: the plain
+///        global in global_state.cpp, read via isr_nesting_own()).
+///        On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth
+///        (gs:0x20, issue #27) with NO global definition — any bare use
+///        here fails to link by design (migration proof).  Do not add
+///        readers of this symbol; use isr_nesting_own().
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+#if !defined(CONFIG_ARCH_X86_64)
 extern uint64_t isr_nesting_depth;
+#endif
 /// @brief Monotonic counter incremented on every detected scheduler corruption
 ///        (invalid TCB magic, RSP outside kernel-stack range, etc).
 ///        Reset to zero in test_isolate restore; test framework fails any test
