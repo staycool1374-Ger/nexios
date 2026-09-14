@@ -56,6 +56,19 @@ SELFTEST_TESTS := src/kernel/test/test_lib.cpp \
                   src/kernel/test/test_wcet_cleanup.cpp \
                   src/kernel/test/test_idle_cleanup.cpp \
                   src/kernel/test/test_apic_timer.cpp \
+                  src/kernel/test/test_lapic.cpp \
+                  src/kernel/test/test_ioapic.cpp \
+                  src/kernel/test/test_core_isolation.cpp \
+                  src/kernel/test/test_load_balancer.cpp \
+                  src/kernel/test/test_cache_coloring.cpp \
+                  src/kernel/test/test_smp_sync.cpp \
+                  src/kernel/test/test_smp_verify.cpp \
+                  src/kernel/test/test_pcid.cpp \
+                  src/kernel/test/test_invpcid.cpp \
+                  src/kernel/test/test_lazy_tlb.cpp \
+                  src/kernel/test/test_ipi_batching.cpp \
+                  src/kernel/test/test_tlb_latency.cpp \
+                  src/kernel/test/test_pml4_sync.cpp \
                   src/kernel/test/test_irq_alloc.cpp \
                   src/kernel/test/test_jitter.cpp \
                   src/kernel/test/test_threaded_irqs.cpp \

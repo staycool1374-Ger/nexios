@@ -112,6 +112,12 @@ void bsp_worker_entry() {
     }
 }
 
+void placement_probe_entry() {
+    for (;;) {
+        arch::hlt();
+    }
+}
+
 } // namespace
 
 // Runmode: kernel
@@ -251,11 +257,55 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Queue placement routes deterministically per mask: tasks
+//           pinned 0x1 land on [0] exclusively, tasks pinned 0x2 land
+//           on [1] exclusively (clamped to [0] with 0 APs).  Setup,
+//           assert and teardown run PER TASK, never batched: next_task()
+//           dequeue-drops queued-but-BLOCKED occupants on every tick, so
+//           a batched window spanning several PMM allocations lets a
+//           tick scavenge earlier probes before they are asserted (the
+//           per-task window matches smp_sched_cross_move's).  Masks are
+//           asserted too (cpu_affinity is tick-stable, unlike queue
+//           membership).
+// Input: 4x (create + BLOCKED + register + pin [0x1,0x1,0x2,0x2] +
+//        enqueue + assert + remove + cleanup + free), one task live.
+// Expect: Per task: affinity == pinned-or-clamped mask;
+//         is_queued_on(expected) && !is_queued_on(other).
+// Depends: Scheduler::set_affinity clamp + re-queue path, is_queued_on
+JARVIS_TEST(smp_sched_queue_placement_fanout, "PRE: iocd | POST: none") {
+    constexpr uint64_t kMasks[4] = {0x1, 0x1, 0x2, 0x2};
+    bool has_ap = smp::ap_count() > 0;
+    for (uint64_t i = 0; i < 4; ++i) {
+        TaskControlBlock *probe = TaskControlBlock::create(
+            placement_probe_entry, 10, TaskControlBlock::NO_PERIOD);
+        JARVIS_ASSERT(probe != nullptr);
+        probe->state = TaskState::BLOCKED;
+        Scheduler::register_task(*probe);
+        Scheduler::set_affinity(*probe, kMasks[i]);
+        uint64_t want = 0;
+        uint64_t want_mask = 0x1;
+        if (has_ap && kMasks[i] == 0x2) {
+            want = 1;
+            want_mask = 0x2;
+        }
+        JARVIS_ASSERT_EQ(want_mask, probe->cpu_affinity);
+        Scheduler::enqueue_ready(*probe);
+        JARVIS_ASSERT(Scheduler::is_queued_on(*probe, want));
+        JARVIS_ASSERT(!Scheduler::is_queued_on(*probe, 1 - want));
+        Scheduler::remove_task(*probe);
+        probe->cleanup();
+        MemPool::free(probe);
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_smp_sched_tests() {
     Logger::info("Registering smp sched tests");
     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
     JARVIS_REGISTER_TEST(smp_sched_ipi_wake);
     JARVIS_REGISTER_TEST(smp_sched_bsp_unaffected);
     JARVIS_REGISTER_TEST(smp_sched_cross_move);
+    JARVIS_REGISTER_TEST(smp_sched_queue_placement_fanout);
 }
 #endif // CONFIG_ARCH_X86_64

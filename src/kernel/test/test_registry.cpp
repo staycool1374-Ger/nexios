@@ -215,6 +215,19 @@ void register_smp_ipi_tests();
 void register_smp_bringup_tests();
 void register_sched_affinity_tests();
 void register_smp_sched_tests();
+void register_lapic_tests();
+void register_ioapic_tests();
+void register_core_isolation_tests();
+void register_load_balancer_tests();
+void register_cache_coloring_tests();
+void register_smp_sync_tests();
+void register_smp_verify_tests();
+void register_pcid_tests();
+void register_invpcid_tests();
+void register_lazy_tlb_tests();
+void register_ipi_batching_tests();
+void register_tlb_latency_tests();
+void register_pml4_sync_tests();
 #endif
 void register_virtio_blk_req_tests();
 void register_ahci_deep_tests();
@@ -517,6 +530,19 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"smp_bringup", []() { register_smp_bringup_tests(); }},
     {"sched_affinity", []() { register_sched_affinity_tests(); }},
     {"smp_sched", []() { register_smp_sched_tests(); }},
+    {"lapic", []() { register_lapic_tests(); }},
+    {"ioapic", []() { register_ioapic_tests(); }},
+    {"core_isolation", []() { register_core_isolation_tests(); }},
+    {"load_balancer", []() { register_load_balancer_tests(); }},
+    {"cache_coloring", []() { register_cache_coloring_tests(); }},
+    {"smp_sync", []() { register_smp_sync_tests(); }},
+    {"smp_verify", []() { register_smp_verify_tests(); }},
+    {"pcid", []() { register_pcid_tests(); }},
+    {"invpcid", []() { register_invpcid_tests(); }},
+    {"lazy_tlb", []() { register_lazy_tlb_tests(); }},
+    {"ipi_batching", []() { register_ipi_batching_tests(); }},
+    {"tlb_latency", []() { register_tlb_latency_tests(); }},
+    {"pml4_sync", []() { register_pml4_sync_tests(); }},
 #endif
 
     // -- drivers: device driver framework and controllers --
@@ -748,6 +774,19 @@ static void register_all_tests() {
     register_smp_bringup_tests();
     register_sched_affinity_tests();
     register_smp_sched_tests();
+    register_lapic_tests();
+    register_ioapic_tests();
+    register_core_isolation_tests();
+    register_load_balancer_tests();
+    register_cache_coloring_tests();
+    register_smp_sync_tests();
+    register_smp_verify_tests();
+    register_pcid_tests();
+    register_invpcid_tests();
+    register_lazy_tlb_tests();
+    register_ipi_batching_tests();
+    register_tlb_latency_tests();
+    register_pml4_sync_tests();
 #endif
     register_buildsystem_tests();
     register_config_checks_tests();

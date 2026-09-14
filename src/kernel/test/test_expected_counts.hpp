@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1176,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests
+    {"all",                1238,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -115,7 +115,20 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
     {"smp_bringup",            3,   0,       0      },  // AP bring-up (issue #25 Phase B4): blob layout, staged block memcmp, parked count == MADT APs
     {"sched_affinity",         6,   0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle
-    {"smp_sched",              4,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move (0-AP trivial pass)
+    {"smp_sched",              5,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass)
+    {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
+    {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
+    {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
+    {"load_balancer",        4,   0,       0      },  // Load balancer stubs (issue #85 module 8): idle-pull/work-push/RT-exclusion/threshold pending balancer API
+    {"cache_coloring",       4,   0,       0      },  // Cache-coloring stubs (issue #85 module 10): spread/collisions/sizes/bit-extract pending allocator API
+    {"smp_sync",             6,   0,       0      },  // SMP sync (issue #85 module 11): IRQ-guard IF contract + unlock/relock (real), 2-CPU race/rwlock/migration/ticket stubs
+    {"smp_verify",           5,   0,       0      },  // SMP verify (issue #85 module 12): census + AP-tick liveness + lock bound (real), inversion/soak stubs
+    {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
+    {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
+    {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown stubs (issue #85 module 15): defer/coalesce/quarantine/timeout pending API
+    {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #85 module 16): unbatched 5:5 baseline (real), collapse/order/overflow stubs
+    {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
+    {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
     {"ahci_live",              3,   0,       0      },  // real AHCI command path on q35+ICH9 variant (issue #108): probe, roundtrip, isolation — NOT in all
@@ -187,7 +200,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
-    {"apic_tpr",              5,    0,       0      },  // TPR classes/shadow/guard/vector reservation (#26)
+    {"apic_tpr",              6,    0,       0      },  // TPR classes/shadow/guard/vector reservation + live IPI block-and-hold (#26, issue #85 module 6)
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
 
     // drivers

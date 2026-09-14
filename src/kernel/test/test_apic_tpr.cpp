@@ -6,7 +6,11 @@
 #include <kernel/nexios_config.h>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/apic.hpp>
+#include <kernel/arch/idt.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/bootparams.hpp>
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/hal/tpr_guard.hpp>
 #include <kernel/irq_delivery.hpp>
@@ -15,6 +19,18 @@
 using namespace kernel;
 
 #if defined(CONFIG_ARCH_X86_64)
+
+// Blockable live-probe vector: class 0x70 (== TPR_CLASS_IPC), free
+// (timer 0xE0, syscall 0x80, self-test 0xEF, sched 0xEC, spurious
+// 0xFF are the taken vectors).
+constexpr uint8_t kTprProbeVector = 0x71;
+
+// Set by the probe handler; polled by the blocking test.
+volatile uint64_t g_tpr_ipi_seen = 0;
+
+// TSC at handler entry (diagnostic: entry delay vs the send
+// timestamps whether a tick healed TPR before delivery).
+volatile uint64_t g_tpr_ipi_tsc = 0;
 
 // Runmode: kernel
 // Testidea: Per-CPU TPR shadow defaults to ACCEPT_ALL with frozen gs:0x40.
@@ -161,6 +177,99 @@ JARVIS_TEST(apic_tpr_timer_vector_reserved, "PRE: isolate | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The TPR blocks live delivery below threshold and holds the
+//           IRQ pending: with TPR raised to IPC a self-IPI on the
+//           class-0x70 probe vector does NOT run its handler; after
+//           lowering to ACCEPT_ALL the pending IRQ delivers (held, not
+//           lost).  The raised window runs with the APIC tick STOPPED:
+//           the tick ISR heals TPR to ACCEPT_ALL on every entry (by
+//           design, #26), so a running tick would clear the raised
+//           class within ~1 ms and the IPI would legitimately deliver.
+//           Waits use raw TSC (ticks are frozen while stopped); the
+//           tick is re-armed BEFORE asserting (cookbook Rule 5).
+// Input: IDT handler on 0x71 + self-IPI under TPR IPC (tick stopped)
+//        then ACCEPT_ALL (tick re-armed).
+// Expect: No delivery within 50 ms while raised; delivery within
+//         100 ms after lowering.  HW + tick restored before asserting.
+// Depends: arch::APIC TPR + send_ipi + timer_stop/init/start,
+//         IDT::register_handler_raw
+JARVIS_TEST(apic_tpr_blocks_ipi_below_threshold, "PRE: isolate | POST: none") {
+    if (!arch::APIC::is_enabled()) {
+        Logger::warn("APIC not enabled — skipping");
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint64_t freq = arch::Timer::tsc_freq_hz();
+    JARVIS_ASSERT(freq > 0);
+    uint64_t boot_hz = BootParams::instance().timer_hz;
+    JARVIS_ASSERT(boot_hz != 0);
+    arch::IDT::register_handler_raw(
+        kTprProbeVector, [](uint64_t, uint64_t, uint64_t) {
+            g_tpr_ipi_tsc = arch::rdtsc();
+            g_tpr_ipi_seen = 1;
+            arch::APIC::eoi();
+        });
+    uint32_t bsp = arch::APIC::lapic_id();
+
+    // Baseline: ACCEPT_ALL delivers the probe promptly.
+    g_tpr_ipi_seen = 0;
+    JARVIS_ASSERT(arch::APIC::send_ipi(bsp, kTprProbeVector,
+                                       arch::APIC::IpiMode::FIXED));
+    uint64_t start = arch::rdtsc();
+    uint64_t limit = freq / 10;
+    while (g_tpr_ipi_seen == 0) {
+        if (arch::rdtsc() - start > limit) {
+            break;
+        }
+        asm volatile("pause");
+    }
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1), g_tpr_ipi_seen);
+
+    // Raised with the tick stopped (no ISR can heal the class):
+    // the same IPI must stay pending (handler must not run).
+    arch::APIC::timer_stop();
+    JARVIS_ASSERT(arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_IPC));
+    JARVIS_ASSERT(arch::APIC::get_tpr_class() ==
+                  arch::APIC::TPR_CLASS_IPC);
+    g_tpr_ipi_seen = 0;
+    g_tpr_ipi_tsc = 0;
+    uint64_t sent_at = arch::rdtsc();
+    JARVIS_ASSERT(arch::APIC::send_ipi(bsp, kTprProbeVector,
+                                       arch::APIC::IpiMode::FIXED));
+    limit = freq / 20;
+    while (g_tpr_ipi_seen == 0) {
+        if (arch::rdtsc() - sent_at > limit) {
+            break;
+        }
+        asm volatile("pause");
+    }
+    bool held = (g_tpr_ipi_seen == 0);
+    uint64_t entry_delta = (g_tpr_ipi_tsc >= sent_at)
+                               ? (g_tpr_ipi_tsc - sent_at)
+                               : 0;
+    // Re-arm tick + lower TPR BEFORE asserting (Rule 5): the class
+    // must never leak raised and the tick must never stay dead.
+    arch::APIC::timer_init(static_cast<uint32_t>(boot_hz));
+    arch::APIC::timer_start();
+    arch::APIC::tpr_restore(arch::APIC::TPR_CLASS_ACCEPT_ALL);
+    Logger::info("tpr_block: held=%u entry_delta_tsc=%lu", held ? 1 : 0,
+                 entry_delta);
+    JARVIS_ASSERT(held);
+
+    // Lowered: the held IRQ delivers (pending, not dropped).
+    start = arch::rdtsc();
+    limit = freq / 10;
+    while (g_tpr_ipi_seen == 0) {
+        if (arch::rdtsc() - start > limit) {
+            break;
+        }
+        asm volatile("pause");
+    }
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1), g_tpr_ipi_seen);
+    JARVIS_TEST_PASS();
+}
+
 void register_apic_tpr_tests() {
     Logger::info("Registering APIC TPR tests");
     JARVIS_REGISTER_TEST(apic_tpr_shadow_defaults);
@@ -168,6 +277,7 @@ void register_apic_tpr_tests() {
     JARVIS_REGISTER_TEST(apic_tpr_ppr_read_only);
     JARVIS_REGISTER_TEST(apic_tpr_guard_nesting);
     JARVIS_REGISTER_TEST(apic_tpr_timer_vector_reserved);
+    JARVIS_REGISTER_TEST(apic_tpr_blocks_ipi_below_threshold);
 }
 
 #endif // CONFIG_ARCH_X86_64
