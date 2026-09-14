@@ -105,7 +105,7 @@ TaskControlBlock *load_pager_probe() {
 /// @brief Drives the scheduler until @p cond (a lambda) is true or bounded.
 template <typename F> void drive_until(F cond, int limit = 10000) {
     for (int i = 0; i < limit && !cond(); ++i) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();
     }

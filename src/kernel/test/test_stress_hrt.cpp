@@ -307,7 +307,7 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
     uint64_t start = arch::Timer::ticks();
     while (__atomic_load_n(&g_rt_done, __ATOMIC_ACQUIRE) == 0 &&
            (arch::Timer::ticks() - start) < 30000) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 

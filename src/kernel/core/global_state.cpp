@@ -48,23 +48,26 @@ uint64_t multiboot_info_ptr = 0;
 }
 
 // ---------------------------------------------------------------------------
-// AsmSwitchState — deferred-context-switch globals shared with isr_stubs.asm.
+// AsmSwitchState — deferred-context-switch state shared with isr_stubs.asm.
 //
-// These symbols are read/written by the x86_64 ISR assembly (isr_stubs.asm)
-// and by C++ via the extern declarations in scheduler.hpp.  They are defined
-// here (single definition point) and MUST keep their exact symbol names and
-// initializers — isr_stubs.asm accesses them by name.
+// Issue #25 C1: every atom EXCEPT scheduler_kernel_cr3 is per-CPU
+// (arrays indexed by logical CPU id).  Each CPU's timer ISR publishes to
+// its own slots; each CPU's ISR epilogue consumes its own.  C++ indexes
+// by arch::cpu_index(); x86_64 asm indexes via gs:0x10; riscv asm keeps
+// using the array base (== [0], single-core there).  scheduler_kernel_cr3
+// stays scalar (read-only after boot).  scheduler_next_task_id[] is
+// initialized to UINT64_MAX per CPU by Scheduler::init (see below).
 // ---------------------------------------------------------------------------
 extern "C" {
-uint64_t *scheduler_save_rsp_to = nullptr;
-uint64_t scheduler_load_rsp_from = 0;
-uint64_t scheduler_load_cr3_from = 0;
-uint64_t scheduler_next_task_id = UINT64_MAX;
-uint64_t scheduler_load_kstack_base = 0;
-uint64_t scheduler_load_kstack_top = 0;
-uint64_t scheduler_switch_generation = 0;
+uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_kernel_cr3 = 0;
-bool scheduler_need_resched = false;
+bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
 // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
 // fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
 // accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
@@ -251,9 +254,9 @@ bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept {
 
 extern "C" void scheduler_on_context_switch() noexcept {
 
-    uint64_t id = __atomic_load_n(&scheduler_next_task_id, __ATOMIC_ACQUIRE);
+    uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
 
-    __atomic_store_n(&scheduler_next_task_id, UINT64_MAX, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX, __ATOMIC_RELEASE);
 
     if (id == UINT64_MAX)
 
@@ -353,13 +356,13 @@ extern "C" void scheduler_on_context_switch() noexcept {
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_pre_save() noexcept {
 #if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t gen = __atomic_load_n(&kernel::scheduler_switch_generation,
+    uint64_t gen = __atomic_load_n(&Scheduler::SwSlots::generation(),
                                    __ATOMIC_ACQUIRE);
     kernel::Logger::raw_write("[H2-PRE] gen=0x");
     kernel::Logger::print_hex(gen);
     kernel::Logger::raw_write(" depth=");
     kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
     kernel::Logger::raw_write(" tick=");
     kernel::Logger::print_dec(kernel::Timer::ticks());
     kernel::Logger::raw_write("\n");
@@ -375,7 +378,7 @@ extern "C" void scheduler_diag_pre_save() noexcept {
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_depth_skip() noexcept {
 #if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+    uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                                   __ATOMIC_ACQUIRE);
     uint64_t rfl = 0;
 #if defined(CONFIG_ARCH_X86_64)
@@ -385,7 +388,7 @@ extern "C" void scheduler_diag_depth_skip() noexcept {
     kernel::Logger::print_dec(id);
     kernel::Logger::raw_write(" depth=");
     kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
     kernel::Logger::raw_write(" rfl=0x");
     kernel::Logger::print_hex(rfl);
     kernel::Logger::raw_write(" if=");
@@ -407,13 +410,13 @@ extern "C" void scheduler_diag_depth_skip() noexcept {
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_rsp_abort() noexcept {
 #if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+    uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                                   __ATOMIC_ACQUIRE);
-    uint64_t rsp = __atomic_load_n(&kernel::scheduler_load_rsp_from,
+    uint64_t rsp = __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(),
                                    __ATOMIC_ACQUIRE);
-    uint64_t base = __atomic_load_n(&kernel::scheduler_load_kstack_base,
+    uint64_t base = __atomic_load_n(&Scheduler::SwSlots::load_kstack_base(),
                                     __ATOMIC_ACQUIRE);
-    uint64_t top = __atomic_load_n(&kernel::scheduler_load_kstack_top,
+    uint64_t top = __atomic_load_n(&Scheduler::SwSlots::load_kstack_top(),
                                    __ATOMIC_ACQUIRE);
     uint64_t rfl = 0;
 #if defined(CONFIG_ARCH_X86_64)
@@ -429,7 +432,7 @@ extern "C" void scheduler_diag_rsp_abort() noexcept {
     kernel::Logger::print_hex(top);
     kernel::Logger::raw_write(" depth=");
     kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
     kernel::Logger::raw_write(" rfl=0x");
     kernel::Logger::print_hex(rfl);
     kernel::Logger::raw_write(" if=");
@@ -456,7 +459,7 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
     // the RFLAGS the interrupted task will return to (tests the IF=0
     // hypothesis for the freeze: the harness's hlt() must not run with IF off).
     {
-        uint64_t id = __atomic_load_n(&kernel::scheduler_next_task_id,
+        uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                                       __ATOMIC_ACQUIRE);
         uint64_t rfl = 0;
 #if defined(CONFIG_ARCH_X86_64)
@@ -470,7 +473,7 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
         kernel::Logger::print_dec(id);
         kernel::Logger::raw_write(" depth=");
         kernel::Logger::print_dec(
-            __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED));
+            __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
         kernel::Logger::raw_write(" rfl=0x");
         kernel::Logger::print_hex(rfl);
         kernel::Logger::raw_write(" if=");
@@ -500,7 +503,7 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
 /// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
 extern "C" int scheduler_validate_pending_switch() noexcept {
     uint64_t id =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
     if (id == UINT64_MAX)
         return 0;
 
@@ -514,6 +517,16 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
     // [APPLY a=0]).  IF=0 here (interrupt gate) — the runq is not concurrently
     // modified, and dequeue_ready/set_task_ready are lock-free.
     auto drop_arm = [&](kernel::TaskControlBlock *target) {
+        // Issue #25 C1: on APs, SKIP the drop (leave the arm pending).
+        // The drop mutates the own queue lock-free, racing BSP task-context
+        // writers of queue[1] (which hold the global lock the AP must not
+        // block on).  The next AP tick's rate_monotonic_schedule CLR path
+        // performs the identical surgery (restore + clear + re-enqueue)
+        // under proper locking — delaying the drop by ≤1 tick is harmless
+        // (the arm cannot apply: validate fails identically next ISR).
+        // BSP path unchanged (single-core IF=0 rules).
+        if (arch::cpu_index() != 0)
+            return;
         kernel::Scheduler::cancel_pending_switch();
         auto *cur = kernel::Scheduler::current_task();
         if (cur && cur->magic == kernel::TaskControlBlock::TCB_MAGIC) {
@@ -529,7 +542,9 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
         }
         // Re-enqueue the dequeued target (if still alive) so it is not
         // stranded (INV-2); a dead/removed target is left to the reaper.
-        if (target && target != kernel::Scheduler::get_idle_task() &&
+        // Issue #25 C1: any idle (BSP or AP) is the fallback, never
+        // re-enqueued.
+        if (target && !kernel::Scheduler::is_idle_task(target) &&
             target != cur &&
             (target->state == kernel::TaskState::READY ||
              target->state == kernel::TaskState::RUNNING)) {
@@ -557,7 +572,7 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
         return 0;
     }
     uint64_t rsp =
-        __atomic_load_n(&kernel::scheduler_load_rsp_from, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
     uint64_t top = t->kernel_stack_top;
     bool in_own = (base && top && rsp >= base && rsp <= top);
@@ -603,6 +618,11 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
 /// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_abort_switch_fixup() noexcept {
 #if defined(CONFIG_ARCH_X86_64)
+    // Issue #25 C1: CPU0-gated — the AP shares this TSS and runs kernel
+    // tasks only (rsp0 irrelevant there); an AP-side rebind would corrupt
+    // the BSP's ring-3→0 stack.
+    if (arch::cpu_index() != 0)
+        return;
     auto *cur = kernel::Scheduler::current_task();
     if (cur && cur->magic == kernel::TaskControlBlock::TCB_MAGIC &&
         cur->kernel_stack && cur->kernel_stack_top) {

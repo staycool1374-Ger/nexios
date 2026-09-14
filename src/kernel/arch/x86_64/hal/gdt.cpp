@@ -106,7 +106,7 @@ void GDT::init() {
         static_cast<uint16_t>(offsetof(TSSBlock, iopb));
 }
 
-/// @brief Load the GDT and TSS into the CPU.
+/// @brief Load the GDT into the CPU.
 /// Executes LGDT, reloads data segments, and loads the TSS via LTR.
 void GDT::load() {
     asm volatile("lgdt %0" : : "m"(desc_));
@@ -119,6 +119,36 @@ void GDT::load() {
                  : "r"((uint16_t)GDT_DATA));
     uint16_t tss_sel = GDT_TSS;
     asm volatile("ltr %0" : : "r"(tss_sel));
+}
+
+/// @brief Load the shared GDT base + selectors on an AP (issue #25 C1).
+/// The trampoline leaves the AP on its throwaway low GDT with CS=0x10 /
+/// SS=0x18 (CODE/DATA there).  LGDT alone is NOT enough: the residual
+/// selectors keep resolving against the NEW (shared) GDT, where 0x10 is
+/// kernel DATA and 0x18 is USER code — the first AP IRQ pushes CS=0x10
+/// and its iretq #GP(0x10)s (GDB-proven: fault RIP == isr_common.restore
+/// iretq, timer frame CS=0x10/SS=0x18).  So reload CS via a far return
+/// plus DS/ES/SS to the shared selectors BEFORE the AP arms its timer.
+/// FS/GS are deliberately UNTOUCHED: percpu_init_ap's WRMSR already set
+/// the hidden FS/GS bases and a MOV to %fs/%gs would reload them from
+/// the GDT (flat 0) — BSP survives its load() MOV only because its WRMSR
+/// comes AFTER (kernel.cpp: GDT::load then percpu_init_bsp).  Still no
+/// LTR: the TSS descriptor is shared and BSP-busy (LTR would #GP); the
+/// AP performs no ring crossings in C1 so TR stays irrelevant (AP faults
+/// reset — same exposure as Phase B).
+void GDT::load_ap() {
+    asm volatile("lgdt %0" : : "m"(desc_));
+    asm volatile("leaq 1f(%%rip), %%rax\n"
+                 "pushq %0\n"
+                 "pushq %%rax\n"
+                 "lretq\n"
+                 "1:\n"
+                 "mov %1, %%ds\n"
+                 "mov %1, %%es\n"
+                 "mov %1, %%ss\n"
+                 :
+                 : "i"(GDT_CODE), "r"((uint16_t)GDT_DATA)
+                 : "rax", "memory");
 }
 
 /// @brief Set the RSP0 field in the TSS (kernel stack pointer for ring-0

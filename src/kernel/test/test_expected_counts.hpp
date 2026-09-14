@@ -113,6 +113,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
     {"smp_bringup",            3,   0,       0      },  // AP bring-up (issue #25 Phase B4): blob layout, staged block memcmp, parked count == MADT APs
+    {"sched_affinity",         6,   0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle
+    {"smp_sched",              4,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move (0-AP trivial pass)
     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
     {"ahci_live",              3,   0,       0      },  // real AHCI command path on q35+ICH9 variant (issue #108): probe, roundtrip, isolation — NOT in all

@@ -58,6 +58,12 @@
 #define CONFIG_MAX_TASKS 64
 #endif
 
+/// Maximum number of logical CPUs (per-CPU state sizing, issue #25).
+/// Single-socket SMP: BSP + APs. Default: 8 (matches MADT_MAX_CPUS).
+#ifndef CONFIG_MAX_CPUS
+#define CONFIG_MAX_CPUS 8
+#endif
+
 /// Scheduling tick rate in Hz.
 /// Valid range: 100–100000. Default: 1000.
 /// Must divide the timer clock frequency evenly (PIT: 1193182).

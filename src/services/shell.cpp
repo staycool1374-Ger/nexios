@@ -1358,11 +1358,11 @@ void Shell::cmd_selftest(int argc, const char** argv) {
         // ISR assembly never consumed them.  If left dangling, the next timer
         // IRQ would attempt to context-switch via stalled pointers to freed
         // task memory → GPF at iretq.
-        __atomic_store_n(&kernel::scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-        __atomic_store_n(&kernel::scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-        __atomic_store_n(&kernel::scheduler_next_task_id, (uint64_t)0, __ATOMIC_RELEASE);
-        __atomic_store_n(&kernel::scheduler_save_rsp_to, (uint64_t*)nullptr, __ATOMIC_RELEASE);
-        __atomic_store_n(&kernel::isr_nesting_depth, (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::Scheduler::SwSlots::next_task_id(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::Scheduler::SwSlots::save_rsp_to(), (uint64_t*)nullptr, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
         }
     }
     if (self_task) {

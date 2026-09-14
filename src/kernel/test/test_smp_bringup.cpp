@@ -152,8 +152,18 @@ JARVIS_TEST(smp_bringup_ap_count_matches_madt, "PRE: iocd | POST: none") {
         JARVIS_ASSERT_EQ(static_cast<uint64_t>(1), arch::per_cpu[1].cpu_id);
         JARVIS_ASSERT_EQ(static_cast<uint64_t>(ap_lapic),
                          arch::per_cpu[1].lapic_id);
-        JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-                         arch::per_cpu[1].isr_nesting_depth);
+        // Nesting depth is written by every ISR entry/exit on the AP: poll
+        // for quiescence (between 1 KHz ticks) instead of asserting once.
+        // A stuck nonzero depth (ISR entered, never exited) fails loudly.
+        bool quiescent = false;
+        for (uint64_t i = 0; i < 1000000; ++i) {
+            if (arch::per_cpu[1].isr_nesting_depth == 0) {
+                quiescent = true;
+                break;
+            }
+            asm volatile("pause");
+        }
+        JARVIS_ASSERT(quiescent);
     }
     JARVIS_TEST_PASS();
 }

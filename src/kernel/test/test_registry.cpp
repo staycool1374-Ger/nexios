@@ -211,6 +211,8 @@ void register_acpi_parse_tests();
 void register_smp_madt_tests();
 void register_smp_ipi_tests();
 void register_smp_bringup_tests();
+void register_sched_affinity_tests();
+void register_smp_sched_tests();
 #endif
 void register_virtio_blk_req_tests();
 void register_ahci_deep_tests();
@@ -509,6 +511,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"smp_madt", []() { register_smp_madt_tests(); }},
     {"smp_ipi", []() { register_smp_ipi_tests(); }},
     {"smp_bringup", []() { register_smp_bringup_tests(); }},
+    {"sched_affinity", []() { register_sched_affinity_tests(); }},
+    {"smp_sched", []() { register_smp_sched_tests(); }},
 #endif
 
     // -- drivers: device driver framework and controllers --
@@ -736,6 +740,8 @@ static void register_all_tests() {
     register_smp_madt_tests();
     register_smp_ipi_tests();
     register_smp_bringup_tests();
+    register_sched_affinity_tests();
+    register_smp_sched_tests();
 #endif
     register_buildsystem_tests();
     register_config_checks_tests();

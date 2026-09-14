@@ -27,10 +27,6 @@
 
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
-
-// irq_entry_tsc has no C++ extern declaration (asm-only datum); declare it
-// here to assert the linker-alias identity (issue #25).
-extern "C" uint64_t irq_entry_tsc;
 #endif
 
 using namespace kernel;
@@ -61,13 +57,10 @@ JARVIS_TEST(per_cpu_slot_offsets_frozen, "PRE: none | POST: none") {
     JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.current_task) ==
                   base + 7);
     JARVIS_ASSERT(sizeof(arch::PerCpu) == 4096);
-    // Linker-alias identity (issue #25): the legacy extern symbols resolve
-    // to the per_cpu[0] fields (linker_x86_64.ld).
-    JARVIS_ASSERT(&pc.isr_nesting_depth == &isr_nesting_depth);
-    JARVIS_ASSERT(&pc.irq_entry_tsc == &irq_entry_tsc);
-    JARVIS_ASSERT(
-        reinterpret_cast<uint64_t>(&pc.fpu_owner) ==
-        reinterpret_cast<uint64_t>(&fpu_owner));
+    // Issue #25 C1: the Phase-A linker aliases (isr_nesting_depth /
+    // irq_entry_tsc) are REMOVED — C++ uses isr_nesting_own() (own slot),
+    // asm uses gs:0x20/gs:0x28 numerically.  Only offsets are asserted
+    // (fpu_owner alias remains for #151).
 #else
     JARVIS_TEST_PASS();
 #endif

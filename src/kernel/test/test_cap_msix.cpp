@@ -72,7 +72,7 @@ bool find_msix_device(arch::PciBdf &out) {
 ///        wait_for_termination_safe (test_cap_irq pattern).
 template <typename Pred> inline void yield_wait_until(Pred cond) {
     while (!cond()) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();
     }

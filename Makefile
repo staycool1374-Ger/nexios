@@ -323,7 +323,11 @@ endif
 # default SeaBIOS machine with -smp 2, so the MADT lists BSP + 1 AP and
 # bring_up() wakes + parks it.  All other classes run single-CPU (the
 # bring-up is a staged-blob no-op there).
+# Phase C1 adds class=smp_sched (AP task execution) to the same variant.
 ifeq ($(CLASS),smp_bringup)
+QEMU_FLAGS += -smp 2
+endif
+ifeq ($(CLASS),smp_sched)
 QEMU_FLAGS += -smp 2
 endif
 

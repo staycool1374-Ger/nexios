@@ -143,7 +143,7 @@ JARVIS_TEST(frame_user_map_unmap_roundtrip, "PRE: none | POST: none") {
     // Drive until the task has mapped + unmapped (bounded).
     for (int i = 0; i < 10000 && __atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0;
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 
@@ -291,7 +291,7 @@ JARVIS_TEST(shm_ring_producer_consumer, "PRE: none | POST: none") {
     for (int i = 0;
          i < 10000 && !(__atomic_load_n(&g_prod_done, __ATOMIC_ACQUIRE) == 1);
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 
@@ -458,7 +458,7 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
     // Wait until the task has mapped + published the VA.
     for (int i = 0; i < 10000 && __atomic_load_n(&g_va, __ATOMIC_ACQUIRE) == 0;
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
     uint64_t va = __atomic_load_n(&g_va, __ATOMIC_ACQUIRE);

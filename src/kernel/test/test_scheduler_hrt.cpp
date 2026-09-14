@@ -327,7 +327,7 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
     uint64_t start = arch::Timer::ticks();
     while (__atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0 &&
            (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 
@@ -397,7 +397,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
                 uint64_t deadline = arch::Timer::ticks() + k_ack_wait_ticks;
                 while (__atomic_load_n(&g_acked, __ATOMIC_ACQUIRE) <= i &&
                        arch::Timer::ticks() < deadline) {
-                    __atomic_store_n(&scheduler_need_resched, true,
+                    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                                      __ATOMIC_RELEASE);
                     arch::hlt();
                 }
@@ -453,7 +453,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
     uint64_t start = arch::Timer::ticks();
     while (__atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0 &&
            (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 
@@ -514,7 +514,7 @@ JARVIS_TEST(scheduler_hrt_release_jitter, "PRE: none | POST: none") {
                     __atomic_add_fetch(&g_jit_fail, 1, __ATOMIC_RELAXED);
                 uint64_t deadline = arch::Timer::ticks() + 3;
                 while (arch::Timer::ticks() < deadline) {
-                    __atomic_store_n(&scheduler_need_resched, true,
+                    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                                      __ATOMIC_RELEASE);
                     arch::hlt();
                 }
@@ -532,7 +532,7 @@ JARVIS_TEST(scheduler_hrt_release_jitter, "PRE: none | POST: none") {
     uint64_t start = arch::Timer::ticks();
     while (__atomic_load_n(&g_done_jit, __ATOMIC_ACQUIRE) == 0 &&
            (arch::Timer::ticks() - start) < k_drive_cap_ticks) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 

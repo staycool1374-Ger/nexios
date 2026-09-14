@@ -726,7 +726,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
                         continue;
                     PMM::free_page(leaf);
                     if ((l2_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step();
+                        Scheduler::cleanup_step_try();
                     continue;
                 }
                 // Table entry (V=1, R=W=X=0) — old 4-level format with L3
@@ -744,7 +744,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
                         continue;
                     PMM::free_page(leaf);
                     if ((l3_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step();
+                        Scheduler::cleanup_step_try();
                 }
                 PMM::free_page(l3_phys);
                 l2[l2_idx] = 0; // clear L2 entry to prevent re-walk
@@ -848,7 +848,7 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
                         continue;
                     PMM::free_page(leaf);
                     if ((pt_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step();
+                        Scheduler::cleanup_step_try();
                 }
                 PMM::free_page(pt_phys);
                 pd[pd_idx] = 0; // clear PD entry to prevent re-walk
@@ -999,7 +999,7 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                         4096);
                     dst_pt[pt_idx] = dst_data | flags;
                     if ((pt_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step();
+                        Scheduler::cleanup_step_try();
                 }
             }
         }

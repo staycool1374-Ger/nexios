@@ -63,6 +63,8 @@ bool crc_process_chunk();
 /// @brief Idle task main — periodically verifies section markers and runs code
 /// CRC.
 void idle_task_main();
+/// @brief AP idle task main (issue #25 C1) — reclamation + halt only.
+void ap_idle_main();
 
 } // namespace integrity
 } // namespace kernel

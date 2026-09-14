@@ -932,6 +932,8 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
+    tcb->cpu_affinity = 1; // issue #25 C1: default CPU0 (create() memsets;
+                           // the ctor default member init never runs)
     tcb->period_ticks = period_ticks;
     tcb->deadline_ticks = arch::Timer::ticks() + period_ticks;
     tcb->deadline_missed = false;
@@ -1146,6 +1148,8 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
+    tcb->cpu_affinity = 1; // issue #25 C1: default CPU0 (create() memsets;
+                           // the ctor default member init never runs)
     tcb->period_ticks = period_ticks;
     tcb->deadline_ticks = arch::Timer::ticks() + period_ticks;
     tcb->deadline_missed = false;
@@ -1330,6 +1334,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = parent->priority;
     tcb->base_priority = parent->base_priority;
+    tcb->cpu_affinity = parent->cpu_affinity; // issue #25 C1: inherit mask
     tcb->period_ticks = parent->period_ticks;
     tcb->deadline_ticks = parent->deadline_ticks;
     tcb->executed_ticks = 0;

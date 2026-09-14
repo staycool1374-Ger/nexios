@@ -897,7 +897,7 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
     // the scheduler.  The sender runs, blocks in send_sync, the receiver
     // runs, replies, and both terminate — at which point the harness
     // resumes from HLT and exits the loop.
-    __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     // Both self-terminate via the trampoline; the zombie reaper may free +
     // 0xDD-poison their TCBs before the harness polls — the safe wait exits
     // on freed (magic != TCB_MAGIC) blocks instead of spinning forever.
@@ -906,7 +906,7 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
            (TaskControlBlock::is_valid(receiver) &&
             receiver->state != TaskState::TERMINATED)) {
         arch::hlt();
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     }
 
     kernel::test::terminate_and_drain2(sender, receiver);

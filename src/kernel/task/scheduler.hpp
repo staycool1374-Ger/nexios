@@ -36,6 +36,39 @@
 
 namespace kernel {
 
+// Forward declarations of the per-CPU deferred-switch arrays (defined in
+// global_state.cpp).  Needed before class Scheduler because SwSlots and
+// routing helpers reference them.
+extern "C" {
+extern uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_kernel_cr3;
+extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
+}
+
+/// @brief POD snapshot of all per-CPU scheduler runtime (issue #25 C1).
+///        Plain data; memcpy-safe.  Captured under quiesce + global lock.
+struct SchedPerCpuPod {
+    TaskControlBlock *current[CONFIG_MAX_CPUS]; ///< cpu_ctx currents
+    uint64_t save_rsp_to[CONFIG_MAX_CPUS];      ///< as addresses
+    uint64_t load_rsp_from[CONFIG_MAX_CPUS];
+    uint64_t load_cr3_from[CONFIG_MAX_CPUS];
+    uint64_t next_task_id[CONFIG_MAX_CPUS];
+    uint64_t load_kstack_base[CONFIG_MAX_CPUS];
+    uint64_t load_kstack_top[CONFIG_MAX_CPUS];
+    uint64_t switch_generation[CONFIG_MAX_CPUS];
+    uint64_t need_resched[CONFIG_MAX_CPUS]; ///< bool-sized
+    TaskControlBlock *mbox_task[CONFIG_MAX_CPUS][4];
+    uint64_t mbox_id[CONFIG_MAX_CPUS][4];
+    uint64_t mbox_generation[CONFIG_MAX_CPUS][4];
+    uint64_t mbox_count[CONFIG_MAX_CPUS];
+};
+
 /// @brief Test-only override for the NOTIFY_MONITOR action target PID.
 ///        When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss
 ///        handler's action=4 path delivers SIGUSR1 to the task whose id equals
@@ -134,13 +167,23 @@ class Scheduler {
 
     /// @brief Change a task's scheduling priority at runtime.
     /// Re-buckets the task in the O(1) ready queue (if queued) so the change
-    /// takes effect on the next tick, and updates base_priority.  Safe to
-    /// call from task context; IRQs are disabled around the move so the
-    /// timer ISR cannot read a half-updated bucket.
+    /// takes effect on the next tick, and updates base_priority.  Task
+    /// context only: takes scheduler_lock_ (blocking) + IrqGuard (issue
+    /// #25 C1 — remote queues are written only under the lock).
     /// @param task Target TCB.
     /// @param new_prio New scheduling priority.
     static void set_priority(TaskControlBlock &task,
                              uint64_t new_prio) noexcept;
+    /// @brief Set a task's CPU affinity mask (issue #25 C1).  Bit N =
+    ///        may run on CPU N.  Task-context only (takes scheduler_lock_;
+    ///        documented NOT-ISR-safe).  Runs inside the quiesce window so
+    ///        the lock-free AP current-apply path cannot race the check.
+    ///        Empty mask clamps to CPU0 (+warn); user tasks force CPU0
+    ///        (shared-TSS limitation); bits beyond up-CPUs clamp (+warn);
+    ///        tasks running on another CPU are refused (warn).
+    /// @param task Target TCB.
+    /// @param mask Affinity bitmask.
+    static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
 
     /// @brief Reaps orphan TERMINATED tasks (no parent to WAITPID them).
     ///        Single-pass scan: identifies all eligible tasks, destroys them
@@ -171,6 +214,14 @@ class Scheduler {
     static TaskControlBlock *get_harness_task() noexcept {
         return harness_task_ptr_;
     }
+    /// @brief Create the idle task for CPU cpu (issue #25 C1).  Called
+    ///        once per AP from bring_up() on the BSP (single-threaded;
+    ///        allocators have no SMP exclusion — the AP adopts, never
+    ///        creates).  Takes scheduler_lock_ (blocking, IF=0 on the
+    ///        BSP path).  Registers in all_tasks_/id_table_, READY but
+    ///        NOT queued (fallback like the BSP idle).  Returns nullptr
+    ///        on OOM (caller panics — boot has no fallback).
+    static TaskControlBlock *create_ap_idle(uint64_t cpu) noexcept;
 
     /// @brief Suppress or re-enable the "task terminated" log message.
     ///        Used by reboot_from_table() during intentional teardown.
@@ -429,6 +480,8 @@ class Scheduler {
         TaskControlBlock *runq_prev;
         bool in_ready_queue;
         uint64_t rq_priority;
+        /// @brief CPU affinity bitmask (issue #25 C1).
+        uint64_t cpu_affinity;
         uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
     };
     static uint64_t snapshot_task_fields_size() {
@@ -461,10 +514,18 @@ class Scheduler {
                               uint64_t rq_bitmap_lo = 0,
                               uint64_t sporadic_count_in = 0);
 
-    /// @brief Capture the full ReadyQueueManager POD into @p out.
-    static void capture_rqpod(ReadyQueuePOD &out) noexcept;
-    /// @brief Restore the full ReadyQueueManager POD from @p src.
-    static void restore_rqpod(const ReadyQueuePOD &src) noexcept;
+    /// @brief Capture CPU c's ReadyQueueManager POD into @p out.
+    static void capture_rqpod(ReadyQueuePOD &out, uint64_t cpu) noexcept;
+    /// @brief Restore CPU c's ReadyQueueManager POD from @p src.
+    static void restore_rqpod(const ReadyQueuePOD &src, uint64_t cpu) noexcept;
+    /// @brief Capture all per-CPU runtime (currents, atoms, mailbox).
+    ///        Runs under quiesce + global lock (test isolation only).
+    static void capture_percpu(SchedPerCpuPod &out) noexcept;
+    /// @brief Restore per-CPU runtime.  BSP current is left to the
+    ///        RSP-match re-identification (untouched here); AP currents
+    ///        restore validated (else AP idle); mailbox is CLEARED, not
+    ///        restored (pending wakes don't cross test boundaries).
+    static void restore_percpu(const SchedPerCpuPod &src) noexcept;
     /// @brief Clear all ready-queue entries.  Called after reap_orphans()
     ///        in reload_daemon_tasks() to remove any stale TCB pointers
     ///        before restarting daemons.
@@ -490,6 +551,10 @@ class Scheduler {
     ///        liveness re-check (scheduler_validate_pending_switch) and by
     ///        release_zombie/reap_orphans when the armed target is removed.
     static void cancel_pending_switch() noexcept;
+    /// @brief Per-CPU variant: cancel CPU c's pending arm (issue #25 C1).
+    ///        Used by the quiesce path (teardown/snapshot/set_affinity) so
+    ///        no stale arm can apply after its target is freed.
+    static void cancel_pending_switch_cpu(uint64_t cpu) noexcept;
 
     /// @brief Drain up to @p max_flush zombies from the zombie list,
     ///        calling cleanup() + MemPool::free() on each.
@@ -507,6 +572,10 @@ class Scheduler {
     ///        per iteration.  Safe to call with IRQs enabled — the pop
     ///        is IRQ-guarded internally.
     static void cleanup_step() noexcept;
+    /// @brief Opportunistic try-variant of cleanup_step() for VMM teardown
+    ///        paths that can run nested under a zombie-leaf holder
+    ///        (flush/drain free paths).  Skips when contended.
+    static void cleanup_step_try() noexcept;
 
     /// @brief Clear the zombie list (used by snapshot_restore to prevent
     ///        dangling pointers after MemPool restoration).
@@ -527,6 +596,112 @@ class Scheduler {
     /// @brief Process all deferred kills: remove_task, cleanup, free.
     ///        Called from on_tick() after the deadline scan lock is released.
     static void process_deferred_kills() noexcept;
+    /// @brief Cross-CPU wake handler (issue #25 C1): drains the calling
+    ///        CPU's mailbox (validated entries → own queue) and arms its
+    ///        reschedule flag.  Runs in the SCHED-IPI ISR (IF=0); takes
+    ///        only the mailbox leaf lock.  Must EOI via the caller.
+    static void sched_ipi_handler() noexcept;
+    /// @brief Current CPU index for scheduler routing (arch::cpu_index()).
+    static uint64_t sched_cpu() noexcept {
+        return arch::cpu_index();
+    }
+    /// @brief Ready queue for CPU c (clamped into range).
+    static ReadyQueueManager &rq_for(uint64_t c) noexcept {
+        return ready_queues_[c % CONFIG_MAX_CPUS];
+    }
+    /// @brief Ready queue of the calling CPU.
+    static ReadyQueueManager &rq_own() noexcept {
+        return rq_for(sched_cpu());
+    }
+    /// @brief Affinity target CPU for a task (lowest set bit, clamped;
+    ///        empty mask behaves as CPU0 — set_affinity never stores 0).
+    static uint64_t queue_target(const TaskControlBlock &t) noexcept;
+    /// @brief Ready queue for a task's affinity target.
+    static ReadyQueueManager &rq_task(const TaskControlBlock &t) noexcept {
+        return rq_for(queue_target(t));
+    }
+    /// @brief Idle task of the calling CPU.
+    static TaskControlBlock *own_idle() noexcept {
+        return idle_tasks_[sched_cpu() % CONFIG_MAX_CPUS];
+    }
+    /// @brief True when t is any CPU's idle task (replaces == idle_task_
+    ///        checks in teardown/reap paths so the live AP idle survives).
+    static bool is_idle_task(const TaskControlBlock *t) noexcept {
+        if (!t)
+            return false;
+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+            if (idle_tasks_[c] == t)
+                return true;
+        }
+        return false;
+    }
+    /// @brief True when t is the current task on ANY CPU (issue #25 C1).
+    ///        Teardown paths spare these (never free a live stack).
+    static bool is_current_on_any_cpu(const TaskControlBlock *t) noexcept {
+        if (!t)
+            return false;
+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+            if (kernel::cpu_ctx(c).current == t)
+                return true;
+        }
+        return false;
+    }
+    /// @brief True when t is physically queued on CPU c's ready queue
+    ///        (issue #25 C1 test accessor; scans c's buckets, no mutation).
+    static bool is_queued_on(const TaskControlBlock &t, uint64_t cpu) noexcept {
+        if (!t.in_ready_queue_)
+            return false;
+        const ReadyQueueManager &rq = ready_queues_[cpu % CONFIG_MAX_CPUS];
+        for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p) {
+            if (rq.queue(p).contains(t))
+                return true;
+        }
+        return false;
+    }
+    /// @brief Current task on CPU c (issue #25 C1 test accessor).
+    ///        No validation (test compares against known pointers).
+    static TaskControlBlock *current_on_cpu(uint64_t cpu) noexcept {
+        return kernel::cpu_ctx(cpu % CONFIG_MAX_CPUS).current;
+    }
+    /// @brief Enter the AP-quiesce window (issue #25 C1): set the flag,
+    ///        cancel all per-CPU armed switches (exact spec order).
+    ///        Teardown/snapshot/set_affinity paths bracket work with this.
+    static void quiesce_enter() noexcept;
+    /// @brief Leave the AP-quiesce window (clear flag; AP resumes).
+    static void quiesce_exit() noexcept;
+struct SwSlots {
+    static uint64_t this_cpu() {
+        return arch::cpu_index();
+    }
+    static uint64_t *&save_rsp_to() {
+        return scheduler_save_rsp_to[this_cpu()];
+    }
+    static uint64_t &load_rsp_from() {
+        return scheduler_load_rsp_from[this_cpu()];
+    }
+    static uint64_t &load_cr3_from() {
+        return scheduler_load_cr3_from[this_cpu()];
+    }
+    static uint64_t &next_task_id() {
+        return scheduler_next_task_id[this_cpu()];
+    }
+    static uint64_t &load_kstack_base() {
+        return scheduler_load_kstack_base[this_cpu()];
+    }
+    static uint64_t &load_kstack_top() {
+        return scheduler_load_kstack_top[this_cpu()];
+    }
+    static uint64_t &generation() {
+        return scheduler_switch_generation[this_cpu()];
+    }
+    static bool &need_resched() {
+        return scheduler_need_resched[this_cpu()];
+    }
+};
+    /// @brief AP dispatch-only tick body (issue #25 C1): runs
+    ///        rate_monotonic_schedule() on the AP's own state.  No
+    ///        accounting/deadlines/watchdogs/zombies/sporadic (BSP-only).
+    static void ap_tick() noexcept;
 
   private:
     static constexpr uint64_t MAX_TASKS = CONFIG_MAX_TASKS;
@@ -568,12 +743,25 @@ class Scheduler {
 
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static sync::SpinLock scheduler_lock_;
+    /// @brief Per-CPU O(1) ready queues (issue #25 C1).  Queue[CPU] holds
+    ///        only tasks affine to CPU C (lowest-set-bit targeting).  The
+    ///        SINGLE global scheduler_lock_ serializes all mutations (no
+    ///        new lock discipline); cross-CPU wakes go through the
+    ///        mailbox+IPI path, never direct remote enqueue.  There is
+    ///        deliberately NO queue[0] alias: every use site names its CPU
+    ///        explicitly so AP paths cannot silently hit the BSP queue
+    ///        (removing ready_queue_ turns misses into compile errors).
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-    static ReadyQueueManager ready_queue_;
+    static ReadyQueueManager ready_queues_[CONFIG_MAX_CPUS];
     /// @brief Deadline-ordered intrusive list for O(1) expired-task detection.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static DeadlineList deadline_list_;
     static constinit TaskControlBlock *idle_task_;
+    /// @brief Per-CPU idle tasks (issue #25 C1).  [0] is the BSP idle
+    ///        (created in init()); APs create their own after the
+    ///        scheduler start-gate.  get_idle_task() keeps returning [0].
+    static TaskControlBlock *idle_tasks_[CONFIG_MAX_CPUS];
+
     static constinit TaskControlBlock *shell_task_ptr_;
     static constinit TaskControlBlock *harness_task_ptr_;
 
@@ -584,6 +772,32 @@ class Scheduler {
     static constinit TaskControlBlock *zombie_head_;
     static constinit TaskControlBlock *zombie_tail_;
     static constinit uint64_t zombie_count_;
+    /// @brief Zombie-list leaf lock (issue #25 C1): caller-holds protocol.
+    ///        Push/flush callers hold the global lock and take the leaf;
+    ///        pop/drain callers take global→leaf themselves and must hold
+    ///        NO lock on entry (non-recursive SpinLock).  List surgery under
+    ///        locks; cleanup()+MemPool::free() always AFTER release.
+    // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+    static sync::SpinLock zombie_lock_;
+    /// @brief Cross-CPU wake mailbox (issue #25 C1): 4-slot ring per CPU
+    ///        carrying (TCB*, id, generation) for tasks woken on a remote
+    ///        CPU.  Overflow panics (fail-closed; unreachable in C1 flows).
+    ///        Entries validated against id_table_ on drain (stale dropped).
+    static constexpr uint64_t MAILBOX_SLOTS = 4;
+    struct MailboxEntry {
+        TaskControlBlock *task = nullptr;
+        uint64_t id = 0;
+        uint64_t generation = 0;
+    };
+    // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+    static MailboxEntry wake_mailbox_[CONFIG_MAX_CPUS][MAILBOX_SLOTS];
+    static constinit uint64_t wake_mailbox_count_[CONFIG_MAX_CPUS];
+    // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+    static sync::SpinLock wake_mailbox_lock_[CONFIG_MAX_CPUS];
+    /// @brief AP quiesce flag (issue #25 C1): while set, the AP tick parks
+    ///        (no dispatch/queue touch).  Set across teardown + snapshot
+    ///        windows (with arm-cancel + global lock per the spec order).
+    static constinit bool sched_quiesced_;
 #if CONFIG_DEADLINE_MONITOR_TASK
     /// @brief Pointer to the deadline-monitor task (nullptr if not spawned).
     static constinit TaskControlBlock *s_monitor_task_;
@@ -601,6 +815,25 @@ class Scheduler {
     /// @brief Performs rate-monotonic scheduling decision.
     static void rate_monotonic_schedule() noexcept;
 
+    /// @brief Publish a cross-CPU wake to CPU cpu's mailbox ring, then
+    ///        IPI it (issue #25 C1).  Caller holds NO mailbox lock (taken
+    ///        here, leaf).  Overflow panics (fail-closed bound).
+    static void mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept;
+    /// @brief Drain the calling CPU's mailbox (validate + enqueue own).
+    ///        Runs in the SCHED-IPI handler (IF=0, try_lock-gated by the
+    ///        caller path — see sched_ipi_handler).
+    static void mailbox_drain() noexcept;
+
+
+
+/// @brief Own-CPU deferred-switch slot accessors (issue #25 C1).
+/// Publish/consume pairing is per-CPU: every site names its slot through
+/// these (tests run on the BSP and resolve to [0] automatically).
+/// Explicit indexing (scheduler_save_rsp_to[c]) is used only for
+/// cross-CPU operations (quiesce cancel, mailbox-adjacent paths).
+
+
+
     /// @brief Hash-table helpers for O(1) task-ID→TCB lookup.
     static uint64_t id_table_probe(uint64_t id);
     static bool id_table_insert(uint64_t id, TaskControlBlock *tcb);
@@ -609,48 +842,43 @@ class Scheduler {
 };
 
 extern "C" {
-/// @brief Address to save the current RSP into during context switch.
-///        Accessed atomically from C++; read/written by isr_stubs.asm.
+/// @brief Per-CPU deferred-switch atoms (issue #25 C1).  Each CPU's timer
+///        ISR publishes to its own slots; each CPU's ISR epilogue consumes
+///        its own.  C++ indexes by arch::cpu_index(); x86_64 asm indexes via
+///        gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses
+///        the array base (== [0], single-core there).
+///        scheduler_kernel_cr3 stays scalar (read-only after boot).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t *scheduler_save_rsp_to;
-/// @brief RSP value to load during context switch restore.
+extern uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_load_rsp_from;
-/// @brief CR3 value to load during context switch restore (0 = don't load).
+extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_load_cr3_from;
-/// @brief Task ID to set as current after the context switch completes.
+extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_next_task_id;
+extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
 /// @brief Kernel-stack range of the task being dispatched.  isr_stubs.asm
 ///        verifies scheduler_load_rsp_from lies within
 ///        [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.
+/// @brief Kernel-stack range of the task being dispatched (per-CPU).
+///        isr_stubs.asm verifies the load RSP lies within range before iretq.
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_load_kstack_base;
+extern uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_load_kstack_top;
-/// @brief Generation sequence counter for the deferred-switch pair.  A
-///        publisher bumps it after writing load_rsp_from / load_cr3_from and
-///        before arming scheduler_save_rsp_to; isr_stubs.asm captures it and
-///        re-verifies before applying so a timer ISR never applies a
-///        half-written / superseded pair.
+extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
+/// @brief Per-CPU generation sequence counter for the deferred-switch pair
+///        (publish-then-bump-then-arm protocol; asm re-verifies before apply).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern uint64_t scheduler_switch_generation;
+extern uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS];
 /// @brief Static kernel PML4 (physical).  isr_stubs.asm falls back to this when
 ///        scheduler_load_cr3_from is null/outdated while returning to the
 ///        kernel/harness context.
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t scheduler_kernel_cr3;
-/// @brief Reschedule request flag.  Set by task-context callers (reschedule(),
-///        terminate(), yield_as) to ask the timer ISR to (re)publish a deferred
-///        switch.  The timer ISR is the SOLE publisher of the deferred switch
-///        (see rate_monotonic_schedule), so there is exactly one writer of the
-///        switch buffer per tick — eliminating the two-publisher race where a
-///        task-context reschedule() and the timer ISR's rate_monotonic_schedule
-///        both called switch_to_task and the last writer before the epilogue
-///        won, starving the other's selection.
+/// @brief Per-CPU reschedule request flag (task-context producers; each
+///        CPU's timer ISR is the sole publisher of its own switch buffer —
+///        the single-writer-per-tick discipline from the two-publisher fix).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-extern bool scheduler_need_resched;
+extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
 /// @brief Current ISR nesting depth.  Incremented at each ISR entry,
 ///        decremented before iretq.  Checked by on_tick() to detect
 ///        nested timer interrupts and skip re-entrant scheduler ops.
@@ -681,6 +909,9 @@ extern uint64_t fpu_nm_depth_max;
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern TaskControlBlock *fpu_owner;
 }
+
+
+
 
 #if CONFIG_DEADLINE_MISS_DETECTION
 /// @brief Weak callback invoked when a task misses its deadline.

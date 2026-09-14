@@ -50,6 +50,12 @@ void Timer::init(uint32_t frequency_hz) {
         // The handler increments ticks and calls the scheduler.
         IDT::register_handler_raw(APIC::APIC_TIMER_VECTOR,
                                   [](uint64_t, uint64_t, uint64_t rip) {
+                                      if (arch::cpu_index() != 0) {
+                                          kernel::Scheduler::ap_tick();
+                                          if (arch::APIC::is_timer_active())
+                                              arch::APIC::timer_start();
+                                          return;
+                                      }
                                       handle_irq(rip);
                                       kernel::Scheduler::on_tick();
                                       // Re-arm TSC-deadline for next tick

@@ -30,17 +30,26 @@
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/x86_64/madt.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/gdt.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/idt.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/kernel.hpp>
+#include <kernel/bootparams.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
 #include <logger.hpp>
 
 namespace kernel::smp {
 
 namespace {
+
+// Start-gate flag (spec §3.4.3): BSP publishes (RELEASE) after
+// reboot_from_table() finishes spawning; APs spin (ACQUIRE + pause).
+static bool scheduler_ready_ = false;
 
 // Raw trampoline blob (objcopy -I binary, symbols redefined by mk/rules.mk).
 extern "C" {
@@ -113,6 +122,21 @@ bool trampoline_block_usable() {
 
 uint8_t ap_count() { return g_aps_up; }
 
+/// @brief Publish the scheduler start-gate (called once by the BSP after
+///        reboot_from_table() finishes spawning, before its idle loop).
+void publish_scheduler_ready() {
+    __atomic_store_n(&scheduler_ready_, true, __ATOMIC_RELEASE);
+}
+
+/// @brief Drop onto a stack with interrupts on and halt (issue #25 C1).
+///        Mirrors the BSP reboot path (RSP = idle top, sti, hlt loop);
+///        the first timer tick applies dispatch via the ISR epilogue.
+[[noreturn, maybe_unused]] static void enter_idle_context(uint64_t stack_top) {
+    asm volatile("mov %0, %%rsp; sti; 1: hlt; jmp 1b" ::"r"(stack_top)
+                 : "memory");
+    __builtin_unreachable();
+}
+
 const kernel::acpi::MadtInfo &boot_madt() { return g_boot_madt; }
 
 void reserve_block_early() {
@@ -184,6 +208,14 @@ void bring_up() {
         trampoline_write64(PARAM_LOGICAL, logical);
         trampoline_write32(PARAM_LAPIC, target);
         ap_ready[logical] = 0;
+        // Issue #25 C1: pre-create the AP idle HERE on the BSP (single-
+        // threaded under bring_up's guard).  The kernel allocators
+        // (MemPool/PMM/VMM) have no SMP exclusion — an AP allocating
+        // concurrently with BSP allocation corrupts the heaps (GDB-proven).
+        // The AP adopts (never creates); visibility ordered by the
+        // scheduler start-gate (RELEASE after this loop, ACQUIRE on AP).
+        if (!kernel::Scheduler::create_ap_idle(logical))
+            panic("SMP: AP idle task OOM");
         // INIT assert — 10 ms — INIT deassert — SIPI — 300 us — SIPI.
         // (The second SIPI is unconditional: a post-startup SIPI is
         // ignored by the AP, so this stays deterministic with no branch.)
@@ -223,14 +255,46 @@ void bring_up() {
 
 extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
     // Per-CPU identity (sets this AP's GS_BASE) + local APIC enable.
-    // Interrupts are and stay disabled (booted with IF=0, no IDT/sti).
+    // Interrupts are and stay disabled until the scheduler entry below.
     arch::percpu_init_ap(logical_id, lapic_id);
     arch::APIC::init_ap();
     ap_ready[logical_id] = 1;
-    // Park until Phase C (no scheduler task may run here: no IDT, no
-    // tick, no user state — halt is the only safe idle).
-    for (;;)
-        arch::hlt();
+
+    // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,
+    // which fail-stops (C1 forbids AP FPU; #151 will allow).  Without
+    // this the trampoline's TS=0 lets x87 run silently, corrupting BSP
+    // lazy-FPU state undetectably.  OSFXSR keeps SSE faulting via #NM
+    // (not #UD) so one tripwire covers both.
+    uint64_t cr0 = arch::read_cr0();
+    arch::write_cr0(cr0 | (1ULL << 3));
+    uint64_t cr4 = arch::read_cr4();
+    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10)); // OSFXSR|OSXMMEXCPT
+
+    // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
+    // publishes scheduler_ready after reboot_from_table() finishes
+    // spawning (AP tick must never read all_tasks_ mid-rebuild).
+    while (__atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE) == false)
+        asm volatile("pause");
+
+    TaskControlBlock *idle = kernel::Scheduler::own_idle();
+    if (!idle || idle->magic != TaskControlBlock::TCB_MAGIC)
+        panic("SMP: AP idle missing");
+    kernel::Scheduler::set_current_task(idle);
+    // Shared GDT base BEFORE IDT (spec erratum): the trampoline leaves the
+    // AP on its own throwaway low GDT (null+32/64/data).  The first AP IRQ
+    // would load CS=0x08 from it (a 32-bit compat descriptor -> #GP in
+    // long mode).  load_ap() installs the shared base ONLY (no segment
+    // reloads, no LTR — the full load() triple-fault-resets the AP,
+    // GDB-proven; AP double faults reset, same exposure as Phase B).
+    arch::GDT::load_ap();
+    // IDT BEFORE timer (spec §3.4.8 erratum): timer_init programs INITCNT
+    // (bus-periodic mode starts counting immediately) and calibration
+    // itself arms the timer — a firing IRQ with no IDT triple-faults.
+    arch::IDT::load();
+    uint32_t hz = kernel::BootParams::instance().timer_hz;
+    arch::APIC::timer_init(hz);
+    arch::APIC::timer_start();
+    enter_idle_context(idle->kernel_stack_top);
 }
 
 } // namespace kernel::smp

@@ -31,6 +31,9 @@
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/smp.hpp>
+#endif
 #include <kernel/nexios_config.h>
 #include <logger.hpp>
 
@@ -198,7 +201,10 @@ void reboot_from_table() {
     for (uint64_t i = 0; i < Scheduler::task_count() && num_to_kill < MAX_KILL;
          ++i) {
         auto *t = Scheduler::task_at(i);
-        if (t && t != idle && t != self)
+        // Issue #25 C1: spare ANY idle (the AP idle cannot exist yet —
+        // it is created post-gate — but this stays correct if that
+        // ordering ever changes).
+        if (t && !Scheduler::is_idle_task(t) && t != self)
             to_kill[num_to_kill++] = t;
     }
     // Release each into the zombie list.  IRQs are disabled (IrqGuard at
@@ -355,6 +361,13 @@ void reboot_from_table() {
     debug_write("[REBOOT] after add_tasks task_count()=0x");
     debug_write_hex(Scheduler::task_count());
     debug_write("\n");
+
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning
+    // (tables quiescent from here on) and before the idle loop.  APs spin
+    // parked until this lands; post-gate they create their idles and tick.
+    kernel::smp::publish_scheduler_ready();
+#endif
 
     // 5. Switch to idle-task stack and enter the idle loop
     if (idle) {

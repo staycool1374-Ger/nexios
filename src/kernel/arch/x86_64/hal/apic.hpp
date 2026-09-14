@@ -86,6 +86,11 @@ public:
     static void mask_irq(uint8_t irq, bool mask);
 
     static constexpr uint8_t APIC_TIMER_VECTOR = 64;
+    /// @brief Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI
+    ///        telling the target CPU to drain its wake mailbox and arm its
+    ///        reschedule flag.  Free (timer 64, syscall 0x80, self-test
+    ///        0xEF, spurious 0xFF).
+    static constexpr uint8_t SCHED_VECTOR = 0xEC;
 
 private:
     // ─── MMIO base addresses ──────────────────────────────────────────────

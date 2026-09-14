@@ -243,14 +243,14 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
     // Yield to the receiver first so next_task() returns the higher-priority
     // sender, which runs, blocks in send_sync, and lets the receiver run.
     kernel::test::yield_as(*receiver);
-    __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
 
     // Drive the ping-pong on real ticks.
     uint64_t start = arch::Timer::ticks();
     while ((!g_sender_done || !g_receiver_done) &&
            (arch::Timer::ticks() - start) < 5000) {
         arch::hlt();
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     }
 
     JARVIS_ASSERT_EQ(1ULL, g_sender_done);

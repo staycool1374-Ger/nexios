@@ -15,6 +15,12 @@
 ; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 extern handle_interrupt_c
+; Issue #25 C1: switch atoms are per-CPU arrays.  This file indexes them
+; by the owning CPU (r11 = [gs:0x10], set once at epilogue entry) because
+; RIP-relative addressing cannot take an index register:
+;   lea rax, [rel scheduler_save_rsp_to] + mov rax, [rax + r11*8].
+; BARE [rel scheduler_*] (except read-only kernel_cr3) is forbidden
+; (INV-PC4, enforced by tools/validate_style.py).
 extern scheduler_save_rsp_to
 extern scheduler_load_rsp_from
 ; Issue #25 (Phase A): isr_nesting_depth / irq_entry_tsc live in per_cpu[0]
@@ -155,12 +161,40 @@ isr_common:
     call handle_interrupt_c
 
     cli
-    mov rax, [rel scheduler_save_rsp_to]
+    ; Own CPU index for the per-CPU switch atoms below (r11 is popped from
+    ; the ISR frame by .restore, so clobbering it here is safe; every call
+    ; block in this epilogue preserves it via push/pop).
+    mov r11, [gs:0x10]
+    ; Issue #25 C1 nested-apply guard: only the outermost ISR epilogue
+    ; (depth 1) or a nested TIMER tick (depth 2, SYSCALL+timer preemption)
+    ; may apply a pending deferred switch.  A nested non-timer ISR (e.g.
+    ; the SCHED IPI landing inside a tick) must NOT apply: it would park
+    ; the outer ISR's C++ frames mid-execution, and
+    ; rate_monotonic_schedule holds scheduler_lock_ there — the parked
+    ; guard never releases (observed: BSP spins in add_task forever while
+    ; the AP idles).  The arm is left set (NOT cleared here); the outer
+    ; epilogue applies it microseconds later.  Vector lives at
+    ; [rsp+15*8] (same layout the entry block loads rdi/rsi/rdx from).
+    cmp qword [gs:0x20], 1
+    jbe .apply_allowed
+    cmp qword [gs:0x20], 3
+    jae .restore
+    mov rax, [rsp + 15*8]
+    cmp rax, 32
+    je .apply_allowed
+    cmp rax, 64
+    jne .restore
+.apply_allowed:
+    lea rax, [rel scheduler_save_rsp_to]
+    mov rax, [rax + r11*8]
     test rax, rax
     jz .restore
 
-    ; Perform context switch at any nesting depth ≤ 2 (normal = 1, SYSCALL+timer = 2).
-    ; Deeper nesting (≥ 3) indicates a bug — skip to avoid stack corruption.
+    ; Apply gate (see nested-apply guard above): the outermost epilogue
+    ; (depth 1) and nested timer ticks (depth 2, SYSCALL+timer) arrive here.
+    ; Deeper nesting (≥ 3) cannot reach this point (redirected to .restore
+    ; by the guard); the H2 depth-skip audit below is retained as
+    ; defense-in-depth.
     cmp qword [gs:0x20], 2
     jbe .depth_ok
     ; H2 depth-skip audit (cold: fires only when a pending apply is skipped due
@@ -190,7 +224,8 @@ isr_common:
     ; Generation-lock: capture the generation that published this deferred-switch
     ; pair (load_rsp_from / load_cr3_from).  RCX is preserved across the
     ; diagnostic call below (the push/pop block includes RCX).
-    mov rcx, [rel scheduler_switch_generation]
+    lea rax, [rel scheduler_switch_generation]
+    mov rcx, [rax + r11*8]
 
     ; Diagnostic: check RSP before saving (preserve caller-saved regs)
     push rax
@@ -219,7 +254,8 @@ isr_common:
     ; (the H2 race).  Skip the apply and leave the atoms untouched: a
     ; superseding publisher's own arm is in place, and a stale arm is ignored
     ; by the next ISR's fresh generation check.
-    cmp rcx, [rel scheduler_switch_generation]
+    lea rax, [rel scheduler_switch_generation]
+    cmp rcx, [rax + r11*8]
     je .gen_ok
     ; H2 ring: record the generation-skip (captured vs current) before
     ; abandoning the apply.  Cold path.  Preserve every GPR that .restore pops.
@@ -233,7 +269,8 @@ isr_common:
     push r10
     push r11
     mov rdi, rcx
-    mov rsi, [rel scheduler_switch_generation]
+    lea rax, [rel scheduler_switch_generation]
+    mov rsi, [rax + r11*8]
     call scheduler_record_skip
     pop r11
     pop r10
@@ -246,7 +283,8 @@ isr_common:
     pop rax
     jmp .restore
 .gen_ok:
-    mov rax, [rel scheduler_save_rsp_to]
+    lea rax, [rel scheduler_save_rsp_to]
+    mov rax, [rax + r11*8]
     test rax, rax
     jz .restore
 
@@ -287,9 +325,11 @@ isr_common:
     test rax, rax
     jz .abort_switch
 
-    mov rsp, [rel scheduler_load_rsp_from]
-    mov qword [rel scheduler_load_rsp_from], 0
-    mov qword [rel scheduler_save_rsp_to], 0
+    lea rax, [rel scheduler_load_rsp_from]
+    mov rsp, [rax + r11*8]
+    mov qword [rax + r11*8], 0
+    lea rax, [rel scheduler_save_rsp_to]
+    mov qword [rax + r11*8], 0
 
     ; Apply-side RSP-owner check (H2): the deferred switch must resume the
     ; dispatched task ON ITS OWN kernel stack.  If the loaded RSP is outside
@@ -297,8 +337,10 @@ isr_common:
     ; value from a split-phase or nested-ISR switch — refuse to iretq onto it.
     ; Restore the original RSP and fall through to .restore (iretq back to the
     ; current task); the dropped switch is harmless and retried next tick.
-    mov rcx, [rel scheduler_load_kstack_base]
-    mov rdx, [rel scheduler_load_kstack_top]
+    lea rax, [rel scheduler_load_kstack_base]
+    mov rcx, [rax + r11*8]
+    lea rax, [rel scheduler_load_kstack_top]
+    mov rdx, [rax + r11*8]
     cmp rsp, rcx
     jb .h2_rsp_abort
     cmp rsp, rdx
@@ -360,7 +402,8 @@ isr_common:
     ; (kernel/harness context) or it was consumed, fall back to the static
     ; kernel PML4 so the harness can never resume on a stale user CR3 from a
     ; previous task (the H2 freeze path).
-    mov rax, [rel scheduler_load_cr3_from]
+    lea rax, [rel scheduler_load_cr3_from]
+    mov rax, [rax + r11*8]
     test rax, rax
     jnz .load_cr3
     mov rax, [rel scheduler_kernel_cr3]
@@ -368,7 +411,8 @@ isr_common:
     jz .restore
 .load_cr3:
     mov cr3, rax
-    mov qword [rel scheduler_load_cr3_from], 0
+    lea rax, [rel scheduler_load_cr3_from]
+    mov qword [rax + r11*8], 0
     jmp .restore
 
 .abort_switch:
@@ -376,9 +420,12 @@ isr_common:
     ; stack (stale/foreign pair — H2).  Abort: restore the original RSP, clear
     ; the pending-switch atoms so the next tick publishes fresh, and iretq back
     ; to the current task.  RBX still holds the original RSP.
-    mov qword [rel scheduler_save_rsp_to], 0
-    mov qword [rel scheduler_load_cr3_from], 0
-    mov qword [rel scheduler_next_task_id], -1
+    lea rax, [rel scheduler_save_rsp_to]
+    mov qword [rax + r11*8], 0
+    lea rax, [rel scheduler_load_cr3_from]
+    mov qword [rax + r11*8], 0
+    lea rax, [rel scheduler_next_task_id]
+    mov qword [rax + r11*8], -1
     mov rsp, rbx
 
     ; Rebind TSS.RSP0 to the continuing task's kernel stack: the arm side may

@@ -87,6 +87,9 @@ class GDT {
     static void init();
     /// @brief Load the GDT via the LGDT instruction.
     static void load();
+    /// @brief Load only the GDT base (issue #25 C1; AP-safe subset of
+    ///        load() — no segment reloads, no LTR).
+    static void load_ap();
     /// @brief Update RSP0 in the TSS (used on syscall entry).
     /// @param rsp New kernel stack pointer for ring 0.
     static void set_tss_rsp0(uint64_t rsp);
@@ -137,6 +140,8 @@ class GDT {
     static inline void init() {
     }
     static inline void load() {
+    }
+    static inline void load_ap() {
     }
     static inline void set_tss_rsp0(uint64_t) {
     }

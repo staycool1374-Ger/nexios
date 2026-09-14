@@ -61,7 +61,7 @@ uint64_t g_notify_val = 0;
 ///        hlts, so the timer ISR can dispatch the cooperating peer task.
 template <typename Pred> inline void yield_wait_until(Pred cond) {
     while (!cond()) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();
     }

@@ -79,7 +79,7 @@ inline void yield_to_task(TaskControlBlock &task) noexcept {
     arch::IrqGuard guard;
     auto *original = Scheduler::current_task();
     Scheduler::set_current(task);
-    __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     Scheduler::set_current(*original);
     // set_current(task) re-enqueued `original` (the harness) into the ready
     // queue because it was RUNNING at the time.  We restored it as current
@@ -208,7 +208,7 @@ inline void wait_for_termination_safe(TaskControlBlock *task) {
         return;
     while (TaskControlBlock::is_valid(task) &&
            task->state != TaskState::TERMINATED) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();
     }

@@ -758,6 +758,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         debug_write_hex(madt.ncpus);
         debug_write("\n");
     }
+    // Issue #25 C1: cross-CPU scheduler wake vector (shared IDT serves
+    // both CPUs; the handler drains the calling CPU's mailbox).
+    arch::IDT::register_handler_raw(
+        arch::APIC::SCHED_VECTOR, [](uint64_t, uint64_t, uint64_t) {
+            kernel::Scheduler::sched_ipi_handler();
+            arch::APIC::eoi();
+        });
 #endif // CONFIG_ARCH_X86_64
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
@@ -1474,6 +1481,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         // RFLAGS, so no sti is needed.
         arch::cli();
 
+        // Issue #25 C1 FPU tripwire: AP FPU is forbidden (lazy protocol is
+        // BSP-scoped; fpu_owner is BSP-global until #151).  ap_main arms
+        // CR0.TS precisely so any AP x87/SSE faults HERE and fail-stops
+        // loudly instead of corrupting BSP lazy state silently.
+        if (arch::cpu_index() != 0)
+            panic("#NM on AP: FPU forbidden in C1 (see #151)");
+
         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
         uint64_t cr0 = arch::read_cr0();
         cr0 &= ~(1ULL << 3);
@@ -1493,7 +1507,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
         if (prev_fpu_owner == current) {
             __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
-            uint64_t depth = kernel::isr_nesting_depth;
+            uint64_t depth = kernel::isr_nesting_own();
             if (depth > kernel::fpu_nm_depth_max)
                 kernel::fpu_nm_depth_max = depth;
             return;
@@ -1510,7 +1524,7 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
 
         __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
-        uint64_t depth = kernel::isr_nesting_depth;
+        uint64_t depth = kernel::isr_nesting_own();
         if (depth > kernel::fpu_nm_depth_max)
             kernel::fpu_nm_depth_max = depth;
         return;

@@ -259,8 +259,8 @@ struct TaskControlBlock {
           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
           blocked_on_pager_fault(nullptr),
           held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
-          next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
-          generation(0) {
+           next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
+           generation(0) {
     }
 
     uint64_t magic;
@@ -269,6 +269,9 @@ struct TaskControlBlock {
     TaskState state;
     uint64_t priority;
     uint64_t base_priority;
+    /// @brief CPU affinity bitmask (issue #25 C1): bit N = may run on CPU N.
+    ///        Default 0x1 (CPU0 — all pre-C1 behavior unchanged).
+    uint64_t cpu_affinity = 1;
     uint64_t period_ticks;
     uint64_t deadline_ticks;
     bool deadline_missed;

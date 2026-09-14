@@ -27,14 +27,15 @@
 
 #include <types.hpp>
 #include <constants.hpp>
+#include <kernel/arch/msr.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>
 
 namespace arch {
 
 /// @brief Maximum number of logical CPUs supported.
-/// Issue #25 Phase B: sized for AP bring-up (SMP); scheduling stays
-/// BSP-only until Phase C.
+/// Canonical default lives in nexios_config.h (CONFIG_MAX_CPUS 8);
+/// this fallback keeps the header self-contained for early includes.
 #ifndef CONFIG_MAX_CPUS
 #define CONFIG_MAX_CPUS 8
 #endif
@@ -57,11 +58,20 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
     uint64_t irq_entry_tsc;     // gs:0x28  — was global irq_entry_tsc
 
     // ─── FPU / scheduler ───────────────────────────────────────────────────
-    void *fpu_owner;            // gs:0x30  — was global fpu_owner (TaskControlBlock*)
-    void *current_task;         // gs:0x38  — was scheduler global current_task
+    void *fpu_owner;            // gs:0x30  — global (FPU migration: #151)
+    void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
+                                //   array, issue #25 C1; kept for layout)
+
+    // ─── Deferred-switch atoms: NOT in this page ─────────────────────────────
+    // C1 stores them as Scheduler/global_state arrays indexed by CPU
+    // (arch-neutral C++; riscv asm keeps working via array base == [0]).
+    // x86 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]).
 
     // ─── Reserved / future expansion ───────────────────────────────────────
-    uint64_t reserved[475];     // pad to 4 KiB (512 * 8 = 4096)
+    // NOTE: explicit fields total 483 u64s; alignas(PAGE_SIZE) tail-pads
+    // sizeof to 4096 (enforced by the static_assert below).  Keep the
+    // explicit total constant when adding fields (shrink reserved).
+    uint64_t reserved[475];
 };
 
 static_assert(sizeof(PerCpu) == arch::PAGE_SIZE,
@@ -73,15 +83,25 @@ extern PerCpu per_cpu[CONFIG_MAX_CPUS];
 
 /// @brief Get pointer to current CPU's PerCpu block.
 /// @return Pointer to current CPU's PerCpu struct (via GS_BASE).
+/// GS_BASE is range-checked against per_cpu[]: callers running before
+/// GS is valid (early boot, GS_BASE=0) resolve to &per_cpu[0].
 inline PerCpu *per_cpu_current() {
-    // In single-core build, this always returns &per_cpu[0].
-    // The GS_BASE is set at boot to point at per_cpu[0].
+    uint64_t base = arch::rdmsr(arch::MSR_GS_BASE);
+    uint64_t lo = reinterpret_cast<uint64_t>(&per_cpu[0]);
+    if (base >= lo && base < lo + sizeof(per_cpu))
+        return &per_cpu[(base - lo) / arch::PAGE_SIZE];
     return &per_cpu[0];
 }
 
 /// @brief Get current CPU's logical ID (index in per_cpu array).
 inline uint64_t cpu_id() {
     return per_cpu_current()->cpu_id;
+}
+
+/// @brief Current CPU's logical index (0..CONFIG_MAX_CPUS-1).
+/// Derived from the GS_BASE range check above: pre-GS callers get 0.
+inline uint64_t cpu_index() {
+    return static_cast<uint64_t>(per_cpu_current() - &per_cpu[0]);
 }
 
 /// @brief Get current CPU's LAPIC ID.

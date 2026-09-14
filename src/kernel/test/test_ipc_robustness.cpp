@@ -549,7 +549,7 @@ TEST_CLASS(IpcPriorityOrderedWake) {
                                   mid->state == TaskState::BLOCKED &&
                                   lo->state == TaskState::BLOCKED);
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
     JARVIS_ASSERT(hi->state == TaskState::BLOCKED);
@@ -575,7 +575,7 @@ TEST_CLASS(IpcPriorityOrderedWake) {
     // flag is set — proves it completed its send + terminated), while
     // mid/lo must still be BLOCKED (never woken).
     for (int i = 0; i < 1000 && !(__atomic_load_n(&s_wake_flags[0], __ATOMIC_ACQUIRE) == 1); ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
     JARVIS_ASSERT_EQ(1ULL, s_wake_flags[0]);
@@ -591,7 +591,7 @@ TEST_CLASS(IpcPriorityOrderedWake) {
     for (uint64_t i = 0; i < IPC_MAX_QUEUE_MSG + 3; ++i) {
         if (!IPC::recv(extra))
             break;
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 
@@ -600,7 +600,7 @@ TEST_CLASS(IpcPriorityOrderedWake) {
                                   mid->state == TaskState::TERMINATED &&
                                   lo->state == TaskState::TERMINATED);
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 

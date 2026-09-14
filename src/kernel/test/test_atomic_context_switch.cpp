@@ -54,10 +54,10 @@ JARVIS_TEST(atomic_globals_set_on_reschedule, "PRE: none | POST: none") {
     auto *original = Scheduler::current_task();
 
     // Clear stale globals so reschedule() doesn't no-op
-    __atomic_store_n(&kernel::scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_rsp_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_cr3_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
 
     kernel::test::yield_as(*task_a);
@@ -69,9 +69,9 @@ JARVIS_TEST(atomic_globals_set_on_reschedule, "PRE: none | POST: none") {
     // Read immediately; ISR may have already consumed the globals.
     // Accept either: non-null (not yet consumed) or null (already consumed).
     uint64_t *saved_rsp_ptr =
-        __atomic_load_n(&kernel::scheduler_save_rsp_to, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
     uint64_t loaded_rsp =
-        __atomic_load_n(&kernel::scheduler_load_rsp_from, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
     (void)loaded_rsp;
 
     // At least one of save/load must be non-zero if ISR hasn't fired yet.
@@ -113,13 +113,13 @@ JARVIS_TEST(atomic_fpu_owner_read_write, "PRE: none | POST: none") {
 // Depends: scheduler_next_task_id atomic
 JARVIS_TEST(atomic_next_task_id_consistency, "PRE: none | POST: none") {
     uint64_t old =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
-    __atomic_store_n(&kernel::scheduler_next_task_id, old + 100,
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), old + 100,
                      __ATOMIC_RELEASE);
     uint64_t val =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
     JARVIS_ASSERT_EQ(old + 100, val);
-    __atomic_store_n(&kernel::scheduler_next_task_id, old, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), old, __ATOMIC_RELEASE);
     JARVIS_TEST_PASS();
 }
 
@@ -144,10 +144,10 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
     auto *original = Scheduler::current_task();
 
     // Clear stale globals so reschedule() doesn't no-op
-    __atomic_store_n(&kernel::scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_rsp_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_cr3_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
 
     kernel::test::yield_as(*task_a);
@@ -158,7 +158,7 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
 
     // Globals must be set after reschedule (save target, load RSP, load CR3)
     uint64_t *save_rsp_ptr =
-        __atomic_load_n(&kernel::scheduler_save_rsp_to, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
     // Accept that ISR may have already consumed the globals
     if (save_rsp_ptr == nullptr) {
         JARVIS_TEST_PASS();
@@ -166,16 +166,16 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
     }
 
     // Clear globals atomically and verify clear took effect
-    __atomic_store_n(&kernel::scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_rsp_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_cr3_from, (uint64_t)0,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
 
     save_rsp_ptr =
-        __atomic_load_n(&kernel::scheduler_save_rsp_to, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
     uint64_t load_cr3 =
-        __atomic_load_n(&kernel::scheduler_load_cr3_from, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::load_cr3_from(), __ATOMIC_ACQUIRE);
 
     JARVIS_ASSERT_EQ(nullptr, save_rsp_ptr);
     JARVIS_ASSERT_EQ(0ULL, load_cr3);
@@ -224,8 +224,8 @@ JARVIS_TEST(atomics_assembly_bridge, "PRE: none | POST: none") {
     // Simulate what switch_to_task + isr_common do:
     // Set scheduler_next_task_id to the target task ID
     uint64_t old_id =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
-    __atomic_store_n(&kernel::scheduler_next_task_id, task->id,
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), task->id,
                      __ATOMIC_RELEASE);
 
     // Call the bridge function that isr_stubs.asm invokes
@@ -237,12 +237,12 @@ JARVIS_TEST(atomics_assembly_bridge, "PRE: none | POST: none") {
 
     // Verify scheduler_next_task_id was cleared to UINT64_MAX
     uint64_t cleared =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
+        __atomic_load_n(&::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
     JARVIS_ASSERT_EQ(UINT64_MAX, cleared);
 
     // Restore original task and next_task_id
     Scheduler::set_current(*original);
-    __atomic_store_n(&kernel::scheduler_next_task_id, old_id, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), old_id, __ATOMIC_RELEASE);
 
     kernel::test::terminate_and_drain(*task);
 

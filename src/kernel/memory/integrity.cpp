@@ -163,5 +163,17 @@ void idle_task_main() {
     }
 }
 
+/// @brief AP idle task entry point (issue #25 C1): halt ONLY.  Deliberately
+///        NOT cleanup_step(): the kernel allocators (MemPool/PMM/VMM) are
+///        single-core (no exclusion) until a later phase, so only the BSP
+///        idle reaps (identical reclamation behavior to pre-C1).  An AP
+///        freeing memory concurrently with BSP allocation corrupts the
+///        heaps — proven by GDB (AP in PMM::rebuild_free_list).
+void ap_idle_main() {
+    for (;;) {
+        arch::hlt();
+    }
+}
+
 } // namespace integrity
 } // namespace kernel

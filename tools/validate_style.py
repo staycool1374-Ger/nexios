@@ -428,6 +428,17 @@ class PerCpuAsmChecker(Checker):
          "irq_entry_tsc must be gs-relative ([gs:0x28]) in ISR asm (INV-PC2)"),
     ]
 
+    # INV-PC4 (issue #25 C1): deferred-switch atoms are per-CPU arrays.
+    # A BARE [rel scheduler_<atom>] data access reads CPU0's slot on every
+    # CPU (cross-talk).  Allowed: `lea` (address computation for indexed
+    # access) and scheduler_kernel_cr3 (global read-only).
+    _pc4_atoms = (
+        r"scheduler_(?:save_rsp_to|load_rsp_from|load_cr3_from|"
+        r"next_task_id|load_kstack_base|load_kstack_top|"
+        r"switch_generation|need_resched)"
+    )
+    _pc4_bare = re.compile(r"\[\s*rel\s+" + _pc4_atoms + r"\s*\]")
+
     def check_file(self, rel_path: str, text: str) -> None:
         if not rel_path.endswith((".asm", ".S", ".s")):
             return
@@ -438,6 +449,13 @@ class PerCpuAsmChecker(Checker):
             for pat, msg in self._patterns:
                 if pat.search(line):
                     self.add(rel_path, line_no, msg)
+            if self._pc4_bare.search(line):
+                code = line.split(";")[0]
+                if not re.match(r"\s*lea\b", code):
+                    self.add(
+                        rel_path, line_no,
+                        "bare [rel scheduler_*] data access reads CPU0's slot "
+                        "on every CPU — index via gs:0x10 (INV-PC4)")
 
 
 # ---------------------------------------------------------------------------

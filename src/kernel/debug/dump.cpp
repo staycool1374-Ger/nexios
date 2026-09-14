@@ -135,7 +135,7 @@ void dump_scheduler_info() {
 
     pkd("current_index", cidx);
     pkd("task_count", cnt);
-    pkd("next_task_id", scheduler_next_task_id);
+    pkd("next_task_id", Scheduler::SwSlots::next_task_id());
 
     L::raw_write("[DUMP]   current_task_id: ");
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC) {
@@ -171,14 +171,14 @@ void dump_scheduler_info() {
     pkd("sporadic_count", S::sporadic_count());
 
     // deferred-switch globals set by switch_to_task
-    pkv("save_rsp_to", reinterpret_cast<uint64_t>(scheduler_save_rsp_to));
-    pkv("load_rsp_from", scheduler_load_rsp_from);
-    pkv("load_cr3_from", scheduler_load_cr3_from);
-    pkd("next_switch_id", scheduler_next_task_id);
+    pkv("save_rsp_to", reinterpret_cast<uint64_t>(Scheduler::SwSlots::save_rsp_to()));
+    pkv("load_rsp_from", Scheduler::SwSlots::load_rsp_from());
+    pkv("load_cr3_from", Scheduler::SwSlots::load_cr3_from());
+    pkd("next_switch_id", Scheduler::SwSlots::next_task_id());
 
-    // ISR / corruption tracking
+    // ISR / corruption tracking (own CPU's nesting slot, issue #25 C1)
     pkd("isr_nesting",
-        __atomic_load_n(&isr_nesting_depth, __ATOMIC_ACQUIRE));
+        __atomic_load_n(&isr_nesting_own(), __ATOMIC_ACQUIRE));
     pkd("corruption_count", scheduler_corruption_count);
 
     L::raw_write("[DUMP] === end scheduler ===\n");
@@ -267,8 +267,8 @@ void dump_task_info(uint64_t task_id) {
     arch::IrqGuard irq_guard{};
 
     // capture live deferred-switch globals for side-channel info
-    uint64_t save_to = reinterpret_cast<uint64_t>(scheduler_save_rsp_to);
-    uint64_t next_id = scheduler_next_task_id;
+    uint64_t save_to = reinterpret_cast<uint64_t>(Scheduler::SwSlots::save_rsp_to());
+    uint64_t next_id = Scheduler::SwSlots::next_task_id();
 
     auto *t = S::find_task(task_id);
     if (!t) {
@@ -444,8 +444,8 @@ void dump_all_tasks() {
             L::raw_write("[DUMP]\n");
         }
         // dump inline using the same format as dump_task_info
-        uint64_t save_to = reinterpret_cast<uint64_t>(scheduler_save_rsp_to);
-        uint64_t next_id = scheduler_next_task_id;
+        uint64_t save_to = reinterpret_cast<uint64_t>(Scheduler::SwSlots::save_rsp_to());
+        uint64_t next_id = Scheduler::SwSlots::next_task_id();
 
         bool valid = (t->magic == TaskControlBlock::TCB_MAGIC);
 

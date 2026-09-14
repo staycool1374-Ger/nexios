@@ -46,6 +46,10 @@ extern "C" void debug_write_dec(uint64_t value);
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
+#include <kernel/arch/apic.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/smp.hpp>
+#endif
 
 /// @brief Read the current stack pointer (portable across arches).
 /// @return Current SP (kernel stack pointer for the running context).
@@ -227,11 +231,15 @@ static H2Event g_h2_ring[H2_RING_SIZE];
 static uint64_t g_h2_idx = 0;
 
 inline void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept {
-    uint64_t idx = g_h2_idx++;
+    // Issue #25 C1: atomic index (two CPUs append concurrently; a torn
+    // ENTRY is possible but debug-only — the generation recorded is the
+    // CALLER's CPU slot, so ordering per CPU stays coherent).
+    uint64_t idx =
+        __atomic_fetch_add(&g_h2_idx, 1ULL, __ATOMIC_RELAXED);
     g_h2_ring[idx % H2_RING_SIZE] = {
         ev, a, b, c,
-        __atomic_load_n(&kernel::scheduler_switch_generation, __ATOMIC_RELAXED),
-        __atomic_load_n(&kernel::isr_nesting_depth, __ATOMIC_RELAXED)};
+        __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED),
+        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED)};
 }
 
 /// @brief Dump the most recent H2_RING_SIZE events to the debug console.
@@ -342,11 +350,23 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
             return;
         }
     }
-    ready_queue_.enqueue(task, effective_priority(&task));
+    // Issue #25 C1: shared-TSS backstop — user tasks never leave CPU0 no
+    // matter what the mask says (set_affinity clamps persistently; this
+    // covers every other path to AP execution).
+    uint64_t target = queue_target(task);
+    if (task.is_user_ && target != 0) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            Logger::warn("sched: user task id=%u clamped to CPU0", task.id);
+        }
+        target = 0;
+    }
+    rq_for(target).enqueue(task, effective_priority(&task));
 }
 
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
-    ready_queue_.remove(task, effective_priority(&task));
+    rq_task(task).remove(task, effective_priority(&task));
 }
 
 // FIX(rms-o1): Explicit priority movement in the O(1) ReadyQueue.  The queue
@@ -358,21 +378,201 @@ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
 // causing missed preemptions or priority inversion.
 void Scheduler::move_priority(TaskControlBlock &task, uint64_t old_prio,
                                uint64_t new_prio) noexcept {
-    ready_queue_.move_priority(task, old_prio, new_prio);
+    rq_task(task).move_priority(task, old_prio, new_prio);
 }
 
 void Scheduler::set_priority(TaskControlBlock &task,
                              uint64_t new_prio) noexcept {
     arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     if (new_prio == task.priority)
         return;
     // Re-bucket in the O(1) ready queue if the task is queued, so the
     // effective priority change is visible on the next tick.  move_priority
     // must be called BEFORE writing the field (move uses the current bucket).
+    // Issue #25 C1: takes the global lock (was IrqGuard-only) — remote
+    // queues are written from task context only under the lock.
     if (task.in_ready_queue_)
         move_priority(task, task.priority, new_prio);
     task.priority = new_prio;
     task.base_priority = new_prio;
+}
+
+// ---------------------------------------------------------------------------
+// Issue #25 C1: affinity, mailbox, quiesce, AP tick.
+// ---------------------------------------------------------------------------
+
+uint64_t Scheduler::queue_target(const TaskControlBlock &t) noexcept {
+    uint64_t m = t.cpu_affinity ? t.cpu_affinity : 1U;
+    uint64_t c = static_cast<uint64_t>(__builtin_ctzll(m));
+    return c < CONFIG_MAX_CPUS ? c : 0;
+}
+
+void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
+    cpu %= CONFIG_MAX_CPUS;
+    __atomic_store_n(&scheduler_load_rsp_from[cpu], (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_load_cr3_from[cpu], (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_next_task_id[cpu], UINT64_MAX,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
+                     __ATOMIC_RELEASE);
+    // Bump the generation LAST (release): an ISR epilogue that captured
+    // the pre-cancel generation fails its re-check and skips the apply.
+    uint64_t gen = __atomic_load_n(&scheduler_switch_generation[cpu],
+                                   __ATOMIC_RELAXED);
+    __atomic_store_n(&scheduler_switch_generation[cpu], gen + 1,
+                     __ATOMIC_RELEASE);
+}
+
+void Scheduler::quiesce_enter() noexcept {
+    __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        cancel_pending_switch_cpu(c);
+}
+
+void Scheduler::quiesce_exit() noexcept {
+    __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
+}
+
+/// @brief Number of CPUs currently up (BSP + parked/running APs).
+static uint64_t sched_up_cpus() noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    return 1 + kernel::smp::ap_count();
+#else
+    return 1;
+#endif
+}
+
+void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
+    // Quiesce window fences the lock-free AP current-apply path (spec
+    // §3.4.5): with arms cancelled and AP dispatch parked, the running
+    // check below is stable across the dequeue+enqueue.
+    arch::IrqGuard irq_guard{};
+    quiesce_enter();
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    uint64_t up = sched_up_cpus();
+    uint64_t allowed = (up >= 64) ? ~0ULL : ((up == 0) ? 0ULL : ((1ULL << up) - 1));
+    if ((mask & allowed) == 0) {
+        Logger::warn(
+            "sched: set_affinity id=%u mask=0x%lx clamps to CPU0", task.id,
+            mask);
+        mask = 1;
+    }
+    mask &= allowed;
+    if (task.is_user_ && mask != 1) {
+        // Shared-TSS limitation (spec §3.4.5): user tasks stay on CPU0.
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            Logger::warn(
+                "sched: user task id=%u forced to CPU0 (no per-CPU TSS)",
+                task.id);
+        }
+        mask = 1;
+    }
+    if (is_current_on_any_cpu(&task) && &task != current_task()) {
+        Logger::warn("sched: set_affinity id=%u refused (running)", task.id);
+        quiesce_exit();
+        return;
+    }
+    if (task.cpu_affinity != mask) {
+        // Issue #25 C1: preserve queue membership across the move.  A
+        // queued-but-BLOCKED task (legal: placement is stable across ticks
+        // since nothing can dispatch it) must land in the new CPU's queue;
+        // the old code only re-enqueued READY tasks and silently dropped
+        // BLOCKED ones (smp_sched_cross_move).  was_queued covers every
+        // state; the READY disjunct keeps the unqueued-READY enqueue.
+        bool was_queued = task.in_ready_queue_;
+        if (was_queued) {
+            rq_task(task).remove(task, task.rq_priority_);
+            task.in_ready_queue_ = false;
+        }
+        task.cpu_affinity = mask;
+        // Issue #25 C1: never enqueue a task the scheduler doesn't own.
+        // create → set_affinity → add_task is the API pattern: at
+        // set_affinity time the task isn't registered yet, and the direct
+        // enqueue below (no enqueue_ready H2 guard on this path) would link
+        // it into a ready queue; add_task then resets its runq links while
+        // still linked → intrusive-list corruption → AP next_task garbage
+        // → #GP at iret (smp_sched_ap_runs_pinned).  Record the mask now;
+        // add_task enqueues after registration.
+        bool owned = (Scheduler::find_task(task.id) == &task);
+        if (was_queued ||
+            (owned && task.state == TaskState::READY &&
+             !task.in_ready_queue_)) {
+            task.in_ready_queue_ = false;
+            rq_task(task).enqueue(task, effective_priority(&task));
+        }
+    }
+    quiesce_exit();
+}
+
+void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
+    cpu %= CONFIG_MAX_CPUS;
+    // IF=0 across the publish (internal guard): a same-CPU ISR can never
+    // preempt mid-publish, so the blocking leaf take below can only
+    // contend with the OTHER CPU (which always progresses) — deadlock-free
+    // from both task and ISR context.  Leaf-last order everywhere.
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[cpu]);
+    uint64_t n = wake_mailbox_count_[cpu];
+    if (n >= MAILBOX_SLOTS)
+        panic("sched: wake mailbox overflow (fail-closed bound)");
+    wake_mailbox_[cpu][n].task = &task;
+    wake_mailbox_[cpu][n].id = task.id;
+    wake_mailbox_[cpu][n].generation = task.generation;
+    wake_mailbox_count_[cpu] = n + 1;
+}
+
+void Scheduler::mailbox_drain() noexcept {
+    uint64_t cpu = sched_cpu() % CONFIG_MAX_CPUS;
+    // Runs in the SCHED-IPI handler (IF=0).  try_lock the global (a BSP
+    // task-context holder may be mid-mutation); skip on contention — the
+    // entries stay queued for the next IPI/tick (never dropped here).
+    // The leaf is blocking-safe (see publish: same-CPU publishers are
+    // IF=0-excluded while we run).
+    if (!scheduler_lock_.try_lock())
+        return;
+    SpinLockGuard<sync::SpinLock> outer(scheduler_lock_, adopt_lock);
+    SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[cpu]);
+    for (;;) {
+        uint64_t n = wake_mailbox_count_[cpu];
+        if (n == 0)
+            return;
+        --n;
+        TaskControlBlock *task = wake_mailbox_[cpu][n].task;
+        uint64_t id = wake_mailbox_[cpu][n].id;
+        uint64_t generation = wake_mailbox_[cpu][n].generation;
+        wake_mailbox_[cpu][n].task = nullptr;
+        wake_mailbox_count_[cpu] = n;
+        // Generation guard (irq_delivery waiter_gen pattern): a task
+        // destroyed + block-reused between publish and drain must never
+        // dispatch (UAF). Stale entries are dropped, never retried.
+        if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
+            task->id != id || task->generation != generation)
+            continue;
+        if (task->state == TaskState::TERMINATED ||
+            task->state == TaskState::REAPED)
+            continue;
+        task->state = TaskState::READY;
+        rq_task(*task).enqueue(*task, effective_priority(task));
+    }
+}
+
+void Scheduler::sched_ipi_handler() noexcept {
+    mailbox_drain();
+    __atomic_store_n(&Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
+}
+
+void Scheduler::ap_tick() noexcept {
+    // AP dispatch-only tick (spec §3.4.4): quiesce parks everything;
+    // otherwise run the standard decision on own state (try_lock inside;
+    // loser retries next tick). No accounting/deadlines/watchdogs.
+    if (__atomic_load_n(&sched_quiesced_, __ATOMIC_ACQUIRE))
+        return;
+    rate_monotonic_schedule();
 }
 
 /// @brief Clear every deferred-switch atom and bump the switch generation.
@@ -382,23 +582,23 @@ void Scheduler::set_priority(TaskControlBlock &task,
 ///        from task removal paths.
 void Scheduler::cancel_pending_switch() noexcept {
     H2_REC(H2_EV_CLR_MISC,
-           __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_RELAXED),
+           __atomic_load_n(&Scheduler::SwSlots::next_task_id(), __ATOMIC_RELAXED),
            0, 0);
-    __atomic_store_n(&kernel::scheduler_save_rsp_to, (uint64_t *)nullptr,
+    __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_rsp_from, (uint64_t)0,
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_cr3_from, (uint64_t)0,
+    __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_next_task_id, UINT64_MAX,
+    __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_kstack_base, (uint64_t)0,
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&kernel::scheduler_load_kstack_top, (uint64_t)0,
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
                      __ATOMIC_RELEASE);
     uint64_t gen =
-        __atomic_load_n(&kernel::scheduler_switch_generation, __ATOMIC_RELAXED);
-    __atomic_store_n(&kernel::scheduler_switch_generation, gen + 1,
+        __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
+    __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
                      __ATOMIC_RELEASE);
 }
 
@@ -421,11 +621,15 @@ void Scheduler::cancel_pending_switch() noexcept {
 ///        pending switch targets it (a self-terminating CURRENT task's own
 ///        switch-away arm targets a successor, so it is preserved).
 static void invalidate_pending_switch_to(uint64_t task_id) noexcept {
-    uint64_t pending =
-        __atomic_load_n(&kernel::scheduler_next_task_id, __ATOMIC_ACQUIRE);
-    if (pending == UINT64_MAX || pending != task_id)
-        return;
-    Scheduler::cancel_pending_switch();
+    // Issue #25 C1: scan ALL CPUs' arms (an AP may hold an arm to a task
+    // the BSP is removing, and vice versa).
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        uint64_t pending = __atomic_load_n(&scheduler_next_task_id[c],
+                                           __ATOMIC_ACQUIRE);
+        if (pending == UINT64_MAX || pending != task_id)
+            continue;
+        Scheduler::cancel_pending_switch_cpu(c);
+    }
 }
 
 void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
@@ -448,35 +652,48 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     invalidate_pending_switch_to(task.id);
 
     task.zombie_next_ = nullptr;
-    if (zombie_tail_) {
-        zombie_tail_->zombie_next_ = &task;
-        zombie_tail_ = &task;
-    } else {
-        zombie_head_ = zombie_tail_ = &task;
+    // Issue #25 C1: list linkage under the zombie leaf lock (caller holds
+    // the global lock (terminate) or runs IF=0 pre-gate (reboot teardown);
+    // leaf-last order everywhere, never leaf→global).
+    {
+        SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
+        if (zombie_tail_) {
+            zombie_tail_->zombie_next_ = &task;
+            zombie_tail_ = &task;
+        } else {
+            zombie_head_ = zombie_tail_ = &task;
+        }
+        __atomic_add_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
-    __atomic_add_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
 }
 
 void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
+    // Caller (on_tick tail) holds the global lock; take the leaf here
+    // (order global→leaf). List surgery under both; free() runs per item
+    // with NEITHER held (two-phase — a VMM-nested cleanup_step_try skips
+    // instead of deadlocking).
     for (uint64_t i = 0; i < max_flush; ++i) {
-        TaskControlBlock *task = zombie_head_;
-        if (!task)
-            break;
-        // Check magic before accessing any field past offset 0 (may be freed).
-        if (task->magic != TaskControlBlock::TCB_MAGIC) {
-            zombie_head_ = nullptr;
-            zombie_tail_ = nullptr;
-            zombie_count_ = 0;
-            continue;
+        TaskControlBlock *task;
+        {
+            SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
+            task = zombie_head_;
+            if (!task)
+                break;
+            // Check magic before accessing any field past offset 0.
+            if (task->magic != TaskControlBlock::TCB_MAGIC) {
+                zombie_head_ = nullptr;
+                zombie_tail_ = nullptr;
+                zombie_count_ = 0;
+                continue;
+            }
+            zombie_head_ = task->zombie_next_;
+            if (!zombie_head_)
+                zombie_tail_ = nullptr;
+            task->zombie_next_ = nullptr;
+            if (task->in_ready_queue_)
+                rq_task(*task).remove(*task, effective_priority(task));
+            __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
         }
-        zombie_head_ = task->zombie_next_;
-        if (!zombie_head_)
-            zombie_tail_ = nullptr;
-        task->zombie_next_ = nullptr;
-        if (task->in_ready_queue_)
-            ready_queue_.remove(*task, effective_priority(task));
-        __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-
         if (task->magic == TaskControlBlock::TCB_MAGIC) {
             task->cleanup();
             MemPool::free(task);
@@ -485,15 +702,16 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
 }
 
 void Scheduler::drain_zombie_list() noexcept {
-    // Pop zombies under IRQ-disable (ISR watchdog can't race).
-    // No scheduler_lock_: cleanup doesn't touch scheduler structures,
-    // and single-core with IRQs off is sufficient for list ops.
-    // Holding the lock during cleanup (PMM free, VMM unmap) would
-    // starve the timer ISR and prevent task scheduling.
+    // Pop zombies under IRQ-disable + zombie leaf (ISR watchdog can't
+    // race; cross-CPU pops serialize on the leaf).  No global take here
+    // (callers hold none — OOM handler, snapshot, tests) so this never
+    // self-deadlocks; queue-removes inherit the baseline single-core
+    // exposure plus AP try-gating (spec §3.4.2).
     for (;;) {
         TaskControlBlock *task;
         {
             arch::IrqGuard irq_guard{};
+            SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
             task = zombie_head_;
             if (!task)
                 return;
@@ -508,7 +726,7 @@ void Scheduler::drain_zombie_list() noexcept {
                 zombie_tail_ = nullptr;
             task->zombie_next_ = nullptr;
             if (task->in_ready_queue_)
-                ready_queue_.remove(*task, effective_priority(task));
+                rq_task(*task).remove(*task, effective_priority(task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
         }
         // IRQs on — cleanup and free without holding any lock.
@@ -518,10 +736,15 @@ void Scheduler::drain_zombie_list() noexcept {
 }
 
 void Scheduler::cleanup_step() noexcept {
-    // Pop one zombie under IRQ-disable so on_tick watchdog cannot race.
+    // Pop one zombie under IRQ-disable + zombie leaf so the on_tick
+    // watchdog and the other CPU's pops cannot race.  No global take
+    // (callers — idle loops, tests — hold none), so VMM-nested calls
+    // cannot self-deadlock; the VMM opportunistic paths use the
+    // try-variant below instead.
     TaskControlBlock *task;
     {
         arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
         task = zombie_head_;
         if (!task)
             return;
@@ -537,10 +760,44 @@ void Scheduler::cleanup_step() noexcept {
             zombie_tail_ = nullptr;
         task->zombie_next_ = nullptr;
         if (task->in_ready_queue_)
-            ready_queue_.remove(*task, effective_priority(task));
+            rq_task(*task).remove(*task, effective_priority(task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
     // IRQs on — cleanup and free without holding any lock.
+    task->cleanup();
+    MemPool::free(task);
+}
+
+/// @brief Opportunistic single-zombie drain for VMM teardown paths.
+///        try-locks the zombie leaf and skips when contended (the zombies
+///        remain for the idle loop / drain — safe to skip).  MUST be used
+///        (instead of cleanup_step) anywhere that can run nested under a
+///        leaf holder (flush/drain free paths); otherwise the non-recursive
+///        leaf self-deadlocks.
+void Scheduler::cleanup_step_try() noexcept {
+    TaskControlBlock *task;
+    {
+        arch::IrqGuard irq_guard{};
+        if (!zombie_lock_.try_lock())
+            return;
+        SpinLockGuard<sync::SpinLock> zguard(zombie_lock_, adopt_lock);
+        task = zombie_head_;
+        if (!task)
+            return;
+        if (task->magic != TaskControlBlock::TCB_MAGIC) {
+            zombie_head_ = nullptr;
+            zombie_tail_ = nullptr;
+            zombie_count_ = 0;
+            return;
+        }
+        zombie_head_ = task->zombie_next_;
+        if (!zombie_head_)
+            zombie_tail_ = nullptr;
+        task->zombie_next_ = nullptr;
+        if (task->in_ready_queue_)
+            rq_task(*task).remove(*task, effective_priority(task));
+        __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+    }
     task->cleanup();
     MemPool::free(task);
 }
@@ -569,6 +826,31 @@ uint64_t Scheduler::remaining_memory_budget() noexcept {
 void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
     arch::IrqGuard irq_guard{};
     task.state = TaskState::READY;
+    uint64_t target = queue_target(task);
+    if (task.is_user_ && target != 0)
+        target = 0; // shared-TSS backstop (see enqueue_ready)
+    uint64_t here = sched_cpu();
+    if (target != here) {
+#if defined(CONFIG_ARCH_X86_64)
+        uint64_t up = sched_up_cpus();
+        if (target < up && up > 1) {
+            // Remote up CPU: mailbox + SCHED IPI (never direct remote
+            // enqueue). Target drains in its IPI handler and dispatches
+            // on its next tick (≤1 tick latency).
+            mailbox_publish(target, task);
+            uint32_t lapic = arch::per_cpu[target].lapic_id;
+            arch::APIC::send_ipi(lapic, arch::APIC::SCHED_VECTOR,
+                                 arch::APIC::IpiMode::FIXED);
+            return;
+        }
+#endif
+        // Target not up (or single-core build): direct-enqueue under the
+        // global lock; the task waits like single-core parked work.
+        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        task.in_ready_queue_ = false;
+        rq_for(target).enqueue(task, effective_priority(&task));
+        return;
+    }
     enqueue_ready(task);
 }
 
@@ -683,7 +965,7 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // orphan the task until the next lazy rebuild, causing the calling
     // test's tight `while (state != TERMINATED) reschedule();` loop to
     // constantly dequeue → lazy-rebuild → dequeue (infinite livelock).
-    auto *next = ready_queue_.peek_highest();
+    auto *next = rq_own().peek_highest();
         if (next && next != &task) {
             switch_to_task(&task, *next, nullptr);
         }
@@ -709,9 +991,16 @@ TestContext *Scheduler::test_context_ = nullptr;
 constinit TaskControlBlock *Scheduler::s_monitor_task_ = nullptr;
 bool Scheduler::s_scan_requested_ = false;
 #endif
-ReadyQueueManager Scheduler::ready_queue_;
+ReadyQueueManager Scheduler::ready_queues_[CONFIG_MAX_CPUS];
 DeadlineList Scheduler::deadline_list_;
     constinit TaskControlBlock *Scheduler::idle_task_ = nullptr;
+TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
+Scheduler::MailboxEntry
+    Scheduler::wake_mailbox_[CONFIG_MAX_CPUS][MAILBOX_SLOTS] = {};
+constinit uint64_t Scheduler::wake_mailbox_count_[CONFIG_MAX_CPUS] = {};
+sync::SpinLock Scheduler::wake_mailbox_lock_[CONFIG_MAX_CPUS];
+constinit bool Scheduler::sched_quiesced_ = false;
+sync::SpinLock Scheduler::zombie_lock_;
     constinit TaskControlBlock *Scheduler::shell_task_ptr_ = nullptr;
     constinit TaskControlBlock *Scheduler::harness_task_ptr_ = nullptr;
 constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
@@ -747,6 +1036,7 @@ void Scheduler::init(const SchedulerConfig &cfg) {
 
     all_tasks_.append(*idle_task_);
     ENSURE(id_table_insert(idle_task_->id, idle_task_) && "id_table full at init");
+    idle_tasks_[0] = idle_task_;
     set_current_ptr(idle_task_);
     sporadic_task_count_ = cfg.sporadic_task_count;
     preempt_enabled_ = cfg.preempt_enabled;
@@ -755,10 +1045,39 @@ void Scheduler::init(const SchedulerConfig &cfg) {
     // Static kernel CR3 for the isr_stubs.asm fallback when returning to the
     // kernel/harness context (VMM::init has already captured kernel_pml4_).
     scheduler_kernel_cr3 = VMM::get_kernel_pml4();
+    // Issue #25 C1: next_id starts empty (UINT64_MAX) on every CPU.
+    // Zero-init would fake-arm CPUs 1..7 (task ID 0, the idle, is valid).
+    // Single owner here: init runs on the BSP before any AP exists.
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        scheduler_next_task_id[c] = UINT64_MAX;
 
 #if CONFIG_DEADLINE_MONITOR_TASK
     ensure_monitor();
 #endif
+}
+
+TaskControlBlock *Scheduler::create_ap_idle(uint64_t cpu) noexcept {
+    cpu %= CONFIG_MAX_CPUS;
+    if (cpu == 0 || idle_tasks_[cpu] != nullptr)
+        return idle_tasks_[cpu];
+    // Table mutations under the global lock (blocking; the AP runs IF=0
+    // here and the BSP never waits on the AP, so the take completes).
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    if (idle_tasks_[cpu] != nullptr)
+        return idle_tasks_[cpu];
+    TaskControlBlock *idle = TaskControlBlock::create(
+        kernel::integrity::ap_idle_main, 0, TaskControlBlock::NO_PERIOD);
+    if (!idle)
+        return nullptr;
+    idle->state = TaskState::READY;
+    idle->cpu_affinity = static_cast<uint64_t>(1) << cpu;
+    __builtin_strncpy(idle->name, "apidle", CONFIG_TASK_NAME_LEN - 1);
+    idle->name[CONFIG_TASK_NAME_LEN - 1] = '\0';
+    all_tasks_.append(*idle);
+    if (!id_table_insert(idle->id, idle))
+        return nullptr;
+    idle_tasks_[cpu] = idle;
+    return idle;
 }
 
 void Scheduler::register_task(TaskControlBlock &task) {
@@ -785,7 +1104,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
     task.in_ready_queue_ = false;
     task.runq_next_ = nullptr;
     task.runq_prev_ = nullptr;
-    ready_queue_.enqueue(task, effective_priority(&task));
+    rq_task(task).enqueue(task, effective_priority(&task));
     kernel::test::ResourceTracker::instance().track_task_add();
 
     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
@@ -797,7 +1116,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
         uint64_t real_tasks = 0;
         TaskControlBlock *t = all_tasks_.first_ptr();
         for (; t; t = all_tasks_.next_ptr(t)) {
-            if (t == idle_task_ || t->magic != TaskControlBlock::TCB_MAGIC)
+            if (is_idle_task(t) || t->magic != TaskControlBlock::TCB_MAGIC)
                 continue;
             if (t->period_ticks > 0) {
                 ++real_tasks;
@@ -848,17 +1167,17 @@ void Scheduler::remove_task(TaskControlBlock &task) {
     // memset() it to zero, zeroing the live current task's context (ctx.rip=0)
     // and corrupting the scheduler / producing 0xDD-poisoned use-after-free
     // crashes.  The next tick's deferred switch will pick a real successor.
-    if (&task == current_task() && idle_task_ && idle_task_ != &task) {
-        set_current_ptr(idle_task_);
+    if (&task == current_task() && own_idle() && own_idle() != &task) {
+        set_current_ptr(own_idle());
     }
     all_tasks_.remove(task);
     deadline_list_.remove(task);
     id_table_remove(&task);
     dequeue_ready(task);
 
-    __atomic_store_n(&scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // NOTE: ResourceTracker::track_task_remove() is intentionally NOT called
     // here.  Task teardown has two styles (operator delete, and the reaper's
@@ -873,17 +1192,17 @@ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
         return false;
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
 
-    if (&task == current_task() && idle_task_ && idle_task_ != &task) {
-        set_current_ptr(idle_task_);
+    if (&task == current_task() && own_idle() && own_idle() != &task) {
+        set_current_ptr(own_idle());
     }
     all_tasks_.remove(task);
     deadline_list_.remove(task);
     id_table_remove(&task);
     dequeue_ready(task);
 
-    __atomic_store_n(&scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     return true;
 }
@@ -970,7 +1289,7 @@ bool Scheduler::needs_switch() noexcept {
     auto *current = current_task();
     if (!current || current->magic != TaskControlBlock::TCB_MAGIC)
         return false;
-    if (current == idle_task_)
+    if (current == own_idle())
         return false;
 
     // A blocked/terminated current task must always yield to let a runnable
@@ -984,28 +1303,31 @@ bool Scheduler::needs_switch() noexcept {
 
     uint64_t cur_eff = effective_priority(current);
     // O(1): check if any higher-priority task exists in the ready queue
-    uint64_t highest_ready = ready_queue_.highest_ready_priority();
+    uint64_t highest_ready = rq_own().highest_ready_priority();
     return highest_ready > cur_eff;
 }
 
 TaskControlBlock *Scheduler::next_task() noexcept {
     if (all_tasks_.size() <= 1)
-        return idle_task_;
+        return own_idle();
 
     {
-        while (auto *candidate = ready_queue_.peek_highest()) {
+        // Issue #25 C1: dequeue from the OWN queue only (no stealing);
+        // candidates not affine here are skipped (defense-in-depth).
+        while (auto *candidate = rq_own().peek_highest()) {
             if (candidate == current_task() ||
                 (candidate->state != TaskState::READY &&
-                 candidate->state != TaskState::RUNNING)) {
-                ready_queue_.dequeue_highest();
+                 candidate->state != TaskState::RUNNING) ||
+                queue_target(*candidate) != sched_cpu()) {
+                rq_own().dequeue_highest();
                 continue;
             }
-            ready_queue_.dequeue_highest();
+            rq_own().dequeue_highest();
             return candidate;
         }
     }
 
-    return idle_task_;
+    return own_idle();
 }
 
 void Scheduler::set_current(TaskControlBlock &task) noexcept {
@@ -1015,12 +1337,12 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
         // must not survive — and if the preempted current was set READY +
         // enqueued by switch_to_task (boot-stack harness), restore it to
         // RUNNING so next_task() cannot skip it and fall to idle (INV-4).
-        uint64_t armed = __atomic_load_n(&scheduler_next_task_id,
+        uint64_t armed = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                                          __ATOMIC_RELAXED);
         H2_REC(H2_EV_CLR_SET, armed, 0, 0);
-        __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
+        __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                          __ATOMIC_RELEASE);
         restore_preempted_current(old, armed);
         return;
@@ -1039,17 +1361,17 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
         // !in_ready_queue_), leaving old physically linked with a stale
         // runq_next_/runq_prev_ — a dangling node that later corrupts the list
         // (pop_front dereferences a freed/reused TCB → #GP) once old is freed.
-        ready_queue_.remove(*old, old->rq_priority_);
+        rq_own().remove(*old, old->rq_priority_);
     }
     // State symmetry: a pending deferred-switch arm is being discarded here.
     // If the preempted current (the boot-stack harness) was set READY +
     // enqueued by switch_to_task, restore it to RUNNING and re-enqueue the
     // armed target so neither is stranded (INV-4 / INV-2, H2 residual).
-    uint64_t armed = __atomic_load_n(&scheduler_next_task_id, __ATOMIC_RELAXED);
+    uint64_t armed = __atomic_load_n(&Scheduler::SwSlots::next_task_id(), __ATOMIC_RELAXED);
     H2_REC(H2_EV_CLR_SET, armed, 0, 0);
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
     restore_preempted_current(old, armed);
 
@@ -1061,7 +1383,7 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
     // dequeue_highest returns null, which never happens while the receiver
     // sits in the queue).  See docs/specs/ipc.md §4 (H2) and
     // docs/specs/scheduler.md §6 (VIOL-1).
-    if (old && old != &task && old != idle_task_ &&
+    if (old && old != &task && !is_idle_task(old) &&
         old->magic == TaskControlBlock::TCB_MAGIC &&
         (old->state == TaskState::READY ||
          old->state == TaskState::RUNNING)) {
@@ -1098,9 +1420,23 @@ uint64_t Scheduler::alloc_id() noexcept {
     // return TASK_INVALID when the ID/table capacity is exhausted, and
     // increment the counter atomically.  Monotonic allocation with no ID
     // reuse: TASK_INVALID (UINT64_MAX) is the out-of-capacity sentinel.
+    // Issue #25 C1: skip LIVE ids.  reboot_from_table() resets the counter
+    // to 1 (so init keeps PID 1) while the AP idle tasks stay live
+    // (spared via is_idle_task); without the skip the respawned daemons
+    // steal a live AP idle's id (observed: vfsd ID 2 == apidle id 2) →
+    // id_table ambiguity, enqueue_ready refusals (degraded daemons), and
+    // crossed snapshot restores (AP-idle affinity clobbered → AP runs a
+    // foreign task → triple fault).  restore_state()'s next_task_id_
+    // rewind is covered the same way.  Bounded retries, same sentinel.
     if (all_tasks_.size() >= MAX_TASKS)
         return UINT64_MAX;
-    return __atomic_fetch_add(&next_task_id_, 1UL, __ATOMIC_RELAXED);
+    for (uint64_t tries = 0; tries < MAX_TASKS; ++tries) {
+        uint64_t cand =
+            __atomic_fetch_add(&next_task_id_, 1UL, __ATOMIC_RELAXED);
+        if (id_table_find(cand) == nullptr)
+            return cand;
+    }
+    return UINT64_MAX;
 }
 
 void Scheduler::reset_next_task_id(uint64_t id) noexcept {
@@ -1121,11 +1457,19 @@ void Scheduler::id_table_remove(TaskControlBlock *task) {
 }
 
 TaskControlBlock *Scheduler::id_table_find(uint64_t id) {
+    // Issue #25 C1: bounded probe (insert/remove already bound theirs).
+    // The old unbounded `while (!= nullptr)` wrapped forever when the
+    // table held no nullptr on the probe chain (live entries + tombstones
+    // fill it over long suites) and the id was absent — alloc_id's
+    // skip-live scan stepped straight into it (test 309 hang: 80-slot
+    // table, 127 historical ids).  A present id is always found within
+    // ID_TABLE_SIZE probes; absent ids now return null.
     uint64_t idx = id_table_probe(id);
-    while (id_table_[idx] != nullptr) {
-        if (id_table_[idx] != ID_TOMBSTONE && id_table_[idx]->id == id) {
+    for (uint64_t probes = 0; probes < ID_TABLE_SIZE; ++probes) {
+        if (id_table_[idx] == nullptr)
+            return nullptr;
+        if (id_table_[idx] != ID_TOMBSTONE && id_table_[idx]->id == id)
             return id_table_[idx];
-        }
         idx = (idx + 1) & ID_TABLE_MASK;
     }
     return nullptr;
@@ -1156,6 +1500,13 @@ void Scheduler::credit_task_memory(uint64_t pages) {
 // ---------------------------------------------------------------------------
 
 void Scheduler::on_tick() noexcept {
+    // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
+    // body below is BSP-only (unchanged); the AP skips accounting,
+    // deadlines, watchdogs, zombies and sporadic (non-real-time in C1).
+    if (sched_cpu() != 0) {
+        ap_tick();
+        return;
+    }
     uint64_t current_tick = arch::Timer::ticks();
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (all_tasks_.size() >= 6) {
@@ -1206,7 +1557,7 @@ void Scheduler::on_tick() noexcept {
                         : 99u);
                 kernel::debug::fmt_str(buf, p, " sched=");
                 p = kernel::debug::fmt_u64(buf, p,
-                    (uint64_t)kernel::scheduler_need_resched);
+                    (uint64_t)Scheduler::SwSlots::need_resched());
                 buf[p] = 0;
                 kernel::debug::trace(buf);
                 for (auto *t = all_tasks_.first_ptr(); t;
@@ -1277,10 +1628,10 @@ void Scheduler::on_tick() noexcept {
                           : 0u));
                 kernel::debug::fmt_str(wb, wp, " bm_lo=");
                 wp = kernel::debug::fmt_u64(
-                    wb, wp, ready_queue_.bitmap().raw_lo());
+                    wb, wp, rq_own().bitmap().raw_lo());
                 kernel::debug::fmt_str(wb, wp, " bm_hi=");
                 wp = kernel::debug::fmt_u64(
-                    wb, wp, ready_queue_.bitmap().raw_hi());
+                    wb, wp, rq_own().bitmap().raw_hi());
                 wb[wp] = 0;
                 kernel::debug::trace(wb);
                 for (auto *t = all_tasks_.first_ptr(); t;
@@ -1319,7 +1670,7 @@ void Scheduler::on_tick() noexcept {
             uint64_t phys_rsp{};
             phys_rsp = current_sp();
             const uint64_t save_to = reinterpret_cast<uint64_t>(
-                __atomic_load_n(&scheduler_save_rsp_to, __ATOMIC_ACQUIRE));
+                __atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE));
 
             // --- (C) INV-2 desync: a BLOCKED/WAITING task still in the runq
             //     (in_ready_queue_==1).  next_task() will keep selecting it,
@@ -1329,8 +1680,11 @@ void Scheduler::on_tick() noexcept {
                  t = all_tasks_.next_ptr(t)) {
                 if (t->magic != TaskControlBlock::TCB_MAGIC)
                     continue;
-                if (t == idle_task_)
+                if (is_idle_task(t))
                     continue;
+                if (queue_target(*t) != sched_cpu())
+                    continue; // issue #25 C1: own-CPU tasks only (no remote
+                              // queue reads — torn metadata false-alarms)
                 if (t->state == TaskState::BLOCKED ||
                     t->state == TaskState::WAITING) {
                     if (t->in_ready_queue_) {
@@ -1349,7 +1703,7 @@ void Scheduler::on_tick() noexcept {
                             bool phys = false;
                             for (uint64_t p = 0;
                                  p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
-                                if (ready_queue_.queue(p).contains(*t))
+                                if (rq_task(*t).queue(p).contains(*t))
                                     phys = true;
                             }
                             wp = kernel::debug::fmt_u64(wb, wp,
@@ -1368,8 +1722,10 @@ void Scheduler::on_tick() noexcept {
                  t = all_tasks_.next_ptr(t)) {
                 if (t->magic != TaskControlBlock::TCB_MAGIC)
                     continue;
-                if (t == idle_task_ || t == current_task())
+                if (is_idle_task(t) || t == current_task())
                     continue;
+                if (queue_target(*t) != sched_cpu())
+                    continue; // issue #25 C1: own-CPU tasks only
                 if (t->state != TaskState::READY &&
                     t->state != TaskState::RUNNING)
                     continue;
@@ -1378,7 +1734,7 @@ void Scheduler::on_tick() noexcept {
                 bool phys = false;
                 for (uint64_t p = 0;
                      p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
-                    if (ready_queue_.queue(p).contains(*t))
+                    if (rq_task(*t).queue(p).contains(*t))
                         phys = true;
                 }
                 if (!phys) {
@@ -1407,10 +1763,10 @@ void Scheduler::on_tick() noexcept {
                          : 0u));
                 kernel::debug::fmt_str(wb, wp, " bm_lo=");
                 wp = kernel::debug::fmt_u64(
-                    wb, wp, ready_queue_.bitmap().raw_lo());
+                    wb, wp, rq_own().bitmap().raw_lo());
                 kernel::debug::fmt_str(wb, wp, " bm_hi=");
                 wp = kernel::debug::fmt_u64(
-                    wb, wp, ready_queue_.bitmap().raw_hi());
+                    wb, wp, rq_own().bitmap().raw_hi());
                 kernel::debug::fmt_str(wb, wp, " physrsp=");
                 wp = kernel::debug::fmt_u64(wb, wp, phys_rsp);
                 wb[wp] = 0;
@@ -1481,8 +1837,15 @@ void Scheduler::on_tick() noexcept {
         }
 #else
 #if CONFIG_DEADLINE_MISS_DETECTION
-        // O(1) deadline scan via DeadlineList
+        // O(1) deadline scan via DeadlineList.  Issue #25 C1: skip tasks
+        // not affine to this CPU (re-insert + stop: the list is
+        // time-ordered, so later entries expire later — another CPU's
+        // tick services them; AP-affine tasks are not serviced in C1).
         while (auto *task = deadline_list_.pop_earliest_if_expired()) {
+            if (queue_target(*task) != sched_cpu()) {
+                deadline_list_.insert(*task);
+                break;
+            }
             if (task->get_sporadic_server()) {
                 task->ss_state_on_deadline_miss =
                     static_cast<uint8_t>(task->get_sporadic_server()->state());
@@ -1497,12 +1860,15 @@ void Scheduler::on_tick() noexcept {
 #endif
 #endif // CONFIG_DEADLINE_MONITOR_TASK
 
-        // Accounting, WCET, alarms — common to both paths
+        // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
+        // only tasks affine to this CPU (AP-affine tasks are not serviced).
         for (auto *task = all_tasks_.first_ptr(); task;
              task = all_tasks_.next_ptr(task)) {
             if (task->magic != TaskControlBlock::TCB_MAGIC)
                 continue;
             if (task->state == TaskState::TERMINATED)
+                continue;
+            if (queue_target(*task) != sched_cpu())
                 continue;
 
             if (task->state == TaskState::RUNNING ||
@@ -1630,7 +1996,8 @@ void Scheduler::on_tick() noexcept {
         if (s_deferred_kill_count > 0)
             Scheduler::process_deferred_kills();
 
-        // Sporadic Server budget management
+        // Sporadic Server budget management.  Issue #25 C1: only tasks
+        // affine here (AP-affine sporadic tasks are not serviced).
         {
         auto *cur = current_task();
         uint64_t found = 0;
@@ -1638,6 +2005,8 @@ void Scheduler::on_tick() noexcept {
             if (found >= sporadic_task_count_)
                 break;
             if (t->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (queue_target(*t) != sched_cpu())
                 continue;
             if (t->get_sporadic_server()) {
                 found++;
@@ -1679,7 +2048,7 @@ void Scheduler::on_tick() noexcept {
                     ss->process_replenishments(current_tick);
                     uint64_t new_eff = effective_priority(t);
                     if (old_eff != new_eff && t != cur)
-                        ready_queue_.move_priority(*t, old_eff, new_eff);
+                        rq_task(*t).move_priority(*t, old_eff, new_eff);
                 }
                 if (t == cur && ss->is_active()) {
                     if (!ss->consume(current_tick)) {
@@ -1762,7 +2131,7 @@ void Scheduler::reap_orphans() noexcept {
             continue;
         if (t->state != TaskState::TERMINATED)
             continue;
-        if (t != idle_task_ && t == current)
+        if (!is_idle_task(t) && t == current)
             continue;
 
         // Adopt children to init_task via the existing intrusive child list.
@@ -1890,14 +2259,21 @@ void Scheduler::reap_orphans() noexcept {
 void Scheduler::cleanup_test_tasks() noexcept {
     TaskControlBlock *const running = current_task();
 
+    // Issue #25 C1: quiesce across teardown (flag + cancel all arms — the
+    // AP cannot dispatch or drain while tasks are freed).  NO outer global
+    // take (non-recursive lock; terminate()/drain_zombie_list() take it
+    // per-op below).
+    quiesce_enter();
     // Collect all non-idle, non-running tasks (can't mutate all_tasks_
     // during iteration: terminate → release_zombie removes from the list).
+    // Spare any idle AND anything current on ANY CPU (never free a live
+    // stack — an AP-running non-idle here warns as a test bug).
     static constexpr uint64_t MAX_CLEANUP = 64;
     TaskControlBlock *to_kill[MAX_CLEANUP];
     uint64_t num_to_kill = 0;
     for (auto *t = all_tasks_.first_ptr(); t && num_to_kill < MAX_CLEANUP;
          t = all_tasks_.next_ptr(t)) {
-        if (t == idle_task_ || t == running)
+        if (is_idle_task(t) || t == running || is_current_on_any_cpu(t))
             continue;
         if (t->magic == TaskControlBlock::TCB_MAGIC)
             to_kill[num_to_kill++] = t;
@@ -1925,7 +2301,9 @@ void Scheduler::cleanup_test_tasks() noexcept {
                "id_table full in restore");
     }
     set_current_ptr(idle_task_);
-    ready_queue_.reset();
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        rq_for(c).reset();
+    quiesce_exit();
 }
 
 // ---------------------------------------------------------------------------
@@ -2016,7 +2394,7 @@ static void restore_preempted_current(TaskControlBlock *current,
     // next_task() performed when selecting it) so it is not stranded (INV-2).
     if (armed_target_id != UINT64_MAX && armed_target_id != 0) {
         auto *target = Scheduler::find_task(armed_target_id);
-        if (target && target != current && target != Scheduler::get_idle_task() &&
+        if (target && target != current && !Scheduler::is_idle_task(target) &&
             target->magic == TaskControlBlock::TCB_MAGIC &&
             (target->state == TaskState::READY ||
              target->state == TaskState::RUNNING)) {
@@ -2079,7 +2457,7 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         Logger::raw_write("\n");
         return false;
     }
-    if (next != Scheduler::get_idle_task() &&
+    if (!Scheduler::is_idle_task(next) &&
         !rsp_in_stack_range(task_stack_ptr(next), next, label)) {
         if (task_stack_ptr(next) <
             reinterpret_cast<uint64_t>(next->kernel_stack)) {
@@ -2431,7 +2809,7 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 // eligible and is retried once it has a real iret frame.  Never
                 // re-enqueue the idle task (it is the default fallback) or the
                 // current physical runner.
-                if (&next != Scheduler::get_idle_task() && &next != current) {
+                if (!Scheduler::is_idle_task(&next) && &next != current) {
                     Scheduler::set_task_ready(next);
                 }
             }
@@ -2439,15 +2817,15 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             return; // do not set scheduler_load_rsp_from -> no switch
         }
     }
-    __atomic_store_n(&scheduler_load_rsp_from, task_stack_ptr(&next),
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), task_stack_ptr(&next),
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_kstack_base,
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
                      reinterpret_cast<uint64_t>(next.kernel_stack),
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_kstack_top, next.kernel_stack_top,
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
                      __ATOMIC_RELEASE);
     if (next.page_table_) {
-        __atomic_store_n(&scheduler_load_cr3_from, next.page_table_,
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next.page_table_,
                          __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         {
@@ -2457,10 +2835,13 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         }
 #endif
 #if defined(CONFIG_ARCH_X86_64)
-        arch::GDT::set_tss_rsp0(next.kernel_stack_top);
+        // Issue #25 C1: CPU0-gated (shared TSS; AP runs kernel tasks only).
+        // (File-static context: arch::cpu_index() directly.)
+        if (arch::cpu_index() == 0)
+            arch::GDT::set_tss_rsp0(next.kernel_stack_top);
 #endif
     } else {
-        __atomic_store_n(&scheduler_load_cr3_from, VMM::get_kernel_pml4(),
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
                          __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         {
@@ -2513,13 +2894,13 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         // (save_rsp_to != 0) strands the previous arm's dequeued target; an
         // IDLE arm aimed at the harness strands the harness itself.
         H2_REC(H2_EV_ARM, next.id,
-               __atomic_load_n(&scheduler_load_rsp_from, __ATOMIC_RELAXED),
+               __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(), __ATOMIC_RELAXED),
                reinterpret_cast<uint64_t>(save_target));
-        if (&next == Scheduler::get_idle_task() &&
+        if (&next == Scheduler::own_idle() &&
             current == Scheduler::get_harness_task()) {
             H2_REC(H2_EV_IDLE_ARM, current->id, 0, 0);
         }
-        __atomic_store_n(&scheduler_next_task_id, next.id, __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::next_task_id(), next.id, __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         // H2 arm-time liveness audit (cold): dump when a deferred-switch arm
         // is published to a target that is NOT a live id_table member — i.e.
@@ -2550,10 +2931,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         // isr_stubs.asm re-verifies this generation before applying, so it
         // never applies a half-written / superseded pair.
         uint64_t gen =
-            __atomic_load_n(&scheduler_switch_generation, __ATOMIC_RELAXED);
-        __atomic_store_n(&scheduler_switch_generation, gen + 1,
+            __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
+        __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_save_rsp_to, save_target,
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), save_target,
                          __ATOMIC_RELEASE);
 
         uint64_t cr0 = arch::read_cr0();
@@ -2611,9 +2992,9 @@ void Scheduler::rate_monotonic_schedule() noexcept {
          current == harness_task_ptr_ &&
          current->state == TaskState::RUNNING);
     if (harness_nonpreempt &&
-        !__atomic_load_n(&kernel::scheduler_need_resched, __ATOMIC_ACQUIRE)) {
+        !__atomic_load_n(&Scheduler::SwSlots::need_resched(), __ATOMIC_ACQUIRE)) {
         uint64_t cur_prio = effective_priority(current);
-        uint64_t highest_ready = ready_queue_.highest_ready_priority();
+        uint64_t highest_ready = rq_own().highest_ready_priority();
         if (highest_ready < cur_prio)
             return;
     }
@@ -2624,17 +3005,17 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     // physically-running harness stays READY+queued (INV-4) and next_task()
     // skips it, falling through to idle (H2 residual hang).  This mirrors the
     // drop_arm restore in scheduler_validate_pending_switch (CLR-MISC).
-    if (__atomic_load_n(&scheduler_save_rsp_to, __ATOMIC_ACQUIRE) != 0) {
-        uint64_t armed = __atomic_load_n(&scheduler_next_task_id,
+    if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0) {
+        uint64_t armed = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                                          __ATOMIC_RELAXED);
         H2_REC(H2_EV_CLR_RMS, armed, 0, 0);
-        __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0,
+        __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0,
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_next_task_id, (uint64_t)-1,
+        __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
                          __ATOMIC_RELEASE);
         restore_preempted_current(current, armed);
     }
@@ -2659,12 +3040,12 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         (is_test_active() && harness_task_ptr_ != nullptr &&
          current == harness_task_ptr_);
     if (next && next != current &&
-        !(next == idle_task_ &&
+        !(next == own_idle() &&
           (current->state == TaskState::RUNNING || harness_current))) {
         switch_to_task(current, *next, nullptr);
     }
 
-    __atomic_store_n(&kernel::scheduler_need_resched, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::need_resched(), false, __ATOMIC_RELEASE);
 }
 
 void Scheduler::reschedule() noexcept {
@@ -2685,7 +3066,7 @@ void Scheduler::reschedule() noexcept {
     // Peek the highest-priority ready task.  We do NOT dequeue here —
     // the switch is deferred (INV-4) and the actual dequeue happens in
     // rate_monotonic_schedule() -> next_task() on the next timer tick.
-    auto *next = ready_queue_.peek_highest();
+    auto *next = rq_own().peek_highest();
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     {
         IPC_SCHED_TRACE("[RS]", "cur=", current->id, "next=",
@@ -2697,7 +3078,7 @@ void Scheduler::reschedule() noexcept {
     if (!next || next == current)
         return;
 
-    if (next == idle_task_ && current->state == TaskState::RUNNING)
+    if (next == own_idle() && current->state == TaskState::RUNNING)
         return;
 
     if (next->state != TaskState::READY && next->state != TaskState::RUNNING)
@@ -2705,7 +3086,7 @@ void Scheduler::reschedule() noexcept {
 
     // IrqGuard destructor re-enables IRQs here, allowing the timer ISR to
     // fire and acquire scheduler_lock_ for rate_monotonic_schedule().
-    __atomic_store_n(&kernel::scheduler_need_resched, true, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
 }
 
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {
@@ -2716,12 +3097,15 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
 
         // A deferred switch is already published.  Do NOT publish a second.
-        if (__atomic_load_n(&scheduler_save_rsp_to, __ATOMIC_ACQUIRE) != 0)
+        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
             return;
 
         next = next_task();
         if (!next || next == &exiting)
-            next = idle_task_;
+            // Issue #25 C1: fall back to the OWN CPU's idle (idle_task_ is
+            // the BSP idle — parking an AP on it runs two CPUs on one
+            // stack).
+            next = own_idle();
         if (!next || next->magic != TaskControlBlock::TCB_MAGIC)
             return;
 
@@ -2775,18 +3159,18 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
             return;
 
         // Publish the deferred switch globals (load side only under lock).
-        __atomic_store_n(&scheduler_load_rsp_from, task_stack_ptr(next),
+        __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), task_stack_ptr(next),
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_load_kstack_base,
+        __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
                          reinterpret_cast<uint64_t>(next->kernel_stack),
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_load_kstack_top, next->kernel_stack_top,
+        __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
                          __ATOMIC_RELEASE);
         if (next->page_table_) {
-            __atomic_store_n(&scheduler_load_cr3_from, next->page_table_,
+            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next->page_table_,
                              __ATOMIC_RELEASE);
         } else {
-            __atomic_store_n(&scheduler_load_cr3_from, VMM::get_kernel_pml4(),
+            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
                              __ATOMIC_RELEASE);
         }
 
@@ -2796,7 +3180,8 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         }
         next->state = TaskState::RUNNING;
 
-        if (next->page_table_)
+        // Issue #25 C1: CPU0-gated (shared TSS; see above).
+        if (next->page_table_ && sched_cpu() == 0)
             arch::GDT::set_tss_rsp0(next->kernel_stack_top);
 
         // Apply the target task's I/O permission bitmap (issue #3).
@@ -2806,15 +3191,15 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
     // IRQ-guarded publish step (lock released).
     {
         arch::IrqGuard ig{};
-        __atomic_store_n(&scheduler_next_task_id, next->id, __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::next_task_id(), next->id, __ATOMIC_RELEASE);
         // Generation-lock: bump the generation after the load side is published
         // (written above under the lock) and before arming save_rsp_to.  The
         // ISR epilogue verifies the generation before applying the pair.
         uint64_t gen =
-            __atomic_load_n(&scheduler_switch_generation, __ATOMIC_RELAXED);
-        __atomic_store_n(&scheduler_switch_generation, gen + 1,
+            __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
+        __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&scheduler_save_rsp_to,
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
                          &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
 #if defined(CONFIG_ARCH_X86_64)
         uint64_t cr0 = arch::read_cr0();
@@ -2845,27 +3230,83 @@ void Scheduler::capture_state(TaskControlBlock **tasks_out,
     idle_out = idle_task_;
     preempt_out = preempt_enabled_;
     if (rq_bitmap_hi)
-        *rq_bitmap_hi = ready_queue_.bitmap().raw_hi();
+        *rq_bitmap_hi = rq_for(0).bitmap().raw_hi();
     if (rq_bitmap_lo)
-        *rq_bitmap_lo = ready_queue_.bitmap().raw_lo();
+        *rq_bitmap_lo = rq_for(0).bitmap().raw_lo();
     if (sporadic_count_out)
         *sporadic_count_out = sporadic_task_count_;
 }
 
-void Scheduler::capture_rqpod(ReadyQueuePOD &out) noexcept {
-    ready_queue_.capture_pod(out);
+void Scheduler::capture_rqpod(ReadyQueuePOD &out, uint64_t cpu) noexcept {
+    rq_for(cpu).capture_pod(out);
 }
 
-void Scheduler::restore_rqpod(const ReadyQueuePOD &src) noexcept {
-    ready_queue_.restore_pod(src);
+void Scheduler::restore_rqpod(const ReadyQueuePOD &src, uint64_t cpu) noexcept {
+    rq_for(cpu).restore_pod(src);
+}
+
+void Scheduler::capture_percpu(SchedPerCpuPod &out) noexcept {
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        out.current[c] = kernel::cpu_ctx(c).current;
+        out.save_rsp_to[c] =
+            reinterpret_cast<uint64_t>(scheduler_save_rsp_to[c]);
+        out.load_rsp_from[c] = scheduler_load_rsp_from[c];
+        out.load_cr3_from[c] = scheduler_load_cr3_from[c];
+        out.next_task_id[c] = scheduler_next_task_id[c];
+        out.load_kstack_base[c] = scheduler_load_kstack_base[c];
+        out.load_kstack_top[c] = scheduler_load_kstack_top[c];
+        out.switch_generation[c] = scheduler_switch_generation[c];
+        out.need_resched[c] = scheduler_need_resched[c] ? 1 : 0;
+        SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[c]);
+        out.mbox_count[c] = wake_mailbox_count_[c];
+        for (uint64_t s = 0; s < MAILBOX_SLOTS; ++s) {
+            out.mbox_task[c][s] = wake_mailbox_[c][s].task;
+            out.mbox_id[c][s] = wake_mailbox_[c][s].id;
+            out.mbox_generation[c][s] = wake_mailbox_[c][s].generation;
+        }
+    }
+}
+
+void Scheduler::restore_percpu(const SchedPerCpuPod &src) noexcept {
+    // BSP current ([0]) is owned by the RSP-match re-identification
+    // (restore_state) — never overwrite it here.
+    for (uint64_t c = 1; c < CONFIG_MAX_CPUS; ++c) {
+        TaskControlBlock *t = src.current[c];
+        if (t && t->magic == TaskControlBlock::TCB_MAGIC &&
+            id_table_find(t->id) == t) {
+            kernel::cpu_ctx(c).current = t;
+        } else if (idle_tasks_[c] &&
+                   idle_tasks_[c]->magic == TaskControlBlock::TCB_MAGIC) {
+            kernel::cpu_ctx(c).current = idle_tasks_[c];
+        }
+        scheduler_load_rsp_from[c] = src.load_rsp_from[c];
+        scheduler_load_cr3_from[c] = src.load_cr3_from[c];
+        scheduler_next_task_id[c] = src.next_task_id[c];
+        scheduler_load_kstack_base[c] = src.load_kstack_base[c];
+        scheduler_load_kstack_top[c] = src.load_kstack_top[c];
+        scheduler_switch_generation[c] = src.switch_generation[c];
+        scheduler_need_resched[c] = src.need_resched[c] != 0;
+        uint64_t *save = reinterpret_cast<uint64_t *>(src.save_rsp_to[c]);
+        scheduler_save_rsp_to[c] = save;
+        // Mailbox is CLEARED (spec §3.4.5): pending cross-CPU wakes do
+        // not cross test boundaries (a test publishing then snapshotting
+        // is a test bug — the wake would target a rewound world).
+        SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[c]);
+        wake_mailbox_count_[c] = 0;
+        for (uint64_t s = 0; s < MAILBOX_SLOTS; ++s)
+            wake_mailbox_[c][s].task = nullptr;
+    }
+    // BSP atoms are cleared by restore_state's existing clear-all loop.
 }
 
 void Scheduler::reset_ready_queue() noexcept {
-    ready_queue_.reset();
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        rq_for(c).reset();
 }
 
 void Scheduler::rebuild_ready_queue() noexcept {
-    ready_queue_.reset();
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        rq_for(c).reset();
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (t->magic != TaskControlBlock::TCB_MAGIC)
             continue;
@@ -2875,7 +3316,7 @@ void Scheduler::rebuild_ready_queue() noexcept {
             // leave the task out of the physical queue while the flag wrongly
             // claims membership.
             t->in_ready_queue_ = false;
-            ready_queue_.enqueue(*t, effective_priority(t));
+            rq_task(*t).enqueue(*t, effective_priority(t));
         } else {
             t->in_ready_queue_ = false;
             t->runq_next_ = nullptr;
@@ -2906,7 +3347,8 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     // Ready-queue state is restored separately via restore_pod()
     (void)rq_bitmap_hi;
     (void)rq_bitmap_lo;
-    ready_queue_.reset();
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        rq_for(c).reset();
 
     {
 #if defined(CONFIG_ARCH_X86_64)
@@ -2914,19 +3356,33 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
         asm volatile("cpuid" : "=a"(_a), "=b"(_b), "=c"(_c), "=d"(_d) : "a"(0));
 #endif
     }
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_next_task_id, UINT64_MAX, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
+    // Issue #25 C1: clear the BSP switch atoms (AP CPUs are handled by
+    // restore_percpu, which restores their captured state; a test may
+    // have armed any CPU before the snapshot).
+    __atomic_store_n(&scheduler_load_rsp_from[0], (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&isr_nesting_depth, (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_load_cr3_from[0], (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_next_task_id[0], UINT64_MAX,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_save_rsp_to[0], (uint64_t *)nullptr,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_need_resched[0], false, __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_switch_generation[0], (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
 }
 
 void Scheduler::clear_switch_globals() noexcept {
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
-                     __ATOMIC_RELEASE);
+    // Issue #25 C1: clear ALL CPUs (see above).
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        __atomic_store_n(&scheduler_load_rsp_from[c], (uint64_t)0,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&scheduler_load_cr3_from[c], (uint64_t)0,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&scheduler_save_rsp_to[c], (uint64_t *)nullptr,
+                         __ATOMIC_RELEASE);
+    }
 }
 
 void Scheduler::rebuild_all_tasks() noexcept {
@@ -2970,6 +3426,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
         out[idx].rq_priority = t->rq_priority_;
+        out[idx].cpu_affinity = t->cpu_affinity;
         out[idx].iopb_slot = t->iopb_slot_;
         ++idx;
     }
@@ -3050,6 +3507,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;
             t->rq_priority_ = saved[j].rq_priority;
+            t->cpu_affinity = saved[j].cpu_affinity;
             t->iopb_slot_ = saved[j].iopb_slot;
             break;
         }
@@ -3234,7 +3692,7 @@ deadline_miss_handler(TaskControlBlock &task,
         task.priority >>= 1;
         uint64_t new_prio = effective_priority(&task);
         if (old_prio != new_prio)
-            ready_queue_.move_priority(task, old_prio, new_prio);
+            rq_task(task).move_priority(task, old_prio, new_prio);
     }
 #elif CONFIG_DEADLINE_ACTION == 3
     if (budget_exhausted)
@@ -3316,7 +3774,7 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
         deadline_list_.insert(task);
     }
     ENSURE(id_table_insert(task.id, &task) && "id_table full in add_task_err");
-    ready_queue_.enqueue(task, effective_priority(&task));
+    rq_task(task).enqueue(task, effective_priority(&task));
     kernel::test::ResourceTracker::instance().track_task_add();
     return SCHED_ERR_OK;
 }
@@ -3330,9 +3788,9 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
     id_table_remove(&task);
     dequeue_ready(task);
 
-    __atomic_store_n(&scheduler_save_rsp_to, nullptr, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // track_task_remove() lives in TaskControlBlock::cleanup() (shared teardown
     // point) — not here — to avoid double-counting.  See Scheduler::remove_task.

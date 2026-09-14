@@ -279,7 +279,7 @@ void run_driven_request(uint64_t sector, bool is_write, bool inject_error) {
     bool pump_done = false;
     bool submit_done = false;
     for (int i = 0; i < 20000000; ++i) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         if (!pump_done && (pump->state == TaskState::TERMINATED ||
                            !TaskControlBlock::is_valid(pump)))

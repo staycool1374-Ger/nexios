@@ -155,8 +155,12 @@ static size_t off_sched_misc_size() {
 static size_t off_sched_rqpod() {
     return off_sched_misc() + off_sched_misc_size();
 }
+static size_t off_sched_percpu() {
+    return off_sched_rqpod() +
+           CONFIG_MAX_CPUS * sizeof(ReadyQueuePOD);
+}
 static size_t off_daemon_entries() {
-    return off_sched_rqpod() + sizeof(ReadyQueuePOD);
+    return off_sched_percpu() + sizeof(SchedPerCpuPod);
 }
 static size_t off_daemon_num() {
     return off_daemon_entries() +
@@ -316,6 +320,19 @@ bool snapshot_create() {
     // nested guard that silently re-enabled IRQs panics at the source.
     ENSURE(!arch::interrupts_enabled());
 #endif
+    // Issue #25 C1: quiesce the AP across the scheduler window (flag +
+    // cancel all arms per the spec order).  Placed AFTER the snapshot
+    // allocation below so an alloc-failure early-return cannot leak a
+    // parked AP.  No outer global take (non-recursive lock + nested
+    // takers inside): safety comes from restore-time healing —
+    // rebuild_ready_queue re-derives queues from task states, RSP-match
+    // re-identifies current, magic checks drop stale entries, mailbox
+    // is cleared (never restored), and the AP's try-gated paths cannot
+    // interleave destructively (quiesced + cancelled).
+    //
+    // NOTE: quiesce_enter() is called further below (after the PMM
+    // allocation); quiesce_exit() runs at every exit path of this
+    // function — keep them paired when editing control flow here.
 
     // Count user-owned pages from the owner bitmap
     size_t user_page_count = 0;
@@ -382,9 +399,14 @@ bool snapshot_create() {
     }
 
     // ---- Scheduler ----
+    // Quiesce here (after allocation, before any scheduler capture):
+    // flag + cancel all arms.  AP dispatch parks; in-flight IPI drains
+    // land before or skip-and-retry after (never torn — see rationale
+    // at the top of this function).
+    Scheduler::quiesce_enter();
     {
         auto *tasks = reinterpret_cast<TaskControlBlock **>(g_snapshot +
-                                                            off_sched_tasks());
+                                                             off_sched_tasks());
         auto *idtable = reinterpret_cast<TaskControlBlock **>(
             g_snapshot + off_sched_idtable());
         auto *misc =
@@ -409,10 +431,19 @@ bool snapshot_create() {
             g_snapshot + off_sched_task_fields());
         Scheduler::capture_task_fields(task_fields);
 
-        // Save full ReadyQueueManager POD (queue heads, tails, counts, bitmap)
-        auto *rqpod =
-            reinterpret_cast<ReadyQueuePOD *>(g_snapshot + off_sched_rqpod());
-        Scheduler::capture_rqpod(*rqpod);
+        // Save full ReadyQueueManager PODs, one per CPU (issue #25 C1).
+        // Runs under quiesce + global lock (see snapshot entry): the AP
+        // cannot mutate queues mid-capture.
+        auto *rqpod = reinterpret_cast<ReadyQueuePOD *>(g_snapshot +
+                                                        off_sched_rqpod());
+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+            Scheduler::capture_rqpod(rqpod[c], c);
+
+        // Save per-CPU scheduler runtime (currents, switch atoms,
+        // mailbox).  Same quiesce+lock window as the queues above.
+        auto *percpu = reinterpret_cast<SchedPerCpuPod *>(
+            g_snapshot + off_sched_percpu());
+        Scheduler::capture_percpu(*percpu);
     }
 
     // ---- Daemon ----
@@ -596,6 +627,7 @@ bool snapshot_create() {
         PMM::capture_pool_snapshot(*pool);
     }
 
+    Scheduler::quiesce_exit();
     return true;
 }
 
@@ -691,12 +723,12 @@ void snapshot_restore(const char *test_name) {
     }
 
     // Clear any pending context-switch state
-    __atomic_store_n(&scheduler_load_rsp_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_cr3_from, (uint64_t)0, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_next_task_id, UINT64_MAX, __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_save_rsp_to, (uint64_t *)nullptr,
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), UINT64_MAX, __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&isr_nesting_depth, (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // Drain zombie list before ResourceTracker check and MemPool restore.
     // Zombies from termininate()->release_zombie() during the test are freed
@@ -988,6 +1020,11 @@ void snapshot_restore(const char *test_name) {
     }
 
     // ---- Scheduler ----
+    // Quiesce across the scheduler window (flag + cancel all arms): the
+    // AP cannot dispatch or drain mid-restore.  No outer global take
+    // (restore paths take it per-op where needed; see rationale at
+    // snapshot_create).
+    Scheduler::quiesce_enter();
     {
         auto *tasks = reinterpret_cast<TaskControlBlock *const *>(
             g_snapshot + off_sched_tasks());
@@ -1033,15 +1070,25 @@ void snapshot_restore(const char *test_name) {
         // priority field.
         Scheduler::rebuild_all_tasks();
 
-        // Restore the full ReadyQueueManager POD (queue heads/tails/counts,
-        // priority bitmap) from the snapshot.  The per-TCB runq pointers
-        // were restored above and are valid because TCBs live at the same
-        // physical addresses across snapshot cycles.
+        // Restore the per-CPU ReadyQueueManager PODs (issue #25 C1) from
+        // the snapshot.  The per-TCB runq pointers were restored above
+        // and are valid because TCBs live at the same physical addresses
+        // across snapshot cycles.
         {
             auto *rqpod = reinterpret_cast<const ReadyQueuePOD *>(
                 g_snapshot + off_sched_rqpod());
-            Scheduler::restore_rqpod(*rqpod);
+            for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+                Scheduler::restore_rqpod(rqpod[c], c);
             Scheduler::rebuild_ready_queue();
+        }
+
+        // Restore per-CPU runtime (AP currents, switch atoms; mailbox is
+        // cleared, not restored — spec §3.4.5).  BSP current ([0]) is
+        // owned by the RSP-match re-identification below.
+        {
+            auto *percpu = reinterpret_cast<const SchedPerCpuPod *>(
+                g_snapshot + off_sched_percpu());
+            Scheduler::restore_percpu(*percpu);
         }
     }
 
@@ -1076,6 +1123,7 @@ void snapshot_restore(const char *test_name) {
             Scheduler::set_current_index(0);
         }
     }
+    Scheduler::quiesce_exit();
 
     // ---- BufferPool ----
     BufferPool::restore_state(g_snapshot + off_bufpool(),
@@ -1429,11 +1477,12 @@ void snapshot_restore(const char *test_name) {
             g_snapshot + off_sched_task_fields());
         Scheduler::capture_task_fields(task_fields);
 
-        // Recapture ReadyQueuePOD so restore_pod reads the post-reload
+        // Recapture ReadyQueuePODs so restore_pod reads the post-reload
         // queue heads/tails/counts (daemon tasks replaced).
         auto *rqpod =
             reinterpret_cast<ReadyQueuePOD *>(g_snapshot + off_sched_rqpod());
-        Scheduler::capture_rqpod(*rqpod);
+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+            Scheduler::capture_rqpod(rqpod[c], c);
 
         // Recapture PtPoolSnapshot — daemon reload may have changed pool state.
         {
@@ -1548,6 +1597,10 @@ void reload_daemon_tasks() {
         if (t != current && t != idle && t != Scheduler::get_shell_task() &&
             t != Scheduler::get_harness_task() &&
             !IrqThread::is_irq_thread_task(t) &&
+            // Issue #25 C1: spare ALL CPUs' idle tasks (the AP idle is a
+            // live runner, not test debris — reload_daemon_tasks runs at
+            // suite setup and between suites while the AP ticks).
+            !Scheduler::is_idle_task(t) &&
             // The background ELF loader is a long-lived kernel task (like the
             // shell/harness): it must survive cleanup_test_tasks, or every
             // test boundary reaps it and the loader never processes requests.

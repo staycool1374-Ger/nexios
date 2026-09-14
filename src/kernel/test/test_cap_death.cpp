@@ -270,7 +270,7 @@ JARVIS_TEST(death_watch_supervisor_death_drains, "PRE: none | POST: none") {
     // Drive until S has registered both watches (bounded).
     for (int i = 0; i < 10000 && __atomic_load_n(&g_done, __ATOMIC_ACQUIRE) == 0;
          ++i) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
     JARVIS_ASSERT_EQ(1U, __atomic_load_n(&g_done, __ATOMIC_ACQUIRE));

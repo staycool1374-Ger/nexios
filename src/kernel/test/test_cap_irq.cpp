@@ -76,7 +76,7 @@ uint64_t g_reg_ret = 0;
 ///        spin does not reliably yield to a higher-priority peer).
 template <typename Pred> inline void yield_wait_until(Pred cond) {
     while (!cond()) {
-        __atomic_store_n(&kernel::scheduler_need_resched, true,
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();
     }

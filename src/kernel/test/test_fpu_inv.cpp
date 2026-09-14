@@ -110,7 +110,7 @@ JARVIS_TEST(fpu_nm_no_alloc, "PRE: none | POST: none") {
 // Expect: fpu_nm_depth_max <= baseline + 1.
 // Depends: fpu_nm_depth_max (global_state), #NM handler
 JARVIS_TEST(fpu_nm_nesting_impossible, "PRE: none | POST: none") {
-    uint64_t baseline = isr_nesting_depth;
+    uint64_t baseline = isr_nesting_own();
     __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
 
     asm volatile("finit" ::: "memory");

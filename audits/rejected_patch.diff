@@ -1,31 +1,17 @@
-diff --git a/src/lib/test.cpp b/src/lib/test.cpp
---- a/src/lib/test.cpp
-+++ b/src/lib/test.cpp
-@@ -642,8 +642,15 @@ void profiling_dump_samples() {
-     // Also write to COM1 so it appears in serial capture
-     static constexpr uint16_t COM1 = 0x3F8;
-     static constexpr uint16_t COM1_LSR = 0x3FD;
-+    static constexpr uint32_t SERIAL_DRAIN_POLL_LIMIT = 100000;
-     
--    // Wait for COM1 TX FIFO ready
--    while ((arch::inb(COM1_LSR) & 0x20) == 0) { }
-+    // Wait for COM1 TX FIFO ready (bounded: a stalled UART must never hang
-+    // the shutdown path; CODING_STYLE section 6 fully-bounded loops).
-+    for (uint32_t poll = 0;
-+         poll < SERIAL_DRAIN_POLL_LIMIT &&
-+             ((arch::inb(COM1_LSR) & 0x20) == 0);
-+         ++poll) {
-+        arch::io_wait();
-+    }
-     
-     // Very visible marker before dump
-@@ -693,3 +700,8 @@ void profiling_dump_samples() {
-     // Very visible marker after dump
--    while ((arch::inb(COM1_LSR) & 0x20) == 0) { }
-+    for (uint32_t poll = 0;
-+         poll < SERIAL_DRAIN_POLL_LIMIT &&
-+             ((arch::inb(COM1_LSR) & 0x20) == 0);
-+         ++poll) {
-+        arch::io_wait();
-+    }
-     arch::outb(COM1, '\\');
+diff --git a/src/kernel/arch/x86_64/hal/apic.cpp b/src/kernel/arch/x86_64/hal/apic.cpp
+--- a/src/kernel/arch/x86_64/hal/apic.cpp
++++ b/src/kernel/arch/x86_64/hal/apic.cpp
+@@ -182,7 +182,9 @@ uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic
+ }
+
+ uint32_t APIC::lapic_id() {
+     if (!enabled_) return 0;
+-    uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
+-    return id >> 24;
++    // x2APIC ID MSR (0x802) carries the full 32-bit LAPIC ID in bits 31:0;
++    // only the xAPIC MMIO ID register holds it in bits 31:24 (Intel SDM 10.12).
++    if (mode_ == MODE_X2) return x2_read(REG_ID);
++    return lapic_rd(REG_ID) >> 24;
+ }
+
+ void APIC::timer_init(uint32_t frequency_hz) {

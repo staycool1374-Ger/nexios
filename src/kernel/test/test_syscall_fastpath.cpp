@@ -227,7 +227,7 @@ JARVIS_TEST(fast_path_skips_canary, "PRE: none | POST: none") {
     // FAST-only task must run WITHOUT tripping at syscall entry; the relocated
     // scheduler sample is the (correct) detection point.
     while ((arch::Timer::ticks() - start) < (CONFIG_CANARY_SAMPLE_TICKS * 2)) {
-        __atomic_store_n(&scheduler_need_resched, true, __ATOMIC_RELEASE);
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
         arch::hlt();
     }
 

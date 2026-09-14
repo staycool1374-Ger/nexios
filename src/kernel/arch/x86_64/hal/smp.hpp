@@ -81,8 +81,13 @@ const kernel::acpi::MadtInfo &boot_madt();
 /// @brief Bring up application processors (called once at boot, after
 ///        Timer::init, under interrupt guard).  Fail-closed: any malformed
 ///        state (no MADT, unusable block, AP start timeout) parks with
-///        zero APs or panics naming the APIC ID — never half-woken.
+///        zero APs or panics naming the LAPIC ID — never half-woken.
 void bring_up();
+
+/// @brief Publish the scheduler start-gate (BSP only, after
+///        reboot_from_table() finishes spawning, before its idle loop).
+///        APs spin parked until this lands (spec §3.4.3).
+void publish_scheduler_ready();
 
 /// @brief Application-processor entry (called from the trampoline's
 ///        64-bit stage with logical ID + LAPIC ID).  Never returns.

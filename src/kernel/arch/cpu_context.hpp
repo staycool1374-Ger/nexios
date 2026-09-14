@@ -22,6 +22,17 @@
 /// @brief Per-CPU execution context (PfA-B, Phase 8 SMP groundwork).
 
 #include <types.hpp>
+#include <kernel/nexios_config.h>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#else
+namespace arch {
+/// @brief Current CPU index — single-core archs are always CPU 0.
+inline uint64_t cpu_index() noexcept {
+    return 0;
+}
+} // namespace arch
+#endif
 
 namespace kernel {
 
@@ -58,13 +69,35 @@ struct CpuContext {
 #endif
 };
 
-/// @brief Returns the current CPU's execution context.
-///
-/// Single-core today: a single static instance.  Phase 8 threads this through
-/// the per-CPU GS base (x86_64) / TPIDR (aarch64) / tp (riscv64).
-inline CpuContext &current_cpu() {
-    static CpuContext cpu{};
-    return cpu;
+/// @brief Per-CPU execution context array (issue #25 C1).
+/// Namespace-scope (not function-static) so teardown/snapshot paths can
+/// scan all CPUs' `current` (spare-any-current, capture). First touch is
+/// on the BSP during boot (single-threaded; -fno-threadsafe-statics safe).
+inline CpuContext &cpu_ctx(uint64_t cpu) {
+    static CpuContext ctx[CONFIG_MAX_CPUS]{};
+    return ctx[cpu % CONFIG_MAX_CPUS];
 }
+
+/// @brief Returns the current CPU's execution context.
+inline CpuContext &current_cpu() {
+    return cpu_ctx(arch::cpu_index());
+}
+
+#if defined(CONFIG_ARCH_X86_64)
+/// @brief Own-CPU ISR nesting depth (isr_stubs.asm increments gs:0x20 on
+///        every entry on every CPU; C++ readers must use the OWN slot).
+///        Single-core builds resolve to per_cpu[0] (identical to the old
+///        global); the x86 linker alias is removed once no C++ reader
+///        uses the bare symbol (link error = proof of full migration).
+inline uint64_t &isr_nesting_own() {
+    return arch::per_cpu[arch::cpu_index()].isr_nesting_depth;
+}
+#else
+extern "C" uint64_t isr_nesting_depth;
+/// @brief Own-CPU ISR nesting depth (single-core archs: the plain global).
+inline uint64_t &isr_nesting_own() {
+    return isr_nesting_depth;
+}
+#endif
 
 } // namespace kernel
