@@ -1,7 +1,8 @@
 # Per-CPU Foundation & SMP Bringup Skeleton
 
 **Doc ID:** NEX-SPEC-2026-08-23-002
-**Status:** DRAFT
+**Status:** IMPLEMENTED (issue #25 Phase C1, commit abd52d85; FPU migration
+split to #151; TPR follow-up in #26; per-CPU asm proof in #27)
 **Milestone target:** v0.4.4 (design now, land with Phase 5 SMP)
 **Inspiration:** Cyjon `kernel/task.asm` (`KERNEL.task_cpu_address[lapic_id]`)
 and `kernel/init/ap.asm` (uniform AP init path); noted caveat: Cyjon's own
