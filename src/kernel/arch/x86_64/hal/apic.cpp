@@ -72,29 +72,22 @@ static void ioapic_redirect(uint8_t irq, uint8_t vector, bool masked) {
 bool APIC::is_apic_supported() { return caps().apic; }
 
 void APIC::enable_local() {
-    auto wr = [&](uint32_t off, uint32_t v) {
-        if (mode_ == MODE_X2) wrmsr(x2apic_msr(off), v);
-        else lapic_wr(off, v);
-    };
-    auto rd = [&](uint32_t off) -> uint32_t {
-        if (mode_ == MODE_X2)
-            return static_cast<uint32_t>(rdmsr(x2apic_msr(off)));
-        return lapic_rd(off);
-    };
+    // TPR accept-all.  Direct reg_wr (not set_tpr_class): enabled_ is set
+    // by init() only AFTER this runs, and the setter is fail-closed while
+    // !enabled_ — the original code wrote TPR=0 unconditionally here.
+    reg_wr(REG_TPR, TPR_CLASS_ACCEPT_ALL);
     // Spurious vector + enable.
-    wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
+    reg_wr(REG_SPURIOUS, SPURIOUS_VECTOR | SPURIOUS_ENABLE);
     // Mask all LVT entries.
-    wr(REG_LVT_TIMER,   LVT_MASKED);
-    wr(REG_LVT_THERMAL, LVT_MASKED);
-    wr(REG_LVT_PERFMON, LVT_MASKED);
-    wr(REG_LVT_LINT0,   LVT_MASKED);
-    wr(REG_LVT_LINT1,   LVT_MASKED);
-    wr(REG_LVT_ERROR,   LVT_MASKED);
+    reg_wr(REG_LVT_TIMER,   LVT_MASKED);
+    reg_wr(REG_LVT_THERMAL, LVT_MASKED);
+    reg_wr(REG_LVT_PERFMON, LVT_MASKED);
+    reg_wr(REG_LVT_LINT0,   LVT_MASKED);
+    reg_wr(REG_LVT_LINT1,   LVT_MASKED);
+    reg_wr(REG_LVT_ERROR,   LVT_MASKED);
     // Clear error status.
-    wr(REG_ESR, 0);
-    rd(REG_ESR);
-    // TPR = 0 (accept all interrupt priorities).
-    wr(REG_TPR, 0);
+    reg_wr(REG_ESR, 0);
+    reg_rd(REG_ESR);
 }
 
 bool APIC::map_mmio() {
@@ -183,6 +176,71 @@ static uint64_t ns_to_tsc_delta(uint64_t ns) {
 void APIC::x2_write(uint32_t off, uint32_t v) { wrmsr(x2apic_msr(off), v); }
 uint32_t APIC::x2_read(uint32_t off) { return static_cast<uint32_t>(rdmsr(x2apic_msr(off))); }
 
+// ─── TPR-based interrupt prioritization (issue #26) ─────────────────────────
+
+void APIC::reg_wr(uint32_t off, uint32_t v) {
+    if (mode_ == MODE_X2) {
+        x2_write(off, v);
+    } else {
+        lapic_wr(off, v);
+    }
+}
+
+uint32_t APIC::reg_rd(uint32_t off) {
+    if (mode_ == MODE_X2) {
+        return x2_read(off);
+    }
+    return lapic_rd(off);
+}
+
+bool APIC::set_tpr_class(uint8_t cls) {
+    if (!enabled_ || (cls & 0xF0U) > TPR_CLASS_MAX) {
+        return false;
+    }
+    reg_wr(REG_TPR, cls & 0xF0U);
+    return true;
+}
+
+uint8_t APIC::get_tpr_class() {
+    if (!enabled_) {
+        return TPR_CLASS_ACCEPT_ALL;
+    }
+    return static_cast<uint8_t>(reg_rd(REG_TPR) & 0xF0U);
+}
+
+uint8_t APIC::get_ppr() {
+    if (!enabled_) {
+        return TPR_CLASS_ACCEPT_ALL;
+    }
+    return static_cast<uint8_t>(reg_rd(REG_PPR) & 0xF0U);
+}
+
+void APIC::tpr_raise(uint8_t cls) {
+    if (!enabled_) {
+        return;
+    }
+    uint8_t target = cls & 0xF0U;
+    if (target > TPR_CLASS_MAX) {
+        return;
+    }
+    if (target > get_tpr_class()) {
+        reg_wr(REG_TPR, target);
+    }
+}
+
+void APIC::tpr_restore(uint8_t cls) {
+    if (!enabled_) {
+        return;
+    }
+    uint8_t target = cls & 0xF0U;
+    if (target > TPR_CLASS_MAX) {
+        return;
+    }
+    if (target < get_tpr_class()) {
+        reg_wr(REG_TPR, target);
+    }
+}
+
 uint32_t APIC::lapic_id() {
     if (!enabled_) return 0;
     uint32_t id = (mode_ == MODE_X2) ? x2_read(REG_ID) : lapic_rd(REG_ID);
@@ -213,6 +271,9 @@ bool APIC::send_ipi(uint32_t lapic_id, uint8_t vector, IpiMode mode) {
     }
     // Bounded delivery-status poll (bit 12 clears once the local APIC
     // accepted the command — no recipient required for INIT/SIPI send).
+    // Issue #26: no TPR change across this poll (the IPI must be
+    // deliverable at any caller class; SCHED_VECTOR 0xEC is class 0xE,
+    // above TPR_CLASS_MAX).
     for (int i = 0; i < 10000; ++i) {
         uint32_t status = (mode_ == MODE_X2)
                               ? static_cast<uint32_t>(

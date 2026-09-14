@@ -83,6 +83,7 @@ void register_atomic_context_switch_tests();
 void register_bench_syscall_latency_tests();
 void register_bench_irq_latency_tests();
 void register_apic_timer_tests();
+void register_apic_tpr_tests();
 void register_jitter_tests();
 void register_idt_tests();
 void register_exc_table_tests();
@@ -501,6 +502,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"exc_table", []() { register_exc_table_tests(); }},
     {"hal_timer", []() { register_timer_tests(); }},
     {"hal_apic", []() { register_apic_timer_tests(); }},
+    {"apic_tpr", []() { register_apic_tpr_tests(); }},
     {"hal_rtc", []() { register_rtc_tests(); }},
 #if defined(CONFIG_ARCH_X86_64)
     {"hal_rtc_datetime", []() { register_rtc_datetime_tests(); }},
@@ -673,6 +675,7 @@ static void register_all_tests() {
 
     // v0.3.4 tests
     register_apic_timer_tests();
+    register_apic_tpr_tests();
     register_jitter_tests();
     register_deadline_miss_tests();
     register_wcet_overrun_tests();
@@ -866,6 +869,7 @@ static void register_all_tests_first_half() {
 
 // v0.3.4 tests
       register_apic_timer_tests();
+      register_apic_tpr_tests();
       register_jitter_tests();
       register_deadline_miss_tests();
       register_wcet_overrun_tests();

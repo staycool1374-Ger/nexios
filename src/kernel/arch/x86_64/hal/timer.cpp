@@ -24,6 +24,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/apic.hpp>
+#include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/profiling/sampler.hpp>
@@ -50,6 +51,15 @@ void Timer::init(uint32_t frequency_hz) {
         // The handler increments ticks and calls the scheduler.
         IDT::register_handler_raw(APIC::APIC_TIMER_VECTOR,
                                   [](uint64_t, uint64_t, uint64_t rip) {
+                                      // Issue #26: the tick never runs
+                                      // raised — heal any stale class on
+                                      // entry (covers BSP + AP branches;
+                                      // the ISR tail restores from the
+                                      // shadow before return).
+                                      arch::per_cpu_current()->tpr_shadow =
+                                          APIC::TPR_CLASS_ACCEPT_ALL;
+                                      APIC::tpr_restore(
+                                          APIC::TPR_CLASS_ACCEPT_ALL);
                                       if (arch::cpu_index() != 0) {
                                           kernel::Scheduler::ap_tick();
                                           if (arch::APIC::is_timer_active())

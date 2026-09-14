@@ -39,6 +39,9 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/pci.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/apic.hpp>
+#endif
 #include <kernel/test/resource_tracker.hpp>
 #include "test_sched_helpers.hpp"
 #include "task_ptr.hpp"
@@ -209,15 +212,17 @@ JARVIS_TEST(msix_cap_single_owner_vector, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: Kernel-reserved vectors inside the MSI-X window are never
-//           claimable (issue #10 S1): the xAPIC scheduler timer (64) and the
+//           claimable (issue #10 S1): the xAPIC scheduler timer (0xE0
+//           since issue #26) and the
 //           APIC spurious vector (0xFF) must fail closed in claim_slot — an
-//           armed slot at 64 would swallow the scheduler tick.
-// Input: claim_slot(64), claim_slot(0xFF), claim_slot(48)
-// Expect: 64 and 0xFF rejected; 48 accepted and released
+//           armed slot at the timer vector would swallow the scheduler tick.
+// Input: claim_slot(0xE0), claim_slot(0xFF), claim_slot(48)
+// Expect: 0xE0 and 0xFF rejected; 48 accepted and released
 // Depends: kernel::IrqDelivery
 #if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(msix_kernel_reserved_vectors_rejected, "PRE: none | POST: none") {
-    JARVIS_ASSERT(IrqDelivery::claim_slot(64) < 0);
+    JARVIS_ASSERT(IrqDelivery::claim_slot(
+                      arch::APIC::APIC_TIMER_VECTOR) < 0);
     JARVIS_ASSERT(IrqDelivery::claim_slot(0xFF) < 0);
     int16_t idx = IrqDelivery::claim_slot(48);
     JARVIS_ASSERT(idx >= 0);

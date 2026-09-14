@@ -1466,6 +1466,21 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     (void)entry_tsc;
 #endif
 #if defined(CONFIG_ARCH_X86_64)
+    // Issue #26: TPR self-heal.  The per-CPU shadow is the source of
+    // truth; a mismatch (stale HW after snapshot restore on an AP, or a
+    // non-guard raise) is re-asserted here.  tpr_clean lets the tail skip
+    // its restore write on the hot path.  Never touches LAPIC HW when
+    // the APIC is off (PIT fallback has no TPR register).
+    bool tpr_clean = true;
+    uint8_t tpr_want = arch::APIC::TPR_CLASS_ACCEPT_ALL;
+    if (arch::APIC::is_enabled()) {
+        tpr_want = static_cast<uint8_t>(
+            arch::per_cpu_current()->tpr_shadow & 0xF0U);
+        if (arch::APIC::get_tpr_class() != tpr_want) {
+            arch::APIC::set_tpr_class(tpr_want);
+            tpr_clean = false;
+        }
+    }
     // #NM (Device Not Available, vector 7) — lazy FPU/SSE context switch
     if (vector == 7) {
         auto *current = kernel::Scheduler::current_task();
@@ -1743,6 +1758,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         outb(arch::PIC1_CMD, 0x20);
         if (vector >= 40)
             outb(arch::PIC2_CMD, 0x20);
+    }
+
+    // Issue #26 INV-TPR7: EOI first (above), TPR restore second.  The
+    // restore is skipped when the prologue found HW == shadow and no
+    // handler raised outside a TprGuard (guards restore themselves).
+    if (!tpr_clean) {
+        arch::APIC::set_tpr_class(tpr_want);
     }
 
     // Record IRQ latency histogram for hardware IRQs (vectors 32-47).

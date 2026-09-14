@@ -162,6 +162,8 @@ void IrqThread::isr_entry(uint8_t vector, uint64_t error_code, uint64_t rip) {
     //    On x86_64 this sends PIC EOI; APIC EOI is handled separately
     //    via a custom isr_ack in the keyboard (and future) registration.
     //    On AArch64 this calls GIC EOI; on RISC-V this calls PLIC complete.
+    //    Issue #26: threaded handlers inherit the interrupted context's
+    //    TPR shadow and must not raise except via TprGuard (RAII).
     if (irqt->isr_ack_) {
         irqt->isr_ack_(vector);
     } else {

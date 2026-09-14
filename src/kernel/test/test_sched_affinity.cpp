@@ -29,6 +29,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/arch/irq_guard.hpp>
 
 using namespace kernel;
 
@@ -53,10 +54,14 @@ void destroy_test_task(TaskControlBlock *t) {
 // Input: create() (no set_affinity), add_task().
 // Expect: cpu_affinity == 0x1; queued on 0, not on 1.
 // Depends: TCB ctor default, Scheduler::add_task targeting
+// Note (issue #26): enqueue + placement asserts run under one IrqGuard
+// (cookbook Rule 2) — a timer tick between add_task and is_queued_on
+// would dispatch the fresh task and the placement assert would fail.
 JARVIS_TEST(sched_affinity_default_mask, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 10, 10);
     JARVIS_ASSERT(t != nullptr);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), t->cpu_affinity);
+    arch::IrqGuard irq_guard{};
     Scheduler::add_task(*t);
     JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
     JARVIS_ASSERT(!Scheduler::is_queued_on(*t, 1));
@@ -74,11 +79,15 @@ JARVIS_TEST(sched_affinity_default_mask, "PRE: none | POST: none") {
 // Input: add_task(), set_affinity(0x2), set_affinity(0x5).
 // Expect: Both clamp to 0x1, queued on 0 both times.
 // Depends: Scheduler::set_affinity clamp, is_queued_on
+// Note (issue #26): whole enqueue/affinity/assert sequence under one
+// IrqGuard (cookbook Rule 2) — a tick after enqueue_ready would dispatch
+// the task and the placement asserts would fail.
 JARVIS_TEST(sched_affinity_lowest_bit_targets, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 10,
                                        TaskControlBlock::NO_PERIOD);
     JARVIS_ASSERT(t != nullptr);
     t->state = TaskState::BLOCKED;
+    arch::IrqGuard irq_guard{};
     Scheduler::register_task(*t);
     Scheduler::enqueue_ready(*t);
     // Single-CPU config (this class runs on the default variant): only
@@ -136,11 +145,14 @@ JARVIS_TEST(sched_affinity_user_clamp, "PRE: none | POST: none") {
 // Input: set_affinity(0x1), set_affinity(0x3) (clamps to 0x1).
 // Expect: Still queued on 0 only, mask 0x1.
 // Depends: Scheduler::set_affinity clamp path
+// Note (issue #26): same cookbook-Rule-2 guard as above — placement
+// asserts are only stable with ticks excluded.
 JARVIS_TEST(sched_affinity_requeue_moves, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 10,
                                        TaskControlBlock::NO_PERIOD);
     JARVIS_ASSERT(t != nullptr);
     t->state = TaskState::BLOCKED;
+    arch::IrqGuard irq_guard{};
     Scheduler::register_task(*t);
     Scheduler::enqueue_ready(*t);
     JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));

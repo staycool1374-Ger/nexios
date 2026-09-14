@@ -48,6 +48,9 @@ extern "C" void debug_write_dec(uint64_t value);
 #include <kernel/driver/iocd.hpp>
 #include <kernel/arch/apic.hpp>
 #if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#endif
+#if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
 
@@ -430,10 +433,22 @@ void Scheduler::quiesce_enter() noexcept {
     __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         cancel_pending_switch_cpu(c);
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #26: a quiesced world must not resume masked — re-assert the
+    // calling CPU's class to ACCEPT_ALL (own-CPU only, INV-TPR1).
+    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
+    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
+#endif
 }
 
 void Scheduler::quiesce_exit() noexcept {
     __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
+#if defined(CONFIG_ARCH_X86_64)
+    // Same re-assert on the way out: teardown paths must not leak a
+    // raised class into the resumed world.
+    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
+    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
+#endif
 }
 
 /// @brief Number of CPUs currently up (BSP + parked/running APs).
@@ -710,7 +725,11 @@ void Scheduler::drain_zombie_list() noexcept {
     for (;;) {
         TaskControlBlock *task;
         {
-            arch::IrqGuard irq_guard{};
+    // Issue #26: reschedule() never raises TPR itself.  The IrqGuard
+    // below stays mandatory (TPR never replaces IF=0, INV-TPR2); a
+    // caller that additionally needs band masking wraps the section
+    // in TprGuard (which ENSUREs IF=0 at construction).
+    arch::IrqGuard irq_guard{};
             SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
             task = zombie_head_;
             if (!task)
@@ -2727,7 +2746,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
               (nsp < nbase || nsp >= next.kernel_stack_top)) ||
               (npg != 0 && (npg & 0xFFF) != 0));
         if (!bad) {
-            const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+            // riscv64 has no frame-validation branch below (x86_64 iret /
+            // aarch64 ELR+SPSR only) — the pointer is unused there.
+            [[maybe_unused]] const uint64_t *f =
+                reinterpret_cast<const uint64_t *>(nsp);
 #if defined(CONFIG_ARCH_X86_64)
             uint64_t f_rflags = 0;
             // The iret frame sits above the saved register frame.  Two valid
@@ -2956,6 +2978,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 // ---------------------------------------------------------------------------
 
 void Scheduler::rate_monotonic_schedule() noexcept {
+    // Issue #26: RMS never raises TPR itself.  It tolerates preemption
+    // only from strictly higher classes (the tick at 0xE0 is above every
+    // raised class, INV-TPR5); the try_lock + skip discipline below is
+    // unchanged by TPR state.
     if (all_tasks_.size() <= 1)
         return;
 
@@ -3125,7 +3151,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                  (next->page_table_ != 0 &&
                   (next->page_table_ & 0xFFF) != 0));
             if (!bad) {
-                const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
+                // Unused on riscv64 (no validation branch below).
+                [[maybe_unused]] const uint64_t *f =
+                    reinterpret_cast<const uint64_t *>(nsp);
 #if defined(CONFIG_ARCH_X86_64)
                 uint64_t rip_a = f[IRET_RIP_IDX], cs_a = f[IRET_CS_IDX],
                          rsp_a = f[IRET_RSP_IDX], ss_a = f[IRET_SS_IDX];

@@ -62,6 +62,11 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
     void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
                                 //   array, issue #25 C1; kept for layout)
 
+    // ─── Interrupt prioritization (issue #26) ──────────────────────────────
+    // Own-CPU intended TPR class (source of truth; HW re-asserted from it).
+    // C++-only via per_cpu_current()/cpu_index() — no asm access, no alias.
+    uint64_t tpr_shadow;        // gs:0x40  — default TPR_CLASS_ACCEPT_ALL
+
     // ─── Deferred-switch atoms: NOT in this page ─────────────────────────────
     // C1 stores them as Scheduler/global_state arrays indexed by CPU
     // (arch-neutral C++; riscv asm keeps working via array base == [0]).
@@ -71,7 +76,7 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
     // NOTE: explicit fields total 483 u64s; alignas(PAGE_SIZE) tail-pads
     // sizeof to 4096 (enforced by the static_assert below).  Keep the
     // explicit total constant when adding fields (shrink reserved).
-    uint64_t reserved[475];
+    uint64_t reserved[474];
 };
 
 static_assert(sizeof(PerCpu) == arch::PAGE_SIZE,

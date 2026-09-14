@@ -259,6 +259,10 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
 
     // EOI exactly once for the consumed vector (the caller returns early, so
     // the handle_interrupt_c tail EOI never double-fires).
+    // Issue #26 class rule: this path never raises TPR itself.  PIC-kind
+    // vectors (33-47) are served at/below TPR_CLASS_PIC and MSI-X vectors
+    // at/below the caller's shadow; any band narrowing inside a handler
+    // uses TprGuard (RAII, self-restoring).
 #if defined(CONFIG_ARCH_X86_64)
     if (arch::APIC::is_enabled()) {
         arch::APIC::eoi();

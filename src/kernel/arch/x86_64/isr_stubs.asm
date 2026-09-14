@@ -182,7 +182,12 @@ isr_common:
     mov rax, [rsp + 15*8]
     cmp rax, 32
     je .apply_allowed
-    cmp rax, 64
+    ; Issue #26: APIC timer vector moved 64 -> 0xE0 (INV-TPR5).  A nested
+    ; tick MUST apply here: a task blocked in a syscall hlt-loop publishes
+    ; its voluntary arm and only a depth-1 epilogue could otherwise apply
+    ; it — the hlt-loop never reaches one, so without this the arm strands
+    ; (RMS sees the pending arm and returns early every tick: total stall).
+    cmp rax, 0xE0
     jne .restore
 .apply_allowed:
     lea rax, [rel scheduler_save_rsp_to]

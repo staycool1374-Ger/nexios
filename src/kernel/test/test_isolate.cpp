@@ -37,6 +37,10 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/apic.hpp>
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#endif
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -159,8 +163,13 @@ static size_t off_sched_percpu() {
     return off_sched_rqpod() +
            CONFIG_MAX_CPUS * sizeof(ReadyQueuePOD);
 }
-static size_t off_daemon_entries() {
+// Issue #26: per-CPU TPR shadows (one u64 per CPU, own-CPU semantics).
+static size_t off_tpr_shadows() {
     return off_sched_percpu() + sizeof(SchedPerCpuPod);
+}
+static size_t off_daemon_entries() {
+    return off_tpr_shadows() +
+           CONFIG_MAX_CPUS * sizeof(uint64_t);
 }
 static size_t off_daemon_num() {
     return off_daemon_entries() +
@@ -444,6 +453,15 @@ bool snapshot_create() {
         auto *percpu = reinterpret_cast<SchedPerCpuPod *>(
             g_snapshot + off_sched_percpu());
         Scheduler::capture_percpu(*percpu);
+
+#if defined(CONFIG_ARCH_X86_64)
+        // Save per-CPU TPR shadows (issue #26).  Same quiesce+lock window
+        // as the queues above; shadows are own-CPU-only by design.
+        auto *shadows = reinterpret_cast<uint64_t *>(g_snapshot +
+                                                     off_tpr_shadows());
+        for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+            shadows[c] = arch::per_cpu[c].tpr_shadow;
+#endif
     }
 
     // ---- Daemon ----
@@ -1090,6 +1108,21 @@ void snapshot_restore(const char *test_name) {
                 g_snapshot + off_sched_percpu());
             Scheduler::restore_percpu(*percpu);
         }
+
+#if defined(CONFIG_ARCH_X86_64)
+        // Restore per-CPU TPR shadows (issue #26).  Own-CPU hardware is
+        // re-asserted now; remote CPUs self-heal at their next ISR
+        // prologue (spec §3.6) — cross-CPU TPR writes are forbidden
+        // (INV-TPR1).
+        {
+            const auto *shadows = reinterpret_cast<const uint64_t *>(
+                g_snapshot + off_tpr_shadows());
+            for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+                arch::per_cpu[c].tpr_shadow = shadows[c];
+            arch::APIC::set_tpr_class(static_cast<uint8_t>(
+                arch::per_cpu[arch::cpu_index()].tpr_shadow & 0xF0U));
+        }
+#endif
     }
 
     // ---- Re-identify current task by RSP match ----

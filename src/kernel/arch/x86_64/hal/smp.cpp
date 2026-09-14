@@ -38,6 +38,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/kernel.hpp>
+#include <assert.hpp>
 #include <kernel/bootparams.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -258,6 +259,12 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
     // Interrupts are and stay disabled until the scheduler entry below.
     arch::percpu_init_ap(logical_id, lapic_id);
     arch::APIC::init_ap();
+    // Issue #26: both init paths establish TPR ACCEPT_ALL; a mismatch
+    // here means the per-CPU isolation contract is broken by construction.
+    ENSURE(arch::per_cpu_current()->tpr_shadow ==
+           arch::APIC::TPR_CLASS_ACCEPT_ALL);
+    ENSURE(arch::APIC::get_tpr_class() ==
+           arch::APIC::TPR_CLASS_ACCEPT_ALL);
     ap_ready[logical_id] = 1;
 
     // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,

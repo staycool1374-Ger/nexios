@@ -36,7 +36,7 @@ void Timer::init(uint32_t frequency_hz) {
     set_frequency(frequency_hz);
     IDT::register_handler(InterruptVector::TIMER,
                           [](uint64_t, uint64_t, uint64_t) {
-                              handle_irq();
+                              handle_irq(0);
                               kernel::Scheduler::on_tick();
                           });
 }
@@ -76,8 +76,9 @@ uint64_t Timer::ns() {
 }
 
 /// @brief Handle a timer interrupt: increment tick count and re-arm via SBI.
-/// @param ip Instruction pointer from interrupt frame.
-void Timer::handle_irq(uint64_t ip) {
+/// @param ip Instruction pointer from interrupt frame (unused on riscv64 —
+///        no sampler hook; kept for the shared Timer interface).
+void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
     ticks_ = ticks_ + 1;
     // Re-arm timer via SBI
     uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);

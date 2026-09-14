@@ -50,6 +50,31 @@ public:
     /// @brief Check whether the CPU supports an APIC.
     static bool is_apic_supported();
 
+    // ─── TPR-based interrupt prioritization (issue #26) ───────────────────
+    // TPR classes are vector-priority bands (class = vector bits 7:4);
+    // an external interrupt is delivered iff its class exceeds the TPR
+    // class.  The tick (0xE0) and SCHED IPI (0xEC) are class 0xE, above
+    // every raised class, so they are never maskable (INV-TPR5).
+    static constexpr uint8_t TPR_CLASS_ACCEPT_ALL = 0x00;
+    static constexpr uint8_t TPR_CLASS_PIC        = 0x30;
+    static constexpr uint8_t TPR_CLASS_IPC        = 0x70;
+    static constexpr uint8_t TPR_CLASS_SCHED      = 0xD0;
+    static constexpr uint8_t TPR_CLASS_MAX        = TPR_CLASS_SCHED;
+
+    /// @brief Program a TPR class (sub-class bits forced to 0).
+    /// No-op when the LAPIC is off.  See docs/specs/apic-tpr.md §3.4.
+    /// @param cls Class byte (only bits 7:4 used).
+    /// @return false when cls exceeds TPR_CLASS_MAX (fail-closed).
+    static bool set_tpr_class(uint8_t cls);
+    /// @brief Read the current hardware TPR class (ACCEPT_ALL when off).
+    static uint8_t get_tpr_class();
+    /// @brief Read the PPR (diagnostic only; never mutates TPR).
+    static uint8_t get_ppr();
+    /// @brief Raise toward cls; writes only when cls exceeds current.
+    static void tpr_raise(uint8_t cls);
+    /// @brief Lower toward cls; writes only when cls is below current.
+    static void tpr_restore(uint8_t cls);
+
     /// @brief Read this CPU's LAPIC ID (bits 24-31 of the ID register).
     /// @return LAPIC ID, or 0 if the APIC is not initialised.
     static uint32_t lapic_id();
@@ -85,10 +110,12 @@ public:
     /// @param mask true = mask, false = unmask.
     static void mask_irq(uint8_t irq, bool mask);
 
-    static constexpr uint8_t APIC_TIMER_VECTOR = 64;
+    // Issue #26: moved 64 -> 0xE0 so the tick sits above every TPR class
+    // (class 0xE > TPR_CLASS_MAX 0xD0 — unmaskable, INV-TPR5).
+    static constexpr uint8_t APIC_TIMER_VECTOR = 0xE0;
     /// @brief Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI
     ///        telling the target CPU to drain its wake mailbox and arm its
-    ///        reschedule flag.  Free (timer 64, syscall 0x80, self-test
+    ///        reschedule flag.  Free (timer 0xE0, syscall 0x80, self-test
     ///        0xEF, spurious 0xFF).
     static constexpr uint8_t SCHED_VECTOR = 0xEC;
 
@@ -158,8 +185,10 @@ private:
 
     static void x2_write(uint32_t off, uint32_t v);
     static uint32_t x2_read(uint32_t off);
-    static void xapic_write(uint32_t off, uint32_t v);
-    static uint32_t xapic_read(uint32_t off);
+    /// @brief Mode-gated LAPIC register write (x2APIC MSR else xAPIC MMIO).
+    static void reg_wr(uint32_t off, uint32_t v);
+    /// @brief Mode-gated LAPIC register read (x2APIC MSR else xAPIC MMIO).
+    static uint32_t reg_rd(uint32_t off);
     static void ioapic_write(uint32_t reg_sel, uint32_t v);
     static uint32_t ioapic_read(uint32_t reg_sel);
     static void ioapic_redirect(uint8_t irq, uint8_t vector, bool mask);

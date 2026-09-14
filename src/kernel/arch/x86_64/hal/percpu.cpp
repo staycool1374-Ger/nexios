@@ -1,5 +1,6 @@
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/hal/msr.hpp>
+#include <kernel/arch/apic.hpp>
 #include <constants.hpp>
 
 namespace arch {
@@ -18,6 +19,7 @@ void percpu_init_bsp(uint64_t bsp_lapic_id) {
     pc.irq_entry_tsc = 0;
     pc.fpu_owner = nullptr;
     pc.current_task = nullptr;
+    pc.tpr_shadow = APIC::TPR_CLASS_ACCEPT_ALL; // issue #26
 
     // Set GS_BASE MSR to point at this CPU's PerCpu page.
     arch::wrmsr(arch::MSR_GS_BASE, reinterpret_cast<uint64_t>(&per_cpu[0]));
@@ -38,6 +40,7 @@ void percpu_init_ap(uint64_t logical_id, uint64_t lapic_id) {
     pc.irq_entry_tsc = 0;
     pc.fpu_owner = nullptr;
     pc.current_task = nullptr;
+    pc.tpr_shadow = APIC::TPR_CLASS_ACCEPT_ALL; // issue #26
 
     // Set GS_BASE for this AP to point at its PerCpu page.
     arch::wrmsr(arch::MSR_GS_BASE, reinterpret_cast<uint64_t>(&per_cpu[logical_id]));

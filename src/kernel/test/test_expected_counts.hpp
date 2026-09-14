@@ -186,6 +186,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
+    {"apic_tpr",              5,    0,       0      },  // TPR classes/shadow/guard/vector reservation (#26)
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
 
     // drivers

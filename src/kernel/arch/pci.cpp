@@ -534,7 +534,9 @@ static void init_vector_alloc() {
     for (int i = 32; i < 48; ++i)
         g_vector_used[i] = true; // PIC IRQs
     g_vector_used[0x80] = true;  // SYSCALL
-    g_vector_used[64] = true;    // xAPIC scheduler timer (APIC_TIMER_VECTOR)
+    // xAPIC scheduler timer (APIC::APIC_TIMER_VECTOR; 0xE0 since #26 —
+    // keep in sync, this TU stays arch-neutral so the value is literal).
+    g_vector_used[0xE0] = true;
     g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
     g_vector_init = true;
 }
