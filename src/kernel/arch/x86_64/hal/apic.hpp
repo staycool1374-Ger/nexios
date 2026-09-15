@@ -118,6 +118,11 @@ public:
     ///        reschedule flag.  Free (timer 0xE0, syscall 0x80, self-test
     ///        0xEF, spurious 0xFF).
     static constexpr uint8_t SCHED_VECTOR = 0xEC;
+    /// @brief Batched TLB-shootdown delivery vector (issue #159): a FIXED
+    ///        IPI telling the target CPU to apply its shootdown batch
+    ///        slot.  Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer,
+    ///        0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious).
+    static constexpr uint8_t SHOOTDOWN_BATCH_VECTOR = 0x73;
 
 private:
     // ─── MMIO base addresses ──────────────────────────────────────────────

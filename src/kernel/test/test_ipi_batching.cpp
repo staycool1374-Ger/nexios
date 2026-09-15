@@ -30,6 +30,8 @@
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
 #include <kernel/nexios_config.h>
 
 using namespace kernel;
@@ -42,6 +44,17 @@ constexpr uint8_t kBatchProbeVector = 0x72;
 
 // Delivery counter for the baseline test.
 volatile uint64_t g_batch_ipi_count = 0;
+
+// Register the shootdown-batch ISR (self-IPI delivery for tests).
+// EOI stays with the registrant, mirroring the 0x72 probe pattern.
+void register_batch_handler() {
+    arch::IDT::register_handler_raw(
+        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
+        [](uint64_t, uint64_t, uint64_t) {
+            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
+            arch::APIC::eoi();
+        });
+}
 
 }  // namespace
 
@@ -82,37 +95,82 @@ JARVIS_TEST(ipi_batching_unbatched_baseline, "PRE: iocd | POST: none") {
 
 // Runmode: kernel
 // Testidea: Multiple pending flushes collapse into a single IPI.
-// Input: N pending shootdown requests, count ICR sends.
-// Expect: Exactly one IPI sent for all N requests.
-// Depends: Shootdown batching layer (not yet implemented)
-JARVIS_TEST(ipi_batching_collapses, "PRE: none | POST: none | PENDING: batching") {
-    /* Pseudocode:
-     *   queue N flushes; JARVIS_ASSERT(ipis_sent() == 1);
-     */
+// Input: N queued shootdown requests for self, one flush.
+// Expect: Exactly one IPI accepted (wrapper send counter) and all N
+//         entries applied (handler counter).  No APIC-coalescing
+//         ambiguity: the send counter is deterministic.
+// Depends: ShootdownBatch queue/flush delivery (issue #159)
+JARVIS_TEST(ipi_batching_collapses, "PRE: none | POST: none") {
+    register_batch_handler();
+    arch::ShootdownBatch::reset_for_test();
+    uint64_t self = arch::cpu_index();
+    constexpr uint64_t k_n = 8;
+    for (uint64_t i = 0; i < k_n; ++i) {
+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
+            self, 0x35000000ULL + i * 0x1000, 1));
+    }
+    uint64_t sends = arch::ShootdownBatch::flush_target(self);
+    JARVIS_ASSERT_EQ(1ULL, sends);
+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::sends_for_test());
+    JARVIS_ASSERT_EQ(k_n, arch::ShootdownBatch::applied_for_test());
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
 // Testidea: Batch processing order is deterministic (address order).
-// Input: Shuffled flush requests, observe application order.
-// Expect: Applied in ascending address order every run.
-// Depends: Shootdown batching layer (not yet implemented)
-JARVIS_TEST(ipi_batching_order, "PRE: none | POST: none | PENDING: batching") {
-    /* Pseudocode:
-     *   queue shuffled addrs; JARVIS_ASSERT(applied_sorted());
-     */
+// Input: Shuffled flush requests, one flush.
+// Expect: Handler applies VAs in ascending order every run (slot
+//         stays sorted on insert; applied log proves it).
+// Depends: ShootdownBatch sorted insert (issue #159)
+JARVIS_TEST(ipi_batching_order, "PRE: none | POST: none") {
+    register_batch_handler();
+    arch::ShootdownBatch::reset_for_test();
+    uint64_t self = arch::cpu_index();
+    constexpr uint64_t k_vas[] = {0x36007000ULL, 0x36001000ULL,
+                                  0x36005000ULL, 0x36000000ULL,
+                                  0x36003000ULL, 0x36002000ULL,
+                                  0x36006000ULL, 0x36004000ULL};
+    constexpr uint64_t k_n = sizeof(k_vas) / sizeof(k_vas[0]);
+    for (uint64_t i = 0; i < k_n; ++i) {
+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self, k_vas[i],
+                                                         2));
+    }
+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
+    JARVIS_ASSERT_EQ(k_n, arch::ShootdownBatch::applied_for_test());
+    for (uint64_t i = 1; i < k_n; ++i) {
+        JARVIS_ASSERT(arch::ShootdownBatch::applied_va_for_test(i - 1) <
+                      arch::ShootdownBatch::applied_va_for_test(i));
+    }
+    JARVIS_ASSERT(arch::ShootdownBatch::applied_va_for_test(0) ==
+                  0x36000000ULL);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
 // Testidea: Batch size never overflows the IPI message buffer.
-// Input: More requests than the buffer holds.
-// Expect: Overflow requests take a second batch (or fail closed).
-// Depends: Shootdown batching layer (not yet implemented)
-JARVIS_TEST(ipi_batching_no_overflow, "PRE: none | POST: none | PENDING: batching") {
-    /* Pseudocode:
-     *   queue CAP+1 flushes; JARVIS_ASSERT(batches == 2 || rejected);
-     */
+// Input: More requests than one slot holds (16 + 1).
+// Expect: Bounded multi-batch (exactly 2 sends), all 17 applied —
+//         never fail-closed, never overwritten.
+// Depends: ShootdownBatch overflow protocol (issue #159)
+JARVIS_TEST(ipi_batching_no_overflow, "PRE: none | POST: none") {
+    register_batch_handler();
+    arch::ShootdownBatch::reset_for_test();
+    uint64_t self = arch::cpu_index();
+    constexpr uint64_t k_cap = arch::ShootdownBatch::BATCH_SLOTS;
+    for (uint64_t i = 0; i < k_cap; ++i) {
+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
+            self, 0x37000000ULL + i * 0x1000, 3));
+    }
+    JARVIS_ASSERT(!arch::ShootdownBatch::queue_remote(self, 0x38000000ULL,
+                                                      3));
+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
+    JARVIS_ASSERT_EQ(k_cap, arch::ShootdownBatch::applied_for_test());
+    JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self, 0x38000000ULL,
+                                                     3));
+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
+    JARVIS_ASSERT_EQ(k_cap + 1,
+                     arch::ShootdownBatch::applied_for_test());
+    JARVIS_ASSERT_EQ(2ULL, arch::ShootdownBatch::sends_for_test());
     JARVIS_TEST_PASS();
 }
 
