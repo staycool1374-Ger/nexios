@@ -126,7 +126,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_verify",           5,   0,       0      },  // SMP verify (issue #85 module 12): census + AP-tick liveness + lock bound (real), inversion/soak stubs
     {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
-    {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown stubs (issue #85 module 15): defer/coalesce/quarantine/timeout pending API
+    {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
     {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #85 module 16): unbatched 5:5 baseline (real), collapse/order/overflow stubs
     {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs

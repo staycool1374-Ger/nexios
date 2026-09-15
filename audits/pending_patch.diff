@@ -1,307 +1,367 @@
-diff --git a/src/kernel/arch/x86_64/hal/io_impl.hpp b/src/kernel/arch/x86_64/hal/io_impl.hpp
-index ef8f4c5e..05af35eb 100644
---- a/src/kernel/arch/x86_64/hal/io_impl.hpp
-+++ b/src/kernel/arch/x86_64/hal/io_impl.hpp
-@@ -25,6 +25,7 @@
- #pragma once
- 
- #include <types.hpp>
-+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
- 
- namespace arch {
- 
-@@ -74,6 +75,64 @@ inline void write_cr4(uint64_t v) {
- /// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
- inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
- 
-+/// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
-+enum class InvpcidType : uint32_t {
-+    SINGLE_ADDRESS = 0, ///< Invalidate VA + PCID (except globals).
-+    SINGLE_CONTEXT = 1, ///< Invalidate all of one PCID (except globals).
-+    ALL_INCL_GLOBAL = 2, ///< Invalidate everything incl. globals.
-+    ALL_RETAIN_GLOBAL = 3, ///< Invalidate everything except globals.
-+};
+diff --git a/src/kernel/memory/tlb_shootdown.cpp b/src/kernel/memory/tlb_shootdown.cpp
+new file mode 100644
+index 00000000..babe027f
+--- /dev/null
++++ b/src/kernel/memory/tlb_shootdown.cpp
+@@ -0,0 +1,177 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
 +
-+/// @brief 128-bit INVPCID descriptor: PCID in low 12 bits of qword 0,
-+///        page-aligned linear address in qword 1 (address ignored
-+///        except for SINGLE_ADDRESS).
-+struct InvpcidDesc {
-+    uint64_t pcid;
-+    uint64_t addr;
-+};
++/// @file tlb_shootdown.cpp
++/// @brief Lazy TLB shootdown request queue + deferred-free quarantine
++///        (issue #158).  See the header for the contract.
 +
-+/// @brief Build a normalized INVPCID descriptor (issue #157).
-+/// @param type Invalidation type.
-+/// @param pcid PCID value (masked to 12 bits).
-+/// @param addr Linear address (page-masked; non-canonical bits cannot
-+///        survive the mask on canonical inputs).
-+/// @return Descriptor ready for invpcid_emit().
-+inline InvpcidDesc invpcid_build_desc(InvpcidType type, uint64_t pcid,
-+                                      uint64_t addr) {
-+    (void)type;
-+    InvpcidDesc desc{};
-+    desc.pcid = pcid & 0xFFFULL;
-+    desc.addr = addr & ~0xFFFULL;
-+    return desc;
-+}
-+
-+/// @brief Execute INVPCID (issue #157).  Fail-safe: returns without
-+///        executing on CPUs without INVPCID support (never #UD).
-+///        Kernel-only instruction (#GP at CPL>0 — all callers ring 0).
-+///        Uses the r64 form (legal per SDM: type in range 0-3).
-+///        Precondition: when the descriptor carries a nonzero PCID
-+///        (types 0/1), CR4.PCIDE must be set — true on every path that
-+///        reaches here (boot/AP enable PCIDE before any task runs;
-+///        callers are post-bring-up unmap/teardown/purge paths).
-+/// @param type Invalidation type.
-+/// @param desc Normalized descriptor (see invpcid_build_desc).
-+inline void invpcid_emit(InvpcidType type, const InvpcidDesc &desc) {
-+    if (!has_invpcid())
-+        return;
-+    // 16-byte descriptor as the m128 operand (register-indirect would
-+    // render an unsized qword access — operand size mismatch).
-+    struct alignas(16) RawDesc {
-+        uint64_t lo;
-+        uint64_t hi;
-+    };
-+    RawDesc raw{desc.pcid, desc.addr};
-+    uint64_t type_value = static_cast<uint64_t>(type);
-+    asm volatile("invpcid %1, %0"
-+                 :
-+                 : "r"(type_value), "m"(raw)
-+                 : "memory");
-+}
-+
- /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
- ///        user pages while SMAP is active.  Must be paired with clac().
- inline void stac() { asm volatile("stac" ::: "cc"); }
-diff --git a/src/kernel/arch/x86_64/hal/page_table_impl.hpp b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
-index 5e2eb6a3..46c117d6 100644
---- a/src/kernel/arch/x86_64/hal/page_table_impl.hpp
-+++ b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
-@@ -45,10 +45,79 @@ inline void arch_page_table_activate(uint64_t pml4_phys) {
- inline void arch_page_table_tlb_flush(uint64_t virt_addr) {
-     asm volatile("invlpg (%0)" : : "r"(virt_addr) : "memory");
- }
--/// @brief Flush the entire TLB by reloading CR3.
-+/// @brief Flush the entire TLB by reloading CR3 (issue #157: the low
-+///        12 bits must clear — a tagged reload is NOT a full flush
-+///        under PCIDE, it retains the loaded PCID's entries).
- inline void arch_page_table_tlb_flush_all() {
-     uint64_t cr3 = read_cr3();
--    write_cr3(cr3);
-+    write_cr3(cr3 & ~0xFFFULL);
-+}
-+
-+/// @brief Per-kind TLB-invalidation event counters (issue #157).
-+///        Observability for tests (routing proofs) and the #160
-+///        latency work.  Monotonic; tests assert deltas, never absolutes.
-+struct TlbFlushStats {
-+    uint64_t single_va;    ///< Single-address flushes (INVLPG, any CPU).
-+    uint64_t ctx_invpcid;  ///< Single-context INVPCID purges issued.
-+    uint64_t ctx_fallback; ///< Single-context CR3-reload fallbacks.
-+    uint64_t all_invpcid;  ///< All-context INVPCID purges issued.
-+    uint64_t all_fallback; ///< All-context CR3-reload fallbacks.
-+};
-+
-+/// @brief Process-wide flush counters (one instance, atomic updates).
-+inline TlbFlushStats &tlb_flush_stats_store() {
-+    static TlbFlushStats stats{};
-+    return stats;
-+}
-+
-+/// @brief Snapshot current flush counters (test/diagnostic read).
-+inline TlbFlushStats tlb_flush_stats() {
-+    TlbFlushStats out{};
-+    TlbFlushStats &store = tlb_flush_stats_store();
-+    out.single_va = __atomic_load_n(&store.single_va, __ATOMIC_RELAXED);
-+    out.ctx_invpcid = __atomic_load_n(&store.ctx_invpcid, __ATOMIC_RELAXED);
-+    out.all_invpcid = __atomic_load_n(&store.all_invpcid, __ATOMIC_RELAXED);
-+    out.ctx_fallback =
-+        __atomic_load_n(&store.ctx_fallback, __ATOMIC_RELAXED);
-+    out.all_fallback =
-+        __atomic_load_n(&store.all_fallback, __ATOMIC_RELAXED);
-+    return out;
-+}
-+
-+/// @brief Purge one PCID's non-global entries (issue #157): INVPCID
-+///        single-context when available, else same-root CR3 reload.
-+///        Local CPU only; cross-CPU invalidation is #158's scope.
-+/// @param pcid PCID to purge (0 purges the untagged/kernel context).
-+inline void tlb_purge_context(uint16_t pcid) {
-+    TlbFlushStats &store = tlb_flush_stats_store();
-+    if (has_invpcid()) {
-+        __atomic_fetch_add(&store.ctx_invpcid, 1ULL, __ATOMIC_RELAXED);
-+        InvpcidDesc desc = invpcid_build_desc(InvpcidType::SINGLE_CONTEXT,
-+                                              pcid, 0);
-+        invpcid_emit(InvpcidType::SINGLE_CONTEXT, desc);
-+    } else {
-+        __atomic_fetch_add(&store.ctx_fallback, 1ULL, __ATOMIC_RELAXED);
-+        uint64_t cr3 = read_cr3();
-+        write_cr3(cr3 & ~0xFFFULL);
-+    }
-+}
-+
-+/// @brief Purge everything incl. globals (issue #157): INVPCID
-+///        all-context when available, else untagged CR3 reload (a
-+///        tagged reload is NOT a full flush — low bits must clear).
-+///        Local CPU only; cross-CPU invalidation is #158's scope.
-+inline void tlb_purge_all() {
-+    TlbFlushStats &store = tlb_flush_stats_store();
-+    if (has_invpcid()) {
-+        __atomic_fetch_add(&store.all_invpcid, 1ULL, __ATOMIC_RELAXED);
-+        InvpcidDesc desc =
-+            invpcid_build_desc(InvpcidType::ALL_INCL_GLOBAL, 0, 0);
-+        invpcid_emit(InvpcidType::ALL_INCL_GLOBAL, desc);
-+    } else {
-+        __atomic_fetch_add(&store.all_fallback, 1ULL, __ATOMIC_RELAXED);
-+        uint64_t cr3 = read_cr3();
-+        write_cr3(cr3 & ~0xFFFULL);
-+    }
- }
- 
- /// @brief Static wrapper class for page-table operations.
-@@ -62,10 +131,12 @@ class ArchPageTable {
-         arch_page_table_activate(pml4_phys);
-     }
-     static inline void tlb_flush(uint64_t virt_addr) {
-+        TlbFlushStats &store = tlb_flush_stats_store();
-+        __atomic_fetch_add(&store.single_va, 1ULL, __ATOMIC_RELAXED);
-         arch_page_table_tlb_flush(virt_addr);
-     }
-     static inline void tlb_flush_all() {
--        arch_page_table_tlb_flush_all();
-+        tlb_purge_all();
-     }
- 
-     /// @brief Size of a single page (from kernel config).
-diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
-index 24c1ac33..a4096fef 100644
---- a/src/kernel/arch/x86_64/hal/pcid.cpp
-+++ b/src/kernel/arch/x86_64/hal/pcid.cpp
-@@ -23,6 +23,7 @@
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
- #include <kernel/arch/x86_64/hal/io_impl.hpp>
-+#include <kernel/arch/x86_64/hal/page_table_impl.hpp>
- 
- namespace arch {
- namespace {
-@@ -89,12 +90,12 @@ uint16_t pcid_alloc() {
-             }
-         }
-     }
--    // Exhausted: epoch bump + one global flush (full CR3 reload of the
--    // current PML4 untagged flushes all PCID-tagged entries), cursor
--    // reset to 1.  Live IDs stay set, so reuse is still impossible and
--    // a fully-live space answers 0 (caller falls back untagged).
-+    // Exhausted: epoch bump + global purge (INVPCID all-context when
-+    // available, else untagged CR3 reload), cursor reset to 1.  Live IDs
-+    // stay set, so reuse is still impossible and a fully-live space
-+    // answers 0 (caller falls back untagged).
-     ++g_epoch;
--    write_cr3(read_cr3() & ~0xFFFULL);
-+    tlb_purge_all();
-     g_next = 1;
-     for (uint16_t id = 1; id <= PCID_MAX; ++id) {
-         if (live_claim(id)) {
-@@ -117,17 +118,17 @@ void pcid_free(uint16_t pcid) {
-     // locally); the old table is destroyed right after, so nothing can
-     // re-cache this ID in the meantime.
-     //
--    // Coherency bound (why a local flush suffices for now): user address
-+    // Coherency bound (why a local purge suffices for now): user address
-     // spaces — the only PCID holders — execute on CPU0 exclusively
-     // (shared-TSS pin), so their tagged entries can only ever live in
-     // CPU0's TLB.  User-task cleanup (self/parent-waitpid/deadline-BSP/
-     // reboot-BSP) likewise executes on CPU0 in every current path — no
--    // AP-context user-teardown producer exists — so this flush always
-+    // AP-context user-teardown producer exists — so this purge always
-     // lands where the stale entries are.  General cross-CPU invalidation
-     // (should APs ever terminate user tasks) is owned by the lazy
-     // shootdown protocol (#158), which must cover it by design.
-     if (g_supported)
--        write_cr3(read_cr3() & ~0xFFFULL);
-+        tlb_purge_context(pcid);
- }
- 
- uint64_t pcid_epoch() {
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 89fdfe10..45d48c72 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -32,6 +32,7 @@
- #include <kernel/memory/vmm.hpp>
- #include <kernel/memory/checked_ptr.hpp>
- #include <kernel/arch/io.hpp>
++#include <kernel/memory/tlb_shootdown.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <constants.hpp>
 +#include <kernel/arch/page_table.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/sync/irq_spinlock_guard.hpp>
++
++namespace kernel {
++
++uint64_t TlbShootdown::timeout_ticks_ = TlbShootdown::DEFAULT_TIMEOUT_TICKS;
++TlbShootdown::Request TlbShootdown::pending_[TlbShootdown::MAX_PENDING] = {};
++uint64_t TlbShootdown::pending_count_ = 0;
++TlbShootdown::Held TlbShootdown::quarantine_[TlbShootdown::MAX_QUARANTINE] = {};
++uint64_t TlbShootdown::quarantine_count_ = 0;
++sync::SpinLock shootdown_lock_{};
++
++TlbShootdown::Error TlbShootdown::request(uint64_t va, uint16_t pcid) noexcept {
++    if ((va & (arch::PAGE_SIZE - 1)) != 0)
++        return Error::INVALID;
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    for (uint64_t i = 0; i < pending_count_; ++i) {
++        if (pending_[i].va == va && pending_[i].pcid == pcid)
++            return Error::OK; // exact duplicate: already covered
++    }
++    if (pending_count_ >= MAX_PENDING)
++        return Error::QUEUE_FULL;
++    pending_[pending_count_].va = va;
++    pending_[pending_count_].pcid = pcid;
++    ++pending_count_;
++    return Error::OK;
++}
++
++void TlbShootdown::coalesce_and_apply() noexcept {
++    // Snapshot under lock; apply without holding it (INVLPG/purge take
++    // no locks; keeps the critical section short).
++    Request batch[MAX_PENDING];
++    uint64_t count = 0;
++    {
++        sync::IrqSpinLockGuard guard(shootdown_lock_);
++        count = pending_count_;
++        for (uint64_t i = 0; i < count; ++i)
++            batch[i] = pending_[i];
++        pending_count_ = 0;
++    }
++    // Group contiguous same-PCID runs: a run at/above threshold earns
++    // one context purge, otherwise per-VA flushes.  O(n^2) bounded by
++    // MAX_PENDING (64^2 worst case, no allocation).
++    bool consumed[MAX_PENDING] = {};
++    for (uint64_t i = 0; i < count; ++i) {
++        if (consumed[i])
++            continue;
++        uint64_t group = 1;
++        for (uint64_t j = i + 1; j < count; ++j) {
++            if (!consumed[j] && batch[j].pcid == batch[i].pcid)
++                ++group;
++        }
++        if (group >= PURGE_GROUP_THRESHOLD) {
++            arch::tlb_purge_context(batch[i].pcid);
++            for (uint64_t j = i; j < count; ++j) {
++                if (!consumed[j] && batch[j].pcid == batch[i].pcid)
++                    consumed[j] = true;
++            }
++        } else {
++            arch::ArchPageTable::tlb_flush(batch[i].va);
++            consumed[i] = true;
++        }
++    }
++}
++
++TlbShootdown::Error TlbShootdown::hold(uint64_t phys) noexcept {
++    if ((phys & (arch::PAGE_SIZE - 1)) != 0 || phys == 0)
++        return Error::INVALID;
++    if (!PMM::is_allocated(phys))
++        return Error::INVALID;
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    if (quarantine_count_ >= MAX_QUARANTINE)
++        return Error::QUARANTINE_FULL;
++    quarantine_[quarantine_count_].phys = phys;
++    quarantine_[quarantine_count_].deadline =
++        arch::Timer::ticks() + timeout_ticks_;
++    ++quarantine_count_;
++    return Error::OK;
++}
++
++void TlbShootdown::release_all() noexcept {
++    // Apply-first ordering: any queued shootdown for a held page lands
++    // before the page returns to the free list (stale entries can never
++    // meet recycled frames).
++    coalesce_and_apply();
++    uint64_t held[MAX_QUARANTINE];
++    uint64_t count = 0;
++    {
++        sync::IrqSpinLockGuard guard(shootdown_lock_);
++        count = quarantine_count_;
++        for (uint64_t i = 0; i < count; ++i)
++            held[i] = quarantine_[i].phys;
++        quarantine_count_ = 0;
++    }
++    for (uint64_t i = 0; i < count; ++i)
++        PMM::free_page(held[i]);
++}
++
++void TlbShootdown::on_tick(uint64_t now) noexcept {
++    // ISR-safe: IF is already clear on the tick path; try_lock skips on
++    // contention instead of spinning on a task-held lock (single-CPU
++    // deadlock otherwise).  Bounded: at most MAX_PER_TICK releases.
++    arch::IrqGuard irq_guard{};
++    if (!shootdown_lock_.try_lock())
++        return;
++    uint64_t due[MAX_PER_TICK];
++    uint64_t due_count = 0;
++    uint64_t kept = 0;
++    for (uint64_t i = 0; i < quarantine_count_; ++i) {
++        bool expired = (now >= quarantine_[i].deadline);
++        if (expired && due_count < MAX_PER_TICK) {
++            due[due_count++] = quarantine_[i].phys;
++        } else {
++            quarantine_[kept] = quarantine_[i];
++            ++kept;
++        }
++    }
++    quarantine_count_ = kept;
++    shootdown_lock_.unlock();
++    // Apply + free outside the lock (PMM::free_page takes pmm_lock_;
++    // leaf-last order, never nested).
++    if (due_count > 0)
++        coalesce_and_apply();
++    for (uint64_t i = 0; i < due_count; ++i)
++        PMM::free_page(due[i]);
++}
++
++uint64_t TlbShootdown::pending_count() noexcept {
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    return pending_count_;
++}
++
++uint64_t TlbShootdown::quarantine_count() noexcept {
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    return quarantine_count_;
++}
++
++void TlbShootdown::set_timeout_ticks_for_test(uint64_t ticks) noexcept {
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    timeout_ticks_ = ticks;
++}
++
++void TlbShootdown::reset() noexcept {
++    sync::IrqSpinLockGuard guard(shootdown_lock_);
++    pending_count_ = 0;
++    quarantine_count_ = 0;
++    timeout_ticks_ = DEFAULT_TIMEOUT_TICKS;
++}
++
++} // namespace kernel
+diff --git a/src/kernel/memory/tlb_shootdown.hpp b/src/kernel/memory/tlb_shootdown.hpp
+new file mode 100644
+index 00000000..5630f3b3
+--- /dev/null
++++ b/src/kernel/memory/tlb_shootdown.hpp
+@@ -0,0 +1,113 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file tlb_shootdown.hpp
++/// @brief Lazy TLB shootdown request queue + deferred-free quarantine
++///        (issue #158).  POLICY side: requests are recorded, coalesced
++///        and applied locally; freed pages park in quarantine until
++///        their shootdown applied or a tick timeout fires.  Cross-CPU
++///        IPI delivery is #159's scope — this module never sends IPIs.
++///
++///        Opt-in only: the default PMM free path and the #157 immediate
++///        unmap flushes are untouched.  All state is bounded static
++///        arrays; all loops bounded; no allocation, ever.
++
++#pragma once
++
++#include <types.hpp>
++
++namespace kernel {
++
++class TlbShootdown {
++  public:
++    /// @brief Max queued shootdown requests.
++    static constexpr size_t MAX_PENDING = 64;
++    /// @brief Max quarantined pages.
++    static constexpr size_t MAX_QUARANTINE = 64;
++    /// @brief Max quarantine releases per on_tick call (RT bound).
++    static constexpr uint64_t MAX_PER_TICK = 8;
++    /// @brief Default quarantine timeout in ticks.
++    static constexpr uint64_t DEFAULT_TIMEOUT_TICKS = 100;
++    /// @brief Single-PCID group size that upgrades per-VA flushes to
++    ///        one context purge (issue #158).
++    static constexpr uint64_t PURGE_GROUP_THRESHOLD = 8;
++
++    /// @brief Module error codes (fail-closed, never panics).
++    enum class Error : uint64_t {
++        OK = 0,
++        QUEUE_FULL = 1,
++        QUARANTINE_FULL = 2,
++        INVALID = 3,
++    };
++
++    /// @brief Pending shootdown request (VA + owning PCID).
++    struct Request {
++        uint64_t va;
++        uint16_t pcid;
++    };
++
++    /// @brief Record a shootdown request (deduplicates exact pairs).
++    /// @param va Page-aligned virtual address.
++    /// @param pcid Owning PCID (0 = untagged/kernel).
++    /// @return OK, INVALID (unaligned VA), or QUEUE_FULL (no eviction;
++    ///         caller keeps its immediate-flush fallback).
++    static Error request(uint64_t va, uint16_t pcid) noexcept;
++    /// @brief Coalesce pending requests and apply them locally
++    ///        (per-VA flush, or one context purge per large same-PCID
++    ///        group).  Clears applied entries.
++    static void coalesce_and_apply() noexcept;
++    /// @brief Park an allocated page in quarantine (deferred free).
++    ///        The page stays bitmap-allocated (no track_pmm_free) until
++    ///        released; never touches the PMM bitmap itself.
++    /// @param phys Page-aligned physical address of an allocated page.
++    /// @return OK, INVALID (unallocated/misaligned), or QUARANTINE_FULL
++    ///         (page stays allocated; caller frees it directly).
++    static Error hold(uint64_t phys) noexcept;
++    /// @brief Apply pending shootdowns, then return every held page to
++    ///        the PMM free list.
++    static void release_all() noexcept;
++    /// @brief Tick hook: force-release expired quarantine entries
++    ///        (bounded MAX_PER_TICK per call).  ISR-safe: try-lock,
++    ///        skip on contention, never blocks or allocates.
++    /// @param now Current value of arch::Timer::ticks().
++    static void on_tick(uint64_t now) noexcept;
++    /// @brief Queued request count (introspection/test only).
++    static uint64_t pending_count() noexcept;
++    /// @brief Quarantined page count (introspection/test only).
++    static uint64_t quarantine_count() noexcept;
++    /// @brief Override the quarantine timeout (test hook).
++    static void set_timeout_ticks_for_test(uint64_t ticks) noexcept;
++    /// @brief Clear queue + quarantine + timeout (test isolation).
++    ///        Does NOT free held pages (PMM rewind owns them); prevents
++    ///        stale-flush counter noise across tests.
++    static void reset() noexcept;
++
++  private:
++    struct Held {
++        uint64_t phys;
++        uint64_t deadline;
++    };
++
++    static uint64_t timeout_ticks_;
++    static Request pending_[MAX_PENDING];
++    static uint64_t pending_count_;
++    static Held quarantine_[MAX_QUARANTINE];
++    static uint64_t quarantine_count_;
++};
++
++} // namespace kernel
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 91769aca..f58c3764 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -21,6 +21,7 @@
+ ///        rate-monotonic dispatch, context switching, and test isolation.
+ 
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/memory/tlb_shootdown.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/gdt.hpp>
+@@ -2263,6 +2264,10 @@ void Scheduler::on_tick() noexcept {
+         balancer_tick();
+     }
+ 
++    // Issue #158: quarantine timeout poll (BSP tick; internally
++    // try-locked + bounded, safe to call every tick; no-op when empty).
++    TlbShootdown::on_tick(arch::Timer::ticks());
++
+     rate_monotonic_schedule();
+ }
+ 
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 92959b5a..8c012372 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -126,7 +126,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"smp_verify",           5,   0,       0      },  // SMP verify (issue #85 module 12): census + AP-tick liveness + lock bound (real), inversion/soak stubs
+     {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
+     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
+-    {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown stubs (issue #85 module 15): defer/coalesce/quarantine/timeout pending API
++    {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
+     {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #85 module 16): unbatched 5:5 baseline (real), collapse/order/overflow stubs
+     {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
+     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 61492b5e..91fe8a61 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -44,6 +44,9 @@
  #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
  #include <kernel/arch/x86_64/hal/pcid.hpp>
  #endif
-@@ -763,6 +764,13 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     tcb->canary_installed = 0;
-     tcb->page_table_ = new_pml4;
-     tcb->is_user_ = true;
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Issue #157 H3: the TCB keeps its PCID across the table swap, but
-+    // the OLD image's entries cached under it must die with the old
-+    // table (tagged switches no longer flush).  Purge the context now —
-+    // the new image cannot have cached anything yet.
-+    arch::tlb_purge_context(tcb->pcid_);
-+#endif
-     tcb->user_stack_ = ustack_phys;
-     tcb->user_stack_size_ = mem::STACK_SIZE;
-     tcb->program_break_start = mem::HEAP_VADDR;
-diff --git a/src/kernel/ipc/buffer_pool.cpp b/src/kernel/ipc/buffer_pool.cpp
-index 41e074a6..0b1d0889 100644
---- a/src/kernel/ipc/buffer_pool.cpp
-+++ b/src/kernel/ipc/buffer_pool.cpp
-@@ -122,12 +122,12 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-     }
++// Issue #158: shootdown queue/quarantine reset (clears lists only;
++// PMM rewind owns any held pages, so no freeing here).
++#include <kernel/memory/tlb_shootdown.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/cap/mmio.hpp>
+@@ -788,6 +791,7 @@ void snapshot_restore(const char *test_name) {
+     // test aborted mid-scope (normal exits reset explicitly).
+     arch::pcid_test_reset();
  #endif
- 
--    // H-4: flush the TLB for this VA when the cleared PML4 is the active one.
--    // A stale TLB entry would keep granting access to the freed/recycled page
--    // until random eviction.  Foreign PML4 staleness is covered by the
--    // per-task CR3 reload at switch time.
--    if (pml4_phys == VMM::current_pml4())
--        arch::ArchPageTable::tlb_flush(virt_addr);
-+    // H-4 (issue #157 H2): flush unconditionally.  The old gate
-+    // (pml4_phys == current) assumed switch-flush heals foreign tables —
-+    // dead since tagged switches (#156) no longer flush.  INVLPG is
-+    // PCID-agnostic (flushes the VA across all PCIDs), so one flush
-+    // covers every context the entry could be cached under.
-+    arch::ArchPageTable::tlb_flush(virt_addr);
- }
- 
- /// @brief BUGS.md#020 red-zone guard (defined in full below validate()).
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 4adf8faf..12406d59 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -1531,6 +1531,9 @@ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
- /// @brief Unmaps one page previously mapped via map_frame_from_cap().
- void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
-     map_page_in_pml4(virt_addr, 0, false, pml4_phys);
-+    // Issue #157 H1: the cleared PTE may be cached (tagged or not) on a
-+    // live table — purge it; pre-PCID the next switch-flush healed this.
-+    arch::ArchPageTable::tlb_flush(virt_addr);
- }
- 
- /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
-@@ -1562,6 +1565,8 @@ void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
-     for (size_t i = 0; i < pages; ++i) {
-         map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
-                          pml4_phys);
-+        // Issue #157 H1: purge each cleared PTE (see unmap_frame_from_cap).
-+        arch::ArchPageTable::tlb_flush(virt_addr + i * arch::PAGE_SIZE);
-     }
- }
- 
-diff --git a/src/kernel/test/test_invpcid.cpp b/src/kernel/test/test_invpcid.cpp
-index bd904594..9470a53e 100644
---- a/src/kernel/test/test_invpcid.cpp
-+++ b/src/kernel/test/test_invpcid.cpp
++    TlbShootdown::reset();
+     if (corr > 0) {
+         Logger::raw_write("[SCHED] corruption_count=");
+         Logger::print_dec(corr);
+diff --git a/src/kernel/test/test_lazy_tlb.cpp b/src/kernel/test/test_lazy_tlb.cpp
+index 58d77617..d269b611 100644
+--- a/src/kernel/test/test_lazy_tlb.cpp
++++ b/src/kernel/test/test_lazy_tlb.cpp
 @@ -1,5 +1,5 @@
  /*
 - * NexIOS RTOS — SMP bring-up (Phase 5)
@@ -309,246 +369,226 @@ index bd904594..9470a53e 100644
   * Copyright (C) 2026 Arnold Hasshold
   *
   * This program is free software: you can redistribute it and/or modify
-@@ -17,64 +17,188 @@
+@@ -17,65 +17,164 @@
   */
  
- /// @file test_invpcid.cpp
--/// @brief INVPCID stubs (issue #85, module 14).  No INVPCID use exists
--///        anywhere in src/kernel — documented stubs pending the
--///        main-branch invalidation API.
-+/// @brief INVPCID selective-invalidation tests (issue #157; stubs from
-+///        issue #85, module 14).  TLB hit/miss is unobservable without
-+///        cycle timing (QEMU-flaky by construction), so tests pin the
-+///        exact descriptor encoding, the dispatch routing (new flush
-+///        counters — deterministic on any CPU), and structural outcomes
-+///        (walks, no-fault re-touch).  The 3-line emit asm itself is
-+///        review- and audit-verified.
+ /// @file test_lazy_tlb.cpp
+-/// @brief Lazy-TLB-shootdown stubs (issue #85, module 15).  No remote
+-///        invalidation path exists (only local invlpg in the page-table
+-///        code) — documented stubs pending the main-branch shootdown
+-///        API.
++/// @brief Lazy-TLB-shootdown tests (issue #158; stubs from issue #85,
++///        module 15).  Single-CPU deterministic: cross-CPU TLB-hit
++///        observables do not exist in this harness (no AP boots), so
++///        tests pin queue/coalesce/quarantine/timeout mechanics via
++///        request counts, flush-counter deltas, and page-table walks —
++///        never cycle timing or remote observation.  IPI delivery is
++///        #159's scope; this class covers policy only.
  
  #if defined(CONFIG_ARCH_X86_64)
  #include <test.hpp>
  #include <logger.hpp>
 +#include <scope_guard.hpp>
++#include <constants.hpp>
 +#include <kernel/memory/pmm.hpp>
-+#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/tlb_shootdown.hpp>
 +#include <kernel/arch/page_table.hpp>
-+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
-+#include <kernel/arch/x86_64/hal/io_impl.hpp>
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
  
  using namespace kernel;
  
-+namespace {
-+
-+// Allocate a kernel-owned scratch page, zeroed (test-local helper).
-+uint64_t alloc_zero_page() {
-+    uint64_t phys = PMM::alloc_page();
-+    if (phys == 0)
-+        return 0;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                              (phys & ~0xFFFULL));
-+    __builtin_memset(virt, 0, arch::PAGE_SIZE);
-+    return phys;
-+}
-+
-+} // namespace
-+
  // Runmode: kernel
- // Testidea: INVPCID individual-address mode drops one page only.
--// Input: Two cached pages, invalidate one, probe both.
--// Expect: Invalidated page misses, sibling still hits.
--// Depends: INVPCID address mode (not yet implemented)
--JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none | PENDING: INVPCID") {
+-// Testidea: Remote invalidation defers to the target's next switch.
+-// Input: Unmap on CPU0, observe CPU1 before/after its next switch.
+-// Expect: Stale entry usable until the switch, gone after.
+-// Depends: Lazy shootdown deferral (not yet implemented)
+-JARVIS_TEST(lazy_tlb_deferred_to_switch, "PRE: none | POST: none | PENDING: shootdown") {
 -    /* Pseudocode:
--     *   touch(p, q); invpcid_addr(p);
--     *   JARVIS_ASSERT(tlb_miss(p) && tlb_hit(q));
+-     *   unmap_on(0, page); JARVIS_ASSERT(cpu1_still_hits(page));
+-     *   force_switch_on(1); JARVIS_ASSERT(cpu1_misses(page));
 -     */
-+// Input: Descriptor unit checks + two mapped scratch pages, unmap one
-+//        via the VMM path.
-+// Expect: Descriptor words exact (pcid masked, addr page-masked);
-+//         cleared VA walks unmapped, sibling intact and re-touchable;
-+//         single_va counter +1 (routing proof on any CPU).
-+// Depends: invpcid_build_desc, VMM unmap selective path (issue #157)
-+JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none") {
-+    auto desc = arch::invpcid_build_desc(
-+        arch::InvpcidType::SINGLE_ADDRESS, 0x12345ULL, 0xABCDEF123ULL);
-+    JARVIS_ASSERT(desc.pcid == 0x345ULL);
-+    JARVIS_ASSERT(desc.addr == (0xABCDEF123ULL & ~0xFFFULL));
-+
-+    constexpr uint64_t k_va_a = 0x10000000ULL;
-+    constexpr uint64_t k_va_b = 0x10001000ULL;
-+    uint64_t mem_before = PMM::free_memory();
-+    uint64_t pml4 = alloc_zero_page();
-+    uint64_t pa = PMM::alloc_user_page();
-+    uint64_t pb = PMM::alloc_user_page();
-+    JARVIS_ASSERT(pml4 != 0 && pa != 0 && pb != 0);
-+    VMM::map_page_in_pml4(k_va_a, pa, true, false, pml4);
-+    VMM::map_page_in_pml4(k_va_b, pb, true, false, pml4);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_a, pml4) == pa);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_b, pml4) == pb);
-+
++// Testidea: Shootdown requests defer to an explicit apply point.
++// Input: N requests with distinct PCIDs (no grouping), no apply yet.
++// Expect: No flush counter moves before apply; after
++//         coalesce_and_apply(), single_va delta == N; queue empty.
++// Depends: TlbShootdown request/apply (issue #158)
++JARVIS_TEST(lazy_tlb_deferred_to_switch, "PRE: none | POST: none") {
++    constexpr uint64_t k_n = 8;
++    TlbShootdown::reset();
++    for (uint64_t i = 0; i < k_n; ++i) {
++        JARVIS_ASSERT(TlbShootdown::request(0x30000000ULL + i * 0x1000,
++                                            static_cast<uint16_t>(i)) ==
++                      TlbShootdown::Error::OK);
++    }
++    JARVIS_ASSERT(TlbShootdown::pending_count() == k_n);
 +    arch::TlbFlushStats before = arch::tlb_flush_stats();
-+    VMM::unmap_page_in_pml4(k_va_a, pml4);
++    TlbShootdown::coalesce_and_apply();
 +    arch::TlbFlushStats after = arch::tlb_flush_stats();
-+    JARVIS_ASSERT(after.single_va == before.single_va + 1);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_a, pml4) == 0);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_b, pml4) == pb);
-+    // Re-touch the sibling through its stable mapping (no fault).
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *sib = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pb);
-+    sib[0] = 0xA5A5A5A5A5A5A5A5ULL;
-+    JARVIS_ASSERT(sib[0] == 0xA5A5A5A5A5A5A5A5ULL);
-+
-+    // The unmapped page is orphaned (free_user_pages only reclaims
-+    // still-mapped pages) — free it explicitly before teardown.
-+    PMM::free_page(pa);
-+    VMM::free_user_pages(pml4);
-+    PMM::free_page(pml4);
++    JARVIS_ASSERT(after.single_va == before.single_va + k_n);
++    JARVIS_ASSERT(TlbShootdown::pending_count() == 0);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Multiple pending invalidations coalesce into one IPI.
+-// Input: N unmaps on CPU0 targeting CPU1, count IPIs.
+-// Expect: Exactly one shootdown IPI for all N pages.
+-// Depends: Shootdown coalescing (not yet implemented)
+-JARVIS_TEST(lazy_tlb_coalesces, "PRE: none | POST: none | PENDING: shootdown") {
+-    /* Pseudocode:
+-     *   unmap N pages; JARVIS_ASSERT(shootdown_ipis() == 1);
+-     */
++// Testidea: Multiple pending invalidations coalesce minimally.
++// Input: N duplicate + adjacent same-PCID requests.
++// Expect: Duplicates collapse (one flush each); a same-PCID run at
++//         threshold earns exactly one context purge; small runs flush
++//         per-VA.  Batches proven via counter deltas.
++// Depends: TlbShootdown coalescing (issue #158)
++JARVIS_TEST(lazy_tlb_coalesces, "PRE: none | POST: none") {
++    TlbShootdown::reset();
++    // Duplicates: same (va, pcid) three times → one flush.
++    for (int i = 0; i < 3; ++i) {
++        JARVIS_ASSERT(TlbShootdown::request(0x31000000ULL, 5) ==
++                      TlbShootdown::Error::OK);
++    }
++    JARVIS_ASSERT(TlbShootdown::pending_count() == 1);
++    // Same-PCID run at threshold → one context purge.
++    for (uint64_t i = 0; i < TlbShootdown::PURGE_GROUP_THRESHOLD; ++i) {
++        JARVIS_ASSERT(TlbShootdown::request(0x32000000ULL + i * 0x1000,
++                                            7) ==
++                      TlbShootdown::Error::OK);
++    }
++    arch::TlbFlushStats before = arch::tlb_flush_stats();
++    TlbShootdown::coalesce_and_apply();
++    arch::TlbFlushStats after = arch::tlb_flush_stats();
++    uint64_t single_delta = after.single_va - before.single_va;
++    uint64_t ctx_delta = (after.ctx_invpcid - before.ctx_invpcid) +
++                         (after.ctx_fallback - before.ctx_fallback);
++    // 1 deduped single + exactly 1 context purge for the run of 8.
++    JARVIS_ASSERT(single_delta == 1);
++    JARVIS_ASSERT(ctx_delta == 1);
++    JARVIS_ASSERT(TlbShootdown::pending_count() == 0);
++    // Overflow fails closed (no eviction, no silent drop).
++    TlbShootdown::reset();
++    for (uint64_t i = 0; i < TlbShootdown::MAX_PENDING; ++i) {
++        JARVIS_ASSERT(TlbShootdown::request(0x33000000ULL + i * 0x1000,
++                                            0) ==
++                      TlbShootdown::Error::OK);
++    }
++    JARVIS_ASSERT(TlbShootdown::request(0x34000000ULL, 0) ==
++                  TlbShootdown::Error::QUEUE_FULL);
++    TlbShootdown::reset();
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: No corruption window: deferred pages are never recycled
+-//           while a remote CPU may still hold the entry.
+-// Input: Unmap + immediate realloc race on two CPUs.
+-// Expect: Reallocated page never observable through the stale entry.
+-// Depends: Deferred-free quarantine (not yet implemented)
+-JARVIS_TEST(lazy_tlb_no_corruption, "PRE: none | POST: none | PENDING: shootdown") {
+-    /* Pseudocode:
+-     *   unmap; realloc same phys; JARVIS_ASSERT(remote sees new mapping only);
+-     */
++// Testidea: No corruption window: quarantined pages are never recycled
++//           while held, and release returns them exactly once.
++// Input: Alloc page, hold it, attempt realloc, release, realloc.
++// Expect: is_allocated stays true while held; a fresh alloc never
++//         returns the held phys; after release the page is freely
++//         reusable; free-memory delta zero overall.
++// Depends: TlbShootdown quarantine (issue #158)
++JARVIS_TEST(lazy_tlb_no_corruption, "PRE: none | POST: none") {
++    TlbShootdown::reset();
++    uint64_t mem_before = PMM::free_memory();
++    uint64_t page = PMM::alloc_page();
++    JARVIS_ASSERT(page != 0);
++    JARVIS_ASSERT(TlbShootdown::hold(page) == TlbShootdown::Error::OK);
++    JARVIS_ASSERT(TlbShootdown::quarantine_count() == 1);
++    JARVIS_ASSERT(PMM::is_allocated(page));
++    // A fresh allocation must not recycle the held page.
++    uint64_t other = PMM::alloc_page();
++    JARVIS_ASSERT(other != 0 && other != page);
++    PMM::free_page(other);
++    // Double-hold is idempotent-safe (same page twice is allowed: the
++    // release frees once per hold — assert count, then release twice).
++    JARVIS_ASSERT(TlbShootdown::hold(page) == TlbShootdown::Error::OK);
++    JARVIS_ASSERT(TlbShootdown::quarantine_count() == 2);
++    TlbShootdown::release_all();
++    JARVIS_ASSERT(TlbShootdown::quarantine_count() == 0);
++    // Page reusable again after release (proves exactly-once free:
++    // free_page on an already-free page is a safe no-op, so a second
++    // release would NOT corrupt — but counts prove single release).
++    uint64_t again = PMM::alloc_page();
++    JARVIS_ASSERT(again != 0);
++    PMM::free_page(again);
 +    JARVIS_ASSERT(PMM::free_memory() == mem_before);
      JARVIS_TEST_PASS();
  }
  
  // Runmode: kernel
- // Testidea: INVPCID single-context mode drops one PCID's entries.
--// Input: Entries under PCIDs A and B, invalidate A.
--// Expect: A entries miss, B entries hit.
--// Depends: INVPCID single-context mode (not yet implemented)
--JARVIS_TEST(invpcid_single_context, "PRE: none | POST: none | PENDING: INVPCID") {
+-// Testidea: An idle remote CPU gets force-flushed after the lazy
+-//           timeout even without any context switch.
+-// Input: Unmap targeting an idle CPU, wait past the timeout.
+-// Expect: Entry invalidated by timeout; flush counter advanced.
+-// Depends: Lazy-shootdown timeout (not yet implemented)
+-JARVIS_TEST(lazy_tlb_timeout_flush, "PRE: none | POST: none | PENDING: shootdown") {
 -    /* Pseudocode:
--     *   touch under A and B; invpcid_context(pcid_a);
--     *   JARVIS_ASSERT(miss_a && hit_b);
+-     *   unmap; sleep past timeout; JARVIS_ASSERT(remote_misses(page));
 -     */
-+// Input: Descriptor unit checks + a forced PCID through the purge
-+//        path (no dispatch while forced — same containment as #156).
-+// Expect: Descriptor words exact; purge bumps the branch-correct
-+//         counter (invpcid vs fallback per hardware); freed ID
-+//         reallocates cleanly.
-+// Depends: invpcid_build_desc, tlb_purge_context (issue #157)
-+JARVIS_TEST(invpcid_single_context, "PRE: none | POST: none") {
-+    auto desc = arch::invpcid_build_desc(
-+        arch::InvpcidType::SINGLE_CONTEXT, 0x1ABCULL, 0xDEADULL);
-+    JARVIS_ASSERT(desc.pcid == 0xABCULL);
-+    JARVIS_ASSERT(desc.addr == (0xDEADULL & ~0xFFFULL));
-+
-+    arch::pcid_test_force();
-+    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
-+    uint64_t id = arch::pcid_alloc();
-+    JARVIS_ASSERT(id != 0);
-+    arch::TlbFlushStats before = arch::tlb_flush_stats();
-+    arch::tlb_purge_context(static_cast<uint16_t>(id));
-+    arch::TlbFlushStats after = arch::tlb_flush_stats();
-+    if (arch::has_invpcid()) {
-+        JARVIS_ASSERT(after.ctx_invpcid == before.ctx_invpcid + 1);
-+    } else {
-+        JARVIS_ASSERT(after.ctx_fallback == before.ctx_fallback + 1);
-+    }
-+    arch::pcid_free(static_cast<uint16_t>(id));
-+    uint64_t id2 = arch::pcid_alloc();
-+    JARVIS_ASSERT(id2 != 0);
-+    arch::pcid_free(static_cast<uint16_t>(id2));
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
- // Testidea: INVPCID all-context mode drops everything incl. globals.
--// Input: Cached entries incl. global pages, invalidate all.
--// Expect: Every probe misses afterwards.
--// Depends: INVPCID all-context mode (not yet implemented)
--JARVIS_TEST(invpcid_all_context, "PRE: none | POST: none | PENDING: INVPCID") {
--    /* Pseudocode:
--     *   touch incl. globals; invpcid_all();
--     *   JARVIS_ASSERT(all probes miss);
--     */
-+// Input: Descriptor unit checks + a live purge_all call.
-+// Expect: Descriptor words exact; purge bumps the branch-correct
-+//         counter; a subsequent map/unmap cycle still works (no wedge).
-+// Depends: invpcid_build_desc, tlb_purge_all (issue #157)
-+JARVIS_TEST(invpcid_all_context, "PRE: none | POST: none") {
-+    auto desc = arch::invpcid_build_desc(
-+        arch::InvpcidType::ALL_INCL_GLOBAL, 0xFFULL, 0x12345ULL);
-+    JARVIS_ASSERT(desc.pcid == 0xFFULL);
-+    JARVIS_ASSERT(desc.addr == (0x12345ULL & ~0xFFFULL));
-+
-+    arch::TlbFlushStats before = arch::tlb_flush_stats();
-+    arch::tlb_purge_all();
-+    arch::TlbFlushStats after = arch::tlb_flush_stats();
-+    if (arch::has_invpcid()) {
-+        JARVIS_ASSERT(after.all_invpcid == before.all_invpcid + 1);
-+    } else {
-+        JARVIS_ASSERT(after.all_fallback == before.all_fallback + 1);
-+    }
-+
-+    constexpr uint64_t k_va = 0x10002000ULL;
++// Testidea: A quarantined page is force-released past its timeout even
++//           without any explicit release call.
++// Input: Hold a page with a tiny timeout; poll wall-clock past the
++//        deadline; drive the tick hook directly (no ISR-timing flakes).
++// Expect: on_tick() releases it (quarantine empty, page reusable,
++//         free-memory delta zero).
++// Depends: TlbShootdown tick timeout (issue #158)
++JARVIS_TEST(lazy_tlb_timeout_flush, "PRE: none | POST: none") {
++    TlbShootdown::reset();
++    TlbShootdown::set_timeout_ticks_for_test(5);
++    auto timeout_reset =
++        ScopeGuard([]() { TlbShootdown::set_timeout_ticks_for_test(
++            TlbShootdown::DEFAULT_TIMEOUT_TICKS); });
 +    uint64_t mem_before = PMM::free_memory();
-+    uint64_t pml4 = alloc_zero_page();
-+    uint64_t data = PMM::alloc_user_page();
-+    JARVIS_ASSERT(pml4 != 0 && data != 0);
-+    VMM::map_page_in_pml4(k_va, data, true, false, pml4);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == data);
-+    VMM::unmap_page_in_pml4(k_va, pml4);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == 0);
-+    PMM::free_page(data);
-+    VMM::free_user_pages(pml4);
-+    PMM::free_page(pml4);
-+    JARVIS_ASSERT(PMM::free_memory() == mem_before);
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
- // Testidea: INVPCID on a never-mapped address is a safe no-op.
--// Input: Invalidate a non-existent address in each mode.
--// Expect: No fault; subsequent valid invalidations still work.
--// Depends: INVPCID fail-safe behavior (not yet implemented)
--JARVIS_TEST(invpcid_nonexistent_safe, "PRE: none | POST: none | PENDING: INVPCID") {
--    /* Pseudocode:
--     *   invpcid_addr(UNMAPPED); JARVIS_ASSERT(still_sane());
--     */
-+// Input: Unmap a VA with no tables behind it; builder edge cases.
-+// Expect: No fault; builder masks low addr bits; a subsequent valid
-+//         map/unmap cycle works (harness sane).
-+// Depends: VMM unmap fail-safe behavior (issue #157)
-+JARVIS_TEST(invpcid_nonexistent_safe, "PRE: none | POST: none") {
-+    auto desc = arch::invpcid_build_desc(
-+        arch::InvpcidType::SINGLE_ADDRESS, 7, 0xFFFFFFFFFFFFFFFFULL);
-+    JARVIS_ASSERT(desc.pcid == 7);
-+    JARVIS_ASSERT(desc.addr == 0xFFFFFFFFFFFFF000ULL);
-+
-+    constexpr uint64_t k_va = 0x10003000ULL;
-+    uint64_t mem_before = PMM::free_memory();
-+    uint64_t pml4 = alloc_zero_page();
-+    JARVIS_ASSERT(pml4 != 0);
-+    VMM::unmap_page_in_pml4(k_va, pml4);
-+    uint64_t data = PMM::alloc_user_page();
-+    JARVIS_ASSERT(data != 0);
-+    VMM::map_page_in_pml4(k_va, data, true, false, pml4);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == data);
-+    VMM::unmap_page_in_pml4(k_va, pml4);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == 0);
-+    PMM::free_page(data);
-+    VMM::free_user_pages(pml4);
-+    PMM::free_page(pml4);
++    uint64_t page = PMM::alloc_page();
++    JARVIS_ASSERT(page != 0);
++    JARVIS_ASSERT(TlbShootdown::hold(page) == TlbShootdown::Error::OK);
++    // Poll wall-clock past the deadline (bounded ~5ms + margin), then
++    // drive the hook directly — deterministic outcome, no ISR flakes.
++    uint64_t start = arch::Timer::ticks();
++    while (arch::Timer::ticks() - start < 20)
++        arch::pause();
++    {
++        arch::IrqGuard irq_guard{};
++        TlbShootdown::on_tick(arch::Timer::ticks());
++    }
++    JARVIS_ASSERT(TlbShootdown::quarantine_count() == 0);
++    uint64_t again = PMM::alloc_page();
++    JARVIS_ASSERT(again != 0);
++    PMM::free_page(again);
 +    JARVIS_ASSERT(PMM::free_memory() == mem_before);
      JARVIS_TEST_PASS();
  }
  
 diff --git a/test-history.txt b/test-history.txt
-index 792b2679..a92e8d1b 100644
+index a92e8d1b..2b190bb2 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1029,3 +1029,15 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 19:04:52 elf_loader PASSED: 8 FAILED: 0 TIME: 20s
- 2026-09-15 19:05:56 all PASSED: 1363 FAILED: 0 TIME: 116390ms
- 2026-09-15 19:06:58 all PASSED: 85 FAILED: 0 TIME: 4279ms
-+2026-09-15 19:29:46 invpcid PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 19:30:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 19:30:52 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
-+2026-09-15 19:30:52 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 21s
-+2026-09-15 19:31:59 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
-+2026-09-15 19:31:59 elf_loader PASSED: 8 FAILED: 0 TIME: 21s
-+2026-09-15 19:31:59 process_lifecycle PASSED: 16 FAILED: 0 TIME: 20s
-+2026-09-15 19:33:08 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 19:33:08 tlb_latency PASSED: 4 FAILED: 0 TIME: 21s
-+2026-09-15 19:33:08 pml4_sync PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 19:34:10 all PASSED: 1363 FAILED: 0 TIME: 627766ms
-+2026-09-15 19:35:05 all PASSED: 85 FAILED: 0 TIME: 4191ms
+@@ -1041,3 +1041,14 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 19:33:08 pml4_sync PASSED: 5 FAILED: 0 TIME: 20s
+ 2026-09-15 19:34:10 all PASSED: 1363 FAILED: 0 TIME: 627766ms
+ 2026-09-15 19:35:05 all PASSED: 85 FAILED: 0 TIME: 4191ms
++2026-09-15 19:50:46 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:52:03 invpcid PASSED: 4 FAILED: 0 TIME: 21s
++2026-09-15 19:52:03 pcid PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:52:03 memory_pmm PASSED: 9 FAILED: 0 TIME: 20s
++2026-09-15 19:53:30 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
++2026-09-15 19:53:30 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 20s
++2026-09-15 19:53:30 cap_pager PASSED: 13 FAILED: 0 TIME: 20s
++2026-09-15 19:53:30 timing_core PASSED: 19 FAILED: 0 TIME: 21s
++2026-09-15 19:53:56 testrunner PASSED: 0 FAILED: 0 TIME: 20s STATUS: EXPECTED_PANIC_PATH
++2026-09-15 19:55:03 all PASSED: 1363 FAILED: 0 TIME: 106985ms
++2026-09-15 19:55:27 all PASSED: 85 FAILED: 0 TIME: 4333ms

@@ -21,6 +21,7 @@
 ///        rate-monotonic dispatch, context switching, and test isolation.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/gdt.hpp>
@@ -2262,6 +2263,10 @@ void Scheduler::on_tick() noexcept {
         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
         balancer_tick();
     }
+
+    // Issue #158: quarantine timeout poll (BSP tick; internally
+    // try-locked + bounded, safe to call every tick; no-op when empty).
+    TlbShootdown::on_tick(arch::Timer::ticks());
 
     rate_monotonic_schedule();
 }
