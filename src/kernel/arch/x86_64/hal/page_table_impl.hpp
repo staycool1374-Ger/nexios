@@ -45,10 +45,79 @@ inline void arch_page_table_activate(uint64_t pml4_phys) {
 inline void arch_page_table_tlb_flush(uint64_t virt_addr) {
     asm volatile("invlpg (%0)" : : "r"(virt_addr) : "memory");
 }
-/// @brief Flush the entire TLB by reloading CR3.
+/// @brief Flush the entire TLB by reloading CR3 (issue #157: the low
+///        12 bits must clear — a tagged reload is NOT a full flush
+///        under PCIDE, it retains the loaded PCID's entries).
 inline void arch_page_table_tlb_flush_all() {
     uint64_t cr3 = read_cr3();
-    write_cr3(cr3);
+    write_cr3(cr3 & ~0xFFFULL);
+}
+
+/// @brief Per-kind TLB-invalidation event counters (issue #157).
+///        Observability for tests (routing proofs) and the #160
+///        latency work.  Monotonic; tests assert deltas, never absolutes.
+struct TlbFlushStats {
+    uint64_t single_va;    ///< Single-address flushes (INVLPG, any CPU).
+    uint64_t ctx_invpcid;  ///< Single-context INVPCID purges issued.
+    uint64_t ctx_fallback; ///< Single-context CR3-reload fallbacks.
+    uint64_t all_invpcid;  ///< All-context INVPCID purges issued.
+    uint64_t all_fallback; ///< All-context CR3-reload fallbacks.
+};
+
+/// @brief Process-wide flush counters (one instance, atomic updates).
+inline TlbFlushStats &tlb_flush_stats_store() {
+    static TlbFlushStats stats{};
+    return stats;
+}
+
+/// @brief Snapshot current flush counters (test/diagnostic read).
+inline TlbFlushStats tlb_flush_stats() {
+    TlbFlushStats out{};
+    TlbFlushStats &store = tlb_flush_stats_store();
+    out.single_va = __atomic_load_n(&store.single_va, __ATOMIC_RELAXED);
+    out.ctx_invpcid = __atomic_load_n(&store.ctx_invpcid, __ATOMIC_RELAXED);
+    out.all_invpcid = __atomic_load_n(&store.all_invpcid, __ATOMIC_RELAXED);
+    out.ctx_fallback =
+        __atomic_load_n(&store.ctx_fallback, __ATOMIC_RELAXED);
+    out.all_fallback =
+        __atomic_load_n(&store.all_fallback, __ATOMIC_RELAXED);
+    return out;
+}
+
+/// @brief Purge one PCID's non-global entries (issue #157): INVPCID
+///        single-context when available, else same-root CR3 reload.
+///        Local CPU only; cross-CPU invalidation is #158's scope.
+/// @param pcid PCID to purge (0 purges the untagged/kernel context).
+inline void tlb_purge_context(uint16_t pcid) {
+    TlbFlushStats &store = tlb_flush_stats_store();
+    if (has_invpcid()) {
+        __atomic_fetch_add(&store.ctx_invpcid, 1ULL, __ATOMIC_RELAXED);
+        InvpcidDesc desc = invpcid_build_desc(InvpcidType::SINGLE_CONTEXT,
+                                              pcid, 0);
+        invpcid_emit(InvpcidType::SINGLE_CONTEXT, desc);
+    } else {
+        __atomic_fetch_add(&store.ctx_fallback, 1ULL, __ATOMIC_RELAXED);
+        uint64_t cr3 = read_cr3();
+        write_cr3(cr3 & ~0xFFFULL);
+    }
+}
+
+/// @brief Purge everything incl. globals (issue #157): INVPCID
+///        all-context when available, else untagged CR3 reload (a
+///        tagged reload is NOT a full flush — low bits must clear).
+///        Local CPU only; cross-CPU invalidation is #158's scope.
+inline void tlb_purge_all() {
+    TlbFlushStats &store = tlb_flush_stats_store();
+    if (has_invpcid()) {
+        __atomic_fetch_add(&store.all_invpcid, 1ULL, __ATOMIC_RELAXED);
+        InvpcidDesc desc =
+            invpcid_build_desc(InvpcidType::ALL_INCL_GLOBAL, 0, 0);
+        invpcid_emit(InvpcidType::ALL_INCL_GLOBAL, desc);
+    } else {
+        __atomic_fetch_add(&store.all_fallback, 1ULL, __ATOMIC_RELAXED);
+        uint64_t cr3 = read_cr3();
+        write_cr3(cr3 & ~0xFFFULL);
+    }
 }
 
 /// @brief Static wrapper class for page-table operations.
@@ -62,10 +131,12 @@ class ArchPageTable {
         arch_page_table_activate(pml4_phys);
     }
     static inline void tlb_flush(uint64_t virt_addr) {
+        TlbFlushStats &store = tlb_flush_stats_store();
+        __atomic_fetch_add(&store.single_va, 1ULL, __ATOMIC_RELAXED);
         arch_page_table_tlb_flush(virt_addr);
     }
     static inline void tlb_flush_all() {
-        arch_page_table_tlb_flush_all();
+        tlb_purge_all();
     }
 
     /// @brief Size of a single page (from kernel config).

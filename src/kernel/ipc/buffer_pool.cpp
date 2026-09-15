@@ -122,12 +122,12 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     }
 #endif
 
-    // H-4: flush the TLB for this VA when the cleared PML4 is the active one.
-    // A stale TLB entry would keep granting access to the freed/recycled page
-    // until random eviction.  Foreign PML4 staleness is covered by the
-    // per-task CR3 reload at switch time.
-    if (pml4_phys == VMM::current_pml4())
-        arch::ArchPageTable::tlb_flush(virt_addr);
+    // H-4 (issue #157 H2): flush unconditionally.  The old gate
+    // (pml4_phys == current) assumed switch-flush heals foreign tables —
+    // dead since tagged switches (#156) no longer flush.  INVLPG is
+    // PCID-agnostic (flushes the VA across all PCIDs), so one flush
+    // covers every context the entry could be cached under.
+    arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
 /// @brief BUGS.md#020 red-zone guard (defined in full below validate()).

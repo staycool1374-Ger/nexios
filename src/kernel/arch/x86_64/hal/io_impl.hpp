@@ -25,6 +25,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
 
 namespace arch {
 
@@ -73,6 +74,64 @@ inline void write_cr4(uint64_t v) {
 }
 /// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
 inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
+
+/// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
+enum class InvpcidType : uint32_t {
+    SINGLE_ADDRESS = 0, ///< Invalidate VA + PCID (except globals).
+    SINGLE_CONTEXT = 1, ///< Invalidate all of one PCID (except globals).
+    ALL_INCL_GLOBAL = 2, ///< Invalidate everything incl. globals.
+    ALL_RETAIN_GLOBAL = 3, ///< Invalidate everything except globals.
+};
+
+/// @brief 128-bit INVPCID descriptor: PCID in low 12 bits of qword 0,
+///        page-aligned linear address in qword 1 (address ignored
+///        except for SINGLE_ADDRESS).
+struct InvpcidDesc {
+    uint64_t pcid;
+    uint64_t addr;
+};
+
+/// @brief Build a normalized INVPCID descriptor (issue #157).
+/// @param type Invalidation type.
+/// @param pcid PCID value (masked to 12 bits).
+/// @param addr Linear address (page-masked; non-canonical bits cannot
+///        survive the mask on canonical inputs).
+/// @return Descriptor ready for invpcid_emit().
+inline InvpcidDesc invpcid_build_desc(InvpcidType type, uint64_t pcid,
+                                      uint64_t addr) {
+    (void)type;
+    InvpcidDesc desc{};
+    desc.pcid = pcid & 0xFFFULL;
+    desc.addr = addr & ~0xFFFULL;
+    return desc;
+}
+
+/// @brief Execute INVPCID (issue #157).  Fail-safe: returns without
+///        executing on CPUs without INVPCID support (never #UD).
+///        Kernel-only instruction (#GP at CPL>0 — all callers ring 0).
+///        Uses the r64 form (legal per SDM: type in range 0-3).
+///        Precondition: when the descriptor carries a nonzero PCID
+///        (types 0/1), CR4.PCIDE must be set — true on every path that
+///        reaches here (boot/AP enable PCIDE before any task runs;
+///        callers are post-bring-up unmap/teardown/purge paths).
+/// @param type Invalidation type.
+/// @param desc Normalized descriptor (see invpcid_build_desc).
+inline void invpcid_emit(InvpcidType type, const InvpcidDesc &desc) {
+    if (!has_invpcid())
+        return;
+    // 16-byte descriptor as the m128 operand (register-indirect would
+    // render an unsized qword access — operand size mismatch).
+    struct alignas(16) RawDesc {
+        uint64_t lo;
+        uint64_t hi;
+    };
+    RawDesc raw{desc.pcid, desc.addr};
+    uint64_t type_value = static_cast<uint64_t>(type);
+    asm volatile("invpcid %1, %0"
+                 :
+                 : "r"(type_value), "m"(raw)
+                 : "memory");
+}
 
 /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
 ///        user pages while SMAP is active.  Must be paired with clac().

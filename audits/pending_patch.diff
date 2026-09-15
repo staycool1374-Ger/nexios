@@ -1,589 +1,307 @@
-diff --git a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-index 490a2d87..1d1a1529 100644
---- a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-+++ b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
-@@ -65,9 +65,13 @@ inline constexpr uint32_t CPUID_ECX1_SSSE3 = 1u << 9;
- inline constexpr uint32_t CPUID_ECX1_SSE4_1 = 1u << 19;
- inline constexpr uint32_t CPUID_ECX1_SSE4_2 = 1u << 20;
- inline constexpr uint32_t CPUID_ECX1_RDRAND = 1u << 30;
-+/// @brief PCID feature bit (ECX, leaf 1): process-context identifiers.
-+inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
- /// @}
- /// @brief RDRAND feature bit (EBX, leaf 7, subleaf 0).
- inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
-+/// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
-+inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
- 
- /// @brief Check if the CPU has an x87 FPU.
- /// @return true if the FPU feature bit is set.
-@@ -89,6 +93,16 @@ inline bool has_sse() {
- inline bool has_rdrand() {
-     return (cpuid(1).ecx & CPUID_ECX1_RDRAND) != 0;
- }
-+/// @brief Check if the CPU supports process-context identifiers.
-+/// @return true if the PCID feature bit is set.
-+inline bool has_pcid() {
-+    return (cpuid(1).ecx & CPUID_ECX1_PCID) != 0;
-+}
-+/// @brief Check if the CPU supports the INVPCID instruction.
-+/// @return true if the INVPCID feature bit is set.
-+inline bool has_invpcid() {
-+    return (cpuid(7, 0).ebx & CPUID_EBX7_INVPCID) != 0;
-+}
- /// @brief Check if the CPU supports the RDSEED instruction.
- /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.
- inline bool has_rdseed() {
 diff --git a/src/kernel/arch/x86_64/hal/io_impl.hpp b/src/kernel/arch/x86_64/hal/io_impl.hpp
-index 02dc4dab..ef8f4c5e 100644
+index ef8f4c5e..05af35eb 100644
 --- a/src/kernel/arch/x86_64/hal/io_impl.hpp
 +++ b/src/kernel/arch/x86_64/hal/io_impl.hpp
-@@ -71,6 +71,8 @@ inline void write_cr0(uint64_t v) {
- inline void write_cr4(uint64_t v) {
-     asm volatile("mov %0, %%cr4" : : "r"(v) : "memory");
- }
-+/// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
-+inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
+@@ -25,6 +25,7 @@
+ #pragma once
  
+ #include <types.hpp>
++#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
+ 
+ namespace arch {
+ 
+@@ -74,6 +75,64 @@ inline void write_cr4(uint64_t v) {
+ /// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
+ inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
+ 
++/// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
++enum class InvpcidType : uint32_t {
++    SINGLE_ADDRESS = 0, ///< Invalidate VA + PCID (except globals).
++    SINGLE_CONTEXT = 1, ///< Invalidate all of one PCID (except globals).
++    ALL_INCL_GLOBAL = 2, ///< Invalidate everything incl. globals.
++    ALL_RETAIN_GLOBAL = 3, ///< Invalidate everything except globals.
++};
++
++/// @brief 128-bit INVPCID descriptor: PCID in low 12 bits of qword 0,
++///        page-aligned linear address in qword 1 (address ignored
++///        except for SINGLE_ADDRESS).
++struct InvpcidDesc {
++    uint64_t pcid;
++    uint64_t addr;
++};
++
++/// @brief Build a normalized INVPCID descriptor (issue #157).
++/// @param type Invalidation type.
++/// @param pcid PCID value (masked to 12 bits).
++/// @param addr Linear address (page-masked; non-canonical bits cannot
++///        survive the mask on canonical inputs).
++/// @return Descriptor ready for invpcid_emit().
++inline InvpcidDesc invpcid_build_desc(InvpcidType type, uint64_t pcid,
++                                      uint64_t addr) {
++    (void)type;
++    InvpcidDesc desc{};
++    desc.pcid = pcid & 0xFFFULL;
++    desc.addr = addr & ~0xFFFULL;
++    return desc;
++}
++
++/// @brief Execute INVPCID (issue #157).  Fail-safe: returns without
++///        executing on CPUs without INVPCID support (never #UD).
++///        Kernel-only instruction (#GP at CPL>0 — all callers ring 0).
++///        Uses the r64 form (legal per SDM: type in range 0-3).
++///        Precondition: when the descriptor carries a nonzero PCID
++///        (types 0/1), CR4.PCIDE must be set — true on every path that
++///        reaches here (boot/AP enable PCIDE before any task runs;
++///        callers are post-bring-up unmap/teardown/purge paths).
++/// @param type Invalidation type.
++/// @param desc Normalized descriptor (see invpcid_build_desc).
++inline void invpcid_emit(InvpcidType type, const InvpcidDesc &desc) {
++    if (!has_invpcid())
++        return;
++    // 16-byte descriptor as the m128 operand (register-indirect would
++    // render an unsized qword access — operand size mismatch).
++    struct alignas(16) RawDesc {
++        uint64_t lo;
++        uint64_t hi;
++    };
++    RawDesc raw{desc.pcid, desc.addr};
++    uint64_t type_value = static_cast<uint64_t>(type);
++    asm volatile("invpcid %1, %0"
++                 :
++                 : "r"(type_value), "m"(raw)
++                 : "memory");
++}
++
  /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
  ///        user pages while SMAP is active.  Must be paired with clac().
+ inline void stac() { asm volatile("stac" ::: "cc"); }
+diff --git a/src/kernel/arch/x86_64/hal/page_table_impl.hpp b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
+index 5e2eb6a3..46c117d6 100644
+--- a/src/kernel/arch/x86_64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/page_table_impl.hpp
+@@ -45,10 +45,79 @@ inline void arch_page_table_activate(uint64_t pml4_phys) {
+ inline void arch_page_table_tlb_flush(uint64_t virt_addr) {
+     asm volatile("invlpg (%0)" : : "r"(virt_addr) : "memory");
+ }
+-/// @brief Flush the entire TLB by reloading CR3.
++/// @brief Flush the entire TLB by reloading CR3 (issue #157: the low
++///        12 bits must clear — a tagged reload is NOT a full flush
++///        under PCIDE, it retains the loaded PCID's entries).
+ inline void arch_page_table_tlb_flush_all() {
+     uint64_t cr3 = read_cr3();
+-    write_cr3(cr3);
++    write_cr3(cr3 & ~0xFFFULL);
++}
++
++/// @brief Per-kind TLB-invalidation event counters (issue #157).
++///        Observability for tests (routing proofs) and the #160
++///        latency work.  Monotonic; tests assert deltas, never absolutes.
++struct TlbFlushStats {
++    uint64_t single_va;    ///< Single-address flushes (INVLPG, any CPU).
++    uint64_t ctx_invpcid;  ///< Single-context INVPCID purges issued.
++    uint64_t ctx_fallback; ///< Single-context CR3-reload fallbacks.
++    uint64_t all_invpcid;  ///< All-context INVPCID purges issued.
++    uint64_t all_fallback; ///< All-context CR3-reload fallbacks.
++};
++
++/// @brief Process-wide flush counters (one instance, atomic updates).
++inline TlbFlushStats &tlb_flush_stats_store() {
++    static TlbFlushStats stats{};
++    return stats;
++}
++
++/// @brief Snapshot current flush counters (test/diagnostic read).
++inline TlbFlushStats tlb_flush_stats() {
++    TlbFlushStats out{};
++    TlbFlushStats &store = tlb_flush_stats_store();
++    out.single_va = __atomic_load_n(&store.single_va, __ATOMIC_RELAXED);
++    out.ctx_invpcid = __atomic_load_n(&store.ctx_invpcid, __ATOMIC_RELAXED);
++    out.all_invpcid = __atomic_load_n(&store.all_invpcid, __ATOMIC_RELAXED);
++    out.ctx_fallback =
++        __atomic_load_n(&store.ctx_fallback, __ATOMIC_RELAXED);
++    out.all_fallback =
++        __atomic_load_n(&store.all_fallback, __ATOMIC_RELAXED);
++    return out;
++}
++
++/// @brief Purge one PCID's non-global entries (issue #157): INVPCID
++///        single-context when available, else same-root CR3 reload.
++///        Local CPU only; cross-CPU invalidation is #158's scope.
++/// @param pcid PCID to purge (0 purges the untagged/kernel context).
++inline void tlb_purge_context(uint16_t pcid) {
++    TlbFlushStats &store = tlb_flush_stats_store();
++    if (has_invpcid()) {
++        __atomic_fetch_add(&store.ctx_invpcid, 1ULL, __ATOMIC_RELAXED);
++        InvpcidDesc desc = invpcid_build_desc(InvpcidType::SINGLE_CONTEXT,
++                                              pcid, 0);
++        invpcid_emit(InvpcidType::SINGLE_CONTEXT, desc);
++    } else {
++        __atomic_fetch_add(&store.ctx_fallback, 1ULL, __ATOMIC_RELAXED);
++        uint64_t cr3 = read_cr3();
++        write_cr3(cr3 & ~0xFFFULL);
++    }
++}
++
++/// @brief Purge everything incl. globals (issue #157): INVPCID
++///        all-context when available, else untagged CR3 reload (a
++///        tagged reload is NOT a full flush — low bits must clear).
++///        Local CPU only; cross-CPU invalidation is #158's scope.
++inline void tlb_purge_all() {
++    TlbFlushStats &store = tlb_flush_stats_store();
++    if (has_invpcid()) {
++        __atomic_fetch_add(&store.all_invpcid, 1ULL, __ATOMIC_RELAXED);
++        InvpcidDesc desc =
++            invpcid_build_desc(InvpcidType::ALL_INCL_GLOBAL, 0, 0);
++        invpcid_emit(InvpcidType::ALL_INCL_GLOBAL, desc);
++    } else {
++        __atomic_fetch_add(&store.all_fallback, 1ULL, __ATOMIC_RELAXED);
++        uint64_t cr3 = read_cr3();
++        write_cr3(cr3 & ~0xFFFULL);
++    }
+ }
+ 
+ /// @brief Static wrapper class for page-table operations.
+@@ -62,10 +131,12 @@ class ArchPageTable {
+         arch_page_table_activate(pml4_phys);
+     }
+     static inline void tlb_flush(uint64_t virt_addr) {
++        TlbFlushStats &store = tlb_flush_stats_store();
++        __atomic_fetch_add(&store.single_va, 1ULL, __ATOMIC_RELAXED);
+         arch_page_table_tlb_flush(virt_addr);
+     }
+     static inline void tlb_flush_all() {
+-        arch_page_table_tlb_flush_all();
++        tlb_purge_all();
+     }
+ 
+     /// @brief Size of a single page (from kernel config).
 diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
-new file mode 100644
-index 00000000..24c1ac33
---- /dev/null
+index 24c1ac33..a4096fef 100644
+--- a/src/kernel/arch/x86_64/hal/pcid.cpp
 +++ b/src/kernel/arch/x86_64/hal/pcid.cpp
-@@ -0,0 +1,145 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file pcid.cpp
-+/// @brief Process-context identifier allocator (issue #156, x86_64 only).
-+
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
-+#include <kernel/arch/x86_64/hal/io_impl.hpp>
-+
-+namespace arch {
-+namespace {
-+
-+// Allocator state (create/cleanup-time mutation only — never on the
-+// timer-ISR or context-switch hot path; callers serialize via the
-+// scheduler paths that already hold scheduler_lock_).
-+bool g_supported = false;
-+uint16_t g_next = 1;
-+uint64_t g_epoch = 0;
-+// Serialization note (audit S3): the live-ID bitmap is the safety
-+// state and is claimed atomically (CAS — never-reissue holds under
-+// concurrency).  g_next is a placement hint (a stale read only wastes
-+// a scan pass; the claim still decides).  g_epoch is diagnostic plus
-+// the rollover witness (monotonic by construction: only ever
-+// incremented under the same task-context paths as allocation, and
-+// tests assert relative deltas, never absolute values).
-+// Live-ID bitmap: 4096 bits = 64 u64s, bit N set = PCID N live.
-+uint64_t g_live[64] = {};
-+
-+// Atomically claim a free ID: returns true iff this caller won it.
-+// CAS loop (concurrent creates on two CPUs can never share an ID).
-+bool live_claim(uint16_t pcid) {
-+    uint64_t *slot = &g_live[pcid / 64];
-+    uint64_t bit = 1ULL << (pcid % 64);
-+    uint64_t seen = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
-+    while ((seen & bit) == 0) {
-+        if (__atomic_compare_exchange_n(slot, &seen, seen | bit, false,
-+                                        __ATOMIC_ACQ_REL,
-+                                        __ATOMIC_ACQUIRE)) {
-+            return true;
-+        }
-+    }
-+    return false;
-+}
-+
-+void live_clear(uint16_t pcid) {
-+    __atomic_fetch_and(&g_live[pcid / 64], ~(1ULL << (pcid % 64)),
-+                       __ATOMIC_ACQ_REL);
-+}
-+
-+} // namespace
-+
-+void pcid_init() {
-+    g_supported = has_pcid();
-+}
-+
-+bool pcid_supported() {
-+    return g_supported;
-+}
-+
-+uint16_t pcid_alloc() {
-+    if (!g_supported)
-+        return PCID_KERNEL;
-+    // First pass: cursor to end.  Second pass: start to cursor.
-+    // A live ID is never reissued (bitmap-checked both passes).
-+    for (int pass = 0; pass < 2; ++pass) {
-+        uint16_t start = (pass == 0) ? g_next : 1;
-+        uint16_t limit = (pass == 0) ? (PCID_MAX + 1) : g_next;
-+        for (uint16_t id = start; id < limit; ++id) {
-+            if (live_claim(id)) {
-+                g_next = (id == PCID_MAX) ? 1 : (id + 1);
-+                return id;
-+            }
-+        }
-+    }
-+    // Exhausted: epoch bump + one global flush (full CR3 reload of the
-+    // current PML4 untagged flushes all PCID-tagged entries), cursor
-+    // reset to 1.  Live IDs stay set, so reuse is still impossible and
-+    // a fully-live space answers 0 (caller falls back untagged).
-+    ++g_epoch;
-+    write_cr3(read_cr3() & ~0xFFFULL);
-+    g_next = 1;
-+    for (uint16_t id = 1; id <= PCID_MAX; ++id) {
-+        if (live_claim(id)) {
-+            g_next = (id == PCID_MAX) ? 1 : (id + 1);
-+            return id;
-+        }
-+    }
-+    return PCID_KERNEL; // all 4095 live — caller falls back untagged
-+}
-+
-+void pcid_free(uint16_t pcid) {
-+    if (pcid == PCID_KERNEL)
-+        return;
-+    live_clear(pcid);
-+    // Issue #156 (audit S1): a freed PCID is immediately reusable, but the
-+    // freed address space's entries tagged with it survive in the TLB
-+    // (tagged switches no longer flush, and VMM::free_user_pages leaves
-+    // flushing to the caller). Purge them with one same-root CR3 reload
-+    // (NoFlush bit clear, so all PCID-tagged entries are invalidated
-+    // locally); the old table is destroyed right after, so nothing can
-+    // re-cache this ID in the meantime.
-+    //
-+    // Coherency bound (why a local flush suffices for now): user address
-+    // spaces — the only PCID holders — execute on CPU0 exclusively
-+    // (shared-TSS pin), so their tagged entries can only ever live in
-+    // CPU0's TLB.  User-task cleanup (self/parent-waitpid/deadline-BSP/
-+    // reboot-BSP) likewise executes on CPU0 in every current path — no
-+    // AP-context user-teardown producer exists — so this flush always
-+    // lands where the stale entries are.  General cross-CPU invalidation
-+    // (should APs ever terminate user tasks) is owned by the lazy
-+    // shootdown protocol (#158), which must cover it by design.
-+    if (g_supported)
-+        write_cr3(read_cr3() & ~0xFFFULL);
-+}
-+
-+uint64_t pcid_epoch() {
-+    return g_epoch;
-+}
-+
-+void pcid_test_force() {
-+    g_supported = true;
-+}
-+
-+void pcid_test_reset() {
-+    g_supported = has_pcid();
-+}
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/x86_64/hal/pcid.hpp b/src/kernel/arch/x86_64/hal/pcid.hpp
-new file mode 100644
-index 00000000..ad7778fc
---- /dev/null
-+++ b/src/kernel/arch/x86_64/hal/pcid.hpp
-@@ -0,0 +1,77 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file pcid.hpp
-+/// @brief Process-context identifier allocator (issue #156, x86_64 only).
-+///
-+/// PCIDs tag TLB entries so CR3 switches between address spaces retain
-+/// translations instead of flushing.  PCID 0 is reserved for the kernel
-+/// PML4 fallback; user address spaces allocate 1..4095.  On exhaustion
-+/// the allocator bumps an epoch, issues one global flush, and restarts
-+/// from 1 — a live ID is never reissued (bitmap-checked).
-+///
-+/// Mutation happens at task create/cleanup only (never on the
-+/// timer-ISR or context-switch hot path).  Snapshot save/restore hooks
-+/// keep test isolation deterministic.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+
-+namespace arch {
-+
-+/// @brief Maximum PCID value (12-bit field, 0 reserved for kernel).
-+inline constexpr uint16_t PCID_MAX = 4095;
-+/// @brief PCID reserved for the kernel PML4 fallback (never allocated).
-+inline constexpr uint16_t PCID_KERNEL = 0;
-+
-+/// @brief Probe CPU support once at boot (BSP).
-+void pcid_init();
-+/// @brief True when PCID tagging is active (probed + CR4.PCIDE set).
-+bool pcid_supported();
-+/// @brief Allocate a user PCID (1..4095), or 0 when unsupported.
-+///        On exhaustion: epoch bump + one global flush, cursor reset
-+///        to 1 (freed IDs are reused low-first); returns 0 if every
-+///        ID is still live — the caller falls back untagged.  A live
-+///        ID is never reissued.
-+uint16_t pcid_alloc();
-+/// @brief Release a user PCID (0 is a no-op).
-+void pcid_free(uint16_t pcid);
-+/// @brief Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys).
-+///        Hot path: single compare; pcid_alloc() only returns nonzero
-+///        when tagging is active, so no support check is needed here.
-+inline uint64_t pcid_tag(uint64_t pml4_phys, uint16_t pcid) {
-+    if (pcid == PCID_KERNEL)
-+        return pml4_phys;
-+    return (pml4_phys & ~0xFFFULL) | (pcid & 0xFFFU);
-+}
-+/// @brief Current rollover epoch (diagnostic/test only).
-+uint64_t pcid_epoch();
-+/// @brief Force allocator availability ON for logic testing (issue
-+///        #156, D2).  Test-only: lets the bitmap/epoch/rollover paths
-+///        run on CPUs without PCID hardware.  DANGER: while forced, a
-+///        dispatched user task would publish a tagged CR3 the hardware
-+///        rejects (#GP) — never dispatch user tasks while forced, and
-+///        always close with pcid_test_reset() (plus the isolate hook).
-+void pcid_test_force();
-+/// @brief Restore hardware truth after forced testing
-+///        (g_supported = has_pcid()).  Called by tests at exit and by
-+///        test isolation on restore.
-+void pcid_test_reset();
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
-index 66a96fbb..ee9aa213 100644
---- a/src/kernel/arch/x86_64/hal/smp.cpp
-+++ b/src/kernel/arch/x86_64/hal/smp.cpp
-@@ -28,6 +28,8 @@
+@@ -23,6 +23,7 @@
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
+ #include <kernel/arch/x86_64/hal/io_impl.hpp>
++#include <kernel/arch/x86_64/hal/page_table_impl.hpp>
  
- #include <kernel/arch/x86_64/hal/apic.hpp>
- #include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/x86_64/hal/io_impl.hpp>
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
- #include <kernel/arch/x86_64/madt.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/arch/gdt.hpp>
-@@ -342,7 +344,14 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
-     uint64_t cr0 = arch::read_cr0();
-     arch::write_cr0(cr0 | (1ULL << 3));
-     uint64_t cr4 = arch::read_cr4();
--    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10)); // OSFXSR|OSXMMEXCPT
-+    // Issue #156: mirror BSP's CR4.PCIDE so AP TLB tagging stays coherent
-+    // (BSP probed support at boot; pcid_supported() is BSP-set by now).
-+    uint64_t pcide = 0;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    if (arch::pcid_supported())
-+        pcide = arch::CR4_PCIDE;
-+#endif
-+    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10) | pcide); // OSFXSR|OSXMMEXCPT
+ namespace arch {
+ namespace {
+@@ -89,12 +90,12 @@ uint16_t pcid_alloc() {
+             }
+         }
+     }
+-    // Exhausted: epoch bump + one global flush (full CR3 reload of the
+-    // current PML4 untagged flushes all PCID-tagged entries), cursor
+-    // reset to 1.  Live IDs stay set, so reuse is still impossible and
+-    // a fully-live space answers 0 (caller falls back untagged).
++    // Exhausted: epoch bump + global purge (INVPCID all-context when
++    // available, else untagged CR3 reload), cursor reset to 1.  Live IDs
++    // stay set, so reuse is still impossible and a fully-live space
++    // answers 0 (caller falls back untagged).
+     ++g_epoch;
+-    write_cr3(read_cr3() & ~0xFFFULL);
++    tlb_purge_all();
+     g_next = 1;
+     for (uint16_t id = 1; id <= PCID_MAX; ++id) {
+         if (live_claim(id)) {
+@@ -117,17 +118,17 @@ void pcid_free(uint16_t pcid) {
+     // locally); the old table is destroyed right after, so nothing can
+     // re-cache this ID in the meantime.
+     //
+-    // Coherency bound (why a local flush suffices for now): user address
++    // Coherency bound (why a local purge suffices for now): user address
+     // spaces — the only PCID holders — execute on CPU0 exclusively
+     // (shared-TSS pin), so their tagged entries can only ever live in
+     // CPU0's TLB.  User-task cleanup (self/parent-waitpid/deadline-BSP/
+     // reboot-BSP) likewise executes on CPU0 in every current path — no
+-    // AP-context user-teardown producer exists — so this flush always
++    // AP-context user-teardown producer exists — so this purge always
+     // lands where the stale entries are.  General cross-CPU invalidation
+     // (should APs ever terminate user tasks) is owned by the lazy
+     // shootdown protocol (#158), which must cover it by design.
+     if (g_supported)
+-        write_cr3(read_cr3() & ~0xFFFULL);
++        tlb_purge_context(pcid);
+ }
  
-     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
-     // publishes scheduler_ready after reboot_from_table() finishes
-diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
-index 31412acf..1e518a79 100644
---- a/src/kernel/arch/x86_64/isr_stubs.asm
-+++ b/src/kernel/arch/x86_64/isr_stubs.asm
-@@ -407,6 +407,9 @@ isr_common:
-     ; (kernel/harness context) or it was consumed, fall back to the static
-     ; kernel PML4 so the harness can never resume on a stale user CR3 from a
-     ; previous task (the H2 freeze path).
-+    ; Issue #156: RAX carries pml4_phys | pcid (low 12 bits) when PCID is
-+    ; active — mov cr3 preserves the tag (no full flush); raw phys (PCID 0)
-+    ; keeps today's flush semantics.  No instruction change needed.
-     lea rax, [rel scheduler_load_cr3_from]
-     mov rax, [rax + r11*8]
-     test rax, rax
+ uint64_t pcid_epoch() {
 diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 9ee5efb6..89fdfe10 100644
+index 89fdfe10..45d48c72 100644
 --- a/src/kernel/elf/elf.cpp
 +++ b/src/kernel/elf/elf.cpp
-@@ -32,6 +32,9 @@
+@@ -32,6 +32,7 @@
  #include <kernel/memory/vmm.hpp>
  #include <kernel/memory/checked_ptr.hpp>
  #include <kernel/arch/io.hpp>
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#endif
- #include <kernel/arch/timer.hpp>
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/vfs/initrd_fs.hpp>
-@@ -547,6 +550,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
- 
-     tcb->page_table_ = pml4;
++#include <kernel/arch/page_table.hpp>
+ #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+ #include <kernel/arch/x86_64/hal/pcid.hpp>
+ #endif
+@@ -763,6 +764,13 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     tcb->canary_installed = 0;
+     tcb->page_table_ = new_pml4;
      tcb->is_user_ = true;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    // Issue #156: eager PCID assignment (see task.cpp birth sites).
-+    tcb->pcid_ = arch::pcid_alloc();
-+#endif
- 
-     open_std_fds(*tcb);
- 
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 97e8e6b3..d115efc3 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -65,6 +65,9 @@
- #include <kernel/random.hpp>
- #if defined(CONFIG_ARCH_X86_64)
- #include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
-+#include <kernel/arch/x86_64/hal/io_impl.hpp>
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
- #include <kernel/arch/x86_64/madt.hpp>
- #include <kernel/arch/x86_64/hal/smp.hpp>
- #endif
-@@ -608,6 +611,19 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-         }
- #endif
-     }
-+#endif
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    // Issue #156: PCID (CR4 bit 17) — process-context identifiers so CR3
-+    // switches retain TLB entries.  BSP-only probe here; APs mirror it in
-+    // ap_main (smp.cpp).  Unsupported CPUs keep today's raw-phys publish
-+    // path (pcid_alloc returns 0 → untagged).
-+    if (arch::has_pcid()) {
-+        cr4 |= arch::CR4_PCIDE;
-+        arch::pcid_init();
-+        debug_write("[BOOT] PCID enabled\n");
-+    } else {
-+        debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
-+    }
- #endif
-     arch::write_cr4(cr4);
- 
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 49d62ac5..090e3eb0 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -878,6 +878,21 @@
- #endif
- #endif
- 
-+/// v0.4.6 issue #156: PCID (process-context identifiers) — CR4 bit 17.
-+/// On x86_64 the boot path sets it when CPUID leaf 1 ECX[17] is supported;
-+/// CR3 publishes then carry the TCB's PCID in the low 12 bits so switches
-+/// retain TLB entries.  Unsupported CPUs keep raw-phys publish (full flush).
-+#ifndef CONFIG_PCID
 +#if defined(CONFIG_ARCH_X86_64)
-+#define CONFIG_PCID 1
-+#else
-+#define CONFIG_PCID 0
++    // Issue #157 H3: the TCB keeps its PCID across the table swap, but
++    // the OLD image's entries cached under it must die with the old
++    // table (tagged switches no longer flush).  Purge the context now —
++    // the new image cannot have cached anything yet.
++    arch::tlb_purge_context(tcb->pcid_);
 +#endif
-+#endif
-+/// Maximum PCID value lives as arch::PCID_MAX (4095, 12-bit field with 0
-+/// reserved) next to the allocator — no duplicate macro here by design
-+/// (a second constant invites off-by-one drift).
-+
- /// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
- /// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
- /// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 98a256b7..91769aca 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -53,6 +53,9 @@ extern "C" void debug_write_dec(uint64_t value);
- #if defined(CONFIG_ARCH_X86_64)
- #include <kernel/arch/x86_64/hal/smp.hpp>
- #endif
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#endif
- 
- /// @brief Read the current stack pointer (portable across arches).
- /// @return Current SP (kernel stack pointer for the running context).
-@@ -2638,6 +2641,21 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
- // switch_to_task
- // ---------------------------------------------------------------------------
- 
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+/// @brief Lazily assign a user PCID at first CR3 publish (issue #156).
-+///        Single choke point covering create/clone/elf births uniformly
-+///        (deviation D1 from the creation-site plan: the elf::load path
-+///        also births user address spaces).  Runs under scheduler_lock_
-+///        at both publish sites; fires once per task lifetime (later
-+///        publishes see nonzero pcid_).  Returns 0 when unsupported so
-+///        the publish stays raw-phys (full flush, today's behavior).
-+static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
-+    if (next.is_user_ && next.pcid_ == 0 && arch::pcid_supported())
-+        next.pcid_ = arch::pcid_alloc();
-+    return next.pcid_;
-+}
-+#endif
-+
- static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-                            sync::SpinLock *held_lock = nullptr) {
-     auto release_lock = [&]() {
-@@ -2981,7 +2999,13 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
-     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
-                      __ATOMIC_RELEASE);
-     if (next.page_table_) {
--        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next.page_table_,
-+        // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
-+        uint64_t cr3_value = next.page_table_;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+        cr3_value = arch::pcid_tag(next.page_table_,
-+                                   publish_pcid_for(next));
-+#endif
-+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
-                          __ATOMIC_RELEASE);
- #if defined(CONFIG_DEBUG_IPC_SCHED)
-         {
-@@ -3329,7 +3353,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
-         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
-                          __ATOMIC_RELEASE);
-         if (next->page_table_) {
--            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next->page_table_,
-+            // Issue #156: tagged publish (same contract as above).
-+            uint64_t cr3_value = next->page_table_;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+            cr3_value = arch::pcid_tag(next->page_table_,
-+                                       publish_pcid_for(*next));
-+#endif
-+            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
-                              __ATOMIC_RELEASE);
-         } else {
-             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 3390b79b..2aa32f3e 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -40,6 +40,9 @@
- #include <kernel/ipc/death_notify.hpp>
- #include <kernel/ipc/pager_registry.hpp>
- #include <kernel/daemon/daemon_mgr.hpp>
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#endif
- #include <kernel/sync/notify.hpp>
- #include <kernel/sync/eventgroup.hpp>
- #include <kernel/sync/semaphore.hpp>
-@@ -1214,6 +1217,12 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     tcb->user_stack_ = ustack_phys;
+     tcb->user_stack_size_ = mem::STACK_SIZE;
+     tcb->program_break_start = mem::HEAP_VADDR;
+diff --git a/src/kernel/ipc/buffer_pool.cpp b/src/kernel/ipc/buffer_pool.cpp
+index 41e074a6..0b1d0889 100644
+--- a/src/kernel/ipc/buffer_pool.cpp
++++ b/src/kernel/ipc/buffer_pool.cpp
+@@ -122,12 +122,12 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
      }
-     tcb->page_table_ = pml4;
-     tcb->is_user_ = true;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    // Issue #156: eager PCID assignment at birth (0 when unsupported).
-+    // Publish-time lazy assignment remains as backstop for paths that
-+    // install user PML4s without passing here.
-+    tcb->pcid_ = arch::pcid_alloc();
-+#endif
- 
-     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
-     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
-@@ -1426,6 +1435,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     // (every task now owns a private kernel-half PML4).
-     bool is_user_task = parent->is_user_;
-     tcb->is_user_ = is_user_task;
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    // Issue #156: fork gets a FRESH PCID (never the parent's — the child
-+    // owns a private address space).
-+    if (is_user_task)
-+        tcb->pcid_ = arch::pcid_alloc();
-+#endif
-     uint64_t slot_va = alloc_kslot(STACK_SIZE);
-     if (slot_va) {
-         tcb->kstack_slot_va_ = slot_va;
-@@ -1894,6 +1909,13 @@ void TaskControlBlock::cleanup() noexcept {
-         // free_user_pages() skips kernel-owned table/data pages via
-         // PMM::is_user_page, so a partially deep-copied address space (OOM
-         // during clone) is fully reclaimed here — no leak.
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+        // Issue #156: release the PCID before the address space goes
-+        // away (keyed on the live TCB, never after free; 0 is a no-op
-+        // for kernel tasks and never-published users).
-+        arch::pcid_free(pcid_);
-+        pcid_ = 0;
-+#endif
-         VMM::free_user_pages(page_table_);
-         PMM::free_page(page_table_);
- #if defined(CONFIG_ARCH_X86_64)
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 4f08e4dd..3704a854 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -239,7 +239,7 @@ struct TaskControlBlock {
-           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
-           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
-           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
--          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
-+          page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
-           user_stack_size_(0), user_data(nullptr), is_user_(false),
-           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
-           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
-@@ -299,6 +299,12 @@ struct TaskControlBlock {
-     /// @brief Total slot size (stack + guard page).  0 if HHDM.
-     uint64_t kstack_slot_size_;
-     uint64_t page_table_;
-+    /// @brief Process-context identifier for TLB tagging (issue #156,
-+    ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
-+    ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
-+    ///        TCB (not the PML4): survives exec PML4 swaps, dies with the
-+    ///        task so IDs are never reused while live.
-+    uint16_t pcid_;
-     /// @brief Physical address of the private PDPT page allocated in
-     /// clone() for the user stack region. Zero when not applicable.
-     /// Used by cleanup() to free the private PDPT and its child PD/PT
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 17b4c12d..61492b5e 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -41,6 +41,9 @@
- #include <kernel/arch/apic.hpp>
- #include <kernel/arch/x86_64/hal/percpu.hpp>
  #endif
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#endif
- #include <kernel/arch/gdt.hpp>
- #include <kernel/arch/hal/iopb.hpp>
- #include <kernel/cap/mmio.hpp>
-@@ -780,6 +783,11 @@ void snapshot_restore(const char *test_name) {
-         while (reaper->notify.try_wait(&stale_wake)) {
-         }
+ 
+-    // H-4: flush the TLB for this VA when the cleared PML4 is the active one.
+-    // A stale TLB entry would keep granting access to the freed/recycled page
+-    // until random eviction.  Foreign PML4 staleness is covered by the
+-    // per-task CR3 reload at switch time.
+-    if (pml4_phys == VMM::current_pml4())
+-        arch::ArchPageTable::tlb_flush(virt_addr);
++    // H-4 (issue #157 H2): flush unconditionally.  The old gate
++    // (pml4_phys == current) assumed switch-flush heals foreign tables —
++    // dead since tagged switches (#156) no longer flush.  INVLPG is
++    // PCID-agnostic (flushes the VA across all PCIDs), so one flush
++    // covers every context the entry could be cached under.
++    arch::ArchPageTable::tlb_flush(virt_addr);
+ }
+ 
+ /// @brief BUGS.md#020 red-zone guard (defined in full below validate()).
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 4adf8faf..12406d59 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -1531,6 +1531,9 @@ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
+ /// @brief Unmaps one page previously mapped via map_frame_from_cap().
+ void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
+     map_page_in_pml4(virt_addr, 0, false, pml4_phys);
++    // Issue #157 H1: the cleared PTE may be cached (tagged or not) on a
++    // live table — purge it; pre-PCID the next switch-flush healed this.
++    arch::ArchPageTable::tlb_flush(virt_addr);
+ }
+ 
+ /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
+@@ -1562,6 +1565,8 @@ void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
+     for (size_t i = 0; i < pages; ++i) {
+         map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
+                          pml4_phys);
++        // Issue #157 H1: purge each cleared PTE (see unmap_frame_from_cap).
++        arch::ArchPageTable::tlb_flush(virt_addr + i * arch::PAGE_SIZE);
      }
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-+    // Issue #156 D2: restore hardware PCID truth in case a forced-logic
-+    // test aborted mid-scope (normal exits reset explicitly).
-+    arch::pcid_test_reset();
-+#endif
-     if (corr > 0) {
-         Logger::raw_write("[SCHED] corruption_count=");
-         Logger::print_dec(corr);
-diff --git a/src/kernel/test/test_pcid.cpp b/src/kernel/test/test_pcid.cpp
-index b4aa9927..2b431444 100644
---- a/src/kernel/test/test_pcid.cpp
-+++ b/src/kernel/test/test_pcid.cpp
+ }
+ 
+diff --git a/src/kernel/test/test_invpcid.cpp b/src/kernel/test/test_invpcid.cpp
+index bd904594..9470a53e 100644
+--- a/src/kernel/test/test_invpcid.cpp
++++ b/src/kernel/test/test_invpcid.cpp
 @@ -1,5 +1,5 @@
  /*
 - * NexIOS RTOS — SMP bring-up (Phase 5)
@@ -591,217 +309,246 @@ index b4aa9927..2b431444 100644
   * Copyright (C) 2026 Arnold Hasshold
   *
   * This program is free software: you can redistribute it and/or modify
-@@ -17,61 +17,157 @@
+@@ -17,64 +17,188 @@
   */
  
- /// @file test_pcid.cpp
--/// @brief PCID stubs (issue #85, module 13).  No PCID support exists
--///        (no CR4.PCIDE programming, no tagged entries anywhere in
--///        src/kernel) — documented stubs pending the main-branch API.
-+/// @brief PCID tests (issue #156; stubs from issue #85, module 13).
-+///
-+/// Two tasks dispatch for real through the tagged publish path; ring-3
-+/// cannot read CR3, so tags are verified post-mortem on the TCBs (lazy
-+/// assignment proves the publish ran tagged) plus direct pcid_tag()
-+/// unit checks.  Retention is structural (stable PCID + stable
-+/// translation across interleaved execution ⇒ same TLB entries stay
-+/// valid); TLB-hit cycle timing is deliberately NOT measured (QEMU
-+/// icount makes it flaky by construction).
+ /// @file test_invpcid.cpp
+-/// @brief INVPCID stubs (issue #85, module 14).  No INVPCID use exists
+-///        anywhere in src/kernel — documented stubs pending the
+-///        main-branch invalidation API.
++/// @brief INVPCID selective-invalidation tests (issue #157; stubs from
++///        issue #85, module 14).  TLB hit/miss is unobservable without
++///        cycle timing (QEMU-flaky by construction), so tests pin the
++///        exact descriptor encoding, the dispatch routing (new flush
++///        counters — deterministic on any CPU), and structural outcomes
++///        (walks, no-fault re-touch).  The 3-line emit asm itself is
++///        review- and audit-verified.
  
  #if defined(CONFIG_ARCH_X86_64)
  #include <test.hpp>
  #include <logger.hpp>
 +#include <scope_guard.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
 +#include <kernel/memory/pmm.hpp>
 +#include <kernel/memory/vmm.hpp>
++#include <kernel/arch/page_table.hpp>
 +#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
 +#include <kernel/arch/x86_64/hal/io_impl.hpp>
 +#include <kernel/arch/x86_64/hal/pcid.hpp>
-+#include "test_sched_helpers.hpp"
++#include <kernel/arch/x86_64/hal/pcid.hpp>
  
  using namespace kernel;
  
-+// Ring-3 execution is impossible for test entries (create_user installs a
-+// yield-forever stub; kernel .text cannot run at CPL=3 — BUGS.md#020), so
-+// assignment and stability are verified on the TCBs directly without
-+// dispatch.  The tag-to-CR3 path itself is one mov-cr3 of the full 64-bit
-+// published value (isr_stubs.asm, review-verified, cannot drop low bits).
++namespace {
++
++// Allocate a kernel-owned scratch page, zeroed (test-local helper).
++uint64_t alloc_zero_page() {
++    uint64_t phys = PMM::alloc_page();
++    if (phys == 0)
++        return 0;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (phys & ~0xFFFULL));
++    __builtin_memset(virt, 0, arch::PAGE_SIZE);
++    return phys;
++}
++
++} // namespace
 +
  // Runmode: kernel
- // Testidea: PCID is enabled in CR4 (PCIDE bit set after boot probe).
--// Input: CR4 readback.
--// Expect: PCIDE set when CPUID reports PCID support.
--// Depends: CR4 PCIDE enablement (not yet implemented)
--JARVIS_TEST(pcid_enabled_in_cr4, "PRE: none | POST: none | PENDING: PCID") {
+ // Testidea: INVPCID individual-address mode drops one page only.
+-// Input: Two cached pages, invalidate one, probe both.
+-// Expect: Invalidated page misses, sibling still hits.
+-// Depends: INVPCID address mode (not yet implemented)
+-JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none | PENDING: INVPCID") {
 -    /* Pseudocode:
--     *   if (cpuid_has_pcid()) JARVIS_ASSERT(read_cr4() & CR4_PCIDE);
+-     *   touch(p, q); invpcid_addr(p);
+-     *   JARVIS_ASSERT(tlb_miss(p) && tlb_hit(q));
 -     */
-+// Input: CR4 readback + CPUID support query.
-+// Expect: PCIDE set iff the CPU reports PCID support; the fallback
-+//         (unsupported) provably allocates nothing.
-+// Depends: CR4 PCIDE enablement (issue #156)
-+JARVIS_TEST(pcid_enabled_in_cr4, "PRE: none | POST: none") {
-+    if (arch::has_pcid()) {
-+        JARVIS_ASSERT((arch::read_cr4() & arch::CR4_PCIDE) != 0);
-+        JARVIS_ASSERT(arch::pcid_supported());
++// Input: Descriptor unit checks + two mapped scratch pages, unmap one
++//        via the VMM path.
++// Expect: Descriptor words exact (pcid masked, addr page-masked);
++//         cleared VA walks unmapped, sibling intact and re-touchable;
++//         single_va counter +1 (routing proof on any CPU).
++// Depends: invpcid_build_desc, VMM unmap selective path (issue #157)
++JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none") {
++    auto desc = arch::invpcid_build_desc(
++        arch::InvpcidType::SINGLE_ADDRESS, 0x12345ULL, 0xABCDEF123ULL);
++    JARVIS_ASSERT(desc.pcid == 0x345ULL);
++    JARVIS_ASSERT(desc.addr == (0xABCDEF123ULL & ~0xFFFULL));
++
++    constexpr uint64_t k_va_a = 0x10000000ULL;
++    constexpr uint64_t k_va_b = 0x10001000ULL;
++    uint64_t mem_before = PMM::free_memory();
++    uint64_t pml4 = alloc_zero_page();
++    uint64_t pa = PMM::alloc_user_page();
++    uint64_t pb = PMM::alloc_user_page();
++    JARVIS_ASSERT(pml4 != 0 && pa != 0 && pb != 0);
++    VMM::map_page_in_pml4(k_va_a, pa, true, false, pml4);
++    VMM::map_page_in_pml4(k_va_b, pb, true, false, pml4);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_a, pml4) == pa);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_b, pml4) == pb);
++
++    arch::TlbFlushStats before = arch::tlb_flush_stats();
++    VMM::unmap_page_in_pml4(k_va_a, pml4);
++    arch::TlbFlushStats after = arch::tlb_flush_stats();
++    JARVIS_ASSERT(after.single_va == before.single_va + 1);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_a, pml4) == 0);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_b, pml4) == pb);
++    // Re-touch the sibling through its stable mapping (no fault).
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *sib = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pb);
++    sib[0] = 0xA5A5A5A5A5A5A5A5ULL;
++    JARVIS_ASSERT(sib[0] == 0xA5A5A5A5A5A5A5A5ULL);
++
++    // The unmapped page is orphaned (free_user_pages only reclaims
++    // still-mapped pages) — free it explicitly before teardown.
++    PMM::free_page(pa);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+ // Testidea: INVPCID single-context mode drops one PCID's entries.
+-// Input: Entries under PCIDs A and B, invalidate A.
+-// Expect: A entries miss, B entries hit.
+-// Depends: INVPCID single-context mode (not yet implemented)
+-JARVIS_TEST(invpcid_single_context, "PRE: none | POST: none | PENDING: INVPCID") {
+-    /* Pseudocode:
+-     *   touch under A and B; invpcid_context(pcid_a);
+-     *   JARVIS_ASSERT(miss_a && hit_b);
+-     */
++// Input: Descriptor unit checks + a forced PCID through the purge
++//        path (no dispatch while forced — same containment as #156).
++// Expect: Descriptor words exact; purge bumps the branch-correct
++//         counter (invpcid vs fallback per hardware); freed ID
++//         reallocates cleanly.
++// Depends: invpcid_build_desc, tlb_purge_context (issue #157)
++JARVIS_TEST(invpcid_single_context, "PRE: none | POST: none") {
++    auto desc = arch::invpcid_build_desc(
++        arch::InvpcidType::SINGLE_CONTEXT, 0x1ABCULL, 0xDEADULL);
++    JARVIS_ASSERT(desc.pcid == 0xABCULL);
++    JARVIS_ASSERT(desc.addr == (0xDEADULL & ~0xFFFULL));
++
++    arch::pcid_test_force();
++    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
++    uint64_t id = arch::pcid_alloc();
++    JARVIS_ASSERT(id != 0);
++    arch::TlbFlushStats before = arch::tlb_flush_stats();
++    arch::tlb_purge_context(static_cast<uint16_t>(id));
++    arch::TlbFlushStats after = arch::tlb_flush_stats();
++    if (arch::has_invpcid()) {
++        JARVIS_ASSERT(after.ctx_invpcid == before.ctx_invpcid + 1);
 +    } else {
-+        Logger::info("pcid: CPU lacks PCID — untagged fallback active");
-+        JARVIS_ASSERT(!arch::pcid_supported());
-+        JARVIS_ASSERT(arch::pcid_alloc() == 0);
++        JARVIS_ASSERT(after.ctx_fallback == before.ctx_fallback + 1);
 +    }
++    arch::pcid_free(static_cast<uint16_t>(id));
++    uint64_t id2 = arch::pcid_alloc();
++    JARVIS_ASSERT(id2 != 0);
++    arch::pcid_free(static_cast<uint16_t>(id2));
      JARVIS_TEST_PASS();
  }
  
  // Runmode: kernel
--// Testidea: Context switch tags TLB entries with the next PCID.
--// Input: Two address spaces switched back and forth.
--// Expect: CR3 carries PCID A then B (low 12 bits), no full flush.
--// Depends: PCID-tagged switch (not yet implemented)
--JARVIS_TEST(pcid_tags_entries, "PRE: none | POST: none | PENDING: PCID") {
+ // Testidea: INVPCID all-context mode drops everything incl. globals.
+-// Input: Cached entries incl. global pages, invalidate all.
+-// Expect: Every probe misses afterwards.
+-// Depends: INVPCID all-context mode (not yet implemented)
+-JARVIS_TEST(invpcid_all_context, "PRE: none | POST: none | PENDING: INVPCID") {
 -    /* Pseudocode:
--     *   switch_to(as_a); JARVIS_ASSERT((read_cr3() & 0xFFF) == pcid_a);
+-     *   touch incl. globals; invpcid_all();
+-     *   JARVIS_ASSERT(all probes miss);
 -     */
-+// Testidea: User address spaces own distinct PCIDs at birth (eager
-+//           assignment covers create/clone/elf uniformly; publish-time
-+//           lazy assignment is the backstop).  Forced logic path (D2):
-+//           no user task is dispatched while forced, so no tagged CR3
-+//           can reach hardware lacking PCIDE.
-+// Input: Two created (never dispatched) user tasks under force.
-+// Expect: pcid_ nonzero and distinct; reset restores hardware truth;
-+//         pcid_tag() unit checks hold.
-+// Depends: Eager PCID assignment at birth (issue #156)
-+JARVIS_TEST(pcid_tags_entries, "PRE: none | POST: none") {
-+    // pcid_tag() is pure: pin its contract directly.
-+    JARVIS_ASSERT(arch::pcid_tag(0x1000000ULL, 7) ==
-+                  (0x1000000ULL | 7ULL));
-+    JARVIS_ASSERT(arch::pcid_tag(0x1000000ULL, arch::PCID_KERNEL) ==
-+                  0x1000000ULL);
++// Input: Descriptor unit checks + a live purge_all call.
++// Expect: Descriptor words exact; purge bumps the branch-correct
++//         counter; a subsequent map/unmap cycle still works (no wedge).
++// Depends: invpcid_build_desc, tlb_purge_all (issue #157)
++JARVIS_TEST(invpcid_all_context, "PRE: none | POST: none") {
++    auto desc = arch::invpcid_build_desc(
++        arch::InvpcidType::ALL_INCL_GLOBAL, 0xFFULL, 0x12345ULL);
++    JARVIS_ASSERT(desc.pcid == 0xFFULL);
++    JARVIS_ASSERT(desc.addr == (0x12345ULL & ~0xFFFULL));
 +
-+    arch::pcid_test_force();
-+    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
-+    auto *a = TaskControlBlock::create_user(kernel::test::forever_entry,
-+                                            12, 10, 32768);
-+    auto *b = TaskControlBlock::create_user(kernel::test::forever_entry,
-+                                            11, 10, 32768);
-+    JARVIS_ASSERT(a != nullptr && b != nullptr);
-+    JARVIS_ASSERT(a->pcid_ != 0 && b->pcid_ != 0);
-+    JARVIS_ASSERT(a->pcid_ != b->pcid_);
-+    a->cleanup();
-+    delete a;
-+    b->cleanup();
-+    delete b;
++    arch::TlbFlushStats before = arch::tlb_flush_stats();
++    arch::tlb_purge_all();
++    arch::TlbFlushStats after = arch::tlb_flush_stats();
++    if (arch::has_invpcid()) {
++        JARVIS_ASSERT(after.all_invpcid == before.all_invpcid + 1);
++    } else {
++        JARVIS_ASSERT(after.all_fallback == before.all_fallback + 1);
++    }
++
++    constexpr uint64_t k_va = 0x10002000ULL;
++    uint64_t mem_before = PMM::free_memory();
++    uint64_t pml4 = alloc_zero_page();
++    uint64_t data = PMM::alloc_user_page();
++    JARVIS_ASSERT(pml4 != 0 && data != 0);
++    VMM::map_page_in_pml4(k_va, data, true, false, pml4);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == data);
++    VMM::unmap_page_in_pml4(k_va, pml4);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == 0);
++    PMM::free_page(data);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
      JARVIS_TEST_PASS();
  }
  
  // Runmode: kernel
--// Testidea: Same-PCID switch invalidates only matching entries.
--// Input: Switch A->B->A with a probe mapping in A.
--// Expect: Probe still cached (no flush on return to A).
--// Depends: PCID selective retention (not yet implemented)
--JARVIS_TEST(pcid_selective_retention, "PRE: none | POST: none | PENDING: PCID") {
+ // Testidea: INVPCID on a never-mapped address is a safe no-op.
+-// Input: Invalidate a non-existent address in each mode.
+-// Expect: No fault; subsequent valid invalidations still work.
+-// Depends: INVPCID fail-safe behavior (not yet implemented)
+-JARVIS_TEST(invpcid_nonexistent_safe, "PRE: none | POST: none | PENDING: INVPCID") {
 -    /* Pseudocode:
--     *   touch probe in A; switch B; switch A; JARVIS_ASSERT(tlb_hit(probe));
+-     *   invpcid_addr(UNMAPPED); JARVIS_ASSERT(still_sane());
 -     */
-+// Testidea: The PCID is TCB-owned, not PML4-owned: an exec-style PML4
-+//           swap keeps the ID, and the new table converges.
-+// Input: User task + probe mapping; swap page_table_ for a fresh
-+//        clone (as exec_into_current does); re-walk.
-+// Expect: pcid_ unchanged across the swap; new kernel half matches
-+//         the live root; probe phys reclaimed with the old table.
-+// Depends: TCB PCID ownership (issue #156)
-+JARVIS_TEST(pcid_selective_retention, "PRE: none | POST: none") {
-+    constexpr uint64_t k_probe_va = 0x20000000ULL;
-+    arch::pcid_test_force();
-+    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
-+    auto *a = TaskControlBlock::create_user(kernel::test::forever_entry,
-+                                            12, 10, 32768);
-+    JARVIS_ASSERT(a != nullptr);
-+    uint64_t pcid_before = a->pcid_;
-+    JARVIS_ASSERT(pcid_before != 0);
-+    uint64_t data_phys = PMM::alloc_user_page();
-+    JARVIS_ASSERT(data_phys != 0);
-+    VMM::map_page_in_pml4(k_probe_va, data_phys, true, false,
-+                          a->page_table_);
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_probe_va, a->page_table_) ==
-+                  data_phys);
-+    uint64_t fresh = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(fresh != 0);
-+    VMM::free_user_pages(a->page_table_);
-+    PMM::free_page(a->page_table_);
-+    a->page_table_ = fresh;
-+    JARVIS_ASSERT(a->pcid_ == pcid_before);
-+    JARVIS_ASSERT(VMM::kernel_half_equal(fresh, VMM::get_kernel_pml4()));
-+    a->cleanup();
-+    delete a;
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
--// Testidea: PCID rollover recycles all 4096 IDs safely.
--// Input: Exhaust the PCID space (4097 address spaces).
--// Expect: No stale entry reachable after rollover (global flush once).
--// Depends: PCID rollover handling (not yet implemented)
--JARVIS_TEST(pcid_rollover, "PRE: none | POST: none | PENDING: PCID") {
--    /* Pseudocode:
--     *   for (i in 0..4097) use_pcid(i); JARVIS_ASSERT(no_stale_hit());
--     */
-+// Testidea: PCID rollover recycles all 4096 IDs safely (forced logic
-+//           path, D2 — same no-dispatch containment as above).
-+// Input: Drive pcid_alloc() to exhaustion (+1 past the live set).
-+// Expect: Epoch bumps exactly once at exhaustion; every issued ID
-+//         unique; post-rollover allocs still unique; all freed cleanly
-+//         and hardware truth restored.
-+// Depends: PCID rollover handling (issue #156)
-+JARVIS_TEST(pcid_rollover, "PRE: none | POST: none") {
-+    arch::pcid_test_force();
-+    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
-+    static uint16_t held[4100];
-+    uint64_t epoch_before = arch::pcid_epoch();
-+    uint64_t held_count = 0;
-+    for (uint64_t i = 0; i < 4100; ++i) {
-+        uint16_t id = arch::pcid_alloc();
-+        if (id == 0)
-+            break;
-+        held[held_count++] = id;
-+        if (arch::pcid_epoch() != epoch_before)
-+            break;
-+    }
-+    // Exhaustion (+1) must have forced exactly one rollover.
-+    JARVIS_ASSERT(arch::pcid_epoch() == epoch_before + 1);
-+    for (uint64_t i = 0; i < held_count; ++i) {
-+        for (uint64_t j = i + 1; j < held_count; ++j)
-+            JARVIS_ASSERT(held[i] != held[j]);
-+    }
-+    for (uint64_t i = 0; i < held_count; ++i)
-+        arch::pcid_free(held[i]);
-+    JARVIS_ASSERT(arch::pcid_epoch() == epoch_before + 1);
-+    uint16_t fresh = arch::pcid_alloc();
-+    JARVIS_ASSERT(fresh != 0);
-+    arch::pcid_free(fresh);
++// Input: Unmap a VA with no tables behind it; builder edge cases.
++// Expect: No fault; builder masks low addr bits; a subsequent valid
++//         map/unmap cycle works (harness sane).
++// Depends: VMM unmap fail-safe behavior (issue #157)
++JARVIS_TEST(invpcid_nonexistent_safe, "PRE: none | POST: none") {
++    auto desc = arch::invpcid_build_desc(
++        arch::InvpcidType::SINGLE_ADDRESS, 7, 0xFFFFFFFFFFFFFFFFULL);
++    JARVIS_ASSERT(desc.pcid == 7);
++    JARVIS_ASSERT(desc.addr == 0xFFFFFFFFFFFFF000ULL);
++
++    constexpr uint64_t k_va = 0x10003000ULL;
++    uint64_t mem_before = PMM::free_memory();
++    uint64_t pml4 = alloc_zero_page();
++    JARVIS_ASSERT(pml4 != 0);
++    VMM::unmap_page_in_pml4(k_va, pml4);
++    uint64_t data = PMM::alloc_user_page();
++    JARVIS_ASSERT(data != 0);
++    VMM::map_page_in_pml4(k_va, data, true, false, pml4);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == data);
++    VMM::unmap_page_in_pml4(k_va, pml4);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va, pml4) == 0);
++    PMM::free_page(data);
++    VMM::free_user_pages(pml4);
++    PMM::free_page(pml4);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
      JARVIS_TEST_PASS();
  }
  
 diff --git a/test-history.txt b/test-history.txt
-index 1ad04405..792b2679 100644
+index 792b2679..a92e8d1b 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1015,3 +1015,17 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 18:12:23 process_waitpid PASSED: 3 FAILED: 0 TIME: 20s
- 2026-09-15 18:13:51 all PASSED: 1363 FAILED: 0 TIME: 438154ms
- 2026-09-15 18:14:39 all PASSED: 85 FAILED: 0 TIME: 4145ms
-+2026-09-15 18:47:43 pcid PASSED: 4 FAILED: 0 TIME: 19s
-+2026-09-15 18:48:53 arch_cross PASSED: 21 FAILED: 0 TIME: 20s
-+2026-09-15 18:48:53 elf_loader PASSED: 8 FAILED: 0 TIME: 19s
-+2026-09-15 18:48:53 memory_vmm PASSED: 13 FAILED: 0 TIME: 20s
-+2026-09-15 18:49:38 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 18:49:38 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
-+2026-09-15 18:51:12 all PASSED: 1363 FAILED: 0 TIME: 432431ms
-+2026-09-15 18:52:12 all PASSED: 85 FAILED: 0 TIME: 3971ms
-+2026-09-15 19:04:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 19:04:52 task_lifecycle PASSED: 9 FAILED: 0 TIME: 20s
-+2026-09-15 19:04:52 task_core PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 19:04:52 elf_loader PASSED: 8 FAILED: 0 TIME: 20s
-+2026-09-15 19:05:56 all PASSED: 1363 FAILED: 0 TIME: 116390ms
-+2026-09-15 19:06:58 all PASSED: 85 FAILED: 0 TIME: 4279ms
+@@ -1029,3 +1029,15 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 19:04:52 elf_loader PASSED: 8 FAILED: 0 TIME: 20s
+ 2026-09-15 19:05:56 all PASSED: 1363 FAILED: 0 TIME: 116390ms
+ 2026-09-15 19:06:58 all PASSED: 85 FAILED: 0 TIME: 4279ms
++2026-09-15 19:29:46 invpcid PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:30:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:30:52 memory_vmm PASSED: 13 FAILED: 0 TIME: 19s
++2026-09-15 19:30:52 data_structures_buffer_pool PASSED: 25 FAILED: 0 TIME: 21s
++2026-09-15 19:31:59 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
++2026-09-15 19:31:59 elf_loader PASSED: 8 FAILED: 0 TIME: 21s
++2026-09-15 19:31:59 process_lifecycle PASSED: 16 FAILED: 0 TIME: 20s
++2026-09-15 19:33:08 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:33:08 tlb_latency PASSED: 4 FAILED: 0 TIME: 21s
++2026-09-15 19:33:08 pml4_sync PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 19:34:10 all PASSED: 1363 FAILED: 0 TIME: 627766ms
++2026-09-15 19:35:05 all PASSED: 85 FAILED: 0 TIME: 4191ms

@@ -32,6 +32,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/page_table.hpp>
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
 #include <kernel/arch/x86_64/hal/pcid.hpp>
 #endif
@@ -763,6 +764,13 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     tcb->canary_installed = 0;
     tcb->page_table_ = new_pml4;
     tcb->is_user_ = true;
+#if defined(CONFIG_ARCH_X86_64)
+    // Issue #157 H3: the TCB keeps its PCID across the table swap, but
+    // the OLD image's entries cached under it must die with the old
+    // table (tagged switches no longer flush).  Purge the context now —
+    // the new image cannot have cached anything yet.
+    arch::tlb_purge_context(tcb->pcid_);
+#endif
     tcb->user_stack_ = ustack_phys;
     tcb->user_stack_size_ = mem::STACK_SIZE;
     tcb->program_break_start = mem::HEAP_VADDR;

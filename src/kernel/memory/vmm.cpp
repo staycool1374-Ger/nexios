@@ -1531,6 +1531,9 @@ bool VMM::map_frame_from_cap(cap::FrameCap *fc, uint64_t virt_addr, bool user,
 /// @brief Unmaps one page previously mapped via map_frame_from_cap().
 void VMM::unmap_frame_from_cap(uint64_t virt_addr, uint64_t pml4_phys) {
     map_page_in_pml4(virt_addr, 0, false, pml4_phys);
+    // Issue #157 H1: the cleared PTE may be cached (tagged or not) on a
+    // live table — purge it; pre-PCID the next switch-flush healed this.
+    arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
 /// @brief Maps an MmioCap's memory BAR range into @p pml4_phys.
@@ -1562,6 +1565,8 @@ void VMM::unmap_mmio_from_cap(cap::MmioCap *mmio, uint64_t virt_addr,
     for (size_t i = 0; i < pages; ++i) {
         map_page_in_pml4(virt_addr + i * arch::PAGE_SIZE, 0, false,
                          pml4_phys);
+        // Issue #157 H1: purge each cleared PTE (see unmap_frame_from_cap).
+        arch::ArchPageTable::tlb_flush(virt_addr + i * arch::PAGE_SIZE);
     }
 }
 

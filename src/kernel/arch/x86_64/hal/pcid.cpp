@@ -23,6 +23,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
 #include <kernel/arch/x86_64/hal/io_impl.hpp>
+#include <kernel/arch/x86_64/hal/page_table_impl.hpp>
 
 namespace arch {
 namespace {
@@ -89,12 +90,12 @@ uint16_t pcid_alloc() {
             }
         }
     }
-    // Exhausted: epoch bump + one global flush (full CR3 reload of the
-    // current PML4 untagged flushes all PCID-tagged entries), cursor
-    // reset to 1.  Live IDs stay set, so reuse is still impossible and
-    // a fully-live space answers 0 (caller falls back untagged).
+    // Exhausted: epoch bump + global purge (INVPCID all-context when
+    // available, else untagged CR3 reload), cursor reset to 1.  Live IDs
+    // stay set, so reuse is still impossible and a fully-live space
+    // answers 0 (caller falls back untagged).
     ++g_epoch;
-    write_cr3(read_cr3() & ~0xFFFULL);
+    tlb_purge_all();
     g_next = 1;
     for (uint16_t id = 1; id <= PCID_MAX; ++id) {
         if (live_claim(id)) {
@@ -117,17 +118,17 @@ void pcid_free(uint16_t pcid) {
     // locally); the old table is destroyed right after, so nothing can
     // re-cache this ID in the meantime.
     //
-    // Coherency bound (why a local flush suffices for now): user address
+    // Coherency bound (why a local purge suffices for now): user address
     // spaces — the only PCID holders — execute on CPU0 exclusively
     // (shared-TSS pin), so their tagged entries can only ever live in
     // CPU0's TLB.  User-task cleanup (self/parent-waitpid/deadline-BSP/
     // reboot-BSP) likewise executes on CPU0 in every current path — no
-    // AP-context user-teardown producer exists — so this flush always
+    // AP-context user-teardown producer exists — so this purge always
     // lands where the stale entries are.  General cross-CPU invalidation
     // (should APs ever terminate user tasks) is owned by the lazy
     // shootdown protocol (#158), which must cover it by design.
     if (g_supported)
-        write_cr3(read_cr3() & ~0xFFFULL);
+        tlb_purge_context(pcid);
 }
 
 uint64_t pcid_epoch() {
