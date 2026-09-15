@@ -105,6 +105,13 @@
 │   ├── report-20260915-143643.md
 │   ├── report-20260915-144055.md
 │   ├── report-20260915-152237.md
+│   ├── report-20260915-161640.md
+│   ├── report-20260915-165738.md
+│   ├── report-20260915-173624.md
+│   ├── report-20260915-175650.md
+│   ├── report-20260915-181504.md
+│   ├── report-20260915-183020.md
+│   ├── report-20260915-191200.md
 │   ├── run_asil_audit.sh
 │   ├── run_code_review.sh
 │   ├── scheduler_audit.md
@@ -551,6 +558,10 @@
 │   │       ├── classarch_1_1_serial_acd5b088c85ae5925492a248973f382ee_cgraph.md5
 │   │       ├── classarch_1_1_serial_af07666176d16b2030b2f5c85102ba32f_cgraph.md5
 │   │       ├── classarch_1_1_serial.html
+│   │       ├── classarch_1_1_shootdown_batch__coll__graph.md5
+│   │       ├── classarch_1_1_shootdown_batch_a5a61027e54f1a54d2630486bddf241ef_cgraph.md5
+│   │       ├── classarch_1_1_shootdown_batch.html
+│   │       ├── classarch_1_1_shootdown_batch.js
 │   │       ├── classarch_1_1_timer__coll__graph.md5
 │   │       ├── classarch_1_1_timer_a4980b13e865193d67c4e87029c642be2_cgraph.md5
 │   │       ├── classarch_1_1_timer_a529d33ca4e64a0947bd66cedff778dea_cgraph.md5
@@ -801,6 +812,11 @@
 │   │       ├── classkernel_1_1_task_queue_a3905fd071681a0e864923ccad27d682d_cgraph.md5
 │   │       ├── classkernel_1_1_task_queue.html
 │   │       ├── classkernel_1_1_task_queue.js
+│   │       ├── classkernel_1_1_tlb_shootdown__coll__graph.md5
+│   │       ├── classkernel_1_1_tlb_shootdown_a026bd8b2d9cdba46be79f75995839ba3_cgraph.md5
+│   │       ├── classkernel_1_1_tlb_shootdown_a98c7328d9e8dfd56346249a4a15d4850_cgraph.md5
+│   │       ├── classkernel_1_1_tlb_shootdown.html
+│   │       ├── classkernel_1_1_tlb_shootdown.js
 │   │       ├── classkernel_1_1_v_m_m__coll__graph.md5
 │   │       ├── classkernel_1_1_v_m_m_a00badc7d69ae6df6b9ec4ece614fe766_cgraph.md5
 │   │       ├── classkernel_1_1_v_m_m_a05dddb595ff91d7b1c0ed494e503b205_cgraph.md5
@@ -4293,6 +4309,14 @@
 │   │       ├── pci_8hpp_source.html
 │   │       ├── pci_8hpp.html
 │   │       ├── pci_8hpp.js
+│   │       ├── pcid_8cpp__incl.md5
+│   │       ├── pcid_8cpp.html
+│   │       ├── pcid_8cpp.js
+│   │       ├── pcid_8hpp__dep__incl.md5
+│   │       ├── pcid_8hpp__incl.md5
+│   │       ├── pcid_8hpp_source.html
+│   │       ├── pcid_8hpp.html
+│   │       ├── pcid_8hpp.js
 │   │       ├── percpu_8cpp__incl.md5
 │   │       ├── percpu_8cpp.html
 │   │       ├── percpu_8cpp.js
@@ -4802,6 +4826,13 @@
 │   │       ├── shm__ring_8hpp_source.html
 │   │       ├── shm__ring_8hpp.html
 │   │       ├── shm__ring_8hpp.js
+│   │       ├── shootdown__ipi_8cpp__incl.md5
+│   │       ├── shootdown__ipi_8cpp.html
+│   │       ├── shootdown__ipi_8hpp__dep__incl.md5
+│   │       ├── shootdown__ipi_8hpp__incl.md5
+│   │       ├── shootdown__ipi_8hpp_source.html
+│   │       ├── shootdown__ipi_8hpp.html
+│   │       ├── shootdown__ipi_8hpp.js
 │   │       ├── signal_8h__incl.md5
 │   │       ├── signal_8h_source.html
 │   │       ├── signal_8h.html
@@ -5087,6 +5118,9 @@
 │   │       ├── structarch_1_1_pci_device_info__coll__graph.md5
 │   │       ├── structarch_1_1_pci_device_info.html
 │   │       ├── structarch_1_1_pci_device_info.js
+│   │       ├── structarch_1_1_shootdown_batch_1_1_batch_entry__coll__graph.md5
+│   │       ├── structarch_1_1_shootdown_batch_1_1_batch_entry.html
+│   │       ├── structarch_1_1_shootdown_batch_1_1_batch_entry.js
 │   │       ├── structarch_1_1_t_s_s__coll__graph.md5
 │   │       ├── structarch_1_1_t_s_s.html
 │   │       ├── structarch_1_1_t_s_s.js
@@ -5319,6 +5353,9 @@
 │   │       ├── structkernel_1_1_timeval__coll__graph.md5
 │   │       ├── structkernel_1_1_timeval.html
 │   │       ├── structkernel_1_1_timeval.js
+│   │       ├── structkernel_1_1_tlb_shootdown_1_1_request__coll__graph.md5
+│   │       ├── structkernel_1_1_tlb_shootdown_1_1_request.html
+│   │       ├── structkernel_1_1_tlb_shootdown_1_1_request.js
 │   │       ├── structkernel_1_1_utsname__coll__graph.md5
 │   │       ├── structkernel_1_1_utsname.html
 │   │       ├── structkernel_1_1_utsname.js
@@ -6718,12 +6755,14 @@
 │   │       ├── test__infra_8cpp.html
 │   │       ├── test__infra_8cpp.js
 │   │       ├── test__init_8cpp__incl.md5
+│   │       ├── test__init_8cpp_a260c568e91142d0f9eb4edd7594a1456_cgraph.md5
 │   │       ├── test__init_8cpp_a2f730cd4bf2065a69f143baa64897427_cgraph.md5
 │   │       ├── test__init_8cpp_a5712e7f89995f7f91cfd5373b193f15a_cgraph.md5
 │   │       ├── test__init_8cpp_a6aa5f129c99f543ef56e96bdc3cb5daa_cgraph.md5
 │   │       ├── test__init_8cpp_aa00a43057b219cf68950d043df3c77f9_cgraph.md5
 │   │       ├── test__init_8cpp_aa9c45cfc10c8edeb722e2df6b13b9267_cgraph.md5
 │   │       ├── test__init_8cpp_aba69e92d386524afe2f424d3e9005e7e_cgraph.md5
+│   │       ├── test__init_8cpp_ad71095113c2f27d8739872ad1e943112_cgraph.md5
 │   │       ├── test__init_8cpp_ad9834efd5d259cdabc1dd973821c3084_cgraph.md5
 │   │       ├── test__init_8cpp.html
 │   │       ├── test__init_8cpp.js
@@ -9083,6 +9122,14 @@
 │   │       ├── timer_8hpp_source.html
 │   │       ├── timer_8hpp.html
 │   │       ├── timer_8hpp.js
+│   │       ├── tlb__shootdown_8cpp__incl.md5
+│   │       ├── tlb__shootdown_8cpp.html
+│   │       ├── tlb__shootdown_8cpp.js
+│   │       ├── tlb__shootdown_8hpp__dep__incl.md5
+│   │       ├── tlb__shootdown_8hpp__incl.md5
+│   │       ├── tlb__shootdown_8hpp_source.html
+│   │       ├── tlb__shootdown_8hpp.html
+│   │       ├── tlb__shootdown_8hpp.js
 │   │       ├── tmpfs_8cpp__incl.md5
 │   │       ├── tmpfs_8cpp.html
 │   │       ├── tmpfs_8cpp.js
@@ -9244,6 +9291,7 @@
 │   │       ├── x86__64_2hal_2apic_8hpp_source.html
 │   │       ├── x86__64_2hal_2apic_8hpp.html
 │   │       ├── x86__64_2hal_2apic_8hpp.js
+│   │       ├── x86__64_2hal_2cpuid__impl_8hpp__dep__incl.md5
 │   │       ├── x86__64_2hal_2cpuid__impl_8hpp__incl.md5
 │   │       ├── x86__64_2hal_2cpuid__impl_8hpp_source.html
 │   │       ├── x86__64_2hal_2cpuid__impl_8hpp.html
@@ -9251,6 +9299,7 @@
 │   │       ├── x86__64_2hal_2idt_8cpp__incl.md5
 │   │       ├── x86__64_2hal_2idt_8cpp.html
 │   │       ├── x86__64_2hal_2idt_8cpp.js
+│   │       ├── x86__64_2hal_2io__impl_8hpp__dep__incl.md5
 │   │       ├── x86__64_2hal_2io__impl_8hpp__incl.md5
 │   │       ├── x86__64_2hal_2io__impl_8hpp_source.html
 │   │       ├── x86__64_2hal_2io__impl_8hpp.html
@@ -9259,6 +9308,7 @@
 │   │       ├── x86__64_2hal_2msr__impl_8hpp_source.html
 │   │       ├── x86__64_2hal_2msr__impl_8hpp.html
 │   │       ├── x86__64_2hal_2msr__impl_8hpp.js
+│   │       ├── x86__64_2hal_2page__table__impl_8hpp__dep__incl.md5
 │   │       ├── x86__64_2hal_2page__table__impl_8hpp__incl.md5
 │   │       ├── x86__64_2hal_2page__table__impl_8hpp_source.html
 │   │       ├── x86__64_2hal_2page__table__impl_8hpp.html
@@ -9481,9 +9531,13 @@
 │   │   │       │   ├── iopb.cpp
 │   │   │       │   ├── msr_impl.hpp
 │   │   │       │   ├── page_table_impl.hpp
+│   │   │       │   ├── pcid.cpp
+│   │   │       │   ├── pcid.hpp
 │   │   │       │   ├── percpu.cpp
 │   │   │       │   ├── percpu.hpp
 │   │   │       │   ├── rand_impl.hpp
+│   │   │       │   ├── shootdown_ipi.cpp
+│   │   │       │   ├── shootdown_ipi.hpp
 │   │   │       │   ├── smp.cpp
 │   │   │       │   ├── smp.hpp
 │   │   │       │   └── timer.cpp
@@ -9597,6 +9651,8 @@
 │   │   │   ├── pmm_errors.hpp
 │   │   │   ├── pmm.cpp
 │   │   │   ├── pmm.hpp
+│   │   │   ├── tlb_shootdown.cpp
+│   │   │   ├── tlb_shootdown.hpp
 │   │   │   ├── vmm_errors.hpp
 │   │   │   ├── vmm.cpp
 │   │   │   └── vmm.hpp
@@ -10186,4 +10242,4 @@
     ├── yield-probe.c.d
     └── yield-probe.c.elf
 
-111 directories, 10076 files
+111 directories, 10132 files

@@ -51,7 +51,7 @@ var searchData=
   ['errno_2ec_48',['errno.c',['../errno_8c.html',1,'']]],
   ['errno_2eh_49',['errno.h',['../errno_8h.html',1,'']]],
   ['error_50',['ERROR',['../namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2abb1ca97ec761fc37101737ba0aa2e7c5',1,'kernel']]],
-  ['error_51',['Error',['../constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91',1,'Error:&#160;constants.hpp'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106',1,'kernel::Error']]],
+  ['error_51',['Error',['../classkernel_1_1_tlb_shootdown.html#a64bcea6452f5f33c97ef7e0382ed173b',1,'kernel::TlbShootdown::Error'],['../constants_8hpp.html#ab55f54011a8f17279e6e814f97523a91',1,'Error:&#160;constants.hpp'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106',1,'kernel::Error']]],
   ['error_52',['error',['../structkernel_1_1_error_or.html#ae81b3dc9706f1ee04faf1262ef9d950a',1,'kernel::ErrorOr::error'],['../structkernel_1_1_error_or_3_01void_01_4.html#ae671f6e03e40d9ce0083fc281b712664',1,'kernel::ErrorOr&lt; void &gt;::error'],['../classkernel_1_1_logger.html#a2ba5a4154f6993524360a639b3e342b5',1,'kernel::Logger::error()']]],
   ['error_2ehpp_53',['error.hpp',['../error_8hpp.html',1,'']]],
   ['error_5fcode_54',['error_code',['../structkernel_1_1log_1_1_log_entry.html#a9dbc8a02bef01b71e3189a54ca25b872',1,'kernel::log::LogEntry::error_code'],['../kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2',1,'error_code:&#160;kernel.cpp']]],

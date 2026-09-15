@@ -7,9 +7,10 @@ var searchData=
   ['remove_5freference_4',['remove_reference',['../structremove__reference.html',1,'']]],
   ['remove_5freference_3c_20t_20_26_20_3e_5',['remove_reference&lt; T &amp; &gt;',['../structremove__reference_3_01_t_01_6_01_4.html',1,'']]],
   ['remove_5freference_3c_20t_20_26_26_20_3e_6',['remove_reference&lt; T &amp;&amp; &gt;',['../structremove__reference_3_01_t_01_6_6_01_4.html',1,'']]],
-  ['resourcecounters_7',['ResourceCounters',['../structkernel_1_1test_1_1_resource_counters.html',1,'kernel::test']]],
-  ['resourcetracker_8',['ResourceTracker',['../classkernel_1_1test_1_1_resource_tracker.html',1,'kernel::test']]],
-  ['rlimit_9',['Rlimit',['../structkernel_1_1_rlimit.html',1,'kernel::Rlimit'],['../struct_rlimit.html',1,'Rlimit']]],
-  ['rlimit_10',['rlimit',['../structrlimit.html',1,'']]],
-  ['rwlock_11',['RwLock',['../classkernel_1_1sync_1_1_rw_lock.html',1,'kernel::sync']]]
+  ['request_7',['Request',['../structkernel_1_1_tlb_shootdown_1_1_request.html',1,'kernel::TlbShootdown']]],
+  ['resourcecounters_8',['ResourceCounters',['../structkernel_1_1test_1_1_resource_counters.html',1,'kernel::test']]],
+  ['resourcetracker_9',['ResourceTracker',['../classkernel_1_1test_1_1_resource_tracker.html',1,'kernel::test']]],
+  ['rlimit_10',['Rlimit',['../structkernel_1_1_rlimit.html',1,'kernel::Rlimit'],['../struct_rlimit.html',1,'Rlimit']]],
+  ['rlimit_11',['rlimit',['../structrlimit.html',1,'']]],
+  ['rwlock_12',['RwLock',['../classkernel_1_1sync_1_1_rw_lock.html',1,'kernel::sync']]]
 ];

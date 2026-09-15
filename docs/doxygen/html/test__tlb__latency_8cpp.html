@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__tlb__lat
 </div><!--header-->
 <div class="contents">
 
-<p>TLB-latency stubs (issue #85, module 17). No per-flush latency recorder exists (no shootdown path at all) — documented stubs pending the main-branch profiling API.  
+<p>TLB-shootdown latency profiling (issue #160; stubs from issue #85, module 17). Test-side exact-sample recorder only — hot paths stay uninstrumented. No icount here (wall-clock TSC), so comparisons use min-of-N plus margins, never tight bounds. cpu_scaling is reframed as batch-size scaling (no AP boots in this harness, so 1-vs-2-CPU comparison is unimplementable).  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>TLB-latency stubs (issue #85, module 17). No per-flush latency recorder exists (no shootdown path at all) — documented stubs pending the main-branch profiling API. </p>
+<div class="textblock"><p>TLB-shootdown latency profiling (issue #160; stubs from issue #85, module 17). Test-side exact-sample recorder only — hot paths stay uninstrumented. No icount here (wall-clock TSC), so comparisons use min-of-N plus margins, never tight bounds. cpu_scaling is reframed as batch-size scaling (no AP boots in this harness, so 1-vs-2-CPU comparison is unimplementable). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

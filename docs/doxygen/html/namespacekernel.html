@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -193,6 +193,7 @@ Data Structures</h2></td></tr>
 <tr class="memitem:TestContext" id="r_TestContext"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_test_context.html">TestContext</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-runner state that the scheduler's ISR-visible paths must read.  <a href="structkernel_1_1_test_context.html#details">More...</a><br /></td></tr>
 <tr class="memitem:Timeval" id="r_Timeval"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_timeval.html">Timeval</a></td></tr>
+<tr class="memitem:TlbShootdown" id="r_TlbShootdown"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_tlb_shootdown.html">TlbShootdown</a></td></tr>
 <tr class="memitem:Utsname" id="r_Utsname"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_utsname.html">Utsname</a></td></tr>
 <tr class="memitem:Version" id="r_Version"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_version.html">Version</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel version constants and string formatting.  <a href="structkernel_1_1_version.html#details">More...</a><br /></td></tr>
@@ -373,6 +374,7 @@ Variables</h2></td></tr>
 <tr class="memdesc:ab596ed6f93b40b1636ef3dfcf39ebd1e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Value signalled to a NOTIFY-mode recipient's Notify when its slot is released (revoke/dispose/drain): the waker-owns-wakeup contract (CODING_STYLE §12.3). 0 is sync::NOTIFY_INVALID — outside the vector range (33–255) and distinguishable from a real delivery.  <br /></td></tr>
 <tr class="memitem:a4f515ca1539e4a4b052e43cedcc9a1aa" id="r_a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="memItemLeft"><a class="el" href="structkernel_1_1_irq_registration.html">IrqRegistration</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4f515ca1539e4a4b052e43cedcc9a1aa">g_irq_regs</a> [<a class="el" href="nexios__config_8h.html#a6778865aa865b535c1b34a9ace0e3e0d">CONFIG_CAP_MAX_IRQ</a>]</td></tr>
 <tr class="memdesc:a4f515ca1539e4a4b052e43cedcc9a1aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static delivery table (no dynamic allocation on RT paths).  <br /></td></tr>
+<tr class="memitem:a76ff31436540b24ae4d48244f05ce8ef" id="r_a76ff31436540b24ae4d48244f05ce8ef"><td class="memItemLeft">sync::SpinLock&#160;</td><td class="memItemRight"><a class="el" href="#a76ff31436540b24ae4d48244f05ce8ef">shootdown_lock_</a> {}</td></tr>
 <tr class="memitem:afdea84e7e6716009ab17af4b202b8271" id="r_afdea84e7e6716009ab17af4b202b8271"><td class="memItemLeft">const TaskControlBlock *const&#160;</td><td class="memItemRight"><a class="el" href="#afdea84e7e6716009ab17af4b202b8271">heads_</a> []</td></tr>
 <tr class="memitem:ac84f34d32e4683fb9c3f512c093068cf" id="r_ac84f34d32e4683fb9c3f512c093068cf"><td class="memItemLeft">const TaskControlBlock *const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num_priorities&#160;</td><td class="memItemRight"><a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memitem:aec37532c2fb1a123d928e41e13297533" id="r_aec37532c2fb1a123d928e41e13297533"><td class="memItemLeft">const TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a> = t</td></tr>
@@ -2790,6 +2792,20 @@ template&lt;typename T&gt; </div>
 </div><div class="memdoc">
 
 <p>Per-CPU generation sequence counter for the deferred-switch pair (publish-then-bump-then-arm protocol; asm re-verifies before apply). </p>
+
+</div>
+</div>
+<a id="a76ff31436540b24ae4d48244f05ce8ef" name="a76ff31436540b24ae4d48244f05ce8ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a76ff31436540b24ae4d48244f05ce8ef">&#9670;&#160;</a></span>shootdown_lock_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">sync::SpinLock kernel::shootdown_lock_ {}</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

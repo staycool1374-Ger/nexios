@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_r.ht
 <li>register_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a090f79eb27f051efff2c746fa009416a">kernel::Scheduler</a></li>
 <li>register_test()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a595308d487285aa880d9ecd350e97c83">kernel::test::Registry</a></li>
 <li>release()&#160;:&#160;<a class="el" href="classkernel_1_1_kernel_object.html#a606920ca39bdbf2e49ddb42b76cc3370">kernel::KernelObject</a>, <a class="el" href="structkernel_1_1_utsname.html#aba8fc0c4d510122bca1f9faf63ece14c">kernel::Utsname</a>, <a class="el" href="class_unique_ptr.html#a330351f60b992aa2e5c9c6953f87b400">UniquePtr&lt; T, Deleter &gt;</a>, <a class="el" href="struct_utsname.html#a14d02215152c354447ef49255e9e1e78">Utsname</a>, <a class="el" href="structutsname.html#a040b309a89b5548eb5616a4618cfc230">utsname</a></li>
+<li>release_all()&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#a026bd8b2d9cdba46be79f75995839ba3">kernel::TlbShootdown</a></li>
 <li>release_completed()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a2004c846d94d4d05e7bb58ea3e9fd8a1">kernel::elf::ElfLoader</a></li>
 <li>release_slot_idx()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#a5ccf22fe6d74cc52b0be94ba456f6f1d">kernel::IrqDelivery</a></li>
 <li>release_zombie()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a4179a8e67889d0c46eaa1d401762112a">kernel::Scheduler</a></li>
@@ -160,12 +161,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_r.ht
 <li>remove_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a1faa60d8cbc8f5827b9e81f7fe135205">kernel::Scheduler</a></li>
 <li>remove_task_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a7e36233fc7325aab8561e55c8e07e594">kernel::Scheduler</a></li>
 <li>remove_unsafe()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#a51d3311f9146656152dcc24e168220ae">kernel::AllTasksRegistry</a></li>
+<li>request()&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#ac023e26054da1c5c17510558bc738e5f">kernel::TlbShootdown</a></li>
 <li>request_cancel()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a2371a741a7c84d9c71dd98c2f04ed002">kernel::elf::ElfLoader</a></li>
 <li>request_load()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#ad4b037529a02716f60ffd23d522db9ba">kernel::elf::ElfLoader</a></li>
 <li>reschedule()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50">kernel::Scheduler</a></li>
 <li>reserved&#160;:&#160;<a class="el" href="structkernel_1_1_signal_frame.html#ae26550d4173bfc7b7f667e1d7546b797">kernel::SignalFrame</a></li>
-<li>reset()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a0b136e926533436c58605666ec2ffc38">kernel::elf::ElfLoader</a>, <a class="el" href="classkernel_1_1_ready_queue_manager.html#a8c615f613c688f940e117122299af930">kernel::ReadyQueueManager</a>, <a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#afa5d22c63f068ccf347a9545b72a8187">kernel::sync::RwLock</a>, <a class="el" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">kernel::TaskQueue</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a3706a331b1f53a82cec9a9020a1efdc4">kernel::test::Registry</a>, <a class="el" href="class_unique_ptr.html#a36d2b7f272979ead8a83fddb580ab5a2">UniquePtr&lt; T, Deleter &gt;</a></li>
+<li>reset()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a0b136e926533436c58605666ec2ffc38">kernel::elf::ElfLoader</a>, <a class="el" href="classkernel_1_1_ready_queue_manager.html#a8c615f613c688f940e117122299af930">kernel::ReadyQueueManager</a>, <a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#afa5d22c63f068ccf347a9545b72a8187">kernel::sync::RwLock</a>, <a class="el" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">kernel::TaskQueue</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a3706a331b1f53a82cec9a9020a1efdc4">kernel::test::Registry</a>, <a class="el" href="classkernel_1_1_tlb_shootdown.html#ab979fa67204c2decab7089c0a279ed36">kernel::TlbShootdown</a>, <a class="el" href="class_unique_ptr.html#a36d2b7f272979ead8a83fddb580ab5a2">UniquePtr&lt; T, Deleter &gt;</a></li>
 <li>reset_claim()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a88d72d38149d07028714c3d1998d6f0a">kernel::cap::UntypedMem</a></li>
+<li>reset_for_test()&#160;:&#160;<a class="el" href="classarch_1_1_shootdown_batch.html#a9b7ed23b363929d73c130b2bb69783b7">arch::ShootdownBatch</a></li>
 <li>reset_migration_counts()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#acd6906eb05cfa89aab54326f1789ec60">kernel::Scheduler</a></li>
 <li>reset_next_task_id()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a7093e9361600d4f12c22adeb2168ac41">kernel::Scheduler</a></li>
 <li>reset_ready_queue()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#affd53a2cbc20336577d0b87d63714252">kernel::Scheduler</a></li>

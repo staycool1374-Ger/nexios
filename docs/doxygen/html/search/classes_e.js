@@ -15,7 +15,8 @@ var searchData=
   ['timespec_12',['timespec',['../structtimespec.html',1,'']]],
   ['timeval_13',['Timeval',['../structkernel_1_1_timeval.html',1,'kernel::Timeval'],['../struct_timeval.html',1,'Timeval']]],
   ['timeval_14',['timeval',['../structtimeval.html',1,'']]],
-  ['tm_15',['tm',['../structtm.html',1,'']]],
-  ['tmpfsentry_16',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
-  ['tprguard_17',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
+  ['tlbshootdown_15',['TlbShootdown',['../classkernel_1_1_tlb_shootdown.html',1,'kernel']]],
+  ['tm_16',['tm',['../structtm.html',1,'']]],
+  ['tmpfsentry_17',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
+  ['tprguard_18',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
 ];

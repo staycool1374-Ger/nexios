@@ -138,6 +138,7 @@ var namespacekernel =
     [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
     [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],
     [ "Timeval", "structkernel_1_1_timeval.html", "structkernel_1_1_timeval" ],
+    [ "TlbShootdown", "classkernel_1_1_tlb_shootdown.html", "classkernel_1_1_tlb_shootdown" ],
     [ "Utsname", "structkernel_1_1_utsname.html", "structkernel_1_1_utsname" ],
     [ "Version", "structkernel_1_1_version.html", null ],
     [ "Integral", "conceptkernel_1_1_integral.html", null ],
@@ -295,5 +296,6 @@ var namespacekernel =
     [ "scheduler_need_resched", "namespacekernel.html#afb68be65bad6d813cd555b20b9500a4f", null ],
     [ "scheduler_next_task_id", "namespacekernel.html#a34491a1a1dfdbb4bc359f8110d283e93", null ],
     [ "scheduler_save_rsp_to", "namespacekernel.html#a8817c181097f042b8820d9cee86cc4b7", null ],
-    [ "scheduler_switch_generation", "namespacekernel.html#a7f4d2c64ad76e92277ca6d410d650da4", null ]
+    [ "scheduler_switch_generation", "namespacekernel.html#a7f4d2c64ad76e92277ca6d410d650da4", null ],
+    [ "shootdown_lock_", "namespacekernel.html#a76ff31436540b24ae4d48244f05ce8ef", null ]
 ];

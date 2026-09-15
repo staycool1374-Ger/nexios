@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__pcid_8cp
 </div><!--header-->
 <div class="contents">
 
-<p>PCID stubs (issue #85, module 13). No PCID support exists (no CR4.PCIDE programming, no tagged entries anywhere in src/kernel) — documented stubs pending the main-branch API.  
+<p>PCID tests (issue #156; stubs from issue #85, module 13).  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>PCID stubs (issue #85, module 13). No PCID support exists (no CR4.PCIDE programming, no tagged entries anywhere in src/kernel) — documented stubs pending the main-branch API. </p>
+<div class="textblock"><p>PCID tests (issue #156; stubs from issue #85, module 13). </p>
+<p>Two tasks dispatch for real through the tagged publish path; ring-3 cannot read CR3, so tags are verified post-mortem on the TCBs (lazy assignment proves the publish ran tagged) plus direct pcid_tag() unit checks. Retention is structural (stable PCID + stable translation across interleaved execution ⇒ same TLB entries stay valid); TLB-hit cycle timing is deliberately NOT measured (QEMU icount makes it flaky by construction). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

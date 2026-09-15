@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.5 | **Last Release:** v0.4.5 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.5)
+**Build:** v0.4.6 | **Last Release:** v0.4.6 | **Completed milestones:** see `ROADMAP_done.md` (v0.2.x — v0.4.6)
 
 > **This file is no longer the work tracker.** Open bugs and features live as
 > GitHub Issues (repo `staycool1374-Ger/nexios`); progress is kept consistent
@@ -12,14 +12,14 @@
 - **Reference-Enforced Tasks:** When manipulating task blocks or IPC endpoints within the new init system or system calls, strictly enforce reference passing over raw pointers to prevent dangling lookups.
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
-## Active Development — v0.4.6
+## Active Development — v0.4.7
 
-**Current work items — tracked as GitHub Issues in [Milestone v0.4.6](https://github.com/staycool1374-Ger/nexios/milestone/6).**
-See `ROADMAP_done.md` for the v0.4.5 release record.
+**Current work items — tracked as GitHub Issues in [Milestone v0.4.7](https://github.com/staycool1374-Ger/nexios/milestone/7).**
+See `ROADMAP_done.md` for the v0.4.6 release record.
 
 ## Past Releases
 
-See `ROADMAP_done.md` for completed items: v0.2.x — v0.4.4 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak, Fine-Grained Lock & Safety-Guardrail Enforcement, CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X).
+See `ROADMAP_done.md` for completed items: v0.2.x — v0.4.5 (boundary audit, PfA concurrency redesign, test hygiene, H2 race, trigger-driven testing rework, BufferPool +1 PMM leak, Fine-Grained Lock & Safety-Guardrail Enforcement, CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X).
 
 ---
 

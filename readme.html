@@ -130,7 +130,7 @@ Ring 3 via a <code>int 0x82</code> syscall gate (47 syscalls). The
 architecture is mid-transition toward a <strong>capability-based
 microkernel</strong>, where drivers, VFS, and block I/O are externalised
 to sandboxed Ring 3 servers communicating through IPC capabilities.</p>
-<p>Current version: <strong>v0.4.5</strong> — Kernel half merge + Cache coloring (per-CPU FPU ownership, kernel-half page-table merge, distributed runqueues + RT balancer + affinity ABI, cache coloring allocator, WCET re-audit, execution-time accounting).
+<p>Current version: <strong>v0.4.6</strong> — TLB Shootdown (blocking reaper, PCID-tagged switches, selective INVPCID, lazy shootdown queue, IPI batching, latency profiling).
 O(1) priority bitmap scheduler, bounded WCET, hard real-time compliance.</p>
 <hr />
 <h2 id="why-nexios">Why NexIOS</h2>

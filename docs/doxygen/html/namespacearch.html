@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,7 @@ Data Structures</h2></td></tr>
 <tr class="memitem:Caps" id="r_Caps"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_caps.html">Caps</a></td></tr>
 <tr class="memitem:QemuDebugcon" id="r_QemuDebugcon"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_qemu_debugcon.html">QemuDebugcon</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal, lock-free writer to the QEMU debugcon device (I/O port 0xE9). On non-x86_64 targets every method is a no-op so the class can be called unconditionally from shared logging code.  <a href="classarch_1_1_qemu_debugcon.html#details">More...</a><br /></td></tr>
+<tr class="memitem:ShootdownBatch" id="r_ShootdownBatch"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_shootdown_batch.html">ShootdownBatch</a></td></tr>
 <tr class="memitem:TprGuard" id="r_TprGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_tpr_guard.html">TprGuard</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
@@ -185,6 +186,22 @@ Functions</h2></td></tr>
 <tr class="memitem:a8dcc3bc98dc325b9ed085730ea58aaec" id="r_a8dcc3bc98dc325b9ed085730ea58aaec"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8dcc3bc98dc325b9ed085730ea58aaec">plic_complete</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> intid)</td></tr>
 <tr class="memitem:abcb80cfbe5c335ca7659697f28452a7b" id="r_abcb80cfbe5c335ca7659697f28452a7b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abcb80cfbe5c335ca7659697f28452a7b">handle_plic_trap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:ade82e23d3659eed529a27355052fcdac" id="r_ade82e23d3659eed529a27355052fcdac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade82e23d3659eed529a27355052fcdac">handle_kernel_exception</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stval)</td></tr>
+<tr class="memitem:a92da100858fccb20607b0cb06a6c0bb2" id="r_a92da100858fccb20607b0cb06a6c0bb2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a92da100858fccb20607b0cb06a6c0bb2">pcid_init</a> ()</td></tr>
+<tr class="memdesc:a92da100858fccb20607b0cb06a6c0bb2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Probe CPU support once at boot (BSP).  <br /></td></tr>
+<tr class="memitem:ad68968a927e70486a43470b95d5fa854" id="r_ad68968a927e70486a43470b95d5fa854"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad68968a927e70486a43470b95d5fa854">pcid_supported</a> ()</td></tr>
+<tr class="memdesc:ad68968a927e70486a43470b95d5fa854"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when PCID tagging is active (probed + CR4.PCIDE set).  <br /></td></tr>
+<tr class="memitem:a9153f47be5d498ed8fa40d683e328eb4" id="r_a9153f47be5d498ed8fa40d683e328eb4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9153f47be5d498ed8fa40d683e328eb4">pcid_alloc</a> ()</td></tr>
+<tr class="memdesc:a9153f47be5d498ed8fa40d683e328eb4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush, cursor reset to 1 (freed IDs are reused low-first); returns 0 if every ID is still live — the caller falls back untagged. A live ID is never reissued.  <br /></td></tr>
+<tr class="memitem:ac1301ef4c5f5966752ed78bee6f3581a" id="r_ac1301ef4c5f5966752ed78bee6f3581a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac1301ef4c5f5966752ed78bee6f3581a">pcid_free</a> (<a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> pcid)</td></tr>
+<tr class="memdesc:ac1301ef4c5f5966752ed78bee6f3581a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release a user PCID (0 is a no-op).  <br /></td></tr>
+<tr class="memitem:a694d63bf194ebfd33568855434d8753b" id="r_a694d63bf194ebfd33568855434d8753b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a694d63bf194ebfd33568855434d8753b">pcid_epoch</a> ()</td></tr>
+<tr class="memdesc:a694d63bf194ebfd33568855434d8753b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current rollover epoch (diagnostic/test only).  <br /></td></tr>
+<tr class="memitem:a6ca9469d1ae1f5c05c3a228e52059fb9" id="r_a6ca9469d1ae1f5c05c3a228e52059fb9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6ca9469d1ae1f5c05c3a228e52059fb9">pcid_test_force</a> ()</td></tr>
+<tr class="memdesc:a6ca9469d1ae1f5c05c3a228e52059fb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force allocator availability ON for logic testing (issue #156, D2). Test-only: lets the bitmap/epoch/rollover paths run on CPUs without PCID hardware. DANGER: while forced, a dispatched user task would publish a tagged CR3 the hardware rejects (#GP) — never dispatch user tasks while forced, and always close with <a class="el" href="#a6a7ecf8ae48d16d94a24a43addc6ea79" title="Restore hardware truth after forced testing (g_supported = has_pcid()). Called by tests at exit and b...">pcid_test_reset()</a> (plus the isolate hook).  <br /></td></tr>
+<tr class="memitem:a6a7ecf8ae48d16d94a24a43addc6ea79" id="r_a6a7ecf8ae48d16d94a24a43addc6ea79"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6a7ecf8ae48d16d94a24a43addc6ea79">pcid_test_reset</a> ()</td></tr>
+<tr class="memdesc:a6a7ecf8ae48d16d94a24a43addc6ea79"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore hardware truth after forced testing (g_supported = has_pcid()). Called by tests at exit and by test isolation on restore.  <br /></td></tr>
+<tr class="memitem:a26f0cec80cb2aa23810e6f3b3a1afad1" id="r_a26f0cec80cb2aa23810e6f3b3a1afad1"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a26f0cec80cb2aa23810e6f3b3a1afad1">pcid_tag</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pml4_phys, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> pcid)</td></tr>
+<tr class="memdesc:a26f0cec80cb2aa23810e6f3b3a1afad1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys). Hot path: single compare; <a class="el" href="#a9153f47be5d498ed8fa40d683e328eb4" title="Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush,...">pcid_alloc()</a> only returns nonzero when tagging is active, so no support check is needed here.  <br /></td></tr>
 <tr class="memitem:aa083df7d97e20366e210c1f978abed5d" id="r_aa083df7d97e20366e210c1f978abed5d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa083df7d97e20366e210c1f978abed5d">percpu_init_bsp</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bsp_lapic_id)</td></tr>
 <tr class="memitem:ae41ccc115f18da2b4a867210a1a99cd0" id="r_ae41ccc115f18da2b4a867210a1a99cd0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae41ccc115f18da2b4a867210a1a99cd0">percpu_init_ap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> logical_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> lapic_id)</td></tr>
 <tr class="memitem:a1888fb8a7b37d30dec1c191cacb1fbf2" id="r_a1888fb8a7b37d30dec1c191cacb1fbf2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1888fb8a7b37d30dec1c191cacb1fbf2">virtio_map_mmio</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> bar, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> offset, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> length, VirtioMmio &amp;mmio_out, PciBdf bdf)</td></tr>
@@ -254,6 +271,10 @@ Variables</h2></td></tr>
 <tr class="memitem:aa595a02252ff6e7295062c376298dfea" id="r_aa595a02252ff6e7295062c376298dfea"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa595a02252ff6e7295062c376298dfea">IRQ_KEYBOARD</a> = 12</td></tr>
 <tr class="memitem:aabce4ce1e12afd68caf560773edc154f" id="r_aabce4ce1e12afd68caf560773edc154f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aabce4ce1e12afd68caf560773edc154f">__isr_vector</a> []</td></tr>
 <tr class="memdesc:aabce4ce1e12afd68caf560773edc154f"><td class="mdescLeft">&#160;</td><td class="mdescRight">External ISR vector table defined in the linker or assembly entry point.  <br /></td></tr>
+<tr class="memitem:a01fc41f7bc66d833a4ddd66bbb110727" id="r_a01fc41f7bc66d833a4ddd66bbb110727"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01fc41f7bc66d833a4ddd66bbb110727">PCID_MAX</a> = 4095</td></tr>
+<tr class="memdesc:a01fc41f7bc66d833a4ddd66bbb110727"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum PCID value (12-bit field, 0 reserved for kernel).  <br /></td></tr>
+<tr class="memitem:a3b6a767ab9a831c83dcac5d92a9b2197" id="r_a3b6a767ab9a831c83dcac5d92a9b2197"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3b6a767ab9a831c83dcac5d92a9b2197">PCID_KERNEL</a> = 0</td></tr>
+<tr class="memdesc:a3b6a767ab9a831c83dcac5d92a9b2197"><td class="mdescLeft">&#160;</td><td class="mdescRight">PCID reserved for the kernel PML4 fallback (never allocated).  <br /></td></tr>
 <tr class="memitem:a74ee5e38b6239c12f5cadd479e625d7d" id="r_a74ee5e38b6239c12f5cadd479e625d7d"><td class="memItemLeft">PerCpu&#160;</td><td class="memItemRight"><a class="el" href="#a74ee5e38b6239c12f5cadd479e625d7d">per_cpu</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:a57c6bb74fdc3ee11eecab91b0142e95b" id="r_a57c6bb74fdc3ee11eecab91b0142e95b"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a57c6bb74fdc3ee11eecab91b0142e95b">HHDM_OFFSET</a> = CONFIG_HHDM_OFFSET</td></tr>
 <tr class="memdesc:a57c6bb74fdc3ee11eecab91b0142e95b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Higher-half offset: convert physical → kernel-visible virtual.  <br /></td></tr>
@@ -1429,6 +1450,170 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="namespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph.png" border="0" usemap="#anamespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 16 -->
 </div>
+
+</div>
+</div>
+<a id="a9153f47be5d498ed8fa40d683e328eb4" name="a9153f47be5d498ed8fa40d683e328eb4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9153f47be5d498ed8fa40d683e328eb4">&#9670;&#160;</a></span>pcid_alloc()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::pcid_alloc </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush, cursor reset to 1 (freed IDs are reused low-first); returns 0 if every ID is still live — the caller falls back untagged. A live ID is never reissued. </p>
+
+</div>
+</div>
+<a id="a694d63bf194ebfd33568855434d8753b" name="a694d63bf194ebfd33568855434d8753b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a694d63bf194ebfd33568855434d8753b">&#9670;&#160;</a></span>pcid_epoch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::pcid_epoch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Current rollover epoch (diagnostic/test only). </p>
+
+</div>
+</div>
+<a id="ac1301ef4c5f5966752ed78bee6f3581a" name="ac1301ef4c5f5966752ed78bee6f3581a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac1301ef4c5f5966752ed78bee6f3581a">&#9670;&#160;</a></span>pcid_free()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::pcid_free </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Release a user PCID (0 is a no-op). </p>
+
+</div>
+</div>
+<a id="a92da100858fccb20607b0cb06a6c0bb2" name="a92da100858fccb20607b0cb06a6c0bb2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92da100858fccb20607b0cb06a6c0bb2">&#9670;&#160;</a></span>pcid_init()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::pcid_init </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Probe CPU support once at boot (BSP). </p>
+
+</div>
+</div>
+<a id="ad68968a927e70486a43470b95d5fa854" name="ad68968a927e70486a43470b95d5fa854"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad68968a927e70486a43470b95d5fa854">&#9670;&#160;</a></span>pcid_supported()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::pcid_supported </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>True when PCID tagging is active (probed + CR4.PCIDE set). </p>
+
+</div>
+</div>
+<a id="a26f0cec80cb2aa23810e6f3b3a1afad1" name="a26f0cec80cb2aa23810e6f3b3a1afad1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a26f0cec80cb2aa23810e6f3b3a1afad1">&#9670;&#160;</a></span>pcid_tag()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::pcid_tag </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pml4_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys). Hot path: single compare; <a class="el" href="#a9153f47be5d498ed8fa40d683e328eb4" title="Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush,...">pcid_alloc()</a> only returns nonzero when tagging is active, so no support check is needed here. </p>
+
+</div>
+</div>
+<a id="a6ca9469d1ae1f5c05c3a228e52059fb9" name="a6ca9469d1ae1f5c05c3a228e52059fb9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ca9469d1ae1f5c05c3a228e52059fb9">&#9670;&#160;</a></span>pcid_test_force()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::pcid_test_force </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Force allocator availability ON for logic testing (issue #156, D2). Test-only: lets the bitmap/epoch/rollover paths run on CPUs without PCID hardware. DANGER: while forced, a dispatched user task would publish a tagged CR3 the hardware rejects (#GP) — never dispatch user tasks while forced, and always close with <a class="el" href="#a6a7ecf8ae48d16d94a24a43addc6ea79" title="Restore hardware truth after forced testing (g_supported = has_pcid()). Called by tests at exit and b...">pcid_test_reset()</a> (plus the isolate hook). </p>
+
+</div>
+</div>
+<a id="a6a7ecf8ae48d16d94a24a43addc6ea79" name="a6a7ecf8ae48d16d94a24a43addc6ea79"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a7ecf8ae48d16d94a24a43addc6ea79">&#9670;&#160;</a></span>pcid_test_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::pcid_test_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Restore hardware truth after forced testing (g_supported = has_pcid()). Called by tests at exit and by test isolation on restore. </p>
 
 </div>
 </div>
@@ -3230,6 +3415,54 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3b6a767ab9a831c83dcac5d92a9b2197" name="a3b6a767ab9a831c83dcac5d92a9b2197"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b6a767ab9a831c83dcac5d92a9b2197">&#9670;&#160;</a></span>PCID_KERNEL</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::PCID_KERNEL = 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>PCID reserved for the kernel PML4 fallback (never allocated). </p>
+
+</div>
+</div>
+<a id="a01fc41f7bc66d833a4ddd66bbb110727" name="a01fc41f7bc66d833a4ddd66bbb110727"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a01fc41f7bc66d833a4ddd66bbb110727">&#9670;&#160;</a></span>PCID_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a> arch::PCID_MAX = 4095</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maximum PCID value (12-bit field, 0 reserved for kernel). </p>
 
 </div>
 </div>

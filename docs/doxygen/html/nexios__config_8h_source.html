@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -759,79 +759,87 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('nexios__config
 <div class="line"><a id="l00878" name="l00878"></a><span class="lineno">  878</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00879" name="l00879"></a><span class="lineno">  879</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00880" name="l00880"></a><span class="lineno">  880</span></div>
-<div class="line"><a id="l00885" name="l00885"></a><span class="lineno">  885</span><span class="preprocessor">#ifndef CONFIG_PAN</span></div>
-<div class="line"><a id="l00886" name="l00886"></a><span class="lineno">  886</span><span class="preprocessor">#if defined(CONFIG_ARCH_AARCH64)</span></div>
-<div class="line"><a id="l00887" name="l00887"></a><span class="lineno">  887</span><span class="preprocessor">#define CONFIG_PAN 1</span></div>
+<div class="line"><a id="l00885" name="l00885"></a><span class="lineno">  885</span><span class="preprocessor">#ifndef CONFIG_PCID</span></div>
+<div class="line"><a id="l00886" name="l00886"></a><span class="lineno">  886</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00887" name="l00887"></a><span class="lineno">  887</span><span class="preprocessor">#define CONFIG_PCID 1</span></div>
 <div class="line"><a id="l00888" name="l00888"></a><span class="lineno">  888</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00889" name="l00889"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aefd329133bd76dfd99be9cf6df1d57ed">  889</a></span><span class="preprocessor">#define CONFIG_PAN 0</span></div>
+<div class="line"><a id="l00889" name="l00889"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#ae4a9bca121aaa8acc25574a4cc3abbcf">  889</a></span><span class="preprocessor">#define CONFIG_PCID 0</span></div>
 <div class="line"><a id="l00890" name="l00890"></a><span class="lineno">  890</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00891" name="l00891"></a><span class="lineno">  891</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00892" name="l00892"></a><span class="lineno">  892</span></div>
-<div class="line"><a id="l00894" name="l00894"></a><span class="lineno">  894</span><span class="preprocessor">#ifndef CONFIG_OOM_HOOK</span></div>
-<div class="line"><a id="l00895" name="l00895"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aaa67bf023e8838df96aa8ec37674ee90">  895</a></span><span class="preprocessor">#define CONFIG_OOM_HOOK 0</span></div>
-<div class="line"><a id="l00896" name="l00896"></a><span class="lineno">  896</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00897" name="l00897"></a><span class="lineno">  897</span></div>
-<div class="line"><a id="l00903" name="l00903"></a><span class="lineno">  903</span><span class="preprocessor">#ifndef CONFIG_OOM_POLICY</span></div>
-<div class="line"><a id="l00904" name="l00904"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aed09cfec33d0062ef3e3e9b872f17cc2">  904</a></span><span class="preprocessor">#define CONFIG_OOM_POLICY 0</span></div>
+<div class="line"><a id="l00895" name="l00895"></a><span class="lineno">  895</span></div>
+<div class="line"><a id="l00900" name="l00900"></a><span class="lineno">  900</span><span class="preprocessor">#ifndef CONFIG_PAN</span></div>
+<div class="line"><a id="l00901" name="l00901"></a><span class="lineno">  901</span><span class="preprocessor">#if defined(CONFIG_ARCH_AARCH64)</span></div>
+<div class="line"><a id="l00902" name="l00902"></a><span class="lineno">  902</span><span class="preprocessor">#define CONFIG_PAN 1</span></div>
+<div class="line"><a id="l00903" name="l00903"></a><span class="lineno">  903</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00904" name="l00904"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aefd329133bd76dfd99be9cf6df1d57ed">  904</a></span><span class="preprocessor">#define CONFIG_PAN 0</span></div>
 <div class="line"><a id="l00905" name="l00905"></a><span class="lineno">  905</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00906" name="l00906"></a><span class="lineno">  906</span></div>
-<div class="line"><a id="l00911" name="l00911"></a><span class="lineno">  911</span><span class="preprocessor">#ifndef CONFIG_STATIC_POOLS_ONLY</span></div>
-<div class="line"><a id="l00912" name="l00912"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#ab4d048869d4222593c9b0691268d36bf">  912</a></span><span class="preprocessor">#define CONFIG_STATIC_POOLS_ONLY 0</span></div>
-<div class="line"><a id="l00913" name="l00913"></a><span class="lineno">  913</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00914" name="l00914"></a><span class="lineno">  914</span></div>
-<div class="line"><a id="l00919" name="l00919"></a><span class="lineno">  919</span><span class="preprocessor">#ifndef CONFIG_MEMORY_BUDGET</span></div>
-<div class="line"><a id="l00920" name="l00920"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a9cbca81eabffa4f1a76bc6230845e648">  920</a></span><span class="preprocessor">#define CONFIG_MEMORY_BUDGET 0</span></div>
-<div class="line"><a id="l00921" name="l00921"></a><span class="lineno">  921</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00922" name="l00922"></a><span class="lineno">  922</span></div>
-<div class="line"><a id="l00924" name="l00924"></a><span class="lineno">  924</span><span class="preprocessor">#ifndef CONFIG_INIT_HOOK</span></div>
-<div class="line"><a id="l00925" name="l00925"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a5f748bfe245b9c25fb556172a5e4f2e5">  925</a></span><span class="preprocessor">#define CONFIG_INIT_HOOK 0</span></div>
-<div class="line"><a id="l00926" name="l00926"></a><span class="lineno">  926</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00927" name="l00927"></a><span class="lineno">  927</span></div>
-<div class="line"><a id="l00929" name="l00929"></a><span class="lineno">  929</span><span class="preprocessor">#ifndef CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</span></div>
-<div class="line"><a id="l00930" name="l00930"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#afd4dfde1bb949f7e03c90dea7fe274f9">  930</a></span><span class="preprocessor">#define CONFIG_SPORADIC_SERVER_DEADLINE_HOOK 1</span></div>
-<div class="line"><a id="l00931" name="l00931"></a><span class="lineno">  931</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00932" name="l00932"></a><span class="lineno">  932</span></div>
-<div class="line"><a id="l00934" name="l00934"></a><span class="lineno">  934</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MISS_DETECTION</span></div>
-<div class="line"><a id="l00935" name="l00935"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#ad7f0edb3b1228f6361d92c6cfa81fc30">  935</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MISS_DETECTION 1</span></div>
+<div class="line"><a id="l00906" name="l00906"></a><span class="lineno">  906</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00907" name="l00907"></a><span class="lineno">  907</span></div>
+<div class="line"><a id="l00909" name="l00909"></a><span class="lineno">  909</span><span class="preprocessor">#ifndef CONFIG_OOM_HOOK</span></div>
+<div class="line"><a id="l00910" name="l00910"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aaa67bf023e8838df96aa8ec37674ee90">  910</a></span><span class="preprocessor">#define CONFIG_OOM_HOOK 0</span></div>
+<div class="line"><a id="l00911" name="l00911"></a><span class="lineno">  911</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00912" name="l00912"></a><span class="lineno">  912</span></div>
+<div class="line"><a id="l00918" name="l00918"></a><span class="lineno">  918</span><span class="preprocessor">#ifndef CONFIG_OOM_POLICY</span></div>
+<div class="line"><a id="l00919" name="l00919"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#aed09cfec33d0062ef3e3e9b872f17cc2">  919</a></span><span class="preprocessor">#define CONFIG_OOM_POLICY 0</span></div>
+<div class="line"><a id="l00920" name="l00920"></a><span class="lineno">  920</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00921" name="l00921"></a><span class="lineno">  921</span></div>
+<div class="line"><a id="l00926" name="l00926"></a><span class="lineno">  926</span><span class="preprocessor">#ifndef CONFIG_STATIC_POOLS_ONLY</span></div>
+<div class="line"><a id="l00927" name="l00927"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#ab4d048869d4222593c9b0691268d36bf">  927</a></span><span class="preprocessor">#define CONFIG_STATIC_POOLS_ONLY 0</span></div>
+<div class="line"><a id="l00928" name="l00928"></a><span class="lineno">  928</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00929" name="l00929"></a><span class="lineno">  929</span></div>
+<div class="line"><a id="l00934" name="l00934"></a><span class="lineno">  934</span><span class="preprocessor">#ifndef CONFIG_MEMORY_BUDGET</span></div>
+<div class="line"><a id="l00935" name="l00935"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a9cbca81eabffa4f1a76bc6230845e648">  935</a></span><span class="preprocessor">#define CONFIG_MEMORY_BUDGET 0</span></div>
 <div class="line"><a id="l00936" name="l00936"></a><span class="lineno">  936</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00937" name="l00937"></a><span class="lineno">  937</span></div>
-<div class="line"><a id="l00941" name="l00941"></a><span class="lineno">  941</span><span class="preprocessor">#ifndef CONFIG_WCET_OVERRUN_DETECTION</span></div>
-<div class="line"><a id="l00942" name="l00942"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a5347bb9dbf512963efd21650e2d3961c">  942</a></span><span class="preprocessor">#define CONFIG_WCET_OVERRUN_DETECTION 1</span></div>
-<div class="line"><a id="l00943" name="l00943"></a><span class="lineno">  943</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00944" name="l00944"></a><span class="lineno">  944</span></div>
-<div class="line"><a id="l00947" name="l00947"></a><span class="lineno">  947</span><span class="preprocessor">#ifndef CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE</span></div>
-<div class="line"><a id="l00948" name="l00948"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#afa71e737433cca1a4223e904afcf0a9c">  948</a></span><span class="preprocessor">#define CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE 0</span></div>
-<div class="line"><a id="l00949" name="l00949"></a><span class="lineno">  949</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00950" name="l00950"></a><span class="lineno">  950</span></div>
-<div class="line"><a id="l00957" name="l00957"></a><span class="lineno">  957</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MONITOR_TASK</span></div>
-<div class="line"><a id="l00958" name="l00958"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a9a7951d5ba3d567a2f0e372fd5540a44">  958</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MONITOR_TASK 1</span></div>
-<div class="line"><a id="l00959" name="l00959"></a><span class="lineno">  959</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00960" name="l00960"></a><span class="lineno">  960</span></div>
-<div class="line"><a id="l00965" name="l00965"></a><span class="lineno">  965</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_ACTION</span></div>
-<div class="line"><a id="l00966" name="l00966"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a515a1e55a71216c50a7d94659c372998">  966</a></span><span class="preprocessor">#define CONFIG_DEADLINE_ACTION 0</span></div>
-<div class="line"><a id="l00967" name="l00967"></a><span class="lineno">  967</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00968" name="l00968"></a><span class="lineno">  968</span></div>
-<div class="line"><a id="l00971" name="l00971"></a><span class="lineno">  971</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MONITOR_PID</span></div>
-<div class="line"><a id="l00972" name="l00972"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#adbfd2982bfd8abcdb392578155755823">  972</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MONITOR_PID 0</span></div>
-<div class="line"><a id="l00973" name="l00973"></a><span class="lineno">  973</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00974" name="l00974"></a><span class="lineno">  974</span> </div>
-<div class="line"><a id="l00975" name="l00975"></a><span class="lineno">  975</span><span class="comment">// ---------------------------------------------------------------------------</span></div>
-<div class="line"><a id="l00976" name="l00976"></a><span class="lineno">  976</span><span class="comment">// Custom Assertion Macro</span></div>
-<div class="line"><a id="l00977" name="l00977"></a><span class="lineno">  977</span><span class="comment">// ---------------------------------------------------------------------------</span></div>
-<div class="line"><a id="l00979" name="l00979"></a><span class="lineno">  979</span><span class="preprocessor">#ifndef CONFIG_ASSERT</span></div>
-<div class="line"><a id="l00980" name="l00980"></a><span class="lineno">  980</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> <span class="keywordtype">void</span> <a class="code hl_function" href="nexios__config_8h.html#ae22655ba6f328217f1ebd6248ed82727">panic</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *msg);</div>
-<div class="foldopen" id="foldopen00981" data-start="" data-end="">
-<div class="line"><a id="l00981" name="l00981"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#af7dbe515e22f94aa374530a637f8418c">  981</a></span><span class="preprocessor">#define CONFIG_ASSERT(expr)                                                    \</span></div>
-<div class="line"><a id="l00982" name="l00982"></a><span class="lineno">  982</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00983" name="l00983"></a><span class="lineno">  983</span><span class="preprocessor">        if (!(expr)) {                                                         \</span></div>
-<div class="line"><a id="l00984" name="l00984"></a><span class="lineno">  984</span><span class="preprocessor">            panic(&quot;CONFIG_ASSERT: &quot; #expr &quot; at &quot; __FILE__);                    \</span></div>
-<div class="line"><a id="l00985" name="l00985"></a><span class="lineno">  985</span><span class="preprocessor">        }                                                                      \</span></div>
-<div class="line"><a id="l00986" name="l00986"></a><span class="lineno">  986</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00939" name="l00939"></a><span class="lineno">  939</span><span class="preprocessor">#ifndef CONFIG_INIT_HOOK</span></div>
+<div class="line"><a id="l00940" name="l00940"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a5f748bfe245b9c25fb556172a5e4f2e5">  940</a></span><span class="preprocessor">#define CONFIG_INIT_HOOK 0</span></div>
+<div class="line"><a id="l00941" name="l00941"></a><span class="lineno">  941</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00942" name="l00942"></a><span class="lineno">  942</span></div>
+<div class="line"><a id="l00944" name="l00944"></a><span class="lineno">  944</span><span class="preprocessor">#ifndef CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</span></div>
+<div class="line"><a id="l00945" name="l00945"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#afd4dfde1bb949f7e03c90dea7fe274f9">  945</a></span><span class="preprocessor">#define CONFIG_SPORADIC_SERVER_DEADLINE_HOOK 1</span></div>
+<div class="line"><a id="l00946" name="l00946"></a><span class="lineno">  946</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00947" name="l00947"></a><span class="lineno">  947</span></div>
+<div class="line"><a id="l00949" name="l00949"></a><span class="lineno">  949</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MISS_DETECTION</span></div>
+<div class="line"><a id="l00950" name="l00950"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#ad7f0edb3b1228f6361d92c6cfa81fc30">  950</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MISS_DETECTION 1</span></div>
+<div class="line"><a id="l00951" name="l00951"></a><span class="lineno">  951</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00952" name="l00952"></a><span class="lineno">  952</span></div>
+<div class="line"><a id="l00956" name="l00956"></a><span class="lineno">  956</span><span class="preprocessor">#ifndef CONFIG_WCET_OVERRUN_DETECTION</span></div>
+<div class="line"><a id="l00957" name="l00957"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a5347bb9dbf512963efd21650e2d3961c">  957</a></span><span class="preprocessor">#define CONFIG_WCET_OVERRUN_DETECTION 1</span></div>
+<div class="line"><a id="l00958" name="l00958"></a><span class="lineno">  958</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00959" name="l00959"></a><span class="lineno">  959</span></div>
+<div class="line"><a id="l00962" name="l00962"></a><span class="lineno">  962</span><span class="preprocessor">#ifndef CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE</span></div>
+<div class="line"><a id="l00963" name="l00963"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#afa71e737433cca1a4223e904afcf0a9c">  963</a></span><span class="preprocessor">#define CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE 0</span></div>
+<div class="line"><a id="l00964" name="l00964"></a><span class="lineno">  964</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00965" name="l00965"></a><span class="lineno">  965</span></div>
+<div class="line"><a id="l00972" name="l00972"></a><span class="lineno">  972</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MONITOR_TASK</span></div>
+<div class="line"><a id="l00973" name="l00973"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a9a7951d5ba3d567a2f0e372fd5540a44">  973</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MONITOR_TASK 1</span></div>
+<div class="line"><a id="l00974" name="l00974"></a><span class="lineno">  974</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00975" name="l00975"></a><span class="lineno">  975</span></div>
+<div class="line"><a id="l00980" name="l00980"></a><span class="lineno">  980</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_ACTION</span></div>
+<div class="line"><a id="l00981" name="l00981"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#a515a1e55a71216c50a7d94659c372998">  981</a></span><span class="preprocessor">#define CONFIG_DEADLINE_ACTION 0</span></div>
+<div class="line"><a id="l00982" name="l00982"></a><span class="lineno">  982</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00983" name="l00983"></a><span class="lineno">  983</span></div>
+<div class="line"><a id="l00986" name="l00986"></a><span class="lineno">  986</span><span class="preprocessor">#ifndef CONFIG_DEADLINE_MONITOR_PID</span></div>
+<div class="line"><a id="l00987" name="l00987"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#adbfd2982bfd8abcdb392578155755823">  987</a></span><span class="preprocessor">#define CONFIG_DEADLINE_MONITOR_PID 0</span></div>
+<div class="line"><a id="l00988" name="l00988"></a><span class="lineno">  988</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00989" name="l00989"></a><span class="lineno">  989</span> </div>
+<div class="line"><a id="l00990" name="l00990"></a><span class="lineno">  990</span><span class="comment">// ---------------------------------------------------------------------------</span></div>
+<div class="line"><a id="l00991" name="l00991"></a><span class="lineno">  991</span><span class="comment">// Custom Assertion Macro</span></div>
+<div class="line"><a id="l00992" name="l00992"></a><span class="lineno">  992</span><span class="comment">// ---------------------------------------------------------------------------</span></div>
+<div class="line"><a id="l00994" name="l00994"></a><span class="lineno">  994</span><span class="preprocessor">#ifndef CONFIG_ASSERT</span></div>
+<div class="line"><a id="l00995" name="l00995"></a><span class="lineno">  995</span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> <span class="keywordtype">void</span> <a class="code hl_function" href="nexios__config_8h.html#ae22655ba6f328217f1ebd6248ed82727">panic</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *msg);</div>
+<div class="foldopen" id="foldopen00996" data-start="" data-end="">
+<div class="line"><a id="l00996" name="l00996"></a><span class="lineno"><a class="line" href="nexios__config_8h.html#af7dbe515e22f94aa374530a637f8418c">  996</a></span><span class="preprocessor">#define CONFIG_ASSERT(expr)                                                    \</span></div>
+<div class="line"><a id="l00997" name="l00997"></a><span class="lineno">  997</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00998" name="l00998"></a><span class="lineno">  998</span><span class="preprocessor">        if (!(expr)) {                                                         \</span></div>
+<div class="line"><a id="l00999" name="l00999"></a><span class="lineno">  999</span><span class="preprocessor">            panic(&quot;CONFIG_ASSERT: &quot; #expr &quot; at &quot; __FILE__);                    \</span></div>
+<div class="line"><a id="l01000" name="l01000"></a><span class="lineno"> 1000</span><span class="preprocessor">        }                                                                      \</span></div>
+<div class="line"><a id="l01001" name="l01001"></a><span class="lineno"> 1001</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00987" name="l00987"></a><span class="lineno">  987</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00988" name="l00988"></a><span class="lineno">  988</span> </div>
-<div class="line"><a id="l00989" name="l00989"></a><span class="lineno">  989</span><span class="preprocessor">#endif </span><span class="comment">// JARVIS_CONFIG_H</span></div>
-<div class="ttc" id="anexios__config_8h_html_ae22655ba6f328217f1ebd6248ed82727"><div class="ttname"><a href="nexios__config_8h.html#ae22655ba6f328217f1ebd6248ed82727">panic</a></div><div class="ttdeci">void panic(const char *msg)</div><div class="ttdoc">Overridable assertion macro. Default calls panic on failure.</div><div class="ttdef"><b>Definition</b> kernel.cpp:1076</div></div>
+<div class="line"><a id="l01002" name="l01002"></a><span class="lineno"> 1002</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l01003" name="l01003"></a><span class="lineno"> 1003</span> </div>
+<div class="line"><a id="l01004" name="l01004"></a><span class="lineno"> 1004</span><span class="preprocessor">#endif </span><span class="comment">// JARVIS_CONFIG_H</span></div>
+<div class="ttc" id="anexios__config_8h_html_ae22655ba6f328217f1ebd6248ed82727"><div class="ttname"><a href="nexios__config_8h.html#ae22655ba6f328217f1ebd6248ed82727">panic</a></div><div class="ttdeci">void panic(const char *msg)</div><div class="ttdoc">Overridable assertion macro. Default calls panic on failure.</div><div class="ttdef"><b>Definition</b> kernel.cpp:1113</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

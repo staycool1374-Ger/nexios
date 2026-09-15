@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -283,6 +283,7 @@ Macros</h2></td></tr>
 <tr class="memitem:a58fca7bf098e6e35cc3151a9389b6105" id="r_a58fca7bf098e6e35cc3151a9389b6105"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a58fca7bf098e6e35cc3151a9389b6105">CONFIG_CANARY_SAMPLE_TICKS</a>&#160;&#160;&#160;64</td></tr>
 <tr class="memitem:a90a087504d57cc28a18745a08011e315" id="r_a90a087504d57cc28a18745a08011e315"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a90a087504d57cc28a18745a08011e315">CONFIG_SMEP</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:a0416a4b1c68b556f00af37b87fdd0742" id="r_a0416a4b1c68b556f00af37b87fdd0742"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0416a4b1c68b556f00af37b87fdd0742">CONFIG_SMAP</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:ae4a9bca121aaa8acc25574a4cc3abbcf" id="r_ae4a9bca121aaa8acc25574a4cc3abbcf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae4a9bca121aaa8acc25574a4cc3abbcf">CONFIG_PCID</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:aefd329133bd76dfd99be9cf6df1d57ed" id="r_aefd329133bd76dfd99be9cf6df1d57ed"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aefd329133bd76dfd99be9cf6df1d57ed">CONFIG_PAN</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:aaa67bf023e8838df96aa8ec37674ee90" id="r_aaa67bf023e8838df96aa8ec37674ee90"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aaa67bf023e8838df96aa8ec37674ee90">CONFIG_OOM_HOOK</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memdesc:aaa67bf023e8838df96aa8ec37674ee90"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol oom_hook(size_t requested_size).  <br /></td></tr>
@@ -1858,7 +1859,22 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64). Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see <a class="el" href="namespacearch.html#ae75234524de4f60ea09150c8da54576b" title="Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4. Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1....">arch::pan_init()</a>); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for stac/clac (mirror of x86_64 SMAP). Runtime-gated by <a class="el" href="namespacearch.html#a84c3ad81d357b03972adf4feea72835a">arch::g_pan_supported</a>. </p>
+<p>Maximum PCID value lives as <a class="el" href="namespacearch.html#a01fc41f7bc66d833a4ddd66bbb110727" title="Maximum PCID value (12-bit field, 0 reserved for kernel).">arch::PCID_MAX</a> (4095, 12-bit field with 0 reserved) next to the allocator — no duplicate macro here by design (a second constant invites off-by-one drift). v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64). Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see <a class="el" href="namespacearch.html#ae75234524de4f60ea09150c8da54576b" title="Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4. Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1....">arch::pan_init()</a>); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for stac/clac (mirror of x86_64 SMAP). Runtime-gated by <a class="el" href="namespacearch.html#a84c3ad81d357b03972adf4feea72835a">arch::g_pan_supported</a>. </p>
+
+</div>
+</div>
+<a id="ae4a9bca121aaa8acc25574a4cc3abbcf" name="ae4a9bca121aaa8acc25574a4cc3abbcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4a9bca121aaa8acc25574a4cc3abbcf">&#9670;&#160;</a></span>CONFIG_PCID</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_PCID&#160;&#160;&#160;0</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>v0.4.6 issue #156: PCID (process-context identifiers) — CR4 bit 17. On x86_64 the boot path sets it when CPUID leaf 1 ECX[17] is supported; CR3 publishes then carry the TCB's PCID in the low 12 bits so switches retain TLB entries. Unsupported CPUs keep raw-phys publish (full flush). </p>
 
 </div>
 </div>

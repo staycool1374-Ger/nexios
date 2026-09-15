@@ -4,6 +4,7 @@ var annotated_dup =
       [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
       [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
       [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
+      [ "ShootdownBatch", "classarch_1_1_shootdown_batch.html", "classarch_1_1_shootdown_batch" ],
       [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ]
     ] ],
     [ "crypto", "namespacecrypto.html", [
@@ -117,6 +118,7 @@ var annotated_dup =
       [ "TaskQueue", "classkernel_1_1_task_queue.html", "classkernel_1_1_task_queue" ],
       [ "TestContext", "structkernel_1_1_test_context.html", "structkernel_1_1_test_context" ],
       [ "Timeval", "structkernel_1_1_timeval.html", "structkernel_1_1_timeval" ],
+      [ "TlbShootdown", "classkernel_1_1_tlb_shootdown.html", "classkernel_1_1_tlb_shootdown" ],
       [ "Utsname", "structkernel_1_1_utsname.html", "structkernel_1_1_utsname" ],
       [ "Version", "structkernel_1_1_version.html", null ]
     ] ],

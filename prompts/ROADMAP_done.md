@@ -1,5 +1,38 @@
 # Completed Roadmap Items
 
+## v0.4.6 — TLB Shootdown (RELEASED 2026-09-15)
+
+**Purpose:** Blocking reaper, PCID-tagged CR3 switches, selective
+INVPCID invalidation, lazy shootdown queue + quarantine, IPI batching
+delivery, TLB latency profiling. Milestone v0.4.6 has 0 open issues.
+
+- **Blocking reaper** (#155) — PID 1 parks in `Notify::wait` with a
+  level-triggered drain loop instead of spinning; terminate() pokes
+  after every zombie-list push; daemon IPC wakes via the generic
+  BLOCKED path; shell selftest kicks after the prio raise.
+- **PCID** (#156) — CPUID detectors + CR4.PCIDE (BSP probe, AP
+  mirror); CAS-claimed allocator with epoch rollover + flush-on-free;
+  TCB ownership with eager birth assignment + lazy publish backstop.
+- **INVPCID** (#157) — wrapper + descriptor + dispatch counters +
+  purge helpers (types 1/2; single-VA keeps INVLPG); cap-unmap
+  flushes, H-4 gate drop, exec-swap purge, tagged-reload fix.
+- **Lazy shootdown** (#158) — request queue (dedup, fail-closed
+  overflow) + coalesce/apply + opt-in quarantine with tick timeout;
+  default free path and #157 flushes untouched; no IPIs.
+- **IPI batching** (#159) — shared-memory per-target slots (sorted
+  insert, release-publish, CAS-clear handler) + 0x73 vector + send /
+  applied counters; SCHED/mailbox path untouched.
+- **Latency profiling** (#160) — test-side recorder + 4 real bounds
+  (avg16 13000/4000, p99 1000/1050, per-req 1000/250); hot paths
+  uninstrumented. No production changes.
+- **Review #161** — 14-claim external review fully verified, 0 held;
+  closed as reviewed-no-action (evidence on the issue).
+
+Gates at completion (2026-09-15): debug `all` **1363/1363**, release
+`all` **85/85**, `make build` Errors 0. SIL 3 APPROVED per issue
+(#155, #156 with one REJECT-fix cycle, #157, #158, #159, #160 audit
+reports under `audits/`).
+
 ## v0.4.5 — Kernel half merge + Cache coloring (RELEASED 2026-09-15)
 
 **Purpose:** Per-CPU FPU ownership, kernel-half page-table merge,

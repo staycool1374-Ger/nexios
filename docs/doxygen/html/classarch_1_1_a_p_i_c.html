@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -194,6 +194,8 @@ Static Public Attributes</h2></td></tr>
 <tr class="memitem:a979dd51d337cf5460d62951dae759652" id="r_a979dd51d337cf5460d62951dae759652"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a979dd51d337cf5460d62951dae759652">APIC_TIMER_VECTOR</a> = 0xE0</td></tr>
 <tr class="memitem:a119fe66aa1954384cb4b6d51758e73f2" id="r_a119fe66aa1954384cb4b6d51758e73f2"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a119fe66aa1954384cb4b6d51758e73f2">SCHED_VECTOR</a> = 0xEC</td></tr>
 <tr class="memdesc:a119fe66aa1954384cb4b6d51758e73f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF).  <br /></td></tr>
+<tr class="memitem:a7be32486fcc6b89abf1498ef029b8ddb" id="r_a7be32486fcc6b89abf1498ef029b8ddb"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7be32486fcc6b89abf1498ef029b8ddb">SHOOTDOWN_BATCH_VECTOR</a> = 0x73</td></tr>
+<tr class="memdesc:a7be32486fcc6b89abf1498ef029b8ddb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>x86_64 <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> driver — Local <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> (xAPIC + x2APIC), I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>, timer. </p>
@@ -930,6 +932,30 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF). </p>
+
+</div>
+</div>
+<a id="a7be32486fcc6b89abf1498ef029b8ddb" name="a7be32486fcc6b89abf1498ef029b8ddb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7be32486fcc6b89abf1498ef029b8ddb">&#9670;&#160;</a></span>SHOOTDOWN_BATCH_VECTOR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::APIC::SHOOTDOWN_BATCH_VECTOR = 0x73</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious). </p>
 
 </div>
 </div>

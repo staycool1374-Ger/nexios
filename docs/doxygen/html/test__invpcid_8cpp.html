@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__invpcid_
 </div><!--header-->
 <div class="contents">
 
-<p>INVPCID stubs (issue #85, module 14). No INVPCID use exists anywhere in src/kernel — documented stubs pending the main-branch invalidation API.  
+<p>INVPCID selective-invalidation tests (issue #157; stubs from issue #85, module 14). TLB hit/miss is unobservable without cycle timing (QEMU-flaky by construction), so tests pin the exact descriptor encoding, the dispatch routing (new flush counters — deterministic on any CPU), and structural outcomes (walks, no-fault re-touch). The 3-line emit asm itself is review- and audit-verified.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>INVPCID stubs (issue #85, module 14). No INVPCID use exists anywhere in src/kernel — documented stubs pending the main-branch invalidation API. </p>
+<div class="textblock"><p>INVPCID selective-invalidation tests (issue #157; stubs from issue #85, module 14). TLB hit/miss is unobservable without cycle timing (QEMU-flaky by construction), so tests pin the exact descriptor encoding, the dispatch routing (new flush counters — deterministic on any CPU), and structural outcomes (walks, no-fault re-touch). The 3-line emit asm itself is review- and audit-verified. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

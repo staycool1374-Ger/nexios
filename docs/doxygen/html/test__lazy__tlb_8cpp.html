@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__lazy__tl
 </div><!--header-->
 <div class="contents">
 
-<p>Lazy-TLB-shootdown stubs (issue #85, module 15). No remote invalidation path exists (only local invlpg in the page-table code) — documented stubs pending the main-branch shootdown API.  
+<p>Lazy-TLB-shootdown tests (issue #158; stubs from issue #85, module 15). Single-CPU deterministic: cross-CPU TLB-hit observables do not exist in this harness (no AP boots), so tests pin queue/coalesce/quarantine/timeout mechanics via request counts, flush-counter deltas, and page-table walks — never cycle timing or remote observation. IPI delivery is #159's scope; this class covers policy only.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Lazy-TLB-shootdown stubs (issue #85, module 15). No remote invalidation path exists (only local invlpg in the page-table code) — documented stubs pending the main-branch shootdown API. </p>
+<div class="textblock"><p>Lazy-TLB-shootdown tests (issue #158; stubs from issue #85, module 15). Single-CPU deterministic: cross-CPU TLB-hit observables do not exist in this harness (no AP boots), so tests pin queue/coalesce/quarantine/timeout mechanics via request counts, flush-counter deltas, and page-table walks — never cycle timing or remote observation. IPI delivery is #159's scope; this class covers policy only. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

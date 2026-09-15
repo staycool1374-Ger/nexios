@@ -104,6 +104,7 @@ var nexios__config_8h =
     [ "CONFIG_PAGER_MAX_COMMITTED_PAGES", "nexios__config_8h.html#a11d98a8c373874a2a405ca91f7d3c2ad", null ],
     [ "CONFIG_PAGER_MAX_PAGES_PER_FAULT", "nexios__config_8h.html#a0e8bd4d6885656c82396aadaf5d70290", null ],
     [ "CONFIG_PAN", "nexios__config_8h.html#aefd329133bd76dfd99be9cf6df1d57ed", null ],
+    [ "CONFIG_PCID", "nexios__config_8h.html#ae4a9bca121aaa8acc25574a4cc3abbcf", null ],
     [ "CONFIG_PML4_USER_COUNT", "nexios__config_8h.html#ad42f27563c0dabc8e3f69851bbbe9f9f", null ],
     [ "CONFIG_PREEMPTION", "nexios__config_8h.html#abbd8a5d807d37174a80088bb5a34de10", null ],
     [ "CONFIG_PREEMPTION_LATENCY_MAX_CYCLES", "nexios__config_8h.html#a804b850b1e890968b4dfb1f1004ee3b0", null ],

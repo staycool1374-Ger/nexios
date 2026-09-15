@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
    </div>
   </td>
  </tr>
@@ -146,6 +146,10 @@ Files</h2></td></tr>
 <tr class="memdesc:pmm_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical Memory Manager — bitmap-based page allocator with owner tracking. <br /></td></tr>
 <tr class="memitem:pmm_5Ferrors_2Ehpp" id="r_pmm_5Ferrors_2Ehpp"><td class="memItemLeft"><a href="pmm__errors_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="pmm__errors_8hpp.html">pmm_errors.hpp</a></td></tr>
 <tr class="memdesc:pmm__errors_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical Memory Manager error codes and string lookup. <br /></td></tr>
+<tr class="memitem:tlb_5Fshootdown_2Ecpp" id="r_tlb_5Fshootdown_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="tlb__shootdown_8cpp.html">tlb_shootdown.cpp</a></td></tr>
+<tr class="memdesc:tlb__shootdown_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lazy TLB shootdown request queue + deferred-free quarantine (issue #158). See the header for the contract. <br /></td></tr>
+<tr class="memitem:tlb_5Fshootdown_2Ehpp" id="r_tlb_5Fshootdown_2Ehpp"><td class="memItemLeft"><a href="tlb__shootdown_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="tlb__shootdown_8hpp.html">tlb_shootdown.hpp</a></td></tr>
+<tr class="memdesc:tlb__shootdown_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lazy TLB shootdown request queue + deferred-free quarantine (issue #158). POLICY side: requests are recorded, coalesced and applied locally; freed pages park in quarantine until their shootdown applied or a tick timeout fires. Cross-CPU IPI delivery is #159's scope — this module never sends IPIs. <br /></td></tr>
 <tr class="memitem:vmm_2Ecpp" id="r_vmm_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="vmm_8cpp.html">vmm.cpp</a></td></tr>
 <tr class="memitem:vmm_2Ehpp" id="r_vmm_2Ehpp"><td class="memItemLeft"><a href="vmm_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="vmm_8hpp.html">vmm.hpp</a></td></tr>
 <tr class="memdesc:vmm_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Virtual Memory Manager — cross-arch page table management with bounded page-walk depth (4-level x86_64/aarch64, 3-level riscv64 Sv39). <br /></td></tr>

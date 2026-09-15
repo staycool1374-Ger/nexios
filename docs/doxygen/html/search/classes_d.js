@@ -9,9 +9,10 @@ var searchData=
   ['scopeguard_6',['ScopeGuard',['../class_scope_guard.html',1,'']]],
   ['sharedringheader_7',['SharedRingHeader',['../structkernel_1_1shm_1_1_shared_ring_header.html',1,'kernel::shm']]],
   ['shell_8',['Shell',['../classservice_1_1_shell.html',1,'service']]],
-  ['signalframe_9',['SignalFrame',['../structkernel_1_1_signal_frame.html',1,'kernel']]],
-  ['simpletaskdeleter_10',['SimpleTaskDeleter',['../struct_simple_task_deleter.html',1,'']]],
-  ['spinlockguard_11',['SpinLockGuard',['../class_spin_lock_guard.html',1,'']]],
-  ['stat_12',['stat',['../structstat.html',1,'']]],
-  ['swslots_13',['SwSlots',['../structkernel_1_1_scheduler_1_1_sw_slots.html',1,'kernel::Scheduler']]]
+  ['shootdownbatch_9',['ShootdownBatch',['../classarch_1_1_shootdown_batch.html',1,'arch']]],
+  ['signalframe_10',['SignalFrame',['../structkernel_1_1_signal_frame.html',1,'kernel']]],
+  ['simpletaskdeleter_11',['SimpleTaskDeleter',['../struct_simple_task_deleter.html',1,'']]],
+  ['spinlockguard_12',['SpinLockGuard',['../class_spin_lock_guard.html',1,'']]],
+  ['stat_13',['stat',['../structstat.html',1,'']]],
+  ['swslots_14',['SwSlots',['../structkernel_1_1_scheduler_1_1_sw_slots.html',1,'kernel::Scheduler']]]
 ];
