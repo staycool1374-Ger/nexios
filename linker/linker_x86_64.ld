@@ -130,11 +130,10 @@ SECTIONS
     kernel_phys_end = ALIGN(phys_lma + SIZEOF(.stack_guard), 4K);
     kernel_virt_end = ALIGN(., 4K);
 
-    /* Issue #25 C1: only fpu_owner still aliases per_cpu[0] (gs:0x30;
-       FPU migration deferred to #151).  isr_nesting_depth / irq_entry_tsc
-       aliases are REMOVED: all C++ readers use isr_nesting_own() (own
-       slot) and asm uses gs:0x20 / gs:0x28 numerically — no symbol
-       needed (a resurrected bare user fails the link, fail-closed).
+    /* Issue #151: NO FPU linker alias remains.  fpu_owner lives in
+       per_cpu[cpu].fpu_owner (gs:0x30); all C++ readers use fpu_owner_own()
+       (own slot).  A resurrected bare user fails the link, fail-closed —
+       same discipline as the removed isr_nesting_depth / irq_entry_tsc
+       aliases (issue #25 C1).
        _ZN4arch7per_cpuE is the mangled name of arch::per_cpu. */
-    fpu_owner = _ZN4arch7per_cpuE + 0x30;
 }

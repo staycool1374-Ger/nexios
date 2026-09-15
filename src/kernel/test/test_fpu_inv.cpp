@@ -41,6 +41,10 @@
 #include <kernel/task/task.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include "test_sched_helpers.hpp"
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#endif
 
 using namespace kernel;
 
@@ -89,7 +93,8 @@ JARVIS_TEST(fpu_nm_no_alloc, "PRE: none | POST: none") {
         force_nm();
 
     uint64_t pages_after = PMM::pool_used_pages();
-    auto *owner = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
+    auto *owner = __atomic_load_n(&kernel::fpu_owner_own(),
+                                  __ATOMIC_ACQUIRE);
 
     JARVIS_ASSERT_EQ(pages_before, pages_after);
     JARVIS_ASSERT(owner == current);
@@ -193,6 +198,38 @@ JARVIS_TEST(fpu_nm_own_arm_no_clobber, "PRE: none | POST: none") {
     asm volatile("finit" ::: "memory");
     JARVIS_TEST_PASS();
 }
+
+// Runmode: kernel
+// Testidea: FPU ownership is per-CPU (issue #151): the harness restore
+//           clears EVERY slot (no cross-test owner leak), and the own-slot
+//           accessor round-trips without disturbing other slots.
+// Input: Read all slots at entry; write a sentinel via fpu_owner_own().
+// Expect: All slots null at entry; sentinel visible via the accessor while
+//         every other slot stays null; all slots null after manual restore.
+// Depends: test_isolate restore loop, fpu_owner_own() (issue #151)
+JARVIS_TEST(fpu_owner_percpu_reset, "PRE: none | POST: none") {
+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
+        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
+    auto *sentinel =
+        reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
+    {
+        arch::IrqGuard irq_guard{};
+        __atomic_store_n(&fpu_owner_own(), sentinel, __ATOMIC_RELEASE);
+        auto *via_accessor =
+            __atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE);
+        JARVIS_ASSERT(via_accessor == sentinel);
+        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
+            if (cpu == arch::cpu_index())
+                continue;
+            JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
+        }
+        __atomic_store_n(&fpu_owner_own(),
+                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+    }
+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
+        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
+    JARVIS_TEST_PASS();
+}
 #endif  // CONFIG_ARCH_X86_64
 
 void register_fpu_inv_tests() {
@@ -202,5 +239,6 @@ void register_fpu_inv_tests() {
     JARVIS_REGISTER_TEST(fpu_nm_nesting_impossible);
     JARVIS_REGISTER_TEST(fpu_save_area_alignment);
     JARVIS_REGISTER_TEST(fpu_nm_own_arm_no_clobber);
+    JARVIS_REGISTER_TEST(fpu_owner_percpu_reset);
 #endif  // CONFIG_ARCH_X86_64
 }

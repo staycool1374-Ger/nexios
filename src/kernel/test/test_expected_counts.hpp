@@ -64,7 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
     {"task_init",             3,    0,       0      },  // init task exists/reparents
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
-    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
+    {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
     {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
@@ -220,7 +220,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
     {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
-    {"per_cpu",               3,  0,       0      },  // Per-CPU foundation (issue #25): frozen slot offsets, BSP identity, nesting-depth live storage
+    {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
     {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset

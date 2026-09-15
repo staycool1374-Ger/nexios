@@ -100,4 +100,21 @@ inline uint64_t &isr_nesting_own() {
 }
 #endif
 
+#if defined(CONFIG_ARCH_X86_64)
+/// @brief Own-CPU FPU register owner (per_cpu[cpu].fpu_owner, gs:0x30;
+///        issue #151).  C++ readers must use the OWN slot — never a global.
+///        Single-core builds resolve to per_cpu[0] (identical to the old
+///        global); no linker alias remains (link error = proof of full
+///        migration).
+inline TaskControlBlock *&fpu_owner_own() {
+    return arch::per_cpu[arch::cpu_index()].fpu_owner;
+}
+#else
+extern "C" TaskControlBlock *fpu_owner;
+/// @brief Own-CPU FPU register owner (single-core archs: the plain global).
+inline TaskControlBlock *&fpu_owner_own() {
+    return fpu_owner;
+}
+#endif
+
 } // namespace kernel

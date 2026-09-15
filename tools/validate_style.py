@@ -935,10 +935,12 @@ class GlobalStateApiChecker(Checker):
     # Consolidated global symbol -> sanctioned accessor + allowlisted files
     # where the raw name may legitimately appear (owner, extern-decl headers,
     # documented fault-atomic / boot paths).  The asm-lockstep switch globals
-    # (scheduler_*, isr_nesting_depth, fpu_owner, …) are a DOCUMENTED
+    # (scheduler_*, isr_nesting_depth, …) are a DOCUMENTED
     # exception: isr_stubs.asm references them by exact symbol name and the
     # scheduler uses atomics on them — they have no gs:: accessor and are
-    # intentionally NOT in this registry.
+    # intentionally NOT in this registry.  (fpu_owner was removed from this
+    # exception by issue #151: no linker alias remains; all C++ readers use
+    # fpu_owner_own().)
     GLOBALS: dict[str, dict] = {
         # -- BootState --
         "g_boot_info": {

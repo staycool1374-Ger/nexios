@@ -1496,12 +1496,10 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         // RFLAGS, so no sti is needed.
         arch::cli();
 
-        // Issue #25 C1 FPU tripwire: AP FPU is forbidden (lazy protocol is
-        // BSP-scoped; fpu_owner is BSP-global until #151).  ap_main arms
-        // CR0.TS precisely so any AP x87/SSE faults HERE and fail-stops
-        // loudly instead of corrupting BSP lazy state silently.
-        if (arch::cpu_index() != 0)
-            panic("#NM on AP: FPU forbidden in C1 (see #151)");
+        // Issue #151: the lazy-FPU protocol is per-CPU — every CPU arms
+        // CR0.TS (ap_main below) and resolves ownership against its OWN
+        // per_cpu[cpu].fpu_owner slot.  APs participate identically to the
+        // BSP; the C1 tripwire is removed.
 
         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
         uint64_t cr0 = arch::read_cr0();
@@ -1515,13 +1513,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         // live registers with stale/zero TCB state.  Leave the registers
         // untouched and return.
         auto *prev_fpu_owner =
-            __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
+            __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
         if (prev_fpu_owner && prev_fpu_owner != current) {
             arch::fxsave(prev_fpu_owner->fpu_state);
             ++prev_fpu_owner->fpu_state_gen;
         }
         if (prev_fpu_owner == current) {
-            __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
+            __atomic_store_n(&kernel::fpu_owner_own(), current,
+                             __ATOMIC_RELEASE);
             uint64_t depth = kernel::isr_nesting_own();
             if (depth > kernel::fpu_nm_depth_max)
                 kernel::fpu_nm_depth_max = depth;
@@ -1538,7 +1537,8 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             current->fpu_used = true;
         }
 
-        __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
+        __atomic_store_n(&kernel::fpu_owner_own(), current,
+                         __ATOMIC_RELEASE);
         uint64_t depth = kernel::isr_nesting_own();
         if (depth > kernel::fpu_nm_depth_max)
             kernel::fpu_nm_depth_max = depth;

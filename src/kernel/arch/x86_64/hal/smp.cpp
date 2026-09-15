@@ -335,11 +335,10 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
            arch::APIC::TPR_CLASS_ACCEPT_ALL);
     ap_ready[logical_id] = 1;
 
-    // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,
-    // which fail-stops (C1 forbids AP FPU; #151 will allow).  Without
-    // this the trampoline's TS=0 lets x87 run silently, corrupting BSP
-    // lazy-FPU state undetectably.  OSFXSR keeps SSE faulting via #NM
-    // (not #UD) so one tripwire covers both.
+    // FPU arming (issue #151): TS=1 enrolls the AP in the per-CPU lazy-FPU
+    // protocol — its first x87/SSE faults #NM and the handler resolves
+    // ownership against the AP's OWN per_cpu slot, identically to the BSP.
+    // OSFXSR keeps SSE faulting via #NM (not #UD) so one path covers both.
     uint64_t cr0 = arch::read_cr0();
     arch::write_cr0(cr0 | (1ULL << 3));
     uint64_t cr4 = arch::read_cr4();

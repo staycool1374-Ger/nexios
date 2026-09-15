@@ -61,7 +61,8 @@ JARVIS_TEST(fpu_clone_copies_state, "PRE: none | POST: none") {
             uint64_t pi = FPU_PI_BITS;
             asm volatile("finit\nfldl %0" : : "m"(pi) : "memory");
 
-            auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
+            auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
+                                                  __ATOMIC_ACQUIRE);
             g_owner_ok = (fpu_owner_val == self) ? 1 : 0;
             g_parent_fpu_used = self->fpu_used ? 1 : 0;
 

@@ -1,265 +1,492 @@
+diff --git a/linker/linker_x86_64.ld b/linker/linker_x86_64.ld
+index ef92e03b..defcb7ef 100644
+--- a/linker/linker_x86_64.ld
++++ b/linker/linker_x86_64.ld
+@@ -130,11 +130,10 @@ SECTIONS
+     kernel_phys_end = ALIGN(phys_lma + SIZEOF(.stack_guard), 4K);
+     kernel_virt_end = ALIGN(., 4K);
+ 
+-    /* Issue #25 C1: only fpu_owner still aliases per_cpu[0] (gs:0x30;
+-       FPU migration deferred to #151).  isr_nesting_depth / irq_entry_tsc
+-       aliases are REMOVED: all C++ readers use isr_nesting_own() (own
+-       slot) and asm uses gs:0x20 / gs:0x28 numerically — no symbol
+-       needed (a resurrected bare user fails the link, fail-closed).
++    /* Issue #151: NO FPU linker alias remains.  fpu_owner lives in
++       per_cpu[cpu].fpu_owner (gs:0x30); all C++ readers use fpu_owner_own()
++       (own slot).  A resurrected bare user fails the link, fail-closed —
++       same discipline as the removed isr_nesting_depth / irq_entry_tsc
++       aliases (issue #25 C1).
+        _ZN4arch7per_cpuE is the mangled name of arch::per_cpu. */
+-    fpu_owner = _ZN4arch7per_cpuE + 0x30;
+ }
+\ No newline at end of file
+diff --git a/src/kernel/arch/cpu_context.hpp b/src/kernel/arch/cpu_context.hpp
+index 2870a7c2..753ea950 100644
+--- a/src/kernel/arch/cpu_context.hpp
++++ b/src/kernel/arch/cpu_context.hpp
+@@ -100,4 +100,21 @@ inline uint64_t &isr_nesting_own() {
+ }
+ #endif
+ 
++#if defined(CONFIG_ARCH_X86_64)
++/// @brief Own-CPU FPU register owner (per_cpu[cpu].fpu_owner, gs:0x30;
++///        issue #151).  C++ readers must use the OWN slot — never a global.
++///        Single-core builds resolve to per_cpu[0] (identical to the old
++///        global); no linker alias remains (link error = proof of full
++///        migration).
++inline TaskControlBlock *&fpu_owner_own() {
++    return arch::per_cpu[arch::cpu_index()].fpu_owner;
++}
++#else
++extern "C" TaskControlBlock *fpu_owner;
++/// @brief Own-CPU FPU register owner (single-core archs: the plain global).
++inline TaskControlBlock *&fpu_owner_own() {
++    return fpu_owner;
++}
++#endif
++
+ } // namespace kernel
+diff --git a/src/kernel/arch/x86_64/hal/percpu.hpp b/src/kernel/arch/x86_64/hal/percpu.hpp
+index bce7950d..236b0abc 100644
+--- a/src/kernel/arch/x86_64/hal/percpu.hpp
++++ b/src/kernel/arch/x86_64/hal/percpu.hpp
+@@ -58,7 +58,9 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
+     uint64_t irq_entry_tsc;     // gs:0x28  — was global irq_entry_tsc
+ 
+     // ─── FPU / scheduler ───────────────────────────────────────────────────
+-    void *fpu_owner;            // gs:0x30  — global (FPU migration: #151)
++    // Own-CPU FPU register owner (issue #151): which task's FPU state is
++    // currently live in this CPU's registers.  nullptr = none since boot.
++    kernel::TaskControlBlock *fpu_owner; // gs:0x30 — per-CPU (was global)
+     void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
+                                 //   array, issue #25 C1; kept for layout)
+ 
 diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
-index b00eca8d..873c873a 100644
+index fa1c46c6..66a96fbb 100644
 --- a/src/kernel/arch/x86_64/hal/smp.cpp
 +++ b/src/kernel/arch/x86_64/hal/smp.cpp
-@@ -37,6 +37,8 @@
- #include <kernel/core/global_state.hpp>
- #include <kernel/memory/vmm.hpp>
- #include <kernel/memory/pmm.hpp>
-+#include <kernel/memory/address.hpp>
-+#include <kernel/multiboot2.hpp>
- #include <kernel/kernel.hpp>
- #include <assert.hpp>
- #include <kernel/bootparams.hpp>
-@@ -108,6 +110,61 @@ void trampoline_write32(uint64_t field_off, uint32_t value) {
-     *p = value;
+@@ -335,11 +335,10 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
+            arch::APIC::TPR_CLASS_ACCEPT_ALL);
+     ap_ready[logical_id] = 1;
+ 
+-    // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,
+-    // which fail-stops (C1 forbids AP FPU; #151 will allow).  Without
+-    // this the trampoline's TS=0 lets x87 run silently, corrupting BSP
+-    // lazy-FPU state undetectably.  OSFXSR keeps SSE faulting via #NM
+-    // (not #UD) so one tripwire covers both.
++    // FPU arming (issue #151): TS=1 enrolls the AP in the per-CPU lazy-FPU
++    // protocol — its first x87/SSE faults #NM and the handler resolves
++    // ownership against the AP's OWN per_cpu slot, identically to the BSP.
++    // OSFXSR keeps SSE faulting via #NM (not #UD) so one path covers both.
+     uint64_t cr0 = arch::read_cr0();
+     arch::write_cr0(cr0 | (1ULL << 3));
+     uint64_t cr4 = arch::read_cr4();
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 1f608c3e..dfa686a2 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -68,19 +68,20 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_kernel_cr3 = 0;
+ bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
+-// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
+-// fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
+-// accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
+-// plain definitions here until their per-CPU migration.
++// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
++// in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
++// Other architectures keep plain definitions here until their per-CPU
++// migration.
+ #if !defined(CONFIG_ARCH_X86_64)
+ uint64_t isr_nesting_depth = 0;
+ uint64_t irq_entry_tsc = 0;
+ #endif
+ uint64_t scheduler_corruption_count = 0;
+ uint64_t deadline_detection_integrity = 0;
+-// Tracks which task's FPU state is currently in the registers (declared in
+-// scheduler.hpp's extern "C" block).
+-// Issue #25 (Phase A): x86_64 definition lives in per_cpu[0] (gs:0x30).
++// Tracks which task's FPU state is currently in the registers, single-core
++// archs only (declared in scheduler.hpp's extern "C" block).
++// Issue #151: on x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30);
++// no global definition here, no linker alias — bare users fail the link.
+ #if !defined(CONFIG_ARCH_X86_64)
+ kernel::TaskControlBlock *fpu_owner = nullptr;
+ #endif
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 0e2d1009..46bb210b 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1496,12 +1496,10 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+         // RFLAGS, so no sti is needed.
+         arch::cli();
+ 
+-        // Issue #25 C1 FPU tripwire: AP FPU is forbidden (lazy protocol is
+-        // BSP-scoped; fpu_owner is BSP-global until #151).  ap_main arms
+-        // CR0.TS precisely so any AP x87/SSE faults HERE and fail-stops
+-        // loudly instead of corrupting BSP lazy state silently.
+-        if (arch::cpu_index() != 0)
+-            panic("#NM on AP: FPU forbidden in C1 (see #151)");
++        // Issue #151: the lazy-FPU protocol is per-CPU — every CPU arms
++        // CR0.TS (ap_main below) and resolves ownership against its OWN
++        // per_cpu[cpu].fpu_owner slot.  APs participate identically to the
++        // BSP; the C1 tripwire is removed.
+ 
+         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
+         uint64_t cr0 = arch::read_cr0();
+@@ -1515,13 +1513,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+         // live registers with stale/zero TCB state.  Leave the registers
+         // untouched and return.
+         auto *prev_fpu_owner =
+-            __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
++            __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
+         if (prev_fpu_owner && prev_fpu_owner != current) {
+             arch::fxsave(prev_fpu_owner->fpu_state);
+             ++prev_fpu_owner->fpu_state_gen;
+         }
+         if (prev_fpu_owner == current) {
+-            __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
++            __atomic_store_n(&kernel::fpu_owner_own(), current,
++                             __ATOMIC_RELEASE);
+             uint64_t depth = kernel::isr_nesting_own();
+             if (depth > kernel::fpu_nm_depth_max)
+                 kernel::fpu_nm_depth_max = depth;
+@@ -1538,7 +1537,8 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+             current->fpu_used = true;
+         }
+ 
+-        __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
++        __atomic_store_n(&kernel::fpu_owner_own(), current,
++                         __ATOMIC_RELEASE);
+         uint64_t depth = kernel::isr_nesting_own();
+         if (depth > kernel::fpu_nm_depth_max)
+             kernel::fpu_nm_depth_max = depth;
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 8493414b..940a5220 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -910,9 +910,15 @@ extern uint64_t deadline_detection_integrity;
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ extern uint64_t fpu_nm_depth_max;
+ /// @brief Tracks which task's FPU state is currently in the registers.
+-///        nullptr means no task has used FPU since boot.
++///        Single-core archs ONLY: the plain global in global_state.cpp, read
++///        via fpu_owner_own().  On x86_64 the owner lives in
++///        per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global
++///        definition — any bare use here fails to link by design (migration
++///        proof).  Do not add readers of this symbol; use fpu_owner_own().
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++#if !defined(CONFIG_ARCH_X86_64)
+ extern TaskControlBlock *fpu_owner;
++#endif
  }
  
-+/// @brief Relocate the live multiboot2 info out of the trampoline block
-+///        (issue #153).  GRUB may place its info inside [TRAMPOLINE_ADDR,
-+///        +4K): staging the blob would then overwrite total_size and every
-+///        late mb2 reader (locate_rsdp/scan_dmar) walks garbage → #PF.
-+///        On overlap the info is copied to PMM-held page(s) and both
-+///        multiboot_info_ptr and the BootInfo mirror are repointed to the
-+///        PHYSICAL copy (mb2 readers deref raw or add HHDM_OFFSET, so an
-+///        HHDM virtual address would misroute them).
-+/// @return true when staging may proceed (no overlap, relocated, or no
-+///         live info); false when malformed/OOM — caller parks with 0 APs.
-+bool relocate_mb2_out_of_trampoline() {
-+    constexpr uint64_t kMb2Magic = 0x36D76289ULL;
-+    constexpr uint64_t kBlockEnd = TRAMPOLINE_ADDR + 4096;
-+    // Raw mb2 readers use the identity-mapped low window (PD_IDENTITY
-+    // covers 0..128 MiB); the copy must live inside it.
-+    constexpr uint64_t kIdentityLimit = 0x08000000ULL;
-+    if (kernel::gs::get_multiboot_magic() != kMb2Magic)
-+        return true;
-+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
-+    if (info_ptr == 0)
-+        return true;
-+    // Same raw read mb2_find_tag performs (readable here: the pre-staging
-+    // scan_madt below already walked these tables under this PML4).
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *info = reinterpret_cast<const volatile Multiboot2Info *>(info_ptr);
-+    uint64_t total_size = info->total_size;
-+    if (total_size < 8 || total_size > MB2_RELOC_MAX_PAGES * 4096)
-+        return false;
-+    uint64_t info_end = info_ptr + total_size;
-+    if (info_end < info_ptr)
-+        return false;  // wrap: malformed range
-+    if (info_end <= TRAMPOLINE_ADDR || info_ptr >= kBlockEnd)
-+        return true;  // disjoint: staging safe
-+    uint64_t page_count = (total_size + 4095) / 4096;
-+    uint64_t new_phys = kernel::PMM::alloc_contiguous(page_count);
-+    if (new_phys == 0)
-+        return false;
-+    if (new_phys + total_size > kIdentityLimit)
-+        return false;  // outside the raw-readable window: park, keep page
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *dst =
-+        reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET + new_phys);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *src = reinterpret_cast<const volatile uint8_t *>(info_ptr);
-+    for (uint64_t i = 0; i < total_size; ++i)
-+        dst[i] = src[i];
-+    kernel::gs::WriteContext ctx{kernel::gs::StatePhase::BOOT, 0};
-+    if (!kernel::gs::try_set_multiboot(kMb2Magic, new_phys, ctx))
-+        return false;
-+    kernel::gs::boot_info().multiboot_info = new_phys;
-+    // The old info-range reservation is kept: after staging it protects
-+    // the live trampoline code.  The new page is PMM-owned already.
-+    return true;
-+}
-+
- } // namespace
  
- bool trampoline_block_usable() {
-@@ -165,6 +222,15 @@ void bring_up() {
-             "SMP: trampoline block not reserved — parking with 0 APs");
-         return;
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 20a80ba2..b7633502 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1395,8 +1395,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     tcb->buf_list_head = -1;
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+-    // Save parent's FPU state if it's currently in the registers
+-    if (__atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE) == parent) {
++    // Save parent's FPU state if it's currently in this CPU's registers
++    // (issue #151: ownership is per-CPU; the cloning CPU's slot decides).
++    if (__atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE) == parent) {
+         arch::fxsave(parent->fpu_state);
+         ++parent->fpu_state_gen;
      }
-+    // Issue #153: the stomper relocates first — when GRUB's live
-+    // multiboot info overlaps the block, staging would overwrite
-+    // total_size and fault every late mb2 reader.  Relocation precedes
-+    // the copy; failure parks with 0 APs (never stages over data).
-+    if (!relocate_mb2_out_of_trampoline()) {
-+        kernel::Logger::warn("SMP: multiboot info relocation failed — "
-+                             "parking with 0 APs");
-+        return;
-+    }
-     // Copy the position-locked blob to its org address (identity-mapped,
-     // writable low RAM) BEFORE the CPU-count gate: the block then holds
-     // the blob on every boot, which the smp_bringup test verifies by
-diff --git a/src/kernel/arch/x86_64/hal/smp.hpp b/src/kernel/arch/x86_64/hal/smp.hpp
-index e0fdf8f2..0d896ae3 100644
---- a/src/kernel/arch/x86_64/hal/smp.hpp
-+++ b/src/kernel/arch/x86_64/hal/smp.hpp
-@@ -58,9 +58,17 @@ static constexpr uint64_t PARAM_ENTRY = 0x18;
- static constexpr uint64_t PARAM_LOGICAL = 0x20;
- static constexpr uint64_t PARAM_LAPIC = 0x28;
+diff --git a/src/kernel/test/test_atomic_context_switch.cpp b/src/kernel/test/test_atomic_context_switch.cpp
+index 279c5727..49f33e50 100644
+--- a/src/kernel/test/test_atomic_context_switch.cpp
++++ b/src/kernel/test/test_atomic_context_switch.cpp
+@@ -96,13 +96,15 @@ JARVIS_TEST(atomic_globals_set_on_reschedule, "PRE: none | POST: none") {
+ // Expect: Value matches what was written.
+ // Depends: fpu_owner atomic
+ JARVIS_TEST(atomic_fpu_owner_read_write, "PRE: none | POST: none") {
+-    auto *old = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
++    auto *old =
++        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
+     auto *test_ptr =
+         reinterpret_cast<TaskControlBlock *>(uintptr_t(0xDEADBEEF));
+-    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELEASE);
+-    auto *val = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
++    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELEASE);
++    auto *val =
++        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
+     JARVIS_ASSERT(val == test_ptr);
+-    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELEASE);
++    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELEASE);
+     JARVIS_TEST_PASS();
+ }
  
-+/// @brief Sanity cap for the multiboot2 info relocation (issue #153):
-+///        at most 8 pages (32 KiB) are ever copied out of the trampoline
-+///        block.  Observed total_size is ~7512 bytes; anything larger is
-+///        treated as malformed and parks with 0 APs.
-+static constexpr uint64_t MB2_RELOC_MAX_PAGES = 8;
-+
- /// @brief True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM
- ///        (multiboot2 memory map type 1) — the occupancy contract the
--///        fixed-address copy depends on.
-+///        fixed-address copy depends on.  This checks the firmware map
-+///        only: overlap with the LIVE multiboot info range is handled by
-+///        the stomper (bring_up relocates the info first, issue #153).
- bool trampoline_block_usable();
+@@ -194,17 +196,17 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
+ // Depends: fpu_owner atomic
+ JARVIS_TEST(atomics_fpu_owner_relaxed, "PRE: none | POST: none") {
+     TaskControlBlock *old =
+-        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
++        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
  
- /// @brief Claim the trampoline block from PMM.  Must run right after
+     auto *test_ptr = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xBEEF));
+-    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELAXED);
++    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELAXED);
+ 
+     TaskControlBlock *val =
+-        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
++        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
+ 
+     JARVIS_ASSERT(val == test_ptr);
+ 
+-    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELAXED);
++    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELAXED);
+ 
+     JARVIS_TEST_PASS();
+ }
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 0e24bcd5..5e799faa 100644
+index 5e799faa..2f305f3f 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
-     {"selftest",            133,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1238,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18)
-+    {"all",                1240,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153)
+@@ -64,7 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+     {"task_init",             3,    0,       0      },  // init task exists/reparents
+     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
+-    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
++    {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
  
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -113,7 +113,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"acpi_parse",             3,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity
-     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
-     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
--    {"smp_bringup",            3,   0,       0      },  // AP bring-up (issue #25 Phase B4): blob layout, staged block memcmp, parked count == MADT APs
-+    {"smp_bringup",            5,   0,       0      },  // AP bring-up (issue #25 Phase B4 + #153): blob layout, staged block memcmp, parked count == MADT APs, mb2 intact + relocated
-     {"sched_affinity",         6,   0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle
-     {"smp_sched",              5,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass)
-     {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
-diff --git a/src/kernel/test/test_smp_bringup.cpp b/src/kernel/test/test_smp_bringup.cpp
-index 01fad4b1..09414f91 100644
---- a/src/kernel/test/test_smp_bringup.cpp
-+++ b/src/kernel/test/test_smp_bringup.cpp
-@@ -39,6 +39,7 @@
- #include <kernel/arch/x86_64/hal/apic.hpp>
- #include <kernel/memory/vmm.hpp>
- #include <kernel/multiboot2.hpp>
-+#include <kernel/core/global_state.hpp>
+     // syscall
+     {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
+@@ -220,7 +220,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
+     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
+     {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
+-    {"per_cpu",               3,  0,       0      },  // Per-CPU foundation (issue #25): frozen slot offsets, BSP identity, nesting-depth live storage
++    {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
+     {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
+     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
+     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
+diff --git a/src/kernel/test/test_fpu.cpp b/src/kernel/test/test_fpu.cpp
+index b327b302..8eb56681 100644
+--- a/src/kernel/test/test_fpu.cpp
++++ b/src/kernel/test/test_fpu.cpp
+@@ -59,7 +59,8 @@ JARVIS_TEST(fpu_basic_instruction, "PRE: none | POST: none") {
+ 
+     auto *current = Scheduler::current_task();
+     JARVIS_ASSERT(current != nullptr);
+-    auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
++    auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
++                                          __ATOMIC_ACQUIRE);
+     JARVIS_ASSERT_FMT(fpu_owner_val == current,
+                       "fpu_owner (%p) should be current task (%p)",
+                       (void *)fpu_owner_val, (void *)current);
+diff --git a/src/kernel/test/test_fpu_clone.cpp b/src/kernel/test/test_fpu_clone.cpp
+index 8ebb8287..c0beed21 100644
+--- a/src/kernel/test/test_fpu_clone.cpp
++++ b/src/kernel/test/test_fpu_clone.cpp
+@@ -61,7 +61,8 @@ JARVIS_TEST(fpu_clone_copies_state, "PRE: none | POST: none") {
+             uint64_t pi = FPU_PI_BITS;
+             asm volatile("finit\nfldl %0" : : "m"(pi) : "memory");
+ 
+-            auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
++            auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
++                                                  __ATOMIC_ACQUIRE);
+             g_owner_ok = (fpu_owner_val == self) ? 1 : 0;
+             g_parent_fpu_used = self->fpu_used ? 1 : 0;
+ 
+diff --git a/src/kernel/test/test_fpu_inv.cpp b/src/kernel/test/test_fpu_inv.cpp
+index 17b031a4..58078d5f 100644
+--- a/src/kernel/test/test_fpu_inv.cpp
++++ b/src/kernel/test/test_fpu_inv.cpp
+@@ -41,6 +41,10 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+ #include "test_sched_helpers.hpp"
++#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/x86_64/hal/percpu.hpp>
++#endif
  
  using namespace kernel;
  
-@@ -168,10 +169,104 @@ JARVIS_TEST(smp_bringup_ap_count_matches_madt, "PRE: iocd | POST: none") {
+@@ -89,7 +93,8 @@ JARVIS_TEST(fpu_nm_no_alloc, "PRE: none | POST: none") {
+         force_nm();
+ 
+     uint64_t pages_after = PMM::pool_used_pages();
+-    auto *owner = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
++    auto *owner = __atomic_load_n(&kernel::fpu_owner_own(),
++                                  __ATOMIC_ACQUIRE);
+ 
+     JARVIS_ASSERT_EQ(pages_before, pages_after);
+     JARVIS_ASSERT(owner == current);
+@@ -193,6 +198,38 @@ JARVIS_TEST(fpu_nm_own_arm_no_clobber, "PRE: none | POST: none") {
+     asm volatile("finit" ::: "memory");
+     JARVIS_TEST_PASS();
+ }
++
++// Runmode: kernel
++// Testidea: FPU ownership is per-CPU (issue #151): the harness restore
++//           clears EVERY slot (no cross-test owner leak), and the own-slot
++//           accessor round-trips without disturbing other slots.
++// Input: Read all slots at entry; write a sentinel via fpu_owner_own().
++// Expect: All slots null at entry; sentinel visible via the accessor while
++//         every other slot stays null; all slots null after manual restore.
++// Depends: test_isolate restore loop, fpu_owner_own() (issue #151)
++JARVIS_TEST(fpu_owner_percpu_reset, "PRE: none | POST: none") {
++    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
++        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
++    auto *sentinel =
++        reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
++    {
++        arch::IrqGuard irq_guard{};
++        __atomic_store_n(&fpu_owner_own(), sentinel, __ATOMIC_RELEASE);
++        auto *via_accessor =
++            __atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE);
++        JARVIS_ASSERT(via_accessor == sentinel);
++        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
++            if (cpu == arch::cpu_index())
++                continue;
++            JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
++        }
++        __atomic_store_n(&fpu_owner_own(),
++                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
++    }
++    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
++        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
++    JARVIS_TEST_PASS();
++}
+ #endif  // CONFIG_ARCH_X86_64
+ 
+ void register_fpu_inv_tests() {
+@@ -202,5 +239,6 @@ void register_fpu_inv_tests() {
+     JARVIS_REGISTER_TEST(fpu_nm_nesting_impossible);
+     JARVIS_REGISTER_TEST(fpu_save_area_alignment);
+     JARVIS_REGISTER_TEST(fpu_nm_own_arm_no_clobber);
++    JARVIS_REGISTER_TEST(fpu_owner_percpu_reset);
+ #endif  // CONFIG_ARCH_X86_64
+ }
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 5b83dac8..5c0dbd10 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -752,7 +752,16 @@ void snapshot_restore(const char *test_name) {
+     // Zombies from termininate()->release_zombie() during the test are freed
+     // here so ResourceTracker does not see leaked resources.
+     Scheduler::drain_zombie_list();
+-    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
++    // Issue #151: FPU ownership is per-CPU — clear every slot so no owner
++    // leaks across tests (single-core archs: the plain global).
++#if defined(CONFIG_ARCH_X86_64)
++    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
++        __atomic_store_n(&arch::per_cpu[cpu].fpu_owner,
++                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
++#else
++    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr,
++                     __ATOMIC_RELEASE);
++#endif
+     __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
+     if (auto *tctx = Scheduler::get_test_context())
+         tctx->dummy_save_rsp = 0;
+diff --git a/src/kernel/test/test_per_cpu.cpp b/src/kernel/test/test_per_cpu.cpp
+index 808427f9..2c516838 100644
+--- a/src/kernel/test/test_per_cpu.cpp
++++ b/src/kernel/test/test_per_cpu.cpp
+@@ -57,10 +57,9 @@ JARVIS_TEST(per_cpu_slot_offsets_frozen, "PRE: none | POST: none") {
+     JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.current_task) ==
+                   base + 7);
+     JARVIS_ASSERT(sizeof(arch::PerCpu) == 4096);
+-    // Issue #25 C1: the Phase-A linker aliases (isr_nesting_depth /
+-    // irq_entry_tsc) are REMOVED — C++ uses isr_nesting_own() (own slot),
+-    // asm uses gs:0x20/gs:0x28 numerically.  Only offsets are asserted
+-    // (fpu_owner alias remains for #151).
++    // Issue #151: no FPU linker alias remains — C++ uses fpu_owner_own()
++    // (own slot).  Only offsets are asserted here; slot independence is
++    // covered by per_cpu_fpu_owner_independent below.
+ #else
+     JARVIS_TEST_PASS();
+ #endif
+@@ -119,9 +118,50 @@ JARVIS_TEST(per_cpu_nesting_depth_live, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
 +// Runmode: kernel
-+// Testidea: Staging the trampoline must not destroy the multiboot info:
-+//           after bring_up, total_size is sane and a bounded tag walk
-+//           finds the memory-map tag (6) before the terminator.  On the
-+//           old code this fails exactly when GRUB places info at 0x70000
-+//           (total_size clobbered by the blob copy).
-+// Input: Live multiboot_info_ptr read via the HHDM alias (test PML4s
-+//        carry the kernel-half mapping; no active-PML4 mapping needed).
-+// Expect: Non-GRUB boot: trivial pass.  GRUB boot: 8 <= total_size <=
-+//         32 KiB, tag 6 found, walk terminates within the size bound.
-+// Depends: smp::bring_up staging + relocate_mb2_out_of_trampoline (#153)
-+JARVIS_TEST(smp_bringup_mb2_intact_after_staging, "PRE: iocd | POST: none") {
-+    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
-+        JARVIS_TEST_PASS();
-+        return;
++// Testidea: Per-CPU FPU owner slots are independent (issue #151): a value
++//           written to slot N never leaks into slot M, and gs:0x30 reads
++//           back slot 0 on the BSP.
++// Input: Distinct sentinels in per_cpu[0]/[1].fpu_owner; gs:0x30 load.
++// Expect: Each slot holds its own sentinel; gs:0x30 == slot 0; both slots
++//         restored afterwards.
++// Depends: per_cpu[cpu].fpu_owner (issue #151)
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_MAX_CPUS > 1
++JARVIS_TEST(per_cpu_fpu_owner_independent, "PRE: none | POST: none") {
++    auto *s0 = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
++    auto *s1 = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF901));
++    auto *saved0 = arch::per_cpu[0].fpu_owner;
++    auto *saved1 = arch::per_cpu[1].fpu_owner;
++    TaskControlBlock *read0 = nullptr;
++    TaskControlBlock *read1 = nullptr;
++    TaskControlBlock *via_gs = nullptr;
++    {
++        // Freeze ticks across the sentinel window (same discipline as
++        // per_cpu_nesting_depth_live): no ISR may observe the sentinels.
++        arch::IrqGuard irq_guard{};
++        arch::per_cpu[0].fpu_owner = s0;
++        arch::per_cpu[1].fpu_owner = s1;
++        asm volatile("mov %%gs:0x30, %0" : "=r"(via_gs));
++        read0 = arch::per_cpu[0].fpu_owner;
++        read1 = arch::per_cpu[1].fpu_owner;
++        arch::per_cpu[0].fpu_owner = saved0;
++        arch::per_cpu[1].fpu_owner = saved1;
 +    }
-+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
-+    JARVIS_ASSERT(info_ptr != 0);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const volatile uint8_t *base =
-+        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
-+                                                   info_ptr);
-+    uint64_t total_size = static_cast<uint64_t>(base[0]) |
-+                          (static_cast<uint64_t>(base[1]) << 8) |
-+                          (static_cast<uint64_t>(base[2]) << 16) |
-+                          (static_cast<uint64_t>(base[3]) << 24);
-+    JARVIS_ASSERT(total_size >= 8);
-+    JARVIS_ASSERT(total_size <= smp::MB2_RELOC_MAX_PAGES * 4096);
-+    bool found_memmap = false;
-+    bool terminated = false;
-+    for (uint64_t offset = 8; offset + 8 <= total_size;) {
-+        uint64_t tag_off = offset;
-+        uint32_t tag_type = static_cast<uint32_t>(base[tag_off]) |
-+                            (static_cast<uint32_t>(base[tag_off + 1]) << 8) |
-+                            (static_cast<uint32_t>(base[tag_off + 2]) << 16) |
-+                            (static_cast<uint32_t>(base[tag_off + 3]) << 24);
-+        uint32_t tag_size = static_cast<uint32_t>(base[tag_off + 4]) |
-+                            (static_cast<uint32_t>(base[tag_off + 5]) << 8) |
-+                            (static_cast<uint32_t>(base[tag_off + 6]) << 16) |
-+                            (static_cast<uint32_t>(base[tag_off + 7]) << 24);
-+        if (tag_type == 0) {
-+            terminated = true;
-+            break;
-+        }
-+        if (tag_type == 6)
-+            found_memmap = true;
-+        if (tag_size < 8)
-+            break;
-+        offset += (tag_size + 7) & ~7ULL;
-+    }
-+    JARVIS_ASSERT(terminated);
-+    JARVIS_ASSERT(found_memmap);
++    JARVIS_ASSERT(read0 == s0);
++    JARVIS_ASSERT(read1 == s1);
++    JARVIS_ASSERT(via_gs == s0);
++    JARVIS_ASSERT(arch::per_cpu[0].fpu_owner == saved0);
++    JARVIS_ASSERT(arch::per_cpu[1].fpu_owner == saved1);
 +    JARVIS_TEST_PASS();
 +}
++#endif
 +
-+// Runmode: kernel
-+// Testidea: The relocation invariant holds regardless of GRUB placement:
-+//           the live info range never overlaps the trampoline block.  An
-+//           insane total_size means bring_up must have parked (0 APs).
-+// Input: Live multiboot pointer + size vs TRAMPOLINE_ADDR block.
-+// Expect: Non-GRUB boot: trivial pass.  Sane size: disjoint ranges.
-+//         Insane size: ap_count() == 0 (fail-closed park honored).
-+// Depends: relocate_mb2_out_of_trampoline (#153), smp::ap_count
-+JARVIS_TEST(smp_bringup_mb2_ptr_outside_trampoline, "PRE: iocd | POST: none") {
-+    if (kernel::gs::get_multiboot_magic() != 0x36D76289) {
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    uint64_t info_ptr = kernel::gs::get_multiboot_info_ptr();
-+    JARVIS_ASSERT(info_ptr != 0);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const volatile uint8_t *base =
-+        reinterpret_cast<const volatile uint8_t *>(arch::HHDM_OFFSET +
-+                                                   info_ptr);
-+    uint64_t total_size = static_cast<uint64_t>(base[0]) |
-+                          (static_cast<uint64_t>(base[1]) << 8) |
-+                          (static_cast<uint64_t>(base[2]) << 16) |
-+                          (static_cast<uint64_t>(base[3]) << 24);
-+    if (total_size < 8 ||
-+        total_size > smp::MB2_RELOC_MAX_PAGES * 4096) {
-+        JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-+                         static_cast<uint64_t>(smp::ap_count()));
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    uint64_t info_end = info_ptr + total_size;
-+    JARVIS_ASSERT(info_end > info_ptr);
-+    JARVIS_ASSERT(info_end <= smp::TRAMPOLINE_ADDR ||
-+                  info_ptr >= smp::TRAMPOLINE_ADDR + 4096);
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_smp_bringup_tests() {
-     Logger::info("Registering smp bringup tests");
-     JARVIS_REGISTER_TEST(smp_bringup_blob_layout_sane);
-     JARVIS_REGISTER_TEST(smp_bringup_block_holds_blob);
-     JARVIS_REGISTER_TEST(smp_bringup_ap_count_matches_madt);
-+    JARVIS_REGISTER_TEST(smp_bringup_mb2_intact_after_staging);
-+    JARVIS_REGISTER_TEST(smp_bringup_mb2_ptr_outside_trampoline);
+ void register_per_cpu_tests() {
+     Logger::info("Registering per-CPU foundation tests");
+     JARVIS_REGISTER_TEST(per_cpu_slot_offsets_frozen);
+     JARVIS_REGISTER_TEST(per_cpu_bsp_identity);
+     JARVIS_REGISTER_TEST(per_cpu_nesting_depth_live);
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_MAX_CPUS > 1
++    JARVIS_REGISTER_TEST(per_cpu_fpu_owner_independent);
++#endif
  }
- #endif // CONFIG_ARCH_X86_64
 diff --git a/test-history.txt b/test-history.txt
-index 7e5ad5cb..9b6236b2 100644
+index 6b579796..45f7be37 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -935,3 +935,7 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 00:30:00 pml4_sync PASSED: 5 FAILED: 0 TIME: 120ms
- 2026-09-15 00:38:00 per_cpu PASSED: 3 FAILED: 0 TIME: 72ms
- 2026-09-15 00:52:00 all PASSED: 1346 FAILED: 0 TIME: 104049ms
-+ all PASSED: 1346 FAILED: 0 TIME: 94412ms
-+2026-09-15 01:20:00 smp_bringup PASSED: 5 FAILED: 0 TIME: 129ms
-+2026-09-15 01:26:00 all PASSED: 85 FAILED: 0 TIME: 17061ms
-+2026-09-15 01:30:00 all PASSED: 1348 FAILED: 0 TIME: 109246ms
+@@ -942,3 +942,10 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 01:42:00 smp_bringup PASSED: 5 FAILED: 0 TIME: 124ms
+ 2026-09-15 02:05:00 all PASSED: 1348 FAILED: 0 TIME: 106064ms
+ 2026-09-15 02:10:00 all PASSED: 85 FAILED: 0 TIME: 16931ms
++2026-09-15 08:19:22 per_cpu PASSED: 4 FAILED: 0 TIME: 93ms
++2026-09-15 08:19:44 fpu_invariants PASSED: 5 FAILED: 0 TIME: 19s
++2026-09-15 08:20:14 fpu_clone PASSED: 0 FAILED: 0 TIME: 11s STATUS: WRONG_CLASS_NAME
++2026-09-15 08:20:49 task_fpu PASSED: 0 FAILED: 0 TIME: 11s STATUS: EMPTY_CLASS_PREEXISTING
++2026-09-15 08:21:13 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
++2026-09-15 08:22:27 all PASSED: 1350 FAILED: 0 TIME: 118540ms
++2026-09-15 08:23:12 all PASSED: 85 FAILED: 0 TIME: 3925ms
+diff --git a/tools/validate_style.py b/tools/validate_style.py
+index b99ca5cf..3c630470 100644
+--- a/tools/validate_style.py
++++ b/tools/validate_style.py
+@@ -935,10 +935,12 @@ class GlobalStateApiChecker(Checker):
+     # Consolidated global symbol -> sanctioned accessor + allowlisted files
+     # where the raw name may legitimately appear (owner, extern-decl headers,
+     # documented fault-atomic / boot paths).  The asm-lockstep switch globals
+-    # (scheduler_*, isr_nesting_depth, fpu_owner, …) are a DOCUMENTED
++    # (scheduler_*, isr_nesting_depth, …) are a DOCUMENTED
+     # exception: isr_stubs.asm references them by exact symbol name and the
+     # scheduler uses atomics on them — they have no gs:: accessor and are
+-    # intentionally NOT in this registry.
++    # intentionally NOT in this registry.  (fpu_owner was removed from this
++    # exception by issue #151: no linker alias remains; all C++ readers use
++    # fpu_owner_own().)
+     GLOBALS: dict[str, dict] = {
+         # -- BootState --
+         "g_boot_info": {

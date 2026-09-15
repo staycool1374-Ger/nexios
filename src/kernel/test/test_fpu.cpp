@@ -59,7 +59,8 @@ JARVIS_TEST(fpu_basic_instruction, "PRE: none | POST: none") {
 
     auto *current = Scheduler::current_task();
     JARVIS_ASSERT(current != nullptr);
-    auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
+    auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
+                                          __ATOMIC_ACQUIRE);
     JARVIS_ASSERT_FMT(fpu_owner_val == current,
                       "fpu_owner (%p) should be current task (%p)",
                       (void *)fpu_owner_val, (void *)current);

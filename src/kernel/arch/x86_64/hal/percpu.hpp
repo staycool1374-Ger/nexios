@@ -58,7 +58,9 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
     uint64_t irq_entry_tsc;     // gs:0x28  — was global irq_entry_tsc
 
     // ─── FPU / scheduler ───────────────────────────────────────────────────
-    void *fpu_owner;            // gs:0x30  — global (FPU migration: #151)
+    // Own-CPU FPU register owner (issue #151): which task's FPU state is
+    // currently live in this CPU's registers.  nullptr = none since boot.
+    kernel::TaskControlBlock *fpu_owner; // gs:0x30 — per-CPU (was global)
     void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
                                 //   array, issue #25 C1; kept for layout)
 

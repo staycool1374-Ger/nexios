@@ -910,9 +910,15 @@ extern uint64_t deadline_detection_integrity;
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t fpu_nm_depth_max;
 /// @brief Tracks which task's FPU state is currently in the registers.
-///        nullptr means no task has used FPU since boot.
+///        Single-core archs ONLY: the plain global in global_state.cpp, read
+///        via fpu_owner_own().  On x86_64 the owner lives in
+///        per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global
+///        definition — any bare use here fails to link by design (migration
+///        proof).  Do not add readers of this symbol; use fpu_owner_own().
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+#if !defined(CONFIG_ARCH_X86_64)
 extern TaskControlBlock *fpu_owner;
+#endif
 }
 
 

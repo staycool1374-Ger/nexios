@@ -752,7 +752,16 @@ void snapshot_restore(const char *test_name) {
     // Zombies from termininate()->release_zombie() during the test are freed
     // here so ResourceTracker does not see leaked resources.
     Scheduler::drain_zombie_list();
-    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+    // Issue #151: FPU ownership is per-CPU — clear every slot so no owner
+    // leaks across tests (single-core archs: the plain global).
+#if defined(CONFIG_ARCH_X86_64)
+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
+        __atomic_store_n(&arch::per_cpu[cpu].fpu_owner,
+                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+#else
+    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr,
+                     __ATOMIC_RELEASE);
+#endif
     __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
     if (auto *tctx = Scheduler::get_test_context())
         tctx->dummy_save_rsp = 0;

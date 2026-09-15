@@ -96,13 +96,15 @@ JARVIS_TEST(atomic_globals_set_on_reschedule, "PRE: none | POST: none") {
 // Expect: Value matches what was written.
 // Depends: fpu_owner atomic
 JARVIS_TEST(atomic_fpu_owner_read_write, "PRE: none | POST: none") {
-    auto *old = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
+    auto *old =
+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
     auto *test_ptr =
         reinterpret_cast<TaskControlBlock *>(uintptr_t(0xDEADBEEF));
-    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELEASE);
-    auto *val = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELEASE);
+    auto *val =
+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
     JARVIS_ASSERT(val == test_ptr);
-    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELEASE);
+    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELEASE);
     JARVIS_TEST_PASS();
 }
 
@@ -194,17 +196,17 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
 // Depends: fpu_owner atomic
 JARVIS_TEST(atomics_fpu_owner_relaxed, "PRE: none | POST: none") {
     TaskControlBlock *old =
-        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
 
     auto *test_ptr = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xBEEF));
-    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELAXED);
+    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELAXED);
 
     TaskControlBlock *val =
-        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
 
     JARVIS_ASSERT(val == test_ptr);
 
-    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELAXED);
+    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELAXED);
 
     JARVIS_TEST_PASS();
 }

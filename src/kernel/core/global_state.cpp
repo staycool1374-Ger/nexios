@@ -68,19 +68,20 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_kernel_cr3 = 0;
 bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
-// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
-// fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
-// accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
-// plain definitions here until their per-CPU migration.
+// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
+// in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
+// Other architectures keep plain definitions here until their per-CPU
+// migration.
 #if !defined(CONFIG_ARCH_X86_64)
 uint64_t isr_nesting_depth = 0;
 uint64_t irq_entry_tsc = 0;
 #endif
 uint64_t scheduler_corruption_count = 0;
 uint64_t deadline_detection_integrity = 0;
-// Tracks which task's FPU state is currently in the registers (declared in
-// scheduler.hpp's extern "C" block).
-// Issue #25 (Phase A): x86_64 definition lives in per_cpu[0] (gs:0x30).
+// Tracks which task's FPU state is currently in the registers, single-core
+// archs only (declared in scheduler.hpp's extern "C" block).
+// Issue #151: on x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30);
+// no global definition here, no linker alias — bare users fail the link.
 #if !defined(CONFIG_ARCH_X86_64)
 kernel::TaskControlBlock *fpu_owner = nullptr;
 #endif

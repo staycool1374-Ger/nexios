@@ -1395,8 +1395,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->buf_list_head = -1;
 
 #if defined(CONFIG_ARCH_X86_64)
-    // Save parent's FPU state if it's currently in the registers
-    if (__atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE) == parent) {
+    // Save parent's FPU state if it's currently in this CPU's registers
+    // (issue #151: ownership is per-CPU; the cloning CPU's slot decides).
+    if (__atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE) == parent) {
         arch::fxsave(parent->fpu_state);
         ++parent->fpu_state_gen;
     }
