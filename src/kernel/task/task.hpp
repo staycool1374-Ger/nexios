@@ -239,7 +239,7 @@ struct TaskControlBlock {
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
+          page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
           user_stack_size_(0), user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
@@ -299,6 +299,12 @@ struct TaskControlBlock {
     /// @brief Total slot size (stack + guard page).  0 if HHDM.
     uint64_t kstack_slot_size_;
     uint64_t page_table_;
+    /// @brief Process-context identifier for TLB tagging (issue #156,
+    ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
+    ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
+    ///        TCB (not the PML4): survives exec PML4 swaps, dies with the
+    ///        task so IDs are never reused while live.
+    uint16_t pcid_;
     /// @brief Physical address of the private PDPT page allocated in
     /// clone() for the user stack region. Zero when not applicable.
     /// Used by cleanup() to free the private PDPT and its child PD/PT

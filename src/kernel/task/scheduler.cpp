@@ -53,6 +53,9 @@ extern "C" void debug_write_dec(uint64_t value);
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 
 /// @brief Read the current stack pointer (portable across arches).
 /// @return Current SP (kernel stack pointer for the running context).
@@ -2638,6 +2641,21 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
 // switch_to_task
 // ---------------------------------------------------------------------------
 
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+/// @brief Lazily assign a user PCID at first CR3 publish (issue #156).
+///        Single choke point covering create/clone/elf births uniformly
+///        (deviation D1 from the creation-site plan: the elf::load path
+///        also births user address spaces).  Runs under scheduler_lock_
+///        at both publish sites; fires once per task lifetime (later
+///        publishes see nonzero pcid_).  Returns 0 when unsupported so
+///        the publish stays raw-phys (full flush, today's behavior).
+static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
+    if (next.is_user_ && next.pcid_ == 0 && arch::pcid_supported())
+        next.pcid_ = arch::pcid_alloc();
+    return next.pcid_;
+}
+#endif
+
 static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                            sync::SpinLock *held_lock = nullptr) {
     auto release_lock = [&]() {
@@ -2981,7 +2999,13 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
                      __ATOMIC_RELEASE);
     if (next.page_table_) {
-        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next.page_table_,
+        // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
+        uint64_t cr3_value = next.page_table_;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+        cr3_value = arch::pcid_tag(next.page_table_,
+                                   publish_pcid_for(next));
+#endif
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                          __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         {
@@ -3329,7 +3353,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
                          __ATOMIC_RELEASE);
         if (next->page_table_) {
-            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next->page_table_,
+            // Issue #156: tagged publish (same contract as above).
+            uint64_t cr3_value = next->page_table_;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+            cr3_value = arch::pcid_tag(next->page_table_,
+                                       publish_pcid_for(*next));
+#endif
+            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                              __ATOMIC_RELEASE);
         } else {
             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),

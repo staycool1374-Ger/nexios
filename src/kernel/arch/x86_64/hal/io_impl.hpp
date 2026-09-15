@@ -71,6 +71,8 @@ inline void write_cr0(uint64_t v) {
 inline void write_cr4(uint64_t v) {
     asm volatile("mov %0, %%cr4" : : "r"(v) : "memory");
 }
+/// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
+inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
 
 /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
 ///        user pages while SMAP is active.  Must be paired with clac().

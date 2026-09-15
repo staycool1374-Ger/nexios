@@ -41,6 +41,9 @@
 #include <kernel/arch/apic.hpp>
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #endif
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -780,6 +783,11 @@ void snapshot_restore(const char *test_name) {
         while (reaper->notify.try_wait(&stale_wake)) {
         }
     }
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    // Issue #156 D2: restore hardware PCID truth in case a forced-logic
+    // test aborted mid-scope (normal exits reset explicitly).
+    arch::pcid_test_reset();
+#endif
     if (corr > 0) {
         Logger::raw_write("[SCHED] corruption_count=");
         Logger::print_dec(corr);

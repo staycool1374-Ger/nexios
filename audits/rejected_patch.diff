@@ -1,67 +1,19 @@
-diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
---- a/src/kernel/memory/pmm.cpp
-+++ b/src/kernel/memory/pmm.cpp
-@@ -302,25 +302,26 @@ uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
-     constexpr uint64_t k_num = cache::NUM_COLORS;
-     if (color >= k_num)
-         return 0;
-     uint64_t cur = color_cursor_[color];
-     if (cur < window_base_page_ || cur >= window_end_page_)
-         cur = window_base_page_;
-+    uint64_t start0 = first_congruent_from(cur, color);
-     for (int pass = 0; pass < 2; ++pass) {
--        uint64_t limit =
--            (pass == 0) ? window_end_page_ : first_congruent_from(cur,
--                                                                 color);
--        for (uint64_t idx = first_congruent_from(cur, color); idx < limit;
--             idx += k_num) {
-+        uint64_t start =
-+            (pass == 0) ? start0
-+                        : first_congruent_from(window_base_page_, color);
-+        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
-+        for (uint64_t idx = start; idx < limit; idx += k_num) {
-             if (!bitmap_test(idx)) {
-                 bitmap_set(idx);
-                 owner_set_kernel(idx);
-                 --free_pages_;
-                 color_cursor_[color] = idx + k_num;
-                 rebuild_free_list();
-                 return idx * PAGE_SIZE;
-             }
-         }
-         cur = window_base_page_;
-     }
-     return 0;
+diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
+--- a/src/kernel/arch/x86_64/hal/pcid.cpp
++++ b/src/kernel/arch/x86_64/hal/pcid.cpp
+@@ -101,6 +101,15 @@ void pcid_free(uint16_t pcid) {
+     if (pcid == PCID_KERNEL)
+         return;
+     live_clear(pcid);
++    // Issue #156 (audit S1): a freed PCID is immediately reusable, but the
++    // freed address space's entries tagged with it survive in the TLB
++    // (tagged switches no longer flush, and VMM::free_user_pages leaves
++    // flushing to the caller). Purge them with one same-root CR3 reload
++    // (NoFlush bit clear, so all PCID-tagged entries are invalidated
++    // locally); the old table is destroyed right after, so nothing can
++    // re-cache this ID in the meantime.
++    if (g_supported)
++        write_cr3(read_cr3() & ~0xFFFULL);
  }
-@@ -331,25 +331,26 @@ uint64_t PMM::try_alloc_colored_user(uint64_t color) {
-     constexpr uint64_t k_num = cache::NUM_COLORS;
-     if (color >= k_num)
-         return 0;
-     uint64_t cur = color_cursor_[color];
-     if (cur < window_base_page_ || cur >= window_end_page_)
-         cur = window_base_page_;
-+    uint64_t start0 = first_congruent_from(cur, color);
-     for (int pass = 0; pass < 2; ++pass) {
--        uint64_t limit =
--            (pass == 0) ? window_end_page_ : first_congruent_from(cur,
--                                                                 color);
--        for (uint64_t idx = first_congruent_from(cur, color); idx < limit;
--             idx += k_num) {
-+        uint64_t start =
-+            (pass == 0) ? start0
-+                        : first_congruent_from(window_base_page_, color);
-+        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
-+        for (uint64_t idx = start; idx < limit; idx += k_num) {
-             if (!bitmap_test(idx)) {
-                 bitmap_set(idx);
-                 owner_set_user(idx);
-                 --free_pages_;
-                 color_cursor_[color] = idx + k_num;
-                 rebuild_free_list();
-                 return idx * PAGE_SIZE;
-             }
-         }
-         cur = window_base_page_;
-     }
-     return 0;
- }
+
+ uint64_t pcid_epoch() {

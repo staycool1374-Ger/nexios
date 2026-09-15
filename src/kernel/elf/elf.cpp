@@ -32,6 +32,9 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 #include <kernel/arch/timer.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/initrd_fs.hpp>
@@ -547,6 +550,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
 
     tcb->page_table_ = pml4;
     tcb->is_user_ = true;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    // Issue #156: eager PCID assignment (see task.cpp birth sites).
+    tcb->pcid_ = arch::pcid_alloc();
+#endif
 
     open_std_fds(*tcb);
 

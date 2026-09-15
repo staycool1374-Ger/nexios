@@ -1,259 +1,807 @@
+diff --git a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
+index 490a2d87..1d1a1529 100644
+--- a/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/cpuid_impl.hpp
+@@ -65,9 +65,13 @@ inline constexpr uint32_t CPUID_ECX1_SSSE3 = 1u << 9;
+ inline constexpr uint32_t CPUID_ECX1_SSE4_1 = 1u << 19;
+ inline constexpr uint32_t CPUID_ECX1_SSE4_2 = 1u << 20;
+ inline constexpr uint32_t CPUID_ECX1_RDRAND = 1u << 30;
++/// @brief PCID feature bit (ECX, leaf 1): process-context identifiers.
++inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
+ /// @}
+ /// @brief RDRAND feature bit (EBX, leaf 7, subleaf 0).
+ inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
++/// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
++inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
+ 
+ /// @brief Check if the CPU has an x87 FPU.
+ /// @return true if the FPU feature bit is set.
+@@ -89,6 +93,16 @@ inline bool has_sse() {
+ inline bool has_rdrand() {
+     return (cpuid(1).ecx & CPUID_ECX1_RDRAND) != 0;
+ }
++/// @brief Check if the CPU supports process-context identifiers.
++/// @return true if the PCID feature bit is set.
++inline bool has_pcid() {
++    return (cpuid(1).ecx & CPUID_ECX1_PCID) != 0;
++}
++/// @brief Check if the CPU supports the INVPCID instruction.
++/// @return true if the INVPCID feature bit is set.
++inline bool has_invpcid() {
++    return (cpuid(7, 0).ebx & CPUID_EBX7_INVPCID) != 0;
++}
+ /// @brief Check if the CPU supports the RDSEED instruction.
+ /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.
+ inline bool has_rdseed() {
+diff --git a/src/kernel/arch/x86_64/hal/io_impl.hpp b/src/kernel/arch/x86_64/hal/io_impl.hpp
+index 02dc4dab..ef8f4c5e 100644
+--- a/src/kernel/arch/x86_64/hal/io_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/io_impl.hpp
+@@ -71,6 +71,8 @@ inline void write_cr0(uint64_t v) {
+ inline void write_cr4(uint64_t v) {
+     asm volatile("mov %0, %%cr4" : : "r"(v) : "memory");
+ }
++/// @brief CR4.PCIDE bit (17): process-context identifiers (issue #156).
++inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
+ 
+ /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
+ ///        user pages while SMAP is active.  Must be paired with clac().
+diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
+new file mode 100644
+index 00000000..24c1ac33
+--- /dev/null
++++ b/src/kernel/arch/x86_64/hal/pcid.cpp
+@@ -0,0 +1,145 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file pcid.cpp
++/// @brief Process-context identifier allocator (issue #156, x86_64 only).
++
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#include <kernel/arch/io.hpp>
++#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
++#include <kernel/arch/x86_64/hal/io_impl.hpp>
++
++namespace arch {
++namespace {
++
++// Allocator state (create/cleanup-time mutation only — never on the
++// timer-ISR or context-switch hot path; callers serialize via the
++// scheduler paths that already hold scheduler_lock_).
++bool g_supported = false;
++uint16_t g_next = 1;
++uint64_t g_epoch = 0;
++// Serialization note (audit S3): the live-ID bitmap is the safety
++// state and is claimed atomically (CAS — never-reissue holds under
++// concurrency).  g_next is a placement hint (a stale read only wastes
++// a scan pass; the claim still decides).  g_epoch is diagnostic plus
++// the rollover witness (monotonic by construction: only ever
++// incremented under the same task-context paths as allocation, and
++// tests assert relative deltas, never absolute values).
++// Live-ID bitmap: 4096 bits = 64 u64s, bit N set = PCID N live.
++uint64_t g_live[64] = {};
++
++// Atomically claim a free ID: returns true iff this caller won it.
++// CAS loop (concurrent creates on two CPUs can never share an ID).
++bool live_claim(uint16_t pcid) {
++    uint64_t *slot = &g_live[pcid / 64];
++    uint64_t bit = 1ULL << (pcid % 64);
++    uint64_t seen = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
++    while ((seen & bit) == 0) {
++        if (__atomic_compare_exchange_n(slot, &seen, seen | bit, false,
++                                        __ATOMIC_ACQ_REL,
++                                        __ATOMIC_ACQUIRE)) {
++            return true;
++        }
++    }
++    return false;
++}
++
++void live_clear(uint16_t pcid) {
++    __atomic_fetch_and(&g_live[pcid / 64], ~(1ULL << (pcid % 64)),
++                       __ATOMIC_ACQ_REL);
++}
++
++} // namespace
++
++void pcid_init() {
++    g_supported = has_pcid();
++}
++
++bool pcid_supported() {
++    return g_supported;
++}
++
++uint16_t pcid_alloc() {
++    if (!g_supported)
++        return PCID_KERNEL;
++    // First pass: cursor to end.  Second pass: start to cursor.
++    // A live ID is never reissued (bitmap-checked both passes).
++    for (int pass = 0; pass < 2; ++pass) {
++        uint16_t start = (pass == 0) ? g_next : 1;
++        uint16_t limit = (pass == 0) ? (PCID_MAX + 1) : g_next;
++        for (uint16_t id = start; id < limit; ++id) {
++            if (live_claim(id)) {
++                g_next = (id == PCID_MAX) ? 1 : (id + 1);
++                return id;
++            }
++        }
++    }
++    // Exhausted: epoch bump + one global flush (full CR3 reload of the
++    // current PML4 untagged flushes all PCID-tagged entries), cursor
++    // reset to 1.  Live IDs stay set, so reuse is still impossible and
++    // a fully-live space answers 0 (caller falls back untagged).
++    ++g_epoch;
++    write_cr3(read_cr3() & ~0xFFFULL);
++    g_next = 1;
++    for (uint16_t id = 1; id <= PCID_MAX; ++id) {
++        if (live_claim(id)) {
++            g_next = (id == PCID_MAX) ? 1 : (id + 1);
++            return id;
++        }
++    }
++    return PCID_KERNEL; // all 4095 live — caller falls back untagged
++}
++
++void pcid_free(uint16_t pcid) {
++    if (pcid == PCID_KERNEL)
++        return;
++    live_clear(pcid);
++    // Issue #156 (audit S1): a freed PCID is immediately reusable, but the
++    // freed address space's entries tagged with it survive in the TLB
++    // (tagged switches no longer flush, and VMM::free_user_pages leaves
++    // flushing to the caller). Purge them with one same-root CR3 reload
++    // (NoFlush bit clear, so all PCID-tagged entries are invalidated
++    // locally); the old table is destroyed right after, so nothing can
++    // re-cache this ID in the meantime.
++    //
++    // Coherency bound (why a local flush suffices for now): user address
++    // spaces — the only PCID holders — execute on CPU0 exclusively
++    // (shared-TSS pin), so their tagged entries can only ever live in
++    // CPU0's TLB.  User-task cleanup (self/parent-waitpid/deadline-BSP/
++    // reboot-BSP) likewise executes on CPU0 in every current path — no
++    // AP-context user-teardown producer exists — so this flush always
++    // lands where the stale entries are.  General cross-CPU invalidation
++    // (should APs ever terminate user tasks) is owned by the lazy
++    // shootdown protocol (#158), which must cover it by design.
++    if (g_supported)
++        write_cr3(read_cr3() & ~0xFFFULL);
++}
++
++uint64_t pcid_epoch() {
++    return g_epoch;
++}
++
++void pcid_test_force() {
++    g_supported = true;
++}
++
++void pcid_test_reset() {
++    g_supported = has_pcid();
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/x86_64/hal/pcid.hpp b/src/kernel/arch/x86_64/hal/pcid.hpp
+new file mode 100644
+index 00000000..ad7778fc
+--- /dev/null
++++ b/src/kernel/arch/x86_64/hal/pcid.hpp
+@@ -0,0 +1,77 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file pcid.hpp
++/// @brief Process-context identifier allocator (issue #156, x86_64 only).
++///
++/// PCIDs tag TLB entries so CR3 switches between address spaces retain
++/// translations instead of flushing.  PCID 0 is reserved for the kernel
++/// PML4 fallback; user address spaces allocate 1..4095.  On exhaustion
++/// the allocator bumps an epoch, issues one global flush, and restarts
++/// from 1 — a live ID is never reissued (bitmap-checked).
++///
++/// Mutation happens at task create/cleanup only (never on the
++/// timer-ISR or context-switch hot path).  Snapshot save/restore hooks
++/// keep test isolation deterministic.
++
++#pragma once
++
++#include <types.hpp>
++
++namespace arch {
++
++/// @brief Maximum PCID value (12-bit field, 0 reserved for kernel).
++inline constexpr uint16_t PCID_MAX = 4095;
++/// @brief PCID reserved for the kernel PML4 fallback (never allocated).
++inline constexpr uint16_t PCID_KERNEL = 0;
++
++/// @brief Probe CPU support once at boot (BSP).
++void pcid_init();
++/// @brief True when PCID tagging is active (probed + CR4.PCIDE set).
++bool pcid_supported();
++/// @brief Allocate a user PCID (1..4095), or 0 when unsupported.
++///        On exhaustion: epoch bump + one global flush, cursor reset
++///        to 1 (freed IDs are reused low-first); returns 0 if every
++///        ID is still live — the caller falls back untagged.  A live
++///        ID is never reissued.
++uint16_t pcid_alloc();
++/// @brief Release a user PCID (0 is a no-op).
++void pcid_free(uint16_t pcid);
++/// @brief Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys).
++///        Hot path: single compare; pcid_alloc() only returns nonzero
++///        when tagging is active, so no support check is needed here.
++inline uint64_t pcid_tag(uint64_t pml4_phys, uint16_t pcid) {
++    if (pcid == PCID_KERNEL)
++        return pml4_phys;
++    return (pml4_phys & ~0xFFFULL) | (pcid & 0xFFFU);
++}
++/// @brief Current rollover epoch (diagnostic/test only).
++uint64_t pcid_epoch();
++/// @brief Force allocator availability ON for logic testing (issue
++///        #156, D2).  Test-only: lets the bitmap/epoch/rollover paths
++///        run on CPUs without PCID hardware.  DANGER: while forced, a
++///        dispatched user task would publish a tagged CR3 the hardware
++///        rejects (#GP) — never dispatch user tasks while forced, and
++///        always close with pcid_test_reset() (plus the isolate hook).
++void pcid_test_force();
++/// @brief Restore hardware truth after forced testing
++///        (g_supported = has_pcid()).  Called by tests at exit and by
++///        test isolation on restore.
++void pcid_test_reset();
++
++} // namespace arch
+diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
+index 66a96fbb..ee9aa213 100644
+--- a/src/kernel/arch/x86_64/hal/smp.cpp
++++ b/src/kernel/arch/x86_64/hal/smp.cpp
+@@ -28,6 +28,8 @@
+ 
+ #include <kernel/arch/x86_64/hal/apic.hpp>
+ #include <kernel/arch/x86_64/hal/percpu.hpp>
++#include <kernel/arch/x86_64/hal/io_impl.hpp>
++#include <kernel/arch/x86_64/hal/pcid.hpp>
+ #include <kernel/arch/x86_64/madt.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/arch/gdt.hpp>
+@@ -342,7 +344,14 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
+     uint64_t cr0 = arch::read_cr0();
+     arch::write_cr0(cr0 | (1ULL << 3));
+     uint64_t cr4 = arch::read_cr4();
+-    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10)); // OSFXSR|OSXMMEXCPT
++    // Issue #156: mirror BSP's CR4.PCIDE so AP TLB tagging stays coherent
++    // (BSP probed support at boot; pcid_supported() is BSP-set by now).
++    uint64_t pcide = 0;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    if (arch::pcid_supported())
++        pcide = arch::CR4_PCIDE;
++#endif
++    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10) | pcide); // OSFXSR|OSXMMEXCPT
+ 
+     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
+     // publishes scheduler_ready after reboot_from_table() finishes
+diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
+index 31412acf..1e518a79 100644
+--- a/src/kernel/arch/x86_64/isr_stubs.asm
++++ b/src/kernel/arch/x86_64/isr_stubs.asm
+@@ -407,6 +407,9 @@ isr_common:
+     ; (kernel/harness context) or it was consumed, fall back to the static
+     ; kernel PML4 so the harness can never resume on a stale user CR3 from a
+     ; previous task (the H2 freeze path).
++    ; Issue #156: RAX carries pml4_phys | pcid (low 12 bits) when PCID is
++    ; active — mov cr3 preserves the tag (no full flush); raw phys (PCID 0)
++    ; keeps today's flush semantics.  No instruction change needed.
+     lea rax, [rel scheduler_load_cr3_from]
+     mov rax, [rax + r11*8]
+     test rax, rax
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 9ee5efb6..89fdfe10 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -32,6 +32,9 @@
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
+ #include <kernel/arch/io.hpp>
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#endif
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/vfs/initrd_fs.hpp>
+@@ -547,6 +550,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+ 
+     tcb->page_table_ = pml4;
+     tcb->is_user_ = true;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    // Issue #156: eager PCID assignment (see task.cpp birth sites).
++    tcb->pcid_ = arch::pcid_alloc();
++#endif
+ 
+     open_std_fds(*tcb);
+ 
 diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 8ac3509a..97e8e6b3 100644
+index 97e8e6b3..d115efc3 100644
 --- a/src/kernel/kernel.cpp
 +++ b/src/kernel/kernel.cpp
-@@ -370,8 +370,9 @@ void init_task_main() {
-     // needs background priority (0) so it never starves the shell (prio 2)
-     // or the daemons (prio 20).  The shell's `selftest` command raises it
-     // back to 10 for the test run.
--    if (auto *init_self = kernel::Scheduler::current_task()) {
--        kernel::Scheduler::set_priority(*init_self, 0);
-+    auto *reaper_self = kernel::Scheduler::current_task();
-+    if (reaper_self) {
-+        kernel::Scheduler::set_priority(*reaper_self, 0);
-         // The reaper is best-effort background work, not a hard real-time
-         // periodic task.  g_task_defs gives init a nominal period/WCET
-         // (period=100, wcet=1) so it participates in RMS while it is the
-@@ -379,16 +380,31 @@ void init_task_main() {
-         // meet a 100-tick deadline (the shell/daemons always run first),
-         // so scan_deadlines() and the WCET scan would flag it every period
-         // with LOG_ONLY spam.  Clear the RT budget so the monitors skip it.
--        init_self->period_ticks = 0;
--        init_self->deadline_ticks = 0;
--        init_self->wcet_ticks = 0;
-+        reaper_self->period_ticks = 0;
-+        reaper_self->deadline_ticks = 0;
-+        reaper_self->wcet_ticks = 0;
-     }
-+    // Issue #155: sleep in Notify::wait (BLOCKED) instead of spinning.
-+    // The loop is level-triggered on all three wake sources — zombie
-+    // count delta across the drain, IPC queue drain, notify try_wait —
-+    // plus a queue-empty check, so a wake landing while RUNNING can only
-+    // delay, never stall.  Wakers: zombie birth (terminate() poke),
-+    // daemon IPC (generic BLOCKED wake on send), selftest kick.
-+    // No hlt() while BLOCKED (the scheduler runs idle, which hlts).
-     for (;;) {
--        arch::pause();
-+        auto *self = kernel::Scheduler::current_task();
-+        if (!self) {
-+            arch::hlt();
-+            continue;
-+        }
-+        uint64_t zombies_before = kernel::Scheduler::zombie_count();
-         kernel::Scheduler::drain_zombie_list();
-+        bool worked =
-+            (kernel::Scheduler::zombie_count() != zombies_before);
- 
-         kernel::Message msg{};
-         while (kernel::IPC::recv(msg)) {
-+            worked = true;
-             if (msg.type == kernel::ipc::MSG_DAEMON_READY) {
-                 kernel::Logger::info("init: daemon (PID %u) ready "
-                                      "(restart)",
-@@ -400,7 +416,12 @@ void init_task_main() {
-             }
+@@ -65,6 +65,9 @@
+ #include <kernel/random.hpp>
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <kernel/arch/x86_64/hal/percpu.hpp>
++#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
++#include <kernel/arch/x86_64/hal/io_impl.hpp>
++#include <kernel/arch/x86_64/hal/pcid.hpp>
+ #include <kernel/arch/x86_64/madt.hpp>
+ #include <kernel/arch/x86_64/hal/smp.hpp>
+ #endif
+@@ -608,6 +611,19 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
          }
- 
--        arch::hlt();
-+        uint64_t wake_value = 0;
-+        if (self->notify.try_wait(&wake_value))
-+            worked = true;
-+        if (worked || !self->msg_queue.is_empty())
-+            continue;
-+        self->notify.wait();
+ #endif
      }
- }
++#endif
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    // Issue #156: PCID (CR4 bit 17) — process-context identifiers so CR3
++    // switches retain TLB entries.  BSP-only probe here; APs mirror it in
++    // ap_main (smp.cpp).  Unsupported CPUs keep today's raw-phys publish
++    // path (pcid_alloc returns 0 → untagged).
++    if (arch::has_pcid()) {
++        cr4 |= arch::CR4_PCIDE;
++        arch::pcid_init();
++        debug_write("[BOOT] PCID enabled\n");
++    } else {
++        debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
++    }
+ #endif
+     arch::write_cr4(cr4);
  
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 49d62ac5..090e3eb0 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -878,6 +878,21 @@
+ #endif
+ #endif
+ 
++/// v0.4.6 issue #156: PCID (process-context identifiers) — CR4 bit 17.
++/// On x86_64 the boot path sets it when CPUID leaf 1 ECX[17] is supported;
++/// CR3 publishes then carry the TCB's PCID in the low 12 bits so switches
++/// retain TLB entries.  Unsupported CPUs keep raw-phys publish (full flush).
++#ifndef CONFIG_PCID
++#if defined(CONFIG_ARCH_X86_64)
++#define CONFIG_PCID 1
++#else
++#define CONFIG_PCID 0
++#endif
++#endif
++/// Maximum PCID value lives as arch::PCID_MAX (4095, 12-bit field with 0
++/// reserved) next to the allocator — no duplicate macro here by design
++/// (a second constant invites off-by-one drift).
++
+ /// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
+ /// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
+ /// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 651dc4c2..98a256b7 100644
+index 98a256b7..91769aca 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -1070,6 +1070,20 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-     // safe before switch_to_task.
-     release_zombie(task);
+@@ -53,6 +53,9 @@ extern "C" void debug_write_dec(uint64_t value);
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <kernel/arch/x86_64/hal/smp.hpp>
+ #endif
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#endif
  
-+    // Issue #155: prompt the PID 1 reaper after every zombie birth
-+    // (unconditional — spurious wakes are harmless under its
-+    // level-triggered drain loop).  Placed after the list push above
-+    // so wake-then-miss is impossible.  Same IrqGuard + scheduler_lock_
-+    // region (global→leaf order: notify takes only its leaf lock).
-+    // Deadlock-free by affinity clamping: set_affinity always clamps
-+    // masks to up-CPUs, so the reaper's target is either here
-+    // (lock-free enqueue_ready) or a booted AP (mailbox+IPI) — never
-+    // the down-CPU direct-enqueue branch that would retake this lock.
-+    if (task.id != 1) {
-+        if (auto *reaper = Scheduler::find_task(1))
-+            reaper->notify.notify(1);
-+    }
+ /// @brief Read the current stack pointer (portable across arches).
+ /// @return Current SP (kernel stack pointer for the running context).
+@@ -2638,6 +2641,21 @@ static bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
+ // switch_to_task
+ // ---------------------------------------------------------------------------
+ 
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++/// @brief Lazily assign a user PCID at first CR3 publish (issue #156).
++///        Single choke point covering create/clone/elf births uniformly
++///        (deviation D1 from the creation-site plan: the elf::load path
++///        also births user address spaces).  Runs under scheduler_lock_
++///        at both publish sites; fires once per task lifetime (later
++///        publishes see nonzero pcid_).  Returns 0 when unsupported so
++///        the publish stays raw-phys (full flush, today's behavior).
++static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
++    if (next.is_user_ && next.pcid_ == 0 && arch::pcid_supported())
++        next.pcid_ = arch::pcid_alloc();
++    return next.pcid_;
++}
++#endif
 +
-     // If the terminating task is the one currently on the CPU, arrange for a
-     // context switch to a valid successor on the next ISR.  Otherwise
-     // current_task() stays parked on a TERMINATED task and the running RSP
+ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                            sync::SpinLock *held_lock = nullptr) {
+     auto release_lock = [&]() {
+@@ -2981,7 +2999,13 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
+                      __ATOMIC_RELEASE);
+     if (next.page_table_) {
+-        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next.page_table_,
++        // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
++        uint64_t cr3_value = next.page_table_;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++        cr3_value = arch::pcid_tag(next.page_table_,
++                                   publish_pcid_for(next));
++#endif
++        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                          __ATOMIC_RELEASE);
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+         {
+@@ -3329,7 +3353,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
+                          __ATOMIC_RELEASE);
+         if (next->page_table_) {
+-            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), next->page_table_,
++            // Issue #156: tagged publish (same contract as above).
++            uint64_t cr3_value = next->page_table_;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++            cr3_value = arch::pcid_tag(next->page_table_,
++                                       publish_pcid_for(*next));
++#endif
++            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                              __ATOMIC_RELEASE);
+         } else {
+             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 3390b79b..2aa32f3e 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -40,6 +40,9 @@
+ #include <kernel/ipc/death_notify.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/daemon/daemon_mgr.hpp>
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#endif
+ #include <kernel/sync/notify.hpp>
+ #include <kernel/sync/eventgroup.hpp>
+ #include <kernel/sync/semaphore.hpp>
+@@ -1214,6 +1217,12 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     }
+     tcb->page_table_ = pml4;
+     tcb->is_user_ = true;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    // Issue #156: eager PCID assignment at birth (0 when unsupported).
++    // Publish-time lazy assignment remains as backstop for paths that
++    // install user PML4s without passing here.
++    tcb->pcid_ = arch::pcid_alloc();
++#endif
+ 
+     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
+     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
+@@ -1426,6 +1435,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     // (every task now owns a private kernel-half PML4).
+     bool is_user_task = parent->is_user_;
+     tcb->is_user_ = is_user_task;
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    // Issue #156: fork gets a FRESH PCID (never the parent's — the child
++    // owns a private address space).
++    if (is_user_task)
++        tcb->pcid_ = arch::pcid_alloc();
++#endif
+     uint64_t slot_va = alloc_kslot(STACK_SIZE);
+     if (slot_va) {
+         tcb->kstack_slot_va_ = slot_va;
+@@ -1894,6 +1909,13 @@ void TaskControlBlock::cleanup() noexcept {
+         // free_user_pages() skips kernel-owned table/data pages via
+         // PMM::is_user_page, so a partially deep-copied address space (OOM
+         // during clone) is fully reclaimed here — no leak.
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++        // Issue #156: release the PCID before the address space goes
++        // away (keyed on the live TCB, never after free; 0 is a no-op
++        // for kernel tasks and never-published users).
++        arch::pcid_free(pcid_);
++        pcid_ = 0;
++#endif
+         VMM::free_user_pages(page_table_);
+         PMM::free_page(page_table_);
+ #if defined(CONFIG_ARCH_X86_64)
 diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 99d20b1e..4f08e4dd 100644
+index 4f08e4dd..3704a854 100644
 --- a/src/kernel/task/task.hpp
 +++ b/src/kernel/task/task.hpp
-@@ -437,7 +437,11 @@ struct TaskControlBlock {
-     /// @brief Embedded message queue (no separate heap allocation).
-     MessageQueue msg_queue;
- 
--    /// @brief Per-task notification object (embedded).
-+    /// @brief Per-task notification object (embedded).  Issue #155: PID 1's
-+    ///        instance doubles as the reaper sleep object — PID 1 is the
-+    ///        sole waiter on its own notify (no other subsystem may wait
-+    ///        on it); wakers are zombie-birth (terminate), daemon IPC
-+    ///        (generic BLOCKED wake on send), and the selftest kick.
-     sync::Notify notify;
- 
-     /// @brief Per-task event-group object (embedded).
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 8cc2bade..92959b5a 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
-     {"selftest",            133,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1251,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154)
-+    {"all",                1253,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155)
- 
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -62,7 +62,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
-     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
-     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
--    {"task_init",             3,    0,       0      },  // init task exists/reparents
-+    {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
-     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
-     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
- 
-diff --git a/src/kernel/test/test_init.cpp b/src/kernel/test/test_init.cpp
-index 4c682c86..420e9025 100644
---- a/src/kernel/test/test_init.cpp
-+++ b/src/kernel/test/test_init.cpp
-@@ -23,6 +23,8 @@
- #include <logger.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/ipc/ipc_boot.hpp>
- 
- using namespace kernel;
- 
-@@ -42,6 +44,55 @@ JARVIS_TEST(init_task_has_no_parent, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Child exit pokes the PID 1 reaper (issue #155): terminate()
-+//           notifies PID 1's sleep object after the zombie-list push, so
-+//           a parked reaper wakes and drains to zero.
-+// Input: Drain stale notify value; register + terminate a child;
-+//        consume the poke; drain zombies.
-+// Expect: try_wait succeeds exactly once after the exit (the poke
-+//         landed); zombie count returns to 0 after the drain.
-+// Depends: Scheduler::terminate reaper poke, Notify level-triggering
-+JARVIS_TEST(reaper_notified_on_child_exit, "PRE: none | POST: none") {
-+    auto *init = Scheduler::find_task(1);
-+    JARVIS_ASSERT(init != nullptr);
-+    uint64_t stale = 0;
-+    while (init->notify.try_wait(&stale)) {
-+    }
-+    auto *child = TaskControlBlock::create([]() {}, 10,
-+                                           TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(child != nullptr);
-+    Scheduler::register_task(*child);
-+    Scheduler::terminate(*child, 0);
-+    uint64_t wake = 0;
-+    JARVIS_ASSERT(init->notify.try_wait(&wake));
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Daemon-ready IPC to PID 1 lands in its queue (issue #155):
-+//           the reaper's second wake source.  The suite runs as PID 1
-+//           (harness exemption), so it can send-to-self and recv back.
-+// Input: IPC::send(1, MSG_DAEMON_READY); IPC::recv.
-+// Expect: send succeeds; recv returns the same type.  The parked
-+//         reaper is woken by the generic BLOCKED path on send.
-+// Depends: IPC::send BLOCKED-wake, PID 1 queue (issue #155)
-+JARVIS_TEST(reaper_wakes_on_daemon_ipc, "PRE: none | POST: none") {
-+    auto *self = Scheduler::current_task();
-+    JARVIS_ASSERT(self != nullptr);
-+    JARVIS_ASSERT_EQ(1ULL, self->id);
-+    Message msg{};
-+    msg.sender_id = self->id;
-+    msg.type = ipc::MSG_DAEMON_READY;
-+    JARVIS_ASSERT(kernel::IPC::send(1, msg, 0));
-+    Message got{};
-+    JARVIS_ASSERT(kernel::IPC::recv(got));
-+    JARVIS_ASSERT(got.type == ipc::MSG_DAEMON_READY);
-+    JARVIS_TEST_PASS();
-+}
-+
- JARVIS_TEST(init_task_reparents_orphans, "PRE: none | POST: none") {
-     // Create a child task, set parent to a task that will exit,
-     // verify it gets reparented to init
-@@ -64,4 +115,6 @@ void register_init_tests() {
-     JARVIS_REGISTER_TEST(init_task_exists);
-     JARVIS_REGISTER_TEST(init_task_has_no_parent);
-     JARVIS_REGISTER_TEST(init_task_reparents_orphans);
-+    JARVIS_REGISTER_TEST(reaper_notified_on_child_exit);
-+    JARVIS_REGISTER_TEST(reaper_wakes_on_daemon_ipc);
- }
+@@ -239,7 +239,7 @@ struct TaskControlBlock {
+           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
+           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
+           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
+-          page_table_(0), stack_pdpt_phys_(0), user_stack_(0),
++          page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
+           user_stack_size_(0), user_data(nullptr), is_user_(false),
+           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
+           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
+@@ -299,6 +299,12 @@ struct TaskControlBlock {
+     /// @brief Total slot size (stack + guard page).  0 if HHDM.
+     uint64_t kstack_slot_size_;
+     uint64_t page_table_;
++    /// @brief Process-context identifier for TLB tagging (issue #156,
++    ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
++    ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
++    ///        TCB (not the PML4): survives exec PML4 swaps, dies with the
++    ///        task so IDs are never reused while live.
++    uint16_t pcid_;
+     /// @brief Physical address of the private PDPT page allocated in
+     /// clone() for the user stack region. Zero when not applicable.
+     /// Used by cleanup() to free the private PDPT and its child PD/PT
 diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 443d80bc..17b4c12d 100644
+index 17b4c12d..61492b5e 100644
 --- a/src/kernel/test/test_isolate.cpp
 +++ b/src/kernel/test/test_isolate.cpp
-@@ -771,6 +771,15 @@ void snapshot_restore(const char *test_name) {
-     // Issue #61: balancer migration counters are per-CPU runtime state —
-     // reset for test isolation (same pattern as corruption_count above).
-     Scheduler::reset_migration_counts();
-+    // Issue #155: drain PID 1's reaper notify value so a poke from a
-+    // previous test never spuriously satisfies a later try_wait.  The
-+    // waiter itself is never parked in-suite (the harness never sleeps
-+    // in Notify::wait), so no waiter reset is needed.
-+    if (auto *reaper = Scheduler::find_task(1)) {
-+        uint64_t stale_wake = 0;
-+        while (reaper->notify.try_wait(&stale_wake)) {
-+        }
-+    }
+@@ -41,6 +41,9 @@
+ #include <kernel/arch/apic.hpp>
+ #include <kernel/arch/x86_64/hal/percpu.hpp>
+ #endif
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#endif
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/cap/mmio.hpp>
+@@ -780,6 +783,11 @@ void snapshot_restore(const char *test_name) {
+         while (reaper->notify.try_wait(&stale_wake)) {
+         }
+     }
++#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
++    // Issue #156 D2: restore hardware PCID truth in case a forced-logic
++    // test aborted mid-scope (normal exits reset explicitly).
++    arch::pcid_test_reset();
++#endif
      if (corr > 0) {
          Logger::raw_write("[SCHED] corruption_count=");
          Logger::print_dec(corr);
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index 671ed737..78bba5ed 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -1312,6 +1312,10 @@ void Shell::cmd_selftest(int argc, const char** argv) {
-     auto *init_task = kernel::Scheduler::get_harness_task();
-     if (init_task && init_task != self_task) {
-         kernel::Scheduler::set_priority(*init_task, 10);
-+        // Issue #155: the reaper may be parked in Notify::wait — kick it
-+        // awake for its test-runner duty (the kick is the wake, not the
-+        // promotion; a spurious wake just re-drains empty queues).
-+        init_task->notify.notify(1);
-     }
+diff --git a/src/kernel/test/test_pcid.cpp b/src/kernel/test/test_pcid.cpp
+index b4aa9927..2b431444 100644
+--- a/src/kernel/test/test_pcid.cpp
++++ b/src/kernel/test/test_pcid.cpp
+@@ -1,5 +1,5 @@
+ /*
+- * NexIOS RTOS — SMP bring-up (Phase 5)
++ * NexIOS RTOS — Development Roadmap / Kernel Core
+  * Copyright (C) 2026 Arnold Hasshold
+  *
+  * This program is free software: you can redistribute it and/or modify
+@@ -17,61 +17,157 @@
+  */
  
-     {
+ /// @file test_pcid.cpp
+-/// @brief PCID stubs (issue #85, module 13).  No PCID support exists
+-///        (no CR4.PCIDE programming, no tagged entries anywhere in
+-///        src/kernel) — documented stubs pending the main-branch API.
++/// @brief PCID tests (issue #156; stubs from issue #85, module 13).
++///
++/// Two tasks dispatch for real through the tagged publish path; ring-3
++/// cannot read CR3, so tags are verified post-mortem on the TCBs (lazy
++/// assignment proves the publish ran tagged) plus direct pcid_tag()
++/// unit checks.  Retention is structural (stable PCID + stable
++/// translation across interleaved execution ⇒ same TLB entries stay
++/// valid); TLB-hit cycle timing is deliberately NOT measured (QEMU
++/// icount makes it flaky by construction).
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <test.hpp>
+ #include <logger.hpp>
++#include <scope_guard.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
++#include <kernel/arch/x86_64/hal/io_impl.hpp>
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#include "test_sched_helpers.hpp"
+ 
+ using namespace kernel;
+ 
++// Ring-3 execution is impossible for test entries (create_user installs a
++// yield-forever stub; kernel .text cannot run at CPL=3 — BUGS.md#020), so
++// assignment and stability are verified on the TCBs directly without
++// dispatch.  The tag-to-CR3 path itself is one mov-cr3 of the full 64-bit
++// published value (isr_stubs.asm, review-verified, cannot drop low bits).
++
+ // Runmode: kernel
+ // Testidea: PCID is enabled in CR4 (PCIDE bit set after boot probe).
+-// Input: CR4 readback.
+-// Expect: PCIDE set when CPUID reports PCID support.
+-// Depends: CR4 PCIDE enablement (not yet implemented)
+-JARVIS_TEST(pcid_enabled_in_cr4, "PRE: none | POST: none | PENDING: PCID") {
+-    /* Pseudocode:
+-     *   if (cpuid_has_pcid()) JARVIS_ASSERT(read_cr4() & CR4_PCIDE);
+-     */
++// Input: CR4 readback + CPUID support query.
++// Expect: PCIDE set iff the CPU reports PCID support; the fallback
++//         (unsupported) provably allocates nothing.
++// Depends: CR4 PCIDE enablement (issue #156)
++JARVIS_TEST(pcid_enabled_in_cr4, "PRE: none | POST: none") {
++    if (arch::has_pcid()) {
++        JARVIS_ASSERT((arch::read_cr4() & arch::CR4_PCIDE) != 0);
++        JARVIS_ASSERT(arch::pcid_supported());
++    } else {
++        Logger::info("pcid: CPU lacks PCID — untagged fallback active");
++        JARVIS_ASSERT(!arch::pcid_supported());
++        JARVIS_ASSERT(arch::pcid_alloc() == 0);
++    }
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Context switch tags TLB entries with the next PCID.
+-// Input: Two address spaces switched back and forth.
+-// Expect: CR3 carries PCID A then B (low 12 bits), no full flush.
+-// Depends: PCID-tagged switch (not yet implemented)
+-JARVIS_TEST(pcid_tags_entries, "PRE: none | POST: none | PENDING: PCID") {
+-    /* Pseudocode:
+-     *   switch_to(as_a); JARVIS_ASSERT((read_cr3() & 0xFFF) == pcid_a);
+-     */
++// Testidea: User address spaces own distinct PCIDs at birth (eager
++//           assignment covers create/clone/elf uniformly; publish-time
++//           lazy assignment is the backstop).  Forced logic path (D2):
++//           no user task is dispatched while forced, so no tagged CR3
++//           can reach hardware lacking PCIDE.
++// Input: Two created (never dispatched) user tasks under force.
++// Expect: pcid_ nonzero and distinct; reset restores hardware truth;
++//         pcid_tag() unit checks hold.
++// Depends: Eager PCID assignment at birth (issue #156)
++JARVIS_TEST(pcid_tags_entries, "PRE: none | POST: none") {
++    // pcid_tag() is pure: pin its contract directly.
++    JARVIS_ASSERT(arch::pcid_tag(0x1000000ULL, 7) ==
++                  (0x1000000ULL | 7ULL));
++    JARVIS_ASSERT(arch::pcid_tag(0x1000000ULL, arch::PCID_KERNEL) ==
++                  0x1000000ULL);
++
++    arch::pcid_test_force();
++    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
++    auto *a = TaskControlBlock::create_user(kernel::test::forever_entry,
++                                            12, 10, 32768);
++    auto *b = TaskControlBlock::create_user(kernel::test::forever_entry,
++                                            11, 10, 32768);
++    JARVIS_ASSERT(a != nullptr && b != nullptr);
++    JARVIS_ASSERT(a->pcid_ != 0 && b->pcid_ != 0);
++    JARVIS_ASSERT(a->pcid_ != b->pcid_);
++    a->cleanup();
++    delete a;
++    b->cleanup();
++    delete b;
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Same-PCID switch invalidates only matching entries.
+-// Input: Switch A->B->A with a probe mapping in A.
+-// Expect: Probe still cached (no flush on return to A).
+-// Depends: PCID selective retention (not yet implemented)
+-JARVIS_TEST(pcid_selective_retention, "PRE: none | POST: none | PENDING: PCID") {
+-    /* Pseudocode:
+-     *   touch probe in A; switch B; switch A; JARVIS_ASSERT(tlb_hit(probe));
+-     */
++// Testidea: The PCID is TCB-owned, not PML4-owned: an exec-style PML4
++//           swap keeps the ID, and the new table converges.
++// Input: User task + probe mapping; swap page_table_ for a fresh
++//        clone (as exec_into_current does); re-walk.
++// Expect: pcid_ unchanged across the swap; new kernel half matches
++//         the live root; probe phys reclaimed with the old table.
++// Depends: TCB PCID ownership (issue #156)
++JARVIS_TEST(pcid_selective_retention, "PRE: none | POST: none") {
++    constexpr uint64_t k_probe_va = 0x20000000ULL;
++    arch::pcid_test_force();
++    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
++    auto *a = TaskControlBlock::create_user(kernel::test::forever_entry,
++                                            12, 10, 32768);
++    JARVIS_ASSERT(a != nullptr);
++    uint64_t pcid_before = a->pcid_;
++    JARVIS_ASSERT(pcid_before != 0);
++    uint64_t data_phys = PMM::alloc_user_page();
++    JARVIS_ASSERT(data_phys != 0);
++    VMM::map_page_in_pml4(k_probe_va, data_phys, true, false,
++                          a->page_table_);
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_probe_va, a->page_table_) ==
++                  data_phys);
++    uint64_t fresh = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(fresh != 0);
++    VMM::free_user_pages(a->page_table_);
++    PMM::free_page(a->page_table_);
++    a->page_table_ = fresh;
++    JARVIS_ASSERT(a->pcid_ == pcid_before);
++    JARVIS_ASSERT(VMM::kernel_half_equal(fresh, VMM::get_kernel_pml4()));
++    a->cleanup();
++    delete a;
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: PCID rollover recycles all 4096 IDs safely.
+-// Input: Exhaust the PCID space (4097 address spaces).
+-// Expect: No stale entry reachable after rollover (global flush once).
+-// Depends: PCID rollover handling (not yet implemented)
+-JARVIS_TEST(pcid_rollover, "PRE: none | POST: none | PENDING: PCID") {
+-    /* Pseudocode:
+-     *   for (i in 0..4097) use_pcid(i); JARVIS_ASSERT(no_stale_hit());
+-     */
++// Testidea: PCID rollover recycles all 4096 IDs safely (forced logic
++//           path, D2 — same no-dispatch containment as above).
++// Input: Drive pcid_alloc() to exhaustion (+1 past the live set).
++// Expect: Epoch bumps exactly once at exhaustion; every issued ID
++//         unique; post-rollover allocs still unique; all freed cleanly
++//         and hardware truth restored.
++// Depends: PCID rollover handling (issue #156)
++JARVIS_TEST(pcid_rollover, "PRE: none | POST: none") {
++    arch::pcid_test_force();
++    auto force_off = ScopeGuard([]() { arch::pcid_test_reset(); });
++    static uint16_t held[4100];
++    uint64_t epoch_before = arch::pcid_epoch();
++    uint64_t held_count = 0;
++    for (uint64_t i = 0; i < 4100; ++i) {
++        uint16_t id = arch::pcid_alloc();
++        if (id == 0)
++            break;
++        held[held_count++] = id;
++        if (arch::pcid_epoch() != epoch_before)
++            break;
++    }
++    // Exhaustion (+1) must have forced exactly one rollover.
++    JARVIS_ASSERT(arch::pcid_epoch() == epoch_before + 1);
++    for (uint64_t i = 0; i < held_count; ++i) {
++        for (uint64_t j = i + 1; j < held_count; ++j)
++            JARVIS_ASSERT(held[i] != held[j]);
++    }
++    for (uint64_t i = 0; i < held_count; ++i)
++        arch::pcid_free(held[i]);
++    JARVIS_ASSERT(arch::pcid_epoch() == epoch_before + 1);
++    uint16_t fresh = arch::pcid_alloc();
++    JARVIS_ASSERT(fresh != 0);
++    arch::pcid_free(fresh);
+     JARVIS_TEST_PASS();
+ }
+ 
 diff --git a/test-history.txt b/test-history.txt
-index e4fb3324..1ad04405 100644
+index 1ad04405..792b2679 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1005,3 +1005,13 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 17:38:08 task_init PASSED: 3 FAILED: 0 TIME: 20s
- 2026-09-15 17:43:10 all PASSED: 1361 FAILED: 0 TIME: 95615ms
- 2026-09-15 17:43:31 all PASSED: 85 FAILED: 0 TIME: 4556ms
-+2026-09-15 18:09:15 task_init PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 18:10:27 task_lifecycle PASSED: 9 FAILED: 0 TIME: 19s
-+2026-09-15 18:10:27 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 22s
-+2026-09-15 18:11:14 servers_vfsd PASSED: 18 FAILED: 0 TIME: 19s
-+2026-09-15 18:11:14 servers_iocd PASSED: 7 FAILED: 0 TIME: 20s
-+2026-09-15 18:11:58 ipc_core PASSED: 23 FAILED: 0 TIME: 19s
-+2026-09-15 18:11:58 ipc_extended PASSED: 9 FAILED: 0 TIME: 20s
-+2026-09-15 18:12:23 process_waitpid PASSED: 3 FAILED: 0 TIME: 20s
-+2026-09-15 18:13:51 all PASSED: 1363 FAILED: 0 TIME: 438154ms
-+2026-09-15 18:14:39 all PASSED: 85 FAILED: 0 TIME: 4145ms
+@@ -1015,3 +1015,17 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 18:12:23 process_waitpid PASSED: 3 FAILED: 0 TIME: 20s
+ 2026-09-15 18:13:51 all PASSED: 1363 FAILED: 0 TIME: 438154ms
+ 2026-09-15 18:14:39 all PASSED: 85 FAILED: 0 TIME: 4145ms
++2026-09-15 18:47:43 pcid PASSED: 4 FAILED: 0 TIME: 19s
++2026-09-15 18:48:53 arch_cross PASSED: 21 FAILED: 0 TIME: 20s
++2026-09-15 18:48:53 elf_loader PASSED: 8 FAILED: 0 TIME: 19s
++2026-09-15 18:48:53 memory_vmm PASSED: 13 FAILED: 0 TIME: 20s
++2026-09-15 18:49:38 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
++2026-09-15 18:49:38 ipc_core PASSED: 23 FAILED: 0 TIME: 20s
++2026-09-15 18:51:12 all PASSED: 1363 FAILED: 0 TIME: 432431ms
++2026-09-15 18:52:12 all PASSED: 85 FAILED: 0 TIME: 3971ms
++2026-09-15 19:04:52 pcid PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 19:04:52 task_lifecycle PASSED: 9 FAILED: 0 TIME: 20s
++2026-09-15 19:04:52 task_core PASSED: 6 FAILED: 0 TIME: 20s
++2026-09-15 19:04:52 elf_loader PASSED: 8 FAILED: 0 TIME: 20s
++2026-09-15 19:05:56 all PASSED: 1363 FAILED: 0 TIME: 116390ms
++2026-09-15 19:06:58 all PASSED: 85 FAILED: 0 TIME: 4279ms

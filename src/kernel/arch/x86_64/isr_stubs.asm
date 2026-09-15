@@ -407,6 +407,9 @@ isr_common:
     ; (kernel/harness context) or it was consumed, fall back to the static
     ; kernel PML4 so the harness can never resume on a stale user CR3 from a
     ; previous task (the H2 freeze path).
+    ; Issue #156: RAX carries pml4_phys | pcid (low 12 bits) when PCID is
+    ; active — mov cr3 preserves the tag (no full flush); raw phys (PCID 0)
+    ; keeps today's flush semantics.  No instruction change needed.
     lea rax, [rel scheduler_load_cr3_from]
     mov rax, [rax + r11*8]
     test rax, rax

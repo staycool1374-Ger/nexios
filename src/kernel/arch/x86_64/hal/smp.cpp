@@ -28,6 +28,8 @@
 
 #include <kernel/arch/x86_64/hal/apic.hpp>
 #include <kernel/arch/x86_64/hal/percpu.hpp>
+#include <kernel/arch/x86_64/hal/io_impl.hpp>
+#include <kernel/arch/x86_64/hal/pcid.hpp>
 #include <kernel/arch/x86_64/madt.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/gdt.hpp>
@@ -342,7 +344,14 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
     uint64_t cr0 = arch::read_cr0();
     arch::write_cr0(cr0 | (1ULL << 3));
     uint64_t cr4 = arch::read_cr4();
-    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10)); // OSFXSR|OSXMMEXCPT
+    // Issue #156: mirror BSP's CR4.PCIDE so AP TLB tagging stays coherent
+    // (BSP probed support at boot; pcid_supported() is BSP-set by now).
+    uint64_t pcide = 0;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    if (arch::pcid_supported())
+        pcide = arch::CR4_PCIDE;
+#endif
+    arch::write_cr4(cr4 | (1ULL << 9) | (1ULL << 10) | pcide); // OSFXSR|OSXMMEXCPT
 
     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
     // publishes scheduler_ready after reboot_from_table() finishes

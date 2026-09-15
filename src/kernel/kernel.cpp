@@ -65,6 +65,9 @@
 #include <kernel/random.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
+#include <kernel/arch/x86_64/hal/cpuid_impl.hpp>
+#include <kernel/arch/x86_64/hal/io_impl.hpp>
+#include <kernel/arch/x86_64/hal/pcid.hpp>
 #include <kernel/arch/x86_64/madt.hpp>
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
@@ -607,6 +610,19 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] SMAP not supported by CPU — leaving off\n");
         }
 #endif
+    }
+#endif
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    // Issue #156: PCID (CR4 bit 17) — process-context identifiers so CR3
+    // switches retain TLB entries.  BSP-only probe here; APs mirror it in
+    // ap_main (smp.cpp).  Unsupported CPUs keep today's raw-phys publish
+    // path (pcid_alloc returns 0 → untagged).
+    if (arch::has_pcid()) {
+        cr4 |= arch::CR4_PCIDE;
+        arch::pcid_init();
+        debug_write("[BOOT] PCID enabled\n");
+    } else {
+        debug_write("[BOOT] PCID not supported by CPU — leaving off\n");
     }
 #endif
     arch::write_cr4(cr4);

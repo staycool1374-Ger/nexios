@@ -40,6 +40,9 @@
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+#include <kernel/arch/x86_64/hal/pcid.hpp>
+#endif
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
 #include <kernel/sync/semaphore.hpp>
@@ -1214,6 +1217,12 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     }
     tcb->page_table_ = pml4;
     tcb->is_user_ = true;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    // Issue #156: eager PCID assignment at birth (0 when unsupported).
+    // Publish-time lazy assignment remains as backstop for paths that
+    // install user PML4s without passing here.
+    tcb->pcid_ = arch::pcid_alloc();
+#endif
 
     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
@@ -1426,6 +1435,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // (every task now owns a private kernel-half PML4).
     bool is_user_task = parent->is_user_;
     tcb->is_user_ = is_user_task;
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+    // Issue #156: fork gets a FRESH PCID (never the parent's — the child
+    // owns a private address space).
+    if (is_user_task)
+        tcb->pcid_ = arch::pcid_alloc();
+#endif
     uint64_t slot_va = alloc_kslot(STACK_SIZE);
     if (slot_va) {
         tcb->kstack_slot_va_ = slot_va;
@@ -1894,6 +1909,13 @@ void TaskControlBlock::cleanup() noexcept {
         // free_user_pages() skips kernel-owned table/data pages via
         // PMM::is_user_page, so a partially deep-copied address space (OOM
         // during clone) is fully reclaimed here — no leak.
+#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+        // Issue #156: release the PCID before the address space goes
+        // away (keyed on the live TCB, never after free; 0 is a no-op
+        // for kernel tasks and never-published users).
+        arch::pcid_free(pcid_);
+        pcid_ = 0;
+#endif
         VMM::free_user_pages(page_table_);
         PMM::free_page(page_table_);
 #if defined(CONFIG_ARCH_X86_64)

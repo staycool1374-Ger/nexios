@@ -65,9 +65,13 @@ inline constexpr uint32_t CPUID_ECX1_SSSE3 = 1u << 9;
 inline constexpr uint32_t CPUID_ECX1_SSE4_1 = 1u << 19;
 inline constexpr uint32_t CPUID_ECX1_SSE4_2 = 1u << 20;
 inline constexpr uint32_t CPUID_ECX1_RDRAND = 1u << 30;
+/// @brief PCID feature bit (ECX, leaf 1): process-context identifiers.
+inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
 /// @}
 /// @brief RDRAND feature bit (EBX, leaf 7, subleaf 0).
 inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
+/// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
+inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
 
 /// @brief Check if the CPU has an x87 FPU.
 /// @return true if the FPU feature bit is set.
@@ -88,6 +92,16 @@ inline bool has_sse() {
 /// @return true if the RDRAND feature bit is set.
 inline bool has_rdrand() {
     return (cpuid(1).ecx & CPUID_ECX1_RDRAND) != 0;
+}
+/// @brief Check if the CPU supports process-context identifiers.
+/// @return true if the PCID feature bit is set.
+inline bool has_pcid() {
+    return (cpuid(1).ecx & CPUID_ECX1_PCID) != 0;
+}
+/// @brief Check if the CPU supports the INVPCID instruction.
+/// @return true if the INVPCID feature bit is set.
+inline bool has_invpcid() {
+    return (cpuid(7, 0).ebx & CPUID_EBX7_INVPCID) != 0;
 }
 /// @brief Check if the CPU supports the RDSEED instruction.
 /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.

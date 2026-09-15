@@ -878,6 +878,21 @@
 #endif
 #endif
 
+/// v0.4.6 issue #156: PCID (process-context identifiers) — CR4 bit 17.
+/// On x86_64 the boot path sets it when CPUID leaf 1 ECX[17] is supported;
+/// CR3 publishes then carry the TCB's PCID in the low 12 bits so switches
+/// retain TLB entries.  Unsupported CPUs keep raw-phys publish (full flush).
+#ifndef CONFIG_PCID
+#if defined(CONFIG_ARCH_X86_64)
+#define CONFIG_PCID 1
+#else
+#define CONFIG_PCID 0
+#endif
+#endif
+/// Maximum PCID value lives as arch::PCID_MAX (4095, 12-bit field with 0
+/// reserved) next to the allocator — no duplicate macro here by design
+/// (a second constant invites off-by-one drift).
+
 /// v0.4.2 MP-4.4: PAN (privileged access never) — SCTLR_EL1 bit 23 (aarch64).
 /// Enabled at boot when ID_AA64MMFR1_EL1.PAN[23:20] != 0 (see
 /// arch::pan_init()); PSTATE.PAN is toggled via the S3_0_C4_C2_4 sysreg for
