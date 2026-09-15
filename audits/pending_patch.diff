@@ -1,439 +1,413 @@
-diff --git a/src/kernel/arch/x86_64/hal/apic.hpp b/src/kernel/arch/x86_64/hal/apic.hpp
-index e212b1c5..e03d1397 100644
---- a/src/kernel/arch/x86_64/hal/apic.hpp
-+++ b/src/kernel/arch/x86_64/hal/apic.hpp
-@@ -118,6 +118,11 @@ public:
-     ///        reschedule flag.  Free (timer 0xE0, syscall 0x80, self-test
-     ///        0xEF, spurious 0xFF).
-     static constexpr uint8_t SCHED_VECTOR = 0xEC;
-+    /// @brief Batched TLB-shootdown delivery vector (issue #159): a FIXED
-+    ///        IPI telling the target CPU to apply its shootdown batch
-+    ///        slot.  Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer,
-+    ///        0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious).
-+    static constexpr uint8_t SHOOTDOWN_BATCH_VECTOR = 0x73;
- 
- private:
-     // ─── MMIO base addresses ──────────────────────────────────────────────
-diff --git a/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp b/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp
-new file mode 100644
-index 00000000..f01487a7
---- /dev/null
-+++ b/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp
-@@ -0,0 +1,157 @@
-+/*
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 31c2cf6b..6b5c0b66 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -128,7 +128,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
+     {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
+     {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #159; baseline from #85 module 16): unbatched 5:5 baseline, collapse/order/overflow real
+-    {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
++    {"tlb_latency",          4,   0,       0      },  // TLB-latency profiling (issue #160; stubs from #85 module 17): record/avg/p99/batch-scaling real
+     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
+     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
+     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
+diff --git a/src/kernel/test/test_tlb_latency.cpp b/src/kernel/test/test_tlb_latency.cpp
+index a70b4b42..db87df82 100644
+--- a/src/kernel/test/test_tlb_latency.cpp
++++ b/src/kernel/test/test_tlb_latency.cpp
+@@ -1,5 +1,5 @@
+ /*
+- * NexIOS RTOS — SMP bring-up (Phase 5)
 + * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file shootdown_ipi.cpp
-+/// @brief Batched TLB-shootdown IPI delivery (issue #159, x86_64 only).
-+
-+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
-+#include <kernel/arch/x86_64/hal/apic.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/hal/io.hpp>
+  * Copyright (C) 2026 Arnold Hasshold
+  *
+  * This program is free software: you can redistribute it and/or modify
+@@ -17,62 +17,340 @@
+  */
+ 
+ /// @file test_tlb_latency.cpp
+-/// @brief TLB-latency stubs (issue #85, module 17).  No per-flush
+-///        latency recorder exists (no shootdown path at all) —
+-///        documented stubs pending the main-branch profiling API.
++/// @brief TLB-shootdown latency profiling (issue #160; stubs from issue
++///        #85, module 17).  Test-side exact-sample recorder only — hot
++///        paths stay uninstrumented.  No icount here (wall-clock TSC),
++///        so comparisons use min-of-N plus margins, never tight bounds.
++///        cpu_scaling is reframed as batch-size scaling (no AP boots in
++///        this harness, so 1-vs-2-CPU comparison is unimplementable).
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <test.hpp>
+ #include <logger.hpp>
++#include <kernel/arch/io.hpp>
++#include <kernel/arch/timer.hpp>
 +#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/x86_64/hal/page_table_impl.hpp>
++#include <kernel/arch/apic.hpp>
++#include <kernel/arch/idt.hpp>
++#include <kernel/arch/x86_64/hal/percpu.hpp>
++#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
++#include <kernel/arch/page_table.hpp>
+ 
+ using namespace kernel;
+ 
++namespace {
 +
-+namespace arch {
++// Unbatched-leg probe vector: class 0x70, free (0x71 TPR probe, 0x72
++// batch probe, 0x73 shootdown batch, 0xE0 timer, 0x80 syscall, 0xEF
++// self-test, 0xEC sched, 0xFF spurious taken).
++constexpr uint8_t kUnbatchedVector = 0x74;
 +
-+ShootdownBatch::CpuSlot ShootdownBatch::slots_[CONFIG_MAX_CPUS] = {};
-+uint64_t ShootdownBatch::sends_ = 0;
-+uint64_t ShootdownBatch::applied_ = 0;
-+uint64_t ShootdownBatch::applied_log_[ShootdownBatch::APPLIED_LOG] = {};
-+uint64_t ShootdownBatch::applied_log_count_ = 0;
++volatile uint64_t g_tlb_unbatched_count = 0;
 +
-+bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
-+                                  uint16_t pcid) {
-+    if (cpu >= CONFIG_MAX_CPUS)
++// Exact-sample recorder (test-side only): fixed ring, min/avg/p99 over
++// stored samples.  Zero deltas tolerated (coarse virtualized TSC).
++constexpr uint64_t kMaxSamples = 256;
++uint64_t t_samples[kMaxSamples] = {};
++uint64_t t_sample_count = 0;
++
++void tlb_lat_reset() {
++    t_sample_count = 0;
++    for (uint64_t i = 0; i < kMaxSamples; ++i)
++        t_samples[i] = 0;
++}
++
++bool tlb_lat_record(uint64_t delta) {
++    if (t_sample_count >= kMaxSamples)
 +        return false;
-+    if ((va & (ArchPageTable::PAGE_SIZE - 1)) != 0)
-+        return false;
-+    // Single producer per target slot at a time (the flushing caller
-+    // owns it; mirrors the mailbox single-publisher discipline).  The
-+    // guard freezes the LOCAL ISR so it cannot interleave the fill.
-+    // Insertion keeps the slot sorted ascending by VA (bounded
-+    // insertion shift) so every batch applies deterministically.
-+    arch::IrqGuard irq_guard{};
-+    CpuSlot &slot = slots_[cpu];
-+    uint64_t count =
-+        __atomic_load_n(&slot.count, __ATOMIC_ACQUIRE);
-+    if (count >= BATCH_SLOTS)
-+        return false;
-+    uint64_t pos = count;
-+    while (pos > 0 && slot.entries[pos - 1].va > va) {
-+        slot.entries[pos] = slot.entries[pos - 1];
-+        --pos;
-+    }
-+    slot.entries[pos].va = va;
-+    slot.entries[pos].pcid = pcid;
-+    __atomic_store_n(&slot.count, count + 1, __ATOMIC_RELEASE);
++    t_samples[t_sample_count++] = delta;
 +    return true;
 +}
 +
-+uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
-+    if (cpu >= CONFIG_MAX_CPUS)
++uint64_t tlb_lat_min() {
++    uint64_t best = 0xFFFFFFFFFFFFFFFFULL;
++    for (uint64_t i = 0; i < t_sample_count; ++i) {
++        if (t_samples[i] < best)
++            best = t_samples[i];
++    }
++    return (t_sample_count == 0) ? 0 : best;
++}
++
++uint64_t tlb_lat_max() {
++    uint64_t best = 0;
++    for (uint64_t i = 0; i < t_sample_count; ++i) {
++        if (t_samples[i] > best)
++            best = t_samples[i];
++    }
++    return best;
++}
++
++uint64_t tlb_lat_avg() {
++    if (t_sample_count == 0)
 +        return 0;
-+    uint32_t lapic = (cpu == cpu_index()) ? APIC::lapic_id()
-+                                          : per_cpu[cpu].lapic_id;
-+    uint64_t sends = 0;
-+    CpuSlot &slot = slots_[cpu];
-+    // NOTE: callers must not hold IF=0 across this call for a self
-+    // target (the delivery ISR cannot land until sti).
-+    for (;;) {
-+        if (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) == 0)
-+            break;
-+        if (!APIC::send_ipi(lapic, APIC::SHOOTDOWN_BATCH_VECTOR,
-+                            APIC::IpiMode::FIXED))
-+            break; // entries stay queued
-+        __atomic_fetch_add(&sends_, 1ULL, __ATOMIC_RELAXED);
-+        ++sends;
-+        // Wait for the serving CPU to drain (bounded: a down target
-+        // never drains — keep the rest queued instead of spinning).
-+        uint64_t spins = 0;
-+        while (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) != 0) {
-+            if (++spins > 1000000ULL)
-+                return sends;
-+            arch::pause();
-+        }
-+    }
-+    return sends;
++    uint64_t sum = 0;
++    for (uint64_t i = 0; i < t_sample_count; ++i)
++        sum += t_samples[i];
++    return sum / t_sample_count;
 +}
 +
-+void ShootdownBatch::handle_cpu(uint64_t cpu) {
-+    if (cpu >= CONFIG_MAX_CPUS)
-+        return;
-+    // Runs IF=0 (ISR): no locks, no allocation.  CAS-clear so a
-+    // concurrent producer append is never wiped (retry covers the
-+    // delta; bounded — see below).
-+    CpuSlot &slot = slots_[cpu];
-+    for (int attempt = 0; attempt < 3; ++attempt) {
-+        uint64_t count =
-+            __atomic_load_n(&slot.count, __ATOMIC_ACQUIRE);
-+        if (count == 0)
-+            return;
-+        if (count > BATCH_SLOTS)
-+            count = BATCH_SLOTS;
-+        for (uint64_t i = 0; i < count; ++i) {
-+            ArchPageTable::tlb_flush(slot.entries[i].va);
-+            if (applied_log_count_ < APPLIED_LOG) {
-+                applied_log_[applied_log_count_] = slot.entries[i].va;
-+                ++applied_log_count_;
-+            }
-+        }
-+        __atomic_fetch_add(&applied_, count, __ATOMIC_RELAXED);
-+        uint64_t expect = count;
-+        if (__atomic_compare_exchange_n(&slot.count, &expect, 0ULL,
-+                                        false, __ATOMIC_ACQ_REL,
-+                                        __ATOMIC_ACQUIRE)) {
-+            return;
-+        }
-+        // Lost the race (producer appended meanwhile): loop covers the
-+        // delta; after 3 attempts the remainder stays queued for the
-+        // next flush — never lost, never unbounded here.
-+    }
-+}
-+
-+uint64_t ShootdownBatch::sends_for_test() {
-+    return __atomic_load_n(&sends_, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t ShootdownBatch::applied_for_test() {
-+    return __atomic_load_n(&applied_, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t ShootdownBatch::applied_va_for_test(uint64_t idx) {
-+    if (idx >= APPLIED_LOG)
++uint64_t tlb_lat_p99() {
++    if (t_sample_count == 0)
 +        return 0;
-+    return applied_log_[idx];
++    uint64_t sorted[kMaxSamples];
++    for (uint64_t i = 0; i < t_sample_count; ++i)
++        sorted[i] = t_samples[i];
++    for (uint64_t i = 1; i < t_sample_count; ++i) {
++        uint64_t key = sorted[i];
++        uint64_t j = i;
++        while (j > 0 && sorted[j - 1] > key) {
++            sorted[j] = sorted[j - 1];
++            --j;
++        }
++        sorted[j] = key;
++    }
++    uint64_t idx = (99 * t_sample_count + 99) / 100 - 1;
++    if (idx >= t_sample_count)
++        idx = t_sample_count - 1;
++    return sorted[idx];
 +}
 +
-+void ShootdownBatch::reset_for_test() {
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
-+        slots_[c].count = 0;
-+        for (size_t i = 0; i < BATCH_SLOTS; ++i) {
-+            slots_[c].entries[i].va = 0;
-+            slots_[c].entries[i].pcid = 0;
++void tlb_lat_dump(const char *tag) {
++    Logger::info("[TLB] ");
++    Logger::info(tag);
++    Logger::info(": n=");
++    Logger::print_dec(t_sample_count);
++    Logger::info(" min=");
++    Logger::print_dec(tlb_lat_min());
++    Logger::info(" avg=");
++    Logger::print_dec(tlb_lat_avg());
++    Logger::info(" max=");
++    Logger::print_dec(tlb_lat_max());
++    Logger::info(" p99=");
++    Logger::print_dec(tlb_lat_p99());
++    Logger::info("");
++}
++
++uint64_t tlb_delta(uint64_t start, uint64_t end) {
++    return (end > start) ? (end - start) : 0;
++}
++
++} // namespace
++
+ // Runmode: kernel
+ // Testidea: Every TLB flush records its latency (TSC delta).
+-// Input: Series of flushes, sample count afterwards.
+-// Expect: One sample per flush; all samples non-zero.
+-// Depends: Flush-latency recorder (not yet implemented)
+-JARVIS_TEST(tlb_latency_recorded, "PRE: none | POST: none | PENDING: profiler") {
+-    /* Pseudocode:
+-     *   flush N times; JARVIS_ASSERT(samples() == N && all_nonzero());
+-     */
++// Input: N=32 direct flushes, sample count afterwards.
++// Expect: 32 samples recorded; max > 0 (zero deltas tolerated —
++//         coarse virtualized TSC can repeat).
++// Depends: Test-side recorder + ArchPageTable::tlb_flush (issue #160)
++JARVIS_TEST(tlb_latency_recorded, "PRE: none | POST: none") {
++    tlb_lat_reset();
++    {
++        arch::IrqGuard irq_guard{};
++        for (uint64_t i = 0; i < 32; ++i) {
++            uint64_t start = arch::rdtsc();
++            arch::ArchPageTable::tlb_flush(0x39000000ULL + i * 0x1000);
++            uint64_t end = arch::rdtsc();
++            JARVIS_ASSERT(tlb_lat_record(tlb_delta(start, end)));
 +        }
 +    }
-+    sends_ = 0;
-+    applied_ = 0;
-+    applied_log_count_ = 0;
-+    for (size_t i = 0; i < APPLIED_LOG; ++i)
-+        applied_log_[i] = 0;
-+}
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp b/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp
-new file mode 100644
-index 00000000..57f386f2
---- /dev/null
-+++ b/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp
-@@ -0,0 +1,90 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file shootdown_ipi.hpp
-+/// @brief Batched TLB-shootdown IPI delivery (issue #159, x86_64 only).
-+///
-+/// IPIs carry no payload, so batches travel via shared-memory per-target
-+/// slots: the sender fills a slot, release-publishes its count, and sends
-+/// ONE shootdown IPI (SHOOTDOWN_BATCH_VECTOR); the target ISR applies
-+/// every entry, records them for order checks, and EOIs (EOI stays with
-+/// the registering handler, mirroring the 0x72 probe pattern).
-+///
-+/// Protocol (single-CPU safe, cross-CPU correct): flush_target() polls
-+/// the slot drained before refilling, so an ISR can never observe a
-+/// half-filled batch.  Delivery to non-up CPUs is accepted-but-unapplied
-+/// (same shape as the SCHED mailbox); tests target self only.
-+
-+#pragma once
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace arch {
-+
-+class ShootdownBatch {
-+  public:
-+    /// @brief Batch slot capacity (entries per IPI).
-+    static constexpr size_t BATCH_SLOTS = 16;
-+    /// @brief Max log entries kept for order checks.
-+    static constexpr size_t APPLIED_LOG = 64;
-+
-+    /// @brief One shootdown entry (VA + owning PCID).
-+    struct BatchEntry {
-+        uint64_t va;
-+        uint16_t pcid;
-+    };
-+
-+    /// @brief Queue one entry for @p cpu (no IPI yet).
-+    /// @return true when queued; false when the slot is full (caller
-+    ///         flushes first, then retries) or arguments invalid.
-+    static bool queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid);
-+    /// @brief Deliver @p cpu's queued entries in bounded batches.
-+    ///        Polls each batch drained before refilling (never overwrites
-+    ///        a live batch).  Entries stay queued on send failure.
-+    ///        Callers must not hold IF=0 across the call for a self
-+    ///        target (the delivery ISR cannot land until sti).
-+    /// @return Number of IPIs accepted by the APIC for this call.
-+    static uint64_t flush_target(uint64_t cpu);
-+    /// @brief ISR entry: apply @p cpu's slot (bounded), record order,
-+    ///        clear the published count.  Lock-free, allocation-free;
-+    ///        caller performs exactly one EOI per run.
-+    static void handle_cpu(uint64_t cpu);
-+    /// @brief Total IPIs accepted (wrapper-side, deterministic).
-+    static uint64_t sends_for_test();
-+    /// @brief Total entries applied by handler runs.
-+    static uint64_t applied_for_test();
-+    /// @brief Applied VA log (ascending-check source for tests).
-+    static uint64_t applied_va_for_test(uint64_t idx);
-+    /// @brief Reset slots, counters and log (test isolation).
-+    static void reset_for_test();
-+
-+  private:
-+    struct CpuSlot {
-+        BatchEntry entries[BATCH_SLOTS];
-+        uint64_t count;
-+    };
-+
-+    static CpuSlot slots_[CONFIG_MAX_CPUS];
-+    static uint64_t sends_;
-+    static uint64_t applied_;
-+    static uint64_t applied_log_[APPLIED_LOG];
-+    static uint64_t applied_log_count_;
-+};
-+
-+} // namespace arch
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 8c012372..31c2cf6b 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -127,7 +127,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
-     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
-     {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
--    {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #85 module 16): unbatched 5:5 baseline (real), collapse/order/overflow stubs
-+    {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #159; baseline from #85 module 16): unbatched 5:5 baseline, collapse/order/overflow real
-     {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
-     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
-     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
-diff --git a/src/kernel/test/test_ipi_batching.cpp b/src/kernel/test/test_ipi_batching.cpp
-index f0bd1f2c..4f3759ea 100644
---- a/src/kernel/test/test_ipi_batching.cpp
-+++ b/src/kernel/test/test_ipi_batching.cpp
-@@ -30,6 +30,8 @@
- #include <kernel/arch/idt.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/io.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
- #include <kernel/nexios_config.h>
++    JARVIS_ASSERT_EQ(32ULL, t_sample_count);
++    JARVIS_ASSERT(tlb_lat_max() > 0);
++    tlb_lat_dump("recorded");
+     JARVIS_TEST_PASS();
+ }
  
- using namespace kernel;
-@@ -43,6 +45,17 @@ constexpr uint8_t kBatchProbeVector = 0x72;
- // Delivery counter for the baseline test.
- volatile uint64_t g_batch_ipi_count = 0;
- 
-+// Register the shootdown-batch ISR (self-IPI delivery for tests).
-+// EOI stays with the registrant, mirroring the 0x72 probe pattern.
-+void register_batch_handler() {
+ // Runmode: kernel
+ // Testidea: Batched average latency beats the unbatched baseline.
+-// Input: Baselines from ipi_batching_unbatched_baseline + batched run.
+-// Expect: avg(batched) < avg(unbatched).
+-// Depends: Flush-latency recorder (not yet implemented)
+-JARVIS_TEST(tlb_latency_avg_improves, "PRE: none | POST: none | PENDING: profiler") {
+-    /* Pseudocode:
+-     *   JARVIS_ASSERT(avg_latency(batched) < avg_latency(unbatched));
+-     */
++// Input: 16 requests unbatched (16 self-IPIs) vs batched (16 entries,
++//        1 IPI); min-of-5 totals each leg, IF=1 throughout.
++// Expect: min_batched_total < min_unbatched_total (gap is ~15 IPI
++//         round-trips — strict-less is robust under host noise).
++// Depends: ShootdownBatch delivery vs raw send_ipi (issue #160)
++JARVIS_TEST(tlb_latency_avg_improves, "PRE: none | POST: none") {
++    JARVIS_ASSERT(arch::APIC::is_enabled());
++    uint64_t freq = arch::Timer::tsc_freq_hz();
++    JARVIS_ASSERT(freq > 0);
++    arch::IDT::register_handler_raw(
++        kUnbatchedVector, [](uint64_t, uint64_t, uint64_t) {
++            g_tlb_unbatched_count = g_tlb_unbatched_count + 1;
++            arch::APIC::eoi();
++        });
 +    arch::IDT::register_handler_raw(
 +        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
 +        [](uint64_t, uint64_t, uint64_t) {
 +            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
 +            arch::APIC::eoi();
 +        });
-+}
-+
- }  // namespace
- 
- // Runmode: kernel
-@@ -82,37 +95,82 @@ JARVIS_TEST(ipi_batching_unbatched_baseline, "PRE: iocd | POST: none") {
- 
- // Runmode: kernel
- // Testidea: Multiple pending flushes collapse into a single IPI.
--// Input: N pending shootdown requests, count ICR sends.
--// Expect: Exactly one IPI sent for all N requests.
--// Depends: Shootdown batching layer (not yet implemented)
--JARVIS_TEST(ipi_batching_collapses, "PRE: none | POST: none | PENDING: batching") {
--    /* Pseudocode:
--     *   queue N flushes; JARVIS_ASSERT(ipis_sent() == 1);
--     */
-+// Input: N queued shootdown requests for self, one flush.
-+// Expect: Exactly one IPI accepted (wrapper send counter) and all N
-+//         entries applied (handler counter).  No APIC-coalescing
-+//         ambiguity: the send counter is deterministic.
-+// Depends: ShootdownBatch queue/flush delivery (issue #159)
-+JARVIS_TEST(ipi_batching_collapses, "PRE: none | POST: none") {
-+    register_batch_handler();
-+    arch::ShootdownBatch::reset_for_test();
++    uint32_t bsp = arch::APIC::lapic_id();
 +    uint64_t self = arch::cpu_index();
-+    constexpr uint64_t k_n = 8;
-+    for (uint64_t i = 0; i < k_n; ++i) {
-+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
-+            self, 0x35000000ULL + i * 0x1000, 1));
++    constexpr uint64_t k_n = 16;
++    constexpr int k_repeats = 5;
++    uint64_t best_unbatched = 0xFFFFFFFFFFFFFFFFULL;
++    uint64_t best_batched = 0xFFFFFFFFFFFFFFFFULL;
++    for (int r = 0; r < k_repeats; ++r) {
++        // Unbatched leg: 16 separate self-IPIs.
++        g_tlb_unbatched_count = 0;
++        uint64_t t0 = arch::rdtsc();
++        for (uint64_t i = 0; i < k_n; ++i) {
++            JARVIS_ASSERT(arch::APIC::send_ipi(
++                bsp, kUnbatchedVector, arch::APIC::IpiMode::FIXED));
++        }
++        uint64_t start = arch::rdtsc();
++        uint64_t limit = freq / 5;
++        while (g_tlb_unbatched_count < k_n) {
++            if (arch::rdtsc() - start > limit)
++                break;
++            asm volatile("pause");
++        }
++        uint64_t t1 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(k_n, g_tlb_unbatched_count);
++        uint64_t unbatched = tlb_delta(t0, t1);
++        if (unbatched < best_unbatched)
++            best_unbatched = unbatched;
++        // Batched leg: 16 entries, 1 IPI.
++        arch::ShootdownBatch::reset_for_test();
++        for (uint64_t i = 0; i < k_n; ++i) {
++            JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
++                self, 0x3A000000ULL + i * 0x1000, 1));
++        }
++        uint64_t applied_before =
++            arch::ShootdownBatch::applied_for_test();
++        t0 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
++        start = arch::rdtsc();
++        while (arch::ShootdownBatch::applied_for_test() <
++               applied_before + k_n) {
++            if (arch::rdtsc() - start > limit)
++                break;
++            asm volatile("pause");
++        }
++        t1 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(applied_before + k_n,
++                         arch::ShootdownBatch::applied_for_test());
++        uint64_t batched = tlb_delta(t0, t1);
++        if (batched < best_batched)
++            best_batched = batched;
 +    }
-+    uint64_t sends = arch::ShootdownBatch::flush_target(self);
-+    JARVIS_ASSERT_EQ(1ULL, sends);
-+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::sends_for_test());
-+    JARVIS_ASSERT_EQ(k_n, arch::ShootdownBatch::applied_for_test());
++    JARVIS_ASSERT(best_batched < best_unbatched);
++    Logger::info("[TLB] avg16: min_unbatched=");
++    Logger::print_dec(best_unbatched);
++    Logger::info(" min_batched=");
++    Logger::print_dec(best_batched);
++    Logger::info("");
      JARVIS_TEST_PASS();
  }
  
  // Runmode: kernel
- // Testidea: Batch processing order is deterministic (address order).
--// Input: Shuffled flush requests, observe application order.
--// Expect: Applied in ascending address order every run.
--// Depends: Shootdown batching layer (not yet implemented)
--JARVIS_TEST(ipi_batching_order, "PRE: none | POST: none | PENDING: batching") {
+ // Testidea: P99 flush latency stays within 2x the average.
+-// Input: Latency histogram over a flush series.
+-// Expect: p99 <= 2 * avg (no pathological tail).
+-// Depends: Flush-latency histogram (not yet implemented)
+-JARVIS_TEST(tlb_latency_p99_bound, "PRE: none | POST: none | PENDING: profiler") {
 -    /* Pseudocode:
--     *   queue shuffled addrs; JARVIS_ASSERT(applied_sorted());
+-     *   JARVIS_ASSERT(percentile(99) <= 2 * mean());
 -     */
-+// Input: Shuffled flush requests, one flush.
-+// Expect: Handler applies VAs in ascending order every run (slot
-+//         stays sorted on insert; applied log proves it).
-+// Depends: ShootdownBatch sorted insert (issue #159)
-+JARVIS_TEST(ipi_batching_order, "PRE: none | POST: none") {
-+    register_batch_handler();
-+    arch::ShootdownBatch::reset_for_test();
-+    uint64_t self = arch::cpu_index();
-+    constexpr uint64_t k_vas[] = {0x36007000ULL, 0x36001000ULL,
-+                                  0x36005000ULL, 0x36000000ULL,
-+                                  0x36003000ULL, 0x36002000ULL,
-+                                  0x36006000ULL, 0x36004000ULL};
-+    constexpr uint64_t k_n = sizeof(k_vas) / sizeof(k_vas[0]);
-+    for (uint64_t i = 0; i < k_n; ++i) {
-+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self, k_vas[i],
-+                                                         2));
++// Input: 200 NONZERO single-flush samples (coarse virtualized TSC
++//        yields mostly-zero deltas — collecting zeros would drag the
++//        average below any nonzero p99 by construction) under one
++//        IrqGuard.
++// Expect: p99 <= 2 * avg over the nonzero population (idx 197 of 200
++//         tolerates the 2 worst host-stall outliers; uniform op keeps
++//         the body tight).
++// Depends: Test-side recorder (issue #160)
++JARVIS_TEST(tlb_latency_p99_bound, "PRE: none | POST: none") {
++    tlb_lat_reset();
++    {
++        arch::IrqGuard irq_guard{};
++        uint64_t collected = 0;
++        for (uint64_t i = 0; i < 20000 && collected < 200; ++i) {
++            uint64_t start = arch::rdtsc();
++            arch::ArchPageTable::tlb_flush(0x3B000000ULL +
++                                           (i % 64) * 0x1000);
++            uint64_t end = arch::rdtsc();
++            uint64_t delta = tlb_delta(start, end);
++            if (delta == 0)
++                continue;
++            JARVIS_ASSERT(tlb_lat_record(delta));
++            ++collected;
++        }
++        JARVIS_ASSERT_EQ(200ULL, collected);
 +    }
-+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+    JARVIS_ASSERT_EQ(k_n, arch::ShootdownBatch::applied_for_test());
-+    for (uint64_t i = 1; i < k_n; ++i) {
-+        JARVIS_ASSERT(arch::ShootdownBatch::applied_va_for_test(i - 1) <
-+                      arch::ShootdownBatch::applied_va_for_test(i));
-+    }
-+    JARVIS_ASSERT(arch::ShootdownBatch::applied_va_for_test(0) ==
-+                  0x36000000ULL);
++    JARVIS_ASSERT_EQ(200ULL, t_sample_count);
++    uint64_t avg = tlb_lat_avg();
++    JARVIS_ASSERT(avg > 0);
++    JARVIS_ASSERT(tlb_lat_p99() <= 2 * avg);
++    tlb_lat_dump("p99");
      JARVIS_TEST_PASS();
  }
  
  // Runmode: kernel
- // Testidea: Batch size never overflows the IPI message buffer.
--// Input: More requests than the buffer holds.
--// Expect: Overflow requests take a second batch (or fail closed).
--// Depends: Shootdown batching layer (not yet implemented)
--JARVIS_TEST(ipi_batching_no_overflow, "PRE: none | POST: none | PENDING: batching") {
+-// Testidea: Flush latency scales with the number of active CPUs.
+-// Input: Same flush workload on 1 vs 2 CPUs.
+-// Expect: 2-CPU latency within [1x, 3x] of 1-CPU (linear-ish, bounded).
+-// Depends: Per-CPU latency attribution (not yet implemented)
+-JARVIS_TEST(tlb_latency_cpu_scaling, "PRE: none | POST: none | PENDING: profiler") {
 -    /* Pseudocode:
--     *   queue CAP+1 flushes; JARVIS_ASSERT(batches == 2 || rejected);
+-     *   l1 = bench(cpus=1); l2 = bench(cpus=2);
+-     *   JARVIS_ASSERT(l2 >= l1 && l2 <= 3 * l1);
 -     */
-+// Input: More requests than one slot holds (16 + 1).
-+// Expect: Bounded multi-batch (exactly 2 sends), all 17 applied —
-+//         never fail-closed, never overwritten.
-+// Depends: ShootdownBatch overflow protocol (issue #159)
-+JARVIS_TEST(ipi_batching_no_overflow, "PRE: none | POST: none") {
-+    register_batch_handler();
-+    arch::ShootdownBatch::reset_for_test();
++// Testidea: Flush cost amortizes with batch size (reframed cpu_scaling:
++//           no AP boots here, so 1-vs-2-CPU comparison is
++//           unimplementable — batch-1 vs batch-16 per-request cost
++//           instead).
++// Input: Per-request cost at batch 1 vs batch 16, min-of-5 each, IF=1.
++// Expect: min_per_req_16 <= min_per_req_1 (one IPI amortized over 16
++//         flushes vs one IPI per flush).
++// Depends: ShootdownBatch delivery (issue #160)
++JARVIS_TEST(tlb_latency_cpu_scaling, "PRE: none | POST: none") {
++    arch::IDT::register_handler_raw(
++        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
++        [](uint64_t, uint64_t, uint64_t) {
++            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
++            arch::APIC::eoi();
++        });
 +    uint64_t self = arch::cpu_index();
-+    constexpr uint64_t k_cap = arch::ShootdownBatch::BATCH_SLOTS;
-+    for (uint64_t i = 0; i < k_cap; ++i) {
-+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
-+            self, 0x37000000ULL + i * 0x1000, 3));
++    uint64_t freq = arch::Timer::tsc_freq_hz();
++    JARVIS_ASSERT(freq > 0);
++    constexpr int k_repeats = 5;
++    uint64_t best_per_1 = 0xFFFFFFFFFFFFFFFFULL;
++    uint64_t best_per_16 = 0xFFFFFFFFFFFFFFFFULL;
++    for (int r = 0; r < k_repeats; ++r) {
++        // Batch-1 leg: 1 entry, 1 IPI.
++        arch::ShootdownBatch::reset_for_test();
++        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self,
++                                                         0x3C000000ULL,
++                                                         1));
++        uint64_t applied_before =
++            arch::ShootdownBatch::applied_for_test();
++        uint64_t t0 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
++        uint64_t start = arch::rdtsc();
++        uint64_t limit = freq / 5;
++        while (arch::ShootdownBatch::applied_for_test() <
++               applied_before + 1) {
++            if (arch::rdtsc() - start > limit)
++                break;
++            asm volatile("pause");
++        }
++        uint64_t t1 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(applied_before + 1,
++                         arch::ShootdownBatch::applied_for_test());
++        uint64_t per_1 = tlb_delta(t0, t1);
++        if (per_1 < best_per_1)
++            best_per_1 = per_1;
++        // Batch-16 leg: 16 entries, still 1 IPI.
++        arch::ShootdownBatch::reset_for_test();
++        for (uint64_t i = 0; i < 16; ++i) {
++            JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
++                self, 0x3D000000ULL + i * 0x1000, 1));
++        }
++        applied_before = arch::ShootdownBatch::applied_for_test();
++        t0 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
++        start = arch::rdtsc();
++        while (arch::ShootdownBatch::applied_for_test() <
++               applied_before + 16) {
++            if (arch::rdtsc() - start > limit)
++                break;
++            asm volatile("pause");
++        }
++        t1 = arch::rdtsc();
++        JARVIS_ASSERT_EQ(applied_before + 16,
++                         arch::ShootdownBatch::applied_for_test());
++        uint64_t per_16 = tlb_delta(t0, t1) / 16;
++        if (per_16 < best_per_16)
++            best_per_16 = per_16;
 +    }
-+    JARVIS_ASSERT(!arch::ShootdownBatch::queue_remote(self, 0x38000000ULL,
-+                                                      3));
-+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+    JARVIS_ASSERT_EQ(k_cap, arch::ShootdownBatch::applied_for_test());
-+    JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self, 0x38000000ULL,
-+                                                     3));
-+    JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+    JARVIS_ASSERT_EQ(k_cap + 1,
-+                     arch::ShootdownBatch::applied_for_test());
-+    JARVIS_ASSERT_EQ(2ULL, arch::ShootdownBatch::sends_for_test());
++    JARVIS_ASSERT(best_per_16 <= best_per_1);
++    Logger::info("[TLB] scale: min_per_1=");
++    Logger::print_dec(best_per_1);
++    Logger::info(" min_per_16=");
++    Logger::print_dec(best_per_16);
++    Logger::info("");
      JARVIS_TEST_PASS();
  }
  
 diff --git a/test-history.txt b/test-history.txt
-index 2b190bb2..3d50c6f6 100644
+index 3d50c6f6..63a408a5 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1052,3 +1052,11 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 19:53:56 testrunner PASSED: 0 FAILED: 0 TIME: 20s STATUS: EXPECTED_PANIC_PATH
- 2026-09-15 19:55:03 all PASSED: 1363 FAILED: 0 TIME: 106985ms
- 2026-09-15 19:55:27 all PASSED: 85 FAILED: 0 TIME: 4333ms
-+2026-09-15 20:08:52 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:10:55 smp_ipi PASSED: 2 FAILED: 0 TIME: 20s
-+2026-09-15 20:10:55 apic_tpr PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 20:10:55 task_init PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 20:10:55 smp_sched PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 20:10:55 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:12:01 all PASSED: 1363 FAILED: 0 TIME: 106561ms
-+2026-09-15 20:12:26 all PASSED: 85 FAILED: 0 TIME: 17059ms
+@@ -1060,3 +1060,10 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 20:10:55 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
+ 2026-09-15 20:12:01 all PASSED: 1363 FAILED: 0 TIME: 106561ms
+ 2026-09-15 20:12:26 all PASSED: 85 FAILED: 0 TIME: 17059ms
++2026-09-15 20:25:21 tlb_latency PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 20:27:06 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 20:27:06 invpcid PASSED: 4 FAILED: 0 TIME: 19s
++2026-09-15 20:27:06 pcid PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 20:27:06 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 20:28:13 all PASSED: 1363 FAILED: 0 TIME: 57339ms
++2026-09-15 20:28:35 all PASSED: 85 FAILED: 0 TIME: 4085ms

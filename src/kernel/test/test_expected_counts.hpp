@@ -128,7 +128,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
     {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
     {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #159; baseline from #85 module 16): unbatched 5:5 baseline, collapse/order/overflow real
-    {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
+    {"tlb_latency",          4,   0,       0      },  // TLB-latency profiling (issue #160; stubs from #85 module 17): record/avg/p99/batch-scaling real
     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
