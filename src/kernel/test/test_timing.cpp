@@ -697,10 +697,45 @@ JARVIS_TEST(deadline_list_capacity, "PRE: none | POST: none") {
     JARVIS_ASSERT(dl.empty() == false);
     JARVIS_TEST_PASS();
 }
+// Runmode: kernel
+// Testidea: executed_ticks is execution time (issue #154): a READY but
+//           never-dispatched task accumulates nothing across real ticks
+//           while the genuinely-running task grows.
+// Input: Parked prio-1 task (READY, never rescheduled to top) + prio-11
+//        runner busy-waiting on its own executed_ticks >= 3.
+// Expect: runner ticks >= 3; parked ticks == 0 (old code charged every
+//         READY task and failed this).
+// Depends: Scheduler::on_tick accounting (issue #154)
+JARVIS_TEST(timer_ready_task_accumulates_no_cpu_time, "PRE: none | POST: none") {
+    static volatile uint64_t g_runner_ticks = 0;
+
+    auto *parked = TaskControlBlock::create([]() {}, 1,
+                                            TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(parked != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, parked->executed_ticks);
+    Scheduler::add_task(*parked);
+
+    auto *t = run_real_task([]() {
+        auto *self = Scheduler::current_task();
+        while (self->executed_ticks < 3)
+            arch::pause();
+        g_runner_ticks = self->executed_ticks;
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(g_runner_ticks >= 3);
+    JARVIS_ASSERT_EQ(0ULL, parked->executed_ticks);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    release_task(parked);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 void register_timing_tests() {
     Logger::raw_write("[TIMING] register_timing_tests called!\n");
     Logger::info("Registering timing tests");
     JARVIS_REGISTER_TEST(timer_tick_accounting);
+    JARVIS_REGISTER_TEST(timer_ready_task_accumulates_no_cpu_time);
     JARVIS_REGISTER_TEST(timer_period_reload);
     JARVIS_REGISTER_TEST(timer_alarm_delivery);
     JARVIS_REGISTER_TEST(timer_alarm_not_expired);

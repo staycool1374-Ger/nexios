@@ -1981,6 +1981,11 @@ void Scheduler::on_tick() noexcept {
 
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).
+        // Issue #154: executed_ticks is execution time — only the
+        // interrupted (running) task is charged.  remaining_ticks,
+        // deadline re-arm and alarms stay wall-clock for every affine
+        // task (a parked READY task still consumes period and alarms).
+        TaskControlBlock *const running = current_task();
         for (auto *task = all_tasks_.first_ptr(); task;
              task = all_tasks_.next_ptr(task)) {
             if (task->magic != TaskControlBlock::TCB_MAGIC)
@@ -1990,9 +1995,11 @@ void Scheduler::on_tick() noexcept {
             if (queue_target(*task) != sched_cpu())
                 continue;
 
+            if (task == running)
+                ++task->executed_ticks;
+
             if (task->state == TaskState::RUNNING ||
                 task->state == TaskState::READY) {
-                ++task->executed_ticks;
                 uint64_t prev_rem = task->remaining_ticks;
                 if (task->remaining_ticks > 0)
                     --task->remaining_ticks;
@@ -2012,7 +2019,10 @@ void Scheduler::on_tick() noexcept {
             }
 
 #if CONFIG_WCET_OVERRUN_DETECTION
-            if (task->wcet_ticks > 0 && !task->wcet_overrun_fired &&
+            // Issue #154: a starved READY task must never trip the
+            // overrun latch — only execution counts toward WCET.
+            if (task == running && task->wcet_ticks > 0 &&
+                !task->wcet_overrun_fired &&
                 task->executed_ticks > task->wcet_ticks) {
                 task->wcet_overrun_fired = true;
                 wcet_overrun_handler(task,
