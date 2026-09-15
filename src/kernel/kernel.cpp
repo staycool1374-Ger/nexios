@@ -1063,6 +1063,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // Register shell commands before the shell task starts
     service::Shell::init();
 
+    // Issue #96: snapshot the kernel-half template at end of bring-up —
+    // all boot-time map_page work (drivers, kslot window) is done, and no
+    // task exists yet.  Fork/exec converge toward the live root; drift
+    // from this baseline is diagnosed, never fatal (paper §4 row 2).
+    kernel::VMM::snapshot_kernel_template();
+
     // Kill all tasks and rebuild system from the task-definition table
     kernel::task::reboot_from_table();
 }

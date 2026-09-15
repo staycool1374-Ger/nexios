@@ -1517,14 +1517,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         }
         tcb->page_table_ = new_pml4;
 
-        // Copy kernel entries from the kernel PML4.
+        // Issue #96: converge the kernel half via recursive merge from
+        // the live kernel PML4 (link semantics — lower tables stay
+        // shared, zero allocations).  The live root, not the parent, is
+        // the source: a parent forked before a late mapping must not
+        // propagate stale entries (convergence goal, paper §2).
         auto *new_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                       (new_pml4 & ~0xFFFULL));
-        auto *kernel_virt = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
         __builtin_memset(new_virt, 0, arch::PAGE_SIZE);
-        for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
-            new_virt[i] = kernel_virt[i];
+        if (!VMM::merge_kernel_half(VMM::get_kernel_pml4(), new_pml4)) {
+            ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
+            TaskControlBlock::destroy(tcb);
+            return nullptr;
+        }
+        VMM::assert_kernel_half_converged(new_pml4);
 
         // Deep-copy user entries from parent (walk, allocate, copy).
         if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {

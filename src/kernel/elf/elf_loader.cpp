@@ -503,6 +503,8 @@ void ElfLoader::run_load() {
         cleanup_and_idle();
         return;
     }
+    // Issue #96: structural audit on the background-loaded image.
+    VMM::assert_kernel_half_converged(pml4_);
     state_ = LoadState::COPYING_SEGMENTS;
     exec_base_ = 0;
     exec_size_ = 0;

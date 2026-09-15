@@ -472,6 +472,9 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     uint64_t pml4 = VMM::clone_kernel_pml4();
     if (!pml4)
         return nullptr;
+    // Issue #96: freshly-cloned tables are the merged state by
+    // construction — assert convergence before mapping user pages.
+    VMM::assert_kernel_half_converged(pml4);
 
     uint64_t ustack_phys = 0;
     if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
@@ -706,6 +709,8 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     uint64_t new_pml4 = VMM::clone_kernel_pml4();
     if (!new_pml4)
         return false;
+    // Issue #96: structural audit on the exec image (see load() above).
+    VMM::assert_kernel_half_converged(new_pml4);
 
     uint64_t ustack_phys = 0;
     if (!load_segments_and_stack(hdr, data, new_pml4, &ustack_phys,

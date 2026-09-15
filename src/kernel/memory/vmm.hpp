@@ -101,6 +101,42 @@ class VMM {
     /// @return VmmError code.
     static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
 
+    /// @brief Converge a child PML4's kernel half (entries 256..511)
+    ///        toward @p src_pml4 (issue #96, kernel-half merge).  Recursive
+    ///        top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an
+    ///        entry present in the source, the entry is copied by value
+    ///        (link semantics — lower tables stay shared, never
+    ///        duplicated); entries already present are left untouched
+    ///        (idempotent); huge/leaf entries are copied by value.
+    ///        Performs ZERO allocations, so it cannot OOM by
+    ///        construction; the bool preserves the failure contract for
+    ///        future allocating revisions (callers must destroy the child
+    ///        table on false).  No locking: single-threaded, runs before
+    ///        the first CR3 switch to the child (same window MP-7 uses).
+    /// @param src_pml4 Physical address of the source (canonical) PML4.
+    /// @param dst_pml4 Physical address of the child PML4 to converge.
+    /// @return true on success, false on invalid arguments (null or
+    ///         identical roots — never on allocation failure).
+    static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
+    /// @brief Snapshot the live kernel PML4's kernel half (entries
+    ///        256..511) into the bring-up template (issue #96).  Call
+    ///        ONCE at end of bring-up, before the first task spawns.
+    static void snapshot_kernel_template();
+    /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
+    ///        entry (256..511), compared recursively through shared
+    ///        tables (present+equal u64, or both-absent, at each level).
+    static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
+    /// @brief True when @p pml4_phys matches the bring-up template on
+    ///        every kernel-half entry (diagnostics + tests; drift from
+    ///        legitimate late mappings is NOT a failure here).
+    static bool kernel_half_matches_template(uint64_t pml4_phys);
+    /// @brief Halt unless @p child_pml4 converged to the LIVE kernel
+    ///        PML4's kernel half (issue #96, structural audit).  Panics
+    ///        (debug AND release) on mismatch; template drift is
+    ///        debug-logged only — legitimate late mappings must converge,
+    ///        not panic (paper §4 row 2).
+    static void assert_kernel_half_converged(uint64_t child_pml4);
+
     /// @brief Maps a page into a specific page table (not the kernel one).
     /// @param virt_addr Virtual address (page-aligned).
     /// @param phys_addr Physical address (page-aligned).
@@ -320,6 +356,11 @@ class VMM {
 
     static constinit uint64_t kernel_pml4_;
 
+    /// @brief Bring-up snapshot of the kernel PML4's kernel half
+    ///        (issue #96).  Written once by snapshot_kernel_template(),
+    ///        never afterwards; read by kernel_half_matches_template().
+    static constinit uint64_t pml4_kernel_template_[512];
+
   public:
     /// @brief Set to true when a test modifies kernel-space page tables
     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
@@ -377,6 +418,18 @@ class VMM {
     /// @return Pointer to the next-level table, or nullptr.
     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
                                bool user_alloc = false);
+    /// @brief True when @p entry points at a next-level table (issue
+    ///        #96).  Arch-aware leaf detection (x86_64 PS bit, RISC-V
+    ///        R|W|X, AArch64 descriptor type); level 3 is always a leaf.
+    static bool is_table_entry(uint64_t entry, unsigned level);
+    /// @brief Recursive merge worker (issue #96): converge @p dst_table
+    ///        toward @p src_table over [@p start, 512).  Zero allocations.
+    static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,
+                                  unsigned level, size_t start);
+    /// @brief Recursive equality worker (issue #96).
+    static bool tables_equal_level(const uint64_t *a_table,
+                                   const uint64_t *b_table, unsigned level,
+                                   size_t start);
 };
 
 } // namespace kernel

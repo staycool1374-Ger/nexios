@@ -1,492 +1,726 @@
-diff --git a/linker/linker_x86_64.ld b/linker/linker_x86_64.ld
-index ef92e03b..defcb7ef 100644
---- a/linker/linker_x86_64.ld
-+++ b/linker/linker_x86_64.ld
-@@ -130,11 +130,10 @@ SECTIONS
-     kernel_phys_end = ALIGN(phys_lma + SIZEOF(.stack_guard), 4K);
-     kernel_virt_end = ALIGN(., 4K);
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 6e614043..9ee5efb6 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -472,6 +472,9 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
+     uint64_t pml4 = VMM::clone_kernel_pml4();
+     if (!pml4)
+         return nullptr;
++    // Issue #96: freshly-cloned tables are the merged state by
++    // construction — assert convergence before mapping user pages.
++    VMM::assert_kernel_half_converged(pml4);
  
--    /* Issue #25 C1: only fpu_owner still aliases per_cpu[0] (gs:0x30;
--       FPU migration deferred to #151).  isr_nesting_depth / irq_entry_tsc
--       aliases are REMOVED: all C++ readers use isr_nesting_own() (own
--       slot) and asm uses gs:0x20 / gs:0x28 numerically — no symbol
--       needed (a resurrected bare user fails the link, fail-closed).
-+    /* Issue #151: NO FPU linker alias remains.  fpu_owner lives in
-+       per_cpu[cpu].fpu_owner (gs:0x30); all C++ readers use fpu_owner_own()
-+       (own slot).  A resurrected bare user fails the link, fail-closed —
-+       same discipline as the removed isr_nesting_depth / irq_entry_tsc
-+       aliases (issue #25 C1).
-        _ZN4arch7per_cpuE is the mangled name of arch::per_cpu. */
--    fpu_owner = _ZN4arch7per_cpuE + 0x30;
- }
-\ No newline at end of file
-diff --git a/src/kernel/arch/cpu_context.hpp b/src/kernel/arch/cpu_context.hpp
-index 2870a7c2..753ea950 100644
---- a/src/kernel/arch/cpu_context.hpp
-+++ b/src/kernel/arch/cpu_context.hpp
-@@ -100,4 +100,21 @@ inline uint64_t &isr_nesting_own() {
- }
- #endif
+     uint64_t ustack_phys = 0;
+     if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
+@@ -706,6 +709,8 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     uint64_t new_pml4 = VMM::clone_kernel_pml4();
+     if (!new_pml4)
+         return false;
++    // Issue #96: structural audit on the exec image (see load() above).
++    VMM::assert_kernel_half_converged(new_pml4);
  
-+#if defined(CONFIG_ARCH_X86_64)
-+/// @brief Own-CPU FPU register owner (per_cpu[cpu].fpu_owner, gs:0x30;
-+///        issue #151).  C++ readers must use the OWN slot — never a global.
-+///        Single-core builds resolve to per_cpu[0] (identical to the old
-+///        global); no linker alias remains (link error = proof of full
-+///        migration).
-+inline TaskControlBlock *&fpu_owner_own() {
-+    return arch::per_cpu[arch::cpu_index()].fpu_owner;
-+}
-+#else
-+extern "C" TaskControlBlock *fpu_owner;
-+/// @brief Own-CPU FPU register owner (single-core archs: the plain global).
-+inline TaskControlBlock *&fpu_owner_own() {
-+    return fpu_owner;
-+}
-+#endif
-+
- } // namespace kernel
-diff --git a/src/kernel/arch/x86_64/hal/percpu.hpp b/src/kernel/arch/x86_64/hal/percpu.hpp
-index bce7950d..236b0abc 100644
---- a/src/kernel/arch/x86_64/hal/percpu.hpp
-+++ b/src/kernel/arch/x86_64/hal/percpu.hpp
-@@ -58,7 +58,9 @@ struct alignas(arch::PAGE_SIZE) PerCpu {
-     uint64_t irq_entry_tsc;     // gs:0x28  — was global irq_entry_tsc
- 
-     // ─── FPU / scheduler ───────────────────────────────────────────────────
--    void *fpu_owner;            // gs:0x30  — global (FPU migration: #151)
-+    // Own-CPU FPU register owner (issue #151): which task's FPU state is
-+    // currently live in this CPU's registers.  nullptr = none since boot.
-+    kernel::TaskControlBlock *fpu_owner; // gs:0x30 — per-CPU (was global)
-     void *current_task;         // gs:0x38  — RESERVED (superseded by CpuContext
-                                 //   array, issue #25 C1; kept for layout)
- 
-diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
-index fa1c46c6..66a96fbb 100644
---- a/src/kernel/arch/x86_64/hal/smp.cpp
-+++ b/src/kernel/arch/x86_64/hal/smp.cpp
-@@ -335,11 +335,10 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
-            arch::APIC::TPR_CLASS_ACCEPT_ALL);
-     ap_ready[logical_id] = 1;
- 
--    // FPU tripwire (spec §3.4.3): TS=1 so ANY AP x87/SSE faults #NM,
--    // which fail-stops (C1 forbids AP FPU; #151 will allow).  Without
--    // this the trampoline's TS=0 lets x87 run silently, corrupting BSP
--    // lazy-FPU state undetectably.  OSFXSR keeps SSE faulting via #NM
--    // (not #UD) so one tripwire covers both.
-+    // FPU arming (issue #151): TS=1 enrolls the AP in the per-CPU lazy-FPU
-+    // protocol — its first x87/SSE faults #NM and the handler resolves
-+    // ownership against the AP's OWN per_cpu slot, identically to the BSP.
-+    // OSFXSR keeps SSE faulting via #NM (not #UD) so one path covers both.
-     uint64_t cr0 = arch::read_cr0();
-     arch::write_cr0(cr0 | (1ULL << 3));
-     uint64_t cr4 = arch::read_cr4();
-diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
-index 1f608c3e..dfa686a2 100644
---- a/src/kernel/core/global_state.cpp
-+++ b/src/kernel/core/global_state.cpp
-@@ -68,19 +68,20 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
- uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
- uint64_t scheduler_kernel_cr3 = 0;
- bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
--// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc /
--// fpu_owner live in per_cpu[0] (linker aliases in linker_x86_64.ld) and are
--// accessed by isr_stubs.asm via gs:0x20 / gs:0x28.  Other architectures keep
--// plain definitions here until their per-CPU migration.
-+// Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
-+// in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
-+// Other architectures keep plain definitions here until their per-CPU
-+// migration.
- #if !defined(CONFIG_ARCH_X86_64)
- uint64_t isr_nesting_depth = 0;
- uint64_t irq_entry_tsc = 0;
- #endif
- uint64_t scheduler_corruption_count = 0;
- uint64_t deadline_detection_integrity = 0;
--// Tracks which task's FPU state is currently in the registers (declared in
--// scheduler.hpp's extern "C" block).
--// Issue #25 (Phase A): x86_64 definition lives in per_cpu[0] (gs:0x30).
-+// Tracks which task's FPU state is currently in the registers, single-core
-+// archs only (declared in scheduler.hpp's extern "C" block).
-+// Issue #151: on x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30);
-+// no global definition here, no linker alias — bare users fail the link.
- #if !defined(CONFIG_ARCH_X86_64)
- kernel::TaskControlBlock *fpu_owner = nullptr;
- #endif
+     uint64_t ustack_phys = 0;
+     if (!load_segments_and_stack(hdr, data, new_pml4, &ustack_phys,
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index 989e370b..d0024f56 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -503,6 +503,8 @@ void ElfLoader::run_load() {
+         cleanup_and_idle();
+         return;
+     }
++    // Issue #96: structural audit on the background-loaded image.
++    VMM::assert_kernel_half_converged(pml4_);
+     state_ = LoadState::COPYING_SEGMENTS;
+     exec_base_ = 0;
+     exec_size_ = 0;
 diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 0e2d1009..46bb210b 100644
+index 46bb210b..8ac3509a 100644
 --- a/src/kernel/kernel.cpp
 +++ b/src/kernel/kernel.cpp
-@@ -1496,12 +1496,10 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-         // RFLAGS, so no sti is needed.
-         arch::cli();
+@@ -1063,6 +1063,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     // Register shell commands before the shell task starts
+     service::Shell::init();
  
--        // Issue #25 C1 FPU tripwire: AP FPU is forbidden (lazy protocol is
--        // BSP-scoped; fpu_owner is BSP-global until #151).  ap_main arms
--        // CR0.TS precisely so any AP x87/SSE faults HERE and fail-stops
--        // loudly instead of corrupting BSP lazy state silently.
--        if (arch::cpu_index() != 0)
--            panic("#NM on AP: FPU forbidden in C1 (see #151)");
-+        // Issue #151: the lazy-FPU protocol is per-CPU — every CPU arms
-+        // CR0.TS (ap_main below) and resolves ownership against its OWN
-+        // per_cpu[cpu].fpu_owner slot.  APs participate identically to the
-+        // BSP; the C1 tripwire is removed.
++    // Issue #96: snapshot the kernel-half template at end of bring-up —
++    // all boot-time map_page work (drivers, kslot window) is done, and no
++    // task exists yet.  Fork/exec converge toward the live root; drift
++    // from this baseline is diagnosed, never fatal (paper §4 row 2).
++    kernel::VMM::snapshot_kernel_template();
++
+     // Kill all tasks and rebuild system from the task-definition table
+     kernel::task::reboot_from_table();
+ }
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 2da4f876..4adf8faf 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -32,6 +32,7 @@
+ namespace kernel {
  
-         // Clear CR0.TS first so FNINIT/FXSAVE/FXRSTOR don't recursively #NM
-         uint64_t cr0 = arch::read_cr0();
-@@ -1515,13 +1513,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-         // live registers with stale/zero TCB state.  Leave the registers
-         // untouched and return.
-         auto *prev_fpu_owner =
--            __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
-+            __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
-         if (prev_fpu_owner && prev_fpu_owner != current) {
-             arch::fxsave(prev_fpu_owner->fpu_state);
-             ++prev_fpu_owner->fpu_state_gen;
-         }
-         if (prev_fpu_owner == current) {
--            __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
-+            __atomic_store_n(&kernel::fpu_owner_own(), current,
-+                             __ATOMIC_RELEASE);
-             uint64_t depth = kernel::isr_nesting_own();
-             if (depth > kernel::fpu_nm_depth_max)
-                 kernel::fpu_nm_depth_max = depth;
-@@ -1538,7 +1537,8 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-             current->fpu_used = true;
-         }
+ constinit uint64_t VMM::kernel_pml4_ = 0;
++constinit uint64_t VMM::pml4_kernel_template_[512] = {};
+ bool VMM::hhdm_modified_ = false;
+ bool VMM::identity_modified_ = false;
  
--        __atomic_store_n(&kernel::fpu_owner, current, __ATOMIC_RELEASE);
-+        __atomic_store_n(&kernel::fpu_owner_own(), current,
-+                         __ATOMIC_RELEASE);
-         uint64_t depth = kernel::isr_nesting_own();
-         if (depth > kernel::fpu_nm_depth_max)
-             kernel::fpu_nm_depth_max = depth;
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 8493414b..940a5220 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -910,9 +910,15 @@ extern uint64_t deadline_detection_integrity;
- // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
- extern uint64_t fpu_nm_depth_max;
- /// @brief Tracks which task's FPU state is currently in the registers.
--///        nullptr means no task has used FPU since boot.
-+///        Single-core archs ONLY: the plain global in global_state.cpp, read
-+///        via fpu_owner_own().  On x86_64 the owner lives in
-+///        per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global
-+///        definition — any bare use here fails to link by design (migration
-+///        proof).  Do not add readers of this symbol; use fpu_owner_own().
- // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-+#if !defined(CONFIG_ARCH_X86_64)
- extern TaskControlBlock *fpu_owner;
-+#endif
+@@ -733,6 +734,155 @@ uint64_t VMM::clone_kernel_pml4() {
+ #endif
  }
  
++/// @brief True when @p entry points at a next-level table (vs a huge/leaf
++///        mapping).  Arch-aware: x86_64 uses the PS bit, RISC-V the R|W|X
++///        bits, AArch64 the descriptor type at non-leaf levels.
++/// @param entry Raw 64-bit page-table entry (must be PRESENT).
++/// @param level Table level holding the entry (0=PML4/L0 .. 2=PD/L2;
++///        level 3=PT/L3 entries are always leaves).
++bool VMM::is_table_entry(uint64_t entry, unsigned level) {
++    if (level >= 3)
++        return false;
++#if defined(CONFIG_ARCH_X86_64)
++    (void)level;
++    return (entry & PAGE_HUGE) == 0;
++#elif defined(CONFIG_ARCH_RISCV64)
++    (void)level;
++    constexpr uint64_t k_rwx = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
++    return (entry & k_rwx) == 0;
++#elif defined(CONFIG_ARCH_AARCH64)
++    return (entry & 0x3ULL) == 0x3ULL;
++#else
++    (void)entry;
++    (void)level;
++    return false;
++#endif
++}
++
++/// @brief Recursive merge worker (issue #96): converge @p dst_table
++///        toward @p src_table over [@p start, 512).  Missing-present
++///        entries are linked (copied by value); present entries are left
++///        untouched unless both sides hold tables, in which case the
++///        pair is merged recursively (hole-filling).  Zero allocations.
++/// @param src_table HHDM virtual address of the source table page.
++/// @param dst_table HHDM virtual address of the child table page.
++/// @param level Table level (0=PML4/L0 .. 3=PT/L3).
++/// @param start First index to converge (kernel-half start at level 0).
++void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
++                            unsigned level, size_t start) {
++    for (size_t i = start; i < 512; ++i) {
++        uint64_t src_entry = src_table[i];
++        if ((src_entry & PAGE_PRESENT) == 0)
++            continue;
++        uint64_t dst_entry = dst_table[i];
++        if ((dst_entry & PAGE_PRESENT) != 0) {
++            if (is_table_entry(src_entry, level) &&
++                is_table_entry(dst_entry, level)) {
++                // NOLINTNEXTLINE(performance-no-int-to-ptr)
++                auto *src_next = reinterpret_cast<uint64_t *>(
++                    arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
++                // NOLINTNEXTLINE(performance-no-int-to-ptr)
++                auto *dst_next = reinterpret_cast<uint64_t *>(
++                    arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
++                merge_table_level(src_next, dst_next, level + 1, 0);
++            }
++            continue;
++        }
++        dst_table[i] = src_entry;
++    }
++}
++
++/// @brief Recursive equality worker (issue #96): true when the two
++///        tables agree on every present entry over [@p start, 512),
++///        descending into table/table pairs.
++bool VMM::tables_equal_level(const uint64_t *a_table,
++                             const uint64_t *b_table, unsigned level,
++                             size_t start) {
++    for (size_t i = start; i < 512; ++i) {
++        uint64_t a_entry = a_table[i];
++        uint64_t b_entry = b_table[i];
++        bool a_present = (a_entry & PAGE_PRESENT) != 0;
++        bool b_present = (b_entry & PAGE_PRESENT) != 0;
++        if (a_present != b_present)
++            return false;
++        if (!a_present)
++            continue;
++        if (is_table_entry(a_entry, level) &&
++            is_table_entry(b_entry, level)) {
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *a_next = reinterpret_cast<const uint64_t *>(
++                arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *b_next = reinterpret_cast<const uint64_t *>(
++                arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
++            if (!tables_equal_level(a_next, b_next, level + 1, 0))
++                return false;
++        } else if (a_entry != b_entry) {
++            return false;
++        }
++    }
++    return true;
++}
++
++bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
++    if (src_pml4 == 0 || dst_pml4 == 0 || src_pml4 == dst_pml4)
++        return false;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                             (src_pml4 & ~0xFFFULL));
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                             (dst_pml4 & ~0xFFFULL));
++    // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
++    // uses) — no locking; link semantics keep lower tables shared, so no
++    // allocation can fail mid-merge by construction.
++    merge_table_level(src, dst, 0, arch::PML4_KERNEL_START);
++    return true;
++}
++
++void VMM::snapshot_kernel_template() {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (kernel_pml4_ & ~0xFFFULL));
++    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
++        pml4_kernel_template_[i] = live[i];
++}
++
++bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
++    if (a_pml4 == 0 || b_pml4 == 0)
++        return false;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *a = reinterpret_cast<const uint64_t *>(
++        arch::HHDM_OFFSET + (a_pml4 & ~0xFFFULL));
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *b = reinterpret_cast<const uint64_t *>(
++        arch::HHDM_OFFSET + (b_pml4 & ~0xFFFULL));
++    return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
++}
++
++bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
++    if (pml4_phys == 0)
++        return false;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *tbl = reinterpret_cast<const uint64_t *>(
++        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
++        if (tbl[i] != pml4_kernel_template_[i])
++            return false;
++    }
++    return true;
++}
++
++void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
++    if (!kernel_half_equal(child_pml4, kernel_pml4_))
++        panic("VMM: child kernel half diverged from live kernel PML4");
++#if CONFIG_DEBUG
++    if (!kernel_half_matches_template(child_pml4))
++        Logger::info("VMM: child kernel half drifted from bring-up "
++                     "template (late mapping converged)");
++#endif
++}
++
+ /// @brief Free all user-space pages and page tables owned by a user PML4.
+ ///        Skips kernel-owned pages (PMM::is_user_page owner-bit check).
+ /// @param pml4_phys Physical address of the user PML4 to tear down.
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 1fda1d70..90c35358 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -101,6 +101,42 @@ class VMM {
+     /// @return VmmError code.
+     static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
  
++    /// @brief Converge a child PML4's kernel half (entries 256..511)
++    ///        toward @p src_pml4 (issue #96, kernel-half merge).  Recursive
++    ///        top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an
++    ///        entry present in the source, the entry is copied by value
++    ///        (link semantics — lower tables stay shared, never
++    ///        duplicated); entries already present are left untouched
++    ///        (idempotent); huge/leaf entries are copied by value.
++    ///        Performs ZERO allocations, so it cannot OOM by
++    ///        construction; the bool preserves the failure contract for
++    ///        future allocating revisions (callers must destroy the child
++    ///        table on false).  No locking: single-threaded, runs before
++    ///        the first CR3 switch to the child (same window MP-7 uses).
++    /// @param src_pml4 Physical address of the source (canonical) PML4.
++    /// @param dst_pml4 Physical address of the child PML4 to converge.
++    /// @return true on success, false on invalid arguments (null or
++    ///         identical roots — never on allocation failure).
++    static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
++    /// @brief Snapshot the live kernel PML4's kernel half (entries
++    ///        256..511) into the bring-up template (issue #96).  Call
++    ///        ONCE at end of bring-up, before the first task spawns.
++    static void snapshot_kernel_template();
++    /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
++    ///        entry (256..511), compared recursively through shared
++    ///        tables (present+equal u64, or both-absent, at each level).
++    static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
++    /// @brief True when @p pml4_phys matches the bring-up template on
++    ///        every kernel-half entry (diagnostics + tests; drift from
++    ///        legitimate late mappings is NOT a failure here).
++    static bool kernel_half_matches_template(uint64_t pml4_phys);
++    /// @brief Halt unless @p child_pml4 converged to the LIVE kernel
++    ///        PML4's kernel half (issue #96, structural audit).  Panics
++    ///        (debug AND release) on mismatch; template drift is
++    ///        debug-logged only — legitimate late mappings must converge,
++    ///        not panic (paper §4 row 2).
++    static void assert_kernel_half_converged(uint64_t child_pml4);
++
+     /// @brief Maps a page into a specific page table (not the kernel one).
+     /// @param virt_addr Virtual address (page-aligned).
+     /// @param phys_addr Physical address (page-aligned).
+@@ -320,6 +356,11 @@ class VMM {
+ 
+     static constinit uint64_t kernel_pml4_;
+ 
++    /// @brief Bring-up snapshot of the kernel PML4's kernel half
++    ///        (issue #96).  Written once by snapshot_kernel_template(),
++    ///        never afterwards; read by kernel_half_matches_template().
++    static constinit uint64_t pml4_kernel_template_[512];
++
+   public:
+     /// @brief Set to true when a test modifies kernel-space page tables
+     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
+@@ -377,6 +418,18 @@ class VMM {
+     /// @return Pointer to the next-level table, or nullptr.
+     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
+                                bool user_alloc = false);
++    /// @brief True when @p entry points at a next-level table (issue
++    ///        #96).  Arch-aware leaf detection (x86_64 PS bit, RISC-V
++    ///        R|W|X, AArch64 descriptor type); level 3 is always a leaf.
++    static bool is_table_entry(uint64_t entry, unsigned level);
++    /// @brief Recursive merge worker (issue #96): converge @p dst_table
++    ///        toward @p src_table over [@p start, 512).  Zero allocations.
++    static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,
++                                  unsigned level, size_t start);
++    /// @brief Recursive equality worker (issue #96).
++    static bool tables_equal_level(const uint64_t *a_table,
++                                   const uint64_t *b_table, unsigned level,
++                                   size_t start);
+ };
+ 
+ } // namespace kernel
 diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 20a80ba2..b7633502 100644
+index b7633502..3390b79b 100644
 --- a/src/kernel/task/task.cpp
 +++ b/src/kernel/task/task.cpp
-@@ -1395,8 +1395,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     tcb->buf_list_head = -1;
+@@ -1517,14 +1517,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+         }
+         tcb->page_table_ = new_pml4;
  
- #if defined(CONFIG_ARCH_X86_64)
--    // Save parent's FPU state if it's currently in the registers
--    if (__atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE) == parent) {
-+    // Save parent's FPU state if it's currently in this CPU's registers
-+    // (issue #151: ownership is per-CPU; the cloning CPU's slot decides).
-+    if (__atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE) == parent) {
-         arch::fxsave(parent->fpu_state);
-         ++parent->fpu_state_gen;
-     }
-diff --git a/src/kernel/test/test_atomic_context_switch.cpp b/src/kernel/test/test_atomic_context_switch.cpp
-index 279c5727..49f33e50 100644
---- a/src/kernel/test/test_atomic_context_switch.cpp
-+++ b/src/kernel/test/test_atomic_context_switch.cpp
-@@ -96,13 +96,15 @@ JARVIS_TEST(atomic_globals_set_on_reschedule, "PRE: none | POST: none") {
- // Expect: Value matches what was written.
- // Depends: fpu_owner atomic
- JARVIS_TEST(atomic_fpu_owner_read_write, "PRE: none | POST: none") {
--    auto *old = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
-+    auto *old =
-+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
-     auto *test_ptr =
-         reinterpret_cast<TaskControlBlock *>(uintptr_t(0xDEADBEEF));
--    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELEASE);
--    auto *val = __atomic_load_n(&kernel::fpu_owner, __ATOMIC_ACQUIRE);
-+    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELEASE);
-+    auto *val =
-+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_ACQUIRE);
-     JARVIS_ASSERT(val == test_ptr);
--    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELEASE);
-+    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELEASE);
-     JARVIS_TEST_PASS();
- }
+-        // Copy kernel entries from the kernel PML4.
++        // Issue #96: converge the kernel half via recursive merge from
++        // the live kernel PML4 (link semantics — lower tables stay
++        // shared, zero allocations).  The live root, not the parent, is
++        // the source: a parent forked before a late mapping must not
++        // propagate stale entries (convergence goal, paper §2).
+         auto *new_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                       (new_pml4 & ~0xFFFULL));
+-        auto *kernel_virt = reinterpret_cast<uint64_t *>(
+-            arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+         __builtin_memset(new_virt, 0, arch::PAGE_SIZE);
+-        for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
+-            new_virt[i] = kernel_virt[i];
++        if (!VMM::merge_kernel_half(VMM::get_kernel_pml4(), new_pml4)) {
++            ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
++            TaskControlBlock::destroy(tcb);
++            return nullptr;
++        }
++        VMM::assert_kernel_half_converged(new_pml4);
  
-@@ -194,17 +196,17 @@ JARVIS_TEST(atomic_idempotent_null_handling, "PRE: none | POST: none") {
- // Depends: fpu_owner atomic
- JARVIS_TEST(atomics_fpu_owner_relaxed, "PRE: none | POST: none") {
-     TaskControlBlock *old =
--        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
-+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
- 
-     auto *test_ptr = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xBEEF));
--    __atomic_store_n(&kernel::fpu_owner, test_ptr, __ATOMIC_RELAXED);
-+    __atomic_store_n(&kernel::fpu_owner_own(), test_ptr, __ATOMIC_RELAXED);
- 
-     TaskControlBlock *val =
--        __atomic_load_n(&kernel::fpu_owner, __ATOMIC_RELAXED);
-+        __atomic_load_n(&kernel::fpu_owner_own(), __ATOMIC_RELAXED);
- 
-     JARVIS_ASSERT(val == test_ptr);
- 
--    __atomic_store_n(&kernel::fpu_owner, old, __ATOMIC_RELAXED);
-+    __atomic_store_n(&kernel::fpu_owner_own(), old, __ATOMIC_RELAXED);
- 
-     JARVIS_TEST_PASS();
- }
+         // Deep-copy user entries from parent (walk, allocate, copy).
+         if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 5e799faa..2f305f3f 100644
+index 2f305f3f..42810f0d 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -64,7 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
-     {"task_init",             3,    0,       0      },  // init task exists/reparents
-     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
--    {"fpu_invariants",        4,    0,       0      },  // FPU/SIMD context invariants (issue #93): no-alloc, nesting-impossible, alignment, own-arm no-clobber
-+    {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+     {"selftest",            133,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                1240,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153)
++    {"all",                1245,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96)
  
-     // syscall
-     {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
-@@ -220,7 +220,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
-     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
-     {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
--    {"per_cpu",               3,  0,       0      },  // Per-CPU foundation (issue #25): frozen slot offsets, BSP identity, nesting-depth live storage
-+    {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
-     {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
-     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
-     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
-diff --git a/src/kernel/test/test_fpu.cpp b/src/kernel/test/test_fpu.cpp
-index b327b302..8eb56681 100644
---- a/src/kernel/test/test_fpu.cpp
-+++ b/src/kernel/test/test_fpu.cpp
-@@ -59,7 +59,8 @@ JARVIS_TEST(fpu_basic_instruction, "PRE: none | POST: none") {
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -80,6 +80,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
+     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
+     {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
++    {"pt_merge",              5,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
+     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
  
-     auto *current = Scheduler::current_task();
-     JARVIS_ASSERT(current != nullptr);
--    auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
-+    auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
-+                                          __ATOMIC_ACQUIRE);
-     JARVIS_ASSERT_FMT(fpu_owner_val == current,
-                       "fpu_owner (%p) should be current task (%p)",
-                       (void *)fpu_owner_val, (void *)current);
-diff --git a/src/kernel/test/test_fpu_clone.cpp b/src/kernel/test/test_fpu_clone.cpp
-index 8ebb8287..c0beed21 100644
---- a/src/kernel/test/test_fpu_clone.cpp
-+++ b/src/kernel/test/test_fpu_clone.cpp
-@@ -61,7 +61,8 @@ JARVIS_TEST(fpu_clone_copies_state, "PRE: none | POST: none") {
-             uint64_t pi = FPU_PI_BITS;
-             asm volatile("finit\nfldl %0" : : "m"(pi) : "memory");
- 
--            auto *fpu_owner_val = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
-+            auto *fpu_owner_val = __atomic_load_n(&kernel::fpu_owner_own(),
-+                                                  __ATOMIC_ACQUIRE);
-             g_owner_ok = (fpu_owner_val == self) ? 1 : 0;
-             g_parent_fpu_used = self->fpu_used ? 1 : 0;
- 
-diff --git a/src/kernel/test/test_fpu_inv.cpp b/src/kernel/test/test_fpu_inv.cpp
-index 17b031a4..58078d5f 100644
---- a/src/kernel/test/test_fpu_inv.cpp
-+++ b/src/kernel/test/test_fpu_inv.cpp
-@@ -41,6 +41,10 @@
- #include <kernel/task/task.hpp>
- #include <kernel/test/resource_tracker.hpp>
- #include "test_sched_helpers.hpp"
+     // cap — capability-based access control (CSpace)
+diff --git a/src/kernel/test/test_pt_merge.cpp b/src/kernel/test/test_pt_merge.cpp
+new file mode 100644
+index 00000000..69344153
+--- /dev/null
++++ b/src/kernel/test/test_pt_merge.cpp
+@@ -0,0 +1,314 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_pt_merge.cpp
++/// @brief Kernel-half page-table merge tests (issue #96).
++///
++/// Verifies VMM::merge_kernel_half (link semantics: missing entries are
++/// copied by value, present entries untouched, zero allocations) and the
++/// template/convergence audit helpers.  All tests use PRIVATE scratch
++/// tables — the live kernel PML4 is only ever walked read-only, except
++/// template_mismatch_detected which clones it (freed afterwards).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <constants.hpp>
++
 +#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#endif
- 
- using namespace kernel;
- 
-@@ -89,7 +93,8 @@ JARVIS_TEST(fpu_nm_no_alloc, "PRE: none | POST: none") {
-         force_nm();
- 
-     uint64_t pages_after = PMM::pool_used_pages();
--    auto *owner = __atomic_load_n(&fpu_owner, __ATOMIC_ACQUIRE);
-+    auto *owner = __atomic_load_n(&kernel::fpu_owner_own(),
-+                                  __ATOMIC_ACQUIRE);
- 
-     JARVIS_ASSERT_EQ(pages_before, pages_after);
-     JARVIS_ASSERT(owner == current);
-@@ -193,6 +198,38 @@ JARVIS_TEST(fpu_nm_own_arm_no_clobber, "PRE: none | POST: none") {
-     asm volatile("finit" ::: "memory");
-     JARVIS_TEST_PASS();
- }
++
++using namespace kernel;
++
++enum : uint64_t {
++    PML4_SHIFT = 39,
++    PAGE_PRESENT = 1ULL << 0,
++    PAGE_WRITE = 1ULL << 1,
++    PAGE_HUGE = 1ULL << 7,
++    PAGE_NX = 1ULL << 63,
++};
++
++/// @brief Allocate a kernel-owned page and zero it (scratch table).
++/// @return Physical address, or 0 on OOM (caller fails the test).
++static uint64_t alloc_zero_table() {
++    uint64_t phys = PMM::alloc_page();
++    if (phys == 0)
++        return 0;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                              (phys & ~0xFFFULL));
++    __builtin_memset(virt, 0, arch::PAGE_SIZE);
++    return phys;
++}
++
++/// @brief HHDM view of a scratch table page.
++static uint64_t *table_virt(uint64_t phys) {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                        (phys & ~0xFFFULL));
++}
 +
 +// Runmode: kernel
-+// Testidea: FPU ownership is per-CPU (issue #151): the harness restore
-+//           clears EVERY slot (no cross-test owner leak), and the own-slot
-+//           accessor round-trips without disturbing other slots.
-+// Input: Read all slots at entry; write a sentinel via fpu_owner_own().
-+// Expect: All slots null at entry; sentinel visible via the accessor while
-+//         every other slot stays null; all slots null after manual restore.
-+// Depends: test_isolate restore loop, fpu_owner_own() (issue #151)
-+JARVIS_TEST(fpu_owner_percpu_reset, "PRE: none | POST: none") {
-+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
-+        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
-+    auto *sentinel =
-+        reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
-+    {
-+        arch::IrqGuard irq_guard{};
-+        __atomic_store_n(&fpu_owner_own(), sentinel, __ATOMIC_RELEASE);
-+        auto *via_accessor =
-+            __atomic_load_n(&fpu_owner_own(), __ATOMIC_ACQUIRE);
-+        JARVIS_ASSERT(via_accessor == sentinel);
-+        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
-+            if (cpu == arch::cpu_index())
-+                continue;
-+            JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
++// Testidea: Merging a populated parent into a fresh child converges the
++//           child exactly (link semantics: entries shared, user half
++//           untouched) — the canonical fork fast-path behavior.
++// Input: Scratch parent with a table chain + huge entry in 256..511;
++//        fresh zeroed scratch child.
++// Expect: merge returns true; child entries equal parent entries;
++//         child shares the parent's tables (same phys); user half stays
++//         zero; PMM delta zero after teardown.
++// Depends: VMM::merge_kernel_half (issue #96)
++JARVIS_TEST(merge_equivalent_to_full_copy, "PRE: none | POST: none") {
++    uint64_t pages_before = PMM::pool_used_pages();
++    uint64_t parent = alloc_zero_table();
++    uint64_t pdpt = alloc_zero_table();
++    uint64_t pd = alloc_zero_table();
++    uint64_t pt = alloc_zero_table();
++    uint64_t data = alloc_zero_table();
++    uint64_t child = alloc_zero_table();
++    JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && pt != 0 &&
++                  data != 0 && child != 0);
++
++    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(pdpt)[0] = pd | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(pd)[0] = pt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(pt)[0] =
++        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
++    table_virt(parent)[511] =
++        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
++
++    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
++    auto *c = table_virt(child);
++    auto *p = table_virt(parent);
++    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
++        JARVIS_ASSERT(c[i] == p[i]);
++    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
++        JARVIS_ASSERT(c[i] == 0);
++    JARVIS_ASSERT((c[256] & ~0xFFFULL) == (pdpt & ~0xFFFULL));
++    JARVIS_ASSERT(c[257] == 0);
++    JARVIS_ASSERT(VMM::kernel_half_equal(child, parent));
++
++    PMM::free_page(data);
++    PMM::free_page(pt);
++    PMM::free_page(pd);
++    PMM::free_page(pdpt);
++    PMM::free_page(parent);
++    PMM::free_page(child);
++    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Merge is idempotent and hole-filling: present entries are
++//           never touched, missing ones linked, and a second merge is a
++//           no-op (paper §3 idempotence).
++// Input: Parent superset table; child with its own table holding a hole
++//        plus one private entry; merge twice.
++// Expect: Hole filled from parent, private entry and parent untouched,
++//         second merge byte-identical, PMM delta zero.
++// Depends: VMM::merge_kernel_half (issue #96)
++JARVIS_TEST(merge_idempotent, "PRE: none | POST: none") {
++    uint64_t pages_before = PMM::pool_used_pages();
++    uint64_t parent = alloc_zero_table();
++    uint64_t parent_pdpt = alloc_zero_table();
++    uint64_t child = alloc_zero_table();
++    uint64_t child_pdpt = alloc_zero_table();
++    uint64_t data_a = alloc_zero_table();
++    uint64_t data_b = alloc_zero_table();
++    JARVIS_ASSERT(parent != 0 && parent_pdpt != 0 && child != 0 &&
++                  child_pdpt != 0 && data_a != 0 && data_b != 0);
++
++    constexpr size_t k_idx = 300;
++    table_virt(parent)[k_idx] = parent_pdpt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(parent_pdpt)[7] =
++        (data_a & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(child)[k_idx] = child_pdpt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(child_pdpt)[8] =
++        (data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
++
++    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
++    auto *cc = table_virt(child);
++    JARVIS_ASSERT(cc[k_idx] == table_virt(child)[k_idx]);
++    auto *cc_pdpt = table_virt(cc[k_idx] & ~0xFFFULL);
++    JARVIS_ASSERT(cc_pdpt[7] == table_virt(parent_pdpt)[7]);
++    JARVIS_ASSERT(cc_pdpt[8] ==
++                  ((data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE));
++
++    uint64_t snapshot[512];
++    __builtin_memcpy(snapshot, cc_pdpt, arch::PAGE_SIZE);
++    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
++    bool identical = true;
++    for (size_t i = 0; i < 512; ++i) {
++        if (snapshot[i] != cc_pdpt[i]) {
++            identical = false;
++            break;
 +        }
-+        __atomic_store_n(&fpu_owner_own(),
-+                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
 +    }
-+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
-+        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
-+    JARVIS_TEST_PASS();
-+}
- #endif  // CONFIG_ARCH_X86_64
- 
- void register_fpu_inv_tests() {
-@@ -202,5 +239,6 @@ void register_fpu_inv_tests() {
-     JARVIS_REGISTER_TEST(fpu_nm_nesting_impossible);
-     JARVIS_REGISTER_TEST(fpu_save_area_alignment);
-     JARVIS_REGISTER_TEST(fpu_nm_own_arm_no_clobber);
-+    JARVIS_REGISTER_TEST(fpu_owner_percpu_reset);
- #endif  // CONFIG_ARCH_X86_64
- }
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 5b83dac8..5c0dbd10 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -752,7 +752,16 @@ void snapshot_restore(const char *test_name) {
-     // Zombies from termininate()->release_zombie() during the test are freed
-     // here so ResourceTracker does not see leaked resources.
-     Scheduler::drain_zombie_list();
--    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
-+    // Issue #151: FPU ownership is per-CPU — clear every slot so no owner
-+    // leaks across tests (single-core archs: the plain global).
-+#if defined(CONFIG_ARCH_X86_64)
-+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
-+        __atomic_store_n(&arch::per_cpu[cpu].fpu_owner,
-+                         (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
-+#else
-+    __atomic_store_n(&fpu_owner, (TaskControlBlock *)nullptr,
-+                     __ATOMIC_RELEASE);
-+#endif
-     __atomic_store_n(&fpu_nm_depth_max, 0, __ATOMIC_RELEASE);
-     if (auto *tctx = Scheduler::get_test_context())
-         tctx->dummy_save_rsp = 0;
-diff --git a/src/kernel/test/test_per_cpu.cpp b/src/kernel/test/test_per_cpu.cpp
-index 808427f9..2c516838 100644
---- a/src/kernel/test/test_per_cpu.cpp
-+++ b/src/kernel/test/test_per_cpu.cpp
-@@ -57,10 +57,9 @@ JARVIS_TEST(per_cpu_slot_offsets_frozen, "PRE: none | POST: none") {
-     JARVIS_ASSERT(reinterpret_cast<const uint64_t *>(&pc.current_task) ==
-                   base + 7);
-     JARVIS_ASSERT(sizeof(arch::PerCpu) == 4096);
--    // Issue #25 C1: the Phase-A linker aliases (isr_nesting_depth /
--    // irq_entry_tsc) are REMOVED — C++ uses isr_nesting_own() (own slot),
--    // asm uses gs:0x20/gs:0x28 numerically.  Only offsets are asserted
--    // (fpu_owner alias remains for #151).
-+    // Issue #151: no FPU linker alias remains — C++ uses fpu_owner_own()
-+    // (own slot).  Only offsets are asserted here; slot independence is
-+    // covered by per_cpu_fpu_owner_independent below.
- #else
-     JARVIS_TEST_PASS();
- #endif
-@@ -119,9 +118,50 @@ JARVIS_TEST(per_cpu_nesting_depth_live, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Runmode: kernel
-+// Testidea: Per-CPU FPU owner slots are independent (issue #151): a value
-+//           written to slot N never leaks into slot M, and gs:0x30 reads
-+//           back slot 0 on the BSP.
-+// Input: Distinct sentinels in per_cpu[0]/[1].fpu_owner; gs:0x30 load.
-+// Expect: Each slot holds its own sentinel; gs:0x30 == slot 0; both slots
-+//         restored afterwards.
-+// Depends: per_cpu[cpu].fpu_owner (issue #151)
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_MAX_CPUS > 1
-+JARVIS_TEST(per_cpu_fpu_owner_independent, "PRE: none | POST: none") {
-+    auto *s0 = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
-+    auto *s1 = reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF901));
-+    auto *saved0 = arch::per_cpu[0].fpu_owner;
-+    auto *saved1 = arch::per_cpu[1].fpu_owner;
-+    TaskControlBlock *read0 = nullptr;
-+    TaskControlBlock *read1 = nullptr;
-+    TaskControlBlock *via_gs = nullptr;
-+    {
-+        // Freeze ticks across the sentinel window (same discipline as
-+        // per_cpu_nesting_depth_live): no ISR may observe the sentinels.
-+        arch::IrqGuard irq_guard{};
-+        arch::per_cpu[0].fpu_owner = s0;
-+        arch::per_cpu[1].fpu_owner = s1;
-+        asm volatile("mov %%gs:0x30, %0" : "=r"(via_gs));
-+        read0 = arch::per_cpu[0].fpu_owner;
-+        read1 = arch::per_cpu[1].fpu_owner;
-+        arch::per_cpu[0].fpu_owner = saved0;
-+        arch::per_cpu[1].fpu_owner = saved1;
-+    }
-+    JARVIS_ASSERT(read0 == s0);
-+    JARVIS_ASSERT(read1 == s1);
-+    JARVIS_ASSERT(via_gs == s0);
-+    JARVIS_ASSERT(arch::per_cpu[0].fpu_owner == saved0);
-+    JARVIS_ASSERT(arch::per_cpu[1].fpu_owner == saved1);
-+    JARVIS_TEST_PASS();
-+}
-+#endif
++    JARVIS_ASSERT(identical);
 +
- void register_per_cpu_tests() {
-     Logger::info("Registering per-CPU foundation tests");
-     JARVIS_REGISTER_TEST(per_cpu_slot_offsets_frozen);
-     JARVIS_REGISTER_TEST(per_cpu_bsp_identity);
-     JARVIS_REGISTER_TEST(per_cpu_nesting_depth_live);
-+#if defined(CONFIG_ARCH_X86_64) && CONFIG_MAX_CPUS > 1
-+    JARVIS_REGISTER_TEST(per_cpu_fpu_owner_independent);
-+#endif
- }
++    PMM::free_page(data_b);
++    PMM::free_page(data_a);
++    PMM::free_page(child_pdpt);
++    PMM::free_page(child);
++    PMM::free_page(parent_pdpt);
++    PMM::free_page(parent);
++    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A mapping added to the canonical root after the template
++//           snapshot becomes visible to a merged child but not to a
++//           pre-merge child (paper §4 row 2: late-mapping convergence).
++//           Uses a 2 MiB PD-level huge entry: the kernel walker resolves
++//           PD-huge (PML4-level 1 GiB huge is not walkable — pre-existing
++//           walker limitation, out of scope for #96).
++// Input: Scratch canonical root; snapshot its entries; add a 2 MiB
++//        mapping; merge into child A only.
++// Expect: child A resolves the VA, child B does not, and the snapshot
++//         predates the mapping.
++// Depends: VMM::merge_kernel_half (issue #96)
++JARVIS_TEST(late_mapping_visible_after_merge, "PRE: none | POST: none") {
++    uint64_t pages_before = PMM::pool_used_pages();
++    uint64_t canon = alloc_zero_table();
++    uint64_t canon_pdpt = alloc_zero_table();
++    uint64_t canon_pd = alloc_zero_table();
++    uint64_t child_a = alloc_zero_table();
++    uint64_t child_b = alloc_zero_table();
++    uint64_t data = alloc_zero_table();
++    JARVIS_ASSERT(canon != 0 && canon_pdpt != 0 && canon_pd != 0 &&
++                  child_a != 0 && child_b != 0 && data != 0);
++
++    uint64_t tmpl[512];
++    __builtin_memcpy(tmpl, table_virt(canon), arch::PAGE_SIZE);
++
++    constexpr size_t k_idx = 400;
++    constexpr size_t k_pd = 5;
++    constexpr uint64_t k_off = 0x12345ULL;
++    // 2 MiB pages mask the low 21 bits (HUGE_FRAME_MASK); the synthetic
++    // phys is only 4 KiB-aligned, so expect the masked frame.
++    constexpr uint64_t k_huge_mask = 0x000FFFFFFFE00000ULL;
++    table_virt(canon)[k_idx] = canon_pdpt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(canon_pdpt)[0] = canon_pd | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(canon_pd)[k_pd] =
++        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
++    JARVIS_ASSERT(tmpl[k_idx] == 0);
++
++    JARVIS_ASSERT(VMM::merge_kernel_half(canon, child_a));
++    uint64_t va = (static_cast<uint64_t>(k_idx) << PML4_SHIFT) |
++                  (static_cast<uint64_t>(k_pd) << 21) | k_off;
++    uint64_t resolved = VMM::virt_to_phys_in_pml4(va, child_a);
++    JARVIS_ASSERT(resolved == ((data & k_huge_mask) | k_off));
++    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, child_b) == 0);
++
++    PMM::free_page(data);
++    PMM::free_page(child_b);
++    PMM::free_page(child_a);
++    PMM::free_page(canon_pd);
++    PMM::free_page(canon_pdpt);
++    PMM::free_page(canon);
++    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Merge performs zero allocations by construction (link
++//           semantics) — this pins the property that makes a mid-merge
++//           OOM impossible (paper failure mode reframed, issue #96 D1).
++// Input: Populated scratch parent; PMM baseline; merge into fresh child.
++// Expect: PMM used-pages delta across the merge itself is zero.
++// Depends: VMM::merge_kernel_half (issue #96)
++JARVIS_TEST(merge_allocates_nothing, "PRE: none | POST: none") {
++    uint64_t parent = alloc_zero_table();
++    uint64_t pdpt = alloc_zero_table();
++    uint64_t pd = alloc_zero_table();
++    uint64_t data = alloc_zero_table();
++    uint64_t child = alloc_zero_table();
++    JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && data != 0 &&
++                  child != 0);
++
++    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
++    table_virt(parent)[257] =
++        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
++    table_virt(parent)[511] = pd | PAGE_PRESENT | PAGE_WRITE;
++    for (size_t i = 0; i < 8; ++i)
++        table_virt(pd)[i] =
++            (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
++
++    uint64_t pages_before = PMM::pool_used_pages();
++    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
++    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++
++    PMM::free_page(child);
++    PMM::free_page(data);
++    PMM::free_page(pd);
++    PMM::free_page(pdpt);
++    PMM::free_page(parent);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The convergence audit detects a corrupted kernel-half entry
++//           (paper §3 debug assertion, reframed as a pure check so the
++//           test is gateable — a halting panic cannot run in `all`).
++// Input: Clone of the live kernel PML4; corrupt one present entry.
++// Expect: check true when intact, false when corrupted, true again
++//         after restore; clone matches the template while intact.
++// Depends: VMM::kernel_half_equal/matches_template (issue #96)
++JARVIS_TEST(template_mismatch_detected, "PRE: none | POST: none") {
++    uint64_t child = VMM::clone_kernel_pml4();
++    JARVIS_ASSERT(child != 0);
++    auto *c = table_virt(child);
++
++    size_t victim = 0;
++    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
++        if ((c[i] & PAGE_PRESENT) != 0) {
++            victim = i;
++            break;
++        }
++    }
++    JARVIS_ASSERT(victim != 0);
++
++    JARVIS_ASSERT(VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
++    JARVIS_ASSERT(VMM::kernel_half_matches_template(child));
++
++    uint64_t saved = c[victim];
++    c[victim] = saved + 0x1000ULL;
++    JARVIS_ASSERT(!VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
++    JARVIS_ASSERT(!VMM::kernel_half_matches_template(child));
++
++    c[victim] = saved;
++    JARVIS_ASSERT(VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
++    JARVIS_ASSERT(VMM::kernel_half_matches_template(child));
++
++    PMM::free_page(child);
++    JARVIS_TEST_PASS();
++}
++
++void register_pt_merge_tests() {
++    Logger::info("Registering kernel-half merge tests");
++    JARVIS_REGISTER_TEST(merge_equivalent_to_full_copy);
++    JARVIS_REGISTER_TEST(merge_idempotent);
++    JARVIS_REGISTER_TEST(late_mapping_visible_after_merge);
++    JARVIS_REGISTER_TEST(merge_allocates_nothing);
++    JARVIS_REGISTER_TEST(template_mismatch_detected);
++}
++
++#endif // CONFIG_ARCH_X86_64
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 777bdc28..4ae59a18 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -93,6 +93,7 @@ void register_gcov_tests();
+ void register_debug_tests();
+ void register_framebuffer_tests();
+ void register_pml4_clone_tests();
++void register_pt_merge_tests();
+ void register_cap_core_tests();
+ void register_cap_lifecycle_tests();
+ void register_cap_syscall_tests();
+@@ -387,6 +388,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"process_rlimit", []() { register_rlimit_tests(); }},
+     {"process_waitpid", []() { register_waitpid_tests(); }},
+     {"process_pml4_clone", []() { register_pml4_clone_tests(); }},
++    {"pt_merge", []() { register_pt_merge_tests(); }},
+     {"process_secure_exec", []() { register_secure_exec_tests(); }},
+ 
+     // -- cap: capability-based access control (CSpace core engine) --
+@@ -716,6 +718,7 @@ static void register_all_tests() {
+     register_queue_pip_tests();
+     register_mutex_pcp_tests();
+     register_pml4_clone_tests();
++    register_pt_merge_tests();
+     register_cap_core_tests();
+     register_cap_untyped_tests();
+     register_cap_mmio_tests();
+@@ -924,6 +927,7 @@ static void register_all_tests_first_half() {
+       register_queue_pip_tests();
+       register_mutex_pcp_tests();
+       register_pml4_clone_tests();
++      register_pt_merge_tests();
+       register_cap_core_tests();
+       register_cap_lifecycle_tests();
+       register_cap_syscall_tests();
 diff --git a/test-history.txt b/test-history.txt
-index 6b579796..45f7be37 100644
+index 45f7be37..e50b4a56 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -942,3 +942,10 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 01:42:00 smp_bringup PASSED: 5 FAILED: 0 TIME: 124ms
- 2026-09-15 02:05:00 all PASSED: 1348 FAILED: 0 TIME: 106064ms
- 2026-09-15 02:10:00 all PASSED: 85 FAILED: 0 TIME: 16931ms
-+2026-09-15 08:19:22 per_cpu PASSED: 4 FAILED: 0 TIME: 93ms
-+2026-09-15 08:19:44 fpu_invariants PASSED: 5 FAILED: 0 TIME: 19s
-+2026-09-15 08:20:14 fpu_clone PASSED: 0 FAILED: 0 TIME: 11s STATUS: WRONG_CLASS_NAME
-+2026-09-15 08:20:49 task_fpu PASSED: 0 FAILED: 0 TIME: 11s STATUS: EMPTY_CLASS_PREEXISTING
-+2026-09-15 08:21:13 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 08:22:27 all PASSED: 1350 FAILED: 0 TIME: 118540ms
-+2026-09-15 08:23:12 all PASSED: 85 FAILED: 0 TIME: 3925ms
-diff --git a/tools/validate_style.py b/tools/validate_style.py
-index b99ca5cf..3c630470 100644
---- a/tools/validate_style.py
-+++ b/tools/validate_style.py
-@@ -935,10 +935,12 @@ class GlobalStateApiChecker(Checker):
-     # Consolidated global symbol -> sanctioned accessor + allowlisted files
-     # where the raw name may legitimately appear (owner, extern-decl headers,
-     # documented fault-atomic / boot paths).  The asm-lockstep switch globals
--    # (scheduler_*, isr_nesting_depth, fpu_owner, …) are a DOCUMENTED
-+    # (scheduler_*, isr_nesting_depth, …) are a DOCUMENTED
-     # exception: isr_stubs.asm references them by exact symbol name and the
-     # scheduler uses atomics on them — they have no gs:: accessor and are
--    # intentionally NOT in this registry.
-+    # intentionally NOT in this registry.  (fpu_owner was removed from this
-+    # exception by issue #151: no linker alias remains; all C++ readers use
-+    # fpu_owner_own().)
-     GLOBALS: dict[str, dict] = {
-         # -- BootState --
-         "g_boot_info": {
+@@ -949,3 +949,15 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 08:21:13 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
+ 2026-09-15 08:22:27 all PASSED: 1350 FAILED: 0 TIME: 118540ms
+ 2026-09-15 08:23:12 all PASSED: 85 FAILED: 0 TIME: 3925ms
++2026-09-15 15:29:47 pt_merge PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 15:30:16 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 19s
++2026-09-15 15:30:40 process_lifecycle PASSED: 16 FAILED: 0 TIME: 20s
++2026-09-15 15:31:08 elf_loader PASSED: 8 FAILED: 0 TIME: 19s
++2026-09-15 15:31:33 elf_shared PASSED: 9 FAILED: 0 TIME: 19s
++2026-09-15 15:31:55 memory_vmm PASSED: 13 FAILED: 0 TIME: 20s
++2026-09-15 15:32:19 memory_kernel_isolation PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 15:32:42 memory_isolation PASSED: 3 FAILED: 0 TIME: 19s
++2026-09-15 15:34:41 acpi_parse PASSED: 3 FAILED: 0 TIME: 19s
++2026-09-15 15:35:52 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_891_ACPI_PREEXISTING_FLAKE
++2026-09-15 15:35:52 all PASSED: 1355 FAILED: 0 TIME: 104814ms
++2026-09-15 15:36:49 all PASSED: 85 FAILED: 0 TIME: 16974ms

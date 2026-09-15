@@ -32,6 +32,7 @@
 namespace kernel {
 
 constinit uint64_t VMM::kernel_pml4_ = 0;
+constinit uint64_t VMM::pml4_kernel_template_[512] = {};
 bool VMM::hhdm_modified_ = false;
 bool VMM::identity_modified_ = false;
 
@@ -730,6 +731,155 @@ uint64_t VMM::clone_kernel_pml4() {
         dst[i] = src[i];
     }
     return phys;
+#endif
+}
+
+/// @brief True when @p entry points at a next-level table (vs a huge/leaf
+///        mapping).  Arch-aware: x86_64 uses the PS bit, RISC-V the R|W|X
+///        bits, AArch64 the descriptor type at non-leaf levels.
+/// @param entry Raw 64-bit page-table entry (must be PRESENT).
+/// @param level Table level holding the entry (0=PML4/L0 .. 2=PD/L2;
+///        level 3=PT/L3 entries are always leaves).
+bool VMM::is_table_entry(uint64_t entry, unsigned level) {
+    if (level >= 3)
+        return false;
+#if defined(CONFIG_ARCH_X86_64)
+    (void)level;
+    return (entry & PAGE_HUGE) == 0;
+#elif defined(CONFIG_ARCH_RISCV64)
+    (void)level;
+    constexpr uint64_t k_rwx = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+    return (entry & k_rwx) == 0;
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (entry & 0x3ULL) == 0x3ULL;
+#else
+    (void)entry;
+    (void)level;
+    return false;
+#endif
+}
+
+/// @brief Recursive merge worker (issue #96): converge @p dst_table
+///        toward @p src_table over [@p start, 512).  Missing-present
+///        entries are linked (copied by value); present entries are left
+///        untouched unless both sides hold tables, in which case the
+///        pair is merged recursively (hole-filling).  Zero allocations.
+/// @param src_table HHDM virtual address of the source table page.
+/// @param dst_table HHDM virtual address of the child table page.
+/// @param level Table level (0=PML4/L0 .. 3=PT/L3).
+/// @param start First index to converge (kernel-half start at level 0).
+void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
+                            unsigned level, size_t start) {
+    for (size_t i = start; i < 512; ++i) {
+        uint64_t src_entry = src_table[i];
+        if ((src_entry & PAGE_PRESENT) == 0)
+            continue;
+        uint64_t dst_entry = dst_table[i];
+        if ((dst_entry & PAGE_PRESENT) != 0) {
+            if (is_table_entry(src_entry, level) &&
+                is_table_entry(dst_entry, level)) {
+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                auto *src_next = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                auto *dst_next = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
+                merge_table_level(src_next, dst_next, level + 1, 0);
+            }
+            continue;
+        }
+        dst_table[i] = src_entry;
+    }
+}
+
+/// @brief Recursive equality worker (issue #96): true when the two
+///        tables agree on every present entry over [@p start, 512),
+///        descending into table/table pairs.
+bool VMM::tables_equal_level(const uint64_t *a_table,
+                             const uint64_t *b_table, unsigned level,
+                             size_t start) {
+    for (size_t i = start; i < 512; ++i) {
+        uint64_t a_entry = a_table[i];
+        uint64_t b_entry = b_table[i];
+        bool a_present = (a_entry & PAGE_PRESENT) != 0;
+        bool b_present = (b_entry & PAGE_PRESENT) != 0;
+        if (a_present != b_present)
+            return false;
+        if (!a_present)
+            continue;
+        if (is_table_entry(a_entry, level) &&
+            is_table_entry(b_entry, level)) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *a_next = reinterpret_cast<const uint64_t *>(
+                arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *b_next = reinterpret_cast<const uint64_t *>(
+                arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
+            if (!tables_equal_level(a_next, b_next, level + 1, 0))
+                return false;
+        } else if (a_entry != b_entry) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
+    if (src_pml4 == 0 || dst_pml4 == 0 || src_pml4 == dst_pml4)
+        return false;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (src_pml4 & ~0xFFFULL));
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (dst_pml4 & ~0xFFFULL));
+    // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
+    // uses) — no locking; link semantics keep lower tables shared, so no
+    // allocation can fail mid-merge by construction.
+    merge_table_level(src, dst, 0, arch::PML4_KERNEL_START);
+    return true;
+}
+
+void VMM::snapshot_kernel_template() {
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (kernel_pml4_ & ~0xFFFULL));
+    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
+        pml4_kernel_template_[i] = live[i];
+}
+
+bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
+    if (a_pml4 == 0 || b_pml4 == 0)
+        return false;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *a = reinterpret_cast<const uint64_t *>(
+        arch::HHDM_OFFSET + (a_pml4 & ~0xFFFULL));
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *b = reinterpret_cast<const uint64_t *>(
+        arch::HHDM_OFFSET + (b_pml4 & ~0xFFFULL));
+    return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
+}
+
+bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
+    if (pml4_phys == 0)
+        return false;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *tbl = reinterpret_cast<const uint64_t *>(
+        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
+        if (tbl[i] != pml4_kernel_template_[i])
+            return false;
+    }
+    return true;
+}
+
+void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
+    if (!kernel_half_equal(child_pml4, kernel_pml4_))
+        panic("VMM: child kernel half diverged from live kernel PML4");
+#if CONFIG_DEBUG
+    if (!kernel_half_matches_template(child_pml4))
+        Logger::info("VMM: child kernel half drifted from bring-up "
+                     "template (late mapping converged)");
 #endif
 }
 
