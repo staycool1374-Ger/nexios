@@ -98,6 +98,7 @@ var hierarchy =
     [ "kernel::Rlimit", "structkernel_1_1_rlimit.html", null ],
     [ "Rlimit", "struct_rlimit.html", null ],
     [ "rlimit", "structrlimit.html", null ],
+    [ "kernel::sync::RwLock", "classkernel_1_1sync_1_1_rw_lock.html", null ],
     [ "kernel::profiling::Sampler", "classkernel_1_1profiling_1_1_sampler.html", null ],
     [ "Sampler", "class_sampler.html", null ],
     [ "kernel::SchedPerCpuPod", "structkernel_1_1_sched_per_cpu_pod.html", null ],

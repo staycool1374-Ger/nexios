@@ -7,7 +7,6 @@ var scheduler_8hpp =
     [ "kernel::Scheduler::SwSlots", "structkernel_1_1_scheduler_1_1_sw_slots.html", null ],
     [ "kernel::deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
     [ "kernel::fpu_nm_depth_max", "namespacekernel.html#a0635983d70bccde24c7125eba436d74e", null ],
-    [ "kernel::fpu_owner", "namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6", null ],
     [ "kernel::scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],
     [ "kernel::scheduler_kernel_cr3", "namespacekernel.html#a45c7ed02104a8f2dc79052a0301a16c3", null ],
     [ "kernel::scheduler_load_cr3_from", "namespacekernel.html#ab2ec048806a6cd223e72e927ab792e6b", null ],

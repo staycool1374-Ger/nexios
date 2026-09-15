@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 Namespaces</h2></td></tr>
 <tr class="memitem:acpi" id="r_acpi"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1acpi.html">acpi</a></td></tr>
 <tr class="memitem:block" id="r_block"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1block.html">block</a></td></tr>
+<tr class="memitem:cache" id="r_cache"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cache.html">cache</a></td></tr>
 <tr class="memitem:cap" id="r_cap"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1cap.html">cap</a></td></tr>
 <tr class="memitem:daemon" id="r_daemon"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1daemon.html">daemon</a></td></tr>
 <tr class="memitem:debug" id="r_debug"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html">debug</a></td></tr>
@@ -294,6 +295,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a777bca6dec383faa735ebe34c5bdf749"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current CPU's execution context.  <br /></td></tr>
 <tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a0571e17de31b74de7a47a25459361c20">isr_nesting_own</a> ()</td></tr>
 <tr class="memdesc:a0571e17de31b74de7a47a25459361c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU ISR nesting depth (single-core archs: the plain global).  <br /></td></tr>
+<tr class="memitem:a68d19d20b85d9992222d05be6deb3e54" id="r_a68d19d20b85d9992222d05be6deb3e54"><td class="memItemLeft">TaskControlBlock *&amp;&#160;</td><td class="memItemRight"><a class="el" href="#a68d19d20b85d9992222d05be6deb3e54">fpu_owner_own</a> ()</td></tr>
+<tr class="memdesc:a68d19d20b85d9992222d05be6deb3e54"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU FPU register owner (single-core archs: the plain global).  <br /></td></tr>
 <tr class="memitem:a03570b332ae94bd1acee2152e83dadd8" id="r_a03570b332ae94bd1acee2152e83dadd8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a03570b332ae94bd1acee2152e83dadd8">random_init</a> ()</td></tr>
 <tr class="memitem:a3a9da091bb2229af08f856b08498fa51" id="r_a3a9da091bb2229af08f856b08498fa51"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9da091bb2229af08f856b08498fa51">random_fill</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> length)</td></tr>
 <tr class="memitem:aa7278439c20dc6234a77d3b08290701f" id="r_aa7278439c20dc6234a77d3b08290701f"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#aa7278439c20dc6234a77d3b08290701f">syscall_task</a> ()</td></tr>
@@ -354,6 +357,8 @@ Functions</h2></td></tr>
 Variables</h2></td></tr>
 <tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5fbbc3448d7b738e78241f86230e0f48">isr_nesting_depth</a></td></tr>
 <tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>.  <br /></td></tr>
+<tr class="memitem:a18ec7fa3e1cedad227d48e45f9633829" id="r_a18ec7fa3e1cedad227d48e45f9633829"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a18ec7fa3e1cedad227d48e45f9633829">fpu_owner</a></td></tr>
+<tr class="memdesc:a18ec7fa3e1cedad227d48e45f9633829"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. Single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>. On x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>.  <br /></td></tr>
 <tr class="memitem:a82642ef1de738764f4ab5b0e505b50ac" id="r_a82642ef1de738764f4ab5b0e505b50ac"><td class="memItemLeft">BootInfo&#160;</td><td class="memItemRight"><a class="el" href="#a82642ef1de738764f4ab5b0e505b50ac">g_boot_info</a> {}</td></tr>
 <tr class="memitem:a602102cf72c2d245437f6dfb539c71eb" id="r_a602102cf72c2d245437f6dfb539c71eb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a602102cf72c2d245437f6dfb539c71eb">g_boot_epoch</a> = 0</td></tr>
 <tr class="memitem:a9710cee4bf56525b356e96332529a5a7" id="r_a9710cee4bf56525b356e96332529a5a7"><td class="memItemLeft">CanaryTrip&#160;</td><td class="memItemRight"><a class="el" href="#a9710cee4bf56525b356e96332529a5a7">g_canary_trip</a> {}</td></tr>
@@ -398,8 +403,6 @@ Variables</h2></td></tr>
 <tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
 <tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0635983d70bccde24c7125eba436d74e">fpu_nm_depth_max</a></td></tr>
 <tr class="memdesc:a0635983d70bccde24c7125eba436d74e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap).  <br /></td></tr>
-<tr class="memitem:af4c6d5dcd3bf1b60bf71cdd2b805f5a6" id="r_af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">fpu_owner</a></td></tr>
-<tr class="memdesc:af4c6d5dcd3bf1b60bf71cdd2b805f5a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot.  <br /></td></tr>
 <tr class="memitem:ab1281ac93f9d469e2fc0dd731d358f3b" id="r_ab1281ac93f9d469e2fc0dd731d358f3b"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#ab1281ac93f9d469e2fc0dd731d358f3b">_stack_start</a> []</td></tr>
 <tr class="memitem:a78863de6e15cebd20b4dd89ce98ea565" id="r_a78863de6e15cebd20b4dd89ce98ea565"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a78863de6e15cebd20b4dd89ce98ea565">_stack_end</a> []</td></tr>
 <tr class="memitem:a3fb2836fc67f3791312d86a01372cc32" id="r_a3fb2836fc67f3791312d86a01372cc32"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
@@ -1384,6 +1387,33 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a68d19d20b85d9992222d05be6deb3e54" name="a68d19d20b85d9992222d05be6deb3e54"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a68d19d20b85d9992222d05be6deb3e54">&#9670;&#160;</a></span>fpu_owner_own()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">TaskControlBlock *&amp; kernel::fpu_owner_own </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Own-CPU FPU register owner (single-core archs: the plain global). </p>
+
+</div>
+</div>
 <a id="abb9b26c8d76b814b9ed2a3c78bad290e" name="abb9b26c8d76b814b9ed2a3c78bad290e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abb9b26c8d76b814b9ed2a3c78bad290e">&#9670;&#160;</a></span>init_task_common()</h2>
 
@@ -2131,27 +2161,19 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
-<a id="af4c6d5dcd3bf1b60bf71cdd2b805f5a6" name="af4c6d5dcd3bf1b60bf71cdd2b805f5a6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af4c6d5dcd3bf1b60bf71cdd2b805f5a6">&#9670;&#160;</a></span>fpu_owner</h2>
+<a id="a18ec7fa3e1cedad227d48e45f9633829" name="a18ec7fa3e1cedad227d48e45f9633829"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a18ec7fa3e1cedad227d48e45f9633829">&#9670;&#160;</a></span>fpu_owner</h2>
 
 <div class="memitem">
 <div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">TaskControlBlock* kernel::fpu_owner</td>
+          <td class="memname">TaskControlBlock * kernel::fpu_owner</td>
         </tr>
       </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
-  </tr>
-</table>
 </div><div class="memdoc">
 
-<p>Tracks which task's FPU state is currently in the registers. nullptr means no task has used FPU since boot. </p>
+<p>Tracks which task's FPU state is currently in the registers. Single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>. On x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>. </p>
 
 </div>
 </div>

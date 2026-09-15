@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>raw_lo()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#ad86ecb1055324490c670f32b9e038869">kernel::PriorityMap</a></li>
 <li>raw_write()&#160;:&#160;<a class="el" href="classkernel_1_1_logger.html#ad4ae5d24650cf692a9d70d545eaa1867">kernel::Logger</a></li>
 <li>read_clear_faults()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a5bbf304d06aebed875196251df07ae1d">kernel::iommu::IoMmuManager</a></li>
+<li>read_lock()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#ae5d44f04be091d09ffea698c884cf5f8">kernel::sync::RwLock</a></li>
+<li>read_unlock()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#ad19e87fbdb1e6ed6048b02216796780d">kernel::sync::RwLock</a></li>
 <li>readline()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a86e177fe04cda56e97c27853fedfd996">service::Terminal</a></li>
 <li>reap_orphans()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a0d595ec39367db2ce160fb1d72c23fab">kernel::Scheduler</a></li>
 <li>rebuild()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#ac43f5224ce9025352dde2504b4a16f15">kernel::AllTasksRegistry</a></li>
@@ -154,8 +156,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>request_cancel()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a2371a741a7c84d9c71dd98c2f04ed002">kernel::elf::ElfLoader</a></li>
 <li>request_load()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#ad4b037529a02716f60ffd23d522db9ba">kernel::elf::ElfLoader</a></li>
 <li>reschedule()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50">kernel::Scheduler</a></li>
-<li>reset()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a0b136e926533436c58605666ec2ffc38">kernel::elf::ElfLoader</a>, <a class="el" href="classkernel_1_1_ready_queue_manager.html#a8c615f613c688f940e117122299af930">kernel::ReadyQueueManager</a>, <a class="el" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">kernel::TaskQueue</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a3706a331b1f53a82cec9a9020a1efdc4">kernel::test::Registry</a>, <a class="el" href="class_unique_ptr.html#a36d2b7f272979ead8a83fddb580ab5a2">UniquePtr&lt; T, Deleter &gt;</a></li>
+<li>reset()&#160;:&#160;<a class="el" href="classkernel_1_1elf_1_1_elf_loader.html#a0b136e926533436c58605666ec2ffc38">kernel::elf::ElfLoader</a>, <a class="el" href="classkernel_1_1_ready_queue_manager.html#a8c615f613c688f940e117122299af930">kernel::ReadyQueueManager</a>, <a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#afa5d22c63f068ccf347a9545b72a8187">kernel::sync::RwLock</a>, <a class="el" href="classkernel_1_1_task_queue.html#afebb07f021c6dfe6f89820d2805b72be">kernel::TaskQueue</a>, <a class="el" href="classkernel_1_1test_1_1_registry.html#a3706a331b1f53a82cec9a9020a1efdc4">kernel::test::Registry</a>, <a class="el" href="class_unique_ptr.html#a36d2b7f272979ead8a83fddb580ab5a2">UniquePtr&lt; T, Deleter &gt;</a></li>
 <li>reset_claim()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_untyped_mem.html#a88d72d38149d07028714c3d1998d6f0a">kernel::cap::UntypedMem</a></li>
+<li>reset_migration_counts()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#acd6906eb05cfa89aab54326f1789ec60">kernel::Scheduler</a></li>
 <li>reset_next_task_id()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a7093e9361600d4f12c22adeb2168ac41">kernel::Scheduler</a></li>
 <li>reset_ready_queue()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#affd53a2cbc20336577d0b87d63714252">kernel::Scheduler</a></li>
 <li>reset_zombie_list()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a1b3612d8eada548ee8dd2621baf78cc5">kernel::Scheduler</a></li>
@@ -172,6 +175,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>rq_own()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a8c06d8f568f07da6d9f749c4cec581b1">kernel::Scheduler</a></li>
 <li>rq_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a593dad7197d614eb2d5f67e48d64bba1">kernel::Scheduler</a></li>
 <li>run()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">kernel::test::TestBase</a></li>
+<li>RwLock()&#160;:&#160;<a class="el" href="classkernel_1_1sync_1_1_rw_lock.html#a6435525dd3f7ddd43f30e2fb7a1adff5">kernel::sync::RwLock</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -131,6 +131,7 @@ This graph shows which files directly or indirectly include this file:</div>
 <p><a href="spinlock_8hpp_source.html">Go to the source code of this file.</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Busy-wait spinlock using atomic exchange. </p>
+<p>SMP-safe by construction (issue #61 audit): lock() is an atomic_exchange ACQUIRE loop with arch::pause() backoff and unlock() is an atomic_store RELEASE — mutual exclusion holds across CPUs. Task-context paths may block; ISR paths must use try_lock() (non-blocking skip-and-retry). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__load__ba
 </div><!--header-->
 <div class="contents">
 
-<p>Load-balancer stubs (issue #85, module 8). The scheduler dequeues from the OWN queue only (no stealing, no migration: <a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a> next_task) — there is no balancer API yet, so every test is a documented stub pending the main-branch balancer (idle-pull / work-push / RT-exclusion / threshold).  
+<p>RT load-balancer tests (issue #61; stubs from issue #85, module 8). Scheduler::balancer_tick() migrates queued aperiodic kernel tasks from the busiest up-CPU to the idlest past BALANCER_THRESHOLD, re-pinning toward balance. Tests branch on up_cpu_count(): with an AP up (standard -smp 2 harness) moves are observable; single-CPU runs prove the no-strand property (no moves off CPU0).  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Load-balancer stubs (issue #85, module 8). The scheduler dequeues from the OWN queue only (no stealing, no migration: <a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a> next_task) — there is no balancer API yet, so every test is a documented stub pending the main-branch balancer (idle-pull / work-push / RT-exclusion / threshold). </p>
+<div class="textblock"><p>RT load-balancer tests (issue #61; stubs from issue #85, module 8). Scheduler::balancer_tick() migrates queued aperiodic kernel tasks from the busiest up-CPU to the idlest past BALANCER_THRESHOLD, re-pinning toward balance. Tests branch on up_cpu_count(): with an AP up (standard -smp 2 harness) moves are observable; single-CPU runs prove the no-strand property (no moves off CPU0). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

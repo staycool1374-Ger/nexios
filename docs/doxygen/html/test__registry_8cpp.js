@@ -115,6 +115,7 @@ var test__registry_8cpp =
     [ "register_process_tests", "test__registry_8cpp.html#ae1d5232fbf708fd2680b373e55efe60e", null ],
     [ "register_procfs_ops_tests", "test__registry_8cpp.html#a4caf1bddaa2301eb83d9374efff4a434", null ],
     [ "register_profiler_sampler_tests", "test__registry_8cpp.html#a31479d0716e242456eea8f63446f0e36", null ],
+    [ "register_pt_merge_tests", "test__registry_8cpp.html#aacd7a712820ff84e2d837ac898eafb7e", null ],
     [ "register_queue_pip_tests", "test__registry_8cpp.html#a97cfd5a3f13caa816ef978a606eed18e", null ],
     [ "register_random_seed_tests", "test__registry_8cpp.html#aa9f37bd5f1eb1bb0acbb8ed99fdc5a33", null ],
     [ "register_random_syscall_tests", "test__registry_8cpp.html#a4921c33ddb21c6cce3124ac1516af0f0", null ],

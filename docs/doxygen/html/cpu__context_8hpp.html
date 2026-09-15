@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -159,11 +159,15 @@ Functions</h2></td></tr>
 <tr class="memdesc:a777bca6dec383faa735ebe34c5bdf749"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the current CPU's execution context.  <br /></td></tr>
 <tr class="memitem:a0571e17de31b74de7a47a25459361c20" id="r_a0571e17de31b74de7a47a25459361c20"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20">kernel::isr_nesting_own</a> ()</td></tr>
 <tr class="memdesc:a0571e17de31b74de7a47a25459361c20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU ISR nesting depth (single-core archs: the plain global).  <br /></td></tr>
+<tr class="memitem:a68d19d20b85d9992222d05be6deb3e54" id="r_a68d19d20b85d9992222d05be6deb3e54"><td class="memItemLeft">TaskControlBlock *&amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54">kernel::fpu_owner_own</a> ()</td></tr>
+<tr class="memdesc:a68d19d20b85d9992222d05be6deb3e54"><td class="mdescLeft">&#160;</td><td class="mdescRight">Own-CPU FPU register owner (single-core archs: the plain global).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:a5fbbc3448d7b738e78241f86230e0f48" id="r_a5fbbc3448d7b738e78241f86230e0f48"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48">kernel::isr_nesting_depth</a></td></tr>
 <tr class="memdesc:a5fbbc3448d7b738e78241f86230e0f48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current ISR nesting depth (single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>). On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth (gs:0x20, issue #27) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20" title="Own-CPU ISR nesting depth (single-core archs: the plain global).">isr_nesting_own()</a>.  <br /></td></tr>
+<tr class="memitem:a18ec7fa3e1cedad227d48e45f9633829" id="r_a18ec7fa3e1cedad227d48e45f9633829"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">kernel::fpu_owner</a></td></tr>
+<tr class="memdesc:a18ec7fa3e1cedad227d48e45f9633829"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tracks which task's FPU state is currently in the registers. Single-core archs ONLY: the plain global in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">global_state.cpp</a>, read via <a class="el" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>. On x86_64 the owner lives in per_cpu[cpu].fpu_owner (gs:0x30, issue #151) with NO global definition — any bare use here fails to link by design (migration proof). Do not add readers of this symbol; use <a class="el" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54" title="Own-CPU FPU register owner (single-core archs: the plain global).">fpu_owner_own()</a>.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Per-CPU execution context (PfA-B, Phase 8 SMP groundwork). </p>

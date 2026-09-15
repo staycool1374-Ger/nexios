@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -178,6 +178,20 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a460f3e4e082b3a13c6966a350b270d23"><td class="mdescLeft">&#160;</td><td class="mdescRight">Change a task's scheduling priority at runtime. Re-buckets the task in the O(1) ready queue (if queued) so the change takes effect on the next tick, and updates base_priority. Task context only: takes scheduler_lock_ (blocking) + IrqGuard (issue #25 C1 — remote queues are written only under the lock).  <br /></td></tr>
 <tr class="memitem:a596d9088e1f0680b0b636847a365ab96" id="r_a596d9088e1f0680b0b636847a365ab96"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a596d9088e1f0680b0b636847a365ab96">set_affinity</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mask) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a596d9088e1f0680b0b636847a365ab96"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a task's CPU affinity mask (issue #25 C1). Bit N = may run on CPU N. Task-context only (takes scheduler_lock_; documented NOT-ISR-safe). Runs inside the quiesce window so the lock-free AP current-apply path cannot race the check. Empty mask clamps to CPU0 (+warn); user tasks force CPU0 (shared-TSS limitation); bits beyond up-CPUs clamp (+warn); tasks running on another CPU are refused (warn).  <br /></td></tr>
+<tr class="memitem:a11b174230bd8bc0816778133ed36b700" id="r_a11b174230bd8bc0816778133ed36b700"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a11b174230bd8bc0816778133ed36b700">balancer_tick</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a11b174230bd8bc0816778133ed36b700"><td class="mdescLeft">&#160;</td><td class="mdescRight">RT load balancer tick (issue #61): migrate queued aperiodic kernel tasks from the busiest up-CPU to the idlest when depths differ beyond BALANCER_THRESHOLD. BSP-only (AP ticks are dispatch-only); quiesce window + try_lock (never blocks — contention skips the tick). Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs). Production cadence comes from the on_tick tail (non-test runs only); tests call it directly under IrqGuard.  <br /></td></tr>
+<tr class="memitem:adad603d784ed57a134fd9483ae5f881a" id="r_adad603d784ed57a134fd9483ae5f881a"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adad603d784ed57a134fd9483ae5f881a">queue_depth</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:adad603d784ed57a134fd9483ae5f881a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queued-task depth of CPU c's ready queue (issue #61). Caller must hold scheduler_lock_ or have IF=0.  <br /></td></tr>
+<tr class="memitem:ace626f0336bf030f74f984cf5d926eca" id="r_ace626f0336bf030f74f984cf5d926eca"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ace626f0336bf030f74f984cf5d926eca">migration_count</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ace626f0336bf030f74f984cf5d926eca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Balancer moves sourced from CPU c since boot (issue #61).  <br /></td></tr>
+<tr class="memitem:a3b30a91ca7fe9b1b0f2eb751d2183c54" id="r_a3b30a91ca7fe9b1b0f2eb751d2183c54"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3b30a91ca7fe9b1b0f2eb751d2183c54">get_affinity</a> (const TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a3b30a91ca7fe9b1b0f2eb751d2183c54"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current affinity mask of <code class="param">task</code> (constraint, not placement — the balancer re-pins toward balance).  <br /></td></tr>
+<tr class="memitem:adb6755583ae2f77411c858772518ec93" id="r_adb6755583ae2f77411c858772518ec93"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#adb6755583ae2f77411c858772518ec93">is_rt_task</a> (const TaskControlBlock &amp;task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:adb6755583ae2f77411c858772518ec93"><td class="mdescLeft">&#160;</td><td class="mdescRight">True for real-time tasks (strict period set, issue #61). Periodic tasks never migrate; NO_PERIOD/aperiodic may.  <br /></td></tr>
+<tr class="memitem:a9c6e17630432b15495c6f5eab94323be" id="r_a9c6e17630432b15495c6f5eab94323be"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9c6e17630432b15495c6f5eab94323be">up_cpu_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9c6e17630432b15495c6f5eab94323be"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of CPUs eligible for placement (BSP + booted APs).  <br /></td></tr>
+<tr class="memitem:acd6906eb05cfa89aab54326f1789ec60" id="r_acd6906eb05cfa89aab54326f1789ec60"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#acd6906eb05cfa89aab54326f1789ec60">reset_migration_counts</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:acd6906eb05cfa89aab54326f1789ec60"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset balancer migration counters (test isolation).  <br /></td></tr>
 <tr class="memitem:a0d595ec39367db2ce160fb1d72c23fab" id="r_a0d595ec39367db2ce160fb1d72c23fab"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a0d595ec39367db2ce160fb1d72c23fab">reap_orphans</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a0d595ec39367db2ce160fb1d72c23fab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reaps orphan TERMINATED tasks (no parent to WAITPID them). Single-pass scan: identifies all eligible tasks, destroys them without compaction, then compacts the task array once at the end. If the idle task is reaped it is immediately recreated and placed at index 0 of the compacted array.  <br /></td></tr>
 <tr class="memitem:a6cb4f7ab4207b34c9e4a278492fe8efc" id="r_a6cb4f7ab4207b34c9e4a278492fe8efc"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6cb4f7ab4207b34c9e4a278492fe8efc">cleanup_test_tasks</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -248,6 +262,15 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:afe8481a5993e14cbd94b81c4f64bd7d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Removes a task from the O(1) ready queue.  <br /></td></tr>
 <tr class="memitem:ae543d07405d0c21a092c2561cbfe6735" id="r_ae543d07405d0c21a092c2561cbfe6735"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae543d07405d0c21a092c2561cbfe6735">move_priority</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> old_prio, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> new_prio) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ae543d07405d0c21a092c2561cbfe6735"><td class="mdescLeft">&#160;</td><td class="mdescRight">Moves a task from one priority queue to another (re-index).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a6f72b20ee2117d8e7473205d5b2c05e9" id="r_a6f72b20ee2117d8e7473205d5b2c05e9"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6f72b20ee2117d8e7473205d5b2c05e9">BALANCER_THRESHOLD</a> = 2</td></tr>
+<tr class="memdesc:a6f72b20ee2117d8e7473205d5b2c05e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Depth spread that triggers migration (issue #61).  <br /></td></tr>
+<tr class="memitem:a154a42bd0c56868f3c27e7ee32ce0295" id="r_a154a42bd0c56868f3c27e7ee32ce0295"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a154a42bd0c56868f3c27e7ee32ce0295">BALANCER_MAX_MIGRATIONS_PER_TICK</a> = 2</td></tr>
+<tr class="memdesc:a154a42bd0c56868f3c27e7ee32ce0295"><td class="mdescLeft">&#160;</td><td class="mdescRight">Migration cap per tick (issue #61, RT budget bound).  <br /></td></tr>
+<tr class="memitem:a1aa50cc38f64e3fcc315efd8090ced03" id="r_a1aa50cc38f64e3fcc315efd8090ced03"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1aa50cc38f64e3fcc315efd8090ced03">BALANCER_TICK_PERIOD</a> = 10</td></tr>
+<tr class="memdesc:a1aa50cc38f64e3fcc315efd8090ced03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Production balancer cadence in BSP ticks (issue #61).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
 Test-isolation helpers</h2></td></tr>
@@ -515,6 +538,39 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a11b174230bd8bc0816778133ed36b700" name="a11b174230bd8bc0816778133ed36b700"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a11b174230bd8bc0816778133ed36b700">&#9670;&#160;</a></span>balancer_tick()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::balancer_tick </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>RT load balancer tick (issue #61): migrate queued aperiodic kernel tasks from the busiest up-CPU to the idlest when depths differ beyond BALANCER_THRESHOLD. BSP-only (AP ticks are dispatch-only); quiesce window + try_lock (never blocks — contention skips the tick). Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs). Production cadence comes from the on_tick tail (non-test runs only); tests call it directly under IrqGuard. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a11b174230bd8bc0816778133ed36b700_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a11b174230bd8bc0816778133ed36b700_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
 <a id="a7ea9fb9eb997735769deb6fdcc70f178" name="a7ea9fb9eb997735769deb6fdcc70f178"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7ea9fb9eb997735769deb6fdcc70f178">&#9670;&#160;</a></span>cancel_pending_switch()</h2>
 
@@ -544,7 +600,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a7ea9fb9eb997735769deb6fdcc70f178_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a7ea9fb9eb997735769deb6fdcc70f178_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -604,7 +660,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ab84ffc50f854095cefc04aa73ad8e238_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ab84ffc50f854095cefc04aa73ad8e238_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -641,7 +697,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8672a015d5e35285915d39ce88e35084_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8672a015d5e35285915d39ce88e35084_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -716,7 +772,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8378abad25413cddf0c6b92b2489dfcb_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8378abad25413cddf0c6b92b2489dfcb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -776,7 +832,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a6ce74ebd0c568fc4dbd19bc24c1d4f8c_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6ce74ebd0c568fc4dbd19bc24c1d4f8c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -809,7 +865,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a0dd60567b314b96f16c4ba03a2ddecf9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a0dd60567b314b96f16c4ba03a2ddecf9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -843,7 +899,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a66efaa5a205ef6eb473f02603bc430c0_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a66efaa5a205ef6eb473f02603bc430c0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -876,7 +932,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a6cb4f7ab4207b34c9e4a278492fe8efc_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6cb4f7ab4207b34c9e4a278492fe8efc_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -936,7 +992,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_aaed8cef7db685c4e8682d15b14b1c104_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_aaed8cef7db685c4e8682d15b14b1c104_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -969,7 +1025,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a09892078dd5b82b04d527059650aaa3f_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a09892078dd5b82b04d527059650aaa3f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -1002,7 +1058,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a6ec2aee2d32d08a9b747a4ef076e0257_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6ec2aee2d32d08a9b747a4ef076e0257_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -1035,7 +1091,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a397e8c1cff9ad82e9491d4e2449c10d2_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a397e8c1cff9ad82e9491d4e2449c10d2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -1069,7 +1125,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ac094d7e0ec9c48c58637e36fce587be2_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac094d7e0ec9c48c58637e36fce587be2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1156,7 +1212,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_af386d3e6be031ea8e376b068d97b0e19_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_af386d3e6be031ea8e376b068d97b0e19_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1189,7 +1245,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_afe8481a5993e14cbd94b81c4f64bd7d0_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_afe8481a5993e14cbd94b81c4f64bd7d0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1222,7 +1278,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ad026a249da546e4b265cf8774b3013cf_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ad026a249da546e4b265cf8774b3013cf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1282,7 +1338,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a75c863b2589f150169806297ba76cf7c_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a75c863b2589f150169806297ba76cf7c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1315,7 +1371,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a913928f9814cd7cb9dd5241133e3fcdd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a913928f9814cd7cb9dd5241133e3fcdd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -1382,8 +1438,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a43f0e681276d4db5f24a11e5e23d958e_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a43f0e681276d4db5f24a11e5e23d958e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 22 -->
 </div>
+
+</div>
+</div>
+<a id="a3b30a91ca7fe9b1b0f2eb751d2183c54" name="a3b30a91ca7fe9b1b0f2eb751d2183c54"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b30a91ca7fe9b1b0f2eb751d2183c54">&#9670;&#160;</a></span>get_affinity()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::get_affinity </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Current affinity mask of <code class="param">task</code> (constraint, not placement — the balancer re-pins toward balance). </p>
 
 </div>
 </div>
@@ -1440,7 +1523,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ab3d622e0c4309eade918101d6fdd060a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ab3d622e0c4309eade918101d6fdd060a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1558,7 +1641,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a1c8102c5c49bfeec7ddf89804d9b5bf3_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a1c8102c5c49bfeec7ddf89804d9b5bf3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1591,7 +1674,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ae95c16cf7d774deef2e4957ac374a77f_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ae95c16cf7d774deef2e4957ac374a77f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -1624,7 +1707,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a1e0be5379fffa19a0ed27eab2367cce8_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a1e0be5379fffa19a0ed27eab2367cce8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -1716,8 +1799,62 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_aceba3c225f5c9e865f155fa649888336_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_aceba3c225f5c9e865f155fa649888336_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 27 -->
 </div>
+
+</div>
+</div>
+<a id="adb6755583ae2f77411c858772518ec93" name="adb6755583ae2f77411c858772518ec93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb6755583ae2f77411c858772518ec93">&#9670;&#160;</a></span>is_rt_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::is_rt_task </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True for real-time tasks (strict period set, issue #61). Periodic tasks never migrate; NO_PERIOD/aperiodic may. </p>
+
+</div>
+</div>
+<a id="ace626f0336bf030f74f984cf5d926eca" name="ace626f0336bf030f74f984cf5d926eca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace626f0336bf030f74f984cf5d926eca">&#9670;&#160;</a></span>migration_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::migration_count </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Balancer moves sourced from CPU c since boot (issue #61). </p>
 
 </div>
 </div>
@@ -1749,7 +1886,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5c115dae407624bae7db3b31baa29a14_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5c115dae407624bae7db3b31baa29a14_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -1791,7 +1928,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ae543d07405d0c21a092c2561cbfe6735_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ae543d07405d0c21a092c2561cbfe6735_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -1825,7 +1962,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8c46258f8feca3ec4f56691ca491df8d_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8c46258f8feca3ec4f56691ca491df8d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -1859,7 +1996,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a852663edfb9d43d51ca280727c2295a3_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a852663edfb9d43d51ca280727c2295a3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -1892,7 +2029,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_abde09e0c1b73175a95f3e78104e437fd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_abde09e0c1b73175a95f3e78104e437fd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -1925,7 +2062,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a2de1eba00337b8d07462fd440d89c053_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a2de1eba00337b8d07462fd440d89c053_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 33 -->
 </div>
 
 </div>
@@ -1958,7 +2095,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ac2ebbf950ac51a2d7700333fb0c4ba8e_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac2ebbf950ac51a2d7700333fb0c4ba8e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 34 -->
+</div>
+
+</div>
+</div>
+<a id="adad603d784ed57a134fd9483ae5f881a" name="adad603d784ed57a134fd9483ae5f881a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adad603d784ed57a134fd9483ae5f881a">&#9670;&#160;</a></span>queue_depth()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::queue_depth </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Queued-task depth of CPU c's ready queue (issue #61). Caller must hold scheduler_lock_ or have IF=0. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_adad603d784ed57a134fd9483ae5f881a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_adad603d784ed57a134fd9483ae5f881a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 35 -->
 </div>
 
 </div>
@@ -2018,7 +2188,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_aa2daa4d9fead7bd6421fd81b283fcaa7_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_aa2daa4d9fead7bd6421fd81b283fcaa7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 36 -->
 </div>
 
 </div>
@@ -2051,7 +2221,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5fe0e89b62ff62fbc33eac920bd0660b_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5fe0e89b62ff62fbc33eac920bd0660b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 37 -->
 </div>
 
 </div>
@@ -2084,7 +2254,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a0d595ec39367db2ce160fb1d72c23fab_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a0d595ec39367db2ce160fb1d72c23fab_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 38 -->
 </div>
 
 </div>
@@ -2144,7 +2314,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ab060fbcd590e46e4e1c3ab07f5fe354d_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ab060fbcd590e46e4e1c3ab07f5fe354d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 39 -->
 </div>
 
 </div>
@@ -2177,7 +2347,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a090f79eb27f051efff2c746fa009416a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a090f79eb27f051efff2c746fa009416a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 38 -->
+<!-- MAP 40 -->
 </div>
 
 </div>
@@ -2243,7 +2413,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a1faa60d8cbc8f5827b9e81f7fe135205_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a1faa60d8cbc8f5827b9e81f7fe135205_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 39 -->
+<!-- MAP 41 -->
 </div>
 
 </div>
@@ -2277,7 +2447,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a7e36233fc7325aab8561e55c8e07e594_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a7e36233fc7325aab8561e55c8e07e594_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 40 -->
+<!-- MAP 42 -->
 </div>
 
 </div>
@@ -2310,8 +2480,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ac92ab8abdaaf924f98d66fd5f8ab2a50_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ac92ab8abdaaf924f98d66fd5f8ab2a50_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 41 -->
+<!-- MAP 43 -->
 </div>
+
+</div>
+</div>
+<a id="acd6906eb05cfa89aab54326f1789ec60" name="acd6906eb05cfa89aab54326f1789ec60"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd6906eb05cfa89aab54326f1789ec60">&#9670;&#160;</a></span>reset_migration_counts()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::Scheduler::reset_migration_counts </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reset balancer migration counters (test isolation). </p>
 
 </div>
 </div>
@@ -2370,7 +2567,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_affd53a2cbc20336577d0b87d63714252_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_affd53a2cbc20336577d0b87d63714252_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 42 -->
+<!-- MAP 44 -->
 </div>
 
 </div>
@@ -2428,7 +2625,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_ad388505a04d211ab3cbfca860d07f13f_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_ad388505a04d211ab3cbfca860d07f13f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 43 -->
+<!-- MAP 45 -->
 </div>
 
 </div>
@@ -2465,7 +2662,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a885ca9872e1d389eb0a5a68e4db90a56_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a885ca9872e1d389eb0a5a68e4db90a56_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 44 -->
+<!-- MAP 46 -->
 </div>
 
 </div>
@@ -2540,7 +2737,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_abbb4bed7e15b38e61e5d7aeb584d0090_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_abbb4bed7e15b38e61e5d7aeb584d0090_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 45 -->
+<!-- MAP 47 -->
 </div>
 
 </div>
@@ -2573,7 +2770,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8c7a0865a998b02ebf986bd029fa8202_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8c7a0865a998b02ebf986bd029fa8202_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 46 -->
+<!-- MAP 48 -->
 </div>
 
 </div>
@@ -2633,7 +2830,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8c06d8f568f07da6d9f749c4cec581b1_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8c06d8f568f07da6d9f749c4cec581b1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 47 -->
+<!-- MAP 49 -->
 </div>
 
 </div>
@@ -2666,7 +2863,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a593dad7197d614eb2d5f67e48d64bba1_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a593dad7197d614eb2d5f67e48d64bba1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 48 -->
+<!-- MAP 50 -->
 </div>
 
 </div>
@@ -2726,7 +2923,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a08909dbd61fc213d9a5a36cc7b6c072a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a08909dbd61fc213d9a5a36cc7b6c072a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 49 -->
+<!-- MAP 51 -->
 </div>
 
 </div>
@@ -2759,7 +2956,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a42d074c7f070204bd85737823bce150a_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a42d074c7f070204bd85737823bce150a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 50 -->
+<!-- MAP 52 -->
 </div>
 
 </div>
@@ -2803,7 +3000,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a596d9088e1f0680b0b636847a365ab96_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a596d9088e1f0680b0b636847a365ab96_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 51 -->
+<!-- MAP 53 -->
 </div>
 
 </div>
@@ -2842,7 +3039,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5a2b494bb6c3b184c9374e85be368804_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a2b494bb6c3b184c9374e85be368804_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 52 -->
+<!-- MAP 54 -->
 </div>
 
 </div>
@@ -2998,7 +3195,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 53 -->
+<!-- MAP 55 -->
 </div>
 
 </div>
@@ -3031,7 +3228,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 54 -->
+<!-- MAP 56 -->
 </div>
 
 </div>
@@ -3091,7 +3288,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 55 -->
+<!-- MAP 57 -->
 </div>
 
 </div>
@@ -3253,7 +3450,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 56 -->
+<!-- MAP 58 -->
 </div>
 
 </div>
@@ -3352,7 +3549,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 57 -->
+<!-- MAP 59 -->
 </div>
 
 </div>
@@ -3386,8 +3583,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 58 -->
+<!-- MAP 60 -->
 </div>
+
+</div>
+</div>
+<a id="a9c6e17630432b15495c6f5eab94323be" name="a9c6e17630432b15495c6f5eab94323be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c6e17630432b15495c6f5eab94323be">&#9670;&#160;</a></span>up_cpu_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::up_cpu_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Number of CPUs eligible for placement (BSP + booted APs). </p>
 
 </div>
 </div>
@@ -3420,8 +3644,81 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 59 -->
+<!-- MAP 61 -->
 </div>
+
+</div>
+</div>
+<a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="a154a42bd0c56868f3c27e7ee32ce0295" name="a154a42bd0c56868f3c27e7ee32ce0295"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a154a42bd0c56868f3c27e7ee32ce0295">&#9670;&#160;</a></span>BALANCER_MAX_MIGRATIONS_PER_TICK</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::BALANCER_MAX_MIGRATIONS_PER_TICK = 2</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Migration cap per tick (issue #61, RT budget bound). </p>
+
+</div>
+</div>
+<a id="a6f72b20ee2117d8e7473205d5b2c05e9" name="a6f72b20ee2117d8e7473205d5b2c05e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f72b20ee2117d8e7473205d5b2c05e9">&#9670;&#160;</a></span>BALANCER_THRESHOLD</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::BALANCER_THRESHOLD = 2</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Depth spread that triggers migration (issue #61). </p>
+
+</div>
+</div>
+<a id="a1aa50cc38f64e3fcc315efd8090ced03" name="a1aa50cc38f64e3fcc315efd8090ced03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1aa50cc38f64e3fcc315efd8090ced03">&#9670;&#160;</a></span>BALANCER_TICK_PERIOD</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::BALANCER_TICK_PERIOD = 10</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Production balancer cadence in BSP ticks (issue #61). </p>
 
 </div>
 </div>

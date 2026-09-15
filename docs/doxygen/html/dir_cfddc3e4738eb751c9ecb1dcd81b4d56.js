@@ -1,6 +1,7 @@
 var dir_cfddc3e4738eb751c9ecb1dcd81b4d56 =
 [
     [ "address.hpp", "address_8hpp.html", null ],
+    [ "cache_color.hpp", "cache__color_8hpp.html", "cache__color_8hpp" ],
     [ "checked_ptr.hpp", "checked__ptr_8hpp.html", null ],
     [ "integrity.cpp", "integrity_8cpp.html", "integrity_8cpp" ],
     [ "integrity.hpp", "integrity_8hpp.html", null ],

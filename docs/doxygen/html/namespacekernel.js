@@ -2,6 +2,9 @@ var namespacekernel =
 [
     [ "acpi", "namespacekernel_1_1acpi.html", "namespacekernel_1_1acpi" ],
     [ "block", "namespacekernel_1_1block.html", null ],
+    [ "cache", "namespacekernel_1_1cache.html", [
+      [ "color_of", "namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c", null ]
+    ] ],
     [ "cap", "namespacekernel_1_1cap.html", "namespacekernel_1_1cap" ],
     [ "daemon", "namespacekernel_1_1daemon.html", [
       [ "capture_state", "namespacekernel_1_1daemon.html#ae09ac16adefc443c674743c771bf7df9", null ],
@@ -229,6 +232,7 @@ var namespacekernel =
     [ "current_cpu", "namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749", null ],
     [ "current_cspace", "namespacekernel.html#a0ecf34d3e30ff218069c96a3645cf261", null ],
     [ "for", "namespacekernel.html#a1dae18e023980d3a17ebc183f9986bd3", null ],
+    [ "fpu_owner_own", "namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54", null ],
     [ "init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
     [ "isr_nesting_own", "namespacekernel.html#a0571e17de31b74de7a47a25459361c20", null ],
     [ "kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],
@@ -261,7 +265,7 @@ var namespacekernel =
     [ "_stack_start", "namespacekernel.html#ab1281ac93f9d469e2fc0dd731d358f3b", null ],
     [ "deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
     [ "fpu_nm_depth_max", "namespacekernel.html#a0635983d70bccde24c7125eba436d74e", null ],
-    [ "fpu_owner", "namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6", null ],
+    [ "fpu_owner", "namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829", null ],
     [ "g_boot_epoch", "namespacekernel.html#a602102cf72c2d245437f6dfb539c71eb", null ],
     [ "g_boot_info", "namespacekernel.html#a82642ef1de738764f4ab5b0e505b50ac", null ],
     [ "g_canary_trip", "namespacekernel.html#a9710cee4bf56525b356e96332529a5a7", null ],

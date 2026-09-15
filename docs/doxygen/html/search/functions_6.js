@@ -41,10 +41,11 @@ var searchData=
   ['format_5fdatetime_38',['format_datetime',['../kernel_8cpp.html#a6758dbad75005fb55338b477c2e5204a',1,'kernel.cpp']]],
   ['format_5fshort_5fname_39',['format_short_name',['../namespacekernel_1_1fat32.html#ad96c400fa4e603f70ae0ecd41241cbbf',1,'kernel::fat32']]],
   ['forward_40',['forward',['../utils_8hpp.html#a25df175eb2c708b8703706828dc59cf0',1,'forward(typename remove_reference&lt; T &gt;::type &amp;t) noexcept:&#160;utils.hpp'],['../utils_8hpp.html#a84de50f91f80486020e9048df873168a',1,'forward(typename remove_reference&lt; T &gt;::type &amp;&amp;t) noexcept:&#160;utils.hpp']]],
-  ['free_41',['free',['../stdlib_8c.html#afbedc913aa4651b3c3b4b3aecd9b4711',1,'free(void *ptr):&#160;stdlib.c'],['../stdlib_8h.html#afbedc913aa4651b3c3b4b3aecd9b4711',1,'free(void *ptr):&#160;stdlib.c']]],
-  ['free_5fbuffer_42',['free_buffer',['../namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d',1,'kernel::dma']]],
-  ['free_5fcluster_5fchain_43',['free_cluster_chain',['../namespacekernel_1_1fat32.html#acaa9ea1e7204014b1ee87d1b18e2786f',1,'kernel::fat32']]],
-  ['free_5fresolve_5fimages_44',['free_resolve_images',['../namespacekernel_1_1elf.html#ad5d8f8b5d835105396ec8ed79a43e212',1,'kernel::elf']]],
-  ['fstat_45',['fstat',['../stat_8c.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c'],['../stat_8h.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c']]],
-  ['full_5fstring_46',['full_string',['../structkernel_1_1_version.html#a6900c1bf9a13fb19ffdef8f8288bafe8',1,'kernel::Version']]]
+  ['fpu_5fowner_5fown_41',['fpu_owner_own',['../namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54',1,'kernel']]],
+  ['free_42',['free',['../stdlib_8c.html#afbedc913aa4651b3c3b4b3aecd9b4711',1,'free(void *ptr):&#160;stdlib.c'],['../stdlib_8h.html#afbedc913aa4651b3c3b4b3aecd9b4711',1,'free(void *ptr):&#160;stdlib.c']]],
+  ['free_5fbuffer_43',['free_buffer',['../namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d',1,'kernel::dma']]],
+  ['free_5fcluster_5fchain_44',['free_cluster_chain',['../namespacekernel_1_1fat32.html#acaa9ea1e7204014b1ee87d1b18e2786f',1,'kernel::fat32']]],
+  ['free_5fresolve_5fimages_45',['free_resolve_images',['../namespacekernel_1_1elf.html#ad5d8f8b5d835105396ec8ed79a43e212',1,'kernel::elf']]],
+  ['fstat_46',['fstat',['../stat_8c.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c'],['../stat_8h.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c']]],
+  ['full_5fstring_47',['full_string',['../structkernel_1_1_version.html#a6900c1bf9a13fb19ffdef8f8288bafe8',1,'kernel::Version']]]
 ];

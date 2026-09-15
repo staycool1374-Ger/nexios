@@ -11,6 +11,7 @@ var searchData=
   ['unregister_8',['unregister',['../classkernel_1_1ipc_1_1_pager_registry.html#abab6df4b98248fd07340d2654ca8f09e',1,'kernel::ipc::PagerRegistry']]],
   ['unregister_5ftask_9',['unregister_task',['../classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9',1,'kernel::Scheduler']]],
   ['unwatch_10',['unwatch',['../classkernel_1_1ipc_1_1_death_notify.html#ab4d10f3c665ac5d4057565d97beabf99',1,'kernel::ipc::DeathNotify']]],
-  ['update_11',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]],
-  ['user_5faccess_5frecover_5fip_12',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]]
+  ['up_5fcpu_5fcount_11',['up_cpu_count',['../classkernel_1_1_scheduler.html#a9c6e17630432b15495c6f5eab94323be',1,'kernel::Scheduler']]],
+  ['update_12',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]],
+  ['user_5faccess_5frecover_5fip_13',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]]
 ];

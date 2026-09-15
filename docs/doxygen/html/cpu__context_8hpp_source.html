@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -197,15 +197,30 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cpu__context_8
 </div>
 <div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span> </div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span><span class="keyword">inline</span> TaskControlBlock *&amp;<a class="code hl_function" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54">fpu_owner_own</a>() {</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    <span class="keywordflow">return</span> <a class="code hl_variable" href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch::per_cpu</a>[<a class="code hl_function" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a>()].fpu_owner;</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>}</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno"><a class="line" href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">  113</a></span><span class="keyword">extern</span> <span class="stringliteral">&quot;C&quot;</span> TaskControlBlock *<a class="code hl_variable" href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">fpu_owner</a>;</div>
+<div class="foldopen" id="foldopen00115" data-start="{" data-end="}">
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno"><a class="line" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54">  115</a></span><span class="keyword">inline</span> TaskControlBlock *&amp;<a class="code hl_function" href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54">fpu_owner_own</a>() {</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    <span class="keywordflow">return</span> <a class="code hl_variable" href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">fpu_owner</a>;</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>}</div>
+</div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span> </div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>} <span class="comment">// namespace kernel</span></div>
 </div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:31</div></div>
 <div class="ttc" id="anamespacearch_html_a74ee5e38b6239c12f5cadd479e625d7d"><div class="ttname"><a href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch::per_cpu</a></div><div class="ttdeci">PerCpu per_cpu[CONFIG_MAX_CPUS]</div><div class="ttdef"><b>Definition</b> percpu.cpp:9</div></div>
 <div class="ttc" id="anamespacearch_html_ac53772566e53832b14ccedb8d6ae2d4e"><div class="ttname"><a href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a></div><div class="ttdeci">uint64_t cpu_index() noexcept</div><div class="ttdoc">Current CPU index — single-core archs are always CPU 0.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:31</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_a0571e17de31b74de7a47a25459361c20"><div class="ttname"><a href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20">kernel::isr_nesting_own</a></div><div class="ttdeci">uint64_t &amp; isr_nesting_own()</div><div class="ttdoc">Own-CPU ISR nesting depth (single-core archs: the plain global).</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:98</div></div>
+<div class="ttc" id="anamespacekernel_html_a18ec7fa3e1cedad227d48e45f9633829"><div class="ttname"><a href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">kernel::fpu_owner</a></div><div class="ttdeci">TaskControlBlock * fpu_owner</div><div class="ttdoc">Tracks which task&#39;s FPU state is currently in the registers. Single-core archs ONLY: the plain global...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:113</div></div>
 <div class="ttc" id="anamespacekernel_html_a20a07952a9e22c0be3a6711567475133"><div class="ttname"><a href="namespacekernel.html#a20a07952a9e22c0be3a6711567475133">kernel::cpu_ctx</a></div><div class="ttdeci">CpuContext &amp; cpu_ctx(uint64_t cpu)</div><div class="ttdoc">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/sna...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:76</div></div>
 <div class="ttc" id="anamespacekernel_html_a5fbbc3448d7b738e78241f86230e0f48"><div class="ttname"><a href="namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48">kernel::isr_nesting_depth</a></div><div class="ttdeci">uint64_t isr_nesting_depth</div><div class="ttdoc">Current ISR nesting depth (single-core archs ONLY: the plain global in global_state....</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:96</div></div>
+<div class="ttc" id="anamespacekernel_html_a68d19d20b85d9992222d05be6deb3e54"><div class="ttname"><a href="namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54">kernel::fpu_owner_own</a></div><div class="ttdeci">TaskControlBlock *&amp; fpu_owner_own()</div><div class="ttdoc">Own-CPU FPU register owner (single-core archs: the plain global).</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:115</div></div>
 <div class="ttc" id="anamespacekernel_html_a777bca6dec383faa735ebe34c5bdf749"><div class="ttname"><a href="namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749">kernel::current_cpu</a></div><div class="ttdeci">CpuContext &amp; current_cpu()</div><div class="ttdoc">Returns the current CPU&#39;s execution context.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:82</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="anexios__config_8h_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div><div class="ttdef"><b>Definition</b> nexios_config.h:64</div></div>

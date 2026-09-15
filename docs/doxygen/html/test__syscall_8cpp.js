@@ -21,5 +21,6 @@ var test__syscall_8cpp =
     [ "JARVIS_TEST", "test__syscall_8cpp.html#a2920a076254415e2701ecb4e704d4f78", null ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#af09d3bc07d94a150f70873047875aae1", null ],
     [ "JARVIS_TEST", "test__syscall_8cpp.html#a8ff462612165985b58373f49d87319fd", null ],
+    [ "register_syscall_affinity_tests", "test__syscall_8cpp.html#acd501c6df3f0d31cc88baae0f8541301", null ],
     [ "register_syscall_tests", "test__syscall_8cpp.html#aec041e930fe1b1be252ec7112c16ccfa", null ]
 ];

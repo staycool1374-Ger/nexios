@@ -11,7 +11,7 @@ var searchData=
   ['flags_8',['flags',['../structkernel_1_1ipc_1_1_death_record.html#aed1facc213ace9f35c567f918b5c291b',1,'kernel::ipc::DeathRecord::flags'],['../structkernel_1_1test_1_1_test_case.html#af4765d0746e3055730a7fd1e39e3acbf',1,'kernel::test::TestCase::flags']]],
   ['found_9',['found',['../structkernel_1_1acpi_1_1_madt_info.html#a4478a71f43c8b5e2b109aa80c5f70f58',1,'kernel::acpi::MadtInfo::found'],['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html#a96fc88560f38804ace5db2a911478d42',1,'kernel::iommu::dmar::DmarInfo::found']]],
   ['fpu_5fnm_5fdepth_5fmax_10',['fpu_nm_depth_max',['../global__state_8cpp.html#ac5cd42fea610f44e7de0179a68eaca95',1,'fpu_nm_depth_max:&#160;global_state.cpp'],['../namespacekernel.html#a0635983d70bccde24c7125eba436d74e',1,'kernel::fpu_nm_depth_max']]],
-  ['fpu_5fowner_11',['fpu_owner',['../global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525',1,'fpu_owner:&#160;global_state.cpp'],['../namespacekernel.html#af4c6d5dcd3bf1b60bf71cdd2b805f5a6',1,'kernel::fpu_owner']]],
+  ['fpu_5fowner_11',['fpu_owner',['../namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829',1,'kernel::fpu_owner'],['../global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525',1,'fpu_owner:&#160;global_state.cpp']]],
   ['fs_12',['fs',['../structkernel_1_1vfs_1_1_fat32_vnode_data.html#affc848cb75d8dd9490d20fc3db432730',1,'kernel::vfs::Fat32VnodeData']]],
   ['func_13',['func',['../structkernel_1_1test_1_1_test_case.html#a39e5c24072d39bdc46a4af7248895f6e',1,'kernel::test::TestCase::func'],['../structservice_1_1_shell_1_1_command.html#a9333d4a056afc51a266c5f9065021f03',1,'service::Shell::Command::func']]]
 ];

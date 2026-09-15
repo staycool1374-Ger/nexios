@@ -68,7 +68,8 @@ var annotated_dup =
         [ "SharedRingHeader", "structkernel_1_1shm_1_1_shared_ring_header.html", "structkernel_1_1shm_1_1_shared_ring_header" ]
       ] ],
       [ "sync", "namespacekernel_1_1sync.html", [
-        [ "IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", "classkernel_1_1sync_1_1_irq_spin_lock_guard" ]
+        [ "IrqSpinLockGuard", "classkernel_1_1sync_1_1_irq_spin_lock_guard.html", "classkernel_1_1sync_1_1_irq_spin_lock_guard" ],
+        [ "RwLock", "classkernel_1_1sync_1_1_rw_lock.html", "classkernel_1_1sync_1_1_rw_lock" ]
       ] ],
       [ "test", "namespacekernel_1_1test.html", [
         [ "ClassSection", "structkernel_1_1test_1_1_class_section.html", "structkernel_1_1test_1_1_class_section" ],

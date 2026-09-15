@@ -39,10 +39,11 @@ var searchData=
   ['untyped_2ehpp_36',['untyped.hpp',['../untyped_8hpp.html',1,'']]],
   ['untypedmem_37',['UntypedMem',['../classkernel_1_1cap_1_1_untyped_mem.html',1,'kernel::cap']]],
   ['unwatch_38',['unwatch',['../classkernel_1_1ipc_1_1_death_notify.html#ab4d10f3c665ac5d4057565d97beabf99',1,'kernel::ipc::DeathNotify']]],
-  ['update_39',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]],
-  ['user_5faccess_5frecover_5fip_40',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]],
-  ['utils_2ehpp_41',['utils.hpp',['../utils_8hpp.html',1,'']]],
-  ['utsname_42',['Utsname',['../structkernel_1_1_utsname.html',1,'kernel::Utsname'],['../struct_utsname.html',1,'Utsname']]],
-  ['utsname_43',['utsname',['../structutsname.html',1,'']]],
-  ['utsname_2eh_44',['utsname.h',['../utsname_8h.html',1,'']]]
+  ['up_5fcpu_5fcount_39',['up_cpu_count',['../classkernel_1_1_scheduler.html#a9c6e17630432b15495c6f5eab94323be',1,'kernel::Scheduler']]],
+  ['update_40',['update',['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32']]],
+  ['user_5faccess_5frecover_5fip_41',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]],
+  ['utils_2ehpp_42',['utils.hpp',['../utils_8hpp.html',1,'']]],
+  ['utsname_43',['Utsname',['../structkernel_1_1_utsname.html',1,'kernel::Utsname'],['../struct_utsname.html',1,'Utsname']]],
+  ['utsname_44',['utsname',['../structutsname.html',1,'']]],
+  ['utsname_2eh_45',['utsname.h',['../utsname_8h.html',1,'']]]
 ];

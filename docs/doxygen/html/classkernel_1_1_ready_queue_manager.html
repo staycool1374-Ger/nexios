@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -144,6 +144,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:ab213aca16e35a1fe9d1702885cde4ef1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Moves a TCB from one priority queue to another.  <br /></td></tr>
 <tr class="memitem:ad9860837c2ece684ae95b9de3727a584" id="r_ad9860837c2ece684ae95b9de3727a584"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad9860837c2ece684ae95b9de3727a584">has_ready</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:ad9860837c2ece684ae95b9de3727a584"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns true if any priority level has ready tasks.  <br /></td></tr>
+<tr class="memitem:a9c5cbd053fe797e89ba2384b32c9aca2" id="r_a9c5cbd053fe797e89ba2384b32c9aca2"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9c5cbd053fe797e89ba2384b32c9aca2">depth</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9c5cbd053fe797e89ba2384b32c9aca2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total queued TCBs across all priority levels (issue #61). O(priorities), non-mutating; caller must hold scheduler_lock_ or have interrupts disabled.  <br /></td></tr>
 <tr class="memitem:a6b670132dd09b3a80e51653b3ad92172" id="r_a6b670132dd09b3a80e51653b3ad92172"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6b670132dd09b3a80e51653b3ad92172">highest_ready_priority</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a6b670132dd09b3a80e51653b3ad92172"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the highest priority level with non-empty queue.  <br /></td></tr>
 <tr class="memitem:acd3ec729284f5c1396d0889fa4bfe9d3" id="r_acd3ec729284f5c1396d0889fa4bfe9d3"><td class="memItemLeft">const <a class="el" href="classkernel_1_1_priority_map.html">PriorityMap</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#acd3ec729284f5c1396d0889fa4bfe9d3">bitmap</a> () const <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -240,6 +242,33 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Empties all per-priority queues (draining each via pop_front). </p>
+
+</div>
+</div>
+<a id="a9c5cbd053fe797e89ba2384b32c9aca2" name="a9c5cbd053fe797e89ba2384b32c9aca2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c5cbd053fe797e89ba2384b32c9aca2">&#9670;&#160;</a></span>depth()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::ReadyQueueManager::depth </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Total queued TCBs across all priority levels (issue #61). O(priorities), non-mutating; caller must hold scheduler_lock_ or have interrupts disabled. </p>
 
 </div>
 </div>
@@ -358,6 +387,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Returns the highest priority level with non-empty queue. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_ready_queue_manager_a6b670132dd09b3a80e51653b3ad92172_cgraph.png" border="0" usemap="#aclasskernel_1_1_ready_queue_manager_a6b670132dd09b3a80e51653b3ad92172_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -398,7 +433,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_ready_queue_manager_ab213aca16e35a1fe9d1702885cde4ef1_cgraph.png" border="0" usemap="#aclasskernel_1_1_ready_queue_manager_ab213aca16e35a1fe9d1702885cde4ef1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>

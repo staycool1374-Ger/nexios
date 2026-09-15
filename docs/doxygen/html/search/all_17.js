@@ -23,8 +23,10 @@ var searchData=
   ['writable_20',['writable',['../structkernel_1_1elf_1_1_map_out.html#a2c973ceb5fb56d243f3c94fcb8d1ff6e',1,'kernel::elf::MapOut']]],
   ['write_21',['write',['../classarch_1_1_qemu_debugcon.html#aa59637719c89f3ed60a4e01eb13b2503',1,'arch::QemuDebugcon::write(const char *str) noexcept'],['../classarch_1_1_qemu_debugcon.html#a492e4d8c9fc0f7a594854fd8accea8ba',1,'arch::QemuDebugcon::write(const char *data, size_t size) noexcept'],['../classservice_1_1_terminal.html#af69ff19b8c2a30f67c02701775fdc285',1,'service::Terminal::write(const char *str)'],['../classservice_1_1_terminal.html#ad4e08ccc7b8b654e02efd7ca6b356c22',1,'service::Terminal::write(const char *data, size_t len)'],['../unistd_8c.html#abb39b21888372e95ad3e5c59b166f5c8',1,'write(int fd, const void *buf, size_t count):&#160;unistd.c'],['../unistd_8h.html#abb39b21888372e95ad3e5c59b166f5c8',1,'write(int fd, const void *buf, size_t count):&#160;unistd.c']]],
   ['write_5fclosed_22',['write_closed',['../structkernel_1_1vfs_1_1_pipe_buffer.html#a6d680699587040ef5d23eff5093940e4',1,'kernel::vfs::PipeBuffer']]],
-  ['write_5fpos_23',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
-  ['writeclass_24',['WriteClass',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d',1,'kernel::gs']]],
-  ['writecontext_25',['WriteContext',['../structkernel_1_1gs_1_1_write_context.html',1,'kernel::gs']]],
-  ['writer_5ftask_5fid_26',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
+  ['write_5flock_23',['write_lock',['../classkernel_1_1sync_1_1_rw_lock.html#a2a84475bdb812b3e52fe81b890c77df5',1,'kernel::sync::RwLock']]],
+  ['write_5fpos_24',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
+  ['write_5funlock_25',['write_unlock',['../classkernel_1_1sync_1_1_rw_lock.html#a5353b9303dc02ebea42a85e328d07c7e',1,'kernel::sync::RwLock']]],
+  ['writeclass_26',['WriteClass',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d',1,'kernel::gs']]],
+  ['writecontext_27',['WriteContext',['../structkernel_1_1gs_1_1_write_context.html',1,'kernel::gs']]],
+  ['writer_5ftask_5fid_28',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
 ];

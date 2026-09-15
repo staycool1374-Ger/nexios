@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__cache__c
 </div><!--header-->
 <div class="contents">
 
-<p>Cache-coloring stubs (issue #85, module 10). No coloring allocator exists (no cache_color references anywhere in src/kernel) — every test is a documented stub pending the main-branch allocator API.  
+<p>Cache-coloring allocator tests (issue #62; stubs from issue #85, module 10). Verifies PMM's colored path: exact-color allocation, uniform spread, range/stability, and the bit-extraction contract. All pages freed per test (net-zero via the harness snapshot check); cursors reset at entry for deterministic placement.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Cache-coloring stubs (issue #85, module 10). No coloring allocator exists (no cache_color references anywhere in src/kernel) — every test is a documented stub pending the main-branch allocator API. </p>
+<div class="textblock"><p>Cache-coloring allocator tests (issue #62; stubs from issue #85, module 10). Verifies PMM's colored path: exact-color allocation, uniform spread, range/stability, and the bit-extraction contract. All pages freed per test (net-zero via the harness snapshot check); cursors reset at entry for deterministic placement. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

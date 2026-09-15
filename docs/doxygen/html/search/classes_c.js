@@ -10,5 +10,6 @@ var searchData=
   ['resourcecounters_7',['ResourceCounters',['../structkernel_1_1test_1_1_resource_counters.html',1,'kernel::test']]],
   ['resourcetracker_8',['ResourceTracker',['../classkernel_1_1test_1_1_resource_tracker.html',1,'kernel::test']]],
   ['rlimit_9',['Rlimit',['../structkernel_1_1_rlimit.html',1,'kernel::Rlimit'],['../struct_rlimit.html',1,'Rlimit']]],
-  ['rlimit_10',['rlimit',['../structrlimit.html',1,'']]]
+  ['rlimit_10',['rlimit',['../structrlimit.html',1,'']]],
+  ['rwlock_11',['RwLock',['../classkernel_1_1sync_1_1_rw_lock.html',1,'kernel::sync']]]
 ];

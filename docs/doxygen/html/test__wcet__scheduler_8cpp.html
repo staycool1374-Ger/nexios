@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -140,14 +140,42 @@ Include dependency graph for test_wcet_scheduler.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a2c070fe8256420c9f4a5d91d79ea20d2" id="r_a2c070fe8256420c9f4a5d91d79ea20d2"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a2c070fe8256420c9f4a5d91d79ea20d2">JARVIS_TEST</a> (wcet_scan_deadlines, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a2110a01ae97bff1f4600d65c34037843" id="r_a2110a01ae97bff1f4600d65c34037843"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a2110a01ae97bff1f4600d65c34037843">JARVIS_TEST</a> (wcet_balancer_tick_worst, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aefc578d12e78a691daeb17cf2145e4c7" id="r_aefc578d12e78a691daeb17cf2145e4c7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aefc578d12e78a691daeb17cf2145e4c7">register_wcet_scheduler_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>WCET benchmark for the deadline-miss detection scan (<a class="el" href="classkernel_1_1_scheduler.html#aabd465f67eed45ec2c20877a6f7398b8" title="Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detec...">Scheduler::scan_deadlines</a> / <a class="el" href="classkernel_1_1_deadline_list.html" title="Intrusive doubly-linked list sorted by deadline_ticks ascending. Provides O(1) expired-detection by c...">DeadlineList</a> walk). Phase 7b. </p>
 <p>v0.3.10 rework (SIMULATED → DRIVEN): the scan population is built from REAL dispatched kernel tasks with genuinely-expired deadlines (a real task that busy-waits past its real deadline). No existing task's deadline/period is mutated. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a2110a01ae97bff1f4600d65c34037843" name="a2110a01ae97bff1f4600d65c34037843"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2110a01ae97bff1f4600d65c34037843">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">wcet_balancer_tick_worst</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__wcet__scheduler_8cpp_a2110a01ae97bff1f4600d65c34037843_cgraph.png" border="0" usemap="#atest__wcet__scheduler_8cpp_a2110a01ae97bff1f4600d65c34037843_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a id="a2c070fe8256420c9f4a5d91d79ea20d2" name="a2c070fe8256420c9f4a5d91d79ea20d2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2c070fe8256420c9f4a5d91d79ea20d2">&#9670;&#160;</a></span>JARVIS_TEST()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a2c070fe8256420c9f4a5d91d79ea20d2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -168,7 +196,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__wcet__scheduler_8cpp_a2c070fe8256420c9f4a5d91d79ea20d2_cgraph.png" border="0" usemap="#atest__wcet__scheduler_8cpp_a2c070fe8256420c9f4a5d91d79ea20d2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -191,7 +219,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__wcet__scheduler_8cpp_aefc578d12e78a691daeb17cf2145e4c7_cgraph.png" border="0" usemap="#atest__wcet__scheduler_8cpp_aefc578d12e78a691daeb17cf2145e4c7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>

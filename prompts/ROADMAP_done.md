@@ -1,5 +1,39 @@
 # Completed Roadmap Items
 
+## v0.4.5 — Kernel half merge + Cache coloring (RELEASED 2026-09-15)
+
+**Purpose:** Per-CPU FPU ownership, kernel-half page-table merge,
+distributed runqueues + RT load balancer + affinity ABI, cache
+coloring allocator, WCET re-audit, execution-time accounting fix.
+Milestone v0.4.5 has 0 open issues.
+
+- **Per-CPU FPU ownership** (#151) — `fpu_owner_own()` own-slot
+  accessor, linker alias deleted (fail-closed), AP tripwire removed;
+  APs join the lazy-FPU protocol identically to the BSP.
+- **Kernel-half page-table merge** (#96) — recursive link-semantics
+  converge from the live kernel PML4 (zero allocations) + structural
+  convergence assert; template snapshot at end of bring-up; asserts
+  on ELF load/exec/loader paths; new `pt_merge` class (5 tests).
+- **Distributed runqueues + RT balancer + affinity ABI** (#61) —
+  header-only `sync::RwLock` (writer preference, folded in from #62),
+  `Scheduler::balancer_tick` (BSP-only, quiesce + try_lock, bounded
+  moves, RT/user/idle exclusion) wired into the on_tick tail,
+  `SYS_SET/GET_AFFINITY` (77/78) + libc wrappers.
+- **Cache coloring allocator + WCET re-audit** (#62) — PMM colored
+  path (16 colors, fail-closed OOR), 4 module-10 stubs converted to
+  real, `cache-coloring.md` paper, `wcet-reaudit-v0.4.5.md` successor
+  doc (scan 2030000 cyc, balancer 8000 cyc).
+- **Execution-time accounting** (#154) — `executed_ticks` charged to
+  the running task only (was: every READY/RUNNING task); WCET overrun
+  latch gated on identity; `init` renamed `init/reaper` (display).
+- **Reaper wait-for-child** (#155) — filed against v0.4.6 (not in
+  this release).
+
+Gates at completion (2026-09-15): debug `all` **1361/1361**, release
+`all` **85/85**, `make build` Errors 0. SIL 3 APPROVED per issue
+(#151, #96, #61, #62 with one REJECT-fix cycle, #154 audit reports
+under `audits/`).
+
 ## v0.4.4 — APIC + SMP / ELF shared objects (RELEASED 2026-09-15)
 
 **Purpose:** Per-CPU foundation + SMP bring-up skeleton, ELF DT_NEEDED

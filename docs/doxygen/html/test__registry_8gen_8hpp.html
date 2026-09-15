@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -455,6 +455,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a13108944e9fe45367d119ec044ca7a81" id="r_a13108944e9fe45367d119ec044ca7a81"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a13108944e9fe45367d119ec044ca7a81">test_fpu_nm_nesting_impossible</a> ()</td></tr>
 <tr class="memitem:ab316e85e09b6413471d63cc885628d5c" id="r_ab316e85e09b6413471d63cc885628d5c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab316e85e09b6413471d63cc885628d5c">test_fpu_nm_no_alloc</a> ()</td></tr>
 <tr class="memitem:adf8d52aa74d5dc88ec489a759c225b71" id="r_adf8d52aa74d5dc88ec489a759c225b71"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#adf8d52aa74d5dc88ec489a759c225b71">test_fpu_nm_own_arm_no_clobber</a> ()</td></tr>
+<tr class="memitem:a0e9cc71f2807a1909854f0f22c0d8cc7" id="r_a0e9cc71f2807a1909854f0f22c0d8cc7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0e9cc71f2807a1909854f0f22c0d8cc7">test_fpu_owner_percpu_reset</a> ()</td></tr>
 <tr class="memitem:a72c039f8f01bee17d5fb7f292f50ab3b" id="r_a72c039f8f01bee17d5fb7f292f50ab3b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a72c039f8f01bee17d5fb7f292f50ab3b">test_fpu_save_area_alignment</a> ()</td></tr>
 <tr class="memitem:ad754ae8f47b5151dc8f9973ea5f39dfa" id="r_ad754ae8f47b5151dc8f9973ea5f39dfa"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad754ae8f47b5151dc8f9973ea5f39dfa">test_frame_cap_map_unmap_roundtrip</a> ()</td></tr>
 <tr class="memitem:a61c9d6f3b59c07971801824cd274a6d3" id="r_a61c9d6f3b59c07971801824cd274a6d3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a61c9d6f3b59c07971801824cd274a6d3">test_frame_cap_release_frees_pmm</a> ()</td></tr>
@@ -728,6 +729,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ab6bf652ca579f818b319d4a1415dd764" id="r_ab6bf652ca579f818b319d4a1415dd764"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab6bf652ca579f818b319d4a1415dd764">test_lapic_oneshot_zero_noop</a> ()</td></tr>
 <tr class="memitem:a21fddca6d5b2a835b12820dce077028c" id="r_a21fddca6d5b2a835b12820dce077028c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a21fddca6d5b2a835b12820dce077028c">test_lapic_periodic_zero_noop</a> ()</td></tr>
 <tr class="memitem:afb2cbf26e1ef8d64f3c851150ca09ca0" id="r_afb2cbf26e1ef8d64f3c851150ca09ca0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afb2cbf26e1ef8d64f3c851150ca09ca0">test_lapic_supported_and_enabled</a> ()</td></tr>
+<tr class="memitem:a88cfe9885592b7282f51535e2fe748d4" id="r_a88cfe9885592b7282f51535e2fe748d4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a88cfe9885592b7282f51535e2fe748d4">test_late_mapping_visible_after_merge</a> ()</td></tr>
 <tr class="memitem:a87dbb8fa0cccbb170da43ed15aee5c97" id="r_a87dbb8fa0cccbb170da43ed15aee5c97"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a87dbb8fa0cccbb170da43ed15aee5c97">test_lazy_tlb_coalesces</a> ()</td></tr>
 <tr class="memitem:a13f4797fd2b8ce3b489b09c4134d2dde" id="r_a13f4797fd2b8ce3b489b09c4134d2dde"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a13f4797fd2b8ce3b489b09c4134d2dde">test_lazy_tlb_deferred_to_switch</a> ()</td></tr>
 <tr class="memitem:af7f2274cd75ba838fbe57dc07102c306" id="r_af7f2274cd75ba838fbe57dc07102c306"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af7f2274cd75ba838fbe57dc07102c306">test_lazy_tlb_no_corruption</a> ()</td></tr>
@@ -767,6 +769,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a8da23576fcaca4a2d305eecd28d1b80e" id="r_a8da23576fcaca4a2d305eecd28d1b80e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8da23576fcaca4a2d305eecd28d1b80e">test_mempool_fragmentation</a> ()</td></tr>
 <tr class="memitem:a1a3aab2f5538964d11cc62255cb04fd6" id="r_a1a3aab2f5538964d11cc62255cb04fd6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1a3aab2f5538964d11cc62255cb04fd6">test_mempool_large_alloc</a> ()</td></tr>
 <tr class="memitem:ac37f53955dc871cfd961706f38a8bdc3" id="r_ac37f53955dc871cfd961706f38a8bdc3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac37f53955dc871cfd961706f38a8bdc3">test_mempool_reuse</a> ()</td></tr>
+<tr class="memitem:a5a26f6298efc0eb9c068c168e58bd481" id="r_a5a26f6298efc0eb9c068c168e58bd481"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5a26f6298efc0eb9c068c168e58bd481">test_merge_allocates_nothing</a> ()</td></tr>
+<tr class="memitem:af233da8f7a95d2eacc6dfdc9b6defaaf" id="r_af233da8f7a95d2eacc6dfdc9b6defaaf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af233da8f7a95d2eacc6dfdc9b6defaaf">test_merge_equivalent_to_full_copy</a> ()</td></tr>
+<tr class="memitem:aab8be6d07879c825e58b1e9a51c44b0c" id="r_aab8be6d07879c825e58b1e9a51c44b0c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aab8be6d07879c825e58b1e9a51c44b0c">test_merge_idempotent</a> ()</td></tr>
 <tr class="memitem:ab8bfa15793c7a6620aba15fd7d698825" id="r_ab8bfa15793c7a6620aba15fd7d698825"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab8bfa15793c7a6620aba15fd7d698825">test_mint_reduces_rights</a> ()</td></tr>
 <tr class="memitem:a3184fccd71c1755eac3caaa688e98a52" id="r_a3184fccd71c1755eac3caaa688e98a52"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3184fccd71c1755eac3caaa688e98a52">test_mmio_cap_create_io_bar_bounds</a> ()</td></tr>
 <tr class="memitem:a7bfdd87e010c3aad5677f0ff55f52f4e" id="r_a7bfdd87e010c3aad5677f0ff55f52f4e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7bfdd87e010c3aad5677f0ff55f52f4e">test_mmio_cap_create_memory_bar_fields</a> ()</td></tr>
@@ -882,6 +887,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a8bce0c645ae9a9fbabe61c4aec8a7179" id="r_a8bce0c645ae9a9fbabe61c4aec8a7179"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8bce0c645ae9a9fbabe61c4aec8a7179">test_pcp_try_lock_held</a> ()</td></tr>
 <tr class="memitem:af57bbad7379d4677195d11f21f99803e" id="r_af57bbad7379d4677195d11f21f99803e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af57bbad7379d4677195d11f21f99803e">test_pcp_two_mutexes</a> ()</td></tr>
 <tr class="memitem:a5459abde7675aef432b28b10d2ad2025" id="r_a5459abde7675aef432b28b10d2ad2025"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5459abde7675aef432b28b10d2ad2025">test_per_cpu_bsp_identity</a> ()</td></tr>
+<tr class="memitem:a357918c657e9fc114d43e041bc801a36" id="r_a357918c657e9fc114d43e041bc801a36"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a357918c657e9fc114d43e041bc801a36">test_per_cpu_fpu_owner_independent</a> ()</td></tr>
 <tr class="memitem:a1d44de72501dfdcd7d3040098a827324" id="r_a1d44de72501dfdcd7d3040098a827324"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1d44de72501dfdcd7d3040098a827324">test_per_cpu_nesting_depth_live</a> ()</td></tr>
 <tr class="memitem:ab2362f52de474192355b290660600714" id="r_ab2362f52de474192355b290660600714"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab2362f52de474192355b290660600714">test_per_cpu_slot_offsets_frozen</a> ()</td></tr>
 <tr class="memitem:a89027cbb224d5357f8e37b07139ce85c" id="r_a89027cbb224d5357f8e37b07139ce85c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a89027cbb224d5357f8e37b07139ce85c">test_pingpong_reject_when_busy</a> ()</td></tr>
@@ -1273,6 +1279,10 @@ Functions</h2></td></tr>
 <tr class="memitem:ac996666f14da2a758b34276c2eb401b2" id="r_ac996666f14da2a758b34276c2eb401b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac996666f14da2a758b34276c2eb401b2">test_sys_iommu_map_dispatch_happy</a> ()</td></tr>
 <tr class="memitem:a4029ad1150b4de43808993586e193fa5" id="r_a4029ad1150b4de43808993586e193fa5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4029ad1150b4de43808993586e193fa5">test_sys_iommu_map_validation_matrix</a> ()</td></tr>
 <tr class="memitem:aed7e9c8af4521a097c9563d1bc326a1a" id="r_aed7e9c8af4521a097c9563d1bc326a1a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aed7e9c8af4521a097c9563d1bc326a1a">test_sys_iommu_unmap_dispatch</a> ()</td></tr>
+<tr class="memitem:aec471af4b7a16bab3573b5c2f8ed02aa" id="r_aec471af4b7a16bab3573b5c2f8ed02aa"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aec471af4b7a16bab3573b5c2f8ed02aa">test_syscall_affinity_bad_pid</a> ()</td></tr>
+<tr class="memitem:a164251ef38e5efa0bf48ecbe3260dbda" id="r_a164251ef38e5efa0bf48ecbe3260dbda"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a164251ef38e5efa0bf48ecbe3260dbda">test_syscall_affinity_empty_mask</a> ()</td></tr>
+<tr class="memitem:ad5ed08d076f2de2469c55299a2a34338" id="r_ad5ed08d076f2de2469c55299a2a34338"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad5ed08d076f2de2469c55299a2a34338">test_syscall_affinity_explicit_pid</a> ()</td></tr>
+<tr class="memitem:ad94c3d2f2d8b939206061b7009bea8ff" id="r_ad94c3d2f2d8b939206061b7009bea8ff"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad94c3d2f2d8b939206061b7009bea8ff">test_syscall_affinity_set_get_roundtrip</a> ()</td></tr>
 <tr class="memitem:af650cd33f0f331896f14a6d1e96e09d1" id="r_af650cd33f0f331896f14a6d1e96e09d1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af650cd33f0f331896f14a6d1e96e09d1">test_syscall_alarm_basic</a> ()</td></tr>
 <tr class="memitem:a88277c21fa6a6162743c70a260bc618c" id="r_a88277c21fa6a6162743c70a260bc618c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a88277c21fa6a6162743c70a260bc618c">test_syscall_alarm_subsecond</a> ()</td></tr>
 <tr class="memitem:aa88dcbb3414153da5d02dd93d46072f0" id="r_aa88dcbb3414153da5d02dd93d46072f0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa88dcbb3414153da5d02dd93d46072f0">test_syscall_dispatch_get_ticks</a> ()</td></tr>
@@ -1307,6 +1317,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a90e45dfe525a8375c376d7eb89fac44f" id="r_a90e45dfe525a8375c376d7eb89fac44f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a90e45dfe525a8375c376d7eb89fac44f">test_task_fork_child_cleanup_preserves_parent_pages</a> ()</td></tr>
 <tr class="memitem:a3d133750c584ad105feab2cb8f29145f" id="r_a3d133750c584ad105feab2cb8f29145f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3d133750c584ad105feab2cb8f29145f">test_task_reparent_preserves_resources</a> ()</td></tr>
 <tr class="memitem:ab6e5c430cb7034e913bdc1f0650530c1" id="r_ab6e5c430cb7034e913bdc1f0650530c1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab6e5c430cb7034e913bdc1f0650530c1">test_task_zombie_state_cleanup</a> ()</td></tr>
+<tr class="memitem:ab14ba8ef048d0b62d003438d0c188305" id="r_ab14ba8ef048d0b62d003438d0c188305"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab14ba8ef048d0b62d003438d0c188305">test_template_mismatch_detected</a> ()</td></tr>
 <tr class="memitem:af4375da21bdf32a6b5c51599a16e4a0b" id="r_af4375da21bdf32a6b5c51599a16e4a0b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af4375da21bdf32a6b5c51599a16e4a0b">test_test_release_zombie_self</a> ()</td></tr>
 <tr class="memitem:a4d9f15e4f9de0e282f1de60e84dceee3" id="r_a4d9f15e4f9de0e282f1de60e84dceee3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4d9f15e4f9de0e282f1de60e84dceee3">test_test_tcb_write_log_catches_stray_write</a> ()</td></tr>
 <tr class="memitem:a93db0b68d6e6f153e3d4255a8729df71" id="r_a93db0b68d6e6f153e3d4255a8729df71"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a93db0b68d6e6f153e3d4255a8729df71">test_test_zombie_starvation_watchdog</a> ()</td></tr>
@@ -1320,6 +1331,7 @@ Functions</h2></td></tr>
 <tr class="memitem:a18d415c1b6f2607119f90744dbec574c" id="r_a18d415c1b6f2607119f90744dbec574c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a18d415c1b6f2607119f90744dbec574c">test_timer_no_side_effects_on_idle</a> ()</td></tr>
 <tr class="memitem:a3d88a0d2114b09daf3e28c8b5a586630" id="r_a3d88a0d2114b09daf3e28c8b5a586630"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3d88a0d2114b09daf3e28c8b5a586630">test_timer_period_reload</a> ()</td></tr>
 <tr class="memitem:aad899f7d10283ae11aebd7d6fe7413fa" id="r_aad899f7d10283ae11aebd7d6fe7413fa"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aad899f7d10283ae11aebd7d6fe7413fa">test_timer_rate_monotonic_schedule_indirect</a> ()</td></tr>
+<tr class="memitem:aa06c21fb0179398aaf11eff6a1113f4c" id="r_aa06c21fb0179398aaf11eff6a1113f4c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa06c21fb0179398aaf11eff6a1113f4c">test_timer_ready_task_accumulates_no_cpu_time</a> ()</td></tr>
 <tr class="memitem:af55a2a24ac908fedd686856003cb3dc6" id="r_af55a2a24ac908fedd686856003cb3dc6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af55a2a24ac908fedd686856003cb3dc6">test_timer_reap_orphans_periodic</a> ()</td></tr>
 <tr class="memitem:a65854e21597c32186f2f803b5727b83e" id="r_a65854e21597c32186f2f803b5727b83e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a65854e21597c32186f2f803b5727b83e">test_timer_tick_accounting</a> ()</td></tr>
 <tr class="memitem:ac817a02b2a6c22426909125c9f8e73e2" id="r_ac817a02b2a6c22426909125c9f8e73e2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac817a02b2a6c22426909125c9f8e73e2">test_tlb_latency_avg_improves</a> ()</td></tr>
@@ -1454,6 +1466,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ad5f1bc29eaefd44404cacfcc547ab7b3" id="r_ad5f1bc29eaefd44404cacfcc547ab7b3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad5f1bc29eaefd44404cacfcc547ab7b3">test_waitpid_cr3_switch_on_status_write</a> ()</td></tr>
 <tr class="memitem:a6eb69cfd2993e9471abbfe3d2b67f5a0" id="r_a6eb69cfd2993e9471abbfe3d2b67f5a0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6eb69cfd2993e9471abbfe3d2b67f5a0">test_waitpid_two_children_sequential_reap</a> ()</td></tr>
 <tr class="memitem:a23c81a2f3eef9fe7e2f1456df812f0b1" id="r_a23c81a2f3eef9fe7e2f1456df812f0b1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a23c81a2f3eef9fe7e2f1456df812f0b1">test_waitpid_zombie_over_new_child</a> ()</td></tr>
+<tr class="memitem:aaffb36e31a0331d8aeaf47732b577e7e" id="r_aaffb36e31a0331d8aeaf47732b577e7e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aaffb36e31a0331d8aeaf47732b577e7e">test_wcet_balancer_tick_worst</a> ()</td></tr>
 <tr class="memitem:a14f98bdf1caccd05fff63da8543a08db" id="r_a14f98bdf1caccd05fff63da8543a08db"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a14f98bdf1caccd05fff63da8543a08db">test_wcet_cleanup_step</a> ()</td></tr>
 <tr class="memitem:a1aa79b6d14a8901f4078791fc9253d2c" id="r_a1aa79b6d14a8901f4078791fc9253d2c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1aa79b6d14a8901f4078791fc9253d2c">test_wcet_mempool_alloc_free</a> ()</td></tr>
 <tr class="memitem:a38731f5d1cb8b7df4384a5489719299e" id="r_a38731f5d1cb8b7df4384a5489719299e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a38731f5d1cb8b7df4384a5489719299e">test_wcet_scan_deadlines</a> ()</td></tr>
@@ -2104,6 +2117,8 @@ Functions</h2></td></tr>
 <tr class="memitem:af1a0b484c2c6179186beecf8e7065321" id="r_af1a0b484c2c6179186beecf8e7065321"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af1a0b484c2c6179186beecf8e7065321">teardown_fpu_nm_no_alloc</a> ()</td></tr>
 <tr class="memitem:ace35c27cdf3d62a60e01419787302a63" id="r_ace35c27cdf3d62a60e01419787302a63"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ace35c27cdf3d62a60e01419787302a63">setup_fpu_nm_own_arm_no_clobber</a> ()</td></tr>
 <tr class="memitem:ad1afc6df0427ffdbf40f9a0137449aca" id="r_ad1afc6df0427ffdbf40f9a0137449aca"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad1afc6df0427ffdbf40f9a0137449aca">teardown_fpu_nm_own_arm_no_clobber</a> ()</td></tr>
+<tr class="memitem:a655d35c4dba96bc6bded85fa080a4dfe" id="r_a655d35c4dba96bc6bded85fa080a4dfe"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a655d35c4dba96bc6bded85fa080a4dfe">setup_fpu_owner_percpu_reset</a> ()</td></tr>
+<tr class="memitem:ab86aa1d240c801b44fd785a344febf7c" id="r_ab86aa1d240c801b44fd785a344febf7c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab86aa1d240c801b44fd785a344febf7c">teardown_fpu_owner_percpu_reset</a> ()</td></tr>
 <tr class="memitem:a654b5a66256e84740fb8b72d663f930a" id="r_a654b5a66256e84740fb8b72d663f930a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a654b5a66256e84740fb8b72d663f930a">setup_fpu_save_area_alignment</a> ()</td></tr>
 <tr class="memitem:a12a6ae833b34a9283074c32e84bc6eaf" id="r_a12a6ae833b34a9283074c32e84bc6eaf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a12a6ae833b34a9283074c32e84bc6eaf">teardown_fpu_save_area_alignment</a> ()</td></tr>
 <tr class="memitem:ad2c8263334f272ce4ba12190d38fa2fb" id="r_ad2c8263334f272ce4ba12190d38fa2fb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad2c8263334f272ce4ba12190d38fa2fb">setup_frame_cap_map_unmap_roundtrip</a> ()</td></tr>
@@ -2650,6 +2665,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a2a0fc097f0c1328b0e97ce60f0f002bd" id="r_a2a0fc097f0c1328b0e97ce60f0f002bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2a0fc097f0c1328b0e97ce60f0f002bd">teardown_lapic_periodic_zero_noop</a> ()</td></tr>
 <tr class="memitem:a3ce7dd553ca643361001963791160d5b" id="r_a3ce7dd553ca643361001963791160d5b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3ce7dd553ca643361001963791160d5b">setup_lapic_supported_and_enabled</a> ()</td></tr>
 <tr class="memitem:a7ad11f13ad08a96cc806461e31922e6b" id="r_a7ad11f13ad08a96cc806461e31922e6b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7ad11f13ad08a96cc806461e31922e6b">teardown_lapic_supported_and_enabled</a> ()</td></tr>
+<tr class="memitem:ad57b020ef99ad1b8bc13a6bdd45f047c" id="r_ad57b020ef99ad1b8bc13a6bdd45f047c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad57b020ef99ad1b8bc13a6bdd45f047c">setup_late_mapping_visible_after_merge</a> ()</td></tr>
+<tr class="memitem:a1ff90b0854e8d7cdc671ab95f6ef9dcf" id="r_a1ff90b0854e8d7cdc671ab95f6ef9dcf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1ff90b0854e8d7cdc671ab95f6ef9dcf">teardown_late_mapping_visible_after_merge</a> ()</td></tr>
 <tr class="memitem:a0d9892b09f3bdab9c2e27a55f659dc9d" id="r_a0d9892b09f3bdab9c2e27a55f659dc9d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0d9892b09f3bdab9c2e27a55f659dc9d">setup_lazy_tlb_coalesces</a> ()</td></tr>
 <tr class="memitem:a1b0a5e6ee02746b3e0db5ce07fbac84c" id="r_a1b0a5e6ee02746b3e0db5ce07fbac84c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1b0a5e6ee02746b3e0db5ce07fbac84c">teardown_lazy_tlb_coalesces</a> ()</td></tr>
 <tr class="memitem:a1776e65d2a88202647fbd7d7ac74886f" id="r_a1776e65d2a88202647fbd7d7ac74886f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1776e65d2a88202647fbd7d7ac74886f">setup_lazy_tlb_deferred_to_switch</a> ()</td></tr>
@@ -2728,6 +2745,12 @@ Functions</h2></td></tr>
 <tr class="memitem:aa111acc74671f2a33fe0f0146e54c1ef" id="r_aa111acc74671f2a33fe0f0146e54c1ef"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa111acc74671f2a33fe0f0146e54c1ef">teardown_mempool_large_alloc</a> ()</td></tr>
 <tr class="memitem:ab2aac13013f285938828c1bac6fc9bd1" id="r_ab2aac13013f285938828c1bac6fc9bd1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab2aac13013f285938828c1bac6fc9bd1">setup_mempool_reuse</a> ()</td></tr>
 <tr class="memitem:ab5362fcd711c30c7dc39f0a942ea1cf1" id="r_ab5362fcd711c30c7dc39f0a942ea1cf1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab5362fcd711c30c7dc39f0a942ea1cf1">teardown_mempool_reuse</a> ()</td></tr>
+<tr class="memitem:a727d4d275a167c27a008c188505085d1" id="r_a727d4d275a167c27a008c188505085d1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a727d4d275a167c27a008c188505085d1">setup_merge_allocates_nothing</a> ()</td></tr>
+<tr class="memitem:a6758b2300a097d2412cb817753e8a5c5" id="r_a6758b2300a097d2412cb817753e8a5c5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6758b2300a097d2412cb817753e8a5c5">teardown_merge_allocates_nothing</a> ()</td></tr>
+<tr class="memitem:acac78ebc392b271616a07d26241f55fd" id="r_acac78ebc392b271616a07d26241f55fd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acac78ebc392b271616a07d26241f55fd">setup_merge_equivalent_to_full_copy</a> ()</td></tr>
+<tr class="memitem:ade7377ff0744fae27200bd2ec7bdf67a" id="r_ade7377ff0744fae27200bd2ec7bdf67a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade7377ff0744fae27200bd2ec7bdf67a">teardown_merge_equivalent_to_full_copy</a> ()</td></tr>
+<tr class="memitem:ade9841c78c386e9ee933e19316c4afe6" id="r_ade9841c78c386e9ee933e19316c4afe6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade9841c78c386e9ee933e19316c4afe6">setup_merge_idempotent</a> ()</td></tr>
+<tr class="memitem:a809522f3253429cf1e66e8f10047b67b" id="r_a809522f3253429cf1e66e8f10047b67b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a809522f3253429cf1e66e8f10047b67b">teardown_merge_idempotent</a> ()</td></tr>
 <tr class="memitem:af15b682e9314575be12bf9d09c6dc48e" id="r_af15b682e9314575be12bf9d09c6dc48e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af15b682e9314575be12bf9d09c6dc48e">setup_mint_reduces_rights</a> ()</td></tr>
 <tr class="memitem:ac1f0a6ba96a10d2dde7b172037a944b7" id="r_ac1f0a6ba96a10d2dde7b172037a944b7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac1f0a6ba96a10d2dde7b172037a944b7">teardown_mint_reduces_rights</a> ()</td></tr>
 <tr class="memitem:acdfa505205acaeb10567597d2be557d6" id="r_acdfa505205acaeb10567597d2be557d6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acdfa505205acaeb10567597d2be557d6">setup_mmio_cap_create_io_bar_bounds</a> ()</td></tr>
@@ -2958,6 +2981,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a6b2ac0ce4576dd5fad50e1ff95b0e85d" id="r_a6b2ac0ce4576dd5fad50e1ff95b0e85d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6b2ac0ce4576dd5fad50e1ff95b0e85d">teardown_pcp_two_mutexes</a> ()</td></tr>
 <tr class="memitem:a4967c08358b3ad75fe43af5455e42673" id="r_a4967c08358b3ad75fe43af5455e42673"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4967c08358b3ad75fe43af5455e42673">setup_per_cpu_bsp_identity</a> ()</td></tr>
 <tr class="memitem:a27c4d60834d2a7a09958a35e03edcbae" id="r_a27c4d60834d2a7a09958a35e03edcbae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a27c4d60834d2a7a09958a35e03edcbae">teardown_per_cpu_bsp_identity</a> ()</td></tr>
+<tr class="memitem:a2f9f9629e31650caa055ecb430f7d2e4" id="r_a2f9f9629e31650caa055ecb430f7d2e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2f9f9629e31650caa055ecb430f7d2e4">setup_per_cpu_fpu_owner_independent</a> ()</td></tr>
+<tr class="memitem:aa53e0583332bc71472ff97ded2a90682" id="r_aa53e0583332bc71472ff97ded2a90682"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa53e0583332bc71472ff97ded2a90682">teardown_per_cpu_fpu_owner_independent</a> ()</td></tr>
 <tr class="memitem:a028ba4d97f460d539bdfde1d312d1855" id="r_a028ba4d97f460d539bdfde1d312d1855"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a028ba4d97f460d539bdfde1d312d1855">setup_per_cpu_nesting_depth_live</a> ()</td></tr>
 <tr class="memitem:a4906af16d29202d15935feff8651bf70" id="r_a4906af16d29202d15935feff8651bf70"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4906af16d29202d15935feff8651bf70">teardown_per_cpu_nesting_depth_live</a> ()</td></tr>
 <tr class="memitem:ac7da876bffb8293381d7e18de3e8c17b" id="r_ac7da876bffb8293381d7e18de3e8c17b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac7da876bffb8293381d7e18de3e8c17b">setup_per_cpu_slot_offsets_frozen</a> ()</td></tr>
@@ -3740,6 +3765,14 @@ Functions</h2></td></tr>
 <tr class="memitem:a76dde4361ca8493aeb551c41cbdf2c4a" id="r_a76dde4361ca8493aeb551c41cbdf2c4a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a76dde4361ca8493aeb551c41cbdf2c4a">teardown_sys_iommu_map_validation_matrix</a> ()</td></tr>
 <tr class="memitem:a2b3f420ffb223f8375d188c0cb07583b" id="r_a2b3f420ffb223f8375d188c0cb07583b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2b3f420ffb223f8375d188c0cb07583b">setup_sys_iommu_unmap_dispatch</a> ()</td></tr>
 <tr class="memitem:a4f2b64f8a3f705e46faf2bfa6d8b4f7a" id="r_a4f2b64f8a3f705e46faf2bfa6d8b4f7a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4f2b64f8a3f705e46faf2bfa6d8b4f7a">teardown_sys_iommu_unmap_dispatch</a> ()</td></tr>
+<tr class="memitem:a6e3d22a738a5bad3bcf54bd7077a6e65" id="r_a6e3d22a738a5bad3bcf54bd7077a6e65"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6e3d22a738a5bad3bcf54bd7077a6e65">setup_syscall_affinity_bad_pid</a> ()</td></tr>
+<tr class="memitem:acd1d75d7949b54e745b5fb36c7388d6a" id="r_acd1d75d7949b54e745b5fb36c7388d6a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acd1d75d7949b54e745b5fb36c7388d6a">teardown_syscall_affinity_bad_pid</a> ()</td></tr>
+<tr class="memitem:a415c4dee285fd650c5681fb675905c42" id="r_a415c4dee285fd650c5681fb675905c42"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a415c4dee285fd650c5681fb675905c42">setup_syscall_affinity_empty_mask</a> ()</td></tr>
+<tr class="memitem:a29a209cf21e212c5050e63587b05faf0" id="r_a29a209cf21e212c5050e63587b05faf0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a29a209cf21e212c5050e63587b05faf0">teardown_syscall_affinity_empty_mask</a> ()</td></tr>
+<tr class="memitem:a59169c3e4bbdaf35379ae7485bfd8940" id="r_a59169c3e4bbdaf35379ae7485bfd8940"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a59169c3e4bbdaf35379ae7485bfd8940">setup_syscall_affinity_explicit_pid</a> ()</td></tr>
+<tr class="memitem:a4d8de40c0bc9043dd042fedc40074000" id="r_a4d8de40c0bc9043dd042fedc40074000"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4d8de40c0bc9043dd042fedc40074000">teardown_syscall_affinity_explicit_pid</a> ()</td></tr>
+<tr class="memitem:ab2cb57e76e78324927eda8d3182d56c3" id="r_ab2cb57e76e78324927eda8d3182d56c3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab2cb57e76e78324927eda8d3182d56c3">setup_syscall_affinity_set_get_roundtrip</a> ()</td></tr>
+<tr class="memitem:a5e19ee3dd42b5243232f809a8139ede1" id="r_a5e19ee3dd42b5243232f809a8139ede1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5e19ee3dd42b5243232f809a8139ede1">teardown_syscall_affinity_set_get_roundtrip</a> ()</td></tr>
 <tr class="memitem:a1da06bca3518243f8fba696cd9bd663c" id="r_a1da06bca3518243f8fba696cd9bd663c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1da06bca3518243f8fba696cd9bd663c">setup_syscall_alarm_basic</a> ()</td></tr>
 <tr class="memitem:a134928450bf4cab882dde7ab7be2a64f" id="r_a134928450bf4cab882dde7ab7be2a64f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a134928450bf4cab882dde7ab7be2a64f">teardown_syscall_alarm_basic</a> ()</td></tr>
 <tr class="memitem:ae5ef0a8a70615145c96b7c7b24796b32" id="r_ae5ef0a8a70615145c96b7c7b24796b32"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae5ef0a8a70615145c96b7c7b24796b32">setup_syscall_alarm_subsecond</a> ()</td></tr>
@@ -3808,6 +3841,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a81cecd6b61639d807e4c1aa2aec7ac65" id="r_a81cecd6b61639d807e4c1aa2aec7ac65"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a81cecd6b61639d807e4c1aa2aec7ac65">teardown_task_reparent_preserves_resources</a> ()</td></tr>
 <tr class="memitem:af9d35dc3c9871bdd42d7b350329e6f63" id="r_af9d35dc3c9871bdd42d7b350329e6f63"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af9d35dc3c9871bdd42d7b350329e6f63">setup_task_zombie_state_cleanup</a> ()</td></tr>
 <tr class="memitem:a1b7df8d7b4327ac7403d36dace09465a" id="r_a1b7df8d7b4327ac7403d36dace09465a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1b7df8d7b4327ac7403d36dace09465a">teardown_task_zombie_state_cleanup</a> ()</td></tr>
+<tr class="memitem:a0dc4edb89a606ba523b4feba2c091c7a" id="r_a0dc4edb89a606ba523b4feba2c091c7a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0dc4edb89a606ba523b4feba2c091c7a">setup_template_mismatch_detected</a> ()</td></tr>
+<tr class="memitem:ad46033b4b22b434f16cdcfb1fee07f5a" id="r_ad46033b4b22b434f16cdcfb1fee07f5a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad46033b4b22b434f16cdcfb1fee07f5a">teardown_template_mismatch_detected</a> ()</td></tr>
 <tr class="memitem:a3556a80dbe74e5c046d17a09409b6ab0" id="r_a3556a80dbe74e5c046d17a09409b6ab0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3556a80dbe74e5c046d17a09409b6ab0">setup_test_release_zombie_self</a> ()</td></tr>
 <tr class="memitem:a2a87ffe92cca4db748c88e49f9435db0" id="r_a2a87ffe92cca4db748c88e49f9435db0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2a87ffe92cca4db748c88e49f9435db0">teardown_test_release_zombie_self</a> ()</td></tr>
 <tr class="memitem:a4237adce0856778df7399ff1f898267c" id="r_a4237adce0856778df7399ff1f898267c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4237adce0856778df7399ff1f898267c">setup_test_tcb_write_log_catches_stray_write</a> ()</td></tr>
@@ -3834,6 +3869,8 @@ Functions</h2></td></tr>
 <tr class="memitem:acacea4ca252999c306cdc1109e10b64e" id="r_acacea4ca252999c306cdc1109e10b64e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acacea4ca252999c306cdc1109e10b64e">teardown_timer_period_reload</a> ()</td></tr>
 <tr class="memitem:a1e43869c44e3c55567701a0913f49fa9" id="r_a1e43869c44e3c55567701a0913f49fa9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1e43869c44e3c55567701a0913f49fa9">setup_timer_rate_monotonic_schedule_indirect</a> ()</td></tr>
 <tr class="memitem:a54e3789498e1775292926d9340fa05fb" id="r_a54e3789498e1775292926d9340fa05fb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a54e3789498e1775292926d9340fa05fb">teardown_timer_rate_monotonic_schedule_indirect</a> ()</td></tr>
+<tr class="memitem:a3266c0bd27de12a5505f500099cb0192" id="r_a3266c0bd27de12a5505f500099cb0192"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3266c0bd27de12a5505f500099cb0192">setup_timer_ready_task_accumulates_no_cpu_time</a> ()</td></tr>
+<tr class="memitem:acb511d33f7b639c81dd891b38d91d6e4" id="r_acb511d33f7b639c81dd891b38d91d6e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acb511d33f7b639c81dd891b38d91d6e4">teardown_timer_ready_task_accumulates_no_cpu_time</a> ()</td></tr>
 <tr class="memitem:a008882a397869f612aee5ac1766779a4" id="r_a008882a397869f612aee5ac1766779a4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a008882a397869f612aee5ac1766779a4">setup_timer_reap_orphans_periodic</a> ()</td></tr>
 <tr class="memitem:a54f2483e4b89e4c4afea3911a0e86e70" id="r_a54f2483e4b89e4c4afea3911a0e86e70"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a54f2483e4b89e4c4afea3911a0e86e70">teardown_timer_reap_orphans_periodic</a> ()</td></tr>
 <tr class="memitem:ab99b13ea2c22fc158dd4682c3bd56cd8" id="r_ab99b13ea2c22fc158dd4682c3bd56cd8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab99b13ea2c22fc158dd4682c3bd56cd8">setup_timer_tick_accounting</a> ()</td></tr>
@@ -4102,6 +4139,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a6a3c9b982b1cab5085b52a6baf0eb9c6" id="r_a6a3c9b982b1cab5085b52a6baf0eb9c6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6a3c9b982b1cab5085b52a6baf0eb9c6">teardown_waitpid_two_children_sequential_reap</a> ()</td></tr>
 <tr class="memitem:afa244e0cfd032a0eb6dfe72abbe79088" id="r_afa244e0cfd032a0eb6dfe72abbe79088"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afa244e0cfd032a0eb6dfe72abbe79088">setup_waitpid_zombie_over_new_child</a> ()</td></tr>
 <tr class="memitem:a673484d21651bd94aa7b5c1ae7fe2f67" id="r_a673484d21651bd94aa7b5c1ae7fe2f67"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a673484d21651bd94aa7b5c1ae7fe2f67">teardown_waitpid_zombie_over_new_child</a> ()</td></tr>
+<tr class="memitem:a6c4a0adf405cbd1677e04a09e682193f" id="r_a6c4a0adf405cbd1677e04a09e682193f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6c4a0adf405cbd1677e04a09e682193f">setup_wcet_balancer_tick_worst</a> ()</td></tr>
+<tr class="memitem:ab577b2bb7fbbf7440e62cef6df788ceb" id="r_ab577b2bb7fbbf7440e62cef6df788ceb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab577b2bb7fbbf7440e62cef6df788ceb">teardown_wcet_balancer_tick_worst</a> ()</td></tr>
 <tr class="memitem:a7079ffab323e2f114a722a8147c4aadd" id="r_a7079ffab323e2f114a722a8147c4aadd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7079ffab323e2f114a722a8147c4aadd">setup_wcet_cleanup_step</a> ()</td></tr>
 <tr class="memitem:a9b743d1a158eb975765dc0acc25c0c60" id="r_a9b743d1a158eb975765dc0acc25c0c60"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9b743d1a158eb975765dc0acc25c0c60">teardown_wcet_cleanup_step</a> ()</td></tr>
 <tr class="memitem:ad507681ea50bb379d419c0017693eb2f" id="r_ad507681ea50bb379d419c0017693eb2f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad507681ea50bb379d419c0017693eb2f">setup_wcet_mempool_alloc_free</a> ()</td></tr>
@@ -12939,6 +12978,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a655d35c4dba96bc6bded85fa080a4dfe" name="a655d35c4dba96bc6bded85fa080a4dfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a655d35c4dba96bc6bded85fa080a4dfe">&#9670;&#160;</a></span>setup_fpu_owner_percpu_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_fpu_owner_percpu_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a654b5a66256e84740fb8b72d663f930a" name="a654b5a66256e84740fb8b72d663f930a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a654b5a66256e84740fb8b72d663f930a">&#9670;&#160;</a></span>setup_fpu_save_area_alignment()</h2>
 
@@ -20262,6 +20326,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad57b020ef99ad1b8bc13a6bdd45f047c" name="ad57b020ef99ad1b8bc13a6bdd45f047c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad57b020ef99ad1b8bc13a6bdd45f047c">&#9670;&#160;</a></span>setup_late_mapping_visible_after_merge()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_late_mapping_visible_after_merge </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a0d9892b09f3bdab9c2e27a55f659dc9d" name="a0d9892b09f3bdab9c2e27a55f659dc9d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0d9892b09f3bdab9c2e27a55f659dc9d">&#9670;&#160;</a></span>setup_lazy_tlb_coalesces()</h2>
 
@@ -21277,6 +21366,81 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void setup_mempool_reuse </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a727d4d275a167c27a008c188505085d1" name="a727d4d275a167c27a008c188505085d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a727d4d275a167c27a008c188505085d1">&#9670;&#160;</a></span>setup_merge_allocates_nothing()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_merge_allocates_nothing </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acac78ebc392b271616a07d26241f55fd" name="acac78ebc392b271616a07d26241f55fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acac78ebc392b271616a07d26241f55fd">&#9670;&#160;</a></span>setup_merge_equivalent_to_full_copy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_merge_equivalent_to_full_copy </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ade9841c78c386e9ee933e19316c4afe6" name="ade9841c78c386e9ee933e19316c4afe6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade9841c78c386e9ee933e19316c4afe6">&#9670;&#160;</a></span>setup_merge_idempotent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_merge_idempotent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -24248,6 +24412,31 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void setup_per_cpu_bsp_identity </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2f9f9629e31650caa055ecb430f7d2e4" name="a2f9f9629e31650caa055ecb430f7d2e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f9f9629e31650caa055ecb430f7d2e4">&#9670;&#160;</a></span>setup_per_cpu_fpu_owner_independent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_per_cpu_fpu_owner_independent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -34835,6 +35024,106 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a6e3d22a738a5bad3bcf54bd7077a6e65" name="a6e3d22a738a5bad3bcf54bd7077a6e65"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6e3d22a738a5bad3bcf54bd7077a6e65">&#9670;&#160;</a></span>setup_syscall_affinity_bad_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_syscall_affinity_bad_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a415c4dee285fd650c5681fb675905c42" name="a415c4dee285fd650c5681fb675905c42"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a415c4dee285fd650c5681fb675905c42">&#9670;&#160;</a></span>setup_syscall_affinity_empty_mask()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_syscall_affinity_empty_mask </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a59169c3e4bbdaf35379ae7485bfd8940" name="a59169c3e4bbdaf35379ae7485bfd8940"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59169c3e4bbdaf35379ae7485bfd8940">&#9670;&#160;</a></span>setup_syscall_affinity_explicit_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_syscall_affinity_explicit_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab2cb57e76e78324927eda8d3182d56c3" name="ab2cb57e76e78324927eda8d3182d56c3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2cb57e76e78324927eda8d3182d56c3">&#9670;&#160;</a></span>setup_syscall_affinity_set_get_roundtrip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_syscall_affinity_set_get_roundtrip </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a1da06bca3518243f8fba696cd9bd663c" name="a1da06bca3518243f8fba696cd9bd663c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1da06bca3518243f8fba696cd9bd663c">&#9670;&#160;</a></span>setup_syscall_alarm_basic()</h2>
 
@@ -35685,6 +35974,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a0dc4edb89a606ba523b4feba2c091c7a" name="a0dc4edb89a606ba523b4feba2c091c7a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0dc4edb89a606ba523b4feba2c091c7a">&#9670;&#160;</a></span>setup_template_mismatch_detected()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_template_mismatch_detected </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a3556a80dbe74e5c046d17a09409b6ab0" name="a3556a80dbe74e5c046d17a09409b6ab0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3556a80dbe74e5c046d17a09409b6ab0">&#9670;&#160;</a></span>setup_test_release_zombie_self()</h2>
 
@@ -35996,6 +36310,31 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void setup_timer_rate_monotonic_schedule_indirect </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3266c0bd27de12a5505f500099cb0192" name="a3266c0bd27de12a5505f500099cb0192"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3266c0bd27de12a5505f500099cb0192">&#9670;&#160;</a></span>setup_timer_ready_task_accumulates_no_cpu_time()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_timer_ready_task_accumulates_no_cpu_time </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -39948,6 +40287,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a6c4a0adf405cbd1677e04a09e682193f" name="a6c4a0adf405cbd1677e04a09e682193f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c4a0adf405cbd1677e04a09e682193f">&#9670;&#160;</a></span>setup_wcet_balancer_tick_worst()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void setup_wcet_balancer_tick_worst </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a7079ffab323e2f114a722a8147c4aadd" name="a7079ffab323e2f114a722a8147c4aadd"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7079ffab323e2f114a722a8147c4aadd">&#9670;&#160;</a></span>setup_wcet_cleanup_step()</h2>
 
@@ -42545,12 +42909,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_ae4b3ce730ec7c4d49bccb5d1e2ba445f_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ae4b3ce730ec7c4d49bccb5d1e2ba445f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 468 -->
-</div>
 
 </div>
 </div>
@@ -42576,12 +42934,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_af9e18426d6d16219063036e6293cfe6a_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_af9e18426d6d16219063036e6293cfe6a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 469 -->
-</div>
 
 </div>
 </div>
@@ -42607,12 +42959,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_a1b1798a9a72ea2b32c2b55e598f728aa_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a1b1798a9a72ea2b32c2b55e598f728aa_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 470 -->
-</div>
 
 </div>
 </div>
@@ -42638,12 +42984,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_a92862d0bb8f8a7e49d5d98ef38af568a_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a92862d0bb8f8a7e49d5d98ef38af568a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 471 -->
-</div>
 
 </div>
 </div>
@@ -43423,7 +43763,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_af67391dfe11ed7f3d6923b6469dd1ecd_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_af67391dfe11ed7f3d6923b6469dd1ecd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 472 -->
+<!-- MAP 468 -->
 </div>
 
 </div>
@@ -43529,7 +43869,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a6a106f081c28a1e41ab01e6e268ffafa_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a6a106f081c28a1e41ab01e6e268ffafa_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 473 -->
+<!-- MAP 469 -->
 </div>
 
 </div>
@@ -48184,6 +48524,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ab86aa1d240c801b44fd785a344febf7c" name="ab86aa1d240c801b44fd785a344febf7c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab86aa1d240c801b44fd785a344febf7c">&#9670;&#160;</a></span>teardown_fpu_owner_percpu_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_fpu_owner_percpu_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a12a6ae833b34a9283074c32e84bc6eaf" name="a12a6ae833b34a9283074c32e84bc6eaf"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a12a6ae833b34a9283074c32e84bc6eaf">&#9670;&#160;</a></span>teardown_fpu_save_area_alignment()</h2>
 
@@ -51060,7 +51425,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a221904d02e6dcaf7c35b13b9da1c09af_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a221904d02e6dcaf7c35b13b9da1c09af_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 474 -->
+<!-- MAP 470 -->
 </div>
 
 </div>
@@ -51091,7 +51456,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a4302718bf03e517a662616e2713c3c32_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a4302718bf03e517a662616e2713c3c32_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 475 -->
+<!-- MAP 471 -->
 </div>
 
 </div>
@@ -51122,7 +51487,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ad7d05c2133a9625f01d9d7b73f368d50_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ad7d05c2133a9625f01d9d7b73f368d50_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 476 -->
+<!-- MAP 472 -->
 </div>
 
 </div>
@@ -51153,7 +51518,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_af4b9bf5aabc95981781ca196f190a56f_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_af4b9bf5aabc95981781ca196f190a56f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 477 -->
+<!-- MAP 473 -->
 </div>
 
 </div>
@@ -51309,7 +51674,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a22a5d9cf57566e1398e8e68fd278f189_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a22a5d9cf57566e1398e8e68fd278f189_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 478 -->
+<!-- MAP 474 -->
 </div>
 
 </div>
@@ -51340,7 +51705,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a6bb83cfd876a4106210f44f1d7cc2c0a_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a6bb83cfd876a4106210f44f1d7cc2c0a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 479 -->
+<!-- MAP 475 -->
 </div>
 
 </div>
@@ -51371,7 +51736,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_acf286df556c01a5b0a5c140ddeee1155_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_acf286df556c01a5b0a5c140ddeee1155_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 480 -->
+<!-- MAP 476 -->
 </div>
 
 </div>
@@ -51402,7 +51767,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_adb5097685ce30700e478e99c6fc71043_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_adb5097685ce30700e478e99c6fc71043_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 481 -->
+<!-- MAP 477 -->
 </div>
 
 </div>
@@ -51433,7 +51798,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a796adeeb53543ada3b3dbf4c840518ae_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a796adeeb53543ada3b3dbf4c840518ae_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 482 -->
+<!-- MAP 478 -->
 </div>
 
 </div>
@@ -51464,7 +51829,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a0f001b6dac8dd45f1c6677d8b4e5c9c2_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a0f001b6dac8dd45f1c6677d8b4e5c9c2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 483 -->
+<!-- MAP 479 -->
 </div>
 
 </div>
@@ -51520,7 +51885,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a645ac46b2aa473d0dc2efb3af8d76724_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a645ac46b2aa473d0dc2efb3af8d76724_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 484 -->
+<!-- MAP 480 -->
 </div>
 
 </div>
@@ -53301,7 +53666,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a5a185b53c76150c6f7442cbe8a10dccc_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a5a185b53c76150c6f7442cbe8a10dccc_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 485 -->
+<!-- MAP 481 -->
 </div>
 
 </div>
@@ -53332,7 +53697,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a29a320f8199959ac4cdac1600dda539d_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a29a320f8199959ac4cdac1600dda539d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 486 -->
+<!-- MAP 482 -->
 </div>
 
 </div>
@@ -53363,7 +53728,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ae57203a741671e69cd18e62966a45442_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ae57203a741671e69cd18e62966a45442_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 487 -->
+<!-- MAP 483 -->
 </div>
 
 </div>
@@ -55093,6 +55458,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a1ff90b0854e8d7cdc671ab95f6ef9dcf" name="a1ff90b0854e8d7cdc671ab95f6ef9dcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1ff90b0854e8d7cdc671ab95f6ef9dcf">&#9670;&#160;</a></span>teardown_late_mapping_visible_after_merge()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_late_mapping_visible_after_merge </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a1b0a5e6ee02746b3e0db5ce07fbac84c" name="a1b0a5e6ee02746b3e0db5ce07fbac84c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1b0a5e6ee02746b3e0db5ce07fbac84c">&#9670;&#160;</a></span>teardown_lazy_tlb_coalesces()</h2>
 
@@ -55119,7 +55509,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a1b0a5e6ee02746b3e0db5ce07fbac84c_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a1b0a5e6ee02746b3e0db5ce07fbac84c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 488 -->
+<!-- MAP 484 -->
 </div>
 
 </div>
@@ -55150,7 +55540,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a7c4e8db484fdbc1732db20edd97c2033_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a7c4e8db484fdbc1732db20edd97c2033_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 489 -->
+<!-- MAP 485 -->
 </div>
 
 </div>
@@ -55181,7 +55571,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ac7b15f2845f522e5ea4cf19c386f0088_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ac7b15f2845f522e5ea4cf19c386f0088_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 490 -->
+<!-- MAP 486 -->
 </div>
 
 </div>
@@ -55212,7 +55602,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a838349d783ec3bd7e0e364c0ce8c8a36_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a838349d783ec3bd7e0e364c0ce8c8a36_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 491 -->
+<!-- MAP 487 -->
 </div>
 
 </div>
@@ -55264,12 +55654,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_a380fd1d2ec96911371722bf7328d73f6_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a380fd1d2ec96911371722bf7328d73f6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 492 -->
-</div>
 
 </div>
 </div>
@@ -55295,12 +55679,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_a4b12ffc58b18b367b0258f70422dbf54_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a4b12ffc58b18b367b0258f70422dbf54_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 493 -->
-</div>
 
 </div>
 </div>
@@ -55326,12 +55704,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_ab4e37a21acdf16153c018d87e69c2ddd_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ab4e37a21acdf16153c018d87e69c2ddd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 494 -->
-</div>
 
 </div>
 </div>
@@ -55357,12 +55729,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_a617bbae347f16e4d93bc1357f5cca3b4_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a617bbae347f16e4d93bc1357f5cca3b4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 495 -->
-</div>
 
 </div>
 </div>
@@ -56102,6 +56468,81 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void teardown_mempool_reuse </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6758b2300a097d2412cb817753e8a5c5" name="a6758b2300a097d2412cb817753e8a5c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6758b2300a097d2412cb817753e8a5c5">&#9670;&#160;</a></span>teardown_merge_allocates_nothing()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_merge_allocates_nothing </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ade7377ff0744fae27200bd2ec7bdf67a" name="ade7377ff0744fae27200bd2ec7bdf67a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade7377ff0744fae27200bd2ec7bdf67a">&#9670;&#160;</a></span>teardown_merge_equivalent_to_full_copy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_merge_equivalent_to_full_copy </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a809522f3253429cf1e66e8f10047b67b" name="a809522f3253429cf1e66e8f10047b67b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a809522f3253429cf1e66e8f10047b67b">&#9670;&#160;</a></span>teardown_merge_idempotent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_merge_idempotent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -58767,7 +59208,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a2b1d5460f40cdb8845b41345d12b1b56_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a2b1d5460f40cdb8845b41345d12b1b56_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 496 -->
+<!-- MAP 488 -->
 </div>
 
 </div>
@@ -58798,7 +59239,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_af42be949a28d86cd3cc978a9aab30457_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_af42be949a28d86cd3cc978a9aab30457_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 497 -->
+<!-- MAP 489 -->
 </div>
 
 </div>
@@ -58829,7 +59270,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a6be3c1df7565ad39b96765dd51b580eb_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a6be3c1df7565ad39b96765dd51b580eb_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 498 -->
+<!-- MAP 490 -->
 </div>
 
 </div>
@@ -58860,7 +59301,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a6431a007f10a40f7af9707d7036c3a0a_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a6431a007f10a40f7af9707d7036c3a0a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 499 -->
+<!-- MAP 491 -->
 </div>
 
 </div>
@@ -59001,6 +59442,31 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void teardown_per_cpu_bsp_identity </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa53e0583332bc71472ff97ded2a90682" name="aa53e0583332bc71472ff97ded2a90682"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa53e0583332bc71472ff97ded2a90682">&#9670;&#160;</a></span>teardown_per_cpu_fpu_owner_independent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_per_cpu_fpu_owner_independent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -59966,7 +60432,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_aa185720d65b5788030dec1fd45b6d1ca_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_aa185720d65b5788030dec1fd45b6d1ca_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 500 -->
+<!-- MAP 492 -->
 </div>
 
 </div>
@@ -59997,7 +60463,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_afc6a2b7e7a17004fd407a11c99cafb46_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_afc6a2b7e7a17004fd407a11c99cafb46_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 501 -->
+<!-- MAP 493 -->
 </div>
 
 </div>
@@ -60053,7 +60519,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a01cf8ed61cc11a19d939c16641562687_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a01cf8ed61cc11a19d939c16641562687_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 502 -->
+<!-- MAP 494 -->
 </div>
 
 </div>
@@ -66059,7 +66525,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a086db928613f3bebca4374a8d76f9bb3_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a086db928613f3bebca4374a8d76f9bb3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 503 -->
+<!-- MAP 495 -->
 </div>
 
 </div>
@@ -66136,12 +66602,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="test__registry_8gen_8hpp_ad66ba8dd18b1a2fe6a542ba340110f94_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ad66ba8dd18b1a2fe6a542ba340110f94_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 504 -->
-</div>
 
 </div>
 </div>
@@ -66171,7 +66631,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a6b1f14c22dc0babc8d45510fe4404bdf_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a6b1f14c22dc0babc8d45510fe4404bdf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 505 -->
+<!-- MAP 496 -->
 </div>
 
 </div>
@@ -66202,7 +66662,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_af7f556e9f92d86d981ba45e5973a625e_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_af7f556e9f92d86d981ba45e5973a625e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 506 -->
+<!-- MAP 497 -->
 </div>
 
 </div>
@@ -66308,7 +66768,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a460f815085b619a36f36979bcd95ee1c_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a460f815085b619a36f36979bcd95ee1c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 507 -->
+<!-- MAP 498 -->
 </div>
 
 </div>
@@ -66339,7 +66799,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a0460688641dbd718a13da2a69c0cce5e_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a0460688641dbd718a13da2a69c0cce5e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 508 -->
+<!-- MAP 499 -->
 </div>
 
 </div>
@@ -68844,6 +69304,106 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="acd1d75d7949b54e745b5fb36c7388d6a" name="acd1d75d7949b54e745b5fb36c7388d6a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd1d75d7949b54e745b5fb36c7388d6a">&#9670;&#160;</a></span>teardown_syscall_affinity_bad_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_syscall_affinity_bad_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a29a209cf21e212c5050e63587b05faf0" name="a29a209cf21e212c5050e63587b05faf0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a29a209cf21e212c5050e63587b05faf0">&#9670;&#160;</a></span>teardown_syscall_affinity_empty_mask()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_syscall_affinity_empty_mask </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4d8de40c0bc9043dd042fedc40074000" name="a4d8de40c0bc9043dd042fedc40074000"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d8de40c0bc9043dd042fedc40074000">&#9670;&#160;</a></span>teardown_syscall_affinity_explicit_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_syscall_affinity_explicit_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5e19ee3dd42b5243232f809a8139ede1" name="a5e19ee3dd42b5243232f809a8139ede1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e19ee3dd42b5243232f809a8139ede1">&#9670;&#160;</a></span>teardown_syscall_affinity_set_get_roundtrip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_syscall_affinity_set_get_roundtrip </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a134928450bf4cab882dde7ab7be2a64f" name="a134928450bf4cab882dde7ab7be2a64f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a134928450bf4cab882dde7ab7be2a64f">&#9670;&#160;</a></span>teardown_syscall_alarm_basic()</h2>
 
@@ -69694,6 +70254,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ad46033b4b22b434f16cdcfb1fee07f5a" name="ad46033b4b22b434f16cdcfb1fee07f5a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad46033b4b22b434f16cdcfb1fee07f5a">&#9670;&#160;</a></span>teardown_template_mismatch_detected()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_template_mismatch_detected </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a2a87ffe92cca4db748c88e49f9435db0" name="a2a87ffe92cca4db748c88e49f9435db0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2a87ffe92cca4db748c88e49f9435db0">&#9670;&#160;</a></span>teardown_test_release_zombie_self()</h2>
 
@@ -70019,6 +70604,31 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="acb511d33f7b639c81dd891b38d91d6e4" name="acb511d33f7b639c81dd891b38d91d6e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb511d33f7b639c81dd891b38d91d6e4">&#9670;&#160;</a></span>teardown_timer_ready_task_accumulates_no_cpu_time()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_timer_ready_task_accumulates_no_cpu_time </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a54f2483e4b89e4c4afea3911a0e86e70" name="a54f2483e4b89e4c4afea3911a0e86e70"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a54f2483e4b89e4c4afea3911a0e86e70">&#9670;&#160;</a></span>teardown_timer_reap_orphans_periodic()</h2>
 
@@ -70095,7 +70705,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_a03359f9690d7b2f5c55255942c55ae8a_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_a03359f9690d7b2f5c55255942c55ae8a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 509 -->
+<!-- MAP 500 -->
 </div>
 
 </div>
@@ -70126,7 +70736,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ad23a1d1491f7d74ad59494214724ebd6_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ad23a1d1491f7d74ad59494214724ebd6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 510 -->
+<!-- MAP 501 -->
 </div>
 
 </div>
@@ -70157,7 +70767,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ae15b3a8f7063dae09d9de09945465fd3_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ae15b3a8f7063dae09d9de09945465fd3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 511 -->
+<!-- MAP 502 -->
 </div>
 
 </div>
@@ -70188,7 +70798,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__registry_8gen_8hpp_ad77e17646a54b2c731d3246919bc7ea6_cgraph.png" border="0" usemap="#atest__registry_8gen_8hpp_ad77e17646a54b2c731d3246919bc7ea6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 512 -->
+<!-- MAP 503 -->
 </div>
 
 </div>
@@ -73379,6 +73989,31 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void teardown_waitpid_zombie_over_new_child </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab577b2bb7fbbf7440e62cef6df788ceb" name="ab577b2bb7fbbf7440e62cef6df788ceb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab577b2bb7fbbf7440e62cef6df788ceb">&#9670;&#160;</a></span>teardown_wcet_balancer_tick_worst()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void teardown_wcet_balancer_tick_worst </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -79017,6 +79652,23 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a0e9cc71f2807a1909854f0f22c0d8cc7" name="a0e9cc71f2807a1909854f0f22c0d8cc7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e9cc71f2807a1909854f0f22c0d8cc7">&#9670;&#160;</a></span>test_fpu_owner_percpu_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_fpu_owner_percpu_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a72c039f8f01bee17d5fb7f292f50ab3b" name="a72c039f8f01bee17d5fb7f292f50ab3b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a72c039f8f01bee17d5fb7f292f50ab3b">&#9670;&#160;</a></span>test_fpu_save_area_alignment()</h2>
 
@@ -83658,6 +84310,23 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a88cfe9885592b7282f51535e2fe748d4" name="a88cfe9885592b7282f51535e2fe748d4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a88cfe9885592b7282f51535e2fe748d4">&#9670;&#160;</a></span>test_late_mapping_visible_after_merge()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_late_mapping_visible_after_merge </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a87dbb8fa0cccbb170da43ed15aee5c97" name="a87dbb8fa0cccbb170da43ed15aee5c97"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a87dbb8fa0cccbb170da43ed15aee5c97">&#9670;&#160;</a></span>test_lazy_tlb_coalesces()</h2>
 
@@ -84312,6 +84981,57 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void test_mempool_reuse </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5a26f6298efc0eb9c068c168e58bd481" name="a5a26f6298efc0eb9c068c168e58bd481"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a26f6298efc0eb9c068c168e58bd481">&#9670;&#160;</a></span>test_merge_allocates_nothing()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_merge_allocates_nothing </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af233da8f7a95d2eacc6dfdc9b6defaaf" name="af233da8f7a95d2eacc6dfdc9b6defaaf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af233da8f7a95d2eacc6dfdc9b6defaaf">&#9670;&#160;</a></span>test_merge_equivalent_to_full_copy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_merge_equivalent_to_full_copy </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aab8be6d07879c825e58b1e9a51c44b0c" name="aab8be6d07879c825e58b1e9a51c44b0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab8be6d07879c825e58b1e9a51c44b0c">&#9670;&#160;</a></span>test_merge_idempotent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_merge_idempotent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -86267,6 +86987,23 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void test_per_cpu_bsp_identity </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a357918c657e9fc114d43e041bc801a36" name="a357918c657e9fc114d43e041bc801a36"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a357918c657e9fc114d43e041bc801a36">&#9670;&#160;</a></span>test_per_cpu_fpu_owner_independent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_per_cpu_fpu_owner_independent </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -92923,6 +93660,74 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aec471af4b7a16bab3573b5c2f8ed02aa" name="aec471af4b7a16bab3573b5c2f8ed02aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aec471af4b7a16bab3573b5c2f8ed02aa">&#9670;&#160;</a></span>test_syscall_affinity_bad_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_syscall_affinity_bad_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a164251ef38e5efa0bf48ecbe3260dbda" name="a164251ef38e5efa0bf48ecbe3260dbda"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a164251ef38e5efa0bf48ecbe3260dbda">&#9670;&#160;</a></span>test_syscall_affinity_empty_mask()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_syscall_affinity_empty_mask </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad5ed08d076f2de2469c55299a2a34338" name="ad5ed08d076f2de2469c55299a2a34338"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5ed08d076f2de2469c55299a2a34338">&#9670;&#160;</a></span>test_syscall_affinity_explicit_pid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_syscall_affinity_explicit_pid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad94c3d2f2d8b939206061b7009bea8ff" name="ad94c3d2f2d8b939206061b7009bea8ff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad94c3d2f2d8b939206061b7009bea8ff">&#9670;&#160;</a></span>test_syscall_affinity_set_get_roundtrip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_syscall_affinity_set_get_roundtrip </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="af650cd33f0f331896f14a6d1e96e09d1" name="af650cd33f0f331896f14a6d1e96e09d1"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af650cd33f0f331896f14a6d1e96e09d1">&#9670;&#160;</a></span>test_syscall_alarm_basic()</h2>
 
@@ -93501,6 +94306,23 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ab14ba8ef048d0b62d003438d0c188305" name="ab14ba8ef048d0b62d003438d0c188305"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab14ba8ef048d0b62d003438d0c188305">&#9670;&#160;</a></span>test_template_mismatch_detected()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_template_mismatch_detected </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="af4375da21bdf32a6b5c51599a16e4a0b" name="af4375da21bdf32a6b5c51599a16e4a0b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af4375da21bdf32a6b5c51599a16e4a0b">&#9670;&#160;</a></span>test_test_release_zombie_self()</h2>
 
@@ -93713,6 +94535,23 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void test_timer_rate_monotonic_schedule_indirect </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa06c21fb0179398aaf11eff6a1113f4c" name="aa06c21fb0179398aaf11eff6a1113f4c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa06c21fb0179398aaf11eff6a1113f4c">&#9670;&#160;</a></span>test_timer_ready_task_accumulates_no_cpu_time()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_timer_ready_task_accumulates_no_cpu_time </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -95991,6 +96830,23 @@ Here is the call graph for this function:</div>
       <table class="memname">
         <tr>
           <td class="memname">void test_waitpid_zombie_over_new_child </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aaffb36e31a0331d8aeaf47732b577e7e" name="aaffb36e31a0331d8aeaf47732b577e7e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaffb36e31a0331d8aeaf47732b577e7e">&#9670;&#160;</a></span>test_wcet_balancer_tick_worst()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void test_wcet_balancer_tick_worst </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>

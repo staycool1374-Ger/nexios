@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__smp__syn
 </div><!--header-->
 <div class="contents">
 
-<p>SMP synchronization tests (issue #85, module 11): IRQ save/restore guard contracts live here (real); reader-writer locks, ticket locks, cross-CPU races and holder migration have no kernel API — documented stubs. Plain SpinLock contention is covered by synchronization_spinlock.  
+<p>SMP synchronization tests (issue #85, module 11): IRQ save/restore guard contracts and the RwLock state machine (issue #61) live here (real); ticket locks, cross-CPU races and holder migration have no kernel API — documented stubs. Plain SpinLock contention is covered by synchronization_spinlock.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>SMP synchronization tests (issue #85, module 11): IRQ save/restore guard contracts live here (real); reader-writer locks, ticket locks, cross-CPU races and holder migration have no kernel API — documented stubs. Plain SpinLock contention is covered by synchronization_spinlock. </p>
+<div class="textblock"><p>SMP synchronization tests (issue #85, module 11): IRQ save/restore guard contracts and the RwLock state machine (issue #61) live here (real); ticket locks, cross-CPU races and holder migration have no kernel API — documented stubs. Plain SpinLock contention is covered by synchronization_spinlock. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

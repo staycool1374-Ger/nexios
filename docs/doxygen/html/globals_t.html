@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.5</span>
    </div>
   </td>
  </tr>
@@ -445,6 +445,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_fpu_nm_nesting_impossible()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a61e792059a58183876d1d186b8b0cd0c">test_registry.gen.hpp</a></li>
 <li>teardown_fpu_nm_no_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af1a0b484c2c6179186beecf8e7065321">test_registry.gen.hpp</a></li>
 <li>teardown_fpu_nm_own_arm_no_clobber()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad1afc6df0427ffdbf40f9a0137449aca">test_registry.gen.hpp</a></li>
+<li>teardown_fpu_owner_percpu_reset()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab86aa1d240c801b44fd785a344febf7c">test_registry.gen.hpp</a></li>
 <li>teardown_fpu_save_area_alignment()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a12a6ae833b34a9283074c32e84bc6eaf">test_registry.gen.hpp</a></li>
 <li>teardown_frame_cap_map_unmap_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af1bbded4a4aac289b4ad0dc2c1efb541">test_registry.gen.hpp</a></li>
 <li>teardown_frame_cap_release_frees_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2c207cf862b06cadbac71420d4e448bf">test_registry.gen.hpp</a></li>
@@ -718,6 +719,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_lapic_oneshot_zero_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7cf4d44ca891a936518db784922088f2">test_registry.gen.hpp</a></li>
 <li>teardown_lapic_periodic_zero_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a0fc097f0c1328b0e97ce60f0f002bd">test_registry.gen.hpp</a></li>
 <li>teardown_lapic_supported_and_enabled()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7ad11f13ad08a96cc806461e31922e6b">test_registry.gen.hpp</a></li>
+<li>teardown_late_mapping_visible_after_merge()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1ff90b0854e8d7cdc671ab95f6ef9dcf">test_registry.gen.hpp</a></li>
 <li>teardown_lazy_tlb_coalesces()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1b0a5e6ee02746b3e0db5ce07fbac84c">test_registry.gen.hpp</a></li>
 <li>teardown_lazy_tlb_deferred_to_switch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7c4e8db484fdbc1732db20edd97c2033">test_registry.gen.hpp</a></li>
 <li>teardown_lazy_tlb_no_corruption()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac7b15f2845f522e5ea4cf19c386f0088">test_registry.gen.hpp</a></li>
@@ -757,6 +759,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_mempool_fragmentation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac40b58a71b17929ec0e403af9f66076d">test_registry.gen.hpp</a></li>
 <li>teardown_mempool_large_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa111acc74671f2a33fe0f0146e54c1ef">test_registry.gen.hpp</a></li>
 <li>teardown_mempool_reuse()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab5362fcd711c30c7dc39f0a942ea1cf1">test_registry.gen.hpp</a></li>
+<li>teardown_merge_allocates_nothing()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6758b2300a097d2412cb817753e8a5c5">test_registry.gen.hpp</a></li>
+<li>teardown_merge_equivalent_to_full_copy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ade7377ff0744fae27200bd2ec7bdf67a">test_registry.gen.hpp</a></li>
+<li>teardown_merge_idempotent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a809522f3253429cf1e66e8f10047b67b">test_registry.gen.hpp</a></li>
 <li>teardown_mint_reduces_rights()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac1f0a6ba96a10d2dde7b172037a944b7">test_registry.gen.hpp</a></li>
 <li>teardown_mmio_cap_create_io_bar_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5535dc9a2cae8f56fb66d68d9a9e234a">test_registry.gen.hpp</a></li>
 <li>teardown_mmio_cap_create_memory_bar_fields()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaa945073c09ab78c1e41f17abdcecb01">test_registry.gen.hpp</a></li>
@@ -872,6 +877,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_pcp_try_lock_held()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5edc7f0acdec29f9dfcebab851dd49aa">test_registry.gen.hpp</a></li>
 <li>teardown_pcp_two_mutexes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6b2ac0ce4576dd5fad50e1ff95b0e85d">test_registry.gen.hpp</a></li>
 <li>teardown_per_cpu_bsp_identity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a27c4d60834d2a7a09958a35e03edcbae">test_registry.gen.hpp</a></li>
+<li>teardown_per_cpu_fpu_owner_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa53e0583332bc71472ff97ded2a90682">test_registry.gen.hpp</a></li>
 <li>teardown_per_cpu_nesting_depth_live()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4906af16d29202d15935feff8651bf70">test_registry.gen.hpp</a></li>
 <li>teardown_per_cpu_slot_offsets_frozen()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a47f665074d3d5878863c5f40d84d3c28">test_registry.gen.hpp</a></li>
 <li>teardown_pingpong_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adb64e18514d2328926b7fb33ab4e639c">test_registry.gen.hpp</a></li>
@@ -1263,6 +1269,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_sys_iommu_map_dispatch_happy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a048bba4275649f0ab0e3a7292af79db7">test_registry.gen.hpp</a></li>
 <li>teardown_sys_iommu_map_validation_matrix()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a76dde4361ca8493aeb551c41cbdf2c4a">test_registry.gen.hpp</a></li>
 <li>teardown_sys_iommu_unmap_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4f2b64f8a3f705e46faf2bfa6d8b4f7a">test_registry.gen.hpp</a></li>
+<li>teardown_syscall_affinity_bad_pid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acd1d75d7949b54e745b5fb36c7388d6a">test_registry.gen.hpp</a></li>
+<li>teardown_syscall_affinity_empty_mask()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a29a209cf21e212c5050e63587b05faf0">test_registry.gen.hpp</a></li>
+<li>teardown_syscall_affinity_explicit_pid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4d8de40c0bc9043dd042fedc40074000">test_registry.gen.hpp</a></li>
+<li>teardown_syscall_affinity_set_get_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5e19ee3dd42b5243232f809a8139ede1">test_registry.gen.hpp</a></li>
 <li>teardown_syscall_alarm_basic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a134928450bf4cab882dde7ab7be2a64f">test_registry.gen.hpp</a></li>
 <li>teardown_syscall_alarm_subsecond()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a22881e02dc27546ed037b6d5b90d4226">test_registry.gen.hpp</a></li>
 <li>teardown_syscall_dispatch_get_ticks()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8c665546b100e1766d9af99d304c32e4">test_registry.gen.hpp</a></li>
@@ -1297,6 +1307,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_task_fork_child_cleanup_preserves_parent_pages()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a02c3e547ec4593581188dba19cef9836">test_registry.gen.hpp</a></li>
 <li>teardown_task_reparent_preserves_resources()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a81cecd6b61639d807e4c1aa2aec7ac65">test_registry.gen.hpp</a></li>
 <li>teardown_task_zombie_state_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1b7df8d7b4327ac7403d36dace09465a">test_registry.gen.hpp</a></li>
+<li>teardown_template_mismatch_detected()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad46033b4b22b434f16cdcfb1fee07f5a">test_registry.gen.hpp</a></li>
 <li>teardown_test_release_zombie_self()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a87ffe92cca4db748c88e49f9435db0">test_registry.gen.hpp</a></li>
 <li>teardown_test_tcb_write_log_catches_stray_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a55febce7a48e06764fee21f5a9c7e038">test_registry.gen.hpp</a></li>
 <li>teardown_test_zombie_starvation_watchdog()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7b218d176f60312ae1631275771cd88a">test_registry.gen.hpp</a></li>
@@ -1310,6 +1321,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_timer_no_side_effects_on_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a35f90b0679ece31ec2bfd35762a4fb8d">test_registry.gen.hpp</a></li>
 <li>teardown_timer_period_reload()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acacea4ca252999c306cdc1109e10b64e">test_registry.gen.hpp</a></li>
 <li>teardown_timer_rate_monotonic_schedule_indirect()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a54e3789498e1775292926d9340fa05fb">test_registry.gen.hpp</a></li>
+<li>teardown_timer_ready_task_accumulates_no_cpu_time()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acb511d33f7b639c81dd891b38d91d6e4">test_registry.gen.hpp</a></li>
 <li>teardown_timer_reap_orphans_periodic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a54f2483e4b89e4c4afea3911a0e86e70">test_registry.gen.hpp</a></li>
 <li>teardown_timer_tick_accounting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acc0ca105d8994e0467438cc75ae0347a">test_registry.gen.hpp</a></li>
 <li>teardown_tlb_latency_avg_improves()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a03359f9690d7b2f5c55255942c55ae8a">test_registry.gen.hpp</a></li>
@@ -1444,6 +1456,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>teardown_waitpid_cr3_switch_on_status_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0644fc6bc9eeab10159106dc94fec412">test_registry.gen.hpp</a></li>
 <li>teardown_waitpid_two_children_sequential_reap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6a3c9b982b1cab5085b52a6baf0eb9c6">test_registry.gen.hpp</a></li>
 <li>teardown_waitpid_zombie_over_new_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a673484d21651bd94aa7b5c1ae7fe2f67">test_registry.gen.hpp</a></li>
+<li>teardown_wcet_balancer_tick_worst()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab577b2bb7fbbf7440e62cef6df788ceb">test_registry.gen.hpp</a></li>
 <li>teardown_wcet_cleanup_step()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9b743d1a158eb975765dc0acc25c0c60">test_registry.gen.hpp</a></li>
 <li>teardown_wcet_mempool_alloc_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a648b4b0e1829fa124922726ea14634ec">test_registry.gen.hpp</a></li>
 <li>teardown_wcet_scan_deadlines()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9af4f5c5b7ac6e1e327aac7b256c97e8">test_registry.gen.hpp</a></li>
@@ -1776,6 +1789,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_fpu_nm_nesting_impossible()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a13108944e9fe45367d119ec044ca7a81">test_registry.gen.hpp</a></li>
 <li>test_fpu_nm_no_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab316e85e09b6413471d63cc885628d5c">test_registry.gen.hpp</a></li>
 <li>test_fpu_nm_own_arm_no_clobber()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#adf8d52aa74d5dc88ec489a759c225b71">test_registry.gen.hpp</a></li>
+<li>test_fpu_owner_percpu_reset()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0e9cc71f2807a1909854f0f22c0d8cc7">test_registry.gen.hpp</a></li>
 <li>test_fpu_save_area_alignment()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a72c039f8f01bee17d5fb7f292f50ab3b">test_registry.gen.hpp</a></li>
 <li>test_frame_cap_map_unmap_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad754ae8f47b5151dc8f9973ea5f39dfa">test_registry.gen.hpp</a></li>
 <li>test_frame_cap_release_frees_pmm()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a61c9d6f3b59c07971801824cd274a6d3">test_registry.gen.hpp</a></li>
@@ -2053,6 +2067,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_lapic_oneshot_zero_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab6bf652ca579f818b319d4a1415dd764">test_registry.gen.hpp</a></li>
 <li>test_lapic_periodic_zero_noop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a21fddca6d5b2a835b12820dce077028c">test_registry.gen.hpp</a></li>
 <li>test_lapic_supported_and_enabled()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#afb2cbf26e1ef8d64f3c851150ca09ca0">test_registry.gen.hpp</a></li>
+<li>test_late_mapping_visible_after_merge()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88cfe9885592b7282f51535e2fe748d4">test_registry.gen.hpp</a></li>
 <li>test_lazy_tlb_coalesces()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a87dbb8fa0cccbb170da43ed15aee5c97">test_registry.gen.hpp</a></li>
 <li>test_lazy_tlb_deferred_to_switch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a13f4797fd2b8ce3b489b09c4134d2dde">test_registry.gen.hpp</a></li>
 <li>test_lazy_tlb_no_corruption()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af7f2274cd75ba838fbe57dc07102c306">test_registry.gen.hpp</a></li>
@@ -2092,6 +2107,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_mempool_fragmentation()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8da23576fcaca4a2d305eecd28d1b80e">test_registry.gen.hpp</a></li>
 <li>test_mempool_large_alloc()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1a3aab2f5538964d11cc62255cb04fd6">test_registry.gen.hpp</a></li>
 <li>test_mempool_reuse()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac37f53955dc871cfd961706f38a8bdc3">test_registry.gen.hpp</a></li>
+<li>test_merge_allocates_nothing()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5a26f6298efc0eb9c068c168e58bd481">test_registry.gen.hpp</a></li>
+<li>test_merge_equivalent_to_full_copy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af233da8f7a95d2eacc6dfdc9b6defaaf">test_registry.gen.hpp</a></li>
+<li>test_merge_idempotent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aab8be6d07879c825e58b1e9a51c44b0c">test_registry.gen.hpp</a></li>
 <li>test_mint_reduces_rights()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab8bfa15793c7a6620aba15fd7d698825">test_registry.gen.hpp</a></li>
 <li>test_mmio_cap_create_io_bar_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3184fccd71c1755eac3caaa688e98a52">test_registry.gen.hpp</a></li>
 <li>test_mmio_cap_create_memory_bar_fields()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7bfdd87e010c3aad5677f0ff55f52f4e">test_registry.gen.hpp</a></li>
@@ -2207,6 +2225,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_pcp_try_lock_held()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8bce0c645ae9a9fbabe61c4aec8a7179">test_registry.gen.hpp</a></li>
 <li>test_pcp_two_mutexes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af57bbad7379d4677195d11f21f99803e">test_registry.gen.hpp</a></li>
 <li>test_per_cpu_bsp_identity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5459abde7675aef432b28b10d2ad2025">test_registry.gen.hpp</a></li>
+<li>test_per_cpu_fpu_owner_independent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a357918c657e9fc114d43e041bc801a36">test_registry.gen.hpp</a></li>
 <li>test_per_cpu_nesting_depth_live()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1d44de72501dfdcd7d3040098a827324">test_registry.gen.hpp</a></li>
 <li>test_per_cpu_slot_offsets_frozen()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab2362f52de474192355b290660600714">test_registry.gen.hpp</a></li>
 <li>test_pingpong_reject_when_busy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a89027cbb224d5357f8e37b07139ce85c">test_registry.gen.hpp</a></li>
@@ -2598,6 +2617,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_sys_iommu_map_dispatch_happy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac996666f14da2a758b34276c2eb401b2">test_registry.gen.hpp</a></li>
 <li>test_sys_iommu_map_validation_matrix()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4029ad1150b4de43808993586e193fa5">test_registry.gen.hpp</a></li>
 <li>test_sys_iommu_unmap_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aed7e9c8af4521a097c9563d1bc326a1a">test_registry.gen.hpp</a></li>
+<li>test_syscall_affinity_bad_pid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aec471af4b7a16bab3573b5c2f8ed02aa">test_registry.gen.hpp</a></li>
+<li>test_syscall_affinity_empty_mask()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a164251ef38e5efa0bf48ecbe3260dbda">test_registry.gen.hpp</a></li>
+<li>test_syscall_affinity_explicit_pid()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad5ed08d076f2de2469c55299a2a34338">test_registry.gen.hpp</a></li>
+<li>test_syscall_affinity_set_get_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad94c3d2f2d8b939206061b7009bea8ff">test_registry.gen.hpp</a></li>
 <li>test_syscall_alarm_basic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af650cd33f0f331896f14a6d1e96e09d1">test_registry.gen.hpp</a></li>
 <li>test_syscall_alarm_subsecond()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a88277c21fa6a6162743c70a260bc618c">test_registry.gen.hpp</a></li>
 <li>test_syscall_dispatch_get_ticks()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa88dcbb3414153da5d02dd93d46072f0">test_registry.gen.hpp</a></li>
@@ -2632,6 +2655,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_task_fork_child_cleanup_preserves_parent_pages()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a90e45dfe525a8375c376d7eb89fac44f">test_registry.gen.hpp</a></li>
 <li>test_task_reparent_preserves_resources()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3d133750c584ad105feab2cb8f29145f">test_registry.gen.hpp</a></li>
 <li>test_task_zombie_state_cleanup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab6e5c430cb7034e913bdc1f0650530c1">test_registry.gen.hpp</a></li>
+<li>test_template_mismatch_detected()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab14ba8ef048d0b62d003438d0c188305">test_registry.gen.hpp</a></li>
 <li>test_test_release_zombie_self()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af4375da21bdf32a6b5c51599a16e4a0b">test_registry.gen.hpp</a></li>
 <li>test_test_tcb_write_log_catches_stray_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4d9f15e4f9de0e282f1de60e84dceee3">test_registry.gen.hpp</a></li>
 <li>test_test_zombie_starvation_watchdog()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a93db0b68d6e6f153e3d4255a8729df71">test_registry.gen.hpp</a></li>
@@ -2645,6 +2669,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_timer_no_side_effects_on_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a18d415c1b6f2607119f90744dbec574c">test_registry.gen.hpp</a></li>
 <li>test_timer_period_reload()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3d88a0d2114b09daf3e28c8b5a586630">test_registry.gen.hpp</a></li>
 <li>test_timer_rate_monotonic_schedule_indirect()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aad899f7d10283ae11aebd7d6fe7413fa">test_registry.gen.hpp</a></li>
+<li>test_timer_ready_task_accumulates_no_cpu_time()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa06c21fb0179398aaf11eff6a1113f4c">test_registry.gen.hpp</a></li>
 <li>test_timer_reap_orphans_periodic()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af55a2a24ac908fedd686856003cb3dc6">test_registry.gen.hpp</a></li>
 <li>test_timer_tick_accounting()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a65854e21597c32186f2f803b5727b83e">test_registry.gen.hpp</a></li>
 <li>test_tlb_latency_avg_improves()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac817a02b2a6c22426909125c9f8e73e2">test_registry.gen.hpp</a></li>
@@ -2779,6 +2804,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_t.html
 <li>test_waitpid_cr3_switch_on_status_write()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad5f1bc29eaefd44404cacfcc547ab7b3">test_registry.gen.hpp</a></li>
 <li>test_waitpid_two_children_sequential_reap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6eb69cfd2993e9471abbfe3d2b67f5a0">test_registry.gen.hpp</a></li>
 <li>test_waitpid_zombie_over_new_child()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a23c81a2f3eef9fe7e2f1456df812f0b1">test_registry.gen.hpp</a></li>
+<li>test_wcet_balancer_tick_worst()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaffb36e31a0331d8aeaf47732b577e7e">test_registry.gen.hpp</a></li>
 <li>test_wcet_cleanup_step()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a14f98bdf1caccd05fff63da8543a08db">test_registry.gen.hpp</a></li>
 <li>test_wcet_mempool_alloc_free()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1aa79b6d14a8901f4078791fc9253d2c">test_registry.gen.hpp</a></li>
 <li>test_wcet_scan_deadlines()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a38731f5d1cb8b7df4384a5489719299e">test_registry.gen.hpp</a></li>
