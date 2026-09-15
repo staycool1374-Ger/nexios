@@ -1070,6 +1070,20 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // safe before switch_to_task.
     release_zombie(task);
 
+    // Issue #155: prompt the PID 1 reaper after every zombie birth
+    // (unconditional — spurious wakes are harmless under its
+    // level-triggered drain loop).  Placed after the list push above
+    // so wake-then-miss is impossible.  Same IrqGuard + scheduler_lock_
+    // region (global→leaf order: notify takes only its leaf lock).
+    // Deadlock-free by affinity clamping: set_affinity always clamps
+    // masks to up-CPUs, so the reaper's target is either here
+    // (lock-free enqueue_ready) or a booted AP (mailbox+IPI) — never
+    // the down-CPU direct-enqueue branch that would retake this lock.
+    if (task.id != 1) {
+        if (auto *reaper = Scheduler::find_task(1))
+            reaper->notify.notify(1);
+    }
+
     // If the terminating task is the one currently on the CPU, arrange for a
     // context switch to a valid successor on the next ISR.  Otherwise
     // current_task() stays parked on a TERMINATED task and the running RSP

@@ -1312,6 +1312,10 @@ void Shell::cmd_selftest(int argc, const char** argv) {
     auto *init_task = kernel::Scheduler::get_harness_task();
     if (init_task && init_task != self_task) {
         kernel::Scheduler::set_priority(*init_task, 10);
+        // Issue #155: the reaper may be parked in Notify::wait — kick it
+        // awake for its test-runner duty (the kick is the wake, not the
+        // promotion; a spurious wake just re-drains empty queues).
+        init_task->notify.notify(1);
     }
 
     {

@@ -370,8 +370,9 @@ void init_task_main() {
     // needs background priority (0) so it never starves the shell (prio 2)
     // or the daemons (prio 20).  The shell's `selftest` command raises it
     // back to 10 for the test run.
-    if (auto *init_self = kernel::Scheduler::current_task()) {
-        kernel::Scheduler::set_priority(*init_self, 0);
+    auto *reaper_self = kernel::Scheduler::current_task();
+    if (reaper_self) {
+        kernel::Scheduler::set_priority(*reaper_self, 0);
         // The reaper is best-effort background work, not a hard real-time
         // periodic task.  g_task_defs gives init a nominal period/WCET
         // (period=100, wcet=1) so it participates in RMS while it is the
@@ -379,16 +380,31 @@ void init_task_main() {
         // meet a 100-tick deadline (the shell/daemons always run first),
         // so scan_deadlines() and the WCET scan would flag it every period
         // with LOG_ONLY spam.  Clear the RT budget so the monitors skip it.
-        init_self->period_ticks = 0;
-        init_self->deadline_ticks = 0;
-        init_self->wcet_ticks = 0;
+        reaper_self->period_ticks = 0;
+        reaper_self->deadline_ticks = 0;
+        reaper_self->wcet_ticks = 0;
     }
+    // Issue #155: sleep in Notify::wait (BLOCKED) instead of spinning.
+    // The loop is level-triggered on all three wake sources — zombie
+    // count delta across the drain, IPC queue drain, notify try_wait —
+    // plus a queue-empty check, so a wake landing while RUNNING can only
+    // delay, never stall.  Wakers: zombie birth (terminate() poke),
+    // daemon IPC (generic BLOCKED wake on send), selftest kick.
+    // No hlt() while BLOCKED (the scheduler runs idle, which hlts).
     for (;;) {
-        arch::pause();
+        auto *self = kernel::Scheduler::current_task();
+        if (!self) {
+            arch::hlt();
+            continue;
+        }
+        uint64_t zombies_before = kernel::Scheduler::zombie_count();
         kernel::Scheduler::drain_zombie_list();
+        bool worked =
+            (kernel::Scheduler::zombie_count() != zombies_before);
 
         kernel::Message msg{};
         while (kernel::IPC::recv(msg)) {
+            worked = true;
             if (msg.type == kernel::ipc::MSG_DAEMON_READY) {
                 kernel::Logger::info("init: daemon (PID %u) ready "
                                      "(restart)",
@@ -400,7 +416,12 @@ void init_task_main() {
             }
         }
 
-        arch::hlt();
+        uint64_t wake_value = 0;
+        if (self->notify.try_wait(&wake_value))
+            worked = true;
+        if (worked || !self->msg_queue.is_empty())
+            continue;
+        self->notify.wait();
     }
 }
 

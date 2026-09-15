@@ -771,6 +771,15 @@ void snapshot_restore(const char *test_name) {
     // Issue #61: balancer migration counters are per-CPU runtime state —
     // reset for test isolation (same pattern as corruption_count above).
     Scheduler::reset_migration_counts();
+    // Issue #155: drain PID 1's reaper notify value so a poke from a
+    // previous test never spuriously satisfies a later try_wait.  The
+    // waiter itself is never parked in-suite (the harness never sleeps
+    // in Notify::wait), so no waiter reset is needed.
+    if (auto *reaper = Scheduler::find_task(1)) {
+        uint64_t stale_wake = 0;
+        while (reaper->notify.try_wait(&stale_wake)) {
+        }
+    }
     if (corr > 0) {
         Logger::raw_write("[SCHED] corruption_count=");
         Logger::print_dec(corr);

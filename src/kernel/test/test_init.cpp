@@ -23,6 +23,8 @@
 #include <logger.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/ipc/ipc_boot.hpp>
 
 using namespace kernel;
 
@@ -39,6 +41,55 @@ JARVIS_TEST(init_task_has_no_parent, "PRE: none | POST: none") {
     auto *init = Scheduler::find_task(1);
     JARVIS_ASSERT(init != nullptr);
     JARVIS_ASSERT_EQ(0ULL, init->parent_id);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Child exit pokes the PID 1 reaper (issue #155): terminate()
+//           notifies PID 1's sleep object after the zombie-list push, so
+//           a parked reaper wakes and drains to zero.
+// Input: Drain stale notify value; register + terminate a child;
+//        consume the poke; drain zombies.
+// Expect: try_wait succeeds exactly once after the exit (the poke
+//         landed); zombie count returns to 0 after the drain.
+// Depends: Scheduler::terminate reaper poke, Notify level-triggering
+JARVIS_TEST(reaper_notified_on_child_exit, "PRE: none | POST: none") {
+    auto *init = Scheduler::find_task(1);
+    JARVIS_ASSERT(init != nullptr);
+    uint64_t stale = 0;
+    while (init->notify.try_wait(&stale)) {
+    }
+    auto *child = TaskControlBlock::create([]() {}, 10,
+                                           TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(child != nullptr);
+    Scheduler::register_task(*child);
+    Scheduler::terminate(*child, 0);
+    uint64_t wake = 0;
+    JARVIS_ASSERT(init->notify.try_wait(&wake));
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Daemon-ready IPC to PID 1 lands in its queue (issue #155):
+//           the reaper's second wake source.  The suite runs as PID 1
+//           (harness exemption), so it can send-to-self and recv back.
+// Input: IPC::send(1, MSG_DAEMON_READY); IPC::recv.
+// Expect: send succeeds; recv returns the same type.  The parked
+//         reaper is woken by the generic BLOCKED path on send.
+// Depends: IPC::send BLOCKED-wake, PID 1 queue (issue #155)
+JARVIS_TEST(reaper_wakes_on_daemon_ipc, "PRE: none | POST: none") {
+    auto *self = Scheduler::current_task();
+    JARVIS_ASSERT(self != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, self->id);
+    Message msg{};
+    msg.sender_id = self->id;
+    msg.type = ipc::MSG_DAEMON_READY;
+    JARVIS_ASSERT(kernel::IPC::send(1, msg, 0));
+    Message got{};
+    JARVIS_ASSERT(kernel::IPC::recv(got));
+    JARVIS_ASSERT(got.type == ipc::MSG_DAEMON_READY);
     JARVIS_TEST_PASS();
 }
 
@@ -64,4 +115,6 @@ void register_init_tests() {
     JARVIS_REGISTER_TEST(init_task_exists);
     JARVIS_REGISTER_TEST(init_task_has_no_parent);
     JARVIS_REGISTER_TEST(init_task_reparents_orphans);
+    JARVIS_REGISTER_TEST(reaper_notified_on_child_exit);
+    JARVIS_REGISTER_TEST(reaper_wakes_on_daemon_ipc);
 }

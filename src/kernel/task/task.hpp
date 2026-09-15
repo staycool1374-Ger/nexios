@@ -437,7 +437,11 @@ struct TaskControlBlock {
     /// @brief Embedded message queue (no separate heap allocation).
     MessageQueue msg_queue;
 
-    /// @brief Per-task notification object (embedded).
+    /// @brief Per-task notification object (embedded).  Issue #155: PID 1's
+    ///        instance doubles as the reaper sleep object — PID 1 is the
+    ///        sole waiter on its own notify (no other subsystem may wait
+    ///        on it); wakers are zombie-birth (terminate), daemon IPC
+    ///        (generic BLOCKED wake on send), and the selftest kick.
     sync::Notify notify;
 
     /// @brief Per-task event-group object (embedded).

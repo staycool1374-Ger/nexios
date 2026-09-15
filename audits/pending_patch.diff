@@ -1,130 +1,259 @@
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 8ac3509a..97e8e6b3 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -370,8 +370,9 @@ void init_task_main() {
+     // needs background priority (0) so it never starves the shell (prio 2)
+     // or the daemons (prio 20).  The shell's `selftest` command raises it
+     // back to 10 for the test run.
+-    if (auto *init_self = kernel::Scheduler::current_task()) {
+-        kernel::Scheduler::set_priority(*init_self, 0);
++    auto *reaper_self = kernel::Scheduler::current_task();
++    if (reaper_self) {
++        kernel::Scheduler::set_priority(*reaper_self, 0);
+         // The reaper is best-effort background work, not a hard real-time
+         // periodic task.  g_task_defs gives init a nominal period/WCET
+         // (period=100, wcet=1) so it participates in RMS while it is the
+@@ -379,16 +380,31 @@ void init_task_main() {
+         // meet a 100-tick deadline (the shell/daemons always run first),
+         // so scan_deadlines() and the WCET scan would flag it every period
+         // with LOG_ONLY spam.  Clear the RT budget so the monitors skip it.
+-        init_self->period_ticks = 0;
+-        init_self->deadline_ticks = 0;
+-        init_self->wcet_ticks = 0;
++        reaper_self->period_ticks = 0;
++        reaper_self->deadline_ticks = 0;
++        reaper_self->wcet_ticks = 0;
+     }
++    // Issue #155: sleep in Notify::wait (BLOCKED) instead of spinning.
++    // The loop is level-triggered on all three wake sources — zombie
++    // count delta across the drain, IPC queue drain, notify try_wait —
++    // plus a queue-empty check, so a wake landing while RUNNING can only
++    // delay, never stall.  Wakers: zombie birth (terminate() poke),
++    // daemon IPC (generic BLOCKED wake on send), selftest kick.
++    // No hlt() while BLOCKED (the scheduler runs idle, which hlts).
+     for (;;) {
+-        arch::pause();
++        auto *self = kernel::Scheduler::current_task();
++        if (!self) {
++            arch::hlt();
++            continue;
++        }
++        uint64_t zombies_before = kernel::Scheduler::zombie_count();
+         kernel::Scheduler::drain_zombie_list();
++        bool worked =
++            (kernel::Scheduler::zombie_count() != zombies_before);
+ 
+         kernel::Message msg{};
+         while (kernel::IPC::recv(msg)) {
++            worked = true;
+             if (msg.type == kernel::ipc::MSG_DAEMON_READY) {
+                 kernel::Logger::info("init: daemon (PID %u) ready "
+                                      "(restart)",
+@@ -400,7 +416,12 @@ void init_task_main() {
+             }
+         }
+ 
+-        arch::hlt();
++        uint64_t wake_value = 0;
++        if (self->notify.try_wait(&wake_value))
++            worked = true;
++        if (worked || !self->msg_queue.is_empty())
++            continue;
++        self->notify.wait();
+     }
+ }
+ 
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 36103ec0..651dc4c2 100644
+index 651dc4c2..98a256b7 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -1981,6 +1981,11 @@ void Scheduler::on_tick() noexcept {
+@@ -1070,6 +1070,20 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+     // safe before switch_to_task.
+     release_zombie(task);
  
-         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
-         // only tasks affine to this CPU (AP-affine tasks are not serviced).
-+        // Issue #154: executed_ticks is execution time — only the
-+        // interrupted (running) task is charged.  remaining_ticks,
-+        // deadline re-arm and alarms stay wall-clock for every affine
-+        // task (a parked READY task still consumes period and alarms).
-+        TaskControlBlock *const running = current_task();
-         for (auto *task = all_tasks_.first_ptr(); task;
-              task = all_tasks_.next_ptr(task)) {
-             if (task->magic != TaskControlBlock::TCB_MAGIC)
-@@ -1990,9 +1995,11 @@ void Scheduler::on_tick() noexcept {
-             if (queue_target(*task) != sched_cpu())
-                 continue;
- 
-+            if (task == running)
-+                ++task->executed_ticks;
++    // Issue #155: prompt the PID 1 reaper after every zombie birth
++    // (unconditional — spurious wakes are harmless under its
++    // level-triggered drain loop).  Placed after the list push above
++    // so wake-then-miss is impossible.  Same IrqGuard + scheduler_lock_
++    // region (global→leaf order: notify takes only its leaf lock).
++    // Deadlock-free by affinity clamping: set_affinity always clamps
++    // masks to up-CPUs, so the reaper's target is either here
++    // (lock-free enqueue_ready) or a booted AP (mailbox+IPI) — never
++    // the down-CPU direct-enqueue branch that would retake this lock.
++    if (task.id != 1) {
++        if (auto *reaper = Scheduler::find_task(1))
++            reaper->notify.notify(1);
++    }
 +
-             if (task->state == TaskState::RUNNING ||
-                 task->state == TaskState::READY) {
--                ++task->executed_ticks;
-                 uint64_t prev_rem = task->remaining_ticks;
-                 if (task->remaining_ticks > 0)
-                     --task->remaining_ticks;
-@@ -2012,7 +2019,10 @@ void Scheduler::on_tick() noexcept {
-             }
+     // If the terminating task is the one currently on the CPU, arrange for a
+     // context switch to a valid successor on the next ISR.  Otherwise
+     // current_task() stays parked on a TERMINATED task and the running RSP
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 99d20b1e..4f08e4dd 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -437,7 +437,11 @@ struct TaskControlBlock {
+     /// @brief Embedded message queue (no separate heap allocation).
+     MessageQueue msg_queue;
  
- #if CONFIG_WCET_OVERRUN_DETECTION
--            if (task->wcet_ticks > 0 && !task->wcet_overrun_fired &&
-+            // Issue #154: a starved READY task must never trip the
-+            // overrun latch — only execution counts toward WCET.
-+            if (task == running && task->wcet_ticks > 0 &&
-+                !task->wcet_overrun_fired &&
-                 task->executed_ticks > task->wcet_ticks) {
-                 task->wcet_overrun_fired = true;
-                 wcet_overrun_handler(task,
+-    /// @brief Per-task notification object (embedded).
++    /// @brief Per-task notification object (embedded).  Issue #155: PID 1's
++    ///        instance doubles as the reaper sleep object — PID 1 is the
++    ///        sole waiter on its own notify (no other subsystem may wait
++    ///        on it); wakers are zombie-birth (terminate), daemon IPC
++    ///        (generic BLOCKED wake on send), and the selftest kick.
+     sync::Notify notify;
+ 
+     /// @brief Per-task event-group object (embedded).
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 3aab6463..8cc2bade 100644
+index 8cc2bade..92959b5a 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1250,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62)
-+    {"all",                1251,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154)
+-    {"all",                1251,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154)
++    {"all",                1253,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155)
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -192,7 +192,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"deadline_ss",           2,    0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish
+@@ -62,7 +62,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"task_core",             6,    0,       0      },  // TCB cleanup/page tables/clone
+     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
+     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+-    {"task_init",             3,    0,       0      },  // init task exists/reparents
++    {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
+     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
+     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
  
-     // timing
--    {"timing_core",          18,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list
-+    {"timing_core",          19,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list + READY-no-charge regression (issue #154)
+diff --git a/src/kernel/test/test_init.cpp b/src/kernel/test/test_init.cpp
+index 4c682c86..420e9025 100644
+--- a/src/kernel/test/test_init.cpp
++++ b/src/kernel/test/test_init.cpp
+@@ -23,6 +23,8 @@
+ #include <logger.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/ipc/ipc_boot.hpp>
  
-     // hal
-     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
-diff --git a/src/kernel/test/test_timing.cpp b/src/kernel/test/test_timing.cpp
-index 0d97a140..e432065e 100644
---- a/src/kernel/test/test_timing.cpp
-+++ b/src/kernel/test/test_timing.cpp
-@@ -697,10 +697,45 @@ JARVIS_TEST(deadline_list_capacity, "PRE: none | POST: none") {
-     JARVIS_ASSERT(dl.empty() == false);
+ using namespace kernel;
+ 
+@@ -42,6 +44,55 @@ JARVIS_TEST(init_task_has_no_parent, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
+ 
 +// Runmode: kernel
-+// Testidea: executed_ticks is execution time (issue #154): a READY but
-+//           never-dispatched task accumulates nothing across real ticks
-+//           while the genuinely-running task grows.
-+// Input: Parked prio-1 task (READY, never rescheduled to top) + prio-11
-+//        runner busy-waiting on its own executed_ticks >= 3.
-+// Expect: runner ticks >= 3; parked ticks == 0 (old code charged every
-+//         READY task and failed this).
-+// Depends: Scheduler::on_tick accounting (issue #154)
-+JARVIS_TEST(timer_ready_task_accumulates_no_cpu_time, "PRE: none | POST: none") {
-+    static volatile uint64_t g_runner_ticks = 0;
-+
-+    auto *parked = TaskControlBlock::create([]() {}, 1,
-+                                            TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(parked != nullptr);
-+    JARVIS_ASSERT_EQ(0ULL, parked->executed_ticks);
-+    Scheduler::add_task(*parked);
-+
-+    auto *t = run_real_task([]() {
-+        auto *self = Scheduler::current_task();
-+        while (self->executed_ticks < 3)
-+            arch::pause();
-+        g_runner_ticks = self->executed_ticks;
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT(g_runner_ticks >= 3);
-+    JARVIS_ASSERT_EQ(0ULL, parked->executed_ticks);
-+    release_task(t);
++// Testidea: Child exit pokes the PID 1 reaper (issue #155): terminate()
++//           notifies PID 1's sleep object after the zombie-list push, so
++//           a parked reaper wakes and drains to zero.
++// Input: Drain stale notify value; register + terminate a child;
++//        consume the poke; drain zombies.
++// Expect: try_wait succeeds exactly once after the exit (the poke
++//         landed); zombie count returns to 0 after the drain.
++// Depends: Scheduler::terminate reaper poke, Notify level-triggering
++JARVIS_TEST(reaper_notified_on_child_exit, "PRE: none | POST: none") {
++    auto *init = Scheduler::find_task(1);
++    JARVIS_ASSERT(init != nullptr);
++    uint64_t stale = 0;
++    while (init->notify.try_wait(&stale)) {
++    }
++    auto *child = TaskControlBlock::create([]() {}, 10,
++                                           TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(child != nullptr);
++    Scheduler::register_task(*child);
++    Scheduler::terminate(*child, 0);
++    uint64_t wake = 0;
++    JARVIS_ASSERT(init->notify.try_wait(&wake));
 +    Scheduler::drain_zombie_list();
-+    release_task(parked);
-+    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
 +    JARVIS_TEST_PASS();
 +}
 +
- void register_timing_tests() {
-     Logger::raw_write("[TIMING] register_timing_tests called!\n");
-     Logger::info("Registering timing tests");
-     JARVIS_REGISTER_TEST(timer_tick_accounting);
-+    JARVIS_REGISTER_TEST(timer_ready_task_accumulates_no_cpu_time);
-     JARVIS_REGISTER_TEST(timer_period_reload);
-     JARVIS_REGISTER_TEST(timer_alarm_delivery);
-     JARVIS_REGISTER_TEST(timer_alarm_not_expired);
++// Runmode: kernel
++// Testidea: Daemon-ready IPC to PID 1 lands in its queue (issue #155):
++//           the reaper's second wake source.  The suite runs as PID 1
++//           (harness exemption), so it can send-to-self and recv back.
++// Input: IPC::send(1, MSG_DAEMON_READY); IPC::recv.
++// Expect: send succeeds; recv returns the same type.  The parked
++//         reaper is woken by the generic BLOCKED path on send.
++// Depends: IPC::send BLOCKED-wake, PID 1 queue (issue #155)
++JARVIS_TEST(reaper_wakes_on_daemon_ipc, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    JARVIS_ASSERT_EQ(1ULL, self->id);
++    Message msg{};
++    msg.sender_id = self->id;
++    msg.type = ipc::MSG_DAEMON_READY;
++    JARVIS_ASSERT(kernel::IPC::send(1, msg, 0));
++    Message got{};
++    JARVIS_ASSERT(kernel::IPC::recv(got));
++    JARVIS_ASSERT(got.type == ipc::MSG_DAEMON_READY);
++    JARVIS_TEST_PASS();
++}
++
+ JARVIS_TEST(init_task_reparents_orphans, "PRE: none | POST: none") {
+     // Create a child task, set parent to a task that will exit,
+     // verify it gets reparented to init
+@@ -64,4 +115,6 @@ void register_init_tests() {
+     JARVIS_REGISTER_TEST(init_task_exists);
+     JARVIS_REGISTER_TEST(init_task_has_no_parent);
+     JARVIS_REGISTER_TEST(init_task_reparents_orphans);
++    JARVIS_REGISTER_TEST(reaper_notified_on_child_exit);
++    JARVIS_REGISTER_TEST(reaper_wakes_on_daemon_ipc);
+ }
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 443d80bc..17b4c12d 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -771,6 +771,15 @@ void snapshot_restore(const char *test_name) {
+     // Issue #61: balancer migration counters are per-CPU runtime state —
+     // reset for test isolation (same pattern as corruption_count above).
+     Scheduler::reset_migration_counts();
++    // Issue #155: drain PID 1's reaper notify value so a poke from a
++    // previous test never spuriously satisfies a later try_wait.  The
++    // waiter itself is never parked in-suite (the harness never sleeps
++    // in Notify::wait), so no waiter reset is needed.
++    if (auto *reaper = Scheduler::find_task(1)) {
++        uint64_t stale_wake = 0;
++        while (reaper->notify.try_wait(&stale_wake)) {
++        }
++    }
+     if (corr > 0) {
+         Logger::raw_write("[SCHED] corruption_count=");
+         Logger::print_dec(corr);
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 671ed737..78bba5ed 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -1312,6 +1312,10 @@ void Shell::cmd_selftest(int argc, const char** argv) {
+     auto *init_task = kernel::Scheduler::get_harness_task();
+     if (init_task && init_task != self_task) {
+         kernel::Scheduler::set_priority(*init_task, 10);
++        // Issue #155: the reaper may be parked in Notify::wait — kick it
++        // awake for its test-runner duty (the kick is the wake, not the
++        // promotion; a spurious wake just re-drains empty queues).
++        init_task->notify.notify(1);
+     }
+ 
+     {
 diff --git a/test-history.txt b/test-history.txt
-index 76fbc1ed..d3f99421 100644
+index e4fb3324..1ad04405 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -992,3 +992,12 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 16:42:41 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_898_PREEXISTING_FLAKE
- 2026-09-15 16:43:49 all PASSED: 1360 FAILED: 0 TIME: 445370ms
- 2026-09-15 16:44:10 all PASSED: 85 FAILED: 0 TIME: 4122ms
-+2026-09-15 17:17:20 timing_core PASSED: 19 FAILED: 0 TIME: 20s
-+2026-09-15 17:17:57 timing_core PASSED: 18 FAILED: 1 TIME: 12s STATUS: REVERT_PROOF_NEW_TEST_CATCHES_BUG
-+2026-09-15 17:19:14 wcet_overrun PASSED: 2 FAILED: 0 TIME: 20s
-+2026-09-15 17:19:14 scheduler_budget PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 17:19:14 scheduler_cpu_load PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 17:20:00 shell_interaction PASSED: 19 FAILED: 0 TIME: 22s
-+2026-09-15 17:20:00 deadline_miss PASSED: 5 FAILED: 0 TIME: 19s
-+2026-09-15 17:20:58 all PASSED: 1361 FAILED: 0 TIME: 94139ms
-+2026-09-15 17:21:19 all PASSED: 85 FAILED: 0 TIME: 4323ms
+@@ -1005,3 +1005,13 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 17:38:08 task_init PASSED: 3 FAILED: 0 TIME: 20s
+ 2026-09-15 17:43:10 all PASSED: 1361 FAILED: 0 TIME: 95615ms
+ 2026-09-15 17:43:31 all PASSED: 85 FAILED: 0 TIME: 4556ms
++2026-09-15 18:09:15 task_init PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 18:10:27 task_lifecycle PASSED: 9 FAILED: 0 TIME: 19s
++2026-09-15 18:10:27 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 22s
++2026-09-15 18:11:14 servers_vfsd PASSED: 18 FAILED: 0 TIME: 19s
++2026-09-15 18:11:14 servers_iocd PASSED: 7 FAILED: 0 TIME: 20s
++2026-09-15 18:11:58 ipc_core PASSED: 23 FAILED: 0 TIME: 19s
++2026-09-15 18:11:58 ipc_extended PASSED: 9 FAILED: 0 TIME: 20s
++2026-09-15 18:12:23 process_waitpid PASSED: 3 FAILED: 0 TIME: 20s
++2026-09-15 18:13:51 all PASSED: 1363 FAILED: 0 TIME: 438154ms
++2026-09-15 18:14:39 all PASSED: 85 FAILED: 0 TIME: 4145ms
