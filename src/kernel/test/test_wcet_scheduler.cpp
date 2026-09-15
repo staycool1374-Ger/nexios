@@ -143,7 +143,72 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Worst-case cost of Scheduler::balancer_tick (issue #62
+//           re-audit): max-spread population (8 queued aperiodic tasks
+//           on CPU0, wide masks), 300 direct calls under IrqGuard.
+// Input: 8 BLOCKED tasks queued on CPU0; rdtsc around each tick.
+// Expect: Worst-case cycles > 0 and logged as [WCET] balancer_tick
+//         for the re-audit table; every task still queued afterwards
+//         (no loss), counters monotone.
+// Depends: Scheduler::balancer_tick (issue #61)
+JARVIS_TEST(wcet_balancer_tick_worst, "PRE: none | POST: none") {
+    constexpr uint64_t k_tasks = 8;
+    constexpr uint64_t k_iters = 300;
+    TaskControlBlock *tasks[k_tasks] = {};
+    uint64_t made = 0;
+    uint64_t max_cycles = 0;
+    {
+        // ONE guard window for setup + measure + check (fanout-test
+        // discipline): any IF=1 gap — even serial logging — lets a
+        // tick dequeue-drop BLOCKED heads via next_task().
+        arch::IrqGuard guard;
+        for (uint64_t k = 0; k < k_tasks; ++k) {
+            auto *t = TaskControlBlock::create([]() {}, 10,
+                                               TaskControlBlock::NO_PERIOD);
+            if (t == nullptr)
+                break;
+            t->state = TaskState::BLOCKED;
+            Scheduler::register_task(*t);
+            Scheduler::enqueue_ready(*t);
+            Scheduler::set_affinity(*t, 0x3);
+            tasks[made++] = t;
+        }
+        for (uint64_t it = 0; it < k_iters; ++it) {
+            uint64_t const s = arch::rdtsc();
+            Scheduler::balancer_tick();
+            uint64_t const e = arch::rdtsc();
+            uint64_t const d = (e > s) ? (e - s) : 0;
+            if (d > max_cycles)
+                max_cycles = d;
+        }
+        for (uint64_t k = 0; k < made; ++k) {
+            bool q0 = Scheduler::is_queued_on(*tasks[k], 0);
+            bool q1 = Scheduler::is_queued_on(*tasks[k], 1);
+            JARVIS_ASSERT(q0 != q1);
+        }
+    }
+    JARVIS_ASSERT(max_cycles > 0);
+    Logger::info("[WCET] balancer_tick worst=");
+    Logger::print_dec(max_cycles);
+    Logger::info(" cyc");
+
+    auto teardown = ScopeGuard([&]() {
+        for (uint64_t k = 0; k < made; ++k) {
+            if (tasks[k] &&
+                tasks[k]->magic == TaskControlBlock::TCB_MAGIC) {
+                Scheduler::remove_task(*tasks[k]);
+                tasks[k]->cleanup();
+                delete tasks[k];
+            }
+        }
+    });
+
+    JARVIS_TEST_PASS();
+}
+
 void register_wcet_scheduler_tests() {
     Logger::info("Registering WCET scheduler benchmark tests");
     JARVIS_REGISTER_TEST(wcet_scan_deadlines);
+    JARVIS_REGISTER_TEST(wcet_balancer_tick_worst);
 }

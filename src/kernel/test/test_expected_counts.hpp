@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
     {"selftest",            133,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1249,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61)
+    {"all",                1250,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -121,7 +121,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
     {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
     {"load_balancer",        4,   0,       0      },  // Load balancer stubs (issue #85 module 8): idle-pull/work-push/RT-exclusion/threshold pending balancer API
-    {"cache_coloring",       4,   0,       0      },  // Cache-coloring stubs (issue #85 module 10): spread/collisions/sizes/bit-extract pending allocator API
+    {"cache_coloring",       4,   0,       0      },  // Cache-coloring allocator (issue #62; stubs from #85 module 10): spread/collisions/sizes/bit-extract real
     {"smp_sync",             6,   0,       0      },  // SMP sync (issue #85 module 11): IRQ-guard IF contract + unlock/relock (real), 2-CPU race/rwlock/migration/ticket stubs
     {"smp_verify",           5,   0,       0      },  // SMP verify (issue #85 module 12): census + AP-tick liveness + lock bound (real), inversion/soak stubs
     {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
@@ -180,7 +180,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // wcet / deadline
     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
-    {"wcet_scheduler",        1,    0,       0      },  // WCET benchmark for scan_deadlines (P7b)
+    {"wcet_scheduler",        2,    0,       0      },  // WCET benchmark for scan_deadlines (P7b) + balancer_tick worst case (issue #62 re-audit)
     {"bench_wcet_memory",    2,    0,       0      },  // WCET mempool/vmm (TF_BENCH)
 #if CONFIG_DEADLINE_MONITOR_TASK
     {"deadline_miss",         5,    0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss

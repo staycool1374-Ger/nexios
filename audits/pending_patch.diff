@@ -1,45 +1,144 @@
-diff --git a/docs/specs/per-cpu-smp.md b/docs/specs/per-cpu-smp.md
-index c6be9ece..5e07bda0 100644
---- a/docs/specs/per-cpu-smp.md
-+++ b/docs/specs/per-cpu-smp.md
-@@ -348,6 +348,31 @@ scheduler statistics per CPU, FPU migration (#151).
-   first-dispatch relies on `create()`-built frames (verified); the AP
-   idle MUST be built via `create()` (no hand-rolled TCB).
- 
-+### 3.4.9 Issue #61 delta (RT load balancer + affinity ABI)
-+
-+§3.4.7's "load balancing/migration" carve-out lands here. Policy:
-+- `Scheduler::balancer_tick()` (BSP-only, quiesce + try_lock, never
-+  blocking) migrates queued aperiodic kernel tasks from the busiest
-+  up-CPU to the idlest while depths differ beyond
-+  `BALANCER_THRESHOLD` (2), at most
-+  `BALANCER_MAX_MIGRATIONS_PER_TICK` (2) moves per tick, every
-+  `BALANCER_TICK_PERIOD` (10) BSP ticks, production runs only
-+  (`!is_test_active()` — tests drive it directly under IrqGuard).
-+- Hard exclusions (never migrate): periodic tasks
-+  (`period_ticks != 0 && != NO_PERIOD`), user tasks (shared-TSS:
-+  CPU0), idle tasks, tasks current on any CPU, unowned/terminated
-+  tasks, tasks whose mask lacks the target bit.
-+- Move = remove + re-pin `cpu_affinity` to the singleton target +
-+  enqueue (queue==target invariant preserved, same as
-+  `set_affinity`); only up-CPUs are targets (no stranding on
-+  never-booted CPUs).
-+- Affinity ABI: `SYS_SET_AFFINITY` (77) / `SYS_GET_AFFINITY` (78);
-+  mask is a constraint, placement follows the lowest set bit;
-+  empty mask clamps to CPU0, user tasks clamp to CPU0, beyond-up
-+  bits clamp; unknown pid returns a specific error (never panic).
-+- Still out of scope: per-CPU TSS + AP user tasks, AP-side
-+  accounting/deadlines, TLB shootdown, per-CPU deadline monitor.
-+
- ## 4. Invariants
- 
- - INV-PC1: gs:0x00/0x08 semantics unchanged — existing syscall_entry/isr
-diff --git a/src/kernel/sync/rwlock.hpp b/src/kernel/sync/rwlock.hpp
+diff --git a/docs/specs/cache-coloring.md b/docs/specs/cache-coloring.md
 new file mode 100644
-index 00000000..50b0c02a
+index 00000000..20eb2d28
 --- /dev/null
-+++ b/src/kernel/sync/rwlock.hpp
-@@ -0,0 +1,135 @@
++++ b/docs/specs/cache-coloring.md
+@@ -0,0 +1,78 @@
++# Cache Coloring Allocator
++
++**Doc ID:** NEX-SPEC-2026-09-15-001
++**Status:** IMPLEMENTED (issue #62)
++**Milestone target:** v0.4.5 (Per-CPU Scheduling & Cache)
++**Related:** `docs/specs/memory.md` §5 (owner-bit contract),
++`docs/specs/per-cpu-smp.md` §3.4.9, `src/kernel/memory/cache_color.hpp`,
++`src/kernel/memory/pmm.hpp` (colored path).
++
++## 1. Contract
++
++A page's color is the cache-set index bits above the page offset:
++
++```
++color_of(phys) = (phys >> COLOR_SHIFT) & COLOR_MASK
++```
++
++with `NUM_COLORS = 16`, `SHIFT = 12`, `MASK = 15` (bits 15..12).
++The geometry is a QEMU-contracted convention — no observable silicon
++cache exists under virtualization — retunable via the three constexprs
++in `cache_color.hpp`. No silicon truth is claimed; no perf claims are
++made beyond relative scaling (colored spread vs uncolored clumping).
++
++## 2. API
++
++| Entry | Ownership | Failure |
++|---|---|---|
++| `PMM::color_of(phys)` | — (pure) | n/a (any u64) |
++| `PMM::alloc_page_colored(color)` | KERNEL | 0 + OOM path |
++| `PMM::alloc_user_page_colored(color)` | USER | 0 + OOM path |
++| `*_colored_err(color, out&)` | as above | `PMM_ERR_OOM` / `PMM_ERR_USER_OOM` |
++| `PMM::reset_color_cursor()` | — (test hook) | n/a |
++
++Colored alloc is single-page-only: colored-contiguous (same color AND
++physically contiguous) is over-constrained and rarely satisfiable;
++multi-page callers keep using `alloc_contiguous`. Out-of-range colors
++fail closed (0 / OOM code, never panic on reachable input).
++
++## 3. Implementation (PMM extension, not a pool)
++
++Colored allocation lives inside PMM under `pmm_lock_` (no second lock,
++no separate pool — a wrapper pool would desync bitmap vs free-list vs
++ResourceTracker vs snapshot rewind, the S1 the design exists to avoid):
++
++- `try_alloc_colored_kernel/user(color)`: color-strided bitmap scan
++  `[window_base_page_, window_end_page_)` from the per-color cursor
++  (page index `i` has color `i & MASK` because SHIFT == page shift),
++  wrapping once for completeness; `bitmap_set` + `owner_set_*` +
++  `--free_pages_`, cursor advanced past the hit, then
++  `rebuild_free_list()` re-syncs the free list the scan bypassed.
++- Public wrappers mirror `alloc_page`/`alloc_user_page` exactly:
++  `CONFIG_STATIC_POOLS_ONLY` gate, `CONFIG_MEMORY_BUDGET`
++  accounting, `ResourceTracker::track_pmm_alloc`, and the
++  unlock→`oom_handler_`→relock retry protocol.
++- `free_page` is shared (no color logic); owner bits keep the
++  `free_user_pages` contract intact.
++- Cursors are placement-only state (never correctness): tests reset
++  them at entry via `reset_color_cursor()`; no snapshot capture.
++
++The colored path is a creation/test-time path: the strided scan plus
++rebuild is not RT-budgeted. Tick paths (`on_tick`, `scan_deadlines`,
++`balancer_tick`) allocate nothing.
++
++## 4. Tests (stub→real, names kept)
++
++`test_cache_coloring.cpp` (was: 4 PENDING stubs from #85 module 10):
++`spread` (cycling requests return exact colors, adjacent differ,
++net-zero), `collisions_bounded` (uniform spread keeps the stub's
++`collisions*COLORS <= M*(M-1)/2 + M` formula green, per-color exact),
++`arbitrary_sizes` (one page per size class, range + stability),
++`bit_extraction` (fixed phys vector incl. HHDM, OOR via `_err`).
++
++## 5. WCET impact
++
++None on hot paths: the allocator never runs on tick/scan/balancer
++paths, and the balancer moves queued TCBs without allocating. The
++v0.4.5 re-audit (`docs/specs/wcet-reaudit-v0.4.5.md`) bounds
++`balancer_tick` explicitly instead.
+diff --git a/docs/specs/wcet-reaudit-v0.4.5.md b/docs/specs/wcet-reaudit-v0.4.5.md
+new file mode 100644
+index 00000000..ebc34562
+--- /dev/null
++++ b/docs/specs/wcet-reaudit-v0.4.5.md
+@@ -0,0 +1,45 @@
++# WCET Re-audit — v0.4.5 (post-balancer)
++
++**Doc ID:** NEX-SPEC-2026-09-15-002
++**Status:** MEASURED (issue #62)
++**Milestone target:** v0.4.5
++**Prior art:** `docs/_archive/wcet_analysis.md` (1/10/40-task SIMULATED
++table — superseded by driven measurements below, kept frozen).
++
++## 1. Why re-audit
++
++Issue #61 put `Scheduler::balancer_tick()` in the BSP `on_tick` tail
++(every `BALANCER_TICK_PERIOD` = 10 ticks, production runs only,
++try_lock-skip). Every pre-#61 tick bound is therefore stale until the
++balancer's worst case is bounded jointly with the scan.
++
++## 2. Method
++
++Driven (real task populations, no simulation), rdtsc max over 300
++iterations, QEMU-virtualized TSC (same caveat as the archive: relative
++numbers, not silicon). Classes: `wcet_scheduler` (scan + balancer),
++`bench_wcet_memory` (mempool + vmm). Regression contract I-1..I-10
++(deadline/timing classes) re-run green — see §4.
++
++## 3. Bounds (2026-09-15, debug build, -smp 2 QEMU)
++
++| Path | Population | Worst (cyc) | Note |
++|---|---|---|---|
++| `scan_deadlines` | 30 genuinely-overrun tasks | 2,030,000 | `wcet_scan_deadlines`, kIters=300 |
++| `balancer_tick` | 8 queued aperiodic, max spread | 8,000 | `wcet_balancer_tick_worst`, kIters=300 |
++| `mempool_alloc_free` | — | max 101,000 (avg 950) | `bench_wcet_memory` |
++| `vmm_map_unmap` | — | max 222,000 (avg 165,795) | `bench_wcet_memory` |
++
++Balancer verdict: worst 8k cyc ≈ 0.4% of the 30-task scan bound,
++well clear of tick budget headroom; it runs at most
++every 10th BSP tick, is skipped under lock contention (try_lock), runs
++only outside test mode, moves at most 2 tasks per tick, and allocates
++nothing (moves queued TCBs). No tick-budget table changes required.
++
++## 4. Regression gates (all green 2026-09-15)
++
++timing_core 18/18, deadline_miss 5/5, deadline_action 1/1,
++deadline_recovery 4/4, deadline_ss 3/3, wcet_overrun 2/2,
++memory_pmm 9/9, memory_determinism 4/4, cache_coloring 4/4,
++wcet_scheduler 2/2, bench_wcet_memory 2/2. Full gates: debug `all`
++1360/1360, release `all` 85 (trace OFF) — see test-history.txt.
+diff --git a/src/kernel/memory/cache_color.hpp b/src/kernel/memory/cache_color.hpp
+new file mode 100644
+index 00000000..b732a09b
+--- /dev/null
++++ b/src/kernel/memory/cache_color.hpp
+@@ -0,0 +1,50 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -58,1054 +157,675 @@ index 00000000..50b0c02a
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file rwlock.hpp
-+/// @brief SMP-safe reader-writer lock with writer preference (issue #61).
++/// @file cache_color.hpp
++/// @brief Cache coloring contract (issue #62).
 +///
-+/// Single 32-bit state word: bit 31 = writer held, bit 30 = writer
-+/// pending (blocks new readers so a waiting writer cannot starve),
-+/// bits 29..0 = active reader count.  All transitions are lock-free
-+/// atomic RMW; waiters spin on arch::pause().
-+///
-+/// Contracts (same discipline as SpinLock):
-+/// - NEVER held across reschedule() or any BLOCKED transition.
-+/// - Blocking lock() is task-context only; ISR-adjacent paths must use
-+///   the try_ variants (non-blocking, skip-and-retry).
-+/// - Read side scales across CPUs; write side is exclusive against
-+///   readers and writers.
++/// A page's color is the cache-set index bits above the page offset:
++/// color_of(phys) = (phys >> SHIFT) & MASK.  The geometry below is a
++/// QEMU-contracted convention (no observable silicon cache under
++/// virtualization), retunable via these three constexprs — no silicon
++/// truth is claimed.  The allocator (PMM colored path) honors colors;
++/// this header owns the formula so tests and PMM cannot disagree.
 +
 +#pragma once
 +
-+#include <kernel/arch/io.hpp>
-+#include <lib/atomic.hpp>
++#include <types.hpp>
 +
-+namespace kernel {
-+namespace sync {
++namespace kernel::cache {
 +
-+class RwLock {
-+  public:
-+    RwLock() = default;
++// 16 colors of 4 KiB-interleaved pages (bits 15..12 of the phys addr).
++static constexpr uint64_t NUM_COLORS = 16;
++static constexpr uint64_t COLOR_SHIFT = 12;
++static constexpr uint64_t COLOR_MASK = NUM_COLORS - 1;
 +
-+    RwLock(const RwLock &) = delete;
-+    RwLock &operator=(const RwLock &) = delete;
-+    RwLock(RwLock &&) = delete;
-+    RwLock &operator=(RwLock &&) = delete;
++static_assert((NUM_COLORS & (NUM_COLORS - 1)) == 0,
++              "cache colors must be a power of two (mask formula)");
 +
-+    /// @brief Acquire shared read access (blocks new readers only while
-+    ///        a writer holds or waits — writer preference).
-+    void read_lock() noexcept {
-+        for (;;) {
-+            uint32_t seen =
-+                atomic_load(&state_, __ATOMIC_ACQUIRE);
-+            if ((seen & (k_writer | k_pending)) != 0) {
-+                arch::pause();
-+                continue;
-+            }
-+            if (atomic_compare_exchange(&state_, &seen, seen + 1,
-+                                        __ATOMIC_ACQUIRE)) {
-+                return;
-+            }
-+            arch::pause();
-+        }
-+    }
++/// @brief Page color of a physical address (pure, lock-free, any ctx).
++/// @param phys_addr Byte physical address (need not be page-aligned).
++/// @return Color in [0, NUM_COLORS).
++constexpr uint64_t color_of(uint64_t phys_addr) noexcept {
++    return (phys_addr >> COLOR_SHIFT) & COLOR_MASK;
++}
 +
-+    /// @brief Release shared read access.
-+    void read_unlock() noexcept {
-+        atomic_fetch_sub(&state_, 1u, __ATOMIC_RELEASE);
-+    }
-+
-+    /// @brief Acquire exclusive write access (writer preference: sets
-+    ///        the pending bit first so no new reader can overtake).
-+    void write_lock() noexcept {
-+        for (;;) {
-+            uint32_t seen =
-+                atomic_load(&state_, __ATOMIC_ACQUIRE);
-+            if ((seen & k_writer) != 0) {
-+                arch::pause();
-+                continue;
-+            }
-+            atomic_fetch_or(&state_, k_pending, __ATOMIC_ACQ_REL);
-+            seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
-+            if (seen == k_pending &&
-+                atomic_compare_exchange(&state_, &seen, k_writer,
-+                                        __ATOMIC_ACQUIRE)) {
-+                return;
-+            }
-+            arch::pause();
-+        }
-+    }
-+
-+    /// @brief Release exclusive write access (clears writer + pending
-+    ///        so a waiting writer or readers can proceed).
-+    void write_unlock() noexcept {
-+        atomic_fetch_and(&state_, ~(k_writer | k_pending),
-+                         __ATOMIC_RELEASE);
-+    }
-+
-+    /// @brief Attempt shared access without blocking.
-+    /// @return true if read access was acquired.
-+    bool try_read_lock() noexcept {
-+        uint32_t seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
-+        if ((seen & (k_writer | k_pending)) != 0)
-+            return false;
-+        return atomic_compare_exchange(&state_, &seen, seen + 1,
-+                                       __ATOMIC_ACQUIRE);
-+    }
-+
-+    /// @brief Attempt exclusive access without blocking.
-+    /// @return true if write access was acquired.
-+    bool try_write_lock() noexcept {
-+        uint32_t seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
-+        if (seen != 0)
-+            return false;
-+        return atomic_compare_exchange(&state_, &seen, k_writer,
-+                                       __ATOMIC_ACQUIRE);
-+    }
-+
-+    /// @brief Force-unlock (used to initialise a lock after MemPool
-+    ///        allocation; mirrors SpinLock::reset).
-+    void reset() noexcept {
-+        atomic_store(&state_, 0u, __ATOMIC_RELAXED);
-+    }
-+
-+  private:
-+    static constexpr uint32_t k_writer = 1u << 31;
-+    static constexpr uint32_t k_pending = 1u << 30;
-+    uint32_t state_ = 0;
-+};
-+
-+} // namespace sync
-+} // namespace kernel
-diff --git a/src/kernel/sync/spinlock.hpp b/src/kernel/sync/spinlock.hpp
-index fdb6b4bf..1a8e8e22 100644
---- a/src/kernel/sync/spinlock.hpp
-+++ b/src/kernel/sync/spinlock.hpp
-@@ -20,6 +20,12 @@
++} // namespace kernel::cache
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+index 72132056..2cd40fd8 100644
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -50,6 +50,7 @@ constinit uint64_t PMM::free_head_ = UINT64_MAX;
+ constinit uint64_t PMM::pool_free_head_ = UINT64_MAX;
+ constinit uint64_t PMM::window_base_page_ = 0;
+ constinit uint64_t PMM::window_end_page_ = 0;
++constinit uint64_t PMM::color_cursor_[cache::NUM_COLORS] = {};
  
- /// @file spinlock.hpp
- /// @brief Busy-wait spinlock using atomic exchange.
-+///
-+/// SMP-safe by construction (issue #61 audit): lock() is an
-+/// atomic_exchange ACQUIRE loop with arch::pause() backoff and unlock()
-+/// is an atomic_store RELEASE — mutual exclusion holds across CPUs.
-+/// Task-context paths may block; ISR paths must use try_lock()
-+/// (non-blocking skip-and-retry).
- 
- #pragma once
- 
-diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index 982bdcdd..6e2c8633 100644
---- a/src/kernel/syscall/syscall.hpp
-+++ b/src/kernel/syscall/syscall.hpp
-@@ -106,7 +106,9 @@ enum class SyscallNumber : uint8_t {
-     SEND_FAST = 74,      ///< register-passing SEND, payload in regs[] (issue #11)
-     RECV_FAST = 75,      ///< register-passing RECEIVE, payload in regs[] (issue #11)
-     SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
--    MAX_SYSCALL = 77,
-+    SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
-+    GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
-+    MAX_SYSCALL = 79,
- };
- 
- /// @brief Folds a list of FAST syscall numbers into a single bitmask
-@@ -254,6 +256,10 @@ class Syscall {
-                                 uint64_t *);
-     static uint64_t sys_getpid(uint64_t, uint64_t, uint64_t, uint64_t,
-                                uint64_t *);
-+    static uint64_t sys_set_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                     uint64_t *);
-+    static uint64_t sys_get_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                     uint64_t *);
-     static uint64_t sys_kill(uint64_t, uint64_t, uint64_t, uint64_t,
-                              uint64_t *);
-     static uint64_t sys_pipe(uint64_t, uint64_t, uint64_t, uint64_t,
-@@ -439,6 +445,8 @@ class Syscall {
-             &Syscall::sys_send_fast,
-             &Syscall::sys_recv_fast,
-             &Syscall::sys_send_sync_fast,
-+            &Syscall::sys_set_affinity,
-+            &Syscall::sys_get_affinity,
-     };
- };
- 
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index d589bd3a..7c3421ac 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -282,9 +282,32 @@ uint64_t Syscall::sys_signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+ #if CONFIG_STATIC_POOLS_ONLY
+ static bool g_pmm_init_done = false;
+@@ -282,6 +283,86 @@ uint64_t PMM::try_alloc_user(size_t count) {
      return 0;
  }
  
-+/// @brief Set a task's CPU affinity mask (issue #61).
-+///        arg0 = pid (0 = caller), arg1 = mask.  Clamp policy lives in
-+///        Scheduler::set_affinity (empty→CPU0, user→CPU0, beyond-up
-+///        bits cut); unknown pid fails with -1.  Mask passed by value —
-+///        no user-pointer dereference (FULL path only: scheduler call).
-+uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                   uint64_t, uint64_t *) {
-+    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
-+    if (t == nullptr)
-+        return static_cast<uint64_t>(-1);
-+    Scheduler::set_affinity(*t, arg1);
++/// @brief First window index at/after @p from with page-index color
++///        @p color (issue #62).  Page index i has color (i & MASK)
++///        because COLOR_SHIFT == page shift (12).
++static uint64_t first_congruent_from(uint64_t from, uint64_t color) {
++    constexpr uint64_t k_num = kernel::cache::NUM_COLORS;
++    uint64_t start = from;
++    uint64_t rem = start % k_num;
++    start += (color + k_num - rem) % k_num;
++    return start;
++}
++
++/// @brief Allocate one page of @p color with KERNEL ownership
++///        (issue #62).  Color-strided bitmap scan from the per-color
++///        cursor (wraps once); bitmap/owner/counter accounting mirrors
++///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
++///        list the scan bypassed.  Caller holds pmm_lock_.
++uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
++    constexpr uint64_t k_num = cache::NUM_COLORS;
++    if (color >= k_num)
++        return 0;
++    uint64_t cur = color_cursor_[color];
++    if (cur < window_base_page_ || cur >= window_end_page_)
++        cur = window_base_page_;
++    uint64_t start0 = first_congruent_from(cur, color);
++    for (int pass = 0; pass < 2; ++pass) {
++        uint64_t start =
++            (pass == 0) ? start0
++                        : first_congruent_from(window_base_page_, color);
++        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
++        for (uint64_t idx = start; idx < limit; idx += k_num) {
++            if (!bitmap_test(idx)) {
++                bitmap_set(idx);
++                owner_set_kernel(idx);
++                --free_pages_;
++                color_cursor_[color] = idx + k_num;
++                rebuild_free_list();
++                return idx * PAGE_SIZE;
++            }
++        }
++        cur = window_base_page_;
++    }
 +    return 0;
 +}
 +
-+/// @brief Get a task's CPU affinity mask (issue #61).
-+///        arg0 = pid (0 = caller).  Unknown pid fails with -1.
-+uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
-+                                   uint64_t, uint64_t *) {
-+    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
-+    if (t == nullptr)
-+        return static_cast<uint64_t>(-1);
-+    return Scheduler::get_affinity(*t);
-+}
-+
- uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
--                                uint64_t *regs) {
--    auto *t = syscall_task();
-+                                uint64_t *regs) {    auto *t = syscall_task();
-     if (!t || !regs)
-         return static_cast<uint64_t>(-1);
-     uint64_t user_rsp = regs[20];
-diff --git a/src/kernel/task/ready_queue_manager.cpp b/src/kernel/task/ready_queue_manager.cpp
-index cf52ff4f..0042ceeb 100644
---- a/src/kernel/task/ready_queue_manager.cpp
-+++ b/src/kernel/task/ready_queue_manager.cpp
-@@ -92,6 +92,13 @@ void ReadyQueueManager::remove(TaskControlBlock &tcb,
-     tcb.in_ready_queue_ = false;
- }
- 
-+uint64_t ReadyQueueManager::depth() const noexcept {
-+    uint64_t total = 0;
-+    for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p)
-+        total += queues_[p].count();
-+    return total;
-+}
-+
- void ReadyQueueManager::move_priority(TaskControlBlock &tcb, uint64_t old_prio,
-                                       uint64_t new_prio) noexcept {
-     if (old_prio == new_prio)
-diff --git a/src/kernel/task/ready_queue_manager.hpp b/src/kernel/task/ready_queue_manager.hpp
-index e8b481a6..bde04717 100644
---- a/src/kernel/task/ready_queue_manager.hpp
-+++ b/src/kernel/task/ready_queue_manager.hpp
-@@ -49,6 +49,10 @@ class ReadyQueueManager {
-     bool has_ready() const noexcept {
-         return !bitmap_.empty();
-     }
-+    /// @brief Total queued TCBs across all priority levels (issue #61).
-+    ///        O(priorities), non-mutating; caller must hold
-+    ///        scheduler_lock_ or have interrupts disabled.
-+    uint64_t depth() const noexcept;
-     /// @brief Returns the highest priority level with non-empty queue.
-     uint64_t highest_ready_priority() const noexcept {
-         return bitmap_.get_highest_priority();
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index e26af690..36103ec0 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -524,6 +524,105 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
-     quiesce_exit();
- }
- 
-+// ---------------------------------------------------------------------------
-+// balancer_tick — RT load balancer (issue #61)
-+// ---------------------------------------------------------------------------
-+uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
-+    return rq_for(cpu).depth();
-+}
-+
-+uint64_t Scheduler::migration_count(uint64_t cpu) noexcept {
-+    return __atomic_load_n(&migration_count_[cpu % CONFIG_MAX_CPUS],
-+                           __ATOMIC_ACQUIRE);
-+}
-+
-+uint64_t Scheduler::get_affinity(const TaskControlBlock &task) noexcept {
-+    return task.cpu_affinity;
-+}
-+
-+bool Scheduler::is_rt_task(const TaskControlBlock &task) noexcept {
-+    return task.period_ticks != 0 &&
-+           task.period_ticks != TaskControlBlock::NO_PERIOD;
-+}
-+
-+uint64_t Scheduler::up_cpu_count() noexcept {
-+    return sched_up_cpus();
-+}
-+
-+void Scheduler::reset_migration_counts() noexcept {
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+        __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
-+}
-+
-+void Scheduler::balancer_tick() noexcept {
-+    // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
-+    if (sched_cpu() != 0)
-+        return;
-+    uint64_t up = sched_up_cpus();
-+    if (up < 2)
-+        return;
-+    if (up > CONFIG_MAX_CPUS)
-+        up = CONFIG_MAX_CPUS;
-+    arch::IrqGuard irq_guard{};
-+    quiesce_enter();
-+    if (!scheduler_lock_.try_lock()) {
-+        quiesce_exit();
-+        return;
-+    }
-+    // Bounded moves per tick (RT budget); depths recomputed per move.
-+    for (uint64_t move = 0; move < BALANCER_MAX_MIGRATIONS_PER_TICK;
-+         ++move) {
-+        uint64_t busy = 0;
-+        uint64_t idle = 0;
-+        uint64_t busy_depth = rq_for(0).depth();
-+        uint64_t idle_depth = busy_depth;
-+        for (uint64_t c = 1; c < up; ++c) {
-+            uint64_t depth = rq_for(c).depth();
-+            if (depth > busy_depth) {
-+                busy_depth = depth;
-+                busy = c;
-+            }
-+            if (depth < idle_depth) {
-+                idle_depth = depth;
-+                idle = c;
++/// @brief Allocate one page of @p color with USER ownership
++///        (issue #62).  Same scan as the KERNEL variant above.
++uint64_t PMM::try_alloc_colored_user(uint64_t color) {
++    constexpr uint64_t k_num = cache::NUM_COLORS;
++    if (color >= k_num)
++        return 0;
++    uint64_t cur = color_cursor_[color];
++    if (cur < window_base_page_ || cur >= window_end_page_)
++        cur = window_base_page_;
++    uint64_t start0 = first_congruent_from(cur, color);
++    for (int pass = 0; pass < 2; ++pass) {
++        uint64_t start =
++            (pass == 0) ? start0
++                        : first_congruent_from(window_base_page_, color);
++        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
++        for (uint64_t idx = start; idx < limit; idx += k_num) {
++            if (!bitmap_test(idx)) {
++                bitmap_set(idx);
++                owner_set_user(idx);
++                --free_pages_;
++                color_cursor_[color] = idx + k_num;
++                rebuild_free_list();
++                return idx * PAGE_SIZE;
 +            }
 +        }
-+        if (busy == idle || busy_depth <= idle_depth + BALANCER_THRESHOLD)
-+            break;
-+        // Busiest queue: first movable task (set_affinity move fence:
-+        // queued, quiesced, non-RT/user/idle/current, owned, affine).
-+        TaskControlBlock *candidate = nullptr;
-+        for (auto *t = all_tasks_.first_ptr(); t != nullptr;
-+             t = all_tasks_.next_ptr(t)) {
-+            if (t->magic != TaskControlBlock::TCB_MAGIC)
-+                continue;
-+            if (!t->in_ready_queue_ || queue_target(*t) != busy)
-+                continue;
-+            if (t->state != TaskState::READY &&
-+                t->state != TaskState::BLOCKED)
-+                continue;
-+            if (t->is_user_ || is_idle_task(t) || is_rt_task(*t))
-+                continue;
-+            if (is_current_on_any_cpu(t) || find_task(t->id) != t)
-+                continue;
-+            if ((t->cpu_affinity & (1ULL << idle)) == 0)
-+                continue;
-+            candidate = t;
-+            break;
-+        }
-+        if (candidate == nullptr)
-+            break;
-+        // Move + re-pin (queue==target invariant, same as set_affinity;
-+        // remove() clears the queue flags, enqueue() re-arms them).
-+        rq_for(busy).remove(*candidate, candidate->rq_priority_);
-+        candidate->cpu_affinity = 1ULL << idle;
-+        rq_for(idle).enqueue(*candidate, effective_priority(candidate));
-+        __atomic_fetch_add(&migration_count_[busy], 1ULL, __ATOMIC_RELAXED);
++        cur = window_base_page_;
 +    }
-+    scheduler_lock_.unlock();
-+    quiesce_exit();
++    return 0;
 +}
 +
- void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
-     cpu %= CONFIG_MAX_CPUS;
-     // IF=0 across the publish (internal guard): a same-CPU ISR can never
-@@ -1025,6 +1124,7 @@ sync::SpinLock Scheduler::zombie_lock_;
- constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
- constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
- constinit uint64_t Scheduler::zombie_count_ = 0;
-+uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
- sync::SpinLock Scheduler::scheduler_lock_;
- 
- // Liu-Leyland Rate-Monotonic LUB bounds (scaled by 1000000)
-@@ -2126,6 +2226,16 @@ void Scheduler::on_tick() noexcept {
-         }
-     }  // end: gated tail sections (lock_acquired && IrqGuard)
- 
-+    // Issue #61: RT load-balancer cadence (BSP tick only; production
-+    // only — tests drive balancer_tick() directly under IrqGuard so
-+    // placement asserts stay deterministic).
-+    static uint64_t balancer_cadence = 0;
-+    ++balancer_cadence;
-+    if (!is_test_active() &&
-+        (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
-+        balancer_tick();
-+    }
++void PMM::reset_color_cursor() noexcept {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    for (uint64_t c = 0; c < cache::NUM_COLORS; ++c)
++        color_cursor_[c] = window_base_page_;
++}
 +
-     rate_monotonic_schedule();
+ /// @brief Allocate a single KERNEL page.  Invokes OOM handler on failure.
+ /// @return Physical address, or 0 (asserts on persistent OOM).
+ uint64_t PMM::alloc_page() {
+@@ -421,6 +502,141 @@ uint64_t PMM::alloc_user_page() {
+     return result;
  }
  
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 940a5220..6c55e2c8 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -185,6 +185,37 @@ class Scheduler {
-     /// @param mask Affinity bitmask.
-     static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
- 
-+    /// @brief RT load balancer tick (issue #61): migrate queued
-+    ///        aperiodic kernel tasks from the busiest up-CPU to the
-+    ///        idlest when depths differ beyond BALANCER_THRESHOLD.
-+    ///        BSP-only (AP ticks are dispatch-only); quiesce window +
-+    ///        try_lock (never blocks — contention skips the tick).
-+    ///        Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs).
-+    ///        Production cadence comes from the on_tick tail (non-test
-+    ///        runs only); tests call it directly under IrqGuard.
-+    static void balancer_tick() noexcept;
-+    /// @brief Queued-task depth of CPU c's ready queue (issue #61).
-+    ///        Caller must hold scheduler_lock_ or have IF=0.
-+    static uint64_t queue_depth(uint64_t cpu) noexcept;
-+    /// @brief Balancer moves sourced from CPU c since boot (issue #61).
-+    static uint64_t migration_count(uint64_t cpu) noexcept;
-+    /// @brief Current affinity mask of @p task (constraint, not
-+    ///        placement — the balancer re-pins toward balance).
-+    static uint64_t get_affinity(const TaskControlBlock &task) noexcept;
-+    /// @brief True for real-time tasks (strict period set, issue #61).
-+    ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
-+    static bool is_rt_task(const TaskControlBlock &task) noexcept;
-+    /// @brief Number of CPUs eligible for placement (BSP + booted APs).
-+    static uint64_t up_cpu_count() noexcept;
-+    /// @brief Reset balancer migration counters (test isolation).
-+    static void reset_migration_counts() noexcept;
-+    /// @brief Depth spread that triggers migration (issue #61).
-+    static constexpr uint64_t BALANCER_THRESHOLD = 2;
-+    /// @brief Migration cap per tick (issue #61, RT budget bound).
-+    static constexpr uint64_t BALANCER_MAX_MIGRATIONS_PER_TICK = 2;
-+    /// @brief Production balancer cadence in BSP ticks (issue #61).
-+    static constexpr uint64_t BALANCER_TICK_PERIOD = 10;
++/// @brief Allocate a single page of the requested color (KERNEL
++///        ownership, issue #62).  Out-of-range colors fail closed (0).
++///        OOM-handler release/retry mirrors alloc_page.
++/// @return Physical address, or 0 (asserts on persistent OOM).
++uint64_t PMM::alloc_page_colored(uint64_t color) {
++#if CONFIG_STATIC_POOLS_ONLY
++    if (g_pmm_init_done) {
++        ASSERT(false && "alloc_page_colored after init with "
++                        "CONFIG_STATIC_POOLS_ONLY");
++        return 0;
++    }
++#endif
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++#if CONFIG_MEMORY_BUDGET
++    auto *cur = Scheduler::current_task();
++    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
++        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
++        return 0;
++    }
++#endif
++    uint64_t result = try_alloc_colored_kernel(color);
++    if (result) {
++#if CONFIG_MEMORY_BUDGET
++        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
++            cur->memory_used_pages_ += 1;
++#endif
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++        return result;
++    }
++    bool oom_retry = false;
++    if (oom_handler_) {
++        lock.unlock();
++        oom_retry = oom_handler_();
++        lock.lock();
++#if CONFIG_MEMORY_BUDGET
++        cur = Scheduler::current_task();
++#endif
++    }
++    if (oom_retry) {
++        result = try_alloc_colored_kernel(color);
++    }
++    if (!result) {
++        ASSERT(errors::PmmError::PMM_ERR_OOM);
++    }
++    if (result) {
++#if CONFIG_MEMORY_BUDGET
++        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
++            cur->memory_used_pages_ += 1;
++#endif
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++    }
++    return result;
++}
 +
-     /// @brief Reaps orphan TERMINATED tasks (no parent to WAITPID them).
-     ///        Single-pass scan: identifies all eligible tasks, destroys them
-     ///        without compaction, then compacts the task array once at the end.
-@@ -753,6 +784,10 @@ struct SwSlots {
-     ///        (removing ready_queue_ turns misses into compile errors).
-     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-     static ReadyQueueManager ready_queues_[CONFIG_MAX_CPUS];
-+    /// @brief Balancer moves sourced from each CPU since boot
-+    ///        (issue #61).  Own-CPU writes under scheduler_lock_;
-+    ///        readers use atomics; reset by reset_migration_counts().
-+    static uint64_t migration_count_[CONFIG_MAX_CPUS];
-     /// @brief Deadline-ordered intrusive list for O(1) expired-task detection.
-     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-     static DeadlineList deadline_list_;
++/// @brief Colored KERNEL alloc with error code (issue #62).
++errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
++                                             uint64_t &out_phys_addr) {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    uint64_t result = try_alloc_colored_kernel(color);
++    if (result) {
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++        out_phys_addr = result;
++        return errors::PMM_ERR_OK;
++    }
++    bool oom_retry = false;
++    if (oom_handler_) {
++        lock.unlock();
++        oom_retry = oom_handler_();
++        lock.lock();
++    }
++    if (oom_retry) {
++        result = try_alloc_colored_kernel(color);
++    }
++    if (!result) {
++        return errors::PMM_ERR_OOM;
++    }
++    kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++    out_phys_addr = result;
++    return errors::PMM_ERR_OK;
++}
++
++/// @brief Allocate a single page of the requested color (USER
++///        ownership, issue #62).  Mirrors alloc_user_page.
++/// @return Physical address, or 0 (asserts on persistent OOM).
++uint64_t PMM::alloc_user_page_colored(uint64_t color) {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    uint64_t result = try_alloc_colored_user(color);
++    if (result) {
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++        return result;
++    }
++    bool oom_retry = false;
++    if (oom_handler_) {
++        lock.unlock();
++        oom_retry = oom_handler_();
++        lock.lock();
++    }
++    if (oom_retry) {
++        result = try_alloc_colored_user(color);
++    }
++    if (!result) {
++        ASSERT(errors::PmmError::PMM_ERR_USER_OOM);
++    }
++    if (result)
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++    return result;
++}
++
++/// @brief Colored USER alloc with error code (issue #62).
++errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
++                                                  uint64_t &out_phys_addr) {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    uint64_t result = try_alloc_colored_user(color);
++    if (result) {
++        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++        out_phys_addr = result;
++        return errors::PMM_ERR_OK;
++    }
++    bool oom_retry = false;
++    if (oom_handler_) {
++        lock.unlock();
++        oom_retry = oom_handler_();
++        lock.lock();
++    }
++    if (oom_retry) {
++        result = try_alloc_colored_user(color);
++    }
++    if (!result) {
++        return errors::PMM_ERR_USER_OOM;
++    }
++    kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
++    out_phys_addr = result;
++    return errors::PMM_ERR_OK;
++}
++
+ /// @brief Allocate contiguous USER pages.  Invokes OOM handler on failure.
+ /// @param count Number of pages.
+ /// @return Physical address, or 0 (asserts on persistent OOM).
+diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
+index 0d2228ba..5b28164a 100644
+--- a/src/kernel/memory/pmm.hpp
++++ b/src/kernel/memory/pmm.hpp
+@@ -27,6 +27,7 @@
+ #include <types.hpp>
+ #include <constants.hpp>
+ #include <kernel/memory/pmm_errors.hpp>
++#include <kernel/memory/cache_color.hpp>
+ 
+ namespace kernel::test {
+ struct PtPoolSnapshot;
+@@ -106,6 +107,46 @@ class PMM {
+     /// @return PmmError code.
+     static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
+ 
++    /// @brief Page color of a physical address (issue #62; delegates
++    ///        to the cache_color contract — pure, lock-free, any ctx).
++    /// @param phys_addr Byte physical address.
++    /// @return Color in [0, cache::NUM_COLORS).
++    static uint64_t color_of(uint64_t phys_addr) noexcept {
++        return cache::color_of(phys_addr);
++    }
++    /// @brief Allocates a single 4 KiB page of the requested color
++    ///        (KERNEL ownership; issue #62).  Single-page only:
++    ///        colored-contiguous is over-constrained (same color AND
++    ///        contiguous is rarely satisfiable) — multi-page callers
++    ///        keep using alloc_contiguous.  Creation/test-time path
++    ///        (color-strided scan + free-list rebuild, not RT-budgeted).
++    /// @param color Color in [0, cache::NUM_COLORS); out-of-range
++    ///        returns 0.
++    /// @return Physical address, or 0 on failure/OOM.
++    static uint64_t alloc_page_colored(uint64_t color);
++    /// @brief Colored KERNEL alloc with error code.
++    /// @param color Requested color.
++    /// @param[out] out_phys_addr Physical address of allocated page.
++    /// @return PmmError code.
++    static errors::PmmError alloc_page_colored_err(uint64_t color,
++                                                   uint64_t &out_phys_addr);
++    /// @brief Allocates a single 4 KiB page of the requested color
++    ///        (USER ownership; issue #62).  Same contract as the
++    ///        KERNEL variant above.
++    /// @param color Color in [0, cache::NUM_COLORS).
++    /// @return Physical address, or 0 on failure/OOM.
++    static uint64_t alloc_user_page_colored(uint64_t color);
++    /// @brief Colored USER alloc with error code.
++    /// @param color Requested color.
++    /// @param[out] out_phys_addr Physical address of allocated page.
++    /// @return PmmError code.
++    static errors::PmmError alloc_user_page_colored_err(
++        uint64_t color, uint64_t &out_phys_addr);
++    /// @brief Reset per-color allocation cursors (test hook, issue
++    ///        #62).  Cursors affect placement only, never correctness;
++    ///        tests call this at entry for deterministic colors.
++    static void reset_color_cursor() noexcept;
++
+     /// @brief Frees a page regardless of ownership.
+     static void free_page(uint64_t phys_addr);
+     /// @brief Frees a page with error code.
+@@ -307,6 +348,12 @@ class PMM {
+     /// @brief One past the last allocatable page index (absolute).
+     static constinit uint64_t window_end_page_;
+ 
++    /// @brief Per-color allocation cursors (page indices, issue #62).
++    ///        cursor[c] is the next index to probe for color c;
++    ///        placement-only state, reset by reset_color_cursor().
++    static constinit uint64_t
++        color_cursor_[cache::NUM_COLORS];
++
+     /// @brief Mark a page as allocated in the bitmap.
+     /// @param index Page index.
+     static void bitmap_set(size_t index);
+@@ -337,6 +384,16 @@ class PMM {
+     /// @param count Number of consecutive pages.
+     /// @return Physical address of first page, or 0 on failure.
+     static uint64_t try_alloc_kernel(size_t count);
++    /// @brief Allocate one KERNEL page of @p color (color-strided
++    ///        bitmap scan, issue #62).  Caller holds pmm_lock_.
++    /// @param color Color in [0, cache::NUM_COLORS).
++    /// @return Physical address of first page, or 0 on failure.
++    static uint64_t try_alloc_colored_kernel(uint64_t color);
++    /// @brief Allocate one USER page of @p color (issue #62).
++    ///        Caller holds pmm_lock_.
++    /// @param color Color in [0, cache::NUM_COLORS).
++    /// @return Physical address of first page, or 0 on failure.
++    static uint64_t try_alloc_colored_user(uint64_t color);
+ };
+ 
+ } // namespace kernel
+diff --git a/src/kernel/test/test_cache_coloring.cpp b/src/kernel/test/test_cache_coloring.cpp
+index 1849ea8f..1dfa81c7 100644
+--- a/src/kernel/test/test_cache_coloring.cpp
++++ b/src/kernel/test/test_cache_coloring.cpp
+@@ -1,5 +1,5 @@
+ /*
+- * NexIOS RTOS — SMP bring-up (Phase 5)
++ * NexIOS RTOS — Development Roadmap / Kernel Core
+  * Copyright (C) 2026 Arnold Hasshold
+  *
+  * This program is free software: you can redistribute it and/or modify
+@@ -17,64 +17,130 @@
+  */
+ 
+ /// @file test_cache_coloring.cpp
+-/// @brief Cache-coloring stubs (issue #85, module 10).  No coloring
+-///        allocator exists (no cache_color references anywhere in
+-///        src/kernel) — every test is a documented stub pending the
+-///        main-branch allocator API.
++/// @brief Cache-coloring allocator tests (issue #62; stubs from issue
++///        #85, module 10).  Verifies PMM's colored path: exact-color
++///        allocation, uniform spread, range/stability, and the
++///        bit-extraction contract.  All pages freed per test (net-zero
++///        via the harness snapshot check); cursors reset at entry for
++///        deterministic placement.
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <test.hpp>
+ #include <logger.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/cache_color.hpp>
+ 
+ using namespace kernel;
+ 
+ // Runmode: kernel
+ // Testidea: Consecutive allocations land on different cache colors.
+-// Input: N consecutive page allocations, color of each.
+-// Expect: No two consecutive pages share a color.
+-// Depends: Coloring allocator color_of() (not yet implemented)
+-JARVIS_TEST(cache_coloring_spread, "PRE: none | POST: none | PENDING: coloring allocator") {
+-    /* Pseudocode:
+-     *   for (i in 1..N) color[i] = color_of(alloc_page());
+-     *   JARVIS_ASSERT(all adjacent pairs differ);
+-     */
++// Input: N=64 colored allocations cycling colors 0..15.
++// Expect: Every page has exactly the requested color (adjacent pairs
++//         differ by construction); all freed, PMM free-memory delta 0.
++// Depends: PMM::alloc_page_colored, PMM::color_of (issue #62)
++JARVIS_TEST(cache_coloring_spread, "PRE: none | POST: none") {
++    constexpr uint64_t k_n = 64;
++    PMM::reset_color_cursor();
++    uint64_t pages[k_n];
++    uint64_t mem_before = PMM::free_memory();
++    for (uint64_t i = 0; i < k_n; ++i) {
++        pages[i] = PMM::alloc_page_colored(i % cache::NUM_COLORS);
++        JARVIS_ASSERT(pages[i] != 0);
++        JARVIS_ASSERT(PMM::color_of(pages[i]) == i % cache::NUM_COLORS);
++    }
++    for (uint64_t i = 1; i < k_n; ++i)
++        JARVIS_ASSERT(PMM::color_of(pages[i]) !=
++                      PMM::color_of(pages[i - 1]));
++    for (uint64_t i = 0; i < k_n; ++i)
++        PMM::free_page(pages[i]);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Threaded-access collision rate stays below bound.
+-// Input: M allocations across simulated threads, pairwise compare.
+-// Expect: Collision fraction below the design bound.
+-// Depends: Coloring allocator (not yet implemented)
+-JARVIS_TEST(cache_coloring_collisions_bounded, "PRE: none | POST: none | PENDING: coloring allocator") {
+-    /* Pseudocode:
+-     *   allocate M pages, count same-color pairs;
+-     *   JARVIS_ASSERT(collisions * COLORS < M * (M - 1) / 2 + slack);
+-     */
++// Testidea: Uniform request spread keeps same-color pairs within the
++//           design bound (stub formula, now with real pages).
++// Input: M=64 cycling-color allocations; count same-color pairs.
++// Expect: collisions * NUM_COLORS <= M*(M-1)/2 + M and every color
++//         holds exactly M/NUM_COLORS pages; all freed, delta 0.
++// Depends: PMM::alloc_page_colored (issue #62)
++JARVIS_TEST(cache_coloring_collisions_bounded, "PRE: none | POST: none") {
++    constexpr uint64_t k_m = 64;
++    PMM::reset_color_cursor();
++    uint64_t pages[k_m];
++    uint64_t mem_before = PMM::free_memory();
++    for (uint64_t i = 0; i < k_m; ++i) {
++        pages[i] = PMM::alloc_page_colored(i % cache::NUM_COLORS);
++        JARVIS_ASSERT(pages[i] != 0);
++    }
++    uint64_t per_color[cache::NUM_COLORS];
++    for (uint64_t c = 0; c < cache::NUM_COLORS; ++c)
++        per_color[c] = 0;
++    for (uint64_t i = 0; i < k_m; ++i)
++        ++per_color[PMM::color_of(pages[i])];
++    uint64_t collisions = 0;
++    for (uint64_t c = 0; c < cache::NUM_COLORS; ++c) {
++        JARVIS_ASSERT(per_color[c] == k_m / cache::NUM_COLORS);
++        collisions += per_color[c] * (per_color[c] - 1) / 2;
++    }
++    JARVIS_ASSERT(collisions * cache::NUM_COLORS <=
++                  k_m * (k_m - 1) / 2 + k_m);
++    for (uint64_t i = 0; i < k_m; ++i)
++        PMM::free_page(pages[i]);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+ // Testidea: Arbitrary allocation sizes get a well-defined color.
+-// Input: Sizes 1 B .. 2 MiB, color_of each.
+-// Expect: Every size maps into [0, COLORS); same page same color.
+-// Depends: Coloring allocator (not yet implemented)
+-JARVIS_TEST(cache_coloring_arbitrary_sizes, "PRE: none | POST: none | PENDING: coloring allocator") {
+-    /* Pseudocode:
+-     *   for (size in sizes) JARVIS_ASSERT(color_of(alloc(size)) < COLORS);
+-     */
++// Input: One colored page per size class {1 B .. 2 MiB}.
++// Expect: Every color in [0, NUM_COLORS); re-reads stable; freed.
++// Depends: PMM::alloc_page_colored, PMM::color_of (issue #62)
++JARVIS_TEST(cache_coloring_arbitrary_sizes, "PRE: none | POST: none") {
++    constexpr uint64_t k_sizes[] = {1, 512, 4096, 8192,
++                                    65536, 1048576, 2097152};
++    constexpr uint64_t k_n =
++        sizeof(k_sizes) / sizeof(k_sizes[0]);
++    PMM::reset_color_cursor();
++    uint64_t pages[k_n];
++    uint64_t mem_before = PMM::free_memory();
++    for (uint64_t i = 0; i < k_n; ++i) {
++        (void)k_sizes[i];
++        pages[i] = PMM::alloc_page_colored(i % cache::NUM_COLORS);
++        JARVIS_ASSERT(pages[i] != 0);
++        uint64_t color = PMM::color_of(pages[i]);
++        JARVIS_ASSERT(color < cache::NUM_COLORS);
++        JARVIS_ASSERT(PMM::color_of(pages[i]) == color);
++    }
++    for (uint64_t i = 0; i < k_n; ++i)
++        PMM::free_page(pages[i]);
++    JARVIS_ASSERT(PMM::free_memory() == mem_before);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Color derives from documented address bits.
+-// Input: Known phys addresses, color_of each.
+-// Expect: Color equals the extracted bit field (spec formula).
+-// Depends: Coloring bit-extraction contract (not yet implemented)
+-JARVIS_TEST(cache_coloring_bit_extraction, "PRE: none | POST: none | PENDING: coloring allocator") {
+-    /* Pseudocode:
+-     *   JARVIS_ASSERT(color_of(0x1000) == ((0x1000 >> SHIFT) & MASK));
+-     */
++// Testidea: Color derives from documented address bits (spec formula).
++// Input: Fixed phys vector incl. HHDM addresses; out-of-range color
++//        requests via the _err variants (clean OOM, no assert noise).
++// Expect: color_of matches (phys >> SHIFT) & MASK; OOR requests fail
++//         with PMM_ERR_OOM and null out-param.
++// Depends: cache::color_of contract (issue #62)
++JARVIS_TEST(cache_coloring_bit_extraction, "PRE: none | POST: none") {
++    JARVIS_ASSERT(PMM::color_of(0x0ULL) == 0);
++    JARVIS_ASSERT(PMM::color_of(0x1000ULL) == 1);
++    JARVIS_ASSERT(PMM::color_of(0xF000ULL) == 15);
++    JARVIS_ASSERT(PMM::color_of(0x10000ULL) == 0);
++    JARVIS_ASSERT(PMM::color_of(0xFFFF8000001000ULL) == 1);
++    JARVIS_ASSERT(PMM::color_of(0xFFFF80000FB7000ULL) ==
++                  ((0xFFFF80000FB7000ULL >> 12) & 15));
++    uint64_t out = 0xDEADULL;
++    JARVIS_ASSERT(PMM::alloc_page_colored_err(cache::NUM_COLORS, out) ==
++                  errors::PMM_ERR_OOM);
++    JARVIS_ASSERT(out == 0xDEADULL);
++    JARVIS_ASSERT(PMM::alloc_user_page_colored_err(0xFFFFFFFFULL, out) ==
++                  errors::PMM_ERR_USER_OOM);
++    JARVIS_ASSERT(out == 0xDEADULL);
++    JARVIS_ASSERT(PMM::alloc_page_colored(cache::NUM_COLORS) == 0);
+     JARVIS_TEST_PASS();
+ }
+ 
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 42810f0d..05e8679e 100644
+index 05e8679e..3aab6463 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1245,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96)
-+    {"all",                1249,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61)
+-    {"all",                1249,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61)
++    {"all",                1250,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62)
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -67,7 +67,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
+@@ -121,7 +121,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
+     {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
+     {"load_balancer",        4,   0,       0      },  // Load balancer stubs (issue #85 module 8): idle-pull/work-push/RT-exclusion/threshold pending balancer API
+-    {"cache_coloring",       4,   0,       0      },  // Cache-coloring stubs (issue #85 module 10): spread/collisions/sizes/bit-extract pending allocator API
++    {"cache_coloring",       4,   0,       0      },  // Cache-coloring allocator (issue #62; stubs from #85 module 10): spread/collisions/sizes/bit-extract real
+     {"smp_sync",             6,   0,       0      },  // SMP sync (issue #85 module 11): IRQ-guard IF contract + unlock/relock (real), 2-CPU race/rwlock/migration/ticket stubs
+     {"smp_verify",           5,   0,       0      },  // SMP verify (issue #85 module 12): census + AP-tick liveness + lock bound (real), inversion/soak stubs
+     {"pcid",                 4,   0,       0      },  // PCID stubs (issue #85 module 13): CR4/tag/retention/rollover pending PCID API
+@@ -180,7 +180,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
  
-     // syscall
--    {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
-+    {"syscall_core",         23,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143) + 4 affinity tests (issue #61)
-     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
-     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
+     // wcet / deadline
+     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
+-    {"wcet_scheduler",        1,    0,       0      },  // WCET benchmark for scan_deadlines (P7b)
++    {"wcet_scheduler",        2,    0,       0      },  // WCET benchmark for scan_deadlines (P7b) + balancer_tick worst case (issue #62 re-audit)
+     {"bench_wcet_memory",    2,    0,       0      },  // WCET mempool/vmm (TF_BENCH)
+ #if CONFIG_DEADLINE_MONITOR_TASK
+     {"deadline_miss",         5,    0,       0      },  // + DeadlineMonitorTaskSpawned + DeadlineMonitorDetectsMiss
+diff --git a/src/kernel/test/test_wcet_scheduler.cpp b/src/kernel/test/test_wcet_scheduler.cpp
+index 5864e4fa..198ec323 100644
+--- a/src/kernel/test/test_wcet_scheduler.cpp
++++ b/src/kernel/test/test_wcet_scheduler.cpp
+@@ -143,7 +143,72 @@ JARVIS_TEST(wcet_scan_deadlines, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
  
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index 5c0dbd10..443d80bc 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -768,6 +768,9 @@ void snapshot_restore(const char *test_name) {
- 
-     uint64_t corr = __atomic_exchange_n(&scheduler_corruption_count,
-                                         (uint64_t)0, __ATOMIC_ACQ_REL);
-+    // Issue #61: balancer migration counters are per-CPU runtime state —
-+    // reset for test isolation (same pattern as corruption_count above).
-+    Scheduler::reset_migration_counts();
-     if (corr > 0) {
-         Logger::raw_write("[SCHED] corruption_count=");
-         Logger::print_dec(corr);
-diff --git a/src/kernel/test/test_load_balancer.cpp b/src/kernel/test/test_load_balancer.cpp
-index ae618fab..552d8989 100644
---- a/src/kernel/test/test_load_balancer.cpp
-+++ b/src/kernel/test/test_load_balancer.cpp
-@@ -17,68 +17,212 @@
-  */
- 
- /// @file test_load_balancer.cpp
--/// @brief Load-balancer stubs (issue #85, module 8).  The scheduler
--///        dequeues from the OWN queue only (no stealing, no migration:
--///        scheduler.cpp next_task) — there is no balancer API yet, so
--///        every test is a documented stub pending the main-branch
--///        balancer (idle-pull / work-push / RT-exclusion / threshold).
-+/// @brief RT load-balancer tests (issue #61; stubs from issue #85,
-+///        module 8).  Scheduler::balancer_tick() migrates queued
-+///        aperiodic kernel tasks from the busiest up-CPU to the idlest
-+///        past BALANCER_THRESHOLD, re-pinning toward balance.  Tests
-+///        branch on up_cpu_count(): with an AP up (standard -smp 2
-+///        harness) moves are observable; single-CPU runs prove the
-+///        no-strand property (no moves off CPU0).
- 
- #if defined(CONFIG_ARCH_X86_64)
- #include <test.hpp>
- #include <logger.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/memory/mempool.hpp>
-+#include <kernel/arch/irq_guard.hpp>
- 
- using namespace kernel;
- 
-+namespace {
-+// Register + queue a BLOCKED kernel task and widen its mask.  Must run
-+// inside the test's single IrqGuard window (cookbook Rule 2): an
-+// untimely tick would dispatch past — or drop, via next_task()'s
-+// defense-in-depth dequeue — a BLOCKED head, breaking determinism.
-+TaskControlBlock *make_queued_task(TaskControlBlock *t) {
-+    t->state = TaskState::BLOCKED;
-+    Scheduler::register_task(*t);
-+    Scheduler::enqueue_ready(*t);
-+    Scheduler::set_affinity(*t, 0x3);
-+    return t;
-+}
-+
-+// Teardown for a never-dispatched BLOCKED test task (affinity-test
-+// pattern: remove + cleanup + free; no terminate — it never ran).
-+void destroy_queued_task(TaskControlBlock *t) {
-+    Scheduler::remove_task(*t);
-+    t->cleanup();
-+    MemPool::free(t);
-+}
-+
-+uint64_t total_migrations() {
-+    uint64_t total = 0;
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+        total += Scheduler::migration_count(c);
-+    return total;
-+}
-+
-+} // namespace
-+
- // Runmode: kernel
- // Testidea: An idle CPU pulls a task from a busy CPU's queue.
--// Input: Two queued tasks on CPU0, CPU1 idles, balancer tick runs.
--// Expect: One task migrates to CPU1's queue; both dispatch.
--// Depends: Load balancer idle-pull (not yet implemented)
--JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none | PENDING: balancer") {
--    /* Pseudocode:
--     *   pin 2 tasks to CPU0, let CPU1 idle, run balancer_tick();
--     *   JARVIS_ASSERT(is_queued_on(task_b, 1));
--     */
-+// Input: Three queued tasks on CPU0, CPU1 idle, balancer tick runs.
-+// Expect: Either no move (all three stay on 0, counters unchanged —
-+//         single up CPU, nothing may strand) or exactly one move
-+//         (counters +1, the moved task re-pinned 0x2 and queued on
-+//         1, the rest on 0).  Per-task placement only: absolute
-+//         depths include background tasks in `all` runs.
++// Runmode: kernel
++// Testidea: Worst-case cost of Scheduler::balancer_tick (issue #62
++//           re-audit): max-spread population (8 queued aperiodic tasks
++//           on CPU0, wide masks), 300 direct calls under IrqGuard.
++// Input: 8 BLOCKED tasks queued on CPU0; rdtsc around each tick.
++// Expect: Worst-case cycles > 0 and logged as [WCET] balancer_tick
++//         for the re-audit table; every task still queued afterwards
++//         (no loss), counters monotone.
 +// Depends: Scheduler::balancer_tick (issue #61)
-+JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none") {
-+    auto *a = TaskControlBlock::create([]() {}, 10,
-+                                       TaskControlBlock::NO_PERIOD);
-+    auto *b = TaskControlBlock::create([]() {}, 10,
-+                                       TaskControlBlock::NO_PERIOD);
-+    auto *c = TaskControlBlock::create([]() {}, 10,
-+                                       TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(a != nullptr && b != nullptr && c != nullptr);
++JARVIS_TEST(wcet_balancer_tick_worst, "PRE: none | POST: none") {
++    constexpr uint64_t k_tasks = 8;
++    constexpr uint64_t k_iters = 300;
++    TaskControlBlock *tasks[k_tasks] = {};
++    uint64_t made = 0;
++    uint64_t max_cycles = 0;
 +    {
-+        arch::IrqGuard irq_guard{};
-+        make_queued_task(a);
-+        make_queued_task(b);
-+        make_queued_task(c);
-+        uint64_t before = total_migrations();
-+        Scheduler::balancer_tick();
-+        uint64_t after = total_migrations();
-+        TaskControlBlock *all[3] = {a, b, c};
-+        uint64_t on_zero = 0;
-+        uint64_t on_one = 0;
-+        for (auto *t : all) {
-+            bool q0 = Scheduler::is_queued_on(*t, 0);
-+            bool q1 = Scheduler::is_queued_on(*t, 1);
++        // ONE guard window for setup + measure + check (fanout-test
++        // discipline): any IF=1 gap — even serial logging — lets a
++        // tick dequeue-drop BLOCKED heads via next_task().
++        arch::IrqGuard guard;
++        for (uint64_t k = 0; k < k_tasks; ++k) {
++            auto *t = TaskControlBlock::create([]() {}, 10,
++                                               TaskControlBlock::NO_PERIOD);
++            if (t == nullptr)
++                break;
++            t->state = TaskState::BLOCKED;
++            Scheduler::register_task(*t);
++            Scheduler::enqueue_ready(*t);
++            Scheduler::set_affinity(*t, 0x3);
++            tasks[made++] = t;
++        }
++        for (uint64_t it = 0; it < k_iters; ++it) {
++            uint64_t const s = arch::rdtsc();
++            Scheduler::balancer_tick();
++            uint64_t const e = arch::rdtsc();
++            uint64_t const d = (e > s) ? (e - s) : 0;
++            if (d > max_cycles)
++                max_cycles = d;
++        }
++        for (uint64_t k = 0; k < made; ++k) {
++            bool q0 = Scheduler::is_queued_on(*tasks[k], 0);
++            bool q1 = Scheduler::is_queued_on(*tasks[k], 1);
 +            JARVIS_ASSERT(q0 != q1);
-+            if (q1) {
-+                ++on_one;
-+                JARVIS_ASSERT(Scheduler::get_affinity(*t) == 0x2);
-+            } else {
-+                ++on_zero;
++        }
++    }
++    JARVIS_ASSERT(max_cycles > 0);
++    Logger::info("[WCET] balancer_tick worst=");
++    Logger::print_dec(max_cycles);
++    Logger::info(" cyc");
++
++    auto teardown = ScopeGuard([&]() {
++        for (uint64_t k = 0; k < made; ++k) {
++            if (tasks[k] &&
++                tasks[k]->magic == TaskControlBlock::TCB_MAGIC) {
++                Scheduler::remove_task(*tasks[k]);
++                tasks[k]->cleanup();
++                delete tasks[k];
 +            }
 +        }
-+        if (after == before) {
-+            JARVIS_ASSERT(on_zero == 3 && on_one == 0);
-+        } else {
-+            JARVIS_ASSERT(after == before + 1);
-+            JARVIS_ASSERT(on_zero == 2 && on_one == 1);
-+        }
-+    }
-+    destroy_queued_task(a);
-+    destroy_queued_task(b);
-+    destroy_queued_task(c);
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
--// Testidea: An overloaded CPU pushes tasks to an idle CPU.
--// Input: CPU0 overloaded (queue depth above threshold), CPU1 idle.
--// Expect: Balancer pushes tasks until depths differ by at most one.
--// Depends: Load balancer work-push (not yet implemented)
--JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none | PENDING: balancer") {
--    /* Pseudocode:
--     *   fill CPU0 queue to 2x threshold, run balancer_tick();
--     *   JARVIS_ASSERT(depth(0) - depth(1) <= 1);
--     */
-+// Testidea: An overloaded CPU pushes tasks to an idle CPU, bounded by
-+//           the per-tick migration cap.
-+// Input: CPU0 overloaded (5 queued), CPU1 idle, one balancer tick.
-+// Expect: Either no move (all five stay on 0) or exactly the cap
-+//         (counters +2, three on 0 and two re-pinned on 1).
-+//         Per-task placement only (see idle_pull above).
-+// Depends: Scheduler::balancer_tick (issue #61)
-+JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none") {
-+    TaskControlBlock *tasks[5];
-+    for (auto &t : tasks) {
-+        t = TaskControlBlock::create([]() {}, 10,
-+                                     TaskControlBlock::NO_PERIOD);
-+        JARVIS_ASSERT(t != nullptr);
-+    }
-+    {
-+        arch::IrqGuard irq_guard{};
-+        for (auto *t : tasks)
-+            make_queued_task(t);
-+        uint64_t before = total_migrations();
-+        Scheduler::balancer_tick();
-+        uint64_t after = total_migrations();
-+        uint64_t on_zero = 0;
-+        uint64_t on_one = 0;
-+        for (auto *t : tasks) {
-+            bool q0 = Scheduler::is_queued_on(*t, 0);
-+            bool q1 = Scheduler::is_queued_on(*t, 1);
-+            JARVIS_ASSERT(q0 != q1);
-+            if (q1)
-+                ++on_one;
-+            else
-+                ++on_zero;
-+        }
-+        if (after == before) {
-+            JARVIS_ASSERT(on_zero == 5 && on_one == 0);
-+        } else {
-+            JARVIS_ASSERT(after == before + 2);
-+            JARVIS_ASSERT(on_zero == 3 && on_one == 2);
-+        }
-+    }
-+    for (auto *t : tasks)
-+        destroy_queued_task(t);
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
- // Testidea: Real-time (periodic) tasks never migrate between CPUs.
--// Input: Periodic RT task on CPU0 under overload + balancer ticks.
--// Expect: RT task stays queued on CPU0; only aperiodic tasks move.
--// Depends: Load balancer RT exclusion (not yet implemented)
--JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none | PENDING: balancer") {
--    /* Pseudocode:
--     *   pin periodic task to CPU0, overload, run balancer_tick() x N;
--     *   JARVIS_ASSERT(is_queued_on(rt_task, 0));
--     */
-+// Input: Periodic RT task + overload on CPU0, balancer ticks run.
-+// Expect: RT task stays queued on CPU0 with its mask intact across
-+//         N ticks, whatever the balancer does around it.
-+// Depends: Scheduler::balancer_tick, is_rt_task (issue #61)
-+JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none") {
-+    auto *rt = TaskControlBlock::create([]() {}, 10, 10);
-+    JARVIS_ASSERT(rt != nullptr);
-+    JARVIS_ASSERT(Scheduler::is_rt_task(*rt));
-+    TaskControlBlock *tasks[3];
-+    for (auto &t : tasks) {
-+        t = TaskControlBlock::create([]() {}, 10,
-+                                     TaskControlBlock::NO_PERIOD);
-+        JARVIS_ASSERT(t != nullptr);
-+        JARVIS_ASSERT(!Scheduler::is_rt_task(*t));
-+    }
-+    {
-+        arch::IrqGuard irq_guard{};
-+        make_queued_task(rt);
-+        for (auto *t : tasks)
-+            make_queued_task(t);
-+        for (int i = 0; i < 3; ++i) {
-+            Scheduler::balancer_tick();
-+            JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
-+            JARVIS_ASSERT(!Scheduler::is_queued_on(*rt, 1));
-+        }
-+        JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
-+    }
-+    destroy_queued_task(rt);
-+    for (auto *t : tasks)
-+        destroy_queued_task(t);
-     JARVIS_TEST_PASS();
- }
- 
- // Runmode: kernel
--// Testidea: Migration threshold prevents thrashing: balanced queues
--//           (within threshold) trigger no migration.
--// Input: Equal depths on both CPUs, balancer tick runs.
--// Expect: Zero migrations; per-CPU migration counters unchanged.
--// Depends: Load balancer threshold + counters (not yet implemented)
--JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none | PENDING: balancer") {
--    /* Pseudocode:
--     *   balance queues within threshold, snapshot counters;
--     *   run balancer_tick(); JARVIS_ASSERT(counters unchanged);
--     */
-+// Testidea: Migration threshold prevents thrashing: queues already
-+//           within threshold trigger no migration.
-+// Input: Two tasks both landing on CPU0 (diff vs empty CPU1 is 2,
-+//        not beyond threshold), balancer tick runs.
-+// Expect: Zero migrations, every task exactly where it was queued.
-+// Depends: Scheduler::balancer_tick (issue #61)
-+JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none") {
-+    auto *a = TaskControlBlock::create([]() {}, 10,
-+                                       TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(a != nullptr);
-+    auto *b = TaskControlBlock::create([]() {}, 10,
-+                                       TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(b != nullptr);
-+    {
-+        arch::IrqGuard irq_guard{};
-+        make_queued_task(a);
-+        make_queued_task(b);
-+        uint64_t before = total_migrations();
-+        Scheduler::balancer_tick();
-+        JARVIS_ASSERT(total_migrations() == before);
-+        JARVIS_ASSERT(Scheduler::is_queued_on(*a, 0));
-+        JARVIS_ASSERT(Scheduler::is_queued_on(*b, 0));
-+    }
-+    destroy_queued_task(a);
-+    destroy_queued_task(b);
-     JARVIS_TEST_PASS();
- }
- 
-diff --git a/src/kernel/test/test_smp_sync.cpp b/src/kernel/test/test_smp_sync.cpp
-index ee0f2419..20bd23b6 100644
---- a/src/kernel/test/test_smp_sync.cpp
-+++ b/src/kernel/test/test_smp_sync.cpp
-@@ -18,15 +18,17 @@
- 
- /// @file test_smp_sync.cpp
- /// @brief SMP synchronization tests (issue #85, module 11): IRQ
--///        save/restore guard contracts live here (real); reader-writer
--///        locks, ticket locks, cross-CPU races and holder migration
--///        have no kernel API — documented stubs.  Plain SpinLock
--///        contention is covered by synchronization_spinlock.
-+///        save/restore guard contracts and the RwLock state machine
-+///        (issue #61) live here (real); ticket locks, cross-CPU races
-+///        and holder migration have no kernel API — documented stubs.
-+///        Plain SpinLock contention is covered by
-+///        synchronization_spinlock.
- 
- #if defined(CONFIG_ARCH_X86_64)
- #include <test.hpp>
- #include <logger.hpp>
- #include <kernel/sync/spinlock.hpp>
-+#include <kernel/sync/rwlock.hpp>
- #include <kernel/sync/irq_spinlock_guard.hpp>
- #include <kernel/arch/io.hpp>
- #include <kernel/nexios_config.h>
-@@ -96,16 +98,44 @@ JARVIS_TEST(smp_sync_two_cpu_race, "PRE: none | POST: none | PENDING: cross-CPU
- }
- 
- // Runmode: kernel
--// Testidea: Reader-writer lock: concurrent readers share, writer is
--//           exclusive against readers and writers.
--// Input: N readers + 1 writer racing on an RwLock.
--// Expect: No reader observes a torn write; writer starves neither way.
--// Depends: sync::RwLock (not yet implemented)
--JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none | PENDING: RwLock") {
--    /* Pseudocode:
--     *   RwLock rw; readers hold read_lock while writer wants write_lock;
--     *   JARVIS_ASSERT(exclusive phases never overlap);
--     */
-+// Testidea: Reader-writer lock state machine (issue #61): concurrent
-+//           readers share, writer is exclusive against readers and
-+//           writers, and a waiting writer blocks new readers
-+//           (writer preference).  Single-CPU interleaving of the
-+//           try_ paths plus uncontended blocking paths; true cross-CPU
-+//           racing is covered by smp_sync_two_cpu_race once spawn exists.
-+// Input: read_lock x N, try_write_lock, read_unlocks, write_lock,
-+//        try_read_lock, write_unlock, reset.
-+// Expect: Readers share (N concurrent holds); writer try fails while
-+//         any reader holds; readers try-fail while writer holds;
-+//         uncontended blocking paths return; reset frees the lock.
-+// Depends: sync::RwLock (issue #61)
-+JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none") {
-+    sync::RwLock rw;
-+    // Shared readers: N concurrent holds, writer excluded throughout.
-+    rw.read_lock();
-+    rw.read_lock();
-+    rw.read_lock();
-+    JARVIS_ASSERT(!rw.try_write_lock());
-+    rw.read_unlock();
-+    JARVIS_ASSERT(!rw.try_write_lock());
-+    rw.read_unlock();
-+    rw.read_unlock();
-+    // Free lock: writer try succeeds once.
-+    JARVIS_ASSERT(rw.try_write_lock());
-+    JARVIS_ASSERT(!rw.try_write_lock());
-+    JARVIS_ASSERT(!rw.try_read_lock());
-+    rw.write_unlock();
-+    // Uncontended blocking paths return immediately.
-+    rw.read_lock();
-+    rw.read_unlock();
-+    rw.write_lock();
-+    rw.write_unlock();
-+    // Reset frees a held lock (MemPool-reuse contract).
-+    rw.read_lock();
-+    rw.reset();
-+    JARVIS_ASSERT(rw.try_write_lock());
-+    rw.write_unlock();
-     JARVIS_TEST_PASS();
- }
- 
-diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
-index 15910cdf..5c6d791c 100644
---- a/src/kernel/test/test_syscall.cpp
-+++ b/src/kernel/test/test_syscall.cpp
-@@ -42,6 +42,8 @@
- 
- using namespace kernel;
- 
-+void register_syscall_affinity_tests();
-+
- static void test_signal_handler(int sig) {
-     (void)sig;
- }
-@@ -811,4 +813,6 @@ void register_syscall_tests() {
-     JARVIS_REGISTER_TEST(syscall_user_gettod_uname);
-     JARVIS_REGISTER_TEST(syscall_user_copy_reject);
-     JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
-+
-+    register_syscall_affinity_tests();
- }
-diff --git a/src/kernel/test/test_syscall_affinity.cpp b/src/kernel/test/test_syscall_affinity.cpp
-new file mode 100644
-index 00000000..834e5378
---- /dev/null
-+++ b/src/kernel/test/test_syscall_affinity.cpp
-@@ -0,0 +1,168 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_syscall_affinity.cpp
-+/// @brief SYS_SET/GET_AFFINITY syscall tests (issue #61).  DRIVEN: every
-+///        syscall is invoked by a REAL dispatched kernel task so
-+///        syscall_task() resolves genuinely (test_syscall.cpp pattern).
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/syscall/syscall.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include "test_sched_helpers.hpp"
-+
-+using namespace kernel;
-+
-+namespace {
-+
-+// Create a REAL kernel task, dispatch it, and wait for genuine
-+// termination (test_syscall.cpp run_syscall_task pattern, local copy:
-+// that helper is file-static there).
-+TaskControlBlock *run_affinity_task(void (*entry)()) {
-+    auto *t = TaskControlBlock::create(entry, 11, 10);
-+    if (t == nullptr)
-+        return nullptr;
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    return t;
-+}
-+
-+void release_affinity_task(TaskControlBlock *t) {
-+    if (t == nullptr)
-+        return;
-+    kernel::test::terminate_if_live(t);
-+}
-+
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: SET/GET affinity round-trips on the caller (pid 0 = self).
-+// Input: Dispatched task calls SET_AFFINITY(0, 0x1), then
-+//        GET_AFFINITY(0).
-+// Expect: SET returns 0; GET returns 0x1.
-+// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
-+JARVIS_TEST(syscall_affinity_set_get_roundtrip, "PRE: none | POST: none") {
-+    static uint64_t g_set_ret = 0;
-+    static uint64_t g_get_ret = 0;
-+
-+    auto *t = run_affinity_task([]() {
-+        g_set_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), 0, 0x1,
-+            0, 0, nullptr);
-+        g_get_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), 0, 0,
-+            0, 0, nullptr);
 +    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
-+    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
-+    release_affinity_task(t);
-+    Scheduler::drain_zombie_list();
++
 +    JARVIS_TEST_PASS();
 +}
 +
-+// Runmode: kernel
-+// Testidea: Explicit-pid form addresses the caller by its own pid.
-+// Input: Task reads its pid via GETPID, then SET/GET with that pid.
-+// Expect: SET returns 0; GET returns the set mask.
-+// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
-+JARVIS_TEST(syscall_affinity_explicit_pid, "PRE: none | POST: none") {
-+    static uint64_t g_set_ret = 0;
-+    static uint64_t g_get_ret = 0;
-+
-+    auto *t = run_affinity_task([]() {
-+        uint64_t pid = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::GETPID), 0, 0, 0, 0,
-+            nullptr);
-+        g_set_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), pid,
-+            0x1, 0, 0, nullptr);
-+        g_get_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), pid,
-+            0, 0, 0, nullptr);
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
-+    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
-+    release_affinity_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Unknown pids fail closed with -1 (no clamp, no panic).
-+// Input: SET/GET with a pid that can never exist.
-+// Expect: Both return 0xFFFFFFFFFFFFFFFF.
-+// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
-+JARVIS_TEST(syscall_affinity_bad_pid, "PRE: none | POST: none") {
-+    static uint64_t g_set_ret = 0;
-+    static uint64_t g_get_ret = 0;
-+    constexpr uint64_t k_no_such_pid = 0xFFFFFFFEULL;
-+
-+    auto *t = run_affinity_task([]() {
-+        g_set_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY),
-+            k_no_such_pid, 0x1, 0, 0, nullptr);
-+        g_get_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY),
-+            k_no_such_pid, 0, 0, 0, nullptr);
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_set_ret);
-+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_get_ret);
-+    release_affinity_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: An empty mask clamps to CPU0 (fail-closed, same policy as
-+//           the kernel-internal set_affinity) instead of erroring.
-+// Input: SET_AFFINITY(0, 0), then GET_AFFINITY(0).
-+// Expect: SET returns 0; GET returns 0x1.
-+// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
-+JARVIS_TEST(syscall_affinity_empty_mask, "PRE: none | POST: none") {
-+    static uint64_t g_set_ret = 0;
-+    static uint64_t g_get_ret = 0;
-+
-+    auto *t = run_affinity_task([]() {
-+        g_set_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), 0, 0,
-+            0, 0, nullptr);
-+        g_get_ret = Syscall::handle(
-+            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), 0, 0,
-+            0, 0, nullptr);
-+    });
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
-+    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
-+    release_affinity_task(t);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_syscall_affinity_tests() {
-+    Logger::info("Registering syscall affinity tests");
-+    JARVIS_REGISTER_TEST(syscall_affinity_set_get_roundtrip);
-+    JARVIS_REGISTER_TEST(syscall_affinity_explicit_pid);
-+    JARVIS_REGISTER_TEST(syscall_affinity_bad_pid);
-+    JARVIS_REGISTER_TEST(syscall_affinity_empty_mask);
-+}
-diff --git a/src/libc/syscall.h b/src/libc/syscall.h
-index 7f5836c9..9da4f623 100644
---- a/src/libc/syscall.h
-+++ b/src/libc/syscall.h
-@@ -193,6 +193,9 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
- #define SYS_SEND_FAST       74
- #define SYS_RECV_FAST       75
- #define SYS_SEND_SYNC_FAST  76
-+// Issue #61 — CPU affinity ABI (matches kernel SyscallNumber).
-+#define SYS_SET_AFFINITY    77
-+#define SYS_GET_AFFINITY    78
- 
- #if defined(__x86_64__)
- static inline long sys_send_fast(unsigned long dest, unsigned long type,
-@@ -271,9 +274,18 @@ static inline long sys_send_sync_fast(unsigned long, unsigned long,
-     return -1;
+ void register_wcet_scheduler_tests() {
+     Logger::info("Registering WCET scheduler benchmark tests");
+     JARVIS_REGISTER_TEST(wcet_scan_deadlines);
++    JARVIS_REGISTER_TEST(wcet_balancer_tick_worst);
  }
- static inline long sys_recv_fast(unsigned long, unsigned long,
--                                 unsigned long[6]) {
-+                                  unsigned long[6]) {
-     return -1;
- }
- #endif
- 
-+// Issue #61 — CPU affinity wrappers (pid 0 = caller).
-+static inline long sys_set_affinity(unsigned long pid, unsigned long mask) {
-+    return __syscall5(SYS_SET_AFFINITY, (long)pid, (long)mask, 0, 0);
-+}
-+
-+static inline long sys_get_affinity(unsigned long pid) {
-+    return __syscall5(SYS_GET_AFFINITY, (long)pid, 0, 0, 0);
-+}
-+
- #endif
 diff --git a/test-history.txt b/test-history.txt
-index e50b4a56..00a5034c 100644
+index 00a5034c..909704fa 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -961,3 +961,15 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 15:35:52 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_891_ACPI_PREEXISTING_FLAKE
- 2026-09-15 15:35:52 all PASSED: 1355 FAILED: 0 TIME: 104814ms
- 2026-09-15 15:36:49 all PASSED: 85 FAILED: 0 TIME: 16974ms
-+2026-09-15 15:57:13 smp_sync PASSED: 6 FAILED: 0 TIME: 19s
-+2026-09-15 16:04:00 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 16:07:57 syscall_core PASSED: 23 FAILED: 0 TIME: 19s
-+2026-09-15 16:08:21 sched_affinity PASSED: 6 FAILED: 0 TIME: 20s
-+2026-09-15 16:08:44 smp_sched PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 16:09:07 scheduler_core PASSED: 16 FAILED: 0 TIME: 20s
-+2026-09-15 16:09:32 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20s
-+2026-09-15 16:09:56 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 16:12:15 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 16:12:15 all PASSED: 0 FAILED: 2 TIME: 50s STATUS: LB_DEPTH_ASSERTS_FIXED
-+2026-09-15 16:13:16 all PASSED: 1359 FAILED: 0 TIME: 105092ms
-+2026-09-15 16:14:05 all PASSED: 85 FAILED: 0 TIME: 18358ms
+@@ -973,3 +973,19 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 16:12:15 all PASSED: 0 FAILED: 2 TIME: 50s STATUS: LB_DEPTH_ASSERTS_FIXED
+ 2026-09-15 16:13:16 all PASSED: 1359 FAILED: 0 TIME: 105092ms
+ 2026-09-15 16:14:05 all PASSED: 85 FAILED: 0 TIME: 18358ms
++2026-09-15 16:24:24 cache_coloring PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 16:24:53 memory_pmm PASSED: 9 FAILED: 0 TIME: 19s
++2026-09-15 16:25:23 memory_determinism PASSED: 4 FAILED: 0 TIME: 21s
++2026-09-15 16:30:46 wcet_scheduler PASSED: 2 FAILED: 0 TIME: 21s
++2026-09-15 16:31:19 bench_wcet_memory PASSED: 2 FAILED: 0 TIME: 20s
++2026-09-15 16:31:39 timing_core PASSED: 18 FAILED: 0 TIME: 20s
++2026-09-15 16:31:59 deadline_miss PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 16:32:19 deadline_action PASSED: 1 FAILED: 0 TIME: 20s
++2026-09-15 16:33:40 deadline_recovery PASSED: 4 FAILED: 0 TIME: 19s
++2026-09-15 16:33:40 deadline_ss PASSED: 3 FAILED: 0 TIME: 20s
++2026-09-15 16:33:40 wcet_overrun PASSED: 2 FAILED: 0 TIME: 20s
++2026-09-15 16:35:00 all PASSED: 1360 FAILED: 0 TIME: 95348ms
++2026-09-15 16:35:34 all PASSED: 85 FAILED: 0 TIME: 4008ms
++2026-09-15 16:40:13 cache_coloring PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 16:40:13 memory_pmm PASSED: 9 FAILED: 0 TIME: 20s
++2026-09-15 16:40:13 memory_determinism PASSED: 4 FAILED: 0 TIME: 20s

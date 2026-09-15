@@ -50,6 +50,7 @@ constinit uint64_t PMM::free_head_ = UINT64_MAX;
 constinit uint64_t PMM::pool_free_head_ = UINT64_MAX;
 constinit uint64_t PMM::window_base_page_ = 0;
 constinit uint64_t PMM::window_end_page_ = 0;
+constinit uint64_t PMM::color_cursor_[cache::NUM_COLORS] = {};
 
 #if CONFIG_STATIC_POOLS_ONLY
 static bool g_pmm_init_done = false;
@@ -282,6 +283,86 @@ uint64_t PMM::try_alloc_user(size_t count) {
     return 0;
 }
 
+/// @brief First window index at/after @p from with page-index color
+///        @p color (issue #62).  Page index i has color (i & MASK)
+///        because COLOR_SHIFT == page shift (12).
+static uint64_t first_congruent_from(uint64_t from, uint64_t color) {
+    constexpr uint64_t k_num = kernel::cache::NUM_COLORS;
+    uint64_t start = from;
+    uint64_t rem = start % k_num;
+    start += (color + k_num - rem) % k_num;
+    return start;
+}
+
+/// @brief Allocate one page of @p color with KERNEL ownership
+///        (issue #62).  Color-strided bitmap scan from the per-color
+///        cursor (wraps once); bitmap/owner/counter accounting mirrors
+///        try_alloc_kernel, then rebuild_free_list() re-syncs the free
+///        list the scan bypassed.  Caller holds pmm_lock_.
+uint64_t PMM::try_alloc_colored_kernel(uint64_t color) {
+    constexpr uint64_t k_num = cache::NUM_COLORS;
+    if (color >= k_num)
+        return 0;
+    uint64_t cur = color_cursor_[color];
+    if (cur < window_base_page_ || cur >= window_end_page_)
+        cur = window_base_page_;
+    uint64_t start0 = first_congruent_from(cur, color);
+    for (int pass = 0; pass < 2; ++pass) {
+        uint64_t start =
+            (pass == 0) ? start0
+                        : first_congruent_from(window_base_page_, color);
+        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
+        for (uint64_t idx = start; idx < limit; idx += k_num) {
+            if (!bitmap_test(idx)) {
+                bitmap_set(idx);
+                owner_set_kernel(idx);
+                --free_pages_;
+                color_cursor_[color] = idx + k_num;
+                rebuild_free_list();
+                return idx * PAGE_SIZE;
+            }
+        }
+        cur = window_base_page_;
+    }
+    return 0;
+}
+
+/// @brief Allocate one page of @p color with USER ownership
+///        (issue #62).  Same scan as the KERNEL variant above.
+uint64_t PMM::try_alloc_colored_user(uint64_t color) {
+    constexpr uint64_t k_num = cache::NUM_COLORS;
+    if (color >= k_num)
+        return 0;
+    uint64_t cur = color_cursor_[color];
+    if (cur < window_base_page_ || cur >= window_end_page_)
+        cur = window_base_page_;
+    uint64_t start0 = first_congruent_from(cur, color);
+    for (int pass = 0; pass < 2; ++pass) {
+        uint64_t start =
+            (pass == 0) ? start0
+                        : first_congruent_from(window_base_page_, color);
+        uint64_t limit = (pass == 0) ? window_end_page_ : start0;
+        for (uint64_t idx = start; idx < limit; idx += k_num) {
+            if (!bitmap_test(idx)) {
+                bitmap_set(idx);
+                owner_set_user(idx);
+                --free_pages_;
+                color_cursor_[color] = idx + k_num;
+                rebuild_free_list();
+                return idx * PAGE_SIZE;
+            }
+        }
+        cur = window_base_page_;
+    }
+    return 0;
+}
+
+void PMM::reset_color_cursor() noexcept {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    for (uint64_t c = 0; c < cache::NUM_COLORS; ++c)
+        color_cursor_[c] = window_base_page_;
+}
+
 /// @brief Allocate a single KERNEL page.  Invokes OOM handler on failure.
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_page() {
@@ -419,6 +500,141 @@ uint64_t PMM::alloc_user_page() {
     if (result)
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
     return result;
+}
+
+/// @brief Allocate a single page of the requested color (KERNEL
+///        ownership, issue #62).  Out-of-range colors fail closed (0).
+///        OOM-handler release/retry mirrors alloc_page.
+/// @return Physical address, or 0 (asserts on persistent OOM).
+uint64_t PMM::alloc_page_colored(uint64_t color) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_init_done) {
+        ASSERT(false && "alloc_page_colored after init with "
+                        "CONFIG_STATIC_POOLS_ONLY");
+        return 0;
+    }
+#endif
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+#if CONFIG_MEMORY_BUDGET
+    auto *cur = Scheduler::current_task();
+    if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+        cur->memory_used_pages_ >= cur->memory_budget_pages_) {
+        return 0;
+    }
+#endif
+    uint64_t result = try_alloc_colored_kernel(color);
+    if (result) {
+#if CONFIG_MEMORY_BUDGET
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
+            cur->memory_used_pages_ += 1;
+#endif
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+        return result;
+    }
+    bool oom_retry = false;
+    if (oom_handler_) {
+        lock.unlock();
+        oom_retry = oom_handler_();
+        lock.lock();
+#if CONFIG_MEMORY_BUDGET
+        cur = Scheduler::current_task();
+#endif
+    }
+    if (oom_retry) {
+        result = try_alloc_colored_kernel(color);
+    }
+    if (!result) {
+        ASSERT(errors::PmmError::PMM_ERR_OOM);
+    }
+    if (result) {
+#if CONFIG_MEMORY_BUDGET
+        if (cur && cur->magic == TaskControlBlock::TCB_MAGIC)
+            cur->memory_used_pages_ += 1;
+#endif
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    }
+    return result;
+}
+
+/// @brief Colored KERNEL alloc with error code (issue #62).
+errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
+                                             uint64_t &out_phys_addr) {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    uint64_t result = try_alloc_colored_kernel(color);
+    if (result) {
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+        out_phys_addr = result;
+        return errors::PMM_ERR_OK;
+    }
+    bool oom_retry = false;
+    if (oom_handler_) {
+        lock.unlock();
+        oom_retry = oom_handler_();
+        lock.lock();
+    }
+    if (oom_retry) {
+        result = try_alloc_colored_kernel(color);
+    }
+    if (!result) {
+        return errors::PMM_ERR_OOM;
+    }
+    kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    out_phys_addr = result;
+    return errors::PMM_ERR_OK;
+}
+
+/// @brief Allocate a single page of the requested color (USER
+///        ownership, issue #62).  Mirrors alloc_user_page.
+/// @return Physical address, or 0 (asserts on persistent OOM).
+uint64_t PMM::alloc_user_page_colored(uint64_t color) {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    uint64_t result = try_alloc_colored_user(color);
+    if (result) {
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+        return result;
+    }
+    bool oom_retry = false;
+    if (oom_handler_) {
+        lock.unlock();
+        oom_retry = oom_handler_();
+        lock.lock();
+    }
+    if (oom_retry) {
+        result = try_alloc_colored_user(color);
+    }
+    if (!result) {
+        ASSERT(errors::PmmError::PMM_ERR_USER_OOM);
+    }
+    if (result)
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    return result;
+}
+
+/// @brief Colored USER alloc with error code (issue #62).
+errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
+                                                  uint64_t &out_phys_addr) {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    uint64_t result = try_alloc_colored_user(color);
+    if (result) {
+        kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+        out_phys_addr = result;
+        return errors::PMM_ERR_OK;
+    }
+    bool oom_retry = false;
+    if (oom_handler_) {
+        lock.unlock();
+        oom_retry = oom_handler_();
+        lock.lock();
+    }
+    if (oom_retry) {
+        result = try_alloc_colored_user(color);
+    }
+    if (!result) {
+        return errors::PMM_ERR_USER_OOM;
+    }
+    kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    out_phys_addr = result;
+    return errors::PMM_ERR_OK;
 }
 
 /// @brief Allocate contiguous USER pages.  Invokes OOM handler on failure.

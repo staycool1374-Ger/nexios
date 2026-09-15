@@ -27,6 +27,7 @@
 #include <types.hpp>
 #include <constants.hpp>
 #include <kernel/memory/pmm_errors.hpp>
+#include <kernel/memory/cache_color.hpp>
 
 namespace kernel::test {
 struct PtPoolSnapshot;
@@ -105,6 +106,46 @@ class PMM {
     /// @param[out] out_phys_addr Physical address of allocated page table page.
     /// @return PmmError code.
     static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
+
+    /// @brief Page color of a physical address (issue #62; delegates
+    ///        to the cache_color contract — pure, lock-free, any ctx).
+    /// @param phys_addr Byte physical address.
+    /// @return Color in [0, cache::NUM_COLORS).
+    static uint64_t color_of(uint64_t phys_addr) noexcept {
+        return cache::color_of(phys_addr);
+    }
+    /// @brief Allocates a single 4 KiB page of the requested color
+    ///        (KERNEL ownership; issue #62).  Single-page only:
+    ///        colored-contiguous is over-constrained (same color AND
+    ///        contiguous is rarely satisfiable) — multi-page callers
+    ///        keep using alloc_contiguous.  Creation/test-time path
+    ///        (color-strided scan + free-list rebuild, not RT-budgeted).
+    /// @param color Color in [0, cache::NUM_COLORS); out-of-range
+    ///        returns 0.
+    /// @return Physical address, or 0 on failure/OOM.
+    static uint64_t alloc_page_colored(uint64_t color);
+    /// @brief Colored KERNEL alloc with error code.
+    /// @param color Requested color.
+    /// @param[out] out_phys_addr Physical address of allocated page.
+    /// @return PmmError code.
+    static errors::PmmError alloc_page_colored_err(uint64_t color,
+                                                   uint64_t &out_phys_addr);
+    /// @brief Allocates a single 4 KiB page of the requested color
+    ///        (USER ownership; issue #62).  Same contract as the
+    ///        KERNEL variant above.
+    /// @param color Color in [0, cache::NUM_COLORS).
+    /// @return Physical address, or 0 on failure/OOM.
+    static uint64_t alloc_user_page_colored(uint64_t color);
+    /// @brief Colored USER alloc with error code.
+    /// @param color Requested color.
+    /// @param[out] out_phys_addr Physical address of allocated page.
+    /// @return PmmError code.
+    static errors::PmmError alloc_user_page_colored_err(
+        uint64_t color, uint64_t &out_phys_addr);
+    /// @brief Reset per-color allocation cursors (test hook, issue
+    ///        #62).  Cursors affect placement only, never correctness;
+    ///        tests call this at entry for deterministic colors.
+    static void reset_color_cursor() noexcept;
 
     /// @brief Frees a page regardless of ownership.
     static void free_page(uint64_t phys_addr);
@@ -307,6 +348,12 @@ class PMM {
     /// @brief One past the last allocatable page index (absolute).
     static constinit uint64_t window_end_page_;
 
+    /// @brief Per-color allocation cursors (page indices, issue #62).
+    ///        cursor[c] is the next index to probe for color c;
+    ///        placement-only state, reset by reset_color_cursor().
+    static constinit uint64_t
+        color_cursor_[cache::NUM_COLORS];
+
     /// @brief Mark a page as allocated in the bitmap.
     /// @param index Page index.
     static void bitmap_set(size_t index);
@@ -337,6 +384,16 @@ class PMM {
     /// @param count Number of consecutive pages.
     /// @return Physical address of first page, or 0 on failure.
     static uint64_t try_alloc_kernel(size_t count);
+    /// @brief Allocate one KERNEL page of @p color (color-strided
+    ///        bitmap scan, issue #62).  Caller holds pmm_lock_.
+    /// @param color Color in [0, cache::NUM_COLORS).
+    /// @return Physical address of first page, or 0 on failure.
+    static uint64_t try_alloc_colored_kernel(uint64_t color);
+    /// @brief Allocate one USER page of @p color (issue #62).
+    ///        Caller holds pmm_lock_.
+    /// @param color Color in [0, cache::NUM_COLORS).
+    /// @return Physical address of first page, or 0 on failure.
+    static uint64_t try_alloc_colored_user(uint64_t color);
 };
 
 } // namespace kernel
