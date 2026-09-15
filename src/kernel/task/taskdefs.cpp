@@ -50,11 +50,14 @@ namespace {
 // ── Task definition table ────────────────────────────────────────────────
 
 constexpr TaskDef g_task_defs[] = {
-    // init: PID 1 coordinator + reaper.  Background priority 0; raised to 10
-    // (harness) only while the test runner is active, dropped back to 0 in
-    // the reap loop.  Period 100 for RMS.
-    {"init", TaskType::KERNEL, true, init_task_main, nullptr, 0, 100, 1, 0, 0,
-     0, nullptr, nullptr, nullptr, 1, 0, false},
+    // init/reaper: PID 1 coordinator + zombie reaper.  Background priority
+    // 0; raised to 10 (harness) only while the test runner is active,
+    // dropped back to 0 in the reap loop.  Period 100 for RMS.  Named
+    // for its steady-state job (the name is display-only): after boot
+    // it spins the reap loop whenever nothing higher-priority runs,
+    // which is why it accrues CPU time while showing READY.
+    {"init/reaper", TaskType::KERNEL, true, init_task_main, nullptr, 0, 100,
+     1, 0, 0, 0, nullptr, nullptr, nullptr, 1, 0, false},
     // vfsd: sporadic server, fast IPC response, 2% worst-case CPU
     {"vfsd", TaskType::SPORADIC_SERVER, true, nullptr, "vfsd.c.elf", 20, 10, 0,
      2, 10, 0, "vfsd", vfsd::set_vfsd_pid, vfsd::get_vfsd_pid, 1, 0, false},
