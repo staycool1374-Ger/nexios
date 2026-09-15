@@ -42,6 +42,8 @@
 
 using namespace kernel;
 
+void register_syscall_affinity_tests();
+
 static void test_signal_handler(int sig) {
     (void)sig;
 }
@@ -811,4 +813,6 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_user_gettod_uname);
     JARVIS_REGISTER_TEST(syscall_user_copy_reject);
     JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
+
+    register_syscall_affinity_tests();
 }

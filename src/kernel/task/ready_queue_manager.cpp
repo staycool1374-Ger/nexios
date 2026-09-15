@@ -92,6 +92,13 @@ void ReadyQueueManager::remove(TaskControlBlock &tcb,
     tcb.in_ready_queue_ = false;
 }
 
+uint64_t ReadyQueueManager::depth() const noexcept {
+    uint64_t total = 0;
+    for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p)
+        total += queues_[p].count();
+    return total;
+}
+
 void ReadyQueueManager::move_priority(TaskControlBlock &tcb, uint64_t old_prio,
                                       uint64_t new_prio) noexcept {
     if (old_prio == new_prio)

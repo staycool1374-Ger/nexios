@@ -18,15 +18,17 @@
 
 /// @file test_smp_sync.cpp
 /// @brief SMP synchronization tests (issue #85, module 11): IRQ
-///        save/restore guard contracts live here (real); reader-writer
-///        locks, ticket locks, cross-CPU races and holder migration
-///        have no kernel API — documented stubs.  Plain SpinLock
-///        contention is covered by synchronization_spinlock.
+///        save/restore guard contracts and the RwLock state machine
+///        (issue #61) live here (real); ticket locks, cross-CPU races
+///        and holder migration have no kernel API — documented stubs.
+///        Plain SpinLock contention is covered by
+///        synchronization_spinlock.
 
 #if defined(CONFIG_ARCH_X86_64)
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/sync/spinlock.hpp>
+#include <kernel/sync/rwlock.hpp>
 #include <kernel/sync/irq_spinlock_guard.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/nexios_config.h>
@@ -96,16 +98,44 @@ JARVIS_TEST(smp_sync_two_cpu_race, "PRE: none | POST: none | PENDING: cross-CPU 
 }
 
 // Runmode: kernel
-// Testidea: Reader-writer lock: concurrent readers share, writer is
-//           exclusive against readers and writers.
-// Input: N readers + 1 writer racing on an RwLock.
-// Expect: No reader observes a torn write; writer starves neither way.
-// Depends: sync::RwLock (not yet implemented)
-JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none | PENDING: RwLock") {
-    /* Pseudocode:
-     *   RwLock rw; readers hold read_lock while writer wants write_lock;
-     *   JARVIS_ASSERT(exclusive phases never overlap);
-     */
+// Testidea: Reader-writer lock state machine (issue #61): concurrent
+//           readers share, writer is exclusive against readers and
+//           writers, and a waiting writer blocks new readers
+//           (writer preference).  Single-CPU interleaving of the
+//           try_ paths plus uncontended blocking paths; true cross-CPU
+//           racing is covered by smp_sync_two_cpu_race once spawn exists.
+// Input: read_lock x N, try_write_lock, read_unlocks, write_lock,
+//        try_read_lock, write_unlock, reset.
+// Expect: Readers share (N concurrent holds); writer try fails while
+//         any reader holds; readers try-fail while writer holds;
+//         uncontended blocking paths return; reset frees the lock.
+// Depends: sync::RwLock (issue #61)
+JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none") {
+    sync::RwLock rw;
+    // Shared readers: N concurrent holds, writer excluded throughout.
+    rw.read_lock();
+    rw.read_lock();
+    rw.read_lock();
+    JARVIS_ASSERT(!rw.try_write_lock());
+    rw.read_unlock();
+    JARVIS_ASSERT(!rw.try_write_lock());
+    rw.read_unlock();
+    rw.read_unlock();
+    // Free lock: writer try succeeds once.
+    JARVIS_ASSERT(rw.try_write_lock());
+    JARVIS_ASSERT(!rw.try_write_lock());
+    JARVIS_ASSERT(!rw.try_read_lock());
+    rw.write_unlock();
+    // Uncontended blocking paths return immediately.
+    rw.read_lock();
+    rw.read_unlock();
+    rw.write_lock();
+    rw.write_unlock();
+    // Reset frees a held lock (MemPool-reuse contract).
+    rw.read_lock();
+    rw.reset();
+    JARVIS_ASSERT(rw.try_write_lock());
+    rw.write_unlock();
     JARVIS_TEST_PASS();
 }
 

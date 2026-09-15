@@ -1,359 +1,45 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 6e614043..9ee5efb6 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -472,6 +472,9 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
-     uint64_t pml4 = VMM::clone_kernel_pml4();
-     if (!pml4)
-         return nullptr;
-+    // Issue #96: freshly-cloned tables are the merged state by
-+    // construction — assert convergence before mapping user pages.
-+    VMM::assert_kernel_half_converged(pml4);
+diff --git a/docs/specs/per-cpu-smp.md b/docs/specs/per-cpu-smp.md
+index c6be9ece..5e07bda0 100644
+--- a/docs/specs/per-cpu-smp.md
++++ b/docs/specs/per-cpu-smp.md
+@@ -348,6 +348,31 @@ scheduler statistics per CPU, FPU migration (#151).
+   first-dispatch relies on `create()`-built frames (verified); the AP
+   idle MUST be built via `create()` (no hand-rolled TCB).
  
-     uint64_t ustack_phys = 0;
-     if (!load_segments_and_stack(hdr, file_data, pml4, &ustack_phys,
-@@ -706,6 +709,8 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     uint64_t new_pml4 = VMM::clone_kernel_pml4();
-     if (!new_pml4)
-         return false;
-+    // Issue #96: structural audit on the exec image (see load() above).
-+    VMM::assert_kernel_half_converged(new_pml4);
- 
-     uint64_t ustack_phys = 0;
-     if (!load_segments_and_stack(hdr, data, new_pml4, &ustack_phys,
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index 989e370b..d0024f56 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -503,6 +503,8 @@ void ElfLoader::run_load() {
-         cleanup_and_idle();
-         return;
-     }
-+    // Issue #96: structural audit on the background-loaded image.
-+    VMM::assert_kernel_half_converged(pml4_);
-     state_ = LoadState::COPYING_SEGMENTS;
-     exec_base_ = 0;
-     exec_size_ = 0;
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 46bb210b..8ac3509a 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1063,6 +1063,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     // Register shell commands before the shell task starts
-     service::Shell::init();
- 
-+    // Issue #96: snapshot the kernel-half template at end of bring-up —
-+    // all boot-time map_page work (drivers, kslot window) is done, and no
-+    // task exists yet.  Fork/exec converge toward the live root; drift
-+    // from this baseline is diagnosed, never fatal (paper §4 row 2).
-+    kernel::VMM::snapshot_kernel_template();
++### 3.4.9 Issue #61 delta (RT load balancer + affinity ABI)
 +
-     // Kill all tasks and rebuild system from the task-definition table
-     kernel::task::reboot_from_table();
- }
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 2da4f876..4adf8faf 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -32,6 +32,7 @@
- namespace kernel {
- 
- constinit uint64_t VMM::kernel_pml4_ = 0;
-+constinit uint64_t VMM::pml4_kernel_template_[512] = {};
- bool VMM::hhdm_modified_ = false;
- bool VMM::identity_modified_ = false;
- 
-@@ -733,6 +734,155 @@ uint64_t VMM::clone_kernel_pml4() {
- #endif
- }
- 
-+/// @brief True when @p entry points at a next-level table (vs a huge/leaf
-+///        mapping).  Arch-aware: x86_64 uses the PS bit, RISC-V the R|W|X
-+///        bits, AArch64 the descriptor type at non-leaf levels.
-+/// @param entry Raw 64-bit page-table entry (must be PRESENT).
-+/// @param level Table level holding the entry (0=PML4/L0 .. 2=PD/L2;
-+///        level 3=PT/L3 entries are always leaves).
-+bool VMM::is_table_entry(uint64_t entry, unsigned level) {
-+    if (level >= 3)
-+        return false;
-+#if defined(CONFIG_ARCH_X86_64)
-+    (void)level;
-+    return (entry & PAGE_HUGE) == 0;
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    (void)level;
-+    constexpr uint64_t k_rwx = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-+    return (entry & k_rwx) == 0;
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    return (entry & 0x3ULL) == 0x3ULL;
-+#else
-+    (void)entry;
-+    (void)level;
-+    return false;
-+#endif
-+}
++§3.4.7's "load balancing/migration" carve-out lands here. Policy:
++- `Scheduler::balancer_tick()` (BSP-only, quiesce + try_lock, never
++  blocking) migrates queued aperiodic kernel tasks from the busiest
++  up-CPU to the idlest while depths differ beyond
++  `BALANCER_THRESHOLD` (2), at most
++  `BALANCER_MAX_MIGRATIONS_PER_TICK` (2) moves per tick, every
++  `BALANCER_TICK_PERIOD` (10) BSP ticks, production runs only
++  (`!is_test_active()` — tests drive it directly under IrqGuard).
++- Hard exclusions (never migrate): periodic tasks
++  (`period_ticks != 0 && != NO_PERIOD`), user tasks (shared-TSS:
++  CPU0), idle tasks, tasks current on any CPU, unowned/terminated
++  tasks, tasks whose mask lacks the target bit.
++- Move = remove + re-pin `cpu_affinity` to the singleton target +
++  enqueue (queue==target invariant preserved, same as
++  `set_affinity`); only up-CPUs are targets (no stranding on
++  never-booted CPUs).
++- Affinity ABI: `SYS_SET_AFFINITY` (77) / `SYS_GET_AFFINITY` (78);
++  mask is a constraint, placement follows the lowest set bit;
++  empty mask clamps to CPU0, user tasks clamp to CPU0, beyond-up
++  bits clamp; unknown pid returns a specific error (never panic).
++- Still out of scope: per-CPU TSS + AP user tasks, AP-side
++  accounting/deadlines, TLB shootdown, per-CPU deadline monitor.
 +
-+/// @brief Recursive merge worker (issue #96): converge @p dst_table
-+///        toward @p src_table over [@p start, 512).  Missing-present
-+///        entries are linked (copied by value); present entries are left
-+///        untouched unless both sides hold tables, in which case the
-+///        pair is merged recursively (hole-filling).  Zero allocations.
-+/// @param src_table HHDM virtual address of the source table page.
-+/// @param dst_table HHDM virtual address of the child table page.
-+/// @param level Table level (0=PML4/L0 .. 3=PT/L3).
-+/// @param start First index to converge (kernel-half start at level 0).
-+void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
-+                            unsigned level, size_t start) {
-+    for (size_t i = start; i < 512; ++i) {
-+        uint64_t src_entry = src_table[i];
-+        if ((src_entry & PAGE_PRESENT) == 0)
-+            continue;
-+        uint64_t dst_entry = dst_table[i];
-+        if ((dst_entry & PAGE_PRESENT) != 0) {
-+            if (is_table_entry(src_entry, level) &&
-+                is_table_entry(dst_entry, level)) {
-+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+                auto *src_next = reinterpret_cast<uint64_t *>(
-+                    arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
-+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+                auto *dst_next = reinterpret_cast<uint64_t *>(
-+                    arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
-+                merge_table_level(src_next, dst_next, level + 1, 0);
-+            }
-+            continue;
-+        }
-+        dst_table[i] = src_entry;
-+    }
-+}
-+
-+/// @brief Recursive equality worker (issue #96): true when the two
-+///        tables agree on every present entry over [@p start, 512),
-+///        descending into table/table pairs.
-+bool VMM::tables_equal_level(const uint64_t *a_table,
-+                             const uint64_t *b_table, unsigned level,
-+                             size_t start) {
-+    for (size_t i = start; i < 512; ++i) {
-+        uint64_t a_entry = a_table[i];
-+        uint64_t b_entry = b_table[i];
-+        bool a_present = (a_entry & PAGE_PRESENT) != 0;
-+        bool b_present = (b_entry & PAGE_PRESENT) != 0;
-+        if (a_present != b_present)
-+            return false;
-+        if (!a_present)
-+            continue;
-+        if (is_table_entry(a_entry, level) &&
-+            is_table_entry(b_entry, level)) {
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *a_next = reinterpret_cast<const uint64_t *>(
-+                arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *b_next = reinterpret_cast<const uint64_t *>(
-+                arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
-+            if (!tables_equal_level(a_next, b_next, level + 1, 0))
-+                return false;
-+        } else if (a_entry != b_entry) {
-+            return false;
-+        }
-+    }
-+    return true;
-+}
-+
-+bool VMM::merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4) {
-+    if (src_pml4 == 0 || dst_pml4 == 0 || src_pml4 == dst_pml4)
-+        return false;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                             (src_pml4 & ~0xFFFULL));
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                             (dst_pml4 & ~0xFFFULL));
-+    // INV-MERGE1: single-threaded pre-CR3-switch window (same window MP-7
-+    // uses) — no locking; link semantics keep lower tables shared, so no
-+    // allocation can fail mid-merge by construction.
-+    merge_table_level(src, dst, 0, arch::PML4_KERNEL_START);
-+    return true;
-+}
-+
-+void VMM::snapshot_kernel_template() {
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *live = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                              (kernel_pml4_ & ~0xFFFULL));
-+    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i)
-+        pml4_kernel_template_[i] = live[i];
-+}
-+
-+bool VMM::kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4) {
-+    if (a_pml4 == 0 || b_pml4 == 0)
-+        return false;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *a = reinterpret_cast<const uint64_t *>(
-+        arch::HHDM_OFFSET + (a_pml4 & ~0xFFFULL));
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *b = reinterpret_cast<const uint64_t *>(
-+        arch::HHDM_OFFSET + (b_pml4 & ~0xFFFULL));
-+    return tables_equal_level(a, b, 0, arch::PML4_KERNEL_START);
-+}
-+
-+bool VMM::kernel_half_matches_template(uint64_t pml4_phys) {
-+    if (pml4_phys == 0)
-+        return false;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *tbl = reinterpret_cast<const uint64_t *>(
-+        arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
-+    for (size_t i = arch::PML4_KERNEL_START; i < PAGE_TABLE_ENTRIES; ++i) {
-+        if (tbl[i] != pml4_kernel_template_[i])
-+            return false;
-+    }
-+    return true;
-+}
-+
-+void VMM::assert_kernel_half_converged(uint64_t child_pml4) {
-+    if (!kernel_half_equal(child_pml4, kernel_pml4_))
-+        panic("VMM: child kernel half diverged from live kernel PML4");
-+#if CONFIG_DEBUG
-+    if (!kernel_half_matches_template(child_pml4))
-+        Logger::info("VMM: child kernel half drifted from bring-up "
-+                     "template (late mapping converged)");
-+#endif
-+}
-+
- /// @brief Free all user-space pages and page tables owned by a user PML4.
- ///        Skips kernel-owned pages (PMM::is_user_page owner-bit check).
- /// @param pml4_phys Physical address of the user PML4 to tear down.
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index 1fda1d70..90c35358 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
-@@ -101,6 +101,42 @@ class VMM {
-     /// @return VmmError code.
-     static errors::VmmError clone_kernel_pml4_err(uint64_t &out_pml4_phys);
+ ## 4. Invariants
  
-+    /// @brief Converge a child PML4's kernel half (entries 256..511)
-+    ///        toward @p src_pml4 (issue #96, kernel-half merge).  Recursive
-+    ///        top-down walk (PML4→PDPT→PD→PT): wherever the child lacks an
-+    ///        entry present in the source, the entry is copied by value
-+    ///        (link semantics — lower tables stay shared, never
-+    ///        duplicated); entries already present are left untouched
-+    ///        (idempotent); huge/leaf entries are copied by value.
-+    ///        Performs ZERO allocations, so it cannot OOM by
-+    ///        construction; the bool preserves the failure contract for
-+    ///        future allocating revisions (callers must destroy the child
-+    ///        table on false).  No locking: single-threaded, runs before
-+    ///        the first CR3 switch to the child (same window MP-7 uses).
-+    /// @param src_pml4 Physical address of the source (canonical) PML4.
-+    /// @param dst_pml4 Physical address of the child PML4 to converge.
-+    /// @return true on success, false on invalid arguments (null or
-+    ///         identical roots — never on allocation failure).
-+    static bool merge_kernel_half(uint64_t src_pml4, uint64_t dst_pml4);
-+    /// @brief Snapshot the live kernel PML4's kernel half (entries
-+    ///        256..511) into the bring-up template (issue #96).  Call
-+    ///        ONCE at end of bring-up, before the first task spawns.
-+    static void snapshot_kernel_template();
-+    /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
-+    ///        entry (256..511), compared recursively through shared
-+    ///        tables (present+equal u64, or both-absent, at each level).
-+    static bool kernel_half_equal(uint64_t a_pml4, uint64_t b_pml4);
-+    /// @brief True when @p pml4_phys matches the bring-up template on
-+    ///        every kernel-half entry (diagnostics + tests; drift from
-+    ///        legitimate late mappings is NOT a failure here).
-+    static bool kernel_half_matches_template(uint64_t pml4_phys);
-+    /// @brief Halt unless @p child_pml4 converged to the LIVE kernel
-+    ///        PML4's kernel half (issue #96, structural audit).  Panics
-+    ///        (debug AND release) on mismatch; template drift is
-+    ///        debug-logged only — legitimate late mappings must converge,
-+    ///        not panic (paper §4 row 2).
-+    static void assert_kernel_half_converged(uint64_t child_pml4);
-+
-     /// @brief Maps a page into a specific page table (not the kernel one).
-     /// @param virt_addr Virtual address (page-aligned).
-     /// @param phys_addr Physical address (page-aligned).
-@@ -320,6 +356,11 @@ class VMM {
- 
-     static constinit uint64_t kernel_pml4_;
- 
-+    /// @brief Bring-up snapshot of the kernel PML4's kernel half
-+    ///        (issue #96).  Written once by snapshot_kernel_template(),
-+    ///        never afterwards; read by kernel_half_matches_template().
-+    static constinit uint64_t pml4_kernel_template_[512];
-+
-   public:
-     /// @brief Set to true when a test modifies kernel-space page tables
-     ///        (HHDM range).  Reset after PD restore in snapshot_restore.
-@@ -377,6 +418,18 @@ class VMM {
-     /// @return Pointer to the next-level table, or nullptr.
-     static uint64_t *get_table(uint64_t *table, size_t index, bool create,
-                                bool user_alloc = false);
-+    /// @brief True when @p entry points at a next-level table (issue
-+    ///        #96).  Arch-aware leaf detection (x86_64 PS bit, RISC-V
-+    ///        R|W|X, AArch64 descriptor type); level 3 is always a leaf.
-+    static bool is_table_entry(uint64_t entry, unsigned level);
-+    /// @brief Recursive merge worker (issue #96): converge @p dst_table
-+    ///        toward @p src_table over [@p start, 512).  Zero allocations.
-+    static void merge_table_level(uint64_t *src_table, uint64_t *dst_table,
-+                                  unsigned level, size_t start);
-+    /// @brief Recursive equality worker (issue #96).
-+    static bool tables_equal_level(const uint64_t *a_table,
-+                                   const uint64_t *b_table, unsigned level,
-+                                   size_t start);
- };
- 
- } // namespace kernel
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index b7633502..3390b79b 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -1517,14 +1517,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-         }
-         tcb->page_table_ = new_pml4;
- 
--        // Copy kernel entries from the kernel PML4.
-+        // Issue #96: converge the kernel half via recursive merge from
-+        // the live kernel PML4 (link semantics — lower tables stay
-+        // shared, zero allocations).  The live root, not the parent, is
-+        // the source: a parent forked before a late mapping must not
-+        // propagate stale entries (convergence goal, paper §2).
-         auto *new_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                       (new_pml4 & ~0xFFFULL));
--        auto *kernel_virt = reinterpret_cast<uint64_t *>(
--            arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
-         __builtin_memset(new_virt, 0, arch::PAGE_SIZE);
--        for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
--            new_virt[i] = kernel_virt[i];
-+        if (!VMM::merge_kernel_half(VMM::get_kernel_pml4(), new_pml4)) {
-+            ASSERT(errors::TaskError::TASK_ERR_PML4_CLONE);
-+            TaskControlBlock::destroy(tcb);
-+            return nullptr;
-+        }
-+        VMM::assert_kernel_half_converged(new_pml4);
- 
-         // Deep-copy user entries from parent (walk, allocate, copy).
-         if (!VMM::deep_copy_user_pages(parent->page_table_, new_pml4)) {
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 2f305f3f..42810f0d 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
-     {"selftest",            133,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1240,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153)
-+    {"all",                1245,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96)
- 
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -80,6 +80,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
-     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
-     {"process_pml4_clone",   10,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
-+    {"pt_merge",              5,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
-     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
- 
-     // cap — capability-based access control (CSpace)
-diff --git a/src/kernel/test/test_pt_merge.cpp b/src/kernel/test/test_pt_merge.cpp
+ - INV-PC1: gs:0x00/0x08 semantics unchanged — existing syscall_entry/isr
+diff --git a/src/kernel/sync/rwlock.hpp b/src/kernel/sync/rwlock.hpp
 new file mode 100644
-index 00000000..69344153
+index 00000000..50b0c02a
 --- /dev/null
-+++ b/src/kernel/test/test_pt_merge.cpp
-@@ -0,0 +1,314 @@
++++ b/src/kernel/sync/rwlock.hpp
+@@ -0,0 +1,135 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -372,355 +58,1054 @@ index 00000000..69344153
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_pt_merge.cpp
-+/// @brief Kernel-half page-table merge tests (issue #96).
++/// @file rwlock.hpp
++/// @brief SMP-safe reader-writer lock with writer preference (issue #61).
 +///
-+/// Verifies VMM::merge_kernel_half (link semantics: missing entries are
-+/// copied by value, present entries untouched, zero allocations) and the
-+/// template/convergence audit helpers.  All tests use PRIVATE scratch
-+/// tables — the live kernel PML4 is only ever walked read-only, except
-+/// template_mismatch_detected which clones it (freed afterwards).
++/// Single 32-bit state word: bit 31 = writer held, bit 30 = writer
++/// pending (blocks new readers so a waiting writer cannot starve),
++/// bits 29..0 = active reader count.  All transitions are lock-free
++/// atomic RMW; waiters spin on arch::pause().
++///
++/// Contracts (same discipline as SpinLock):
++/// - NEVER held across reschedule() or any BLOCKED transition.
++/// - Blocking lock() is task-context only; ISR-adjacent paths must use
++///   the try_ variants (non-blocking, skip-and-retry).
++/// - Read side scales across CPUs; write side is exclusive against
++///   readers and writers.
++
++#pragma once
++
++#include <kernel/arch/io.hpp>
++#include <lib/atomic.hpp>
++
++namespace kernel {
++namespace sync {
++
++class RwLock {
++  public:
++    RwLock() = default;
++
++    RwLock(const RwLock &) = delete;
++    RwLock &operator=(const RwLock &) = delete;
++    RwLock(RwLock &&) = delete;
++    RwLock &operator=(RwLock &&) = delete;
++
++    /// @brief Acquire shared read access (blocks new readers only while
++    ///        a writer holds or waits — writer preference).
++    void read_lock() noexcept {
++        for (;;) {
++            uint32_t seen =
++                atomic_load(&state_, __ATOMIC_ACQUIRE);
++            if ((seen & (k_writer | k_pending)) != 0) {
++                arch::pause();
++                continue;
++            }
++            if (atomic_compare_exchange(&state_, &seen, seen + 1,
++                                        __ATOMIC_ACQUIRE)) {
++                return;
++            }
++            arch::pause();
++        }
++    }
++
++    /// @brief Release shared read access.
++    void read_unlock() noexcept {
++        atomic_fetch_sub(&state_, 1u, __ATOMIC_RELEASE);
++    }
++
++    /// @brief Acquire exclusive write access (writer preference: sets
++    ///        the pending bit first so no new reader can overtake).
++    void write_lock() noexcept {
++        for (;;) {
++            uint32_t seen =
++                atomic_load(&state_, __ATOMIC_ACQUIRE);
++            if ((seen & k_writer) != 0) {
++                arch::pause();
++                continue;
++            }
++            atomic_fetch_or(&state_, k_pending, __ATOMIC_ACQ_REL);
++            seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
++            if (seen == k_pending &&
++                atomic_compare_exchange(&state_, &seen, k_writer,
++                                        __ATOMIC_ACQUIRE)) {
++                return;
++            }
++            arch::pause();
++        }
++    }
++
++    /// @brief Release exclusive write access (clears writer + pending
++    ///        so a waiting writer or readers can proceed).
++    void write_unlock() noexcept {
++        atomic_fetch_and(&state_, ~(k_writer | k_pending),
++                         __ATOMIC_RELEASE);
++    }
++
++    /// @brief Attempt shared access without blocking.
++    /// @return true if read access was acquired.
++    bool try_read_lock() noexcept {
++        uint32_t seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
++        if ((seen & (k_writer | k_pending)) != 0)
++            return false;
++        return atomic_compare_exchange(&state_, &seen, seen + 1,
++                                       __ATOMIC_ACQUIRE);
++    }
++
++    /// @brief Attempt exclusive access without blocking.
++    /// @return true if write access was acquired.
++    bool try_write_lock() noexcept {
++        uint32_t seen = atomic_load(&state_, __ATOMIC_ACQUIRE);
++        if (seen != 0)
++            return false;
++        return atomic_compare_exchange(&state_, &seen, k_writer,
++                                       __ATOMIC_ACQUIRE);
++    }
++
++    /// @brief Force-unlock (used to initialise a lock after MemPool
++    ///        allocation; mirrors SpinLock::reset).
++    void reset() noexcept {
++        atomic_store(&state_, 0u, __ATOMIC_RELAXED);
++    }
++
++  private:
++    static constexpr uint32_t k_writer = 1u << 31;
++    static constexpr uint32_t k_pending = 1u << 30;
++    uint32_t state_ = 0;
++};
++
++} // namespace sync
++} // namespace kernel
+diff --git a/src/kernel/sync/spinlock.hpp b/src/kernel/sync/spinlock.hpp
+index fdb6b4bf..1a8e8e22 100644
+--- a/src/kernel/sync/spinlock.hpp
++++ b/src/kernel/sync/spinlock.hpp
+@@ -20,6 +20,12 @@
+ 
+ /// @file spinlock.hpp
+ /// @brief Busy-wait spinlock using atomic exchange.
++///
++/// SMP-safe by construction (issue #61 audit): lock() is an
++/// atomic_exchange ACQUIRE loop with arch::pause() backoff and unlock()
++/// is an atomic_store RELEASE — mutual exclusion holds across CPUs.
++/// Task-context paths may block; ISR paths must use try_lock()
++/// (non-blocking skip-and-retry).
+ 
+ #pragma once
+ 
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index 982bdcdd..6e2c8633 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -106,7 +106,9 @@ enum class SyscallNumber : uint8_t {
+     SEND_FAST = 74,      ///< register-passing SEND, payload in regs[] (issue #11)
+     RECV_FAST = 75,      ///< register-passing RECEIVE, payload in regs[] (issue #11)
+     SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
+-    MAX_SYSCALL = 77,
++    SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
++    GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
++    MAX_SYSCALL = 79,
+ };
+ 
+ /// @brief Folds a list of FAST syscall numbers into a single bitmask
+@@ -254,6 +256,10 @@ class Syscall {
+                                 uint64_t *);
+     static uint64_t sys_getpid(uint64_t, uint64_t, uint64_t, uint64_t,
+                                uint64_t *);
++    static uint64_t sys_set_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
++    static uint64_t sys_get_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
+     static uint64_t sys_kill(uint64_t, uint64_t, uint64_t, uint64_t,
+                              uint64_t *);
+     static uint64_t sys_pipe(uint64_t, uint64_t, uint64_t, uint64_t,
+@@ -439,6 +445,8 @@ class Syscall {
+             &Syscall::sys_send_fast,
+             &Syscall::sys_recv_fast,
+             &Syscall::sys_send_sync_fast,
++            &Syscall::sys_set_affinity,
++            &Syscall::sys_get_affinity,
+     };
+ };
+ 
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index d589bd3a..7c3421ac 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -282,9 +282,32 @@ uint64_t Syscall::sys_signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+     return 0;
+ }
+ 
++/// @brief Set a task's CPU affinity mask (issue #61).
++///        arg0 = pid (0 = caller), arg1 = mask.  Clamp policy lives in
++///        Scheduler::set_affinity (empty→CPU0, user→CPU0, beyond-up
++///        bits cut); unknown pid fails with -1.  Mask passed by value —
++///        no user-pointer dereference (FULL path only: scheduler call).
++uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
++                                   uint64_t, uint64_t *) {
++    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
++    if (t == nullptr)
++        return static_cast<uint64_t>(-1);
++    Scheduler::set_affinity(*t, arg1);
++    return 0;
++}
++
++/// @brief Get a task's CPU affinity mask (issue #61).
++///        arg0 = pid (0 = caller).  Unknown pid fails with -1.
++uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
++                                   uint64_t, uint64_t *) {
++    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
++    if (t == nullptr)
++        return static_cast<uint64_t>(-1);
++    return Scheduler::get_affinity(*t);
++}
++
+ uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
+-                                uint64_t *regs) {
+-    auto *t = syscall_task();
++                                uint64_t *regs) {    auto *t = syscall_task();
+     if (!t || !regs)
+         return static_cast<uint64_t>(-1);
+     uint64_t user_rsp = regs[20];
+diff --git a/src/kernel/task/ready_queue_manager.cpp b/src/kernel/task/ready_queue_manager.cpp
+index cf52ff4f..0042ceeb 100644
+--- a/src/kernel/task/ready_queue_manager.cpp
++++ b/src/kernel/task/ready_queue_manager.cpp
+@@ -92,6 +92,13 @@ void ReadyQueueManager::remove(TaskControlBlock &tcb,
+     tcb.in_ready_queue_ = false;
+ }
+ 
++uint64_t ReadyQueueManager::depth() const noexcept {
++    uint64_t total = 0;
++    for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p)
++        total += queues_[p].count();
++    return total;
++}
++
+ void ReadyQueueManager::move_priority(TaskControlBlock &tcb, uint64_t old_prio,
+                                       uint64_t new_prio) noexcept {
+     if (old_prio == new_prio)
+diff --git a/src/kernel/task/ready_queue_manager.hpp b/src/kernel/task/ready_queue_manager.hpp
+index e8b481a6..bde04717 100644
+--- a/src/kernel/task/ready_queue_manager.hpp
++++ b/src/kernel/task/ready_queue_manager.hpp
+@@ -49,6 +49,10 @@ class ReadyQueueManager {
+     bool has_ready() const noexcept {
+         return !bitmap_.empty();
+     }
++    /// @brief Total queued TCBs across all priority levels (issue #61).
++    ///        O(priorities), non-mutating; caller must hold
++    ///        scheduler_lock_ or have interrupts disabled.
++    uint64_t depth() const noexcept;
+     /// @brief Returns the highest priority level with non-empty queue.
+     uint64_t highest_ready_priority() const noexcept {
+         return bitmap_.get_highest_priority();
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index e26af690..36103ec0 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -524,6 +524,105 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
+     quiesce_exit();
+ }
+ 
++// ---------------------------------------------------------------------------
++// balancer_tick — RT load balancer (issue #61)
++// ---------------------------------------------------------------------------
++uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
++    return rq_for(cpu).depth();
++}
++
++uint64_t Scheduler::migration_count(uint64_t cpu) noexcept {
++    return __atomic_load_n(&migration_count_[cpu % CONFIG_MAX_CPUS],
++                           __ATOMIC_ACQUIRE);
++}
++
++uint64_t Scheduler::get_affinity(const TaskControlBlock &task) noexcept {
++    return task.cpu_affinity;
++}
++
++bool Scheduler::is_rt_task(const TaskControlBlock &task) noexcept {
++    return task.period_ticks != 0 &&
++           task.period_ticks != TaskControlBlock::NO_PERIOD;
++}
++
++uint64_t Scheduler::up_cpu_count() noexcept {
++    return sched_up_cpus();
++}
++
++void Scheduler::reset_migration_counts() noexcept {
++    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
++        __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
++}
++
++void Scheduler::balancer_tick() noexcept {
++    // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
++    if (sched_cpu() != 0)
++        return;
++    uint64_t up = sched_up_cpus();
++    if (up < 2)
++        return;
++    if (up > CONFIG_MAX_CPUS)
++        up = CONFIG_MAX_CPUS;
++    arch::IrqGuard irq_guard{};
++    quiesce_enter();
++    if (!scheduler_lock_.try_lock()) {
++        quiesce_exit();
++        return;
++    }
++    // Bounded moves per tick (RT budget); depths recomputed per move.
++    for (uint64_t move = 0; move < BALANCER_MAX_MIGRATIONS_PER_TICK;
++         ++move) {
++        uint64_t busy = 0;
++        uint64_t idle = 0;
++        uint64_t busy_depth = rq_for(0).depth();
++        uint64_t idle_depth = busy_depth;
++        for (uint64_t c = 1; c < up; ++c) {
++            uint64_t depth = rq_for(c).depth();
++            if (depth > busy_depth) {
++                busy_depth = depth;
++                busy = c;
++            }
++            if (depth < idle_depth) {
++                idle_depth = depth;
++                idle = c;
++            }
++        }
++        if (busy == idle || busy_depth <= idle_depth + BALANCER_THRESHOLD)
++            break;
++        // Busiest queue: first movable task (set_affinity move fence:
++        // queued, quiesced, non-RT/user/idle/current, owned, affine).
++        TaskControlBlock *candidate = nullptr;
++        for (auto *t = all_tasks_.first_ptr(); t != nullptr;
++             t = all_tasks_.next_ptr(t)) {
++            if (t->magic != TaskControlBlock::TCB_MAGIC)
++                continue;
++            if (!t->in_ready_queue_ || queue_target(*t) != busy)
++                continue;
++            if (t->state != TaskState::READY &&
++                t->state != TaskState::BLOCKED)
++                continue;
++            if (t->is_user_ || is_idle_task(t) || is_rt_task(*t))
++                continue;
++            if (is_current_on_any_cpu(t) || find_task(t->id) != t)
++                continue;
++            if ((t->cpu_affinity & (1ULL << idle)) == 0)
++                continue;
++            candidate = t;
++            break;
++        }
++        if (candidate == nullptr)
++            break;
++        // Move + re-pin (queue==target invariant, same as set_affinity;
++        // remove() clears the queue flags, enqueue() re-arms them).
++        rq_for(busy).remove(*candidate, candidate->rq_priority_);
++        candidate->cpu_affinity = 1ULL << idle;
++        rq_for(idle).enqueue(*candidate, effective_priority(candidate));
++        __atomic_fetch_add(&migration_count_[busy], 1ULL, __ATOMIC_RELAXED);
++    }
++    scheduler_lock_.unlock();
++    quiesce_exit();
++}
++
+ void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
+     cpu %= CONFIG_MAX_CPUS;
+     // IF=0 across the publish (internal guard): a same-CPU ISR can never
+@@ -1025,6 +1124,7 @@ sync::SpinLock Scheduler::zombie_lock_;
+ constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
+ constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
+ constinit uint64_t Scheduler::zombie_count_ = 0;
++uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
+ sync::SpinLock Scheduler::scheduler_lock_;
+ 
+ // Liu-Leyland Rate-Monotonic LUB bounds (scaled by 1000000)
+@@ -2126,6 +2226,16 @@ void Scheduler::on_tick() noexcept {
+         }
+     }  // end: gated tail sections (lock_acquired && IrqGuard)
+ 
++    // Issue #61: RT load-balancer cadence (BSP tick only; production
++    // only — tests drive balancer_tick() directly under IrqGuard so
++    // placement asserts stay deterministic).
++    static uint64_t balancer_cadence = 0;
++    ++balancer_cadence;
++    if (!is_test_active() &&
++        (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
++        balancer_tick();
++    }
++
+     rate_monotonic_schedule();
+ }
+ 
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 940a5220..6c55e2c8 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -185,6 +185,37 @@ class Scheduler {
+     /// @param mask Affinity bitmask.
+     static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
+ 
++    /// @brief RT load balancer tick (issue #61): migrate queued
++    ///        aperiodic kernel tasks from the busiest up-CPU to the
++    ///        idlest when depths differ beyond BALANCER_THRESHOLD.
++    ///        BSP-only (AP ticks are dispatch-only); quiesce window +
++    ///        try_lock (never blocks — contention skips the tick).
++    ///        Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs).
++    ///        Production cadence comes from the on_tick tail (non-test
++    ///        runs only); tests call it directly under IrqGuard.
++    static void balancer_tick() noexcept;
++    /// @brief Queued-task depth of CPU c's ready queue (issue #61).
++    ///        Caller must hold scheduler_lock_ or have IF=0.
++    static uint64_t queue_depth(uint64_t cpu) noexcept;
++    /// @brief Balancer moves sourced from CPU c since boot (issue #61).
++    static uint64_t migration_count(uint64_t cpu) noexcept;
++    /// @brief Current affinity mask of @p task (constraint, not
++    ///        placement — the balancer re-pins toward balance).
++    static uint64_t get_affinity(const TaskControlBlock &task) noexcept;
++    /// @brief True for real-time tasks (strict period set, issue #61).
++    ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
++    static bool is_rt_task(const TaskControlBlock &task) noexcept;
++    /// @brief Number of CPUs eligible for placement (BSP + booted APs).
++    static uint64_t up_cpu_count() noexcept;
++    /// @brief Reset balancer migration counters (test isolation).
++    static void reset_migration_counts() noexcept;
++    /// @brief Depth spread that triggers migration (issue #61).
++    static constexpr uint64_t BALANCER_THRESHOLD = 2;
++    /// @brief Migration cap per tick (issue #61, RT budget bound).
++    static constexpr uint64_t BALANCER_MAX_MIGRATIONS_PER_TICK = 2;
++    /// @brief Production balancer cadence in BSP ticks (issue #61).
++    static constexpr uint64_t BALANCER_TICK_PERIOD = 10;
++
+     /// @brief Reaps orphan TERMINATED tasks (no parent to WAITPID them).
+     ///        Single-pass scan: identifies all eligible tasks, destroys them
+     ///        without compaction, then compacts the task array once at the end.
+@@ -753,6 +784,10 @@ struct SwSlots {
+     ///        (removing ready_queue_ turns misses into compile errors).
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+     static ReadyQueueManager ready_queues_[CONFIG_MAX_CPUS];
++    /// @brief Balancer moves sourced from each CPU since boot
++    ///        (issue #61).  Own-CPU writes under scheduler_lock_;
++    ///        readers use atomics; reset by reset_migration_counts().
++    static uint64_t migration_count_[CONFIG_MAX_CPUS];
+     /// @brief Deadline-ordered intrusive list for O(1) expired-task detection.
+     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+     static DeadlineList deadline_list_;
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 42810f0d..05e8679e 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+     {"selftest",            133,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                1245,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96)
++    {"all",                1249,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61)
+ 
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -67,7 +67,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
+ 
+     // syscall
+-    {"syscall_core",         19,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143)
++    {"syscall_core",         23,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143) + 4 affinity tests (issue #61)
+     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
+     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
+ 
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 5c0dbd10..443d80bc 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -768,6 +768,9 @@ void snapshot_restore(const char *test_name) {
+ 
+     uint64_t corr = __atomic_exchange_n(&scheduler_corruption_count,
+                                         (uint64_t)0, __ATOMIC_ACQ_REL);
++    // Issue #61: balancer migration counters are per-CPU runtime state —
++    // reset for test isolation (same pattern as corruption_count above).
++    Scheduler::reset_migration_counts();
+     if (corr > 0) {
+         Logger::raw_write("[SCHED] corruption_count=");
+         Logger::print_dec(corr);
+diff --git a/src/kernel/test/test_load_balancer.cpp b/src/kernel/test/test_load_balancer.cpp
+index ae618fab..552d8989 100644
+--- a/src/kernel/test/test_load_balancer.cpp
++++ b/src/kernel/test/test_load_balancer.cpp
+@@ -17,68 +17,212 @@
+  */
+ 
+ /// @file test_load_balancer.cpp
+-/// @brief Load-balancer stubs (issue #85, module 8).  The scheduler
+-///        dequeues from the OWN queue only (no stealing, no migration:
+-///        scheduler.cpp next_task) — there is no balancer API yet, so
+-///        every test is a documented stub pending the main-branch
+-///        balancer (idle-pull / work-push / RT-exclusion / threshold).
++/// @brief RT load-balancer tests (issue #61; stubs from issue #85,
++///        module 8).  Scheduler::balancer_tick() migrates queued
++///        aperiodic kernel tasks from the busiest up-CPU to the idlest
++///        past BALANCER_THRESHOLD, re-pinning toward balance.  Tests
++///        branch on up_cpu_count(): with an AP up (standard -smp 2
++///        harness) moves are observable; single-CPU runs prove the
++///        no-strand property (no moves off CPU0).
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <test.hpp>
+ #include <logger.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/arch/irq_guard.hpp>
+ 
+ using namespace kernel;
+ 
++namespace {
++// Register + queue a BLOCKED kernel task and widen its mask.  Must run
++// inside the test's single IrqGuard window (cookbook Rule 2): an
++// untimely tick would dispatch past — or drop, via next_task()'s
++// defense-in-depth dequeue — a BLOCKED head, breaking determinism.
++TaskControlBlock *make_queued_task(TaskControlBlock *t) {
++    t->state = TaskState::BLOCKED;
++    Scheduler::register_task(*t);
++    Scheduler::enqueue_ready(*t);
++    Scheduler::set_affinity(*t, 0x3);
++    return t;
++}
++
++// Teardown for a never-dispatched BLOCKED test task (affinity-test
++// pattern: remove + cleanup + free; no terminate — it never ran).
++void destroy_queued_task(TaskControlBlock *t) {
++    Scheduler::remove_task(*t);
++    t->cleanup();
++    MemPool::free(t);
++}
++
++uint64_t total_migrations() {
++    uint64_t total = 0;
++    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
++        total += Scheduler::migration_count(c);
++    return total;
++}
++
++} // namespace
++
+ // Runmode: kernel
+ // Testidea: An idle CPU pulls a task from a busy CPU's queue.
+-// Input: Two queued tasks on CPU0, CPU1 idles, balancer tick runs.
+-// Expect: One task migrates to CPU1's queue; both dispatch.
+-// Depends: Load balancer idle-pull (not yet implemented)
+-JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none | PENDING: balancer") {
+-    /* Pseudocode:
+-     *   pin 2 tasks to CPU0, let CPU1 idle, run balancer_tick();
+-     *   JARVIS_ASSERT(is_queued_on(task_b, 1));
+-     */
++// Input: Three queued tasks on CPU0, CPU1 idle, balancer tick runs.
++// Expect: Either no move (all three stay on 0, counters unchanged —
++//         single up CPU, nothing may strand) or exactly one move
++//         (counters +1, the moved task re-pinned 0x2 and queued on
++//         1, the rest on 0).  Per-task placement only: absolute
++//         depths include background tasks in `all` runs.
++// Depends: Scheduler::balancer_tick (issue #61)
++JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none") {
++    auto *a = TaskControlBlock::create([]() {}, 10,
++                                       TaskControlBlock::NO_PERIOD);
++    auto *b = TaskControlBlock::create([]() {}, 10,
++                                       TaskControlBlock::NO_PERIOD);
++    auto *c = TaskControlBlock::create([]() {}, 10,
++                                       TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(a != nullptr && b != nullptr && c != nullptr);
++    {
++        arch::IrqGuard irq_guard{};
++        make_queued_task(a);
++        make_queued_task(b);
++        make_queued_task(c);
++        uint64_t before = total_migrations();
++        Scheduler::balancer_tick();
++        uint64_t after = total_migrations();
++        TaskControlBlock *all[3] = {a, b, c};
++        uint64_t on_zero = 0;
++        uint64_t on_one = 0;
++        for (auto *t : all) {
++            bool q0 = Scheduler::is_queued_on(*t, 0);
++            bool q1 = Scheduler::is_queued_on(*t, 1);
++            JARVIS_ASSERT(q0 != q1);
++            if (q1) {
++                ++on_one;
++                JARVIS_ASSERT(Scheduler::get_affinity(*t) == 0x2);
++            } else {
++                ++on_zero;
++            }
++        }
++        if (after == before) {
++            JARVIS_ASSERT(on_zero == 3 && on_one == 0);
++        } else {
++            JARVIS_ASSERT(after == before + 1);
++            JARVIS_ASSERT(on_zero == 2 && on_one == 1);
++        }
++    }
++    destroy_queued_task(a);
++    destroy_queued_task(b);
++    destroy_queued_task(c);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: An overloaded CPU pushes tasks to an idle CPU.
+-// Input: CPU0 overloaded (queue depth above threshold), CPU1 idle.
+-// Expect: Balancer pushes tasks until depths differ by at most one.
+-// Depends: Load balancer work-push (not yet implemented)
+-JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none | PENDING: balancer") {
+-    /* Pseudocode:
+-     *   fill CPU0 queue to 2x threshold, run balancer_tick();
+-     *   JARVIS_ASSERT(depth(0) - depth(1) <= 1);
+-     */
++// Testidea: An overloaded CPU pushes tasks to an idle CPU, bounded by
++//           the per-tick migration cap.
++// Input: CPU0 overloaded (5 queued), CPU1 idle, one balancer tick.
++// Expect: Either no move (all five stay on 0) or exactly the cap
++//         (counters +2, three on 0 and two re-pinned on 1).
++//         Per-task placement only (see idle_pull above).
++// Depends: Scheduler::balancer_tick (issue #61)
++JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none") {
++    TaskControlBlock *tasks[5];
++    for (auto &t : tasks) {
++        t = TaskControlBlock::create([]() {}, 10,
++                                     TaskControlBlock::NO_PERIOD);
++        JARVIS_ASSERT(t != nullptr);
++    }
++    {
++        arch::IrqGuard irq_guard{};
++        for (auto *t : tasks)
++            make_queued_task(t);
++        uint64_t before = total_migrations();
++        Scheduler::balancer_tick();
++        uint64_t after = total_migrations();
++        uint64_t on_zero = 0;
++        uint64_t on_one = 0;
++        for (auto *t : tasks) {
++            bool q0 = Scheduler::is_queued_on(*t, 0);
++            bool q1 = Scheduler::is_queued_on(*t, 1);
++            JARVIS_ASSERT(q0 != q1);
++            if (q1)
++                ++on_one;
++            else
++                ++on_zero;
++        }
++        if (after == before) {
++            JARVIS_ASSERT(on_zero == 5 && on_one == 0);
++        } else {
++            JARVIS_ASSERT(after == before + 2);
++            JARVIS_ASSERT(on_zero == 3 && on_one == 2);
++        }
++    }
++    for (auto *t : tasks)
++        destroy_queued_task(t);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+ // Testidea: Real-time (periodic) tasks never migrate between CPUs.
+-// Input: Periodic RT task on CPU0 under overload + balancer ticks.
+-// Expect: RT task stays queued on CPU0; only aperiodic tasks move.
+-// Depends: Load balancer RT exclusion (not yet implemented)
+-JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none | PENDING: balancer") {
+-    /* Pseudocode:
+-     *   pin periodic task to CPU0, overload, run balancer_tick() x N;
+-     *   JARVIS_ASSERT(is_queued_on(rt_task, 0));
+-     */
++// Input: Periodic RT task + overload on CPU0, balancer ticks run.
++// Expect: RT task stays queued on CPU0 with its mask intact across
++//         N ticks, whatever the balancer does around it.
++// Depends: Scheduler::balancer_tick, is_rt_task (issue #61)
++JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none") {
++    auto *rt = TaskControlBlock::create([]() {}, 10, 10);
++    JARVIS_ASSERT(rt != nullptr);
++    JARVIS_ASSERT(Scheduler::is_rt_task(*rt));
++    TaskControlBlock *tasks[3];
++    for (auto &t : tasks) {
++        t = TaskControlBlock::create([]() {}, 10,
++                                     TaskControlBlock::NO_PERIOD);
++        JARVIS_ASSERT(t != nullptr);
++        JARVIS_ASSERT(!Scheduler::is_rt_task(*t));
++    }
++    {
++        arch::IrqGuard irq_guard{};
++        make_queued_task(rt);
++        for (auto *t : tasks)
++            make_queued_task(t);
++        for (int i = 0; i < 3; ++i) {
++            Scheduler::balancer_tick();
++            JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
++            JARVIS_ASSERT(!Scheduler::is_queued_on(*rt, 1));
++        }
++        JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
++    }
++    destroy_queued_task(rt);
++    for (auto *t : tasks)
++        destroy_queued_task(t);
+     JARVIS_TEST_PASS();
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Migration threshold prevents thrashing: balanced queues
+-//           (within threshold) trigger no migration.
+-// Input: Equal depths on both CPUs, balancer tick runs.
+-// Expect: Zero migrations; per-CPU migration counters unchanged.
+-// Depends: Load balancer threshold + counters (not yet implemented)
+-JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none | PENDING: balancer") {
+-    /* Pseudocode:
+-     *   balance queues within threshold, snapshot counters;
+-     *   run balancer_tick(); JARVIS_ASSERT(counters unchanged);
+-     */
++// Testidea: Migration threshold prevents thrashing: queues already
++//           within threshold trigger no migration.
++// Input: Two tasks both landing on CPU0 (diff vs empty CPU1 is 2,
++//        not beyond threshold), balancer tick runs.
++// Expect: Zero migrations, every task exactly where it was queued.
++// Depends: Scheduler::balancer_tick (issue #61)
++JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none") {
++    auto *a = TaskControlBlock::create([]() {}, 10,
++                                       TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(a != nullptr);
++    auto *b = TaskControlBlock::create([]() {}, 10,
++                                       TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(b != nullptr);
++    {
++        arch::IrqGuard irq_guard{};
++        make_queued_task(a);
++        make_queued_task(b);
++        uint64_t before = total_migrations();
++        Scheduler::balancer_tick();
++        JARVIS_ASSERT(total_migrations() == before);
++        JARVIS_ASSERT(Scheduler::is_queued_on(*a, 0));
++        JARVIS_ASSERT(Scheduler::is_queued_on(*b, 0));
++    }
++    destroy_queued_task(a);
++    destroy_queued_task(b);
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_smp_sync.cpp b/src/kernel/test/test_smp_sync.cpp
+index ee0f2419..20bd23b6 100644
+--- a/src/kernel/test/test_smp_sync.cpp
++++ b/src/kernel/test/test_smp_sync.cpp
+@@ -18,15 +18,17 @@
+ 
+ /// @file test_smp_sync.cpp
+ /// @brief SMP synchronization tests (issue #85, module 11): IRQ
+-///        save/restore guard contracts live here (real); reader-writer
+-///        locks, ticket locks, cross-CPU races and holder migration
+-///        have no kernel API — documented stubs.  Plain SpinLock
+-///        contention is covered by synchronization_spinlock.
++///        save/restore guard contracts and the RwLock state machine
++///        (issue #61) live here (real); ticket locks, cross-CPU races
++///        and holder migration have no kernel API — documented stubs.
++///        Plain SpinLock contention is covered by
++///        synchronization_spinlock.
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/rwlock.hpp>
+ #include <kernel/sync/irq_spinlock_guard.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/nexios_config.h>
+@@ -96,16 +98,44 @@ JARVIS_TEST(smp_sync_two_cpu_race, "PRE: none | POST: none | PENDING: cross-CPU
+ }
+ 
+ // Runmode: kernel
+-// Testidea: Reader-writer lock: concurrent readers share, writer is
+-//           exclusive against readers and writers.
+-// Input: N readers + 1 writer racing on an RwLock.
+-// Expect: No reader observes a torn write; writer starves neither way.
+-// Depends: sync::RwLock (not yet implemented)
+-JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none | PENDING: RwLock") {
+-    /* Pseudocode:
+-     *   RwLock rw; readers hold read_lock while writer wants write_lock;
+-     *   JARVIS_ASSERT(exclusive phases never overlap);
+-     */
++// Testidea: Reader-writer lock state machine (issue #61): concurrent
++//           readers share, writer is exclusive against readers and
++//           writers, and a waiting writer blocks new readers
++//           (writer preference).  Single-CPU interleaving of the
++//           try_ paths plus uncontended blocking paths; true cross-CPU
++//           racing is covered by smp_sync_two_cpu_race once spawn exists.
++// Input: read_lock x N, try_write_lock, read_unlocks, write_lock,
++//        try_read_lock, write_unlock, reset.
++// Expect: Readers share (N concurrent holds); writer try fails while
++//         any reader holds; readers try-fail while writer holds;
++//         uncontended blocking paths return; reset frees the lock.
++// Depends: sync::RwLock (issue #61)
++JARVIS_TEST(smp_sync_rwlock, "PRE: none | POST: none") {
++    sync::RwLock rw;
++    // Shared readers: N concurrent holds, writer excluded throughout.
++    rw.read_lock();
++    rw.read_lock();
++    rw.read_lock();
++    JARVIS_ASSERT(!rw.try_write_lock());
++    rw.read_unlock();
++    JARVIS_ASSERT(!rw.try_write_lock());
++    rw.read_unlock();
++    rw.read_unlock();
++    // Free lock: writer try succeeds once.
++    JARVIS_ASSERT(rw.try_write_lock());
++    JARVIS_ASSERT(!rw.try_write_lock());
++    JARVIS_ASSERT(!rw.try_read_lock());
++    rw.write_unlock();
++    // Uncontended blocking paths return immediately.
++    rw.read_lock();
++    rw.read_unlock();
++    rw.write_lock();
++    rw.write_unlock();
++    // Reset frees a held lock (MemPool-reuse contract).
++    rw.read_lock();
++    rw.reset();
++    JARVIS_ASSERT(rw.try_write_lock());
++    rw.write_unlock();
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/kernel/test/test_syscall.cpp b/src/kernel/test/test_syscall.cpp
+index 15910cdf..5c6d791c 100644
+--- a/src/kernel/test/test_syscall.cpp
++++ b/src/kernel/test/test_syscall.cpp
+@@ -42,6 +42,8 @@
+ 
+ using namespace kernel;
+ 
++void register_syscall_affinity_tests();
++
+ static void test_signal_handler(int sig) {
+     (void)sig;
+ }
+@@ -811,4 +813,6 @@ void register_syscall_tests() {
+     JARVIS_REGISTER_TEST(syscall_user_gettod_uname);
+     JARVIS_REGISTER_TEST(syscall_user_copy_reject);
+     JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
++
++    register_syscall_affinity_tests();
+ }
+diff --git a/src/kernel/test/test_syscall_affinity.cpp b/src/kernel/test/test_syscall_affinity.cpp
+new file mode 100644
+index 00000000..834e5378
+--- /dev/null
++++ b/src/kernel/test/test_syscall_affinity.cpp
+@@ -0,0 +1,168 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_syscall_affinity.cpp
++/// @brief SYS_SET/GET_AFFINITY syscall tests (issue #61).  DRIVEN: every
++///        syscall is invoked by a REAL dispatched kernel task so
++///        syscall_task() resolves genuinely (test_syscall.cpp pattern).
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/memory/pmm.hpp>
-+#include <kernel/task/task.hpp>
++#include <kernel/syscall/syscall.hpp>
 +#include <kernel/task/scheduler.hpp>
-+#include <constants.hpp>
-+
-+#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/task/task.hpp>
++#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
 +
-+enum : uint64_t {
-+    PML4_SHIFT = 39,
-+    PAGE_PRESENT = 1ULL << 0,
-+    PAGE_WRITE = 1ULL << 1,
-+    PAGE_HUGE = 1ULL << 7,
-+    PAGE_NX = 1ULL << 63,
-+};
++namespace {
 +
-+/// @brief Allocate a kernel-owned page and zero it (scratch table).
-+/// @return Physical address, or 0 on OOM (caller fails the test).
-+static uint64_t alloc_zero_table() {
-+    uint64_t phys = PMM::alloc_page();
-+    if (phys == 0)
-+        return 0;
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto *virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                              (phys & ~0xFFFULL));
-+    __builtin_memset(virt, 0, arch::PAGE_SIZE);
-+    return phys;
++// Create a REAL kernel task, dispatch it, and wait for genuine
++// termination (test_syscall.cpp run_syscall_task pattern, local copy:
++// that helper is file-static there).
++TaskControlBlock *run_affinity_task(void (*entry)()) {
++    auto *t = TaskControlBlock::create(entry, 11, 10);
++    if (t == nullptr)
++        return nullptr;
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    return t;
 +}
 +
-+/// @brief HHDM view of a scratch table page.
-+static uint64_t *table_virt(uint64_t phys) {
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                        (phys & ~0xFFFULL));
++void release_affinity_task(TaskControlBlock *t) {
++    if (t == nullptr)
++        return;
++    kernel::test::terminate_if_live(t);
 +}
++
++} // namespace
 +
 +// Runmode: kernel
-+// Testidea: Merging a populated parent into a fresh child converges the
-+//           child exactly (link semantics: entries shared, user half
-+//           untouched) — the canonical fork fast-path behavior.
-+// Input: Scratch parent with a table chain + huge entry in 256..511;
-+//        fresh zeroed scratch child.
-+// Expect: merge returns true; child entries equal parent entries;
-+//         child shares the parent's tables (same phys); user half stays
-+//         zero; PMM delta zero after teardown.
-+// Depends: VMM::merge_kernel_half (issue #96)
-+JARVIS_TEST(merge_equivalent_to_full_copy, "PRE: none | POST: none") {
-+    uint64_t pages_before = PMM::pool_used_pages();
-+    uint64_t parent = alloc_zero_table();
-+    uint64_t pdpt = alloc_zero_table();
-+    uint64_t pd = alloc_zero_table();
-+    uint64_t pt = alloc_zero_table();
-+    uint64_t data = alloc_zero_table();
-+    uint64_t child = alloc_zero_table();
-+    JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && pt != 0 &&
-+                  data != 0 && child != 0);
++// Testidea: SET/GET affinity round-trips on the caller (pid 0 = self).
++// Input: Dispatched task calls SET_AFFINITY(0, 0x1), then
++//        GET_AFFINITY(0).
++// Expect: SET returns 0; GET returns 0x1.
++// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
++JARVIS_TEST(syscall_affinity_set_get_roundtrip, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_get_ret = 0;
 +
-+    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(pdpt)[0] = pd | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(pd)[0] = pt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(pt)[0] =
-+        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
-+    table_virt(parent)[511] =
-+        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
-+
-+    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
-+    auto *c = table_virt(child);
-+    auto *p = table_virt(parent);
-+    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
-+        JARVIS_ASSERT(c[i] == p[i]);
-+    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
-+        JARVIS_ASSERT(c[i] == 0);
-+    JARVIS_ASSERT((c[256] & ~0xFFFULL) == (pdpt & ~0xFFFULL));
-+    JARVIS_ASSERT(c[257] == 0);
-+    JARVIS_ASSERT(VMM::kernel_half_equal(child, parent));
-+
-+    PMM::free_page(data);
-+    PMM::free_page(pt);
-+    PMM::free_page(pd);
-+    PMM::free_page(pdpt);
-+    PMM::free_page(parent);
-+    PMM::free_page(child);
-+    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    auto *t = run_affinity_task([]() {
++        g_set_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), 0, 0x1,
++            0, 0, nullptr);
++        g_get_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), 0, 0,
++            0, 0, nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
++    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
++    release_affinity_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: Merge is idempotent and hole-filling: present entries are
-+//           never touched, missing ones linked, and a second merge is a
-+//           no-op (paper §3 idempotence).
-+// Input: Parent superset table; child with its own table holding a hole
-+//        plus one private entry; merge twice.
-+// Expect: Hole filled from parent, private entry and parent untouched,
-+//         second merge byte-identical, PMM delta zero.
-+// Depends: VMM::merge_kernel_half (issue #96)
-+JARVIS_TEST(merge_idempotent, "PRE: none | POST: none") {
-+    uint64_t pages_before = PMM::pool_used_pages();
-+    uint64_t parent = alloc_zero_table();
-+    uint64_t parent_pdpt = alloc_zero_table();
-+    uint64_t child = alloc_zero_table();
-+    uint64_t child_pdpt = alloc_zero_table();
-+    uint64_t data_a = alloc_zero_table();
-+    uint64_t data_b = alloc_zero_table();
-+    JARVIS_ASSERT(parent != 0 && parent_pdpt != 0 && child != 0 &&
-+                  child_pdpt != 0 && data_a != 0 && data_b != 0);
++// Testidea: Explicit-pid form addresses the caller by its own pid.
++// Input: Task reads its pid via GETPID, then SET/GET with that pid.
++// Expect: SET returns 0; GET returns the set mask.
++// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
++JARVIS_TEST(syscall_affinity_explicit_pid, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_get_ret = 0;
 +
-+    constexpr size_t k_idx = 300;
-+    table_virt(parent)[k_idx] = parent_pdpt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(parent_pdpt)[7] =
-+        (data_a & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(child)[k_idx] = child_pdpt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(child_pdpt)[8] =
-+        (data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
-+
-+    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
-+    auto *cc = table_virt(child);
-+    JARVIS_ASSERT(cc[k_idx] == table_virt(child)[k_idx]);
-+    auto *cc_pdpt = table_virt(cc[k_idx] & ~0xFFFULL);
-+    JARVIS_ASSERT(cc_pdpt[7] == table_virt(parent_pdpt)[7]);
-+    JARVIS_ASSERT(cc_pdpt[8] ==
-+                  ((data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE));
-+
-+    uint64_t snapshot[512];
-+    __builtin_memcpy(snapshot, cc_pdpt, arch::PAGE_SIZE);
-+    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
-+    bool identical = true;
-+    for (size_t i = 0; i < 512; ++i) {
-+        if (snapshot[i] != cc_pdpt[i]) {
-+            identical = false;
-+            break;
-+        }
-+    }
-+    JARVIS_ASSERT(identical);
-+
-+    PMM::free_page(data_b);
-+    PMM::free_page(data_a);
-+    PMM::free_page(child_pdpt);
-+    PMM::free_page(child);
-+    PMM::free_page(parent_pdpt);
-+    PMM::free_page(parent);
-+    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    auto *t = run_affinity_task([]() {
++        uint64_t pid = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::GETPID), 0, 0, 0, 0,
++            nullptr);
++        g_set_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), pid,
++            0x1, 0, 0, nullptr);
++        g_get_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), pid,
++            0, 0, 0, nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
++    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
++    release_affinity_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: A mapping added to the canonical root after the template
-+//           snapshot becomes visible to a merged child but not to a
-+//           pre-merge child (paper §4 row 2: late-mapping convergence).
-+//           Uses a 2 MiB PD-level huge entry: the kernel walker resolves
-+//           PD-huge (PML4-level 1 GiB huge is not walkable — pre-existing
-+//           walker limitation, out of scope for #96).
-+// Input: Scratch canonical root; snapshot its entries; add a 2 MiB
-+//        mapping; merge into child A only.
-+// Expect: child A resolves the VA, child B does not, and the snapshot
-+//         predates the mapping.
-+// Depends: VMM::merge_kernel_half (issue #96)
-+JARVIS_TEST(late_mapping_visible_after_merge, "PRE: none | POST: none") {
-+    uint64_t pages_before = PMM::pool_used_pages();
-+    uint64_t canon = alloc_zero_table();
-+    uint64_t canon_pdpt = alloc_zero_table();
-+    uint64_t canon_pd = alloc_zero_table();
-+    uint64_t child_a = alloc_zero_table();
-+    uint64_t child_b = alloc_zero_table();
-+    uint64_t data = alloc_zero_table();
-+    JARVIS_ASSERT(canon != 0 && canon_pdpt != 0 && canon_pd != 0 &&
-+                  child_a != 0 && child_b != 0 && data != 0);
++// Testidea: Unknown pids fail closed with -1 (no clamp, no panic).
++// Input: SET/GET with a pid that can never exist.
++// Expect: Both return 0xFFFFFFFFFFFFFFFF.
++// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
++JARVIS_TEST(syscall_affinity_bad_pid, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_get_ret = 0;
++    constexpr uint64_t k_no_such_pid = 0xFFFFFFFEULL;
 +
-+    uint64_t tmpl[512];
-+    __builtin_memcpy(tmpl, table_virt(canon), arch::PAGE_SIZE);
-+
-+    constexpr size_t k_idx = 400;
-+    constexpr size_t k_pd = 5;
-+    constexpr uint64_t k_off = 0x12345ULL;
-+    // 2 MiB pages mask the low 21 bits (HUGE_FRAME_MASK); the synthetic
-+    // phys is only 4 KiB-aligned, so expect the masked frame.
-+    constexpr uint64_t k_huge_mask = 0x000FFFFFFFE00000ULL;
-+    table_virt(canon)[k_idx] = canon_pdpt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(canon_pdpt)[0] = canon_pd | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(canon_pd)[k_pd] =
-+        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
-+    JARVIS_ASSERT(tmpl[k_idx] == 0);
-+
-+    JARVIS_ASSERT(VMM::merge_kernel_half(canon, child_a));
-+    uint64_t va = (static_cast<uint64_t>(k_idx) << PML4_SHIFT) |
-+                  (static_cast<uint64_t>(k_pd) << 21) | k_off;
-+    uint64_t resolved = VMM::virt_to_phys_in_pml4(va, child_a);
-+    JARVIS_ASSERT(resolved == ((data & k_huge_mask) | k_off));
-+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, child_b) == 0);
-+
-+    PMM::free_page(data);
-+    PMM::free_page(child_b);
-+    PMM::free_page(child_a);
-+    PMM::free_page(canon_pd);
-+    PMM::free_page(canon_pdpt);
-+    PMM::free_page(canon);
-+    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
++    auto *t = run_affinity_task([]() {
++        g_set_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY),
++            k_no_such_pid, 0x1, 0, 0, nullptr);
++        g_get_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY),
++            k_no_such_pid, 0, 0, 0, nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_set_ret);
++    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_get_ret);
++    release_affinity_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: Merge performs zero allocations by construction (link
-+//           semantics) — this pins the property that makes a mid-merge
-+//           OOM impossible (paper failure mode reframed, issue #96 D1).
-+// Input: Populated scratch parent; PMM baseline; merge into fresh child.
-+// Expect: PMM used-pages delta across the merge itself is zero.
-+// Depends: VMM::merge_kernel_half (issue #96)
-+JARVIS_TEST(merge_allocates_nothing, "PRE: none | POST: none") {
-+    uint64_t parent = alloc_zero_table();
-+    uint64_t pdpt = alloc_zero_table();
-+    uint64_t pd = alloc_zero_table();
-+    uint64_t data = alloc_zero_table();
-+    uint64_t child = alloc_zero_table();
-+    JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && data != 0 &&
-+                  child != 0);
++// Testidea: An empty mask clamps to CPU0 (fail-closed, same policy as
++//           the kernel-internal set_affinity) instead of erroring.
++// Input: SET_AFFINITY(0, 0), then GET_AFFINITY(0).
++// Expect: SET returns 0; GET returns 0x1.
++// Depends: Syscall SET_AFFINITY/GET_AFFINITY (issue #61)
++JARVIS_TEST(syscall_affinity_empty_mask, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_get_ret = 0;
 +
-+    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
-+    table_virt(parent)[257] =
-+        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
-+    table_virt(parent)[511] = pd | PAGE_PRESENT | PAGE_WRITE;
-+    for (size_t i = 0; i < 8; ++i)
-+        table_virt(pd)[i] =
-+            (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
-+
-+    uint64_t pages_before = PMM::pool_used_pages();
-+    JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
-+    JARVIS_ASSERT(PMM::pool_used_pages() == pages_before);
-+
-+    PMM::free_page(child);
-+    PMM::free_page(data);
-+    PMM::free_page(pd);
-+    PMM::free_page(pdpt);
-+    PMM::free_page(parent);
++    auto *t = run_affinity_task([]() {
++        g_set_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::SET_AFFINITY), 0, 0,
++            0, 0, nullptr);
++        g_get_ret = Syscall::handle(
++            static_cast<uint64_t>(SyscallNumber::GET_AFFINITY), 0, 0,
++            0, 0, nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
++    JARVIS_ASSERT_EQ(0x1ULL, g_get_ret);
++    release_affinity_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
-+// Runmode: kernel
-+// Testidea: The convergence audit detects a corrupted kernel-half entry
-+//           (paper §3 debug assertion, reframed as a pure check so the
-+//           test is gateable — a halting panic cannot run in `all`).
-+// Input: Clone of the live kernel PML4; corrupt one present entry.
-+// Expect: check true when intact, false when corrupted, true again
-+//         after restore; clone matches the template while intact.
-+// Depends: VMM::kernel_half_equal/matches_template (issue #96)
-+JARVIS_TEST(template_mismatch_detected, "PRE: none | POST: none") {
-+    uint64_t child = VMM::clone_kernel_pml4();
-+    JARVIS_ASSERT(child != 0);
-+    auto *c = table_virt(child);
-+
-+    size_t victim = 0;
-+    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
-+        if ((c[i] & PAGE_PRESENT) != 0) {
-+            victim = i;
-+            break;
-+        }
-+    }
-+    JARVIS_ASSERT(victim != 0);
-+
-+    JARVIS_ASSERT(VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
-+    JARVIS_ASSERT(VMM::kernel_half_matches_template(child));
-+
-+    uint64_t saved = c[victim];
-+    c[victim] = saved + 0x1000ULL;
-+    JARVIS_ASSERT(!VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
-+    JARVIS_ASSERT(!VMM::kernel_half_matches_template(child));
-+
-+    c[victim] = saved;
-+    JARVIS_ASSERT(VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
-+    JARVIS_ASSERT(VMM::kernel_half_matches_template(child));
-+
-+    PMM::free_page(child);
-+    JARVIS_TEST_PASS();
++void register_syscall_affinity_tests() {
++    Logger::info("Registering syscall affinity tests");
++    JARVIS_REGISTER_TEST(syscall_affinity_set_get_roundtrip);
++    JARVIS_REGISTER_TEST(syscall_affinity_explicit_pid);
++    JARVIS_REGISTER_TEST(syscall_affinity_bad_pid);
++    JARVIS_REGISTER_TEST(syscall_affinity_empty_mask);
 +}
-+
-+void register_pt_merge_tests() {
-+    Logger::info("Registering kernel-half merge tests");
-+    JARVIS_REGISTER_TEST(merge_equivalent_to_full_copy);
-+    JARVIS_REGISTER_TEST(merge_idempotent);
-+    JARVIS_REGISTER_TEST(late_mapping_visible_after_merge);
-+    JARVIS_REGISTER_TEST(merge_allocates_nothing);
-+    JARVIS_REGISTER_TEST(template_mismatch_detected);
-+}
-+
-+#endif // CONFIG_ARCH_X86_64
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 777bdc28..4ae59a18 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -93,6 +93,7 @@ void register_gcov_tests();
- void register_debug_tests();
- void register_framebuffer_tests();
- void register_pml4_clone_tests();
-+void register_pt_merge_tests();
- void register_cap_core_tests();
- void register_cap_lifecycle_tests();
- void register_cap_syscall_tests();
-@@ -387,6 +388,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"process_rlimit", []() { register_rlimit_tests(); }},
-     {"process_waitpid", []() { register_waitpid_tests(); }},
-     {"process_pml4_clone", []() { register_pml4_clone_tests(); }},
-+    {"pt_merge", []() { register_pt_merge_tests(); }},
-     {"process_secure_exec", []() { register_secure_exec_tests(); }},
+diff --git a/src/libc/syscall.h b/src/libc/syscall.h
+index 7f5836c9..9da4f623 100644
+--- a/src/libc/syscall.h
++++ b/src/libc/syscall.h
+@@ -193,6 +193,9 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
+ #define SYS_SEND_FAST       74
+ #define SYS_RECV_FAST       75
+ #define SYS_SEND_SYNC_FAST  76
++// Issue #61 — CPU affinity ABI (matches kernel SyscallNumber).
++#define SYS_SET_AFFINITY    77
++#define SYS_GET_AFFINITY    78
  
-     // -- cap: capability-based access control (CSpace core engine) --
-@@ -716,6 +718,7 @@ static void register_all_tests() {
-     register_queue_pip_tests();
-     register_mutex_pcp_tests();
-     register_pml4_clone_tests();
-+    register_pt_merge_tests();
-     register_cap_core_tests();
-     register_cap_untyped_tests();
-     register_cap_mmio_tests();
-@@ -924,6 +927,7 @@ static void register_all_tests_first_half() {
-       register_queue_pip_tests();
-       register_mutex_pcp_tests();
-       register_pml4_clone_tests();
-+      register_pt_merge_tests();
-       register_cap_core_tests();
-       register_cap_lifecycle_tests();
-       register_cap_syscall_tests();
+ #if defined(__x86_64__)
+ static inline long sys_send_fast(unsigned long dest, unsigned long type,
+@@ -271,9 +274,18 @@ static inline long sys_send_sync_fast(unsigned long, unsigned long,
+     return -1;
+ }
+ static inline long sys_recv_fast(unsigned long, unsigned long,
+-                                 unsigned long[6]) {
++                                  unsigned long[6]) {
+     return -1;
+ }
+ #endif
+ 
++// Issue #61 — CPU affinity wrappers (pid 0 = caller).
++static inline long sys_set_affinity(unsigned long pid, unsigned long mask) {
++    return __syscall5(SYS_SET_AFFINITY, (long)pid, (long)mask, 0, 0);
++}
++
++static inline long sys_get_affinity(unsigned long pid) {
++    return __syscall5(SYS_GET_AFFINITY, (long)pid, 0, 0, 0);
++}
++
+ #endif
 diff --git a/test-history.txt b/test-history.txt
-index 45f7be37..e50b4a56 100644
+index e50b4a56..00a5034c 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -949,3 +949,15 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 08:21:13 scheduler_atomic PASSED: 6 FAILED: 0 TIME: 20s
- 2026-09-15 08:22:27 all PASSED: 1350 FAILED: 0 TIME: 118540ms
- 2026-09-15 08:23:12 all PASSED: 85 FAILED: 0 TIME: 3925ms
-+2026-09-15 15:29:47 pt_merge PASSED: 5 FAILED: 0 TIME: 20s
-+2026-09-15 15:30:16 process_pml4_clone PASSED: 10 FAILED: 0 TIME: 19s
-+2026-09-15 15:30:40 process_lifecycle PASSED: 16 FAILED: 0 TIME: 20s
-+2026-09-15 15:31:08 elf_loader PASSED: 8 FAILED: 0 TIME: 19s
-+2026-09-15 15:31:33 elf_shared PASSED: 9 FAILED: 0 TIME: 19s
-+2026-09-15 15:31:55 memory_vmm PASSED: 13 FAILED: 0 TIME: 20s
-+2026-09-15 15:32:19 memory_kernel_isolation PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 15:32:42 memory_isolation PASSED: 3 FAILED: 0 TIME: 19s
-+2026-09-15 15:34:41 acpi_parse PASSED: 3 FAILED: 0 TIME: 19s
-+2026-09-15 15:35:52 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_891_ACPI_PREEXISTING_FLAKE
-+2026-09-15 15:35:52 all PASSED: 1355 FAILED: 0 TIME: 104814ms
-+2026-09-15 15:36:49 all PASSED: 85 FAILED: 0 TIME: 16974ms
+@@ -961,3 +961,15 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 15:35:52 all PASSED: 0 FAILED: 0 TIME: 30s STATUS: HANG_AT_891_ACPI_PREEXISTING_FLAKE
+ 2026-09-15 15:35:52 all PASSED: 1355 FAILED: 0 TIME: 104814ms
+ 2026-09-15 15:36:49 all PASSED: 85 FAILED: 0 TIME: 16974ms
++2026-09-15 15:57:13 smp_sync PASSED: 6 FAILED: 0 TIME: 19s
++2026-09-15 16:04:00 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 16:07:57 syscall_core PASSED: 23 FAILED: 0 TIME: 19s
++2026-09-15 16:08:21 sched_affinity PASSED: 6 FAILED: 0 TIME: 20s
++2026-09-15 16:08:44 smp_sched PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 16:09:07 scheduler_core PASSED: 16 FAILED: 0 TIME: 20s
++2026-09-15 16:09:32 scheduler_o1 PASSED: 13 FAILED: 0 TIME: 20s
++2026-09-15 16:09:56 syscall_fastpath PASSED: 5 FAILED: 0 TIME: 20s
++2026-09-15 16:12:15 load_balancer PASSED: 4 FAILED: 0 TIME: 20s
++2026-09-15 16:12:15 all PASSED: 0 FAILED: 2 TIME: 50s STATUS: LB_DEPTH_ASSERTS_FIXED
++2026-09-15 16:13:16 all PASSED: 1359 FAILED: 0 TIME: 105092ms
++2026-09-15 16:14:05 all PASSED: 85 FAILED: 0 TIME: 18358ms

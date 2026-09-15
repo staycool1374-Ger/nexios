@@ -524,6 +524,105 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
     quiesce_exit();
 }
 
+// ---------------------------------------------------------------------------
+// balancer_tick — RT load balancer (issue #61)
+// ---------------------------------------------------------------------------
+uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
+    return rq_for(cpu).depth();
+}
+
+uint64_t Scheduler::migration_count(uint64_t cpu) noexcept {
+    return __atomic_load_n(&migration_count_[cpu % CONFIG_MAX_CPUS],
+                           __ATOMIC_ACQUIRE);
+}
+
+uint64_t Scheduler::get_affinity(const TaskControlBlock &task) noexcept {
+    return task.cpu_affinity;
+}
+
+bool Scheduler::is_rt_task(const TaskControlBlock &task) noexcept {
+    return task.period_ticks != 0 &&
+           task.period_ticks != TaskControlBlock::NO_PERIOD;
+}
+
+uint64_t Scheduler::up_cpu_count() noexcept {
+    return sched_up_cpus();
+}
+
+void Scheduler::reset_migration_counts() noexcept {
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::balancer_tick() noexcept {
+    // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
+    if (sched_cpu() != 0)
+        return;
+    uint64_t up = sched_up_cpus();
+    if (up < 2)
+        return;
+    if (up > CONFIG_MAX_CPUS)
+        up = CONFIG_MAX_CPUS;
+    arch::IrqGuard irq_guard{};
+    quiesce_enter();
+    if (!scheduler_lock_.try_lock()) {
+        quiesce_exit();
+        return;
+    }
+    // Bounded moves per tick (RT budget); depths recomputed per move.
+    for (uint64_t move = 0; move < BALANCER_MAX_MIGRATIONS_PER_TICK;
+         ++move) {
+        uint64_t busy = 0;
+        uint64_t idle = 0;
+        uint64_t busy_depth = rq_for(0).depth();
+        uint64_t idle_depth = busy_depth;
+        for (uint64_t c = 1; c < up; ++c) {
+            uint64_t depth = rq_for(c).depth();
+            if (depth > busy_depth) {
+                busy_depth = depth;
+                busy = c;
+            }
+            if (depth < idle_depth) {
+                idle_depth = depth;
+                idle = c;
+            }
+        }
+        if (busy == idle || busy_depth <= idle_depth + BALANCER_THRESHOLD)
+            break;
+        // Busiest queue: first movable task (set_affinity move fence:
+        // queued, quiesced, non-RT/user/idle/current, owned, affine).
+        TaskControlBlock *candidate = nullptr;
+        for (auto *t = all_tasks_.first_ptr(); t != nullptr;
+             t = all_tasks_.next_ptr(t)) {
+            if (t->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (!t->in_ready_queue_ || queue_target(*t) != busy)
+                continue;
+            if (t->state != TaskState::READY &&
+                t->state != TaskState::BLOCKED)
+                continue;
+            if (t->is_user_ || is_idle_task(t) || is_rt_task(*t))
+                continue;
+            if (is_current_on_any_cpu(t) || find_task(t->id) != t)
+                continue;
+            if ((t->cpu_affinity & (1ULL << idle)) == 0)
+                continue;
+            candidate = t;
+            break;
+        }
+        if (candidate == nullptr)
+            break;
+        // Move + re-pin (queue==target invariant, same as set_affinity;
+        // remove() clears the queue flags, enqueue() re-arms them).
+        rq_for(busy).remove(*candidate, candidate->rq_priority_);
+        candidate->cpu_affinity = 1ULL << idle;
+        rq_for(idle).enqueue(*candidate, effective_priority(candidate));
+        __atomic_fetch_add(&migration_count_[busy], 1ULL, __ATOMIC_RELAXED);
+    }
+    scheduler_lock_.unlock();
+    quiesce_exit();
+}
+
 void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
     cpu %= CONFIG_MAX_CPUS;
     // IF=0 across the publish (internal guard): a same-CPU ISR can never
@@ -1025,6 +1124,7 @@ sync::SpinLock Scheduler::zombie_lock_;
 constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
 constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
 constinit uint64_t Scheduler::zombie_count_ = 0;
+uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
 sync::SpinLock Scheduler::scheduler_lock_;
 
 // Liu-Leyland Rate-Monotonic LUB bounds (scaled by 1000000)
@@ -2125,6 +2225,16 @@ void Scheduler::on_tick() noexcept {
             daemon::restart_stale_daemons();
         }
     }  // end: gated tail sections (lock_acquired && IrqGuard)
+
+    // Issue #61: RT load-balancer cadence (BSP tick only; production
+    // only — tests drive balancer_tick() directly under IrqGuard so
+    // placement asserts stay deterministic).
+    static uint64_t balancer_cadence = 0;
+    ++balancer_cadence;
+    if (!is_test_active() &&
+        (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
+        balancer_tick();
+    }
 
     rate_monotonic_schedule();
 }

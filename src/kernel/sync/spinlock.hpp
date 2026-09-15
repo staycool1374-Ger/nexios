@@ -20,6 +20,12 @@
 
 /// @file spinlock.hpp
 /// @brief Busy-wait spinlock using atomic exchange.
+///
+/// SMP-safe by construction (issue #61 audit): lock() is an
+/// atomic_exchange ACQUIRE loop with arch::pause() backoff and unlock()
+/// is an atomic_store RELEASE — mutual exclusion holds across CPUs.
+/// Task-context paths may block; ISR paths must use try_lock()
+/// (non-blocking skip-and-retry).
 
 #pragma once
 

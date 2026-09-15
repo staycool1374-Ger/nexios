@@ -106,7 +106,9 @@ enum class SyscallNumber : uint8_t {
     SEND_FAST = 74,      ///< register-passing SEND, payload in regs[] (issue #11)
     RECV_FAST = 75,      ///< register-passing RECEIVE, payload in regs[] (issue #11)
     SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
-    MAX_SYSCALL = 77,
+    SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
+    GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
+    MAX_SYSCALL = 79,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -254,6 +256,10 @@ class Syscall {
                                 uint64_t *);
     static uint64_t sys_getpid(uint64_t, uint64_t, uint64_t, uint64_t,
                                uint64_t *);
+    static uint64_t sys_set_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_get_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
     static uint64_t sys_kill(uint64_t, uint64_t, uint64_t, uint64_t,
                              uint64_t *);
     static uint64_t sys_pipe(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -439,6 +445,8 @@ class Syscall {
             &Syscall::sys_send_fast,
             &Syscall::sys_recv_fast,
             &Syscall::sys_send_sync_fast,
+            &Syscall::sys_set_affinity,
+            &Syscall::sys_get_affinity,
     };
 };
 

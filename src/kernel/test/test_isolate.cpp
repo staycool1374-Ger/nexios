@@ -768,6 +768,9 @@ void snapshot_restore(const char *test_name) {
 
     uint64_t corr = __atomic_exchange_n(&scheduler_corruption_count,
                                         (uint64_t)0, __ATOMIC_ACQ_REL);
+    // Issue #61: balancer migration counters are per-CPU runtime state —
+    // reset for test isolation (same pattern as corruption_count above).
+    Scheduler::reset_migration_counts();
     if (corr > 0) {
         Logger::raw_write("[SCHED] corruption_count=");
         Logger::print_dec(corr);

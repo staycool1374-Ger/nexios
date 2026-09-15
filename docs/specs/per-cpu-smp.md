@@ -348,6 +348,31 @@ scheduler statistics per CPU, FPU migration (#151).
   first-dispatch relies on `create()`-built frames (verified); the AP
   idle MUST be built via `create()` (no hand-rolled TCB).
 
+### 3.4.9 Issue #61 delta (RT load balancer + affinity ABI)
+
+§3.4.7's "load balancing/migration" carve-out lands here. Policy:
+- `Scheduler::balancer_tick()` (BSP-only, quiesce + try_lock, never
+  blocking) migrates queued aperiodic kernel tasks from the busiest
+  up-CPU to the idlest while depths differ beyond
+  `BALANCER_THRESHOLD` (2), at most
+  `BALANCER_MAX_MIGRATIONS_PER_TICK` (2) moves per tick, every
+  `BALANCER_TICK_PERIOD` (10) BSP ticks, production runs only
+  (`!is_test_active()` — tests drive it directly under IrqGuard).
+- Hard exclusions (never migrate): periodic tasks
+  (`period_ticks != 0 && != NO_PERIOD`), user tasks (shared-TSS:
+  CPU0), idle tasks, tasks current on any CPU, unowned/terminated
+  tasks, tasks whose mask lacks the target bit.
+- Move = remove + re-pin `cpu_affinity` to the singleton target +
+  enqueue (queue==target invariant preserved, same as
+  `set_affinity`); only up-CPUs are targets (no stranding on
+  never-booted CPUs).
+- Affinity ABI: `SYS_SET_AFFINITY` (77) / `SYS_GET_AFFINITY` (78);
+  mask is a constraint, placement follows the lowest set bit;
+  empty mask clamps to CPU0, user tasks clamp to CPU0, beyond-up
+  bits clamp; unknown pid returns a specific error (never panic).
+- Still out of scope: per-CPU TSS + AP user tasks, AP-side
+  accounting/deadlines, TLB shootdown, per-CPU deadline monitor.
+
 ## 4. Invariants
 
 - INV-PC1: gs:0x00/0x08 semantics unchanged — existing syscall_entry/isr

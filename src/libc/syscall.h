@@ -193,6 +193,9 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_SEND_FAST       74
 #define SYS_RECV_FAST       75
 #define SYS_SEND_SYNC_FAST  76
+// Issue #61 — CPU affinity ABI (matches kernel SyscallNumber).
+#define SYS_SET_AFFINITY    77
+#define SYS_GET_AFFINITY    78
 
 #if defined(__x86_64__)
 static inline long sys_send_fast(unsigned long dest, unsigned long type,
@@ -271,9 +274,18 @@ static inline long sys_send_sync_fast(unsigned long, unsigned long,
     return -1;
 }
 static inline long sys_recv_fast(unsigned long, unsigned long,
-                                 unsigned long[6]) {
+                                  unsigned long[6]) {
     return -1;
 }
 #endif
+
+// Issue #61 — CPU affinity wrappers (pid 0 = caller).
+static inline long sys_set_affinity(unsigned long pid, unsigned long mask) {
+    return __syscall5(SYS_SET_AFFINITY, (long)pid, (long)mask, 0, 0);
+}
+
+static inline long sys_get_affinity(unsigned long pid) {
+    return __syscall5(SYS_GET_AFFINITY, (long)pid, 0, 0, 0);
+}
 
 #endif

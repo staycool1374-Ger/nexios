@@ -17,68 +17,212 @@
  */
 
 /// @file test_load_balancer.cpp
-/// @brief Load-balancer stubs (issue #85, module 8).  The scheduler
-///        dequeues from the OWN queue only (no stealing, no migration:
-///        scheduler.cpp next_task) — there is no balancer API yet, so
-///        every test is a documented stub pending the main-branch
-///        balancer (idle-pull / work-push / RT-exclusion / threshold).
+/// @brief RT load-balancer tests (issue #61; stubs from issue #85,
+///        module 8).  Scheduler::balancer_tick() migrates queued
+///        aperiodic kernel tasks from the busiest up-CPU to the idlest
+///        past BALANCER_THRESHOLD, re-pinning toward balance.  Tests
+///        branch on up_cpu_count(): with an AP up (standard -smp 2
+///        harness) moves are observable; single-CPU runs prove the
+///        no-strand property (no moves off CPU0).
 
 #if defined(CONFIG_ARCH_X86_64)
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/memory/mempool.hpp>
+#include <kernel/arch/irq_guard.hpp>
 
 using namespace kernel;
 
+namespace {
+// Register + queue a BLOCKED kernel task and widen its mask.  Must run
+// inside the test's single IrqGuard window (cookbook Rule 2): an
+// untimely tick would dispatch past — or drop, via next_task()'s
+// defense-in-depth dequeue — a BLOCKED head, breaking determinism.
+TaskControlBlock *make_queued_task(TaskControlBlock *t) {
+    t->state = TaskState::BLOCKED;
+    Scheduler::register_task(*t);
+    Scheduler::enqueue_ready(*t);
+    Scheduler::set_affinity(*t, 0x3);
+    return t;
+}
+
+// Teardown for a never-dispatched BLOCKED test task (affinity-test
+// pattern: remove + cleanup + free; no terminate — it never ran).
+void destroy_queued_task(TaskControlBlock *t) {
+    Scheduler::remove_task(*t);
+    t->cleanup();
+    MemPool::free(t);
+}
+
+uint64_t total_migrations() {
+    uint64_t total = 0;
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        total += Scheduler::migration_count(c);
+    return total;
+}
+
+} // namespace
+
 // Runmode: kernel
 // Testidea: An idle CPU pulls a task from a busy CPU's queue.
-// Input: Two queued tasks on CPU0, CPU1 idles, balancer tick runs.
-// Expect: One task migrates to CPU1's queue; both dispatch.
-// Depends: Load balancer idle-pull (not yet implemented)
-JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none | PENDING: balancer") {
-    /* Pseudocode:
-     *   pin 2 tasks to CPU0, let CPU1 idle, run balancer_tick();
-     *   JARVIS_ASSERT(is_queued_on(task_b, 1));
-     */
+// Input: Three queued tasks on CPU0, CPU1 idle, balancer tick runs.
+// Expect: Either no move (all three stay on 0, counters unchanged —
+//         single up CPU, nothing may strand) or exactly one move
+//         (counters +1, the moved task re-pinned 0x2 and queued on
+//         1, the rest on 0).  Per-task placement only: absolute
+//         depths include background tasks in `all` runs.
+// Depends: Scheduler::balancer_tick (issue #61)
+JARVIS_TEST(load_balancer_idle_pull, "PRE: none | POST: none") {
+    auto *a = TaskControlBlock::create([]() {}, 10,
+                                       TaskControlBlock::NO_PERIOD);
+    auto *b = TaskControlBlock::create([]() {}, 10,
+                                       TaskControlBlock::NO_PERIOD);
+    auto *c = TaskControlBlock::create([]() {}, 10,
+                                       TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(a != nullptr && b != nullptr && c != nullptr);
+    {
+        arch::IrqGuard irq_guard{};
+        make_queued_task(a);
+        make_queued_task(b);
+        make_queued_task(c);
+        uint64_t before = total_migrations();
+        Scheduler::balancer_tick();
+        uint64_t after = total_migrations();
+        TaskControlBlock *all[3] = {a, b, c};
+        uint64_t on_zero = 0;
+        uint64_t on_one = 0;
+        for (auto *t : all) {
+            bool q0 = Scheduler::is_queued_on(*t, 0);
+            bool q1 = Scheduler::is_queued_on(*t, 1);
+            JARVIS_ASSERT(q0 != q1);
+            if (q1) {
+                ++on_one;
+                JARVIS_ASSERT(Scheduler::get_affinity(*t) == 0x2);
+            } else {
+                ++on_zero;
+            }
+        }
+        if (after == before) {
+            JARVIS_ASSERT(on_zero == 3 && on_one == 0);
+        } else {
+            JARVIS_ASSERT(after == before + 1);
+            JARVIS_ASSERT(on_zero == 2 && on_one == 1);
+        }
+    }
+    destroy_queued_task(a);
+    destroy_queued_task(b);
+    destroy_queued_task(c);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: An overloaded CPU pushes tasks to an idle CPU.
-// Input: CPU0 overloaded (queue depth above threshold), CPU1 idle.
-// Expect: Balancer pushes tasks until depths differ by at most one.
-// Depends: Load balancer work-push (not yet implemented)
-JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none | PENDING: balancer") {
-    /* Pseudocode:
-     *   fill CPU0 queue to 2x threshold, run balancer_tick();
-     *   JARVIS_ASSERT(depth(0) - depth(1) <= 1);
-     */
+// Testidea: An overloaded CPU pushes tasks to an idle CPU, bounded by
+//           the per-tick migration cap.
+// Input: CPU0 overloaded (5 queued), CPU1 idle, one balancer tick.
+// Expect: Either no move (all five stay on 0) or exactly the cap
+//         (counters +2, three on 0 and two re-pinned on 1).
+//         Per-task placement only (see idle_pull above).
+// Depends: Scheduler::balancer_tick (issue #61)
+JARVIS_TEST(load_balancer_work_push, "PRE: none | POST: none") {
+    TaskControlBlock *tasks[5];
+    for (auto &t : tasks) {
+        t = TaskControlBlock::create([]() {}, 10,
+                                     TaskControlBlock::NO_PERIOD);
+        JARVIS_ASSERT(t != nullptr);
+    }
+    {
+        arch::IrqGuard irq_guard{};
+        for (auto *t : tasks)
+            make_queued_task(t);
+        uint64_t before = total_migrations();
+        Scheduler::balancer_tick();
+        uint64_t after = total_migrations();
+        uint64_t on_zero = 0;
+        uint64_t on_one = 0;
+        for (auto *t : tasks) {
+            bool q0 = Scheduler::is_queued_on(*t, 0);
+            bool q1 = Scheduler::is_queued_on(*t, 1);
+            JARVIS_ASSERT(q0 != q1);
+            if (q1)
+                ++on_one;
+            else
+                ++on_zero;
+        }
+        if (after == before) {
+            JARVIS_ASSERT(on_zero == 5 && on_one == 0);
+        } else {
+            JARVIS_ASSERT(after == before + 2);
+            JARVIS_ASSERT(on_zero == 3 && on_one == 2);
+        }
+    }
+    for (auto *t : tasks)
+        destroy_queued_task(t);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
 // Testidea: Real-time (periodic) tasks never migrate between CPUs.
-// Input: Periodic RT task on CPU0 under overload + balancer ticks.
-// Expect: RT task stays queued on CPU0; only aperiodic tasks move.
-// Depends: Load balancer RT exclusion (not yet implemented)
-JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none | PENDING: balancer") {
-    /* Pseudocode:
-     *   pin periodic task to CPU0, overload, run balancer_tick() x N;
-     *   JARVIS_ASSERT(is_queued_on(rt_task, 0));
-     */
+// Input: Periodic RT task + overload on CPU0, balancer ticks run.
+// Expect: RT task stays queued on CPU0 with its mask intact across
+//         N ticks, whatever the balancer does around it.
+// Depends: Scheduler::balancer_tick, is_rt_task (issue #61)
+JARVIS_TEST(load_balancer_no_rt_migration, "PRE: none | POST: none") {
+    auto *rt = TaskControlBlock::create([]() {}, 10, 10);
+    JARVIS_ASSERT(rt != nullptr);
+    JARVIS_ASSERT(Scheduler::is_rt_task(*rt));
+    TaskControlBlock *tasks[3];
+    for (auto &t : tasks) {
+        t = TaskControlBlock::create([]() {}, 10,
+                                     TaskControlBlock::NO_PERIOD);
+        JARVIS_ASSERT(t != nullptr);
+        JARVIS_ASSERT(!Scheduler::is_rt_task(*t));
+    }
+    {
+        arch::IrqGuard irq_guard{};
+        make_queued_task(rt);
+        for (auto *t : tasks)
+            make_queued_task(t);
+        for (int i = 0; i < 3; ++i) {
+            Scheduler::balancer_tick();
+            JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
+            JARVIS_ASSERT(!Scheduler::is_queued_on(*rt, 1));
+        }
+        JARVIS_ASSERT(Scheduler::is_queued_on(*rt, 0));
+    }
+    destroy_queued_task(rt);
+    for (auto *t : tasks)
+        destroy_queued_task(t);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: Migration threshold prevents thrashing: balanced queues
-//           (within threshold) trigger no migration.
-// Input: Equal depths on both CPUs, balancer tick runs.
-// Expect: Zero migrations; per-CPU migration counters unchanged.
-// Depends: Load balancer threshold + counters (not yet implemented)
-JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none | PENDING: balancer") {
-    /* Pseudocode:
-     *   balance queues within threshold, snapshot counters;
-     *   run balancer_tick(); JARVIS_ASSERT(counters unchanged);
-     */
+// Testidea: Migration threshold prevents thrashing: queues already
+//           within threshold trigger no migration.
+// Input: Two tasks both landing on CPU0 (diff vs empty CPU1 is 2,
+//        not beyond threshold), balancer tick runs.
+// Expect: Zero migrations, every task exactly where it was queued.
+// Depends: Scheduler::balancer_tick (issue #61)
+JARVIS_TEST(load_balancer_threshold_holds, "PRE: none | POST: none") {
+    auto *a = TaskControlBlock::create([]() {}, 10,
+                                       TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(a != nullptr);
+    auto *b = TaskControlBlock::create([]() {}, 10,
+                                       TaskControlBlock::NO_PERIOD);
+    JARVIS_ASSERT(b != nullptr);
+    {
+        arch::IrqGuard irq_guard{};
+        make_queued_task(a);
+        make_queued_task(b);
+        uint64_t before = total_migrations();
+        Scheduler::balancer_tick();
+        JARVIS_ASSERT(total_migrations() == before);
+        JARVIS_ASSERT(Scheduler::is_queued_on(*a, 0));
+        JARVIS_ASSERT(Scheduler::is_queued_on(*b, 0));
+    }
+    destroy_queued_task(a);
+    destroy_queued_task(b);
     JARVIS_TEST_PASS();
 }
 

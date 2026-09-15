@@ -282,9 +282,32 @@ uint64_t Syscall::sys_signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     return 0;
 }
 
+/// @brief Set a task's CPU affinity mask (issue #61).
+///        arg0 = pid (0 = caller), arg1 = mask.  Clamp policy lives in
+///        Scheduler::set_affinity (empty→CPU0, user→CPU0, beyond-up
+///        bits cut); unknown pid fails with -1.  Mask passed by value —
+///        no user-pointer dereference (FULL path only: scheduler call).
+uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
+                                   uint64_t, uint64_t *) {
+    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
+    if (t == nullptr)
+        return static_cast<uint64_t>(-1);
+    Scheduler::set_affinity(*t, arg1);
+    return 0;
+}
+
+/// @brief Get a task's CPU affinity mask (issue #61).
+///        arg0 = pid (0 = caller).  Unknown pid fails with -1.
+uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
+                                   uint64_t, uint64_t *) {
+    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
+    if (t == nullptr)
+        return static_cast<uint64_t>(-1);
+    return Scheduler::get_affinity(*t);
+}
+
 uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
-                                uint64_t *regs) {
-    auto *t = syscall_task();
+                                uint64_t *regs) {    auto *t = syscall_task();
     if (!t || !regs)
         return static_cast<uint64_t>(-1);
     uint64_t user_rsp = regs[20];

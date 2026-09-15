@@ -49,6 +49,10 @@ class ReadyQueueManager {
     bool has_ready() const noexcept {
         return !bitmap_.empty();
     }
+    /// @brief Total queued TCBs across all priority levels (issue #61).
+    ///        O(priorities), non-mutating; caller must hold
+    ///        scheduler_lock_ or have interrupts disabled.
+    uint64_t depth() const noexcept;
     /// @brief Returns the highest priority level with non-empty queue.
     uint64_t highest_ready_priority() const noexcept {
         return bitmap_.get_highest_priority();

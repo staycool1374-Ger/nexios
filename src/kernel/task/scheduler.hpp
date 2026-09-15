@@ -185,6 +185,37 @@ class Scheduler {
     /// @param mask Affinity bitmask.
     static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
 
+    /// @brief RT load balancer tick (issue #61): migrate queued
+    ///        aperiodic kernel tasks from the busiest up-CPU to the
+    ///        idlest when depths differ beyond BALANCER_THRESHOLD.
+    ///        BSP-only (AP ticks are dispatch-only); quiesce window +
+    ///        try_lock (never blocks — contention skips the tick).
+    ///        Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs).
+    ///        Production cadence comes from the on_tick tail (non-test
+    ///        runs only); tests call it directly under IrqGuard.
+    static void balancer_tick() noexcept;
+    /// @brief Queued-task depth of CPU c's ready queue (issue #61).
+    ///        Caller must hold scheduler_lock_ or have IF=0.
+    static uint64_t queue_depth(uint64_t cpu) noexcept;
+    /// @brief Balancer moves sourced from CPU c since boot (issue #61).
+    static uint64_t migration_count(uint64_t cpu) noexcept;
+    /// @brief Current affinity mask of @p task (constraint, not
+    ///        placement — the balancer re-pins toward balance).
+    static uint64_t get_affinity(const TaskControlBlock &task) noexcept;
+    /// @brief True for real-time tasks (strict period set, issue #61).
+    ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
+    static bool is_rt_task(const TaskControlBlock &task) noexcept;
+    /// @brief Number of CPUs eligible for placement (BSP + booted APs).
+    static uint64_t up_cpu_count() noexcept;
+    /// @brief Reset balancer migration counters (test isolation).
+    static void reset_migration_counts() noexcept;
+    /// @brief Depth spread that triggers migration (issue #61).
+    static constexpr uint64_t BALANCER_THRESHOLD = 2;
+    /// @brief Migration cap per tick (issue #61, RT budget bound).
+    static constexpr uint64_t BALANCER_MAX_MIGRATIONS_PER_TICK = 2;
+    /// @brief Production balancer cadence in BSP ticks (issue #61).
+    static constexpr uint64_t BALANCER_TICK_PERIOD = 10;
+
     /// @brief Reaps orphan TERMINATED tasks (no parent to WAITPID them).
     ///        Single-pass scan: identifies all eligible tasks, destroys them
     ///        without compaction, then compacts the task array once at the end.
@@ -753,6 +784,10 @@ struct SwSlots {
     ///        (removing ready_queue_ turns misses into compile errors).
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static ReadyQueueManager ready_queues_[CONFIG_MAX_CPUS];
+    /// @brief Balancer moves sourced from each CPU since boot
+    ///        (issue #61).  Own-CPU writes under scheduler_lock_;
+    ///        readers use atomics; reset by reset_migration_counts().
+    static uint64_t migration_count_[CONFIG_MAX_CPUS];
     /// @brief Deadline-ordered intrusive list for O(1) expired-task detection.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static DeadlineList deadline_list_;
