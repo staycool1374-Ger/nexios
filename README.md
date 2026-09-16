@@ -153,13 +153,18 @@ Fix the code on your host, re-run `rsync`, and restart the task from the shell.
 
 - **Current work:** [GitHub Milestones](https://github.com/staycool1374-Ger/nexios/milestones) — open items tracked as Issues.
 - **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
-- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.6 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
+- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.7 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
 
 Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ---
 
 ## Recent Release Highlights
+
+### **v0.4.7 — High-Resolution Time & Bounded Waits**
+* **Precise System Clock:** A calibrated, high-resolution monotonic timebase provides sub-millisecond accuracy for deadlines and latency measurements.
+* **Efficient Timer Management:** A constant-time event queue powers system timeouts, driver deadlines, and watchdog timers without scanning overhead.
+* **No More Indefinite Blocking:** Inter-process message receives now support bounded timeouts, guaranteeing every blocking call returns — with a message or a timeout — instead of waiting forever.
 
 ### **v0.4.6 — System Responsiveness & Memory Efficiency**
 * **Event-Driven Idle Cleanup:** Terminated process reaping is handled via an event-driven wait loop rather than CPU spinning, preserving system resources and improving responsiveness.
