@@ -306,6 +306,29 @@ uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
     return Scheduler::get_affinity(*t);
 }
 
+/// @brief Read a task's execution-time accounting (issue #21).
+///        arg0 = pid (0 = caller), arg1 = user TaskTimes* out-param.
+///        Snapshot via Scheduler::read_times (charge-before-read for the
+///        running task); copied out with safe_copy_to_user (stac-wrapped).
+///        Unknown pid or bad buffer fails with -1 (fuzz-safe).  Non-blocking;
+///        FULL path only (dereferences a user pointer — never FAST).
+uint64_t Syscall::sys_times(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
+                            uint64_t *) {
+    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
+    if (t == nullptr)
+        return static_cast<uint64_t>(-1);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *out = reinterpret_cast<TaskTimes *>(arg1);
+    auto chk = checked(out, 1);
+    if (!chk.valid())
+        return static_cast<uint64_t>(-1);
+    TaskTimes kt{};
+    Scheduler::read_times(*t, kt);
+    if (!safe_copy_to_user(chk.unsafe_ptr(), &kt, 1))
+        return static_cast<uint64_t>(-1);
+    return 0;
+}
+
 uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
                                 uint64_t *regs) {    auto *t = syscall_task();
     if (!t || !regs)

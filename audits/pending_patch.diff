@@ -1,658 +1,348 @@
-diff --git a/audits/rejected_patch.diff b/audits/rejected_patch.diff
-index 6d6a4305..3559c00c 100644
---- a/audits/rejected_patch.diff
-+++ b/audits/rejected_patch.diff
-@@ -1,71 +1,17 @@
--diff --git a/src/kernel/time/timer_wheel.cpp b/src/kernel/time/timer_wheel.cpp
----- a/src/kernel/time/timer_wheel.cpp
--+++ b/src/kernel/time/timer_wheel.cpp
--@@ -460,6 +460,12 @@ bool TimerWheel::arm(uint32_t cpu, uint64
--     if (cpu >= CONFIG_MAX_CPUS || callback == nullptr || out == nullptr) {
--         return false;
--     }
--+    // SIL3 fail-closed (audit issue #17): production services only the BSP
--+    // wheel — Scheduler::on_tick() returns early for APs and ap_tick() has
--+    // no TimerWheel hook (spec section 3.4.4 dispatch-only). An armed AP
--+    // timer would report success yet never expire, so reject it outright
--+    // until AP servicing lands.
--+    if (cpu != 0) {
--+        return false;
--+    }
--     sync::IrqSpinLockGuard guard(lock_);
--     ensure_init_locked();
--     CpuWheel& wheel = wheels_[cpu];
--diff --git a/src/kernel/time/timer_wheel.hpp b/src/kernel/time/timer_wheel.hpp
----- a/src/kernel/time/timer_wheel.hpp
--+++ b/src/kernel/time/timer_wheel.hpp
--@@ -676,7 +676,8 @@ class TimerWheel {
--     /// @brief Arm a one-shot expiry (O(1)).
--     /// Fail-closed: false on invalid cpu, null callback/context-out,
--     /// or a full wheel (caller keeps its fallback; no eviction).
---    /// @param cpu Owning CPU index (< CONFIG_MAX_CPUS).
--+    /// @param cpu Owning CPU index; must be 0 (BSP). Non-BSP CPUs are
--+    /// rejected: production never services their wheels (AP dispatch-only).
--     /// @param expiry_ns Absolute expiry in monotonic ns (#16 clock).
--     /// @param callback Expiry callback (non-null).
--     /// @param context Opaque callback context (carries owner identity).
--diff --git a/src/kernel/test/test_timer_wheel.cpp b/src/kernel/test/test_timer_wheel.cpp
----- a/src/kernel/test/test_timer_wheel.cpp
--+++ b/src/kernel/test/test_timer_wheel.cpp
--@@ -288,9 +288,9 @@ JARVIS_TEST(wheel_pop_cap_defers_without_
-- }
--
-- // Runmode: kernel
---// Testidea: per-CPU wheels are isolated (arm on cpu 1, tick cpu 0).
---// Input: arm on cpu 1, on_tick cpu 0 past expiry, on_tick cpu 1
---// Expect: cpu-0 tick silent, cpu-1 tick fires
--+// Testidea: non-BSP arm is fail-closed (production never ticks AP wheels).
--+// Input: arm on cpu 1, on_tick cpu 1 past expiry
--+// Expect: arm false, live_count 0, tick silent, fired == 0
-- // Depends: time::TimerWheel per-CPU routing
-- JARVIS_TEST(wheel_cpu_isolation, "PRE: none | POST: none") {
--     time::TimerWheel::snapshot_reset();
--@@ -303,15 +303,15 @@ JARVIS_TEST(wheel_cpu_isolation, "PRE: no
--                      time::TimerWheel::live_count(CONFIG_MAX_CPUS));
-- #else
--+    // Production services only the BSP wheel (Scheduler::on_tick AP
--+    // early-return; ap_tick has no wheel hook), so arm() must fail
--+    // closed for non-BSP CPUs instead of reporting success without expiry.
--     uint64_t fired = 0;
--     time::TimerWheel::Handle handle{};
---    JARVIS_ASSERT(time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
---                                        &fired, &handle));
--+    JARVIS_ASSERT(!time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
--+                                         &fired, &handle));
--+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(1));
--     JARVIS_ASSERT_EQ((uint32_t)0,
---                     time::TimerWheel::on_tick(k_base_ns + 1000, 0));
--+                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
--     JARVIS_ASSERT_EQ((uint64_t)0, fired);
---    JARVIS_ASSERT_EQ((uint64_t)1, time::TimerWheel::live_count(1));
---    JARVIS_ASSERT_EQ((uint32_t)1,
---                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
---    JARVIS_ASSERT_EQ((uint64_t)1, fired);
-- #endif
--     JARVIS_TEST_PASS();
-- }
-+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-+--- a/src/kernel/task/scheduler.cpp
-++++ b/src/kernel/task/scheduler.cpp
-+@@ -2029,6 +2029,13 @@
-+                 continue;
-+             if (task->state == TaskState::BLOCKED)
-+                 task->state = TaskState::READY;
-++            // SIL 3 guard (audit issue #18): never queue a task that is not
-++            // BLOCKED-turned-READY or already READY. A dispatched waiter is
-++            // RUNNING with its slot still armed until its resume path runs
-++            // recv_wait_cancel; queueing it violates the
-++            // current-never-queued invariant (set_current defense, H2).
-++            else if (task->state != TaskState::READY)
-++                continue;
-+             enqueue_ready(*task);
-+             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                              __ATOMIC_RELEASE);
-diff --git a/audits/report-20260916T185611Z.md b/audits/report-20260916T185611Z.md
-new file mode 100644
-index 00000000..2966f561
---- /dev/null
-+++ b/audits/report-20260916T185611Z.md
-@@ -0,0 +1,38 @@
-+# AUDIT REPORT 20260916T185611Z
-+PATCH: audits/pending_patch.diff
-+FILES: src/kernel/ipc/ipc.cpp, src/kernel/ipc/ipc.hpp, src/kernel/syscall/syscall_handlers_ipc.cpp, src/kernel/task/scheduler.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/task.cpp, src/kernel/task/task.hpp, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_ipc_timeout.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_weak_stubs.cpp
-+
-+## FINDINGS
-+- [S2] src/kernel/task/scheduler.cpp:2032 — level-triggered tail calls enqueue_ready() on any state after the BLOCKED check, so a waiter dispatched to RUNNING (slot still armed until its resume path runs recv_wait_cancel) gets queued while executing.
-+  WHY: enqueue_ready() refuses only duplicates (in_ready_queue_) and id_table_-orphans, never RUNNING tasks, while next_task() explicitly dispatches RUNNING candidates and set_current() documents current-never-queued as a wedge-causing invariant.
-+- [S3] src/kernel/ipc/ipc.cpp:677 — recv_timed_out is a plain bool written in tick-callback context and read in task resume paths and the scheduler tail, unlike need_resched which uses __atomic.
-+  WHY: Byte access is benign on x86-64 but the cross-context flag lacks the codebase's own atomic precedent for tick-observed state.
-+- [S3] src/kernel/task/scheduler.hpp:509 — TaskFields comment claims the wheel handle rewinds to gen-0-invalid, but handle/generation are not captured, so rewind safety rests solely on snapshot_reset() bumping wheel generations.
-+  WHY: A mid-wait rewind (armed=true, timed_out=false, dead wheel entry) would strand with no waker, and the comment misdirects future maintainers about where the guarantee lives.
-+- [S3] src/kernel/ipc/ipc.cpp:712 — recv_wait_arm overwrites recv_timeout_handle without cancelling a possibly live prior arm, leaking the old slot until its expiry fires against a matching generation.
-+  WHY: Unreachable under today's single-arm discipline plus cleanup cancel, but a defensive cancel-first would close the stale-fire window by construction.
-+- [S3] src/kernel/syscall/syscall_handlers_ipc.cpp:114 — CONFIG_TICK_HZ==0 makes arm fail closed into a RUNNING-poll fallback whose frozen-ticks deadline can never expire.
-+  WHY: The degenerate no-tick configuration hangs the fallback instead of failing fast with -1 (the wheel path is equally dead there, so impact is confined to that config).
-+
-+## PATCH
-+```diff
-+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-+--- a/src/kernel/task/scheduler.cpp
-++++ b/src/kernel/task/scheduler.cpp
-+@@ -2029,6 +2029,13 @@
-+                 continue;
-+             if (task->state == TaskState::BLOCKED)
-+                 task->state = TaskState::READY;
-++            // SIL 3 guard (audit issue #18): never queue a task that is not
-++            // BLOCKED-turned-READY or already READY. A dispatched waiter is
-++            // RUNNING with its slot still armed until its resume path runs
-++            // recv_wait_cancel; queueing it violates the
-++            // current-never-queued invariant (set_current defense, H2).
-++            else if (task->state != TaskState::READY)
-++                continue;
-+             enqueue_ready(*task);
-+             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                              __ATOMIC_RELEASE);
-+```
-+
-+DECISION: REJECTED
-diff --git a/audits/report-20260916T190325Z.md b/audits/report-20260916T190325Z.md
-new file mode 100644
-index 00000000..191e93e5
---- /dev/null
-+++ b/audits/report-20260916T190325Z.md
-@@ -0,0 +1,8 @@
-+# AUDIT REPORT 20260916T190325Z
-+PATCH: audits/pending_patch.diff
-+FILES: src/kernel/ipc/ipc.cpp, src/kernel/ipc/ipc.hpp, src/kernel/syscall/syscall_handlers_ipc.cpp, src/kernel/task/scheduler.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/task.cpp, src/kernel/task/task.hpp, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_ipc_timeout.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_weak_stubs.cpp
-+
-+## FINDINGS
-+- none
-+
-+DECISION: APPROVED
-diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
-index fae64ea5..2282155e 100644
---- a/prompts/LEARNINGS.md
-+++ b/prompts/LEARNINGS.md
-@@ -20,6 +20,11 @@
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 45d48c72..1a69a864 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -519,6 +519,9 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+     tcb->period_ticks = 0;
+     tcb->base_priority = 2;
+     tcb->executed_ticks = 0;
++    tcb->exec_ns_total = 0;
++    tcb->exec_period_ns = 0;
++    tcb->exec_stamp_ns = 0;
+     tcb->remaining_ticks = 0;
+     tcb->deadline_ticks = arch::Timer::ticks();
+     tcb->page_table_ = 0;
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index 6e2c8633..5004fa7f 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -108,7 +108,8 @@ enum class SyscallNumber : uint8_t {
+     SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
+     SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
+     GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
+-    MAX_SYSCALL = 79,
++    TIMES = 79,          ///< read a task's execution-time accounting: arg0=pid (0=self), arg1=user TaskTimes* out-param (issue #21)
++    MAX_SYSCALL = 80,
+ };
  
- <!-- Append new entries below; newest first. -->
+ /// @brief Folds a list of FAST syscall numbers into a single bitmask
+@@ -260,6 +261,8 @@ class Syscall {
+                                      uint64_t *);
+     static uint64_t sys_get_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
++    static uint64_t sys_times(uint64_t, uint64_t, uint64_t, uint64_t,
++                              uint64_t *);
+     static uint64_t sys_kill(uint64_t, uint64_t, uint64_t, uint64_t,
+                              uint64_t *);
+     static uint64_t sys_pipe(uint64_t, uint64_t, uint64_t, uint64_t,
+@@ -447,6 +450,7 @@ class Syscall {
+             &Syscall::sys_send_sync_fast,
+             &Syscall::sys_set_affinity,
+             &Syscall::sys_get_affinity,
++            &Syscall::sys_times,
+     };
+ };
  
-+### #18 — Bounded-wait primitive: wheel-armed receive, VULN-W3 close (2026-09-16)
-+- **Learned:** (1) A BLOCKED+dequeued task has no waker by construction — any polled fallback MUST stay RUNNING (proven: BLOCKED fallback parks forever; the old VULN-W3 poll had the same flaw, hence "unconfirmed"). (2) Edge-triggered wakeups strand on silent dequeue: level-triggered re-apply (READY+enqueue every tick while armed+timed_out, enqueue-guard idempotent, never clobber RUNNING) converts any missed wake into ≤1-tick-late delivery. (3) Intermittent full-suite hangs with moving sites need hypothesis-first forensics, not dismissal: 15+ rounds (serial probes mask Heisenbugs — prints in the tick path shift timing; test-side bounded dumps don't) narrowed a 728 strand to inrq 1→0 with zero logged runq ops. (4) Auditor corrective patches can be corrupt — always `git apply --check` first, then implement manually; this cycle's was valid and applied verbatim.
-+- **Adapted:** sys_receive/sys_recv_fast wheel-arm + inbox-first resume recheck (msg beats timeout) + RUNNING-poll fallback; IPC::recv_wait_arm/cancel/fire (saturating ticks→ns, gen-0-invalid, cancel-first); TCB timeout slot + TaskFields capture/restore (handle deliberately not captured — flags rewind false, wheel reset disarms); scheduler tick-tail (level-trigger, RUNNING guard); cleanup cancel; hrt_monotonic→ipc_timeout test chain (live-clock-based expiries — fixed bases below the suite clock are born-expired); audits/report-20260916T190325Z.md (APPROVED iter-2).
-+- **Style re-surface:** CODING_STYLE §5 (fail-closed arm/fallback/TICK_HZ==0, ENSURE-free reachable paths), §11 (no spinlock across reschedule; IrqSpinLockGuard short sections; ISR try-lock-skip), §11.6 (atomics all-or-nothing: __atomic builtins for tick-observed flags, need_resched precedent), §12.2 (generation-tagged handles + TCB gen snapshot defeat id-reuse ABA), test-first (stub classes green before impl; history row per run).
-+
- ### #17 — Event-timer wheel: static slot table + generation handles (2026-09-16)
- - **Learned:** (1) An armed-but-never-serviced timer is a silent liveness hole: with the tick hook BSP-only (AP early-return), arm() must fail closed for cpu != 0 — caught by audit iter-1 S2, not by tests (unit tests happily tick any cpu). (2) Test expiry bases must derive from the LIVE clock: a fixed synthetic base below the suite-position clock makes timers born-expired and turns asserts into ISR timing luck (flaked at position 1318 in `all` while green standalone; fixed via ns_monotonic()+10s). (3) Auditor corrective patches can be corrupt/hallucinated line numbers — always `git apply --check` first, then implement manually per findings; the S2 intent still applied verbatim. (4) New top-level kernel dirs need no mk changes (SRC find auto-globs) but DO need gen.mk regen per arch like any new .cpp. (5) `pending_patch.diff` regenerated post-staging via `git diff HEAD` excluding itself; new-file coverage needs `git add -N` first with a `grep -c '^diff --git'` count check.
- - **Adapted:** src/kernel/time/timer_wheel.{hpp,cpp} (IrqSpinLockGuard arm/cancel, try-lock-skip + earliest-8 + unlock-before-fire on_tick, snapshot_reset with generation bump), Scheduler::on_tick hook position (after DeadlineList scan, before alarms) + callback contract comment, test_timer_wheel.cpp (8 deterministic tests, live-based expiries); audits/report-20260916-134406.md (APPROVED iter-2).
-diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index f31a266d..9f494fcb 100644
---- a/src/kernel/ipc/ipc.cpp
-+++ b/src/kernel/ipc/ipc.cpp
-@@ -22,6 +22,8 @@
- 
- #include <kernel/ipc/ipc.hpp>
- #include <kernel/ipc/buffer_pool.hpp>
-+#include <kernel/time/timer_wheel.hpp>
-+#include <kernel/arch/timer.hpp>
- #include <kernel/cap/endpoint.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/debug/ipc_sched_trace.hpp>
-@@ -660,4 +662,74 @@ static void unblock_sender_rollback(MessageQueue &q,
-     Scheduler::enqueue_ready(task);
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index 7c3421ac..e0f8839b 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -306,6 +306,29 @@ uint64_t Syscall::sys_get_affinity(uint64_t arg0, uint64_t, uint64_t,
+     return Scheduler::get_affinity(*t);
  }
  
-+void IPC::recv_timeout_fire(void *context) noexcept {
-+    auto *task =
-+        static_cast<TaskControlBlock *>(context);
-+    if (!TaskControlBlock::is_valid(task)) {
-+        return;
-+    }
-+    if (task->generation != task->recv_timeout_gen) {
-+        return;
-+    }
-+    if (!__atomic_load_n(&task->recv_timeout_armed, __ATOMIC_ACQUIRE)) {
-+        return;
-+    }
-+    __atomic_store_n(&task->recv_timed_out, true, __ATOMIC_RELEASE);
++/// @brief Read a task's execution-time accounting (issue #21).
++///        arg0 = pid (0 = caller), arg1 = user TaskTimes* out-param.
++///        Snapshot via Scheduler::read_times (charge-before-read for the
++///        running task); copied out with safe_copy_to_user (stac-wrapped).
++///        Unknown pid or bad buffer fails with -1 (fuzz-safe).  Non-blocking;
++///        FULL path only (dereferences a user pointer — never FAST).
++uint64_t Syscall::sys_times(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
++                            uint64_t *) {
++    auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
++    if (t == nullptr)
++        return static_cast<uint64_t>(-1);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *out = reinterpret_cast<TaskTimes *>(arg1);
++    auto chk = checked(out, 1);
++    if (!chk.valid())
++        return static_cast<uint64_t>(-1);
++    TaskTimes kt{};
++    Scheduler::read_times(*t, kt);
++    if (!safe_copy_to_user(chk.unsafe_ptr(), &kt, 1))
++        return static_cast<uint64_t>(-1);
++    return 0;
 +}
 +
-+bool IPC::recv_wait_arm(TaskControlBlock &task,
-+                        uint64_t timeout_ticks) noexcept {
-+    // Consume any stale expiry from a previous wait first: the resume
-+    // path below only sets this flag, so a stale true would fake a
-+    // timeout on entry (e.g. a later forever-wait after a timed one).
-+    __atomic_store_n(&task.recv_timed_out, false, __ATOMIC_RELEASE);
-+    if (timeout_ticks == 0) {
-+        return true;
-+    }
-+    if (CONFIG_TICK_HZ == 0) {
-+        return false;
-+    }
-+    // Ticks to ns without 64-bit overflow (decompose around 1e9).
-+    const uint64_t whole = timeout_ticks / CONFIG_TICK_HZ;
-+    const uint64_t part = timeout_ticks % CONFIG_TICK_HZ;
-+    uint64_t budget_ns = 0;
-+    if (whole >= 0xFFFFFFFFFFFFFFFFULL / 1000000000ULL) {
-+        budget_ns = 0xFFFFFFFFFFFFFFFFULL;
-+    } else {
-+        budget_ns =
-+            whole * 1000000000ULL + (part * 1000000000ULL) / CONFIG_TICK_HZ;
-+    }
-+    if (budget_ns == 0) {
-+        budget_ns = 1;
-+    }
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    // Saturating add: absurd budgets (>= 584M years) clamp to never-expire
-+    // instead of wrapping into an immediate deadline.
-+    uint64_t expiry_ns = now_ns + budget_ns;
-+    if (expiry_ns < now_ns) {
-+        expiry_ns = 0xFFFFFFFFFFFFFFFFULL;
-+    }
-+    task.recv_timeout_gen = task.generation;
-+    // Defensive cancel-first: never overwrite a live arm (unreachable
-+    // under today's single-arm discipline, closed by construction).
-+    if (__atomic_load_n(&task.recv_timeout_armed, __ATOMIC_ACQUIRE)) {
-+        recv_wait_cancel(task);
-+    }
-+    if (!time::TimerWheel::arm(0, expiry_ns, recv_timeout_fire, &task,
-+                               &task.recv_timeout_handle)) {
-+        __atomic_store_n(&task.recv_timeout_armed, false, __ATOMIC_RELEASE);
-+        return false;
-+    }
-+    __atomic_store_n(&task.recv_timeout_armed, true, __ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+void IPC::recv_wait_cancel(TaskControlBlock &task) noexcept {
-+    if (!__atomic_load_n(&task.recv_timeout_armed, __ATOMIC_ACQUIRE)) {
-+        return;
-+    }
-+    __atomic_store_n(&task.recv_timeout_armed, false, __ATOMIC_RELEASE);
-+    time::TimerWheel::cancel(task.recv_timeout_handle);
-+}
-+
- } // namespace kernel
-diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 857d9e9d..70a32bb1 100644
---- a/src/kernel/ipc/ipc.hpp
-+++ b/src/kernel/ipc/ipc.hpp
-@@ -126,6 +126,32 @@ class IPC {
-     ///        is empty.
-     static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
- 
-+    /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
-+    /// Flag-only: validates the TCB and generation, sets recv_timed_out.
-+    /// Takes no locks, no scheduler services, never reschedules or
-+    /// allocates (audit #17 callback contract). Runs in tick context.
-+    /// @param context Owning TaskControlBlock (nullable, fail-closed).
-+    static void recv_timeout_fire(void *context) noexcept;
-+
-+    /// @brief Arm the calling task's receive timeout on the wheel.
-+    /// Sets recv_timed_out=false, snapshots the TCB generation, arms the
-+    /// wheel at now_ns+timeout converted from ticks. Fail-closed false on
-+    /// non-BSP CPU, full wheel, or zero CONFIG_TICK_HZ. No-op (returns
-+    /// true, no arm) when timeout_ticks is 0 — the 0=forever contract
-+    /// never arms. A false return means the caller must use a fallback
-+    /// that keeps the task RUNNING (never BLOCKED+dequeue): a blocked
-+    /// task has no waker and would park forever.
-+    /// @param task Waiting task (non-null, current task).
-+    /// @param timeout_ticks Budget in coarse ticks (0 = forever).
-+    /// @return true when armed or when no arm is needed (timeout 0).
-+    static bool recv_wait_arm(TaskControlBlock &task,
-+                              uint64_t timeout_ticks) noexcept;
-+
-+    /// @brief Cancel the calling task's receive timeout (idempotent).
-+    /// Disarms the TCB slot; stale handles fail closed inside.
-+    /// @param task Waiting task.
-+    static void recv_wait_cancel(TaskControlBlock &task) noexcept;
-+
-     /// @brief Blocks the current task on a full queue
-     ///        (may boost owner priority).
-     ///
-diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
-index 0a661aa5..9a1103da 100644
---- a/src/kernel/syscall/syscall_handlers_ipc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
-@@ -55,11 +55,10 @@ uint64_t Syscall::sys_send(uint64_t arg0, uint64_t arg1, uint64_t arg2,
- uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
-                               uint64_t arg3, uint64_t *) {
-     uint64_t max_size = arg2;
--    // VULN-W3: arg3 is the bounded-wait timeout in ticks.  0 = block forever
--    // (preserves current behaviour for non-real-time callers).
-+    // VULN-W3 (closed, issue #18): arg3 is the bounded-wait timeout in
-+    // ticks, armed on the event-timer wheel. 0 = block forever (no arm,
-+    // preserves current behaviour for non-real-time callers).
-     uint64_t timeout_ticks = arg3;
--    uint64_t deadline =
--        timeout_ticks ? arch::Timer::ticks() + timeout_ticks : 0;
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), max_size);
-     if (!buf.valid())
-@@ -71,28 +70,59 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
-         return static_cast<uint64_t>(-1);
-     bool ok = false;
-     bool was_blocked = false;
--    while (!(ok = IPC::recv(msg))) {
--        // VULN-W3: bounded-wait deadline — fail with -1 once the budget is
--        // exhausted instead of blocking indefinitely.
--        if (deadline && arch::Timer::ticks() >= deadline)
-+    if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
-+        // Wheel-armed bounded wait (or 0 = forever, never armed).
-+        while (!(ok = IPC::recv(msg))) {
-+            if (cur->get_sporadic_server()) {
-+                kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
-+                cur->get_sporadic_server()->on_completion(
-+                    arch::Timer::ticks());
-+            }
-+            cur->state = TaskState::BLOCKED;
-+            was_blocked = true;
-+            // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
-+            // never be physically queued (INV-2/WEDGE invariant) — the
-+            // block in ipc.cpp's send path declares this, and sys_receive
-+            // was missing the dequeue.
-+            Scheduler::dequeue_ready(*cur);
-+            Scheduler::reschedule();
-+            // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
-+            // pattern; key on is_user_ (every task now owns a PML4).
-+            if (cur->is_user_) {
-+                arch::sti();
-+                arch::hlt();
-+                arch::cli();
-+            }
-+            // Resume: recheck the inbox FIRST (delivery beats timeout),
-+            // then the timeout flag; otherwise re-block on the live arm.
-+            if (IPC::recv(msg)) {
-+                ok = true;
-+                break;
-+            }
-+            if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
-+                IPC::recv_wait_cancel(*cur);
-+                return static_cast<uint64_t>(-1);
-+            }
-+        }
-+        IPC::recv_wait_cancel(*cur);
-+    } else {
-+        // Fallback (wheel arm failed: full wheel / non-BSP). The task
-+        // stays RUNNING and polls: BLOCKED+dequeue would park it with no
-+        // waker (the deadline check lives in this task), hanging forever.
-+        // Absolute coarse deadline bounds the poll; reschedule() stays
-+        // polite to same-priority tasks. Degenerate no-tick config fails
-+        // fast (a frozen tick counter can never expire).
-+        if (CONFIG_TICK_HZ == 0) {
-             return static_cast<uint64_t>(-1);
--        if (cur->get_sporadic_server()) {
--            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
--            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
-         }
--        cur->state = TaskState::BLOCKED;
--        was_blocked = true;
--        // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must never be
--        // physically queued (INV-2/WEDGE invariant) — the block in ipc.cpp's
--        // send path declares this, and sys_receive was missing the dequeue.
--        Scheduler::dequeue_ready(*cur);
--        Scheduler::reschedule();
--        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern;
--        // key on is_user_ (every task now owns a PML4).
--        if (cur->is_user_) {
--            arch::sti();
--            arch::hlt();
--            arch::cli();
-+        const uint64_t fallback_deadline =
-+            arch::Timer::ticks() + timeout_ticks;
-+        while (!(ok = IPC::recv(msg))) {
-+            if (arch::Timer::ticks() >= fallback_deadline) {
-+                return static_cast<uint64_t>(-1);
-+            }
-+            Scheduler::reschedule();
-+            arch::pause();
-         }
-     }
-     if (was_blocked) {
-@@ -188,36 +218,75 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
-         max_size < IPC_FAST_PAYLOAD_BYTES
-             ? static_cast<uint32_t>(max_size)
-             : static_cast<uint32_t>(IPC_FAST_PAYLOAD_BYTES);
--    uint64_t deadline =
--        timeout_ticks ? arch::Timer::ticks() + timeout_ticks : 0;
-     auto *cur = syscall_task();
-     if (!cur)
-         return static_cast<uint64_t>(-1);
-     Message msg{};
-     bool ok = false;
-     bool was_blocked = false;
--    while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
--        // An oversized best match is NOT consumed (stays queued for a full
--        // RECEIVE, INV-4) — disambiguate empty-vs-oversized with is_empty().
--        if (!cur->msg_queue.is_empty())
--            return static_cast<uint64_t>(-1);
--        // VULN-W3 bounded-wait deadline (mirrors sys_receive verbatim).
--        if (deadline && arch::Timer::ticks() >= deadline)
-+    if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
-+        // Wheel-armed bounded wait (or 0 = forever, never armed).
-+        while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
-+            // An oversized best match is NOT consumed (stays queued for a
-+            // full RECEIVE, INV-4) — disambiguate empty-vs-oversized with
-+            // is_empty().
-+            if (!cur->msg_queue.is_empty()) {
-+                IPC::recv_wait_cancel(*cur);
-+                return static_cast<uint64_t>(-1);
-+            }
-+            if (cur->get_sporadic_server()) {
-+                kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
-+                cur->get_sporadic_server()->on_completion(
-+                    arch::Timer::ticks());
-+            }
-+            cur->state = TaskState::BLOCKED;
-+            was_blocked = true;
-+            Scheduler::dequeue_ready(*cur);
-+            Scheduler::reschedule();
-+            if (cur->is_user_) {
-+                arch::sti();
-+                arch::hlt();
-+                arch::cli();
-+            } else {
-+                arch::hlt();
-+            }
-+            // Resume: recheck the inbox FIRST (delivery beats timeout),
-+            // then the oversized/timeout exits; otherwise re-block.
-+            if (cur->msg_queue.pop_clamped(msg, clamp)) {
-+                ok = true;
-+                break;
-+            }
-+            if (!cur->msg_queue.is_empty()) {
-+                IPC::recv_wait_cancel(*cur);
-+                return static_cast<uint64_t>(-1);
-+            }
-+            if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
-+                IPC::recv_wait_cancel(*cur);
-+                return static_cast<uint64_t>(-1);
-+            }
-+        }
-+        IPC::recv_wait_cancel(*cur);
-+    } else {
-+        // Fallback (wheel arm failed: full wheel / non-BSP). The task
-+        // stays RUNNING and polls: BLOCKED+dequeue would park it with no
-+        // waker (the deadline check lives in this task), hanging forever.
-+        // Absolute coarse deadline bounds the poll; reschedule() stays
-+        // polite to same-priority tasks. Degenerate no-tick config fails
-+        // fast (a frozen tick counter can never expire).
-+        if (CONFIG_TICK_HZ == 0) {
-             return static_cast<uint64_t>(-1);
--        if (cur->get_sporadic_server()) {
--            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
--            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
-         }
--        cur->state = TaskState::BLOCKED;
--        was_blocked = true;
--        Scheduler::dequeue_ready(*cur);
--        Scheduler::reschedule();
--        if (cur->is_user_) {
--            arch::sti();
--            arch::hlt();
--            arch::cli();
--        } else {
--            arch::hlt();
-+        const uint64_t fallback_deadline =
-+            arch::Timer::ticks() + timeout_ticks;
-+        while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
-+            if (!cur->msg_queue.is_empty()) {
-+                return static_cast<uint64_t>(-1);
-+            }
-+            if (arch::Timer::ticks() >= fallback_deadline) {
-+                return static_cast<uint64_t>(-1);
-+            }
-+            Scheduler::reschedule();
-+            arch::pause();
-         }
-     }
-     if (was_blocked) {
+ uint64_t Syscall::sys_sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *regs) {    auto *t = syscall_task();
+     if (!t || !regs)
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 0e2a9465..724c812b 100644
+index 724c812b..e597985a 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -2007,6 +2007,42 @@ void Scheduler::on_tick() noexcept {
-         time::TimerWheel::on_tick(arch::Timer::ns_monotonic(),
-                                   sched_cpu());
+@@ -1039,9 +1039,45 @@ static void wake_waiting_parent(TaskControlBlock &child) {
+ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                            sync::SpinLock *held_lock);
  
-+        // Issue #18: bounded-receive timeout apply. Wheel callbacks only
-+        // set recv_timed_out; the wake is applied here under the
-+        // already-held scheduler_lock_ (deadline-monitor wake precedent —
-+        // never take the non-recursive lock again). Guards mirror the
-+        // accounting walk below (magic, liveness, affinity).
-+        // Level-triggered (not edge): the wake re-applies every tick until
-+        // the waiter observes it (resume cancel) or dies (cleanup cancel).
-+        // A silently dequeued waiter is thus re-queued next tick instead
-+        // of stranding: enqueue_ready refuses duplicates, so re-apply is
-+        // idempotent. Never clobber a RUNNING state.
-+        for (auto *task = all_tasks_.first_ptr(); task;
-+             task = all_tasks_.next_ptr(task)) {
-+            if (task->magic != TaskControlBlock::TCB_MAGIC)
-+                continue;
-+            if (!__atomic_load_n(&task->recv_timeout_armed,
-+                                 __ATOMIC_ACQUIRE) ||
-+                !__atomic_load_n(&task->recv_timed_out, __ATOMIC_ACQUIRE))
-+                continue;
-+            if (task->generation != task->recv_timeout_gen)
-+                continue;
-+            if (queue_target(*task) != sched_cpu())
-+                continue;
-+            if (task->state == TaskState::BLOCKED)
-+                task->state = TaskState::READY;
-+            // SIL 3 guard (audit issue #18): never queue a task that is not
-+            // BLOCKED-turned-READY or already READY. A dispatched waiter is
-+            // RUNNING with its slot still armed until its resume path runs
-+            // recv_wait_cancel; queueing it violates the
-+            // current-never-queued invariant (set_current defense, H2).
-+            else if (task->state != TaskState::READY)
-+                continue;
-+            enqueue_ready(*task);
-+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                             __ATOMIC_RELEASE);
-+        }
++/// @brief Bill (ns_monotonic() - exec_stamp_ns) into the task's executed-ns
++///        totals (issue #21 — feeds admission, WCET validation, SYS_TIMES).
++///        Saturating adds (never wrap); always restamps.  A zero stamp means
++///        "never stamped" (fresh task): stamp without billing so the first
++///        charge never bills creation-to-first-dispatch as execution.
++///        Caller must hold scheduler_lock_ (or run IRQ-off on the tick path)
++///        so the add+restamp is atomic — never double-charge, never lose.
++/// @param t Task to charge (must be the running task or a terminating task).
++static void charge_exec(TaskControlBlock &t) noexcept {
++    const uint64_t now = arch::Timer::ns_monotonic();
++    if (t.exec_stamp_ns == 0) {
++        t.exec_stamp_ns = now;
++        return;
++    }
++    const uint64_t delta =
++        (now >= t.exec_stamp_ns) ? now - t.exec_stamp_ns : 0;
++    if (delta > 0) {
++        t.exec_ns_total = (t.exec_ns_total > UINT64_MAX - delta)
++                              ? UINT64_MAX
++                              : t.exec_ns_total + delta;
++        t.exec_period_ns = (t.exec_period_ns > UINT64_MAX - delta)
++                               ? UINT64_MAX
++                               : t.exec_period_ns + delta;
++    }
++    t.exec_stamp_ns = now;
++}
 +
-         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
-         // only tasks affine to this CPU (AP-affine tasks are not serviced).
-         // Issue #154: executed_ticks is execution time — only the
-@@ -3629,6 +3665,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
-         out[idx].pending_signals = t->pending_signals;
-         out[idx].alarm_ticks = t->alarm_ticks;
-         out[idx].alarm_armed = t->alarm_armed;
-+        out[idx].recv_timeout_armed = t->recv_timeout_armed;
-+        out[idx].recv_timed_out = t->recv_timed_out;
-         out[idx].runq_next = t->runq_next_;
-         out[idx].runq_prev = t->runq_prev_;
-         out[idx].in_ready_queue = t->in_ready_queue_;
-@@ -3702,6 +3740,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             t->pending_signals = saved[j].pending_signals;
-             t->alarm_ticks = saved[j].alarm_ticks;
-             t->alarm_armed = saved[j].alarm_armed;
-+            t->recv_timeout_armed = saved[j].recv_timeout_armed;
-+            t->recv_timed_out = saved[j].recv_timed_out;
-             // Snapshot does not capture SporadicServer state nor PMM page-table
-             // pools — clear the pointer and the intrusive object list so stale
-             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
++/// @brief Stamp a task being switched in: it starts accruing from now, and
++///        any stale stamp (e.g. from a previous quantum) is discarded so no
++///        descheduled interval is ever billed (issue #21).
++/// @param t Task being dispatched.
++static void stamp_exec(TaskControlBlock &t) noexcept {
++    t.exec_stamp_ns = arch::Timer::ns_monotonic();
++}
++
+ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+     arch::IrqGuard irq_guard{};
+     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
++    charge_exec(task); // issue #21: bill the final partial quantum (no loss)
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+     if (task.id == 6) {
+         auto *cur = current_task();
+@@ -1109,6 +1145,17 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+     }
+ }
+ 
++void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
++    arch::IrqGuard irq_guard{};
++    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
++    if (&task == current_task())
++        charge_exec(task); // charge-before-read: sample includes time to now
++    out.exec_ns_total = task.exec_ns_total;
++    out.exec_period_ns = task.exec_period_ns;
++    out.executed_ticks = task.executed_ticks;
++    out.wcet_ticks = task.wcet_ticks;
++}
++
+ TaskControlBlock *const Scheduler::ID_TOMBSTONE =
+     reinterpret_cast<TaskControlBlock *>(static_cast<uintptr_t>(1));
+ 
+@@ -2059,8 +2106,10 @@ void Scheduler::on_tick() noexcept {
+             if (queue_target(*task) != sched_cpu())
+                 continue;
+ 
+-            if (task == running)
++            if (task == running) {
+                 ++task->executed_ticks;
++                charge_exec(*task); // issue #21: ns billing, running task only
++            }
+ 
+             if (task->state == TaskState::RUNNING ||
+                 task->state == TaskState::READY) {
+@@ -2069,6 +2118,9 @@ void Scheduler::on_tick() noexcept {
+                     --task->remaining_ticks;
+                 if (prev_rem == 0 && task->period_ticks > 0) {
+                     task->remaining_ticks = task->period_ticks;
++                    // Issue #21: new period, fresh budget clock (this
++                    // tick was already billed into the old period above).
++                    task->exec_period_ns = 0;
+ #if CONFIG_DEADLINE_MISS_DETECTION && !CONFIG_DEADLINE_MONITOR_TASK
+                     task->deadline_ticks += task->period_ticks;
+                     task->deadline_missed = false;
+@@ -2730,6 +2782,11 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+         release_lock();
+         return;
+     }
++    // Issue #21: bill the outgoing task's quantum, stamp the incoming one.
++    // Both run under the caller's scheduler_lock_/IRQ-off discipline, so the
++    // add+restamp pairs are atomic — no double-charge, no lost quantum.
++    charge_exec(*current);
++    stamp_exec(next);
+ 
+     uint64_t *save_target = &task_stack_ptr(current);
+     bool cur_is_boot_stack = false;
 diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 6c55e2c8..8e1d7b9a 100644
+index 8e1d7b9a..d64c6e7a 100644
 --- a/src/kernel/task/scheduler.hpp
 +++ b/src/kernel/task/scheduler.hpp
-@@ -504,6 +504,14 @@ class Scheduler {
-         uint64_t pending_signals;
-         uint64_t alarm_ticks;
-         bool alarm_armed;
-+        /// @brief Bounded-receive timeout slot (issue #18): flags rewind
-+        /// with the snapshot (always to false — captured pre-arm at suite
-+        /// setup). The wheel handle/generation are deliberately NOT
-+        /// captured: no arm survives rewind (wheel snapshot_reset disarms
-+        /// everything and flags read false), so no stale handle can
-+        /// outlive the wait it belonged to.
-+        bool recv_timeout_armed;
-+        bool recv_timed_out;
-         /// @brief Ready-queue intrusive list pointers (POD copy).
-         ///        These form doubly-linked lists; TCBs are in-place across
-         ///        snapshot cycles so pointer values remain valid.
+@@ -202,6 +202,11 @@ class Scheduler {
+     /// @brief Current affinity mask of @p task (constraint, not
+     ///        placement — the balancer re-pins toward balance).
+     static uint64_t get_affinity(const TaskControlBlock &task) noexcept;
++    /// @brief Fill @p out with @p task's execution-time accounting (issue
++    ///        #21).  Takes IrqGuard + scheduler_lock_; charges the task
++    ///        first when it is the running task so the sample includes time
++    ///        up to the call (charge-before-read).
++    static void read_times(TaskControlBlock &task, TaskTimes &out) noexcept;
+     /// @brief True for real-time tasks (strict period set, issue #61).
+     ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
+     static bool is_rt_task(const TaskControlBlock &task) noexcept;
 diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 2aa32f3e..86a989fc 100644
+index 86a989fc..ebebefbf 100644
 --- a/src/kernel/task/task.cpp
 +++ b/src/kernel/task/task.cpp
-@@ -1747,6 +1747,16 @@ void TaskControlBlock::cleanup() noexcept {
-         parent_id = 0;
-     }
- 
-+    // Cancel a wheel-armed bounded receive (issue #18) before detaching
-+    // from queues: an armed timer firing after this TCB is freed would run
-+    // the callback against poisoned memory (stale fire). The wheel owns
-+    // its own lock; cleanup() holds no scheduler lock, so cancel() here
-+    // preserves wake-path lock ordering. Stale handles fail closed.
-+    if (__atomic_load_n(&recv_timeout_armed, __ATOMIC_ACQUIRE)) {
-+        __atomic_store_n(&recv_timeout_armed, false, __ATOMIC_RELEASE);
-+        time::TimerWheel::cancel(recv_timeout_handle);
-+    }
-+
-     // Remove self from any message queue's blocked-senders list *before*
-     // freeing any resources.  If we are blocked on another task's queue
-     // (blocked_on_queue != nullptr) we must detach now — otherwise the
+@@ -943,6 +943,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+     tcb->deadline_missed = false;
+     tcb->deadline_miss_count = 0;
+     tcb->executed_ticks = 0;
++    tcb->exec_ns_total = 0;
++    tcb->exec_period_ns = 0;
++    tcb->exec_stamp_ns = 0;
+     tcb->remaining_ticks = period_ticks;
+     tcb->wcet_ticks = 0;
+     tcb->wcet_overrun_fired = false;
+@@ -1159,6 +1162,9 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     tcb->deadline_missed = false;
+     tcb->deadline_miss_count = 0;
+     tcb->executed_ticks = 0;
++    tcb->exec_ns_total = 0;
++    tcb->exec_period_ns = 0;
++    tcb->exec_stamp_ns = 0;
+     tcb->remaining_ticks = period_ticks;
+     tcb->memory_budget_pages_ = 0;
+     tcb->memory_used_pages_ = 0;
+@@ -1348,6 +1354,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     tcb->period_ticks = parent->period_ticks;
+     tcb->deadline_ticks = parent->deadline_ticks;
+     tcb->executed_ticks = 0;
++    tcb->exec_ns_total = 0;
++    tcb->exec_period_ns = 0;
++    tcb->exec_stamp_ns = 0;
+     tcb->remaining_ticks = parent->remaining_ticks;
+     tcb->exit_code = 0;
+     tcb->waiting_child_pid = 0;
 diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 3704a854..6580e0de 100644
+index 6580e0de..62fefde7 100644
 --- a/src/kernel/task/task.hpp
 +++ b/src/kernel/task/task.hpp
-@@ -32,6 +32,7 @@
- #include <kernel/vfs/vfs.hpp>
- #include <kernel/sync/notify.hpp>
- #include <kernel/sync/eventgroup.hpp>
-+#include <kernel/time/timer_wheel.hpp>
- #include <kernel/memory/kernel_object.hpp>
- #include <signal.hpp>
+@@ -182,6 +182,16 @@ struct TaskContext {
+ };
+ #endif
  
-@@ -251,7 +252,10 @@ struct TaskControlBlock {
-           in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
-           zombie_next_(nullptr), waiting_child_pid(0),
-           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
--          alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
-+          alarm_armed(false), recv_timeout_armed(false),
-+          recv_timed_out(false),
-+          recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
-+          recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
-           iopb_slot_(IOPB_SLOT_NONE),
-           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
-           blocked_next(nullptr), blocked_prev(nullptr),
-@@ -440,6 +444,18 @@ struct TaskControlBlock {
-     /// @brief True if alarm is armed.
-     bool alarm_armed;
- 
-+    /// @brief Bounded-receive timeout armed on the wheel (issue #18).
-+    bool recv_timeout_armed;
++/// @brief Snapshot of a task's execution-time accounting (issue #21).
++///        SYS_TIMES out-param: copied to the caller's buffer, never a
++///        kernel pointer handed to user space.
++struct TaskTimes {
++    uint64_t exec_ns_total;  ///< lifetime executed ns (saturating)
++    uint64_t exec_period_ns; ///< current-period executed ns (saturating)
++    uint64_t executed_ticks; ///< tick-granular executed count (#154)
++    uint64_t wcet_ticks;     ///< configured WCET bound (0 = implicit 100%)
++};
 +
-+    /// @brief Set by the wheel callback when the receive budget expires.
-+    bool recv_timed_out;
-+
-+    /// @brief Wheel receipt for the armed timeout (gen 0 = invalid).
-+    time::TimerWheel::Handle recv_timeout_handle;
-+
-+    /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
-+    uint32_t recv_timeout_gen;
-+
-     /// @brief Embedded message queue (no separate heap allocation).
-     MessageQueue msg_queue;
- 
+ /// @brief Task control block — represents a single thread of execution.
+ /// @note Includes scheduling parameters, register context, and stack info.
+ struct TaskControlBlock {
+@@ -234,9 +244,10 @@ struct TaskControlBlock {
+           debug_switch_idx(0),
+ #endif
+           id(0), parent_id(0), state(TaskState::READY), priority(0),
+-          base_priority(0), period_ticks(0), deadline_ticks(0),
+-          deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
+-          remaining_ticks(0), wcet_ticks(0), wcet_overrun_fired(false),
++           base_priority(0), period_ticks(0), deadline_ticks(0),
++           deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
++           remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
++           exec_stamp_ns(0), wcet_ticks(0), wcet_overrun_fired(false),
+           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
+           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
+           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
+@@ -283,6 +294,15 @@ struct TaskControlBlock {
+     uint64_t deadline_miss_count;
+     uint64_t executed_ticks;
+     uint64_t remaining_ticks;
++    /// @brief Lifetime executed time in ns, saturating at UINT64_MAX
++    ///        (issue #21 — feeds admission, WCET validation, SYS_TIMES).
++    uint64_t exec_ns_total;
++    /// @brief Current-period executed time in ns, saturating; reset at
++    ///        each period reload (issue #21).
++    uint64_t exec_period_ns;
++    /// @brief ns_monotonic() sample at the last charge point; the next
++    ///        charge bills (now - stamp) (issue #21).
++    uint64_t exec_stamp_ns;
+     uint64_t
+         wcet_ticks; ///< explicit WCET for utilisation calc; 0 = implicit 100%
+     bool wcet_overrun_fired; ///< latch to fire WCET handler once per period
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 50541c17..bb054785 100644
+index bb054785..dd0754bd 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -138,6 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     // ipc
-     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
-     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
-+    {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
-     {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
-     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
-     {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
-diff --git a/src/kernel/test/test_ipc_timeout.cpp b/src/kernel/test/test_ipc_timeout.cpp
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+     {"selftest",            133,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                1253,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155)
++    {"all",                1260,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21)
+ 
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -263,6 +263,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
+     {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
+     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
++    {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
+ };
+ 
+ static constexpr size_t k_expected_count_size =
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index e414f67b..6c303608 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -202,6 +202,7 @@ void register_stress_hrt_tests();
+ void register_scheduler_hrt_tests();
+ void register_hrt_monotonic_tests();
+ void register_timer_wheel_tests();
++void register_task_metering_tests();
+ void register_syscall_fastpath_tests();
+ void register_fpu_inv_tests();
+ void register_cap_shm_tests();
+@@ -623,6 +624,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"stress_hrt", []() { register_stress_hrt_tests(); }},
+     {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
+     {"timer_wheel", []() { register_timer_wheel_tests(); }},
++    {"task_metering", []() { register_task_metering_tests(); }},
+ 
+     // -- safe: curated subset with TF_RELEASE tests --
+     {"safe",
+@@ -848,6 +850,7 @@ static void register_all_tests() {
+     register_scheduler_hrt_tests();
+     register_hrt_monotonic_tests();
+     register_timer_wheel_tests();
++    register_task_metering_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+@@ -1011,6 +1014,7 @@ static void register_all_tests_second_half() {
+     register_scheduler_hrt_tests();
+     register_hrt_monotonic_tests();
+     register_timer_wheel_tests();
++    register_task_metering_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+diff --git a/src/kernel/test/test_task_metering.cpp b/src/kernel/test/test_task_metering.cpp
 new file mode 100644
-index 00000000..8606ea8c
+index 00000000..ca6675e3
 --- /dev/null
-+++ b/src/kernel/test/test_ipc_timeout.cpp
-@@ -0,0 +1,396 @@
++++ b/src/kernel/test/test_task_metering.cpp
+@@ -0,0 +1,410 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -671,453 +361,407 @@ index 00000000..8606ea8c
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_ipc_timeout.cpp
-+/// @brief Wheel-armed bounded receive tests (issue #18, v0.4.7).
++/// @file test_task_metering.cpp
++/// @brief Per-task execution-time metering tests (issue #21, v0.4.8).
++///
++/// DRIVEN: every property is reached through REAL dispatched tasks on real
++/// timer ticks — the harness never calls Scheduler::on_tick() to fake time
++/// and never mutates task accounting fields (v0.3.10 rework discipline).
++/// The SYS_TIMES copy-out path is driven through a REAL Ring-3 probe task
++/// (issue #143 fixture pattern), x86_64 only.
 +
 +#include <test.hpp>
 +#include <logger.hpp>
 +#include <kernel/syscall/syscall.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/ipc/ipc.hpp>
 +#include <kernel/arch/timer.hpp>
 +#include <kernel/arch/io.hpp>
 +#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/time/timer_wheel.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <kernel/memory/vmm.hpp>
 +#include <kernel/nexios_config.h>
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
 +
-+#ifndef __clang__
-+#pragma GCC diagnostic push
-+#pragma GCC diagnostic ignored "-Wanalyzer-null-argument"
-+#endif
-+
 +namespace {
 +
-+/// @brief Fabricated regs[] frame for fast handlers (mirrors the fastpath
-+/// test driver; internal linkage so no ODR clash across test TUs).
-+struct ToFastFrame {
-+    uint64_t regs[20];
-+    ToFastFrame() {
-+        __builtin_memset(regs, 0, sizeof(regs));
++/// @brief Create a real kernel task, dispatch it, and wait for genuine
++///        termination.  Returns the TCB for post-mortem reads + cleanup.
++static TaskControlBlock *run_meter_task(void (*entry)(), uint64_t prio = 11,
++                                        uint64_t period = 10) {
++    auto *t = TaskControlBlock::create(entry, prio, period);
++    if (t == nullptr)
++        return nullptr;
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    return t;
++}
++
++/// @brief Release a completed task TCB (mirrors test_ipc_blocking.cpp).
++static void release_meter_task(TaskControlBlock *t) {
++    if (t == nullptr)
++        return;
++    kernel::test::terminate_if_live(t);
++}
++
++#if defined(CONFIG_ARCH_X86_64)
++// ---------------------------------------------------------------------------
++// Ring-3 TIMES probe fixture (issue #143 pattern, TIMES-shaped).
++//
++// A REAL Ring-3 task performs two real int $0x80 TIMES calls against a REAL
++// private PML4, so safe_copy_to_user takes the user-task path with ambient
++// tables that actually map the probed pages.  Struct slots live in the data
++// page at caller-chosen offsets (arg1 is full 64-bit).
++// ---------------------------------------------------------------------------
++/// @brief Code VA: the auto-installed yield-stub page, content replaced.
++constexpr uint64_t kMeterProbeCodeVa = 0x40000000ULL;
++/// @brief Data VA: fresh user page mapped by the fixture (RW, NX).
++constexpr uint64_t kMeterProbeDataVa = 0x50001000ULL;
++/// @brief Bounded-join budget (converted to FAIL, never a hang).
++constexpr uint64_t kMeterProbeJoinSpins = 10000000ULL;
++/// @brief Fixture priority: above the harness so ticks dispatch it.
++constexpr uint64_t kMeterProbePrio = 20;
++
++/// @brief Emit one (mov edx,data; mov eax,num; mov ebx,arg0; movabs
++///        rcx,arg1; int $0x80; mov [rdx+disp],rax) call sequence at @p code.
++static uint8_t *emit_meter_syscall(uint8_t *code, uint32_t num, uint32_t arg0,
++                                   uint64_t arg1, int8_t ret_disp) {
++    *code++ = 0xBA;
++    uint32_t data_lo = static_cast<uint32_t>(kMeterProbeDataVa);
++    for (uint64_t i = 0; i < 4; ++i)
++        *code++ = static_cast<uint8_t>((data_lo >> (i * 8)) & 0xFF);
++    *code++ = 0xB8;
++    for (uint64_t i = 0; i < 4; ++i)
++        *code++ = static_cast<uint8_t>((num >> (i * 8)) & 0xFF);
++    *code++ = 0xBB;
++    for (uint64_t i = 0; i < 4; ++i)
++        *code++ = static_cast<uint8_t>((arg0 >> (i * 8)) & 0xFF);
++    *code++ = 0x48;
++    *code++ = 0xB9;
++    for (uint64_t i = 0; i < 8; ++i)
++        *code++ = static_cast<uint8_t>((arg1 >> (i * 8)) & 0xFF);
++    *code++ = 0xCD;
++    *code++ = 0x80;
++    *code++ = 0x48;
++    *code++ = 0x89;
++    if (ret_disp == 0) {
++        *code++ = 0x02;
++    } else {
++        *code++ = 0x42;
++        *code++ = static_cast<uint8_t>(ret_disp);
 +    }
-+};
-+
-+/// @brief Dispatch a fast syscall by number with a fabricated frame.
-+uint64_t to_fast_call(uint64_t number, uint64_t arg0, uint64_t arg1,
-+                      uint64_t arg2, uint64_t arg3, ToFastFrame &frame) {
-+    return Syscall::handle(number, arg0, arg1, arg2, arg3, frame.regs);
++    return code;
 +}
 +
-+/// @brief Shared driver context for timeout receiver/sender tasks.
-+struct ToRecvCtx {
-+    uint64_t peer_id;
-+    uint64_t result;
-+    uint64_t timeout_ticks;
-+    uint64_t send_type;
-+    uint64_t spin_iters;
-+};
-+
-+/// @brief Receiver task: RECV_FAST with ctx timeout, stores the result.
-+void to_receiver_entry() {
-+    auto *self = Scheduler::current_task();
-+    auto *ctx = reinterpret_cast<ToRecvCtx *>(self->user_data);
-+    ToFastFrame frame;
-+    const uint64_t recv_res = to_fast_call(
-+        static_cast<uint64_t>(SyscallNumber::RECV_FAST), 0, 0, 8,
-+        ctx->timeout_ticks, frame);
-+    __atomic_store_n(&ctx->result, recv_res, __ATOMIC_RELEASE);
-+}
-+
-+/// @brief Sender task: optional spin, then SEND_FAST to the peer.
-+void to_sender_entry() {
-+    auto *self = Scheduler::current_task();
-+    auto *ctx = reinterpret_cast<ToRecvCtx *>(self->user_data);
-+    for (uint64_t spin = 0; spin < ctx->spin_iters; ++spin) {
++/// @brief Run two TIMES calls from a REAL dispatched user task; read back
++///        the return slots + data page.
++/// @return true if the probe reached EXIT(0) with the data page intact.
++static bool run_meter_probe(uint32_t arg0_a, uint64_t arg1_a, uint32_t arg0_b,
++                            uint64_t arg1_b, uint64_t *out_ret_a,
++                            uint64_t *out_ret_b, uint8_t *out_data) {
++    constexpr uint32_t k_times =
++        static_cast<uint32_t>(SyscallNumber::TIMES);
++    auto *fixture = TaskControlBlock::create_user(kernel::test::forever_entry,
++                                                  kMeterProbePrio, 10, 32768);
++    if (!fixture) {
++        return false;
++    }
++    uint64_t data_phys = PMM::alloc_user_page();
++    if (data_phys) {
++        VMM::map_page_in_pml4(kMeterProbeDataVa, data_phys, true, false,
++                              fixture->page_table_);
++    }
++    uint64_t code_phys = VMM::virt_to_phys_in_pml4(kMeterProbeCodeVa,
++                                                   fixture->page_table_);
++    uint64_t data_check = VMM::virt_to_phys_in_pml4(kMeterProbeDataVa,
++                                                    fixture->page_table_);
++    if (!data_phys || data_check != data_phys || !code_phys) {
++        kernel::test::terminate_and_drain(*fixture);
++        return false;
++    }
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *code = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + code_phys);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + data_phys);
++    for (uint64_t i = 0; i < 512; ++i)
++        data[i] = 0;
++    code = emit_meter_syscall(code, k_times, arg0_a, arg1_a, 0);
++    code = emit_meter_syscall(code, k_times, arg0_b, arg1_b, 8);
++    *code++ = 0xB8;
++    *code++ = 0x06;
++    *code++ = 0x00;
++    *code++ = 0x00;
++    *code++ = 0x00;
++    *code++ = 0xBB;
++    *code++ = 0x00;
++    *code++ = 0x00;
++    *code++ = 0x00;
++    *code++ = 0x00;
++    *code++ = 0xCD;
++    *code++ = 0x80;
++    *code++ = 0xEB;
++    *code++ = 0xFE;
++    Scheduler::add_task(*fixture);
++    Scheduler::reschedule();
++    for (uint64_t i = 0;
++         i < kMeterProbeJoinSpins && fixture->state != TaskState::TERMINATED;
++         ++i) {
 +        arch::pause();
 +    }
-+    ToFastFrame frame;
-+    const uint64_t send_res = to_fast_call(
-+        static_cast<uint64_t>(SyscallNumber::SEND_FAST), ctx->peer_id,
-+        ctx->send_type, 8, 0, frame);
-+    __atomic_store_n(&ctx->result, send_res, __ATOMIC_RELEASE);
-+}
-+
-+/// @brief Spawn a timeout receiver (prio 11, lower than the sender).
-+TaskControlBlock *to_spawn_receiver(ToRecvCtx &ctx) {
-+    auto *task = TaskControlBlock::create(
-+        []() {
-+            to_receiver_entry();
-+        },
-+        11, 10);
-+    if (task != nullptr) {
-+        task->user_data = &ctx;
++    data_check = VMM::virt_to_phys_in_pml4(kMeterProbeDataVa,
++                                           fixture->page_table_);
++    bool exited = (fixture->state == TaskState::TERMINATED);
++    bool clean_exit = exited && (fixture->exit_code == 0);
++    bool observed = exited && (data_check == data_phys);
++    if (observed) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + data_phys);
++        *out_ret_a = 0;
++        *out_ret_b = 0;
++        for (uint64_t i = 0; i < 8; ++i) {
++            *out_ret_a |= static_cast<uint64_t>(data[i]) << (i * 8);
++            *out_ret_b |= static_cast<uint64_t>(data[8 + i]) << (i * 8);
++        }
++        for (uint64_t i = 0; i < 512; ++i)
++            out_data[i] = data[i];
 +    }
-+    return task;
-+}
-+
-+/// @brief Spawn a delayed sender (prio 12, runs first unless yielded).
-+TaskControlBlock *to_spawn_sender(ToRecvCtx &ctx) {
-+    auto *task = TaskControlBlock::create(
-+        []() {
-+            to_sender_entry();
-+        },
-+        12, 10);
-+    if (task != nullptr) {
-+        task->user_data = &ctx;
++    if (TaskControlBlock::is_valid(fixture) &&
++        (fixture->state != TaskState::TERMINATED ||
++         fixture->exit_code == 0)) {
++        Scheduler::terminate(*fixture, 0);
 +    }
-+    return task;
++    Scheduler::drain_zombie_list();
++    return observed && clean_exit;
 +}
 +
-+/// @brief Null callback for wheel-filling (tolerates null context).
-+void to_dummy_fire(void *context) {
-+    (void)context;
++/// @brief Little-endian u64 load from a byte buffer at @p off.
++static uint64_t meter_load_u64(const uint8_t *buf, uint64_t off) {
++    uint64_t v = 0;
++    for (uint64_t i = 0; i < 8; ++i)
++        v |= static_cast<uint64_t>(buf[off + i]) << (i * 8);
++    return v;
 +}
++#endif // CONFIG_ARCH_X86_64
 +
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: fast-path message returns without arming the wheel.
-+// Input: Dispatched task self-sends, RECV_FAST(timeout=10) with queued msg
-+// Expect: returns msg type immediately, wheel live_count stays 0
-+// Depends: sys_recv_fast fast path, IPC::recv_wait_arm
-+JARVIS_TEST(recv_timeout_fastpath_no_arm, "PRE: none | POST: none") {
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.peer_id = 0;
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 10;
-+    recv_ctx.send_type = 41;
-+    recv_ctx.spin_iters = 0;
-+    auto *receiver = TaskControlBlock::create(
++// Testidea: a task that runs accumulates exec_ns_total across switch-out.
++// Input: Driven task spins ~2ms + waits 3 real ticks, then samples self.
++// Expect: exec_ns_total > 0; exec_period_ns == exec_ns_total (period 10,
++//         no reload fired yet).
++// Depends: Scheduler::charge on tick + switch-out (issue #21)
++JARVIS_TEST(meter_switch_delta_accumulates, "PRE: none | POST: none") {
++    static volatile uint64_t g_total = 0;
++    static volatile uint64_t g_period = 0;
++
++    auto *t = run_meter_task([]() {
++        auto *self = Scheduler::current_task();
++        const uint64_t t0 = arch::Timer::ns_monotonic();
++        while (arch::Timer::ns_monotonic() - t0 < 2000000ULL)
++            arch::pause();
++        while (self->executed_ticks < 3)
++            arch::pause();
++        g_total = self->exec_ns_total;
++        g_period = self->exec_period_ns;
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(g_total > 0);
++    JARVIS_ASSERT_EQ(g_total, g_period);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: ns-resolution twin of timer_ready_task_accumulates_no_cpu_time.
++// Input: Parked prio-1 READY task (never dispatched) + real ticks elapse.
++// Expect: parked exec_ns_total == 0 and exec_period_ns == 0.
++// Depends: #154 discipline extended to ns charge (issue #21)
++JARVIS_TEST(meter_ready_task_accumulates_no_ns, "PRE: none | POST: none") {
++    auto *parked = TaskControlBlock::create([]() {}, 1,
++                                            TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(parked != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, parked->exec_ns_total);
++    Scheduler::add_task(*parked);
++
++    auto *t = run_meter_task([]() {
++        auto *self = Scheduler::current_task();
++        while (self->executed_ticks < 3)
++            arch::pause();
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, parked->exec_ns_total);
++    JARVIS_ASSERT_EQ(0ULL, parked->exec_period_ns);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
++    release_meter_task(parked);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: period reload resets the per-period counter, not the total.
++// Input: Periodic task (period 2 ticks) runs 6 real ticks.
++// Expect: total > 0; period < total (a reload zeroed the period clock
++//         while the lifetime total kept every quantum).
++// Depends: Scheduler::on_tick period-reload reset (issue #21)
++JARVIS_TEST(meter_period_reload_resets_period_keeps_total,
++            "PRE: none | POST: none") {
++    static volatile uint64_t g_total = 0;
++    static volatile uint64_t g_period = 0;
++
++    auto *t = run_meter_task(
 +        []() {
 +            auto *self = Scheduler::current_task();
-+            auto *ctx = reinterpret_cast<ToRecvCtx *>(self->user_data);
-+            Message msg{};
-+            msg.sender_id = self->id;
-+            msg.type = ctx->send_type;
-+            msg.priority = 0;
-+            msg.data_size = 0;
-+            if (!IPC::send(self->id, msg)) {
-+                return;
-+            }
-+            ToFastFrame frame;
-+            const uint64_t recv_res = to_fast_call(
-+                static_cast<uint64_t>(SyscallNumber::RECV_FAST), 0, 0, 8,
-+                ctx->timeout_ticks, frame);
-+            __atomic_store_n(&ctx->result, recv_res, __ATOMIC_RELEASE);
++            while (self->executed_ticks < 6)
++                arch::pause();
++            g_total = self->exec_ns_total;
++            g_period = self->exec_period_ns;
 +        },
-+        11, 10);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    receiver->user_data = &recv_ctx;
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(receiver);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(41ULL, recv_ctx.result);
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    kernel::test::terminate_and_drain(*receiver);
++        11, 2);
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(g_total > 0);
++    JARVIS_ASSERT(g_period < g_total);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: empty queue with timeout returns -1 and reclaims the slot.
-+// Input: Dispatched task RECV_FAST(timeout=5) on empty queue, no sender
-+// Expect: returns -1, wheel live_count back to 0, flags cleared
-+// Depends: wheel expiry, tick-tail apply, resume recheck
-+JARVIS_TEST(recv_timeout_fires_minus_one, "PRE: none | POST: none") {
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 5;
-+    uint64_t armed_after = 0;
-+    auto *receiver = to_spawn_receiver(recv_ctx);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(receiver);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, recv_ctx.result);
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    armed_after = receiver->recv_timeout_armed ? 1ULL : 0ULL;
-+    JARVIS_ASSERT_EQ(0ULL, armed_after);
-+    kernel::test::terminate_and_drain(*receiver);
++// Testidea: SYS_TIMES on self returns a growing total through Ring-3.
++// Input: User probe: TIMES(0, data+16) then TIMES(0, data+48).
++// Expect: Probe reaches EXIT(0); both return 0; second total >= first;
++//         first total > 0; period <= total.
++// Depends: Syscall TIMES + safe_copy_to_user path (issue #21)
++JARVIS_TEST(meter_times_self_grows, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    uint64_t ret_a = 0;
++    uint64_t ret_b = 0;
++    uint8_t data[512] = {};
++    constexpr uint64_t k_slot_a = kMeterProbeDataVa + 16;
++    constexpr uint64_t k_slot_b = kMeterProbeDataVa + 48;
++    bool ran = run_meter_probe(0, k_slot_a, 0, k_slot_b, &ret_a, &ret_b,
++                               data);
++    JARVIS_ASSERT(ran);
++    JARVIS_ASSERT_EQ(0ULL, ret_a);
++    JARVIS_ASSERT_EQ(0ULL, ret_b);
++    const uint64_t total_a = meter_load_u64(data, 16);
++    const uint64_t period_a = meter_load_u64(data, 24);
++    const uint64_t total_b = meter_load_u64(data, 48);
++    JARVIS_ASSERT(total_a > 0);
++    JARVIS_ASSERT(total_b >= total_a);
++    JARVIS_ASSERT(period_a <= total_a);
++#else
 +    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: message arriving before timeout returns the message, not -1.
-+// Input: Receiver RECV_FAST(timeout=100); sender delivers after short spin
-+// Expect: receiver returns msg type, armed timer cancelled (live 0)
-+// Depends: sender wake path, resume cancel, msg-wins recheck
-+JARVIS_TEST(recv_timeout_msg_wins, "PRE: none | POST: none") {
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 100;
-+    ToRecvCtx send_ctx{};
-+    send_ctx.result = 0;
-+    send_ctx.send_type = 77;
-+    send_ctx.spin_iters = 2000;
-+    auto *receiver = to_spawn_receiver(recv_ctx);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    auto *sender = to_spawn_sender(send_ctx);
-+    JARVIS_ASSERT(sender != nullptr);
-+    send_ctx.peer_id = receiver->id;
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+        Scheduler::add_task(*sender);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(sender);
-+    kernel::test::wait_for_termination_safe(receiver);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(77ULL, recv_ctx.result);
-+    JARVIS_ASSERT_EQ(0ULL, send_ctx.result);
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    kernel::test::terminate_and_drain2(sender, receiver);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: timeout 0 still blocks forever until a send wakes it.
-+// Input: Receiver RECV_FAST(timeout=0); sender delivers after short spin
-+// Expect: receiver returns msg type, wheel never armed (live 0 throughout)
-+// Depends: 0=forever legacy contract preservation
-+JARVIS_TEST(recv_timeout_forever_wakes_on_send, "PRE: none | POST: none") {
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 0;
-+    ToRecvCtx send_ctx{};
-+    send_ctx.result = 0;
-+    send_ctx.send_type = 78;
-+    send_ctx.spin_iters = 2000;
-+    auto *receiver = to_spawn_receiver(recv_ctx);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    auto *sender = to_spawn_sender(send_ctx);
-+    JARVIS_ASSERT(sender != nullptr);
-+    send_ctx.peer_id = receiver->id;
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+        Scheduler::add_task(*sender);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(sender);
-+    kernel::test::wait_for_termination_safe(receiver);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(78ULL, recv_ctx.result);
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    kernel::test::terminate_and_drain2(sender, receiver);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: killing a BLOCKED armed waiter is crash-free and leak-free.
-+// Input: Receiver RECV_FAST(timeout=30000) blocks; terminate it; run ticks
-+// Expect: no crash, wheel live_count back to 0 (cleanup cancelled)
-+// Depends: TaskControlBlock::cleanup cancel, snapshot_reset
-+JARVIS_TEST(recv_timeout_kill_while_armed, "PRE: none | POST: none") {
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 30000;
-+    auto *receiver = to_spawn_receiver(recv_ctx);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    // Bounded wait until the receiver blocks with its timeout armed.
-+    bool saw_armed = false;
-+    for (uint64_t spin = 0; spin < 10000000ULL; ++spin) {
-+        if (receiver->state == TaskState::BLOCKED &&
-+            receiver->recv_timeout_armed &&
-+            time::TimerWheel::live_count(0) == 1) {
-+            saw_armed = true;
-+            break;
-+        }
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT(saw_armed);
-+    kernel::test::terminate_and_drain(*receiver);
-+    // Let stray ticks run: nothing may fire and nothing may leak.
-+    const uint64_t tick_start = arch::Timer::ticks();
-+    while (arch::Timer::ticks() - tick_start < 3) {
-+        arch::pause();
-+    }
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    Scheduler::set_current(*original);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: stale fire after TCB reuse is a no-op (generation check).
-+// Input: Arm wheel directly with ctx=live task, bump task timeout-gen,
-+//        tick past expiry
-+// Expect: no timed_out set, no wake, no crash
-+// Depends: IPC::recv_timeout_fire generation validation
-+JARVIS_TEST(recv_timeout_stale_fire_noop, "PRE: none | POST: none") {
-+    time::TimerWheel::snapshot_reset();
-+    auto *self = Scheduler::current_task();
-+    JARVIS_ASSERT(self != nullptr);
-+    const uint32_t real_gen = self->generation;
-+    // Simulate an armed waiter, then a TCB reuse (generation advanced).
-+    self->recv_timeout_armed = true;
-+    self->recv_timed_out = false;
-+    self->recv_timeout_gen = real_gen + 1;
-+    time::TimerWheel::Handle handle{};
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    JARVIS_ASSERT(time::TimerWheel::arm(0, now_ns + 1000000ULL,
-+                                        IPC::recv_timeout_fire, self,
-+                                        &handle));
-+    JARVIS_ASSERT_EQ((uint32_t)1,
-+                     time::TimerWheel::on_tick(now_ns + 2000000ULL, 0));
-+    JARVIS_ASSERT(!self->recv_timed_out);
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    self->recv_timeout_armed = false;
-+    self->recv_timed_out = false;
-+    self->recv_timeout_gen = real_gen;
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: full wheel falls back to coarse poll and still times out.
-+// Input: Fill all 64 wheel slots, RECV_FAST(timeout=5) on empty queue
-+// Expect: returns -1 via fallback path, no crash, slots drained after
-+// Depends: arm()==false fallback, coarse deadline poll
-+JARVIS_TEST(recv_timeout_full_wheel_fallback, "PRE: none | POST: none") {
-+    time::TimerWheel::snapshot_reset();
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    for (uint32_t fill_idx = 0;
-+         fill_idx < time::TimerWheel::kMaxTimersPerCpu; ++fill_idx) {
-+        time::TimerWheel::Handle filler{};
-+        JARVIS_ASSERT(time::TimerWheel::arm(0, now_ns + 1000000000000ULL,
-+                                            to_dummy_fire, nullptr,
-+                                            &filler));
-+    }
-+    JARVIS_ASSERT_EQ((uint64_t)time::TimerWheel::kMaxTimersPerCpu,
-+                     time::TimerWheel::live_count(0));
-+    ToRecvCtx recv_ctx{};
-+    recv_ctx.result = 0;
-+    recv_ctx.timeout_ticks = 5;
-+    auto *receiver = to_spawn_receiver(recv_ctx);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*receiver);
-+    }
-+    auto *original = Scheduler::current_task();
-+    kernel::test::yield_as(*receiver);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(receiver);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, recv_ctx.result);
-+    kernel::test::terminate_and_drain(*receiver);
-+    time::TimerWheel::snapshot_reset();
-+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_ipc_timeout_tests() {
-+    Logger::info("Registering ipc_timeout tests");
-+    JARVIS_REGISTER_TEST(recv_timeout_fastpath_no_arm);
-+    JARVIS_REGISTER_TEST(recv_timeout_fires_minus_one);
-+    JARVIS_REGISTER_TEST(recv_timeout_msg_wins);
-+    JARVIS_REGISTER_TEST(recv_timeout_forever_wakes_on_send);
-+    JARVIS_REGISTER_TEST(recv_timeout_kill_while_armed);
-+    JARVIS_REGISTER_TEST(recv_timeout_stale_fire_noop);
-+    JARVIS_REGISTER_TEST(recv_timeout_full_wheel_fallback);
-+}
-+
-+#ifndef __clang__
-+#pragma GCC diagnostic pop
 +#endif
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 5902e636..e414f67b 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -114,6 +114,7 @@ void register_block_device_tests();
- void register_fat32_tests();
- void register_vfs_fat32_tests();
- void register_ipc_blocking_tests();
-+void register_ipc_timeout_tests();
- void register_vfsd_authorization_tests();
- void register_textutils_tests();
- void register_shell_interaction_tests();
-@@ -430,6 +431,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     // -- ipc: messages, events, notifications, pipes --
-     {"ipc_core", []() { register_ipc_tests(); }},
-     {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
-+    {"ipc_timeout", []() { register_ipc_timeout_tests(); }},
-     {"ipc_extended", []() { register_ipc_extended_tests(); }},
-     {"ipc_lock_free", []() { register_ipc_lock_free_tests(); }},
-     {"ipc_robustness", []() { register_ipc_robustness_tests(); }},
-@@ -749,6 +751,7 @@ static void register_all_tests() {
-     register_vfs_errors_tests();
- #if CONFIG_VERSION_NUM >= 0x000309
-     register_ipc_blocking_tests();
-+    register_ipc_timeout_tests();
- #endif
-     register_ipc_lock_free_tests();
-     register_vfsd_authorization_tests();
-@@ -954,6 +957,7 @@ static void register_all_tests_first_half() {
-       register_vfs_fat32_tests();
- #if CONFIG_VERSION_NUM >= 0x000309
-       register_ipc_blocking_tests();
-+      register_ipc_timeout_tests();
- #endif
-       register_ipc_lock_free_tests();
-       register_vfsd_authorization_tests();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: SYS_TIMES on another pid works; bogus pid fails closed.
++// Input: Parked peer task + user probe: TIMES(peer, data+16) then
++//        TIMES(0xFFFFFFFE, data+48).
++// Expect: First returns 0 with all-zero accounting (peer never ran);
++//         second returns -1.
++// Depends: Syscall TIMES pid lookup (issue #21)
++JARVIS_TEST(meter_times_other_pid_and_esrch, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    auto *peer = TaskControlBlock::create([]() {}, 1,
++                                          TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(peer != nullptr);
++    Scheduler::add_task(*peer);
++
++    uint64_t ret_a = 0;
++    uint64_t ret_b = 0;
++    uint8_t data[512] = {};
++    constexpr uint64_t k_slot_a = kMeterProbeDataVa + 16;
++    constexpr uint64_t k_slot_b = kMeterProbeDataVa + 48;
++    constexpr uint32_t k_no_such_pid = 0xFFFFFFFEUL;
++    bool ran = run_meter_probe(static_cast<uint32_t>(peer->id), k_slot_a,
++                               k_no_such_pid, k_slot_b, &ret_a, &ret_b,
++                               data);
++    JARVIS_ASSERT(ran);
++    JARVIS_ASSERT_EQ(0ULL, ret_a);
++    JARVIS_ASSERT_EQ(0ULL, meter_load_u64(data, 16));
++    JARVIS_ASSERT_EQ(0ULL, meter_load_u64(data, 24));
++    JARVIS_ASSERT_EQ(0ULL, meter_load_u64(data, 32));
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_b);
++    release_meter_task(peer);
++    Scheduler::drain_zombie_list();
++#else
++    JARVIS_TEST_PASS();
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: null user buffer fails closed (fuzz-safety).
++// Input: Driven kernel task calls TIMES(0, nullptr) via the FULL path.
++// Expect: Returns -1; no fault, harness survives.
++// Depends: checked_ptr validation in sys_times (issue #21)
++JARVIS_TEST(meter_times_null_buffer_fail_closed, "PRE: none | POST: none") {
++    static volatile uint64_t g_ret = 0;
++
++    auto *t = run_meter_task([]() {
++        g_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::TIMES),
++                                0, 0, 0, 0, nullptr);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: termination charges the final partial quantum (no loss).
++// Input: Task spins, self-samples its total, then exits; harness reads
++//        the TCB total post-mortem before drain.
++// Expect: Sample > 0; post-mortem total >= sample.
++// Depends: terminate/drain charge path (issue #21)
++JARVIS_TEST(meter_terminate_charges_final_quantum, "PRE: none | POST: none") {
++    static volatile uint64_t g_sample = 0;
++
++    auto *t = run_meter_task([]() {
++        auto *self = Scheduler::current_task();
++        const uint64_t t0 = arch::Timer::ns_monotonic();
++        while (arch::Timer::ns_monotonic() - t0 < 2000000ULL)
++            arch::pause();
++        while (self->executed_ticks < 3)
++            arch::pause();
++        g_sample = self->exec_ns_total;
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(g_sample > 0);
++    JARVIS_ASSERT(t->exec_ns_total >= g_sample);
++    release_meter_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++void register_task_metering_tests() {
++    Logger::info("Registering task_metering tests");
++    JARVIS_REGISTER_TEST(meter_switch_delta_accumulates);
++    JARVIS_REGISTER_TEST(meter_ready_task_accumulates_no_ns);
++    JARVIS_REGISTER_TEST(meter_period_reload_resets_period_keeps_total);
++    JARVIS_REGISTER_TEST(meter_times_self_grows);
++    JARVIS_REGISTER_TEST(meter_times_other_pid_and_esrch);
++    JARVIS_REGISTER_TEST(meter_times_null_buffer_fail_closed);
++    JARVIS_REGISTER_TEST(meter_terminate_charges_final_quantum);
++}
 diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index 1b48c75a..f0931eab 100644
+index f0931eab..231586f7 100644
 --- a/src/kernel/test/test_weak_stubs.cpp
 +++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -65,6 +65,7 @@ __attribute__((weak)) void register_integration_tests() {}
- __attribute__((weak)) void register_pml4_clone_tests() {}
- __attribute__((weak)) void register_buffer_pool_tests() {}
- __attribute__((weak)) void register_ipc_blocking_tests() {}
-+__attribute__((weak)) void register_ipc_timeout_tests() {}
- __attribute__((weak)) void register_vfsd_authorization_tests() {}
- __attribute__((weak)) void register_textutils_tests() {}
- __attribute__((weak)) void register_irq_guard_tests() {}
-diff --git a/test-history.txt b/test-history.txt
-index 9fc5f77a..3cae567e 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -1087,3 +1087,19 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-16 15:38:26 timer_wheel PASSED: 8 FAILED: 0 TIME: 175ms
- 2026-09-16 15:41:56 timer_wheel PASSED: 8 FAILED: 0 TIME: 729ms
- 2026-09-16 15:43:02 all PASSED: 1376 FAILED: 0 TIME: 400280ms
-+2026-09-16 16:09:29 ipc_timeout PASSED: 7 FAILED: 0 TIME: 387ms
-+2026-09-16 16:22:28 ipc_timeout PASSED: 7 FAILED: 0 TIME: 281ms
-+2026-09-16 16:23:00 ipc_blocking PASSED: 4 FAILED: 0 TIME: 146ms
-+2026-09-16 16:23:34 syscall_core PASSED: 23 FAILED: 0 TIME: 407ms
-+2026-09-16 16:23:58 cap_ipc PASSED: 6 FAILED: 0 TIME: 810ms
-+2026-09-16 16:24:23 timing_core PASSED: 19 FAILED: 0 TIME: 1366ms
-+2026-09-16 16:24:47 ipc_fastpath PASSED: 14 FAILED: 0 TIME: 423ms
-+2026-09-16 16:25:23 timer_wheel PASSED: 8 FAILED: 0 TIME: 176ms
-+2026-09-16 18:05:25 all PASSED: 1383 FAILED: 0 TIME: 101762ms
-+2026-09-16 19:57:10 all PASSED: 1383 FAILED: 0 TIME: 106897ms
-+2026-09-16 20:47:59 ipc_timeout PASSED: 7 FAILED: 0 TIME: 270ms
-+2026-09-16 20:49:04 all PASSED: 1383 FAILED: 0 TIME: 102656ms
-+2026-09-16 20:50:14 all PASSED: 1383 FAILED: 0 TIME: 105934ms
-+2026-09-16 20:51:27 all PASSED: 1383 FAILED: 0 TIME: 106118ms
-+2026-09-16 21:01:12 ipc_timeout PASSED: 7 FAILED: 0 TIME: 271ms
-+2026-09-16 21:02:40 all PASSED: 1383 FAILED: 0 TIME: 455975ms
+@@ -108,6 +108,7 @@ __attribute__((weak)) void register_sporadic_server_tests() {}
+ __attribute__((weak)) void register_atomic_tests() {}
+ __attribute__((weak)) void register_hrt_monotonic_tests() {}
+ __attribute__((weak)) void register_timer_wheel_tests() {}
++__attribute__((weak)) void register_task_metering_tests() {}
+ __attribute__((weak)) void register_cross_arch_tests() {}
+ #if defined(CONFIG_ARCH_AARCH64)
+ __attribute__((weak)) void register_aarch64_tests() {}

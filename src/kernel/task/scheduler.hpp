@@ -202,6 +202,11 @@ class Scheduler {
     /// @brief Current affinity mask of @p task (constraint, not
     ///        placement — the balancer re-pins toward balance).
     static uint64_t get_affinity(const TaskControlBlock &task) noexcept;
+    /// @brief Fill @p out with @p task's execution-time accounting (issue
+    ///        #21).  Takes IrqGuard + scheduler_lock_; charges the task
+    ///        first when it is the running task so the sample includes time
+    ///        up to the call (charge-before-read).
+    static void read_times(TaskControlBlock &task, TaskTimes &out) noexcept;
     /// @brief True for real-time tasks (strict period set, issue #61).
     ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
     static bool is_rt_task(const TaskControlBlock &task) noexcept;

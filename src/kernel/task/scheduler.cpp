@@ -1039,9 +1039,45 @@ static void wake_waiting_parent(TaskControlBlock &child) {
 static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                            sync::SpinLock *held_lock);
 
+/// @brief Bill (ns_monotonic() - exec_stamp_ns) into the task's executed-ns
+///        totals (issue #21 — feeds admission, WCET validation, SYS_TIMES).
+///        Saturating adds (never wrap); always restamps.  A zero stamp means
+///        "never stamped" (fresh task): stamp without billing so the first
+///        charge never bills creation-to-first-dispatch as execution.
+///        Caller must hold scheduler_lock_ (or run IRQ-off on the tick path)
+///        so the add+restamp is atomic — never double-charge, never lose.
+/// @param t Task to charge (must be the running task or a terminating task).
+static void charge_exec(TaskControlBlock &t) noexcept {
+    const uint64_t now = arch::Timer::ns_monotonic();
+    if (t.exec_stamp_ns == 0) {
+        t.exec_stamp_ns = now;
+        return;
+    }
+    const uint64_t delta =
+        (now >= t.exec_stamp_ns) ? now - t.exec_stamp_ns : 0;
+    if (delta > 0) {
+        t.exec_ns_total = (t.exec_ns_total > UINT64_MAX - delta)
+                              ? UINT64_MAX
+                              : t.exec_ns_total + delta;
+        t.exec_period_ns = (t.exec_period_ns > UINT64_MAX - delta)
+                               ? UINT64_MAX
+                               : t.exec_period_ns + delta;
+    }
+    t.exec_stamp_ns = now;
+}
+
+/// @brief Stamp a task being switched in: it starts accruing from now, and
+///        any stale stamp (e.g. from a previous quantum) is discarded so no
+///        descheduled interval is ever billed (issue #21).
+/// @param t Task being dispatched.
+static void stamp_exec(TaskControlBlock &t) noexcept {
+    t.exec_stamp_ns = arch::Timer::ns_monotonic();
+}
+
 void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     arch::IrqGuard irq_guard{};
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    charge_exec(task); // issue #21: bill the final partial quantum (no loss)
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (task.id == 6) {
         auto *cur = current_task();
@@ -1107,6 +1143,17 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
             switch_to_task(&task, *next, nullptr);
         }
     }
+}
+
+void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    if (&task == current_task())
+        charge_exec(task); // charge-before-read: sample includes time to now
+    out.exec_ns_total = task.exec_ns_total;
+    out.exec_period_ns = task.exec_period_ns;
+    out.executed_ticks = task.executed_ticks;
+    out.wcet_ticks = task.wcet_ticks;
 }
 
 TaskControlBlock *const Scheduler::ID_TOMBSTONE =
@@ -2059,8 +2106,10 @@ void Scheduler::on_tick() noexcept {
             if (queue_target(*task) != sched_cpu())
                 continue;
 
-            if (task == running)
+            if (task == running) {
                 ++task->executed_ticks;
+                charge_exec(*task); // issue #21: ns billing, running task only
+            }
 
             if (task->state == TaskState::RUNNING ||
                 task->state == TaskState::READY) {
@@ -2069,6 +2118,9 @@ void Scheduler::on_tick() noexcept {
                     --task->remaining_ticks;
                 if (prev_rem == 0 && task->period_ticks > 0) {
                     task->remaining_ticks = task->period_ticks;
+                    // Issue #21: new period, fresh budget clock (this
+                    // tick was already billed into the old period above).
+                    task->exec_period_ns = 0;
 #if CONFIG_DEADLINE_MISS_DETECTION && !CONFIG_DEADLINE_MONITOR_TASK
                     task->deadline_ticks += task->period_ticks;
                     task->deadline_missed = false;
@@ -2730,6 +2782,11 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         release_lock();
         return;
     }
+    // Issue #21: bill the outgoing task's quantum, stamp the incoming one.
+    // Both run under the caller's scheduler_lock_/IRQ-off discipline, so the
+    // add+restamp pairs are atomic — no double-charge, no lost quantum.
+    charge_exec(*current);
+    stamp_exec(next);
 
     uint64_t *save_target = &task_stack_ptr(current);
     bool cur_is_boot_stack = false;

@@ -519,6 +519,9 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->period_ticks = 0;
     tcb->base_priority = 2;
     tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_stamp_ns = 0;
     tcb->remaining_ticks = 0;
     tcb->deadline_ticks = arch::Timer::ticks();
     tcb->page_table_ = 0;

@@ -108,7 +108,8 @@ enum class SyscallNumber : uint8_t {
     SEND_SYNC_FAST = 76, ///< register-passing SEND_SYNC (issue #11)
     SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
     GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
-    MAX_SYSCALL = 79,
+    TIMES = 79,          ///< read a task's execution-time accounting: arg0=pid (0=self), arg1=user TaskTimes* out-param (issue #21)
+    MAX_SYSCALL = 80,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -260,6 +261,8 @@ class Syscall {
                                      uint64_t *);
     static uint64_t sys_get_affinity(uint64_t, uint64_t, uint64_t, uint64_t,
                                      uint64_t *);
+    static uint64_t sys_times(uint64_t, uint64_t, uint64_t, uint64_t,
+                              uint64_t *);
     static uint64_t sys_kill(uint64_t, uint64_t, uint64_t, uint64_t,
                              uint64_t *);
     static uint64_t sys_pipe(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -447,6 +450,7 @@ class Syscall {
             &Syscall::sys_send_sync_fast,
             &Syscall::sys_set_affinity,
             &Syscall::sys_get_affinity,
+            &Syscall::sys_times,
     };
 };
 

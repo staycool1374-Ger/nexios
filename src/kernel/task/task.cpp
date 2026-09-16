@@ -943,6 +943,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->deadline_missed = false;
     tcb->deadline_miss_count = 0;
     tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_stamp_ns = 0;
     tcb->remaining_ticks = period_ticks;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
@@ -1159,6 +1162,9 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->deadline_missed = false;
     tcb->deadline_miss_count = 0;
     tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_stamp_ns = 0;
     tcb->remaining_ticks = period_ticks;
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
@@ -1348,6 +1354,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->period_ticks = parent->period_ticks;
     tcb->deadline_ticks = parent->deadline_ticks;
     tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_stamp_ns = 0;
     tcb->remaining_ticks = parent->remaining_ticks;
     tcb->exit_code = 0;
     tcb->waiting_child_pid = 0;

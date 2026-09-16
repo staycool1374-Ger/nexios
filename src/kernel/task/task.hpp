@@ -182,6 +182,16 @@ struct TaskContext {
 };
 #endif
 
+/// @brief Snapshot of a task's execution-time accounting (issue #21).
+///        SYS_TIMES out-param: copied to the caller's buffer, never a
+///        kernel pointer handed to user space.
+struct TaskTimes {
+    uint64_t exec_ns_total;  ///< lifetime executed ns (saturating)
+    uint64_t exec_period_ns; ///< current-period executed ns (saturating)
+    uint64_t executed_ticks; ///< tick-granular executed count (#154)
+    uint64_t wcet_ticks;     ///< configured WCET bound (0 = implicit 100%)
+};
+
 /// @brief Task control block — represents a single thread of execution.
 /// @note Includes scheduling parameters, register context, and stack info.
 struct TaskControlBlock {
@@ -234,9 +244,10 @@ struct TaskControlBlock {
           debug_switch_idx(0),
 #endif
           id(0), parent_id(0), state(TaskState::READY), priority(0),
-          base_priority(0), period_ticks(0), deadline_ticks(0),
-          deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
-          remaining_ticks(0), wcet_ticks(0), wcet_overrun_fired(false),
+           base_priority(0), period_ticks(0), deadline_ticks(0),
+           deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
+           remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
+           exec_stamp_ns(0), wcet_ticks(0), wcet_overrun_fired(false),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
@@ -283,6 +294,15 @@ struct TaskControlBlock {
     uint64_t deadline_miss_count;
     uint64_t executed_ticks;
     uint64_t remaining_ticks;
+    /// @brief Lifetime executed time in ns, saturating at UINT64_MAX
+    ///        (issue #21 — feeds admission, WCET validation, SYS_TIMES).
+    uint64_t exec_ns_total;
+    /// @brief Current-period executed time in ns, saturating; reset at
+    ///        each period reload (issue #21).
+    uint64_t exec_period_ns;
+    /// @brief ns_monotonic() sample at the last charge point; the next
+    ///        charge bills (now - stamp) (issue #21).
+    uint64_t exec_stamp_ns;
     uint64_t
         wcet_ticks; ///< explicit WCET for utilisation calc; 0 = implicit 100%
     bool wcet_overrun_fired; ///< latch to fire WCET handler once per period
