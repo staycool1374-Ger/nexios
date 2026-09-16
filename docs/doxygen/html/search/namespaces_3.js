@@ -30,6 +30,7 @@ var searchData=
   ['kernel_3a_3async_27',['sync',['../namespacekernel_1_1sync.html',1,'kernel']]],
   ['kernel_3a_3atask_28',['task',['../namespacekernel_1_1task.html',1,'kernel']]],
   ['kernel_3a_3atest_29',['test',['../namespacekernel_1_1test.html',1,'kernel']]],
-  ['kernel_3a_3avfs_30',['vfs',['../namespacekernel_1_1vfs.html',1,'kernel']]],
-  ['kernel_3a_3avfsd_31',['vfsd',['../namespacekernel_1_1vfsd.html',1,'kernel']]]
+  ['kernel_3a_3atime_30',['time',['../namespacekernel_1_1time.html',1,'kernel']]],
+  ['kernel_3a_3avfs_31',['vfs',['../namespacekernel_1_1vfs.html',1,'kernel']]],
+  ['kernel_3a_3avfsd_32',['vfsd',['../namespacekernel_1_1vfsd.html',1,'kernel']]]
 ];

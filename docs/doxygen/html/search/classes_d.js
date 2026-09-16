@@ -1,18 +1,16 @@
 var searchData=
 [
-  ['sampler_0',['Sampler',['../classkernel_1_1profiling_1_1_sampler.html',1,'kernel::profiling::Sampler'],['../class_sampler.html',1,'Sampler']]],
-  ['schedpercpupod_1',['SchedPerCpuPod',['../structkernel_1_1_sched_per_cpu_pod.html',1,'kernel']]],
-  ['scheduler_2',['Scheduler',['../classkernel_1_1_scheduler.html',1,'kernel']]],
-  ['schedulerconfig_3',['SchedulerConfig',['../structkernel_1_1_scheduler_config.html',1,'kernel']]],
-  ['scopedcurrenttask_4',['ScopedCurrentTask',['../classkernel_1_1test_1_1_scoped_current_task.html',1,'kernel::test']]],
-  ['scopedref_5',['ScopedRef',['../classkernel_1_1_scoped_ref.html',1,'kernel']]],
-  ['scopeguard_6',['ScopeGuard',['../class_scope_guard.html',1,'']]],
-  ['sharedringheader_7',['SharedRingHeader',['../structkernel_1_1shm_1_1_shared_ring_header.html',1,'kernel::shm']]],
-  ['shell_8',['Shell',['../classservice_1_1_shell.html',1,'service']]],
-  ['shootdownbatch_9',['ShootdownBatch',['../classarch_1_1_shootdown_batch.html',1,'arch']]],
-  ['signalframe_10',['SignalFrame',['../structkernel_1_1_signal_frame.html',1,'kernel']]],
-  ['simpletaskdeleter_11',['SimpleTaskDeleter',['../struct_simple_task_deleter.html',1,'']]],
-  ['spinlockguard_12',['SpinLockGuard',['../class_spin_lock_guard.html',1,'']]],
-  ['stat_13',['stat',['../structstat.html',1,'']]],
-  ['swslots_14',['SwSlots',['../structkernel_1_1_scheduler_1_1_sw_slots.html',1,'kernel::Scheduler']]]
+  ['readyqueuemanager_0',['ReadyQueueManager',['../classkernel_1_1_ready_queue_manager.html',1,'kernel']]],
+  ['readyqueuepod_1',['ReadyQueuePOD',['../structkernel_1_1_ready_queue_p_o_d.html',1,'kernel']]],
+  ['registry_2',['Registry',['../classkernel_1_1test_1_1_registry.html',1,'kernel::test']]],
+  ['remappingunit_3',['RemappingUnit',['../structkernel_1_1iommu_1_1dmar_1_1_remapping_unit.html',1,'kernel::iommu::dmar']]],
+  ['remove_5freference_4',['remove_reference',['../structremove__reference.html',1,'']]],
+  ['remove_5freference_3c_20t_20_26_20_3e_5',['remove_reference&lt; T &amp; &gt;',['../structremove__reference_3_01_t_01_6_01_4.html',1,'']]],
+  ['remove_5freference_3c_20t_20_26_26_20_3e_6',['remove_reference&lt; T &amp;&amp; &gt;',['../structremove__reference_3_01_t_01_6_6_01_4.html',1,'']]],
+  ['request_7',['Request',['../structkernel_1_1_tlb_shootdown_1_1_request.html',1,'kernel::TlbShootdown']]],
+  ['resourcecounters_8',['ResourceCounters',['../structkernel_1_1test_1_1_resource_counters.html',1,'kernel::test']]],
+  ['resourcetracker_9',['ResourceTracker',['../classkernel_1_1test_1_1_resource_tracker.html',1,'kernel::test']]],
+  ['rlimit_10',['Rlimit',['../structkernel_1_1_rlimit.html',1,'kernel::Rlimit'],['../struct_rlimit.html',1,'Rlimit']]],
+  ['rlimit_11',['rlimit',['../structrlimit.html',1,'']]],
+  ['rwlock_12',['RwLock',['../classkernel_1_1sync_1_1_rw_lock.html',1,'kernel::sync']]]
 ];

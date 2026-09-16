@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['mode_5ft_0',['mode_t',['../types_8h.html#adb8322e115035a284aab704909e63d00',1,'types.h']]]
+  ['l_0',['L',['../namespacekernel_1_1debug.html#a516d263e9a9dd5318b938067a1e3b353',1,'kernel::debug']]]
 ];

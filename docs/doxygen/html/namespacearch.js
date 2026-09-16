@@ -1,5 +1,10 @@
 var namespacearch =
 [
+    [ "hpet", "namespacearch_1_1hpet.html", [
+      [ "counter", "namespacearch_1_1hpet.html#a41ef9de205eb776a0737e64f04c97ed5", null ],
+      [ "freq_hz", "namespacearch_1_1hpet.html#aa0d92e20d620519b97bcec1ccf51ff86", null ],
+      [ "probe", "namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3", null ]
+    ] ],
     [ "APIC", "classarch_1_1_a_p_i_c.html", "classarch_1_1_a_p_i_c" ],
     [ "Caps", "structarch_1_1_caps.html", "structarch_1_1_caps" ],
     [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],

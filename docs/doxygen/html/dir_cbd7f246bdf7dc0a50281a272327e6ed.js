@@ -19,6 +19,7 @@ var dir_cbd7f246bdf7dc0a50281a272327e6ed =
     [ "syscall", "dir_86f15235f1dbace123bd765dedac1e4b.html", "dir_86f15235f1dbace123bd765dedac1e4b" ],
     [ "task", "dir_507c9ec95be9a201f49444d5da26e8a6.html", "dir_507c9ec95be9a201f49444d5da26e8a6" ],
     [ "test", "dir_6198906391a1b3439aea9d345bf1b4f0.html", "dir_6198906391a1b3439aea9d345bf1b4f0" ],
+    [ "time", "dir_fc5cfe600d892ad1b812a54c244fb6ca.html", "dir_fc5cfe600d892ad1b812a54c244fb6ca" ],
     [ "vfs", "dir_a74448e09a2c209561f74c876dd35689.html", "dir_a74448e09a2c209561f74c876dd35689" ],
     [ "bootparams.cpp", "bootparams_8cpp.html", null ],
     [ "bootparams.hpp", "bootparams_8hpp.html", null ],

@@ -56,7 +56,7 @@ var searchData=
   ['print_5freport_53',['print_report',['../namespacekernel_1_1test.html#a0fb9d643d01186cc11f1c2868176b39c',1,'kernel::test']]],
   ['printf_54',['printf',['../stdio_8c.html#a55f3d956bb2ba20b5059e9e25484a47f',1,'printf(const char *fmt,...):&#160;stdio.c'],['../stdio_8h.html#a55f3d956bb2ba20b5059e9e25484a47f',1,'printf(const char *fmt,...):&#160;stdio.c']]],
   ['prioritymap_55',['PriorityMap',['../classkernel_1_1_priority_map.html#a2d3e3d8feecbcb4b31dfb67a8adee94d',1,'kernel::PriorityMap']]],
-  ['probe_56',['probe',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a49d55ccf28c9ef9ad6009a610d102d6b',1,'kernel::iommu::IoMmuManager']]],
+  ['probe_56',['probe',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a49d55ccf28c9ef9ad6009a610d102d6b',1,'kernel::iommu::IoMmuManager::probe()'],['../namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3',1,'arch::hpet::probe()']]],
   ['probe_5fhardware_57',['probe_hardware',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a8056e61793d4747342dcca012a3b38f7',1,'kernel::iommu::IoMmuManager']]],
   ['process_5fdeferred_5fkills_58',['process_deferred_kills',['../classkernel_1_1_scheduler.html#ac2ebbf950ac51a2d7700333fb0c4ba8e',1,'kernel::Scheduler']]],
   ['publish_5fscheduler_5fready_59',['publish_scheduler_ready',['../namespacekernel_1_1smp.html#ae4fc4bdd31c0c6cd357ec5d46f55289a',1,'kernel::smp']]],

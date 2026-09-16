@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -265,6 +265,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__hal__bits_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">HAL bit-manipulation utility tests. <br /></td></tr>
 <tr class="memitem:test_5Fhealth_2Ecpp" id="r_test_5Fhealth_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__health_8cpp.html">test_health.cpp</a></td></tr>
 <tr class="memdesc:test__health_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Health-check / smoke test suite. <br /></td></tr>
+<tr class="memitem:test_5Fhr_5Fclock_2Ecpp" id="r_test_5Fhr_5Fclock_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__hr__clock_8cpp.html">test_hr_clock.cpp</a></td></tr>
+<tr class="memdesc:test__hr__clock_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">High-resolution monotonic clock tests (issue #16, v0.4.7). <br /></td></tr>
 <tr class="memitem:test_5Fidle_5Fcleanup_2Ecpp" id="r_test_5Fidle_5Fcleanup_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idle__cleanup_8cpp.html">test_idle_cleanup.cpp</a></td></tr>
 <tr class="memdesc:test__idle__cleanup_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tests that idle-task zombie cleanup does not cause deadline misses. <br /></td></tr>
 <tr class="memitem:test_5Fidle_5Ftask_2Ecpp" id="r_test_5Fidle_5Ftask_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__idle__task_8cpp.html">test_idle_task.cpp</a></td></tr>
@@ -302,6 +304,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__ipc__lock__free_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPC lock-free queue tests. <br /></td></tr>
 <tr class="memitem:test_5Fipc_5Frobustness_2Ecpp" id="r_test_5Fipc_5Frobustness_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__ipc__robustness_8cpp.html">test_ipc_robustness.cpp</a></td></tr>
 <tr class="memdesc:test__ipc__robustness_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPC robustness and error-handling tests. <br /></td></tr>
+<tr class="memitem:test_5Fipc_5Ftimeout_2Ecpp" id="r_test_5Fipc_5Ftimeout_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__ipc__timeout_8cpp.html">test_ipc_timeout.cpp</a></td></tr>
+<tr class="memdesc:test__ipc__timeout_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wheel-armed bounded receive tests (issue #18, v0.4.7). <br /></td></tr>
 <tr class="memitem:test_5Fipi_5Fbatching_2Ecpp" id="r_test_5Fipi_5Fbatching_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__ipi__batching_8cpp.html">test_ipi_batching.cpp</a></td></tr>
 <tr class="memdesc:test__ipi__batching_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">IPI-batching tests (issue #85, module 16). The transport half (INIT/SIPI acceptance, FIXED delivery) is covered by the smp_ipi class; no batching layer exists, so this file pins the current unbatched baseline (real) plus documented batching stubs. <br /></td></tr>
 <tr class="memitem:test_5Firq_5Fguard_2Ecpp" id="r_test_5Firq_5Fguard_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__irq__guard_8cpp.html">test_irq_guard.cpp</a></td></tr>
@@ -495,6 +499,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__textutils_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Text utility function tests. <br /></td></tr>
 <tr class="memitem:test_5Ftimer_2Ecpp" id="r_test_5Ftimer_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__timer_8cpp.html">test_timer.cpp</a></td></tr>
 <tr class="memdesc:test__timer_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timer subsystem tests. <br /></td></tr>
+<tr class="memitem:test_5Ftimer_5Fwheel_2Ecpp" id="r_test_5Ftimer_5Fwheel_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__timer__wheel_8cpp.html">test_timer_wheel.cpp</a></td></tr>
+<tr class="memdesc:test__timer__wheel_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Event-timer wheel tests (issue #17, v0.4.7). <br /></td></tr>
 <tr class="memitem:test_5Ftiming_2Ecpp" id="r_test_5Ftiming_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__timing_8cpp.html">test_timing.cpp</a></td></tr>
 <tr class="memdesc:test__timing_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timing measurement tests. <br /></td></tr>
 <tr class="memitem:test_5Ftlb_5Flatency_2Ecpp" id="r_test_5Ftlb_5Flatency_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tlb__latency_8cpp.html">test_tlb_latency.cpp</a></td></tr>

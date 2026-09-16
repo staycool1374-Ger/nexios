@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -227,6 +227,13 @@ Macros</h2></td></tr>
 <tr class="memdesc:adb1a44e12231914498173d371ade590f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Computed count of enabled syscalls (used for dispatch table sizing).  <br /></td></tr>
 <tr class="memitem:a95ce8c171faeb012773cd4f72a0f2935" id="r_a95ce8c171faeb012773cd4f72a0f2935"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a95ce8c171faeb012773cd4f72a0f2935">CONFIG_HAS_MPU</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:a835305cb9a116e1c539f8f2a6b880848" id="r_a835305cb9a116e1c539f8f2a6b880848"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a835305cb9a116e1c539f8f2a6b880848">CONFIG_HAS_HPET</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a700f59f32dcea3aeefaee7407867065a" id="r_a700f59f32dcea3aeefaee7407867065a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a700f59f32dcea3aeefaee7407867065a">CONFIG_HRT_NS_WIDTH</a>&#160;&#160;&#160;64</td></tr>
+<tr class="memdesc:a700f59f32dcea3aeefaee7407867065a"><td class="mdescLeft">&#160;</td><td class="mdescRight">64-bit nanosecond width for ns_monotonic() (documents wrap period).  <br /></td></tr>
+<tr class="memitem:a0600363aeeff028f814836fef3e54621" id="r_a0600363aeeff028f814836fef3e54621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0600363aeeff028f814836fef3e54621">CONFIG_HRT_CALIBRATION_RETRIES</a>&#160;&#160;&#160;12</td></tr>
+<tr class="memdesc:a0600363aeeff028f814836fef3e54621"><td class="mdescLeft">&#160;</td><td class="mdescRight">PIT-anchored TSC calibration attempts (x86_64, bounded loop).  <br /></td></tr>
+<tr class="memitem:a05b47d11f3b104e148d4aace9059e921" id="r_a05b47d11f3b104e148d4aace9059e921"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a05b47d11f3b104e148d4aace9059e921">CONFIG_HRT_CALIBRATION_TIMEOUT_MS</a>&#160;&#160;&#160;500</td></tr>
+<tr class="memdesc:a05b47d11f3b104e148d4aace9059e921"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wall-clock bound for the whole TSC calibration (ms, 50 MHz floor).  <br /></td></tr>
+<tr class="memitem:a82e6d056624722ccc8199ed26d77f752" id="r_a82e6d056624722ccc8199ed26d77f752"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a82e6d056624722ccc8199ed26d77f752">CONFIG_HRT_SOURCE_PREFERENCE</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:aac781da257db7b6183fac86fc89095c5" id="r_aac781da257db7b6183fac86fc89095c5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aac781da257db7b6183fac86fc89095c5">CONFIG_PRIORITY_CEILING_PROTOCOL</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a9cd0e684a26b0270d442310ccd4330da" id="r_a9cd0e684a26b0270d442310ccd4330da"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cd0e684a26b0270d442310ccd4330da">CONFIG_MAX_HELD_CEILINGS</a>&#160;&#160;&#160;16</td></tr>
 <tr class="memitem:ab7f91f26b4b36eff22a2b15ea5405621" id="r_ab7f91f26b4b36eff22a2b15ea5405621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab7f91f26b4b36eff22a2b15ea5405621">CONFIG_MAX_PER_TASK_OBJECTS</a>&#160;&#160;&#160;32</td></tr>
@@ -661,6 +668,69 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>Total kernel heap size in bytes (used by MemPool and early allocators). Default: 16777216 (16 MiB). </p>
+
+</div>
+</div>
+<a id="a0600363aeeff028f814836fef3e54621" name="a0600363aeeff028f814836fef3e54621"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0600363aeeff028f814836fef3e54621">&#9670;&#160;</a></span>CONFIG_HRT_CALIBRATION_RETRIES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_CALIBRATION_RETRIES&#160;&#160;&#160;12</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>PIT-anchored TSC calibration attempts (x86_64, bounded loop). </p>
+
+</div>
+</div>
+<a id="a05b47d11f3b104e148d4aace9059e921" name="a05b47d11f3b104e148d4aace9059e921"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a05b47d11f3b104e148d4aace9059e921">&#9670;&#160;</a></span>CONFIG_HRT_CALIBRATION_TIMEOUT_MS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_CALIBRATION_TIMEOUT_MS&#160;&#160;&#160;500</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Wall-clock bound for the whole TSC calibration (ms, 50 MHz floor). </p>
+
+</div>
+</div>
+<a id="a700f59f32dcea3aeefaee7407867065a" name="a700f59f32dcea3aeefaee7407867065a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a700f59f32dcea3aeefaee7407867065a">&#9670;&#160;</a></span>CONFIG_HRT_NS_WIDTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_NS_WIDTH&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>64-bit nanosecond width for ns_monotonic() (documents wrap period). </p>
+
+</div>
+</div>
+<a id="a82e6d056624722ccc8199ed26d77f752" name="a82e6d056624722ccc8199ed26d77f752"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82e6d056624722ccc8199ed26d77f752">&#9670;&#160;</a></span>CONFIG_HRT_SOURCE_PREFERENCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_HRT_SOURCE_PREFERENCE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Tick-source preference: 0 = auto, 1 = prefer TSC(-deadline), 2 = prefer HPET when probed. </p>
 
 </div>
 </div>

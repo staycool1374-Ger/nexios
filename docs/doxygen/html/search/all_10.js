@@ -134,7 +134,7 @@ var searchData=
   ['priority_131',['priority',['../structkernel_1_1_scheduler_1_1_task_fields.html#a06613a61eb8e6bf0b9a70d68163af9f3',1,'kernel::Scheduler::TaskFields']]],
   ['priority_5fmap_2ehpp_132',['priority_map.hpp',['../priority__map_8hpp.html',1,'']]],
   ['prioritymap_133',['PriorityMap',['../classkernel_1_1_priority_map.html',1,'kernel::PriorityMap'],['../classkernel_1_1_priority_map.html#a2d3e3d8feecbcb4b31dfb67a8adee94d',1,'kernel::PriorityMap::PriorityMap()']]],
-  ['probe_134',['probe',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a49d55ccf28c9ef9ad6009a610d102d6b',1,'kernel::iommu::IoMmuManager']]],
+  ['probe_134',['probe',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a49d55ccf28c9ef9ad6009a610d102d6b',1,'kernel::iommu::IoMmuManager::probe()'],['../namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3',1,'arch::hpet::probe()']]],
   ['probe_5fhardware_135',['probe_hardware',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#a8056e61793d4747342dcca012a3b38f7',1,'kernel::iommu::IoMmuManager']]],
   ['proc_5ffs_136',['proc_fs',['../namespacekernel_1_1vfs.html#a8049afbb25873d95c723f015f6c61856',1,'kernel::vfs']]],
   ['process_5fdeferred_5fkills_137',['process_deferred_kills',['../classkernel_1_1_scheduler.html#ac2ebbf950ac51a2d7700333fb0c4ba8e',1,'kernel::Scheduler']]],

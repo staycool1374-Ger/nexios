@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -161,6 +161,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a436a27b56c64e696706ebf01971a738c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Program the <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> timer to fire every <span class="tt">ns</span> nanoseconds. In TSC-deadline mode the ISR re-arms at <span class="tt">periodic_ns_</span>; in periodic bus-clock mode the hardware auto-re-arms.  <br /></td></tr>
 <tr class="memitem:a7c7c1235ef15b4b2bf4ff551470327af" id="r_a7c7c1235ef15b4b2bf4ff551470327af"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7c7c1235ef15b4b2bf4ff551470327af">timer_current_count</a> ()</td></tr>
 <tr class="memdesc:a7c7c1235ef15b4b2bf4ff551470327af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the current <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> timer count.  <br /></td></tr>
+<tr class="memitem:ae8a355e6ec0c95782d3c87561fa2b25f" id="r_ae8a355e6ec0c95782d3c87561fa2b25f"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae8a355e6ec0c95782d3c87561fa2b25f">has_tsc_deadline</a> ()</td></tr>
+<tr class="memdesc:ae8a355e6ec0c95782d3c87561fa2b25f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether CPU+APIC support TSC-deadline mode (issue #16). Valid after <a class="el" href="#ab249fe370f75c1368059078e6c88f6d9" title="Initialise the local APIC (x2APIC MSR or xAPIC MMIO).">init()</a> probed CPUID leaf 1 (ECX bit 24).  <br /></td></tr>
+<tr class="memitem:af9d9ee3e615a099cc4db05484bff493a" id="r_af9d9ee3e615a099cc4db05484bff493a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af9d9ee3e615a099cc4db05484bff493a">arm_deadline</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ns)</td></tr>
+<tr class="memdesc:af9d9ee3e615a099cc4db05484bff493a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm a one-shot TSC deadline (issue #16; timer-wheel use). Fail-closed: false when the <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> is off, ns is 0, or TSC-deadline mode is unavailable. Steals the LAPIC timer: the caller must re-arm the periodic tick (timer_init + timer_start at the boot rate) after expiry.  <br /></td></tr>
 <tr class="memitem:a6cf29bb7b88440859780745585d13e3e" id="r_a6cf29bb7b88440859780745585d13e3e"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a6cf29bb7b88440859780745585d13e3e">is_apic_supported</a> ()</td></tr>
 <tr class="memdesc:a6cf29bb7b88440859780745585d13e3e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the CPU supports an <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>.  <br /></td></tr>
 <tr class="memitem:ad903889e8587ca2fa1a27d87d06b375c" id="r_ad903889e8587ca2fa1a27d87d06b375c"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ad903889e8587ca2fa1a27d87d06b375c">set_tpr_class</a> (<a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> cls)</td></tr>
@@ -235,6 +239,46 @@ Static Public Attributes</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="af9d9ee3e615a099cc4db05484bff493a" name="af9d9ee3e615a099cc4db05484bff493a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af9d9ee3e615a099cc4db05484bff493a">&#9670;&#160;</a></span>arm_deadline()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::APIC::arm_deadline </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ns</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Arm a one-shot TSC deadline (issue #16; timer-wheel use). Fail-closed: false when the <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> is off, ns is 0, or TSC-deadline mode is unavailable. Steals the LAPIC timer: the caller must re-arm the periodic tick (timer_init + timer_start at the boot rate) after expiry. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ns</td><td>Delay in nanoseconds (0 = no-op, returns false). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the deadline was armed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_a_p_i_c_af9d9ee3e615a099cc4db05484bff493a_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_af9d9ee3e615a099cc4db05484bff493a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a id="a3b30327b9bac7df8de30b112b7b117d2" name="a3b30327b9bac7df8de30b112b7b117d2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3b30327b9bac7df8de30b112b7b117d2">&#9670;&#160;</a></span>eoi()</h2>
 
@@ -316,6 +360,34 @@ Static Public Attributes</h2></td></tr>
 
 </div>
 </div>
+<a id="ae8a355e6ec0c95782d3c87561fa2b25f" name="ae8a355e6ec0c95782d3c87561fa2b25f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8a355e6ec0c95782d3c87561fa2b25f">&#9670;&#160;</a></span>has_tsc_deadline()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::APIC::has_tsc_deadline </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether CPU+APIC support TSC-deadline mode (issue #16). Valid after <a class="el" href="#ab249fe370f75c1368059078e6c88f6d9" title="Initialise the local APIC (x2APIC MSR or xAPIC MMIO).">init()</a> probed CPUID leaf 1 (ECX bit 24). </p>
+<dl class="section return"><dt>Returns</dt><dd>true when TSC-deadline mode is available. </dd></dl>
+
+</div>
+</div>
 <a id="ab249fe370f75c1368059078e6c88f6d9" name="ab249fe370f75c1368059078e6c88f6d9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab249fe370f75c1368059078e6c88f6d9">&#9670;&#160;</a></span>init()</h2>
 
@@ -345,7 +417,7 @@ Static Public Attributes</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_ab249fe370f75c1368059078e6c88f6d9_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_ab249fe370f75c1368059078e6c88f6d9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -597,7 +669,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_a2955b5b89ac50be8c8896d91a9d6b2f4_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_a2955b5b89ac50be8c8896d91a9d6b2f4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -763,7 +835,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_af7e4a0e6659cd8f7a49f6c08c269f321_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_af7e4a0e6659cd8f7a49f6c08c269f321_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -850,7 +922,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_ab63f9b0cbcbcbb282fa17edc51886485_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_ab63f9b0cbcbcbb282fa17edc51886485_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -883,7 +955,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_a_p_i_c_a13f2ec36d9a52f4c7dff5f9cc7610aa1_cgraph.png" border="0" usemap="#aclassarch_1_1_a_p_i_c_a13f2ec36d9a52f4c7dff5f9cc7610aa1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>

@@ -1,7 +1,9 @@
 var searchData=
 [
-  ['taskcontrolblock_0',['TaskControlBlock',['../namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c',1,'kernel::test']]],
-  ['taskptr_1',['TaskPtr',['../task__ptr_8hpp.html#a263f29adbaac80d77e9fbbbf23965723',1,'task_ptr.hpp']]],
-  ['time_5ft_2',['time_t',['../types_8h.html#a824afaa48b313f905546cf45822800fc',1,'types.h']]],
-  ['type_3',['type',['../structremove__reference.html#a31ea968007fc326e375c28702e5c208b',1,'remove_reference::type'],['../structremove__reference_3_01_t_01_6_01_4.html#a913f3767f5d7c818b4aa1997bfb85f1d',1,'remove_reference&lt; T &amp; &gt;::type'],['../structremove__reference_3_01_t_01_6_6_01_4.html#acf4651f0a6fc96ef32dd88de51f593c6',1,'remove_reference&lt; T &amp;&amp; &gt;::type'],['../structintegral__constant.html#a83852f05767121d9b948a9cec5ae1a91',1,'integral_constant::type']]]
+  ['s_0',['S',['../namespacekernel_1_1debug.html#a4c63317d15f89eed657007431bb35cb9',1,'kernel::debug']]],
+  ['sighandler_5ft_1',['sighandler_t',['../namespacekernel.html#ae89f8530616ba6e58eebc1f5104f6e5c',1,'kernel::sighandler_t'],['../signal_8h.html#a754cdc0bcfffe07baa426dc252c9101a',1,'sighandler_t:&#160;signal.h']]],
+  ['simpletaskptr_2',['SimpleTaskPtr',['../task__ptr_8hpp.html#a53ca8685f1df91ebe286141b39601554',1,'task_ptr.hpp']]],
+  ['size_5ft_3',['size_t',['../types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875',1,'size_t:&#160;types.hpp'],['../types_8h.html#acf18a0d6c4b39d531e021702e9a77984',1,'size_t:&#160;types.h']]],
+  ['ssize_5ft_4',['ssize_t',['../types_8h.html#a831c6b6852c6d34448e30a88c34539fd',1,'types.h']]],
+  ['suseconds_5ft_5',['suseconds_t',['../types_8h.html#ae32f449456d5f1877a9e630e92422c01',1,'types.h']]]
 ];

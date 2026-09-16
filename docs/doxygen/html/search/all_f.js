@@ -18,7 +18,7 @@ var searchData=
   ['ok_15',['ok',['../structkernel_1_1_error_or.html#a7836a95c7c7e5cf4f11da5ae67a23170',1,'kernel::ErrorOr::ok()'],['../structkernel_1_1_error_or_3_01void_01_4.html#a898ddac425b9d95e6335b7696ba97df1',1,'kernel::ErrorOr&lt; void &gt;::ok()']]],
   ['old_5fvalue_16',['old_value',['../structkernel_1_1diag_1_1_tcb_write_log.html#a35e7f2cfc9799cf4fc7a6b3ffcbb6a12',1,'kernel::diag::TcbWriteLog']]],
   ['on_5ftask_5fdeath_17',['on_task_death',['../classkernel_1_1ipc_1_1_death_notify.html#af783ad818e7f806d3ac43a98af0243d4',1,'kernel::ipc::DeathNotify']]],
-  ['on_5ftick_18',['on_tick',['../classkernel_1_1_tlb_shootdown.html#a98c7328d9e8dfd56346249a4a15d4850',1,'kernel::TlbShootdown::on_tick()'],['../classkernel_1_1_scheduler.html#abde09e0c1b73175a95f3e78104e437fd',1,'kernel::Scheduler::on_tick()']]],
+  ['on_5ftick_18',['on_tick',['../classkernel_1_1_tlb_shootdown.html#a98c7328d9e8dfd56346249a4a15d4850',1,'kernel::TlbShootdown::on_tick()'],['../classkernel_1_1_scheduler.html#abde09e0c1b73175a95f3e78104e437fd',1,'kernel::Scheduler::on_tick()'],['../classkernel_1_1time_1_1_timer_wheel.html#a1d8f447f26e546b9beff76cee76693fe',1,'kernel::time::TimerWheel::on_tick()']]],
   ['oom_19',['OOM',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a56a16d94e7f11cd4af1723c74c8d9291',1,'kernel']]],
   ['open_20',['open',['../unistd_8c.html#ab97f58472981847c31f85a68b1a4a24b',1,'open(const char *path, int flags):&#160;unistd.c'],['../unistd_8h.html#ab97f58472981847c31f85a68b1a4a24b',1,'open(const char *path, int flags):&#160;unistd.c']]],
   ['open_5ffds_21',['open_fds',['../structkernel_1_1test_1_1_resource_counters.html#aa2481316af1a8cfd31c12e3f3a499254',1,'kernel::test::ResourceCounters']]],

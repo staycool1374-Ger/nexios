@@ -78,5 +78,6 @@ var searchData=
   ['expand_5fand_5fstringify_75',['EXPAND_AND_STRINGIFY',['../assert_8hpp.html#af404f8f49103651e90d404acdae3ffc4',1,'assert.hpp']]],
   ['expected_5fcount_76',['expected_count',['../classkernel_1_1test_1_1_registry.html#a4a568529fa16c9832276b3bb84eab6f0',1,'kernel::test::Registry']]],
   ['expected_5ffor_5fclass_77',['expected_for_class',['../namespacekernel_1_1test.html#a22a1e73ffb69f6fd807228fc5756b380',1,'kernel::test']]],
-  ['expectedcounts_78',['ExpectedCounts',['../structkernel_1_1test_1_1_expected_counts.html',1,'kernel::test']]]
+  ['expectedcounts_78',['ExpectedCounts',['../structkernel_1_1test_1_1_expected_counts.html',1,'kernel::test']]],
+  ['expirecallback_79',['ExpireCallback',['../classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8',1,'kernel::time::TimerWheel']]]
 ];

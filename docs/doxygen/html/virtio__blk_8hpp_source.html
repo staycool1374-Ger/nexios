@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>        <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
 <div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    }</div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span> </div>
-<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keyword">static</span> VirtioBlkDriver *probe();</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keyword">static</span> VirtioBlkDriver *<a class="code hl_function" href="namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3">probe</a>();</div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span> </div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>  <span class="keyword">private</span>:</div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>    <span class="keywordtype">bool</span> submit_request(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> type, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sector, <a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *data,</div>
@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('virtio__blk_8h
 <div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>} <span class="comment">// namespace kernel::block</span></div>
 <div class="ttc" id="ablock__device_8hpp_html"><div class="ttname"><a href="block__device_8hpp.html">block_device.hpp</a></div><div class="ttdoc">Abstract block device interface and mock device.</div></div>
 <div class="ttc" id="amutex_8hpp_html"><div class="ttname"><a href="mutex_8hpp.html">mutex.hpp</a></div><div class="ttdoc">Mutex with priority inheritance and blocking waiters.</div></div>
+<div class="ttc" id="anamespacearch_1_1hpet_html_a2b9f8f09d7cd4d5ead750b5c322b50d3"><div class="ttname"><a href="namespacearch_1_1hpet.html#a2b9f8f09d7cd4d5ead750b5c322b50d3">arch::hpet::probe</a></div><div class="ttdeci">bool probe()</div><div class="ttdoc">Probe for an HPET (idempotent, fail-closed). Returns false until ACPI-table discovery plus a VMM mapp...</div><div class="ttdef"><b>Definition</b> hpet.cpp:35</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1block_html"><div class="ttname"><a href="namespacekernel_1_1block.html">kernel::block</a></div><div class="ttdef"><b>Definition</b> ata_pio.cpp:29</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

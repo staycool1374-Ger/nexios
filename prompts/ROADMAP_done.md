@@ -1,5 +1,39 @@
 # Completed Roadmap Items
 
+## v0.4.7 — Enhance HRT (RELEASED 2026-09-16)
+
+**Purpose:** High-resolution monotonic clock, per-CPU event-timer wheel,
+wheel-armed bounded waits (VULN-W3 close). Milestone v0.4.7 has 0 open
+issues.
+
+- **HRT monotonic clock** (#16) — TickSource enum + ns_monotonic() /
+  active_source() / calibrate() / freq_hz() / remaining_ns() over
+  arch::Timer; PIT-anchored TSC calibration (bounded retries + wall-time
+  bound, fail-closed 2 GHz default); HPET probe (fail-closed absent);
+  APIC has_tsc_deadline()/arm_deadline(); missing x86_64
+  oneshot/periodic/remaining filled; aarch64/riscv64 parity shims;
+  CONFIG_HRT_* knobs (CONFIG_HAS_HPET stays 0).
+- **Event-timer wheel** (#17) — static 64-slot/CPU table with
+  generation-tagged handles; IrqSpinLockGuard arm/cancel; on_tick
+  ISR-inline earliest-8 expiry (try-lock skip, unlock-before-fire);
+  BSP-only fail-closed arm; snapshot_reset; hooked in
+  Scheduler::on_tick (pure callee, no timer programming).
+- **Bounded-wait primitive** (#18) — sys_receive + sys_recv_fast arg3
+  coarse polls converted to wheel-armed waits (per-TCB slot, flag-only
+  callback, tick-tail apply, inbox-first resume recheck with msg-wins
+  precedence, 0=forever preserved); level-triggered re-apply (missed
+  wakeups heal in ≤1 tick); RUNNING-poll fallback (BLOCKED fallback
+  would park with no waker); alarm_ticks coexists; sync primitives,
+  driver polls and send_sync untouched.
+- **Tests** — hrt_monotonic (5), timer_wheel (8), ipc_timeout (7),
+  all stub-first with live-clock-based expiries.
+
+Gates at completion (2026-09-16): debug `all` **1383/1383** (x3+
+consecutive on final code), `make build` Errors 0. Release `all` gate
+skipped per release instruction (last green 85/85 on 2026-09-15).
+SIL 3 APPROVED per issue (#16, #17 iter-2 after AP-arm S2, #18 iter-2
+after RUNNING-enqueue S2; audit reports under `audits/`).
+
 ## v0.4.6 — TLB Shootdown (RELEASED 2026-09-15)
 
 **Purpose:** Blocking reaper, PCID-tagged CR3 switches, selective

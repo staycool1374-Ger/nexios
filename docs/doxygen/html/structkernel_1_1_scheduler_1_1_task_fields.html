@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -158,6 +158,9 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a3a8da7e0197955ddbcf5c91d5e2886bc" id="r_a3a8da7e0197955ddbcf5c91d5e2886bc"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3a8da7e0197955ddbcf5c91d5e2886bc">pending_signals</a></td></tr>
 <tr class="memitem:a27309f0e9bc19f99776057140c067efe" id="r_a27309f0e9bc19f99776057140c067efe"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a27309f0e9bc19f99776057140c067efe">alarm_ticks</a></td></tr>
 <tr class="memitem:a19746974d73ea97c73607c45ffd757db" id="r_a19746974d73ea97c73607c45ffd757db"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a19746974d73ea97c73607c45ffd757db">alarm_armed</a></td></tr>
+<tr class="memitem:a49ab52b96140dca92d3c5760c8fc2b7e" id="r_a49ab52b96140dca92d3c5760c8fc2b7e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a49ab52b96140dca92d3c5760c8fc2b7e">recv_timeout_armed</a></td></tr>
+<tr class="memdesc:a49ab52b96140dca92d3c5760c8fc2b7e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded-receive timeout slot (issue #18): flags rewind with the snapshot (always to false — captured pre-arm at suite setup). The wheel handle/generation are deliberately NOT captured: no arm survives rewind (wheel snapshot_reset disarms everything and flags read false), so no stale handle can outlive the wait it belonged to.  <br /></td></tr>
+<tr class="memitem:a4c33f7cfacc100183cec02955be0ec63" id="r_a4c33f7cfacc100183cec02955be0ec63"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c33f7cfacc100183cec02955be0ec63">recv_timed_out</a></td></tr>
 <tr class="memitem:ac73ae1af5ef6915c916d0c3b1f1850ad" id="r_ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ac73ae1af5ef6915c916d0c3b1f1850ad">runq_next</a></td></tr>
 <tr class="memdesc:ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ready-queue intrusive list pointers (POD copy). These form doubly-linked lists; TCBs are in-place across snapshot cycles so pointer values remain valid.  <br /></td></tr>
 <tr class="memitem:a79d3a773fa7cb12eb78681ed6fc4cdb6" id="r_a79d3a773fa7cb12eb78681ed6fc4cdb6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a79d3a773fa7cb12eb78681ed6fc4cdb6">runq_prev</a></td></tr>
@@ -462,6 +465,36 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4c33f7cfacc100183cec02955be0ec63" name="a4c33f7cfacc100183cec02955be0ec63"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4c33f7cfacc100183cec02955be0ec63">&#9670;&#160;</a></span>recv_timed_out</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::recv_timed_out</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a49ab52b96140dca92d3c5760c8fc2b7e" name="a49ab52b96140dca92d3c5760c8fc2b7e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a49ab52b96140dca92d3c5760c8fc2b7e">&#9670;&#160;</a></span>recv_timeout_armed</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::recv_timeout_armed</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bounded-receive timeout slot (issue #18): flags rewind with the snapshot (always to false — captured pre-arm at suite setup). The wheel handle/generation are deliberately NOT captured: no arm survives rewind (wheel snapshot_reset disarms everything and flags read false), so no stale handle can outlive the wait it belonged to. </p>
 
 </div>
 </div>

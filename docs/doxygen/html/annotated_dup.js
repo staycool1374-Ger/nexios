@@ -84,6 +84,9 @@ var annotated_dup =
         [ "TestCase", "structkernel_1_1test_1_1_test_case.html", "structkernel_1_1test_1_1_test_case" ],
         [ "TestClass", "structkernel_1_1test_1_1_test_class.html", "structkernel_1_1test_1_1_test_class" ]
       ] ],
+      [ "time", "namespacekernel_1_1time.html", [
+        [ "TimerWheel", "classkernel_1_1time_1_1_timer_wheel.html", "classkernel_1_1time_1_1_timer_wheel" ]
+      ] ],
       [ "vfs", "namespacekernel_1_1vfs.html", [
         [ "DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", "structkernel_1_1vfs_1_1_dev_entry" ],
         [ "Fat32VnodeData", "structkernel_1_1vfs_1_1_fat32_vnode_data.html", "structkernel_1_1vfs_1_1_fat32_vnode_data" ],

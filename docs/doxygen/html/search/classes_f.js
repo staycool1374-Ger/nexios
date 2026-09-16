@@ -1,9 +1,23 @@
 var searchData=
 [
-  ['uniqueptr_0',['UniquePtr',['../class_unique_ptr.html',1,'']]],
-  ['uniqueptr_3c_20taskcontrolblock_2c_20simpletaskdeleter_20_3e_1',['UniquePtr&lt; TaskControlBlock, SimpleTaskDeleter &gt;',['../class_unique_ptr.html',1,'']]],
-  ['uniqueptr_3c_20taskcontrolblock_2c_20taskdeleter_20_3e_2',['UniquePtr&lt; TaskControlBlock, TaskDeleter &gt;',['../class_unique_ptr.html',1,'']]],
-  ['untypedmem_3',['UntypedMem',['../classkernel_1_1cap_1_1_untyped_mem.html',1,'kernel::cap']]],
-  ['utsname_4',['Utsname',['../structkernel_1_1_utsname.html',1,'kernel::Utsname'],['../struct_utsname.html',1,'Utsname']]],
-  ['utsname_5',['utsname',['../structutsname.html',1,'']]]
+  ['taskdeleter_0',['TaskDeleter',['../struct_task_deleter.html',1,'']]],
+  ['taskfields_1',['TaskFields',['../structkernel_1_1_scheduler_1_1_task_fields.html',1,'kernel::Scheduler']]],
+  ['taskiter_2',['TaskIter',['../structkernel_1_1_scheduler_1_1_task_iter.html',1,'kernel::Scheduler']]],
+  ['taskqueue_3',['TaskQueue',['../classkernel_1_1_task_queue.html',1,'kernel']]],
+  ['tcbwritelog_4',['TcbWriteLog',['../structkernel_1_1diag_1_1_tcb_write_log.html',1,'kernel::diag']]],
+  ['terminal_5',['Terminal',['../classservice_1_1_terminal.html',1,'service']]],
+  ['testbase_6',['TestBase',['../classkernel_1_1test_1_1_test_base.html',1,'kernel::test']]],
+  ['testcase_7',['TestCase',['../structkernel_1_1test_1_1_test_case.html',1,'kernel::test']]],
+  ['testclass_8',['TestClass',['../structkernel_1_1test_1_1_test_class.html',1,'kernel::test']]],
+  ['testcontext_9',['TestContext',['../structkernel_1_1_test_context.html',1,'kernel']]],
+  ['testmeta_10',['TestMeta',['../struct_test_meta.html',1,'']]],
+  ['teststruct_11',['TestStruct',['../struct_test_struct.html',1,'']]],
+  ['timerwheel_12',['TimerWheel',['../classkernel_1_1time_1_1_timer_wheel.html',1,'kernel::time']]],
+  ['timespec_13',['timespec',['../structtimespec.html',1,'']]],
+  ['timeval_14',['Timeval',['../structkernel_1_1_timeval.html',1,'kernel::Timeval'],['../struct_timeval.html',1,'Timeval']]],
+  ['timeval_15',['timeval',['../structtimeval.html',1,'']]],
+  ['tlbshootdown_16',['TlbShootdown',['../classkernel_1_1_tlb_shootdown.html',1,'kernel']]],
+  ['tm_17',['tm',['../structtm.html',1,'']]],
+  ['tmpfsentry_18',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
+  ['tprguard_19',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
 ];

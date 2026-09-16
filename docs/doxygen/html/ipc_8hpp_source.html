@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
    </div>
   </td>
  </tr>
@@ -212,12 +212,19 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('ipc_8hpp_sourc
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span></div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> recv_via_cap(cap::Endpoint *ep, Message &amp;msg);</div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span></div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> block_sender(MessageQueue &amp;q, TaskControlBlock &amp;task);</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span></div>
-<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> wake_sender(MessageQueue &amp;q, TaskControlBlock &amp;receiver);</div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>};</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span> </div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> recv_timeout_fire(<span class="keywordtype">void</span> *context) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span></div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> recv_wait_arm(TaskControlBlock &amp;task,</div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>                              <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> timeout_ticks) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span></div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> recv_wait_cancel(TaskControlBlock &amp;task) <span class="keyword">noexcept</span>;</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span></div>
+<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> block_sender(MessageQueue &amp;q, TaskControlBlock &amp;task);</div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span></div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> wake_sender(MessageQueue &amp;q, TaskControlBlock &amp;receiver);</div>
+<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>};</div>
+<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span> </div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="aclasskernel_1_1cap_1_1_endpoint_html"><div class="ttname"><a href="classkernel_1_1cap_1_1_endpoint.html">kernel::cap::Endpoint</a></div><div class="ttdoc">A capability-gated IPC endpoint: a heap-resident message queue plus a receiver binding and badge....</div><div class="ttdef"><b>Definition</b> endpoint.hpp:40</div></div>
 <div class="ttc" id="aipc_8h_html_a02406c274ef11e7931d893a8f7e7b293"><div class="ttname"><a href="ipc_8h.html#a02406c274ef11e7931d893a8f7e7b293">IPC_NONBLOCK</a></div><div class="ttdeci">#define IPC_NONBLOCK</div><div class="ttdef"><b>Definition</b> ipc.h:27</div></div>
 <div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1267</div></div>

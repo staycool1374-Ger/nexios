@@ -47,6 +47,7 @@ var searchData=
   ['free_5fbuffer_44',['free_buffer',['../namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d',1,'kernel::dma']]],
   ['free_5fcluster_5fchain_45',['free_cluster_chain',['../namespacekernel_1_1fat32.html#acaa9ea1e7204014b1ee87d1b18e2786f',1,'kernel::fat32']]],
   ['free_5fresolve_5fimages_46',['free_resolve_images',['../namespacekernel_1_1elf.html#ad5d8f8b5d835105396ec8ed79a43e212',1,'kernel::elf']]],
-  ['fstat_47',['fstat',['../stat_8c.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c'],['../stat_8h.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c']]],
-  ['full_5fstring_48',['full_string',['../structkernel_1_1_version.html#a6900c1bf9a13fb19ffdef8f8288bafe8',1,'kernel::Version']]]
+  ['freq_5fhz_47',['freq_hz',['../namespacearch_1_1hpet.html#aa0d92e20d620519b97bcec1ccf51ff86',1,'arch::hpet']]],
+  ['fstat_48',['fstat',['../stat_8c.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c'],['../stat_8h.html#a198a57e185e8a036ad06345623b84521',1,'fstat(int fd, struct stat *buf):&#160;stat.c']]],
+  ['full_5fstring_49',['full_string',['../structkernel_1_1_version.html#a6900c1bf9a13fb19ffdef8f8288bafe8',1,'kernel::Version']]]
 ];

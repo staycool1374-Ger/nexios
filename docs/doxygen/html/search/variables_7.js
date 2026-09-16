@@ -19,7 +19,7 @@ var searchData=
   ['gen_16',['gen',['../structkernel_1_1cap_1_1_c_slot.html#a45a872901a4cb175744bb4467ac42039',1,'kernel::cap::CSlot']]],
   ['generated_5ftests_17',['generated_tests',['../test__registry_8gen_8hpp.html#aed8e7ca5b470a2d98eca89d4c2f3e8e0',1,'test_registry.gen.hpp']]],
   ['generated_5ftests_5fcount_18',['generated_tests_count',['../test__registry_8gen_8hpp.html#a2e28db5aa04917fdba864c113c58b4fa',1,'test_registry.gen.hpp']]],
-  ['generation_19',['generation',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a073a2cad1d8d6ba96abf0e40ea427439',1,'kernel::test::PtPoolSnapshot']]],
+  ['generation_19',['generation',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a073a2cad1d8d6ba96abf0e40ea427439',1,'kernel::test::PtPoolSnapshot::generation'],['../structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#ad17eaa9732319a7cf304fd67fff7b315',1,'kernel::time::TimerWheel::Handle::generation']]],
   ['gicc_5fbase_20',['GICC_BASE',['../namespacearch.html#a3b94ff78f7b9fc3de77542c57af2703a',1,'arch']]],
   ['gicc_5fctlr_21',['GICC_CTLR',['../namespacearch.html#a9a2d4827817f87651def264300fbcbc1',1,'arch']]],
   ['gicc_5fctlr_5fenable_22',['GICC_CTLR_ENABLE',['../namespacearch.html#a1fb93cd4519d541d33f8aa2018f0d283',1,'arch']]],

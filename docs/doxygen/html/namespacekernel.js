@@ -109,6 +109,7 @@ var namespacekernel =
       [ "reboot_from_table", "namespacekernel_1_1task.html#a7f227dc40c3e02534d8c4640812236c7", null ]
     ] ],
     [ "test", "namespacekernel_1_1test.html", "namespacekernel_1_1test" ],
+    [ "time", "namespacekernel_1_1time.html", "namespacekernel_1_1time" ],
     [ "vfs", "namespacekernel_1_1vfs.html", "namespacekernel_1_1vfs" ],
     [ "vfsd", "namespacekernel_1_1vfsd.html", [
       [ "get_vfsd_pid", "namespacekernel_1_1vfsd.html#aa0df972eac82190a35e45b47576066a7", null ],

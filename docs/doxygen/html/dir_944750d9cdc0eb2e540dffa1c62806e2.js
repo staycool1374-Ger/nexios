@@ -4,6 +4,8 @@ var dir_944750d9cdc0eb2e540dffa1c62806e2 =
     [ "apic.hpp", "x86__64_2hal_2apic_8hpp.html", "x86__64_2hal_2apic_8hpp" ],
     [ "cpuid_impl.hpp", "x86__64_2hal_2cpuid__impl_8hpp.html", null ],
     [ "gdt.cpp", "gdt_8cpp.html", "gdt_8cpp" ],
+    [ "hpet.cpp", "hpet_8cpp.html", "hpet_8cpp" ],
+    [ "hpet.hpp", "hpet_8hpp.html", "hpet_8hpp" ],
     [ "idt.cpp", "x86__64_2hal_2idt_8cpp.html", "x86__64_2hal_2idt_8cpp" ],
     [ "io_impl.hpp", "x86__64_2hal_2io__impl_8hpp.html", null ],
     [ "iopb.cpp", "iopb_8cpp.html", null ],

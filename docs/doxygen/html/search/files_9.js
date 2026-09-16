@@ -1,7 +1,8 @@
 var searchData=
 [
-  ['libfdt_2eh_0',['libfdt.h',['../libfdt_8h.html',1,'']]],
-  ['libfdt_5finternal_2eh_1',['libfdt_internal.h',['../libfdt__internal_8h.html',1,'']]],
-  ['logger_2ecpp_2',['logger.cpp',['../logger_8cpp.html',1,'']]],
-  ['logger_2ehpp_3',['logger.hpp',['../logger_8hpp.html',1,'']]]
+  ['kernel_2ecpp_0',['kernel.cpp',['../kernel_8cpp.html',1,'']]],
+  ['kernel_2ehpp_1',['kernel.hpp',['../kernel_8hpp.html',1,'']]],
+  ['kernel_5fobject_2ehpp_2',['kernel_object.hpp',['../kernel__object_8hpp.html',1,'']]],
+  ['keyboard_2ecpp_3',['keyboard.cpp',['../keyboard_8cpp.html',1,'']]],
+  ['keyboard_2ehpp_4',['keyboard.hpp',['../hal_2keyboard_8hpp.html',1,'(Global Namespace)'],['../keyboard_8hpp.html',1,'(Global Namespace)']]]
 ];
