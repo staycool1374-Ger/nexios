@@ -136,6 +136,39 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ---
 
+## Recent Release Highlights
+
+### **v0.4.6 — System Responsiveness & Memory Efficiency**
+* **Event-Driven Idle Cleanup:** Terminated process reaping is handled via an event-driven wait loop rather than CPU spinning, preserving system resources and improving responsiveness[cite: 2].
+* **Faster Process Context Switches:** Hardware-assisted memory management (PCID/INVPCID) prevents unnecessary CPU cache flushes during application context switches[cite: 2].
+* **Multi-Core Overhead Reduction:** Cross-core memory invalidation requests (TLB shootdowns) are batched to avoid interrupting active real-time workloads[cite: 2].
+
+### **v0.4.5 — Multi-Core Real-Time Scheduling**
+* **Distributed Runqueues:** Per-CPU task queues eliminate global scheduler lock contention on multi-core systems[cite: 2].
+* **Real-Time Load Balancing & Core Pinning:** Time-critical tasks can be deterministically distributed or strictly bound to specific CPU cores (`SYS_SET_AFFINITY`)[cite: 2].
+* **Cache-Coloring Memory Allocator:** A tailored physical memory allocator minimizes L1/L2 CPU cache collisions[cite: 2].
+
+### **v0.4.4 — SMP Bring-Up & Shared Libraries**
+* **Multi-Core Bootup:** Complete multi-core initialization using Inter-Processor Interrupts (IPIs)[cite: 2].
+* **Dynamic Linking (ELF Shared Objects):** Applications can share common library code (`DT_NEEDED`), significantly reducing memory footprints[cite: 2].
+* **Robust Boot Handshake:** Automatic relocation of overwritten bootloader staging data prevents page faults during initial bootup[cite: 2].
+
+### **v0.4.3 — Hardware Driver Stability & Coverage**
+* **Extended Hardware Diagnostics:** Expanded test coverage for storage controllers (AHCI/SATA), real-time clocks (RTC), and ACPI tables on bare metal[cite: 2].
+* **Cross-Platform Hardening:** Elimination of silent build and runtime defects across both x86_64 and ARM64 architectures[cite: 2].
+
+### **v0.4.2 — User-Space Drivers & Hardware Isolation**
+* **IOMMU DMA Protection:** Hardware drivers running in user-space are isolated via VT-d to prevent faulty DMA accesses from compromising system integrity[cite: 2].
+* **Fine-Grained Hardware Delegation:** Direct assignment of hardware interrupts (MSI-X/IRQ) and MMIO regions to user-space drivers without kernel privilege escalation[cite: 2].
+* **Dynamic Capability Management:** Granular hardware rights can be delegated to child processes and deterministically revoked at any time[cite: 2].
+
+### **v0.4.1 — Capability Security Model (CSpace)**
+* **Zero Ambient Authority:** Tasks operate under strict capability-based access control, accessing only kernel objects and IPC endpoints explicitly granted to them[cite: 2].
+* **Deterministic Resource Teardown:** Automatic, leak-free cleanup of kernel objects enforced through a multi-holder shared reference counting model[cite: 2].
+* **Sub-Range Memory Carving:** Applications can safely subdivide and retype untyped memory ranges independently[cite: 2].
+
+---
+
 ## Build & Quick Start
 
 ### Prerequisites
