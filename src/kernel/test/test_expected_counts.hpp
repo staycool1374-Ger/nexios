@@ -138,6 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
+    {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
     {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)

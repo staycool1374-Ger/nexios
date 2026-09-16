@@ -114,6 +114,7 @@ void register_block_device_tests();
 void register_fat32_tests();
 void register_vfs_fat32_tests();
 void register_ipc_blocking_tests();
+void register_ipc_timeout_tests();
 void register_vfsd_authorization_tests();
 void register_textutils_tests();
 void register_shell_interaction_tests();
@@ -430,6 +431,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { register_ipc_tests(); }},
     {"ipc_blocking", []() { register_ipc_blocking_tests(); }},
+    {"ipc_timeout", []() { register_ipc_timeout_tests(); }},
     {"ipc_extended", []() { register_ipc_extended_tests(); }},
     {"ipc_lock_free", []() { register_ipc_lock_free_tests(); }},
     {"ipc_robustness", []() { register_ipc_robustness_tests(); }},
@@ -749,6 +751,7 @@ static void register_all_tests() {
     register_vfs_errors_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
     register_ipc_blocking_tests();
+    register_ipc_timeout_tests();
 #endif
     register_ipc_lock_free_tests();
     register_vfsd_authorization_tests();
@@ -954,6 +957,7 @@ static void register_all_tests_first_half() {
       register_vfs_fat32_tests();
 #if CONFIG_VERSION_NUM >= 0x000309
       register_ipc_blocking_tests();
+      register_ipc_timeout_tests();
 #endif
       register_ipc_lock_free_tests();
       register_vfsd_authorization_tests();

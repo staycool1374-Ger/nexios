@@ -126,6 +126,32 @@ class IPC {
     ///        is empty.
     static bool recv_via_cap(cap::Endpoint *ep, Message &msg);
 
+    /// @brief Wheel callback arming a bounded receive's expiry (issue #18).
+    /// Flag-only: validates the TCB and generation, sets recv_timed_out.
+    /// Takes no locks, no scheduler services, never reschedules or
+    /// allocates (audit #17 callback contract). Runs in tick context.
+    /// @param context Owning TaskControlBlock (nullable, fail-closed).
+    static void recv_timeout_fire(void *context) noexcept;
+
+    /// @brief Arm the calling task's receive timeout on the wheel.
+    /// Sets recv_timed_out=false, snapshots the TCB generation, arms the
+    /// wheel at now_ns+timeout converted from ticks. Fail-closed false on
+    /// non-BSP CPU, full wheel, or zero CONFIG_TICK_HZ. No-op (returns
+    /// true, no arm) when timeout_ticks is 0 — the 0=forever contract
+    /// never arms. A false return means the caller must use a fallback
+    /// that keeps the task RUNNING (never BLOCKED+dequeue): a blocked
+    /// task has no waker and would park forever.
+    /// @param task Waiting task (non-null, current task).
+    /// @param timeout_ticks Budget in coarse ticks (0 = forever).
+    /// @return true when armed or when no arm is needed (timeout 0).
+    static bool recv_wait_arm(TaskControlBlock &task,
+                              uint64_t timeout_ticks) noexcept;
+
+    /// @brief Cancel the calling task's receive timeout (idempotent).
+    /// Disarms the TCB slot; stale handles fail closed inside.
+    /// @param task Waiting task.
+    static void recv_wait_cancel(TaskControlBlock &task) noexcept;
+
     /// @brief Blocks the current task on a full queue
     ///        (may boost owner priority).
     ///

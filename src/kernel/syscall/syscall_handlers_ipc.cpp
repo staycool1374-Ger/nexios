@@ -55,11 +55,10 @@ uint64_t Syscall::sys_send(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                               uint64_t arg3, uint64_t *) {
     uint64_t max_size = arg2;
-    // VULN-W3: arg3 is the bounded-wait timeout in ticks.  0 = block forever
-    // (preserves current behaviour for non-real-time callers).
+    // VULN-W3 (closed, issue #18): arg3 is the bounded-wait timeout in
+    // ticks, armed on the event-timer wheel. 0 = block forever (no arm,
+    // preserves current behaviour for non-real-time callers).
     uint64_t timeout_ticks = arg3;
-    uint64_t deadline =
-        timeout_ticks ? arch::Timer::ticks() + timeout_ticks : 0;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), max_size);
     if (!buf.valid())
@@ -71,28 +70,59 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
         return static_cast<uint64_t>(-1);
     bool ok = false;
     bool was_blocked = false;
-    while (!(ok = IPC::recv(msg))) {
-        // VULN-W3: bounded-wait deadline — fail with -1 once the budget is
-        // exhausted instead of blocking indefinitely.
-        if (deadline && arch::Timer::ticks() >= deadline)
-            return static_cast<uint64_t>(-1);
-        if (cur->get_sporadic_server()) {
-            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
-            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
+    if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
+        // Wheel-armed bounded wait (or 0 = forever, never armed).
+        while (!(ok = IPC::recv(msg))) {
+            if (cur->get_sporadic_server()) {
+                kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+                cur->get_sporadic_server()->on_completion(
+                    arch::Timer::ticks());
+            }
+            cur->state = TaskState::BLOCKED;
+            was_blocked = true;
+            // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
+            // never be physically queued (INV-2/WEDGE invariant) — the
+            // block in ipc.cpp's send path declares this, and sys_receive
+            // was missing the dequeue.
+            Scheduler::dequeue_ready(*cur);
+            Scheduler::reschedule();
+            // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
+            // pattern; key on is_user_ (every task now owns a PML4).
+            if (cur->is_user_) {
+                arch::sti();
+                arch::hlt();
+                arch::cli();
+            }
+            // Resume: recheck the inbox FIRST (delivery beats timeout),
+            // then the timeout flag; otherwise re-block on the live arm.
+            if (IPC::recv(msg)) {
+                ok = true;
+                break;
+            }
+            if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
+                IPC::recv_wait_cancel(*cur);
+                return static_cast<uint64_t>(-1);
+            }
         }
-        cur->state = TaskState::BLOCKED;
-        was_blocked = true;
-        // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must never be
-        // physically queued (INV-2/WEDGE invariant) — the block in ipc.cpp's
-        // send path declares this, and sys_receive was missing the dequeue.
-        Scheduler::dequeue_ready(*cur);
-        Scheduler::reschedule();
-        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern;
-        // key on is_user_ (every task now owns a PML4).
-        if (cur->is_user_) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
+        IPC::recv_wait_cancel(*cur);
+    } else {
+        // Fallback (wheel arm failed: full wheel / non-BSP). The task
+        // stays RUNNING and polls: BLOCKED+dequeue would park it with no
+        // waker (the deadline check lives in this task), hanging forever.
+        // Absolute coarse deadline bounds the poll; reschedule() stays
+        // polite to same-priority tasks. Degenerate no-tick config fails
+        // fast (a frozen tick counter can never expire).
+        if (CONFIG_TICK_HZ == 0) {
+            return static_cast<uint64_t>(-1);
+        }
+        const uint64_t fallback_deadline =
+            arch::Timer::ticks() + timeout_ticks;
+        while (!(ok = IPC::recv(msg))) {
+            if (arch::Timer::ticks() >= fallback_deadline) {
+                return static_cast<uint64_t>(-1);
+            }
+            Scheduler::reschedule();
+            arch::pause();
         }
     }
     if (was_blocked) {
@@ -188,36 +218,75 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
         max_size < IPC_FAST_PAYLOAD_BYTES
             ? static_cast<uint32_t>(max_size)
             : static_cast<uint32_t>(IPC_FAST_PAYLOAD_BYTES);
-    uint64_t deadline =
-        timeout_ticks ? arch::Timer::ticks() + timeout_ticks : 0;
     auto *cur = syscall_task();
     if (!cur)
         return static_cast<uint64_t>(-1);
     Message msg{};
     bool ok = false;
     bool was_blocked = false;
-    while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
-        // An oversized best match is NOT consumed (stays queued for a full
-        // RECEIVE, INV-4) — disambiguate empty-vs-oversized with is_empty().
-        if (!cur->msg_queue.is_empty())
-            return static_cast<uint64_t>(-1);
-        // VULN-W3 bounded-wait deadline (mirrors sys_receive verbatim).
-        if (deadline && arch::Timer::ticks() >= deadline)
-            return static_cast<uint64_t>(-1);
-        if (cur->get_sporadic_server()) {
-            kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
-            cur->get_sporadic_server()->on_completion(arch::Timer::ticks());
+    if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
+        // Wheel-armed bounded wait (or 0 = forever, never armed).
+        while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
+            // An oversized best match is NOT consumed (stays queued for a
+            // full RECEIVE, INV-4) — disambiguate empty-vs-oversized with
+            // is_empty().
+            if (!cur->msg_queue.is_empty()) {
+                IPC::recv_wait_cancel(*cur);
+                return static_cast<uint64_t>(-1);
+            }
+            if (cur->get_sporadic_server()) {
+                kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+                cur->get_sporadic_server()->on_completion(
+                    arch::Timer::ticks());
+            }
+            cur->state = TaskState::BLOCKED;
+            was_blocked = true;
+            Scheduler::dequeue_ready(*cur);
+            Scheduler::reschedule();
+            if (cur->is_user_) {
+                arch::sti();
+                arch::hlt();
+                arch::cli();
+            } else {
+                arch::hlt();
+            }
+            // Resume: recheck the inbox FIRST (delivery beats timeout),
+            // then the oversized/timeout exits; otherwise re-block.
+            if (cur->msg_queue.pop_clamped(msg, clamp)) {
+                ok = true;
+                break;
+            }
+            if (!cur->msg_queue.is_empty()) {
+                IPC::recv_wait_cancel(*cur);
+                return static_cast<uint64_t>(-1);
+            }
+            if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
+                IPC::recv_wait_cancel(*cur);
+                return static_cast<uint64_t>(-1);
+            }
         }
-        cur->state = TaskState::BLOCKED;
-        was_blocked = true;
-        Scheduler::dequeue_ready(*cur);
-        Scheduler::reschedule();
-        if (cur->is_user_) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
-        } else {
-            arch::hlt();
+        IPC::recv_wait_cancel(*cur);
+    } else {
+        // Fallback (wheel arm failed: full wheel / non-BSP). The task
+        // stays RUNNING and polls: BLOCKED+dequeue would park it with no
+        // waker (the deadline check lives in this task), hanging forever.
+        // Absolute coarse deadline bounds the poll; reschedule() stays
+        // polite to same-priority tasks. Degenerate no-tick config fails
+        // fast (a frozen tick counter can never expire).
+        if (CONFIG_TICK_HZ == 0) {
+            return static_cast<uint64_t>(-1);
+        }
+        const uint64_t fallback_deadline =
+            arch::Timer::ticks() + timeout_ticks;
+        while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
+            if (!cur->msg_queue.is_empty()) {
+                return static_cast<uint64_t>(-1);
+            }
+            if (arch::Timer::ticks() >= fallback_deadline) {
+                return static_cast<uint64_t>(-1);
+            }
+            Scheduler::reschedule();
+            arch::pause();
         }
     }
     if (was_blocked) {

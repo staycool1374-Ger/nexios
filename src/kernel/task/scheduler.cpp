@@ -2007,6 +2007,42 @@ void Scheduler::on_tick() noexcept {
         time::TimerWheel::on_tick(arch::Timer::ns_monotonic(),
                                   sched_cpu());
 
+        // Issue #18: bounded-receive timeout apply. Wheel callbacks only
+        // set recv_timed_out; the wake is applied here under the
+        // already-held scheduler_lock_ (deadline-monitor wake precedent —
+        // never take the non-recursive lock again). Guards mirror the
+        // accounting walk below (magic, liveness, affinity).
+        // Level-triggered (not edge): the wake re-applies every tick until
+        // the waiter observes it (resume cancel) or dies (cleanup cancel).
+        // A silently dequeued waiter is thus re-queued next tick instead
+        // of stranding: enqueue_ready refuses duplicates, so re-apply is
+        // idempotent. Never clobber a RUNNING state.
+        for (auto *task = all_tasks_.first_ptr(); task;
+             task = all_tasks_.next_ptr(task)) {
+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (!__atomic_load_n(&task->recv_timeout_armed,
+                                 __ATOMIC_ACQUIRE) ||
+                !__atomic_load_n(&task->recv_timed_out, __ATOMIC_ACQUIRE))
+                continue;
+            if (task->generation != task->recv_timeout_gen)
+                continue;
+            if (queue_target(*task) != sched_cpu())
+                continue;
+            if (task->state == TaskState::BLOCKED)
+                task->state = TaskState::READY;
+            // SIL 3 guard (audit issue #18): never queue a task that is not
+            // BLOCKED-turned-READY or already READY. A dispatched waiter is
+            // RUNNING with its slot still armed until its resume path runs
+            // recv_wait_cancel; queueing it violates the
+            // current-never-queued invariant (set_current defense, H2).
+            else if (task->state != TaskState::READY)
+                continue;
+            enqueue_ready(*task);
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+        }
+
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).
         // Issue #154: executed_ticks is execution time — only the
@@ -3629,6 +3665,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].pending_signals = t->pending_signals;
         out[idx].alarm_ticks = t->alarm_ticks;
         out[idx].alarm_armed = t->alarm_armed;
+        out[idx].recv_timeout_armed = t->recv_timeout_armed;
+        out[idx].recv_timed_out = t->recv_timed_out;
         out[idx].runq_next = t->runq_next_;
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
@@ -3702,6 +3740,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->pending_signals = saved[j].pending_signals;
             t->alarm_ticks = saved[j].alarm_ticks;
             t->alarm_armed = saved[j].alarm_armed;
+            t->recv_timeout_armed = saved[j].recv_timeout_armed;
+            t->recv_timed_out = saved[j].recv_timed_out;
             // Snapshot does not capture SporadicServer state nor PMM page-table
             // pools — clear the pointer and the intrusive object list so stale
             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot

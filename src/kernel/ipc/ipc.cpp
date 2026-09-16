@@ -22,6 +22,8 @@
 
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/time/timer_wheel.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/cap/endpoint.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/debug/ipc_sched_trace.hpp>
@@ -658,6 +660,76 @@ static void unblock_sender_rollback(MessageQueue &q,
     // RUNNING directly and only fix ready-queue membership.
     task.state = TaskState::RUNNING;
     Scheduler::enqueue_ready(task);
+}
+
+void IPC::recv_timeout_fire(void *context) noexcept {
+    auto *task =
+        static_cast<TaskControlBlock *>(context);
+    if (!TaskControlBlock::is_valid(task)) {
+        return;
+    }
+    if (task->generation != task->recv_timeout_gen) {
+        return;
+    }
+    if (!__atomic_load_n(&task->recv_timeout_armed, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+    __atomic_store_n(&task->recv_timed_out, true, __ATOMIC_RELEASE);
+}
+
+bool IPC::recv_wait_arm(TaskControlBlock &task,
+                        uint64_t timeout_ticks) noexcept {
+    // Consume any stale expiry from a previous wait first: the resume
+    // path below only sets this flag, so a stale true would fake a
+    // timeout on entry (e.g. a later forever-wait after a timed one).
+    __atomic_store_n(&task.recv_timed_out, false, __ATOMIC_RELEASE);
+    if (timeout_ticks == 0) {
+        return true;
+    }
+    if (CONFIG_TICK_HZ == 0) {
+        return false;
+    }
+    // Ticks to ns without 64-bit overflow (decompose around 1e9).
+    const uint64_t whole = timeout_ticks / CONFIG_TICK_HZ;
+    const uint64_t part = timeout_ticks % CONFIG_TICK_HZ;
+    uint64_t budget_ns = 0;
+    if (whole >= 0xFFFFFFFFFFFFFFFFULL / 1000000000ULL) {
+        budget_ns = 0xFFFFFFFFFFFFFFFFULL;
+    } else {
+        budget_ns =
+            whole * 1000000000ULL + (part * 1000000000ULL) / CONFIG_TICK_HZ;
+    }
+    if (budget_ns == 0) {
+        budget_ns = 1;
+    }
+    const uint64_t now_ns = arch::Timer::ns_monotonic();
+    // Saturating add: absurd budgets (>= 584M years) clamp to never-expire
+    // instead of wrapping into an immediate deadline.
+    uint64_t expiry_ns = now_ns + budget_ns;
+    if (expiry_ns < now_ns) {
+        expiry_ns = 0xFFFFFFFFFFFFFFFFULL;
+    }
+    task.recv_timeout_gen = task.generation;
+    // Defensive cancel-first: never overwrite a live arm (unreachable
+    // under today's single-arm discipline, closed by construction).
+    if (__atomic_load_n(&task.recv_timeout_armed, __ATOMIC_ACQUIRE)) {
+        recv_wait_cancel(task);
+    }
+    if (!time::TimerWheel::arm(0, expiry_ns, recv_timeout_fire, &task,
+                               &task.recv_timeout_handle)) {
+        __atomic_store_n(&task.recv_timeout_armed, false, __ATOMIC_RELEASE);
+        return false;
+    }
+    __atomic_store_n(&task.recv_timeout_armed, true, __ATOMIC_RELEASE);
+    return true;
+}
+
+void IPC::recv_wait_cancel(TaskControlBlock &task) noexcept {
+    if (!__atomic_load_n(&task.recv_timeout_armed, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+    __atomic_store_n(&task.recv_timeout_armed, false, __ATOMIC_RELEASE);
+    time::TimerWheel::cancel(task.recv_timeout_handle);
 }
 
 } // namespace kernel

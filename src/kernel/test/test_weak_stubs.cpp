@@ -65,6 +65,7 @@ __attribute__((weak)) void register_integration_tests() {}
 __attribute__((weak)) void register_pml4_clone_tests() {}
 __attribute__((weak)) void register_buffer_pool_tests() {}
 __attribute__((weak)) void register_ipc_blocking_tests() {}
+__attribute__((weak)) void register_ipc_timeout_tests() {}
 __attribute__((weak)) void register_vfsd_authorization_tests() {}
 __attribute__((weak)) void register_textutils_tests() {}
 __attribute__((weak)) void register_irq_guard_tests() {}

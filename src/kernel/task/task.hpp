@@ -32,6 +32,7 @@
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/sync/eventgroup.hpp>
+#include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <signal.hpp>
 
@@ -251,7 +252,10 @@ struct TaskControlBlock {
           in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
           zombie_next_(nullptr), waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
-          alarm_armed(false), sporadic_server(nullptr), cspace_(nullptr),
+          alarm_armed(false), recv_timeout_armed(false),
+          recv_timed_out(false),
+          recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
+          recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
           iopb_slot_(IOPB_SLOT_NONE),
           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
@@ -439,6 +443,18 @@ struct TaskControlBlock {
 
     /// @brief True if alarm is armed.
     bool alarm_armed;
+
+    /// @brief Bounded-receive timeout armed on the wheel (issue #18).
+    bool recv_timeout_armed;
+
+    /// @brief Set by the wheel callback when the receive budget expires.
+    bool recv_timed_out;
+
+    /// @brief Wheel receipt for the armed timeout (gen 0 = invalid).
+    time::TimerWheel::Handle recv_timeout_handle;
+
+    /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
+    uint32_t recv_timeout_gen;
 
     /// @brief Embedded message queue (no separate heap allocation).
     MessageQueue msg_queue;

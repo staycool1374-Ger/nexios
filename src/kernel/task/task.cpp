@@ -1747,6 +1747,16 @@ void TaskControlBlock::cleanup() noexcept {
         parent_id = 0;
     }
 
+    // Cancel a wheel-armed bounded receive (issue #18) before detaching
+    // from queues: an armed timer firing after this TCB is freed would run
+    // the callback against poisoned memory (stale fire). The wheel owns
+    // its own lock; cleanup() holds no scheduler lock, so cancel() here
+    // preserves wake-path lock ordering. Stale handles fail closed.
+    if (__atomic_load_n(&recv_timeout_armed, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&recv_timeout_armed, false, __ATOMIC_RELEASE);
+        time::TimerWheel::cancel(recv_timeout_handle);
+    }
+
     // Remove self from any message queue's blocked-senders list *before*
     // freeing any resources.  If we are blocked on another task's queue
     // (blocked_on_queue != nullptr) we must detach now — otherwise the
