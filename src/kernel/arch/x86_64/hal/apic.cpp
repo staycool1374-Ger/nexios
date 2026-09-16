@@ -420,6 +420,14 @@ uint32_t APIC::timer_current_count() {
     return lapic_rd(REG_TIMER_CURCNT);
 }
 
+bool APIC::arm_deadline(uint64_t ns) {
+    if (!enabled_ || ns == 0 || tsc_deadline_supported_ == 0) {
+        return false;
+    }
+    set_timer_oneshot(ns);
+    return true;
+}
+
 // ─── Bus frequency calibration (periodic mode only) ──────────────────────
 uint32_t APIC::calibrate_bus_hz() {
     // One-shot mode: write a known initial count, measure elapsed TSC

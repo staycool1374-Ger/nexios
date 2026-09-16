@@ -25,16 +25,79 @@
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/apic.hpp>
 #include <kernel/arch/x86_64/hal/percpu.hpp>
+#include <kernel/arch/x86_64/hal/hpet.hpp>
+#include <kernel/bootparams.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/profiling/sampler.hpp>
 
 namespace arch {
 
+namespace {
+/// @brief Maximum deadline span (1 hour in ns): bounds all products.
+static constexpr uint64_t k_max_deadline_ns = 3600000000000ULL;
+/// @brief Calibration timeout floor (50 MHz in ticks per ms).
+static constexpr uint64_t k_timeout_ticks_per_ms = 50000ULL;
+/// @brief Plausible TSC range (50 MHz – 100 GHz).
+static constexpr uint64_t k_tsc_min_hz = 50000000ULL;
+static constexpr uint64_t k_tsc_max_hz = 100000000000ULL;
+/// @brief Fail-closed TSC frequency when calibration finds nothing.
+static constexpr uint64_t k_fallback_tsc_hz = 2000000000ULL;
+
+/// @brief Convert coarse ticks to nanoseconds without 64-bit overflow.
+/// @param tick_count Coarse tick count.
+/// @param rate_hz Tick rate in Hz.
+/// @return Nanoseconds clamped to k_max_deadline_ns (0 when rate is 0).
+uint64_t ticks_to_ns(uint64_t tick_count, uint64_t rate_hz) {
+    if (rate_hz == 0) {
+        return 0;
+    }
+    const uint64_t cap_ticks = 3600ULL * rate_hz;
+    if (tick_count > cap_ticks) {
+        return k_max_deadline_ns;
+    }
+    const uint64_t whole = tick_count / rate_hz;
+    const uint64_t part = tick_count % rate_hz;
+    return whole * 1000000000ULL + (part * 1000000000ULL) / rate_hz;
+}
+
+/// @brief Convert nanoseconds to a TSC delta without 64-bit overflow.
+/// @param delay_ns Delay in nanoseconds (clamped to k_max_deadline_ns).
+/// @param freq_hz TSC frequency in Hz.
+/// @return TSC delta (0 when freq is 0).
+uint64_t hrt_ns_to_tsc(uint64_t delay_ns, uint64_t freq_hz) {
+    if (freq_hz == 0) {
+        return 0;
+    }
+    uint64_t bounded_ns = delay_ns;
+    if (bounded_ns > k_max_deadline_ns) {
+        bounded_ns = k_max_deadline_ns;
+    }
+    const uint64_t whole = bounded_ns / 1000000000ULL;
+    const uint64_t part = bounded_ns % 1000000000ULL;
+    const uint64_t part_hi = part / 1000ULL;
+    const uint64_t part_lo = part % 1000ULL;
+    return whole * freq_hz + part_hi * freq_hz / 1000000ULL +
+           part_lo * freq_hz / 1000000000ULL;
+}
+} // namespace
+
 /// @brief Monotonic tick counter, incremented on each timer IRQ.
 constinit uint64_t Timer::ticks_ = 0;
 /// @brief Calibrated TSC frequency in Hz.
 constinit uint64_t Timer::tsc_freq_hz_ = 0;
+/// @brief Active HRT tick source (set by resolve_source).
+constinit TickSource Timer::active_source_ = TickSource::PIT;
+/// @brief Last reported monotonic sample (atomics-only, see ns_monotonic).
+constinit uint64_t Timer::last_ns_ = 0;
+/// @brief Armed deadline in TSC units (0 = disarmed).
+constinit uint64_t Timer::deadline_tsc_ = 0;
+/// @brief Tick rate passed to init() (for tick/ns conversion).
+constinit uint32_t Timer::last_freq_hz_ = 0;
+/// @brief Calibration latch (calibrate() is idempotent).
+constinit bool Timer::calibrated_ = false;
+/// @brief Cached calibration result (true = preferred source).
+constinit bool Timer::calibrate_ok_ = false;
 
 /// @brief Initialise the system timer.
 /// When CONFIG_USE_APIC_TIMER=1 and the APIC was successfully enabled, the
@@ -43,6 +106,7 @@ constinit uint64_t Timer::tsc_freq_hz_ = 0;
 void Timer::init(uint32_t frequency_hz) {
     // Always calibrate TSC using the PIT (it's the most reliable method
     // across QEMU/hardware, and is independent of the tick source).
+    last_freq_hz_ = frequency_hz;
     calibrate_tsc(frequency_hz);
 
     #if CONFIG_USE_APIC_TIMER
@@ -117,18 +181,29 @@ void Timer::handle_irq(uint64_t ip) {
 }
 
 /// @brief Calibrate the TSC frequency using the PIT as a reference.
-/// Performs up to 12 iterations with increasing measurement windows and picks
-/// the first result that falls in a plausible range (50 MHz – 100 GHz).
+/// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with increasing
+/// measurement windows and picks the first result that falls in a plausible
+/// range (50 MHz – 100 GHz). Bounded in wall time by
+/// CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz floor; on failure the
+/// fail-closed 2 GHz default applies. Resolves the HRT source label.
 /// @param frequency_hz The PIT frequency used as the timing reference.
 void Timer::calibrate_tsc(uint32_t frequency_hz) {
     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
+    calibrated_ = true;
+    const uint64_t cal_start = rdtsc();
+    const uint64_t timeout_ticks =
+        (uint64_t)CONFIG_HRT_CALIBRATION_TIMEOUT_MS *
+        k_timeout_ticks_per_ms;
 
-    for (int retry = 0; retry < 12; ++retry) {
+    for (int retry = 0; retry < CONFIG_HRT_CALIBRATION_RETRIES; ++retry) {
+        if (rdtsc() - cal_start > timeout_ticks) {
+            break;
+        }
         outb(0x43, 0x00);
         uint16_t c0 = inb(0x40) | ((uint16_t)inb(0x40) << 8);
         uint64_t t0 = rdtsc();
 
-        uint64_t tsc_target = t0 + 50000ULL * (1 << retry);
+        uint64_t tsc_target = t0 + 50000ULL * (1ULL << retry);
         while (rdtsc() < tsc_target) {
             asm volatile("pause" : : : "memory");
         }
@@ -148,14 +223,72 @@ void Timer::calibrate_tsc(uint32_t frequency_hz) {
         if (count_delta > 0 && tsc_delta > 0) {
             uint64_t pit_ticks = (uint64_t)count_delta * 2;
             tsc_freq_hz_ = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
-            if (tsc_freq_hz_ >= 50000000ULL &&
-                tsc_freq_hz_ <= 100000000000ULL) {
+            if (tsc_freq_hz_ >= k_tsc_min_hz &&
+                tsc_freq_hz_ <= k_tsc_max_hz) {
+                resolve_source();
                 return;
             }
         }
     }
 
-    tsc_freq_hz_ = 2000000000ULL;
+    tsc_freq_hz_ = k_fallback_tsc_hz;
+    resolve_source();
+}
+
+/// @brief Resolve active_source_/calibrate_ok_ from calibrated state.
+/// Preference chain (CONFIG_HRT_SOURCE_PREFERENCE): prefer HPET (2) takes
+/// a probed HPET; otherwise a valid TSC wins; a probed HPET is the auto
+/// (0) fallback; anything else records PIT with the fail-closed frequency.
+void Timer::resolve_source() {
+    const bool hpet_ok =
+        hpet::probe() && hpet::freq_hz() != 0;
+    const bool tsc_ok = tsc_freq_hz_ >= k_tsc_min_hz &&
+                        tsc_freq_hz_ <= k_tsc_max_hz;
+    if (CONFIG_HRT_SOURCE_PREFERENCE == 2 && hpet_ok) {
+        active_source_ = TickSource::HPET;
+        calibrate_ok_ = true;
+        return;
+    }
+    if (tsc_ok) {
+        calibrate_ok_ = true;
+        active_source_ = APIC::has_tsc_deadline() ? TickSource::TSC_DEADLINE
+                                                  : TickSource::TSC;
+        return;
+    }
+    if (hpet_ok) {
+        active_source_ = TickSource::HPET;
+        calibrate_ok_ = true;
+        return;
+    }
+    active_source_ = TickSource::PIT;
+    calibrate_ok_ = false;
+}
+
+TickSource Timer::active_source() {
+    return active_source_;
+}
+
+uint64_t Timer::freq_hz() {
+    return tsc_freq_hz_;
+}
+
+bool Timer::calibrate() {
+    if (!calibrated_) {
+        calibrated_ = true;
+        uint32_t ref_hz = last_freq_hz_;
+        if (ref_hz == 0) {
+            ref_hz = CONFIG_TICK_HZ;
+        }
+        calibrate_tsc(ref_hz);
+        return calibrate_ok_;
+    }
+    // Frequency is stable; refresh the label only (APIC CPUID caps are
+    // probed after Timer::init, so a TSC label may promote to
+    // TSC_DEADLINE once the APIC is up).
+    if (active_source_ == TickSource::TSC && APIC::has_tsc_deadline()) {
+        active_source_ = TickSource::TSC_DEADLINE;
+    }
+    return calibrate_ok_;
 }
 
 /// @brief Return the calibrated TSC frequency in Hz.
@@ -174,6 +307,97 @@ uint64_t Timer::ns() {
     uint64_t sec = tsc / tsc_freq_hz_;
     uint64_t rem = tsc % tsc_freq_hz_;
     return sec * 1000000000ULL + (rem * 1000000000ULL) / tsc_freq_hz_;
+}
+
+uint64_t Timer::ns_monotonic() {
+    uint64_t sample = 0;
+    if (active_source_ == TickSource::HPET) {
+        const uint64_t hpet_freq = hpet::freq_hz();
+        if (hpet_freq != 0) {
+            const uint64_t hpet_cnt = hpet::counter();
+            const uint64_t sec = hpet_cnt / hpet_freq;
+            const uint64_t rem = hpet_cnt % hpet_freq;
+            sample = sec * 1000000000ULL + (rem * 1000000000ULL) / hpet_freq;
+        }
+    } else {
+        sample = ns();
+    }
+    return detail::monotonic_commit(&last_ns_, sample);
+}
+
+void Timer::oneshot(uint64_t ticks_from_now) {
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
+    if (boot_hz == 0 || ticks_from_now == 0) {
+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
+        return;
+    }
+    const uint64_t delay_ns = ticks_to_ns(ticks_from_now, boot_hz);
+    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
+        arch::APIC::set_timer_oneshot(delay_ns);
+    }
+    // PIT-only configs keep the system tick: only the software deadline
+    // is armed (the #17 wheel owns IRQ-backed bounded waits).
+    const uint64_t freq = tsc_freq_hz();
+    if (freq == 0) {
+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
+        return;
+    }
+    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(delay_ns, freq),
+                     __ATOMIC_RELEASE);
+}
+
+void Timer::periodic(uint64_t period_ticks) {
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
+    if (boot_hz == 0 || period_ticks == 0) {
+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
+        return;
+    }
+    const uint64_t period_ns = ticks_to_ns(period_ticks, boot_hz);
+    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
+        arch::APIC::set_timer_periodic(period_ns);
+    }
+    const uint64_t freq = tsc_freq_hz();
+    if (freq == 0) {
+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
+        return;
+    }
+    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(period_ns, freq),
+                     __ATOMIC_RELEASE);
+}
+
+uint64_t Timer::remaining() {
+    const uint64_t rem_ns = remaining_ns();
+    if (rem_ns == 0) {
+        return 0;
+    }
+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
+    if (boot_hz == 0) {
+        return 0;
+    }
+    // Ceil to ticks so a live (nonzero ns) deadline never reads 0.
+    const uint64_t whole = rem_ns / 1000000000ULL;
+    const uint64_t part = rem_ns % 1000000000ULL;
+    return whole * boot_hz + (part * boot_hz + 1000000000ULL - 1) / 1000000000ULL;
+}
+
+uint64_t Timer::remaining_ns() {
+    const uint64_t deadline =
+        __atomic_load_n(&deadline_tsc_, __ATOMIC_ACQUIRE);
+    if (deadline == 0) {
+        return 0;
+    }
+    const uint64_t freq = tsc_freq_hz();
+    if (freq == 0) {
+        return 0;
+    }
+    const uint64_t now = rdtsc();
+    if (now >= deadline) {
+        return 0;
+    }
+    const uint64_t delta = deadline - now;
+    const uint64_t sec = delta / freq;
+    const uint64_t rem = delta % freq;
+    return sec * 1000000000ULL + (rem * 1000000000ULL) / freq;
 }
 
 /// @brief Override the tick counter (test support).

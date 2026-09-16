@@ -199,6 +199,7 @@ void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 void register_stress_hrt_tests();
 void register_scheduler_hrt_tests();
+void register_hrt_monotonic_tests();
 void register_syscall_fastpath_tests();
 void register_fpu_inv_tests();
 void register_cap_shm_tests();
@@ -617,6 +618,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // runs cleanly inside `all` without -icount.  Class-scoped icount in the
     // Makefile gives it hard deterministic timing when run standalone.
     {"stress_hrt", []() { register_stress_hrt_tests(); }},
+    {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
 
     // -- safe: curated subset with TF_RELEASE tests --
     {"safe",
@@ -839,6 +841,7 @@ static void register_all_tests() {
     register_preemption_tests();
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
+    register_hrt_monotonic_tests();
     register_syscall_fastpath_tests();
     register_fpu_inv_tests();
     register_cap_shm_tests();
@@ -999,6 +1002,7 @@ static void register_all_tests_second_half() {
     register_no_op_new_tests();
     register_stress_hrt_tests();
     register_scheduler_hrt_tests();
+    register_hrt_monotonic_tests();
     register_syscall_fastpath_tests();
     register_fpu_inv_tests();
     register_cap_shm_tests();

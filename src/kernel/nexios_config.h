@@ -477,6 +477,27 @@
 #define CONFIG_HAS_HPET 0
 #endif
 
+// ---------------------------------------------------------------------------
+// HRT monotonic clock (issue #16, v0.4.7 "Enhance HRT")
+// ---------------------------------------------------------------------------
+/// 64-bit nanosecond width for ns_monotonic() (documents wrap period).
+#ifndef CONFIG_HRT_NS_WIDTH
+#define CONFIG_HRT_NS_WIDTH 64
+#endif
+/// PIT-anchored TSC calibration attempts (x86_64, bounded loop).
+#ifndef CONFIG_HRT_CALIBRATION_RETRIES
+#define CONFIG_HRT_CALIBRATION_RETRIES 12
+#endif
+/// Wall-clock bound for the whole TSC calibration (ms, 50 MHz floor).
+#ifndef CONFIG_HRT_CALIBRATION_TIMEOUT_MS
+#define CONFIG_HRT_CALIBRATION_TIMEOUT_MS 500
+#endif
+/// Tick-source preference: 0 = auto, 1 = prefer TSC(-deadline),
+/// 2 = prefer HPET when probed.
+#ifndef CONFIG_HRT_SOURCE_PREFERENCE
+#define CONFIG_HRT_SOURCE_PREFERENCE 1
+#endif
+
 /// Enable Priority Ceiling Protocol for Mutex.
 /// When set, each mutex has a static priority_ceiling (= max priority of any
 /// task that may lock it). The system ceiling is the max of all held mutex

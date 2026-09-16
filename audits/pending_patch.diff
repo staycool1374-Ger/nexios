@@ -1,413 +1,1106 @@
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 31c2cf6b..6b5c0b66 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -128,7 +128,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"invpcid",              4,   0,       0      },  // INVPCID stubs (issue #85 module 14): single/context/all/nonexistent pending API
-     {"lazy_tlb",             4,   0,       0      },  // Lazy-shootdown policy (issue #158; stubs from #85 module 15): defer/coalesce/quarantine/timeout real
-     {"ipi_batching",         4,   0,       0      },  // IPI batching (issue #159; baseline from #85 module 16): unbatched 5:5 baseline, collapse/order/overflow real
--    {"tlb_latency",          4,   0,       0      },  // TLB-latency stubs (issue #85 module 17): record/avg/p99/scaling pending profiler API
-+    {"tlb_latency",          4,   0,       0      },  // TLB-latency profiling (issue #160; stubs from #85 module 17): record/avg/p99/batch-scaling real
-     {"pml4_sync",            5,   0,       0      },  // PML4 sync (issue #85 module 18): remap/unmap table visibility (real), remote/write-barrier/remove-all stubs
-     {"drivers_virtio_blk_req", 7,   0,       0      },  // virtio-blk request path (issue #117): init, null transport, timeout+descriptor layout, read/write roundtrip, error mapping, used cookie
-     {"drivers_ahci_deep",      5,   0,       0      },  // AHCI protocol contracts (issue #108): CmdHeader/CmdTable layout, PRD encoding, NCQ tag, constants
-diff --git a/src/kernel/test/test_tlb_latency.cpp b/src/kernel/test/test_tlb_latency.cpp
-index a70b4b42..db87df82 100644
---- a/src/kernel/test/test_tlb_latency.cpp
-+++ b/src/kernel/test/test_tlb_latency.cpp
-@@ -1,5 +1,5 @@
- /*
-- * NexIOS RTOS — SMP bring-up (Phase 5)
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-  * Copyright (C) 2026 Arnold Hasshold
-  *
-  * This program is free software: you can redistribute it and/or modify
-@@ -17,62 +17,340 @@
-  */
- 
- /// @file test_tlb_latency.cpp
--/// @brief TLB-latency stubs (issue #85, module 17).  No per-flush
--///        latency recorder exists (no shootdown path at all) —
--///        documented stubs pending the main-branch profiling API.
-+/// @brief TLB-shootdown latency profiling (issue #160; stubs from issue
-+///        #85, module 17).  Test-side exact-sample recorder only — hot
-+///        paths stay uninstrumented.  No icount here (wall-clock TSC),
-+///        so comparisons use min-of-N plus margins, never tight bounds.
-+///        cpu_scaling is reframed as batch-size scaling (no AP boots in
-+///        this harness, so 1-vs-2-CPU comparison is unimplementable).
- 
- #if defined(CONFIG_ARCH_X86_64)
- #include <test.hpp>
- #include <logger.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/apic.hpp>
-+#include <kernel/arch/idt.hpp>
-+#include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
-+#include <kernel/arch/page_table.hpp>
- 
- using namespace kernel;
- 
-+namespace {
+diff --git a/audits/report-20260916-130230.md b/audits/report-20260916-130230.md
+new file mode 100644
+index 00000000..4c99f210
+--- /dev/null
++++ b/audits/report-20260916-130230.md
+@@ -0,0 +1,13 @@
++# AUDIT REPORT 20260916-130230
++PATCH: audits/pending_patch.diff
++FILES: src/kernel/arch/aarch64/timer.cpp, src/kernel/arch/hal/timer.hpp, src/kernel/arch/riscv64/timer.cpp, src/kernel/arch/x86_64/hal/apic.cpp, src/kernel/arch/x86_64/hal/apic.hpp, src/kernel/arch/x86_64/hal/hpet.cpp, src/kernel/arch/x86_64/hal/hpet.hpp, src/kernel/arch/x86_64/hal/timer.cpp, src/kernel/nexios_config.h, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_hr_clock.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_weak_stubs.cpp
 +
-+// Unbatched-leg probe vector: class 0x70, free (0x71 TPR probe, 0x72
-+// batch probe, 0x73 shootdown batch, 0xE0 timer, 0x80 syscall, 0xEF
-+// self-test, 0xEC sched, 0xFF spurious taken).
-+constexpr uint8_t kUnbatchedVector = 0x74;
++## FINDINGS
++- [S3] src/kernel/arch/x86_64/hal/timer.cpp:267 — plain (non-atomic) active_source_ read/write across ns_monotonic()/calibrate() refresh path
++  WHY: Single-byte boot-stable label with only a TSC→TSC_DEADLINE promotion means any stale read is transient and frequency-identical, so hardening to explicit atomic access is optional.
++- [S3] src/kernel/arch/x86_64/hal/hpet.cpp:40 — CONFIG_HAS_HPET conditional has identical fail-closed outcomes on both branches (present_ = false)
++  WHY: Dead conditional is intentional until ACPI/VMM mapping exists and never dereferences HPET_PHYS_BASE, so it is a forward-compat stub rather than a behavior divergence.
++- [S3] src/kernel/arch/x86_64/hal/apic.hpp:57 — Timer::oneshot()/APIC::arm_deadline() steal the LAPIC timer (set_timer_oneshot clears periodic re-arm) with restore assigned to the caller
++  WHY: Steal-and-restore discipline is documented in the header contract and honored by the test (timer_init + timer_start before further asserts) with no production caller yet, so the residual risk sits with the future #17 wheel, not this patch.
 +
-+volatile uint64_t g_tlb_unbatched_count = 0;
++DECISION: APPROVED
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index bd9ff28f..5c5f5b5b 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -20,6 +20,11 @@
+ 
+ <!-- Append new entries below; newest first. -->
+ 
++### #16 — HRT monotonic clock: TickSource + ns_monotonic + oneshot/remaining (2026-09-16)
++- **Learned:** (1) x86_64 `Timer::oneshot/periodic/remaining` were declared but never defined — linkable only because nothing referenced them (`test_hal` stubs document the gap); filling them is additive but their LAPIC delegation steals the system tick, so tests must steal-and-restore via the `apic_timer_oneshot` re-init pattern before further asserts. (2) `mk/cpp-rules.*.gen.mk` (arch-specific ones are git-ignored) regenerate only when `mk/rules.mk`/`Makefile` change — every new `.cpp` needs `rm mk/cpp-rules.<arch>.gen.mk` before building, for each arch. (3) Cross-arch compile can be verified per-TU with `-fsyntax-only` + the exact per-arch flags when full cross builds die on a pre-existing unrelated error (here `tlb_shootdown` on baseline, confirmed via `stash -u` + rebuild). (4) `calibrate()` idempotency needs the label refresh separated from the frequency work: APIC CPUID caps probe after `Timer::init`, so a cached TSC label must promote to TSC_DEADLINE on repeat calls.
++- **Adapted:** `arch::Timer::resolve_source` (preference chain TSC→HPET→PIT, `CONFIG_HRT_*` knobs), `detail::monotonic_commit` CAS clamp (atomics-only `last_ns_`), overflow-split tick/ns/TSC conversions (1 h clamp), fail-closed `hpet::probe` (no MMIO touch until ACPI/VMM mapping lands); audits/report-20260916-130230.md (APPROVED, 3x S3 carried to #17: plain `active_source_` access, HPET stub, LAPIC steal-and-restore contract).
++- **Style re-surface:** CODING_STYLE §5 (ENSURE-free reachable paths — all calibration/timeout/zero-freq paths fail closed with returns, never panics), §10.3/10.6 (all new locals initialized, descriptive names), §11.6 (atomics all-or-nothing on `last_ns_`/`deadline_tsc_`; `active_source_` documented single-writer exception), §12 test-first (stub class wired + green before implementation, `test-history.txt` row per run).
 +
-+// Exact-sample recorder (test-side only): fixed ring, min/avg/p99 over
-+// stored samples.  Zero deltas tolerated (coarse virtualized TSC).
-+constexpr uint64_t kMaxSamples = 256;
-+uint64_t t_samples[kMaxSamples] = {};
-+uint64_t t_sample_count = 0;
-+
-+void tlb_lat_reset() {
-+    t_sample_count = 0;
-+    for (uint64_t i = 0; i < kMaxSamples; ++i)
-+        t_samples[i] = 0;
+ ### #25 — Close-out: belated C1 implementation audit (2026-09-14)
+ - **Learned:** (1) A phase can ship gated but unaudited — the C1 commit message carried gates with zero audit evidence, and the gap survived 4 subsequent issues because every later audit scoped itself to its own diff. Close-out check: every merged phase needs a DECISION artifact, not just gates. (2) Auditing a historical diff works when scoped honestly: cover the commit as-landed, and explicitly delimit later deltas to their own reports instead of re-litigating. (3) Cross-issue scope accounting (what split to #26/#27/#60/#151 vs what stayed) is the actual close criterion for a parent issue — the spec status flip belongs with it.
+ - **Adapted:** audits/report-2026-09-14T19-36-04Z.md (S3-only APPROVED); docs/specs/per-cpu-smp.md → IMPLEMENTED.
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+index 494013c8..28e1d0fb 100644
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -30,6 +30,9 @@ namespace arch {
+ constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::counter_freq_hz_ = 0;
+ uint32_t Timer::tick_interval_ = 0;
++constinit TickSource Timer::active_source_ = TickSource::GENERIC_COUNTER;
++constinit uint64_t Timer::last_ns_ = 0;
++constinit bool Timer::calibrated_ = false;
+ 
+ /// @brief Initialise the timer with a given tick frequency and register the IRQ
+ /// handler.
+@@ -96,6 +99,41 @@ uint64_t Timer::tsc_freq_hz() {
+     return counter_freq_hz_;
+ }
+ 
++TickSource Timer::active_source() {
++    return active_source_;
 +}
 +
-+bool tlb_lat_record(uint64_t delta) {
-+    if (t_sample_count >= kMaxSamples)
++uint64_t Timer::freq_hz() {
++    return counter_freq_hz_;
++}
++
++bool Timer::calibrate() {
++    if (!calibrated_) {
++        calibrated_ = true;
++        if (counter_freq_hz_ == 0) {
++            uint64_t freq{};
++            asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
++            counter_freq_hz_ = freq;
++        }
++        active_source_ = TickSource::GENERIC_COUNTER;
++    }
++    return counter_freq_hz_ != 0;
++}
++
++uint64_t Timer::ns_monotonic() {
++    return detail::monotonic_commit(&last_ns_, ns());
++}
++
++uint64_t Timer::remaining_ns() {
++    const uint64_t freq = counter_freq_hz_;
++    if (freq == 0) {
++        return 0;
++    }
++    const uint64_t tval = remaining();
++    return (tval / freq) * 1000000000ULL +
++           ((tval % freq) * 1000000000ULL) / freq;
++}
++
+ /// @brief Override the tick counter (used in test isolation).
+ /// @param[in] value Value to set ticks_ to.
+ void Timer::set_ticks_for_test(uint64_t value) {
+diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
+index f7c82fba..8ab8b158 100644
+--- a/src/kernel/arch/hal/timer.hpp
++++ b/src/kernel/arch/hal/timer.hpp
+@@ -29,6 +29,39 @@
+ 
+ namespace arch {
+ 
++/// @brief Tick source backing the HRT monotonic clock (issue #16).
++enum class TickSource : uint8_t {
++    PIT = 0,            ///< Legacy PIT channel 0 (fallback).
++    TSC = 1,            ///< Calibrated TSC over PIT/APIC tick.
++    TSC_DEADLINE = 2,   ///< TSC with APIC TSC-deadline mode.
++    HPET = 3,           ///< HPET main counter (when probed).
++    GENERIC_COUNTER = 4,///< AArch64 generic counter (CNTFRQ/CNTPCT).
++    MTIME = 5,          ///< RISC-V mtime.
++    TEST = 6            ///< Test override (unused by production).
++};
++
++namespace detail {
++/// @brief Lock-free monotonic commit: stores max(*cell, now).
++/// @param cell Pointer to the last-reported value (atomics-only).
++/// @param now New sample.
++/// @return Monotonic value to report.
++inline uint64_t monotonic_commit(uint64_t* cell, uint64_t now) {
++    uint64_t prev = __atomic_load_n(cell, __ATOMIC_ACQUIRE);
++    while (now > prev) {
++        uint64_t expect = prev;
++        const bool swapped = __atomic_compare_exchange_n(
++            cell, &expect, now, false, __ATOMIC_ACQ_REL,
++            __ATOMIC_ACQUIRE);
++        if (swapped) {
++            prev = now;
++            break;
++        }
++        prev = expect;
++    }
++    return (now > prev) ? now : prev;
++}
++} // namespace detail
++
+ /// @cond
+ #if defined(CONFIG_ARCH_X86_64)
+ /// @endcond
+@@ -46,6 +79,22 @@ class Timer {
+     /// @brief Estimate nanoseconds since boot.
+     /// @return Approximate elapsed nanoseconds.
+     static uint64_t ns();
++    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
++    /// Never decreases on the calling CPU (lock-free last-value clamp).
++    /// @return Monotonic elapsed nanoseconds.
++    static uint64_t ns_monotonic();
++    /// @brief Which source backs ns_monotonic() (set by calibrate()).
++    /// @return Active tick source.
++    static TickSource active_source();
++    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
++    /// Fail-closed: falls back down TSC → HPET → PIT, frequency stays
++    /// nonzero. Refreshes the source label on repeat calls (APIC caps
++    /// are probed after Timer::init).
++    /// @return true on the preferred source, false on fallback.
++    static bool calibrate();
++    /// @brief Unified backing frequency in Hz (0 before calibrate()).
++    /// @return Backing frequency in Hz.
++    static uint64_t freq_hz();
+     /// @brief Change the tick frequency at runtime.
+     /// @param frequency_hz New tick rate in Hz.
+     static void set_frequency(uint32_t frequency_hz);
+@@ -57,25 +106,43 @@ class Timer {
+     static void set_ticks_for_test(uint64_t value);
+ 
+     /// @brief Schedule a one-shot timer interrupt.
+-    /// @param ticks_from_now Number of ticks from now.
++    /// Delegates to the APIC timer when active; on PIT-only configs the
++    /// IRQ is not reprogrammed (system tick preservation) and only the
++    /// software deadline is armed for remaining()/remaining_ns().
++    /// @param ticks_from_now Number of coarse ticks from now (0 = disarm).
+     static void oneshot(uint64_t ticks_from_now);
+     /// @brief Configure a periodic timer interrupt.
+-    /// @param period_ticks Period in ticks.
++    /// @param period_ticks Period in coarse ticks (0 = disarm).
+     static void periodic(uint64_t period_ticks);
+-    /// @brief Get the remaining ticks on the current timer.
+-    /// @return Remaining ticks.
++    /// @brief Get the remaining ticks on the armed deadline.
++    /// @return Remaining coarse ticks (0 when disarmed or expired).
+     static uint64_t remaining();
++    /// @brief Sub-tick nanoseconds remaining on the armed deadline.
++    /// @return Remaining nanoseconds (0 when disarmed or expired).
++    static uint64_t remaining_ns();
+     /// @brief Return the calibrated TSC frequency in Hz.
+     static uint64_t tsc_freq_hz();
+ 
+   private:
+-    /// @brief Calibrate the TSC frequency using the PIT.
+-    /// @param frequency_hz Target PIT frequency.
++    /// @brief Calibrate the TSC frequency using the PIT as a reference.
++    /// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with
++    /// increasing measurement windows and picks the first result that
++    /// falls in a plausible range (50 MHz – 100 GHz), bounded in wall
++    /// time by CONFIG_HRT_CALIBRATION_TIMEOUT_MS (50 MHz floor).
++    /// @param frequency_hz The PIT frequency used as the timing reference.
+     static void calibrate_tsc(uint32_t frequency_hz);
++    /// @brief Resolve active_source_/calibrate_ok_ from calibrated state.
++    static void resolve_source();
+     /// @brief PIT base input frequency (1.193182 MHz).
+     static constexpr uint32_t PIT_BASE_FREQ = 1193182;
+     static constinit uint64_t ticks_;
+     static constinit uint64_t tsc_freq_hz_;
++    static constinit TickSource active_source_;
++    static constinit uint64_t last_ns_;
++    static constinit uint64_t deadline_tsc_;
++    static constinit uint32_t last_freq_hz_;
++    static constinit bool calibrated_;
++    static constinit bool calibrate_ok_;
+ };
+ 
+ /// @cond
+@@ -91,12 +158,21 @@ class Timer {
+     static uint64_t ticks();
+     /// @brief Estimate nanoseconds since boot.
+     static uint64_t ns();
++    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
++    static uint64_t ns_monotonic();
++    /// @brief Which source backs ns_monotonic() (set by calibrate()).
++    static TickSource active_source();
++    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
++    /// @return true on the preferred source, false on fallback.
++    static bool calibrate();
++    /// @brief Unified backing frequency in Hz (0 before calibrate()).
++    static uint64_t freq_hz();
+     /// @brief Change the tick frequency at runtime.
+     static void set_frequency(uint32_t frequency_hz);
+     /// @brief Handle a timer interrupt.
+     /// @param ip Instruction pointer from interrupt frame.
+     static void handle_irq(uint64_t ip);
+-    /// @brief Override the tick count (test support).
++    /// @brief Override the tick counter (test support).
+     static void set_ticks_for_test(uint64_t value);
+ 
+     /// @brief Schedule a one-shot timer interrupt.
+@@ -105,6 +181,8 @@ class Timer {
+     static void periodic(uint64_t period_ticks);
+     /// @brief Get the remaining ticks on the current timer.
+     static uint64_t remaining();
++    /// @brief Sub-tick nanoseconds remaining on the current timer.
++    static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
+ 
+@@ -113,6 +191,9 @@ class Timer {
+     static constinit uint64_t counter_freq_hz_;
+     /// @brief Current compare interval in counter ticks (re-arm value).
+     static constinit uint32_t tick_interval_;
++    static constinit TickSource active_source_;
++    static constinit uint64_t last_ns_;
++    static constinit bool calibrated_;
+ };
+ 
+ /// @cond
+@@ -128,6 +209,15 @@ class Timer {
+     static uint64_t ticks();
+     /// @brief Estimate nanoseconds since boot.
+     static uint64_t ns();
++    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
++    static uint64_t ns_monotonic();
++    /// @brief Which source backs ns_monotonic() (set by calibrate()).
++    static TickSource active_source();
++    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
++    /// @return true on the preferred source, false on fallback.
++    static bool calibrate();
++    /// @brief Unified backing frequency in Hz (0 before calibrate()).
++    static uint64_t freq_hz();
+     /// @brief Change the tick frequency at runtime.
+     static void set_frequency(uint32_t frequency_hz);
+     /// @brief Handle a timer interrupt.
+@@ -142,12 +232,17 @@ class Timer {
+     static void periodic(uint64_t period_ticks);
+     /// @brief Get the remaining ticks on the current timer.
+     static uint64_t remaining();
++    /// @brief Sub-tick nanoseconds remaining (0: mtimecmp unreadable).
++    static uint64_t remaining_ns();
+     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
+     static uint64_t tsc_freq_hz();
+ 
+   private:
+     static constinit uint64_t ticks_;
+     static constinit uint64_t timer_freq_hz_;
++    static constinit TickSource active_source_;
++    static constinit uint64_t last_ns_;
++    static constinit bool calibrated_;
+ };
+ 
+ /// @cond
+diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
+index d103e265..629571f7 100644
+--- a/src/kernel/arch/riscv64/timer.cpp
++++ b/src/kernel/arch/riscv64/timer.cpp
+@@ -29,6 +29,9 @@ namespace arch {
+ 
+ constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::timer_freq_hz_ = 0;
++constinit TickSource Timer::active_source_ = TickSource::MTIME;
++constinit uint64_t Timer::last_ns_ = 0;
++constinit bool Timer::calibrated_ = false;
+ 
+ /// @brief Initialize the timer, set frequency, and register the IRQ handler.
+ /// @param frequency_hz Desired tick frequency in Hz.
+@@ -100,6 +103,35 @@ uint64_t Timer::tsc_freq_hz() {
+     return timer_freq_hz_;
+ }
+ 
++TickSource Timer::active_source() {
++    return active_source_;
++}
++
++uint64_t Timer::freq_hz() {
++    return timer_freq_hz_;
++}
++
++bool Timer::calibrate() {
++    if (!calibrated_) {
++        calibrated_ = true;
++        if (timer_freq_hz_ == 0) {
++            timer_freq_hz_ = 10000000;
++        }
++        active_source_ = TickSource::MTIME;
++    }
++    return timer_freq_hz_ != 0;
++}
++
++uint64_t Timer::ns_monotonic() {
++    return detail::monotonic_commit(&last_ns_, ns());
++}
++
++uint64_t Timer::remaining_ns() {
++    // mtimecmp is not readable from S-mode: no sub-tick remainder.
++    (void)remaining();
++    return 0;
++}
++
+ /// @brief Arm a one-shot timer via SBI.
+ /// @param ticks_from_now Number of milliseconds from now to fire.
+ void Timer::oneshot(uint64_t ticks_from_now) {
+diff --git a/src/kernel/arch/x86_64/hal/apic.cpp b/src/kernel/arch/x86_64/hal/apic.cpp
+index 07a47c4b..885360ab 100644
+--- a/src/kernel/arch/x86_64/hal/apic.cpp
++++ b/src/kernel/arch/x86_64/hal/apic.cpp
+@@ -420,6 +420,14 @@ uint32_t APIC::timer_current_count() {
+     return lapic_rd(REG_TIMER_CURCNT);
+ }
+ 
++bool APIC::arm_deadline(uint64_t ns) {
++    if (!enabled_ || ns == 0 || tsc_deadline_supported_ == 0) {
 +        return false;
-+    t_samples[t_sample_count++] = delta;
++    }
++    set_timer_oneshot(ns);
 +    return true;
 +}
 +
-+uint64_t tlb_lat_min() {
-+    uint64_t best = 0xFFFFFFFFFFFFFFFFULL;
-+    for (uint64_t i = 0; i < t_sample_count; ++i) {
-+        if (t_samples[i] < best)
-+            best = t_samples[i];
-+    }
-+    return (t_sample_count == 0) ? 0 : best;
-+}
+ // ─── Bus frequency calibration (periodic mode only) ──────────────────────
+ uint32_t APIC::calibrate_bus_hz() {
+     // One-shot mode: write a known initial count, measure elapsed TSC
+diff --git a/src/kernel/arch/x86_64/hal/apic.hpp b/src/kernel/arch/x86_64/hal/apic.hpp
+index e03d1397..3d297173 100644
+--- a/src/kernel/arch/x86_64/hal/apic.hpp
++++ b/src/kernel/arch/x86_64/hal/apic.hpp
+@@ -47,6 +47,20 @@ public:
+     /// @brief Read the current APIC timer count.
+     static uint32_t timer_current_count();
+ 
++    /// @brief Whether CPU+APIC support TSC-deadline mode (issue #16).
++    /// Valid after init() probed CPUID leaf 1 (ECX bit 24).
++    /// @return true when TSC-deadline mode is available.
++    static bool has_tsc_deadline() { return tsc_deadline_supported_ != 0; }
 +
-+uint64_t tlb_lat_max() {
-+    uint64_t best = 0;
-+    for (uint64_t i = 0; i < t_sample_count; ++i) {
-+        if (t_samples[i] > best)
-+            best = t_samples[i];
-+    }
-+    return best;
-+}
++    /// @brief Arm a one-shot TSC deadline (issue #16; timer-wheel use).
++    /// Fail-closed: false when the APIC is off, ns is 0, or TSC-deadline
++    /// mode is unavailable. Steals the LAPIC timer: the caller must
++    /// re-arm the periodic tick (timer_init + timer_start at the boot
++    /// rate) after expiry.
++    /// @param ns Delay in nanoseconds (0 = no-op, returns false).
++    /// @return true when the deadline was armed.
++    static bool arm_deadline(uint64_t ns);
 +
-+uint64_t tlb_lat_avg() {
-+    if (t_sample_count == 0)
-+        return 0;
-+    uint64_t sum = 0;
-+    for (uint64_t i = 0; i < t_sample_count; ++i)
-+        sum += t_samples[i];
-+    return sum / t_sample_count;
-+}
+     /// @brief Check whether the CPU supports an APIC.
+     static bool is_apic_supported();
+ 
+diff --git a/src/kernel/arch/x86_64/hal/hpet.cpp b/src/kernel/arch/x86_64/hal/hpet.cpp
+new file mode 100644
+index 00000000..fc80b4a5
+--- /dev/null
++++ b/src/kernel/arch/x86_64/hal/hpet.cpp
+@@ -0,0 +1,66 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
 +
-+uint64_t tlb_lat_p99() {
-+    if (t_sample_count == 0)
-+        return 0;
-+    uint64_t sorted[kMaxSamples];
-+    for (uint64_t i = 0; i < t_sample_count; ++i)
-+        sorted[i] = t_samples[i];
-+    for (uint64_t i = 1; i < t_sample_count; ++i) {
-+        uint64_t key = sorted[i];
-+        uint64_t j = i;
-+        while (j > 0 && sorted[j - 1] > key) {
-+            sorted[j] = sorted[j - 1];
-+            --j;
-+        }
-+        sorted[j] = key;
-+    }
-+    uint64_t idx = (99 * t_sample_count + 99) / 100 - 1;
-+    if (idx >= t_sample_count)
-+        idx = t_sample_count - 1;
-+    return sorted[idx];
-+}
++/// @file hpet.cpp
++/// @brief Minimal HPET probe for the HRT tick-source chain (issue #16).
 +
-+void tlb_lat_dump(const char *tag) {
-+    Logger::info("[TLB] ");
-+    Logger::info(tag);
-+    Logger::info(": n=");
-+    Logger::print_dec(t_sample_count);
-+    Logger::info(" min=");
-+    Logger::print_dec(tlb_lat_min());
-+    Logger::info(" avg=");
-+    Logger::print_dec(tlb_lat_avg());
-+    Logger::info(" max=");
-+    Logger::print_dec(tlb_lat_max());
-+    Logger::info(" p99=");
-+    Logger::print_dec(tlb_lat_p99());
-+    Logger::info("");
-+}
++#include <kernel/arch/x86_64/hal/hpet.hpp>
 +
-+uint64_t tlb_delta(uint64_t start, uint64_t end) {
-+    return (end > start) ? (end - start) : 0;
-+}
++namespace arch::hpet {
 +
++namespace {
++/// @brief Probe latch (set on first call; probe is idempotent).
++constinit bool probed_ = false;
++/// @brief Cached presence result.
++constinit bool present_ = false;
++/// @brief Cached frequency in Hz (0 when absent).
++constinit uint64_t cached_freq_hz_ = 0;
 +} // namespace
 +
- // Runmode: kernel
- // Testidea: Every TLB flush records its latency (TSC delta).
--// Input: Series of flushes, sample count afterwards.
--// Expect: One sample per flush; all samples non-zero.
--// Depends: Flush-latency recorder (not yet implemented)
--JARVIS_TEST(tlb_latency_recorded, "PRE: none | POST: none | PENDING: profiler") {
--    /* Pseudocode:
--     *   flush N times; JARVIS_ASSERT(samples() == N && all_nonzero());
--     */
-+// Input: N=32 direct flushes, sample count afterwards.
-+// Expect: 32 samples recorded; max > 0 (zero deltas tolerated —
-+//         coarse virtualized TSC can repeat).
-+// Depends: Test-side recorder + ArchPageTable::tlb_flush (issue #160)
-+JARVIS_TEST(tlb_latency_recorded, "PRE: none | POST: none") {
-+    tlb_lat_reset();
-+    {
-+        arch::IrqGuard irq_guard{};
-+        for (uint64_t i = 0; i < 32; ++i) {
-+            uint64_t start = arch::rdtsc();
-+            arch::ArchPageTable::tlb_flush(0x39000000ULL + i * 0x1000);
-+            uint64_t end = arch::rdtsc();
-+            JARVIS_ASSERT(tlb_lat_record(tlb_delta(start, end)));
-+        }
++bool probe() {
++    if (probed_) {
++        return present_;
 +    }
-+    JARVIS_ASSERT_EQ(32ULL, t_sample_count);
-+    JARVIS_ASSERT(tlb_lat_max() > 0);
-+    tlb_lat_dump("recorded");
-     JARVIS_TEST_PASS();
++    probed_ = true;
++#if CONFIG_HAS_HPET
++    // Fail-closed: HPET_PHYS_BASE sits above the HHDM identity window, so
++    // a raw dereference would fault. ACPI-table discovery plus a VMM
++    // mapping must publish a readable base before this path trusts the
++    // capabilities register (follow-up work, not issue #16).
++    present_ = false;
++#else
++    present_ = false;
++#endif
++    return present_;
++}
++
++uint64_t freq_hz() {
++    if (!probe()) {
++        return 0;
++    }
++    return cached_freq_hz_;
++}
++
++uint64_t counter() {
++    if (!probe()) {
++        return 0;
++    }
++    return 0;
++}
++
++} // namespace arch::hpet
+diff --git a/src/kernel/arch/x86_64/hal/hpet.hpp b/src/kernel/arch/x86_64/hal/hpet.hpp
+new file mode 100644
+index 00000000..61f0f9d9
+--- /dev/null
++++ b/src/kernel/arch/x86_64/hal/hpet.hpp
+@@ -0,0 +1,55 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file hpet.hpp
++/// @brief Minimal HPET probe for the HRT tick-source chain (issue #16).
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace arch::hpet {
++
++/// @brief HPET MMIO base (from the ACPI HPET table address field).
++static constexpr uint64_t HPET_PHYS_BASE = 0xFED00000ULL;
++/// @brief General capabilities and ID register offset.
++static constexpr uint64_t HPET_REG_CAP = 0x000ULL;
++/// @brief Main counter register offset.
++static constexpr uint64_t HPET_REG_COUNTER = 0x0F0ULL;
++/// @brief Period mask in the capabilities register (femtoseconds).
++static constexpr uint64_t HPET_CAP_PERIOD_MASK = 0xFFFFFFFF00000000ULL;
++/// @brief Period shift in the capabilities register.
++static constexpr uint64_t HPET_CAP_PERIOD_SHIFT = 32ULL;
++/// @brief Femtoseconds per second (period → frequency conversion).
++static constexpr uint64_t HPET_FEMTO_PER_SEC = 1000000000000000ULL;
++
++/// @brief Probe for an HPET (idempotent, fail-closed).
++/// Returns false until ACPI-table discovery plus a VMM mapping make the
++/// base readable; CONFIG_HAS_HPET gates the register path. Never faults:
++/// without a mapping the probe reports absent.
++/// @return true when an HPET is present and readable.
++bool probe();
++/// @brief HPET frequency in Hz (0 when absent).
++/// @return Frequency in Hz, or 0.
++uint64_t freq_hz();
++/// @brief HPET main counter value (0 when absent).
++/// @return Counter value, or 0.
++uint64_t counter();
++
++} // namespace arch::hpet
+diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
+index ff7bc68c..e9fd69b4 100644
+--- a/src/kernel/arch/x86_64/hal/timer.cpp
++++ b/src/kernel/arch/x86_64/hal/timer.cpp
+@@ -25,16 +25,79 @@
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/apic.hpp>
+ #include <kernel/arch/x86_64/hal/percpu.hpp>
++#include <kernel/arch/x86_64/hal/hpet.hpp>
++#include <kernel/bootparams.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/profiling/sampler.hpp>
+ 
+ namespace arch {
+ 
++namespace {
++/// @brief Maximum deadline span (1 hour in ns): bounds all products.
++static constexpr uint64_t k_max_deadline_ns = 3600000000000ULL;
++/// @brief Calibration timeout floor (50 MHz in ticks per ms).
++static constexpr uint64_t k_timeout_ticks_per_ms = 50000ULL;
++/// @brief Plausible TSC range (50 MHz – 100 GHz).
++static constexpr uint64_t k_tsc_min_hz = 50000000ULL;
++static constexpr uint64_t k_tsc_max_hz = 100000000000ULL;
++/// @brief Fail-closed TSC frequency when calibration finds nothing.
++static constexpr uint64_t k_fallback_tsc_hz = 2000000000ULL;
++
++/// @brief Convert coarse ticks to nanoseconds without 64-bit overflow.
++/// @param tick_count Coarse tick count.
++/// @param rate_hz Tick rate in Hz.
++/// @return Nanoseconds clamped to k_max_deadline_ns (0 when rate is 0).
++uint64_t ticks_to_ns(uint64_t tick_count, uint64_t rate_hz) {
++    if (rate_hz == 0) {
++        return 0;
++    }
++    const uint64_t cap_ticks = 3600ULL * rate_hz;
++    if (tick_count > cap_ticks) {
++        return k_max_deadline_ns;
++    }
++    const uint64_t whole = tick_count / rate_hz;
++    const uint64_t part = tick_count % rate_hz;
++    return whole * 1000000000ULL + (part * 1000000000ULL) / rate_hz;
++}
++
++/// @brief Convert nanoseconds to a TSC delta without 64-bit overflow.
++/// @param delay_ns Delay in nanoseconds (clamped to k_max_deadline_ns).
++/// @param freq_hz TSC frequency in Hz.
++/// @return TSC delta (0 when freq is 0).
++uint64_t hrt_ns_to_tsc(uint64_t delay_ns, uint64_t freq_hz) {
++    if (freq_hz == 0) {
++        return 0;
++    }
++    uint64_t bounded_ns = delay_ns;
++    if (bounded_ns > k_max_deadline_ns) {
++        bounded_ns = k_max_deadline_ns;
++    }
++    const uint64_t whole = bounded_ns / 1000000000ULL;
++    const uint64_t part = bounded_ns % 1000000000ULL;
++    const uint64_t part_hi = part / 1000ULL;
++    const uint64_t part_lo = part % 1000ULL;
++    return whole * freq_hz + part_hi * freq_hz / 1000000ULL +
++           part_lo * freq_hz / 1000000000ULL;
++}
++} // namespace
++
+ /// @brief Monotonic tick counter, incremented on each timer IRQ.
+ constinit uint64_t Timer::ticks_ = 0;
+ /// @brief Calibrated TSC frequency in Hz.
+ constinit uint64_t Timer::tsc_freq_hz_ = 0;
++/// @brief Active HRT tick source (set by resolve_source).
++constinit TickSource Timer::active_source_ = TickSource::PIT;
++/// @brief Last reported monotonic sample (atomics-only, see ns_monotonic).
++constinit uint64_t Timer::last_ns_ = 0;
++/// @brief Armed deadline in TSC units (0 = disarmed).
++constinit uint64_t Timer::deadline_tsc_ = 0;
++/// @brief Tick rate passed to init() (for tick/ns conversion).
++constinit uint32_t Timer::last_freq_hz_ = 0;
++/// @brief Calibration latch (calibrate() is idempotent).
++constinit bool Timer::calibrated_ = false;
++/// @brief Cached calibration result (true = preferred source).
++constinit bool Timer::calibrate_ok_ = false;
+ 
+ /// @brief Initialise the system timer.
+ /// When CONFIG_USE_APIC_TIMER=1 and the APIC was successfully enabled, the
+@@ -43,6 +106,7 @@ constinit uint64_t Timer::tsc_freq_hz_ = 0;
+ void Timer::init(uint32_t frequency_hz) {
+     // Always calibrate TSC using the PIT (it's the most reliable method
+     // across QEMU/hardware, and is independent of the tick source).
++    last_freq_hz_ = frequency_hz;
+     calibrate_tsc(frequency_hz);
+ 
+     #if CONFIG_USE_APIC_TIMER
+@@ -117,18 +181,29 @@ void Timer::handle_irq(uint64_t ip) {
  }
  
- // Runmode: kernel
- // Testidea: Batched average latency beats the unbatched baseline.
--// Input: Baselines from ipi_batching_unbatched_baseline + batched run.
--// Expect: avg(batched) < avg(unbatched).
--// Depends: Flush-latency recorder (not yet implemented)
--JARVIS_TEST(tlb_latency_avg_improves, "PRE: none | POST: none | PENDING: profiler") {
--    /* Pseudocode:
--     *   JARVIS_ASSERT(avg_latency(batched) < avg_latency(unbatched));
--     */
-+// Input: 16 requests unbatched (16 self-IPIs) vs batched (16 entries,
-+//        1 IPI); min-of-5 totals each leg, IF=1 throughout.
-+// Expect: min_batched_total < min_unbatched_total (gap is ~15 IPI
-+//         round-trips — strict-less is robust under host noise).
-+// Depends: ShootdownBatch delivery vs raw send_ipi (issue #160)
-+JARVIS_TEST(tlb_latency_avg_improves, "PRE: none | POST: none") {
-+    JARVIS_ASSERT(arch::APIC::is_enabled());
-+    uint64_t freq = arch::Timer::tsc_freq_hz();
-+    JARVIS_ASSERT(freq > 0);
-+    arch::IDT::register_handler_raw(
-+        kUnbatchedVector, [](uint64_t, uint64_t, uint64_t) {
-+            g_tlb_unbatched_count = g_tlb_unbatched_count + 1;
-+            arch::APIC::eoi();
-+        });
-+    arch::IDT::register_handler_raw(
-+        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
-+        [](uint64_t, uint64_t, uint64_t) {
-+            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
-+            arch::APIC::eoi();
-+        });
-+    uint32_t bsp = arch::APIC::lapic_id();
-+    uint64_t self = arch::cpu_index();
-+    constexpr uint64_t k_n = 16;
-+    constexpr int k_repeats = 5;
-+    uint64_t best_unbatched = 0xFFFFFFFFFFFFFFFFULL;
-+    uint64_t best_batched = 0xFFFFFFFFFFFFFFFFULL;
-+    for (int r = 0; r < k_repeats; ++r) {
-+        // Unbatched leg: 16 separate self-IPIs.
-+        g_tlb_unbatched_count = 0;
-+        uint64_t t0 = arch::rdtsc();
-+        for (uint64_t i = 0; i < k_n; ++i) {
-+            JARVIS_ASSERT(arch::APIC::send_ipi(
-+                bsp, kUnbatchedVector, arch::APIC::IpiMode::FIXED));
+ /// @brief Calibrate the TSC frequency using the PIT as a reference.
+-/// Performs up to 12 iterations with increasing measurement windows and picks
+-/// the first result that falls in a plausible range (50 MHz – 100 GHz).
++/// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with increasing
++/// measurement windows and picks the first result that falls in a plausible
++/// range (50 MHz – 100 GHz). Bounded in wall time by
++/// CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz floor; on failure the
++/// fail-closed 2 GHz default applies. Resolves the HRT source label.
+ /// @param frequency_hz The PIT frequency used as the timing reference.
+ void Timer::calibrate_tsc(uint32_t frequency_hz) {
+     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
++    calibrated_ = true;
++    const uint64_t cal_start = rdtsc();
++    const uint64_t timeout_ticks =
++        (uint64_t)CONFIG_HRT_CALIBRATION_TIMEOUT_MS *
++        k_timeout_ticks_per_ms;
+ 
+-    for (int retry = 0; retry < 12; ++retry) {
++    for (int retry = 0; retry < CONFIG_HRT_CALIBRATION_RETRIES; ++retry) {
++        if (rdtsc() - cal_start > timeout_ticks) {
++            break;
 +        }
-+        uint64_t start = arch::rdtsc();
-+        uint64_t limit = freq / 5;
-+        while (g_tlb_unbatched_count < k_n) {
-+            if (arch::rdtsc() - start > limit)
-+                break;
-+            asm volatile("pause");
-+        }
-+        uint64_t t1 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(k_n, g_tlb_unbatched_count);
-+        uint64_t unbatched = tlb_delta(t0, t1);
-+        if (unbatched < best_unbatched)
-+            best_unbatched = unbatched;
-+        // Batched leg: 16 entries, 1 IPI.
-+        arch::ShootdownBatch::reset_for_test();
-+        for (uint64_t i = 0; i < k_n; ++i) {
-+            JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
-+                self, 0x3A000000ULL + i * 0x1000, 1));
-+        }
-+        uint64_t applied_before =
-+            arch::ShootdownBatch::applied_for_test();
-+        t0 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+        start = arch::rdtsc();
-+        while (arch::ShootdownBatch::applied_for_test() <
-+               applied_before + k_n) {
-+            if (arch::rdtsc() - start > limit)
-+                break;
-+            asm volatile("pause");
-+        }
-+        t1 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(applied_before + k_n,
-+                         arch::ShootdownBatch::applied_for_test());
-+        uint64_t batched = tlb_delta(t0, t1);
-+        if (batched < best_batched)
-+            best_batched = batched;
+         outb(0x43, 0x00);
+         uint16_t c0 = inb(0x40) | ((uint16_t)inb(0x40) << 8);
+         uint64_t t0 = rdtsc();
+ 
+-        uint64_t tsc_target = t0 + 50000ULL * (1 << retry);
++        uint64_t tsc_target = t0 + 50000ULL * (1ULL << retry);
+         while (rdtsc() < tsc_target) {
+             asm volatile("pause" : : : "memory");
+         }
+@@ -148,14 +223,72 @@ void Timer::calibrate_tsc(uint32_t frequency_hz) {
+         if (count_delta > 0 && tsc_delta > 0) {
+             uint64_t pit_ticks = (uint64_t)count_delta * 2;
+             tsc_freq_hz_ = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
+-            if (tsc_freq_hz_ >= 50000000ULL &&
+-                tsc_freq_hz_ <= 100000000000ULL) {
++            if (tsc_freq_hz_ >= k_tsc_min_hz &&
++                tsc_freq_hz_ <= k_tsc_max_hz) {
++                resolve_source();
+                 return;
+             }
+         }
+     }
+ 
+-    tsc_freq_hz_ = 2000000000ULL;
++    tsc_freq_hz_ = k_fallback_tsc_hz;
++    resolve_source();
++}
++
++/// @brief Resolve active_source_/calibrate_ok_ from calibrated state.
++/// Preference chain (CONFIG_HRT_SOURCE_PREFERENCE): prefer HPET (2) takes
++/// a probed HPET; otherwise a valid TSC wins; a probed HPET is the auto
++/// (0) fallback; anything else records PIT with the fail-closed frequency.
++void Timer::resolve_source() {
++    const bool hpet_ok =
++        hpet::probe() && hpet::freq_hz() != 0;
++    const bool tsc_ok = tsc_freq_hz_ >= k_tsc_min_hz &&
++                        tsc_freq_hz_ <= k_tsc_max_hz;
++    if (CONFIG_HRT_SOURCE_PREFERENCE == 2 && hpet_ok) {
++        active_source_ = TickSource::HPET;
++        calibrate_ok_ = true;
++        return;
 +    }
-+    JARVIS_ASSERT(best_batched < best_unbatched);
-+    Logger::info("[TLB] avg16: min_unbatched=");
-+    Logger::print_dec(best_unbatched);
-+    Logger::info(" min_batched=");
-+    Logger::print_dec(best_batched);
-+    Logger::info("");
-     JARVIS_TEST_PASS();
++    if (tsc_ok) {
++        calibrate_ok_ = true;
++        active_source_ = APIC::has_tsc_deadline() ? TickSource::TSC_DEADLINE
++                                                  : TickSource::TSC;
++        return;
++    }
++    if (hpet_ok) {
++        active_source_ = TickSource::HPET;
++        calibrate_ok_ = true;
++        return;
++    }
++    active_source_ = TickSource::PIT;
++    calibrate_ok_ = false;
++}
++
++TickSource Timer::active_source() {
++    return active_source_;
++}
++
++uint64_t Timer::freq_hz() {
++    return tsc_freq_hz_;
++}
++
++bool Timer::calibrate() {
++    if (!calibrated_) {
++        calibrated_ = true;
++        uint32_t ref_hz = last_freq_hz_;
++        if (ref_hz == 0) {
++            ref_hz = CONFIG_TICK_HZ;
++        }
++        calibrate_tsc(ref_hz);
++        return calibrate_ok_;
++    }
++    // Frequency is stable; refresh the label only (APIC CPUID caps are
++    // probed after Timer::init, so a TSC label may promote to
++    // TSC_DEADLINE once the APIC is up).
++    if (active_source_ == TickSource::TSC && APIC::has_tsc_deadline()) {
++        active_source_ = TickSource::TSC_DEADLINE;
++    }
++    return calibrate_ok_;
  }
  
- // Runmode: kernel
- // Testidea: P99 flush latency stays within 2x the average.
--// Input: Latency histogram over a flush series.
--// Expect: p99 <= 2 * avg (no pathological tail).
--// Depends: Flush-latency histogram (not yet implemented)
--JARVIS_TEST(tlb_latency_p99_bound, "PRE: none | POST: none | PENDING: profiler") {
--    /* Pseudocode:
--     *   JARVIS_ASSERT(percentile(99) <= 2 * mean());
--     */
-+// Input: 200 NONZERO single-flush samples (coarse virtualized TSC
-+//        yields mostly-zero deltas — collecting zeros would drag the
-+//        average below any nonzero p99 by construction) under one
-+//        IrqGuard.
-+// Expect: p99 <= 2 * avg over the nonzero population (idx 197 of 200
-+//         tolerates the 2 worst host-stall outliers; uniform op keeps
-+//         the body tight).
-+// Depends: Test-side recorder (issue #160)
-+JARVIS_TEST(tlb_latency_p99_bound, "PRE: none | POST: none") {
-+    tlb_lat_reset();
-+    {
-+        arch::IrqGuard irq_guard{};
-+        uint64_t collected = 0;
-+        for (uint64_t i = 0; i < 20000 && collected < 200; ++i) {
-+            uint64_t start = arch::rdtsc();
-+            arch::ArchPageTable::tlb_flush(0x3B000000ULL +
-+                                           (i % 64) * 0x1000);
-+            uint64_t end = arch::rdtsc();
-+            uint64_t delta = tlb_delta(start, end);
-+            if (delta == 0)
-+                continue;
-+            JARVIS_ASSERT(tlb_lat_record(delta));
-+            ++collected;
-+        }
-+        JARVIS_ASSERT_EQ(200ULL, collected);
-+    }
-+    JARVIS_ASSERT_EQ(200ULL, t_sample_count);
-+    uint64_t avg = tlb_lat_avg();
-+    JARVIS_ASSERT(avg > 0);
-+    JARVIS_ASSERT(tlb_lat_p99() <= 2 * avg);
-+    tlb_lat_dump("p99");
-     JARVIS_TEST_PASS();
+ /// @brief Return the calibrated TSC frequency in Hz.
+@@ -176,6 +309,97 @@ uint64_t Timer::ns() {
+     return sec * 1000000000ULL + (rem * 1000000000ULL) / tsc_freq_hz_;
  }
  
- // Runmode: kernel
--// Testidea: Flush latency scales with the number of active CPUs.
--// Input: Same flush workload on 1 vs 2 CPUs.
--// Expect: 2-CPU latency within [1x, 3x] of 1-CPU (linear-ish, bounded).
--// Depends: Per-CPU latency attribution (not yet implemented)
--JARVIS_TEST(tlb_latency_cpu_scaling, "PRE: none | POST: none | PENDING: profiler") {
--    /* Pseudocode:
--     *   l1 = bench(cpus=1); l2 = bench(cpus=2);
--     *   JARVIS_ASSERT(l2 >= l1 && l2 <= 3 * l1);
--     */
-+// Testidea: Flush cost amortizes with batch size (reframed cpu_scaling:
-+//           no AP boots here, so 1-vs-2-CPU comparison is
-+//           unimplementable — batch-1 vs batch-16 per-request cost
-+//           instead).
-+// Input: Per-request cost at batch 1 vs batch 16, min-of-5 each, IF=1.
-+// Expect: min_per_req_16 <= min_per_req_1 (one IPI amortized over 16
-+//         flushes vs one IPI per flush).
-+// Depends: ShootdownBatch delivery (issue #160)
-+JARVIS_TEST(tlb_latency_cpu_scaling, "PRE: none | POST: none") {
-+    arch::IDT::register_handler_raw(
-+        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
-+        [](uint64_t, uint64_t, uint64_t) {
-+            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
-+            arch::APIC::eoi();
-+        });
-+    uint64_t self = arch::cpu_index();
-+    uint64_t freq = arch::Timer::tsc_freq_hz();
-+    JARVIS_ASSERT(freq > 0);
-+    constexpr int k_repeats = 5;
-+    uint64_t best_per_1 = 0xFFFFFFFFFFFFFFFFULL;
-+    uint64_t best_per_16 = 0xFFFFFFFFFFFFFFFFULL;
-+    for (int r = 0; r < k_repeats; ++r) {
-+        // Batch-1 leg: 1 entry, 1 IPI.
-+        arch::ShootdownBatch::reset_for_test();
-+        JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(self,
-+                                                         0x3C000000ULL,
-+                                                         1));
-+        uint64_t applied_before =
-+            arch::ShootdownBatch::applied_for_test();
-+        uint64_t t0 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+        uint64_t start = arch::rdtsc();
-+        uint64_t limit = freq / 5;
-+        while (arch::ShootdownBatch::applied_for_test() <
-+               applied_before + 1) {
-+            if (arch::rdtsc() - start > limit)
-+                break;
-+            asm volatile("pause");
++uint64_t Timer::ns_monotonic() {
++    uint64_t sample = 0;
++    if (active_source_ == TickSource::HPET) {
++        const uint64_t hpet_freq = hpet::freq_hz();
++        if (hpet_freq != 0) {
++            const uint64_t hpet_cnt = hpet::counter();
++            const uint64_t sec = hpet_cnt / hpet_freq;
++            const uint64_t rem = hpet_cnt % hpet_freq;
++            sample = sec * 1000000000ULL + (rem * 1000000000ULL) / hpet_freq;
 +        }
-+        uint64_t t1 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(applied_before + 1,
-+                         arch::ShootdownBatch::applied_for_test());
-+        uint64_t per_1 = tlb_delta(t0, t1);
-+        if (per_1 < best_per_1)
-+            best_per_1 = per_1;
-+        // Batch-16 leg: 16 entries, still 1 IPI.
-+        arch::ShootdownBatch::reset_for_test();
-+        for (uint64_t i = 0; i < 16; ++i) {
-+            JARVIS_ASSERT(arch::ShootdownBatch::queue_remote(
-+                self, 0x3D000000ULL + i * 0x1000, 1));
-+        }
-+        applied_before = arch::ShootdownBatch::applied_for_test();
-+        t0 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(1ULL, arch::ShootdownBatch::flush_target(self));
-+        start = arch::rdtsc();
-+        while (arch::ShootdownBatch::applied_for_test() <
-+               applied_before + 16) {
-+            if (arch::rdtsc() - start > limit)
-+                break;
-+            asm volatile("pause");
-+        }
-+        t1 = arch::rdtsc();
-+        JARVIS_ASSERT_EQ(applied_before + 16,
-+                         arch::ShootdownBatch::applied_for_test());
-+        uint64_t per_16 = tlb_delta(t0, t1) / 16;
-+        if (per_16 < best_per_16)
-+            best_per_16 = per_16;
++    } else {
++        sample = ns();
 +    }
-+    JARVIS_ASSERT(best_per_16 <= best_per_1);
-+    Logger::info("[TLB] scale: min_per_1=");
-+    Logger::print_dec(best_per_1);
-+    Logger::info(" min_per_16=");
-+    Logger::print_dec(best_per_16);
-+    Logger::info("");
-     JARVIS_TEST_PASS();
- }
++    return detail::monotonic_commit(&last_ns_, sample);
++}
++
++void Timer::oneshot(uint64_t ticks_from_now) {
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
++    if (boot_hz == 0 || ticks_from_now == 0) {
++        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
++        return;
++    }
++    const uint64_t delay_ns = ticks_to_ns(ticks_from_now, boot_hz);
++    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
++        arch::APIC::set_timer_oneshot(delay_ns);
++    }
++    // PIT-only configs keep the system tick: only the software deadline
++    // is armed (the #17 wheel owns IRQ-backed bounded waits).
++    const uint64_t freq = tsc_freq_hz();
++    if (freq == 0) {
++        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
++        return;
++    }
++    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(delay_ns, freq),
++                     __ATOMIC_RELEASE);
++}
++
++void Timer::periodic(uint64_t period_ticks) {
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
++    if (boot_hz == 0 || period_ticks == 0) {
++        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
++        return;
++    }
++    const uint64_t period_ns = ticks_to_ns(period_ticks, boot_hz);
++    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
++        arch::APIC::set_timer_periodic(period_ns);
++    }
++    const uint64_t freq = tsc_freq_hz();
++    if (freq == 0) {
++        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
++        return;
++    }
++    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(period_ns, freq),
++                     __ATOMIC_RELEASE);
++}
++
++uint64_t Timer::remaining() {
++    const uint64_t rem_ns = remaining_ns();
++    if (rem_ns == 0) {
++        return 0;
++    }
++    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
++    if (boot_hz == 0) {
++        return 0;
++    }
++    // Ceil to ticks so a live (nonzero ns) deadline never reads 0.
++    const uint64_t whole = rem_ns / 1000000000ULL;
++    const uint64_t part = rem_ns % 1000000000ULL;
++    return whole * boot_hz + (part * boot_hz + 1000000000ULL - 1) / 1000000000ULL;
++}
++
++uint64_t Timer::remaining_ns() {
++    const uint64_t deadline =
++        __atomic_load_n(&deadline_tsc_, __ATOMIC_ACQUIRE);
++    if (deadline == 0) {
++        return 0;
++    }
++    const uint64_t freq = tsc_freq_hz();
++    if (freq == 0) {
++        return 0;
++    }
++    const uint64_t now = rdtsc();
++    if (now >= deadline) {
++        return 0;
++    }
++    const uint64_t delta = deadline - now;
++    const uint64_t sec = delta / freq;
++    const uint64_t rem = delta % freq;
++    return sec * 1000000000ULL + (rem * 1000000000ULL) / freq;
++}
++
+ /// @brief Override the tick counter (test support).
+ /// @param value Value to assign to the tick counter.
+ void Timer::set_ticks_for_test(uint64_t value) {
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 090e3eb0..4e0eb5c0 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -477,6 +477,27 @@
+ #define CONFIG_HAS_HPET 0
+ #endif
  
++// ---------------------------------------------------------------------------
++// HRT monotonic clock (issue #16, v0.4.7 "Enhance HRT")
++// ---------------------------------------------------------------------------
++/// 64-bit nanosecond width for ns_monotonic() (documents wrap period).
++#ifndef CONFIG_HRT_NS_WIDTH
++#define CONFIG_HRT_NS_WIDTH 64
++#endif
++/// PIT-anchored TSC calibration attempts (x86_64, bounded loop).
++#ifndef CONFIG_HRT_CALIBRATION_RETRIES
++#define CONFIG_HRT_CALIBRATION_RETRIES 12
++#endif
++/// Wall-clock bound for the whole TSC calibration (ms, 50 MHz floor).
++#ifndef CONFIG_HRT_CALIBRATION_TIMEOUT_MS
++#define CONFIG_HRT_CALIBRATION_TIMEOUT_MS 500
++#endif
++/// Tick-source preference: 0 = auto, 1 = prefer TSC(-deadline),
++/// 2 = prefer HPET when probed.
++#ifndef CONFIG_HRT_SOURCE_PREFERENCE
++#define CONFIG_HRT_SOURCE_PREFERENCE 1
++#endif
++
+ /// Enable Priority Ceiling Protocol for Mutex.
+ /// When set, each mutex has a static priority_ceiling (= max priority of any
+ /// task that may lock it). The system ceiling is the max of all held mutex
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 6b5c0b66..5eccc6c9 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -260,6 +260,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ 
+     // hrt — hard real-time measurement under QEMU -icount (issue #101)
+     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
++    {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
+ };
+ 
+ static constexpr size_t k_expected_count_size =
+diff --git a/src/kernel/test/test_hr_clock.cpp b/src/kernel/test/test_hr_clock.cpp
+new file mode 100644
+index 00000000..98ba6703
+--- /dev/null
++++ b/src/kernel/test/test_hr_clock.cpp
+@@ -0,0 +1,181 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_hr_clock.cpp
++/// @brief High-resolution monotonic clock tests (issue #16, v0.4.7).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/nexios_config.h>
++#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/apic.hpp>
++#include <kernel/bootparams.hpp>
++#endif
++
++using namespace kernel;
++
++// Runmode: kernel
++// Testidea: calibrate() leaves a nonzero unified frequency (fail-closed).
++// Input: Call calibrate() twice (idempotency), read freq_hz()
++// Expect: freq_hz() != 0 and stable across both calls
++// Depends: arch::Timer::calibrate, arch::Timer::freq_hz
++JARVIS_TEST(hrt_freq_nonzero_after_calibrate, "PRE: none | POST: none") {
++    const bool first_ok = arch::Timer::calibrate();
++    const uint64_t freq_first = arch::Timer::freq_hz();
++    JARVIS_ASSERT(freq_first != 0);
++    JARVIS_ASSERT(arch::Timer::tsc_freq_hz() != 0);
++    const bool second_ok = arch::Timer::calibrate();
++    JARVIS_ASSERT(first_ok == second_ok);
++    JARVIS_ASSERT_EQ(freq_first, arch::Timer::freq_hz());
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_ASSERT_EQ(freq_first, arch::Timer::tsc_freq_hz());
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: ns_monotonic() never decreases across successive reads.
++// Input: Read ns_monotonic() and ns() several times
++// Expect: Each sample >= previous sample
++// Depends: arch::Timer::ns_monotonic, arch::Timer::ns
++JARVIS_TEST(hrt_ns_monotonic_non_decrease, "PRE: none | POST: none") {
++    uint64_t prev_mono = arch::Timer::ns_monotonic();
++    for (int sample_idx = 0; sample_idx < 4; ++sample_idx) {
++        const uint64_t cur_mono = arch::Timer::ns_monotonic();
++        JARVIS_ASSERT(cur_mono >= prev_mono);
++        prev_mono = cur_mono;
++    }
++    const uint64_t ns_first = arch::Timer::ns();
++    const uint64_t ns_second = arch::Timer::ns();
++    JARVIS_ASSERT(ns_second >= ns_first);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: active_source() reports a configured, valid tick source.
++// Input: Read active_source() after calibrate()
++// Expect: Source matches build config (never HPET when disabled; x86_64
++//         TSC_DEADLINE/TSC/PIT; aarch64 GENERIC_COUNTER; riscv64 MTIME)
++// Depends: arch::Timer::active_source, CONFIG_HAS_HPET
++JARVIS_TEST(hrt_active_source_valid, "PRE: none | POST: none") {
++    (void)arch::Timer::calibrate();
++    const arch::TickSource src = arch::Timer::active_source();
++#if defined(CONFIG_ARCH_X86_64)
++#if CONFIG_HAS_HPET
++    JARVIS_ASSERT(src == arch::TickSource::HPET ||
++                  src == arch::TickSource::TSC ||
++                  src == arch::TickSource::TSC_DEADLINE ||
++                  src == arch::TickSource::PIT);
++#else
++    JARVIS_ASSERT(src != arch::TickSource::HPET);
++    if (arch::APIC::has_tsc_deadline()) {
++        JARVIS_ASSERT(src == arch::TickSource::TSC_DEADLINE);
++    } else {
++        JARVIS_ASSERT(src == arch::TickSource::TSC ||
++                      src == arch::TickSource::PIT);
++    }
++#endif
++#elif defined(CONFIG_ARCH_AARCH64)
++    JARVIS_ASSERT(src == arch::TickSource::GENERIC_COUNTER);
++#elif defined(CONFIG_ARCH_RISCV64)
++    JARVIS_ASSERT(src == arch::TickSource::MTIME);
++#else
++    JARVIS_ASSERT(src != arch::TickSource::TEST);
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: set_ticks_for_test() round-trips without disturbing ns_monotonic().
++// Input: Override ticks, read back; sample ns_monotonic() across override
++// Expect: ticks() returns test values; ns_monotonic() still non-decreasing
++// Depends: arch::Timer::set_ticks_for_test, arch::Timer::ticks
++JARVIS_TEST(hrt_test_ticks_determinism, "PRE: none | POST: none") {
++    const uint64_t mono_before = arch::Timer::ns_monotonic();
++    arch::Timer::set_ticks_for_test(0x1234ABCDULL);
++    JARVIS_ASSERT_EQ((uint64_t)0x1234ABCDULL, arch::Timer::ticks());
++    arch::Timer::set_ticks_for_test(0x0ULL);
++    JARVIS_ASSERT_EQ((uint64_t)0x0ULL, arch::Timer::ticks());
++    const uint64_t mono_after = arch::Timer::ns_monotonic();
++    JARVIS_ASSERT(mono_after >= mono_before);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: oneshot() arms a sub-tick deadline visible via remaining_ns().
++// Input: Arm oneshot(N ticks), read remaining()/remaining_ns() immediately
++// Expect: 0 < remaining() <= N, 0 < remaining_ns() <= N * ns_per_tick;
++//         system tick restored afterwards (no tick freeze for later tests)
++// Depends: arch::Timer::oneshot/periodic/remaining/remaining_ns,
++//         arch::APIC::timer_init/timer_start, BootParams::timer_hz
++JARVIS_TEST(hrt_oneshot_remaining_ns, "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_X86_64)
++    if (!arch::APIC::is_enabled() || !arch::APIC::is_timer_active()) {
++        Logger::warn("HRT oneshot skipped (APIC timer inactive)");
++        JARVIS_TEST_PASS();
++        return;
++    }
++    const uint64_t boot_hz = BootParams::instance().timer_hz;
++    JARVIS_ASSERT(boot_hz != 0);
++    constexpr uint64_t k_arm_ticks = 50;
++    arch::Timer::oneshot(k_arm_ticks);
++    const uint64_t rem_ticks = arch::Timer::remaining();
++    JARVIS_ASSERT(rem_ticks > 0);
++    JARVIS_ASSERT(rem_ticks <= k_arm_ticks);
++    const uint64_t rem_ns = arch::Timer::remaining_ns();
++    const uint64_t tick_ns = 1000000000ULL / boot_hz;
++    JARVIS_ASSERT(rem_ns > 0);
++    JARVIS_ASSERT(rem_ns <= k_arm_ticks * tick_ns);
++    // Restore the periodic system tick BEFORE further asserts (cookbook
++    // Rule 5): oneshot() disarms re-arm, so the tick would otherwise die
++    // here for every later test in the class.
++    arch::APIC::timer_init(static_cast<uint32_t>(boot_hz));
++    arch::APIC::timer_start();
++    // periodic() smoke at the running rate: re-arms the same 1-tick period
++    // the tick already uses, so the tick keeps running unchanged.
++    arch::Timer::periodic(1);
++    const uint64_t per_ns = arch::Timer::remaining_ns();
++    JARVIS_ASSERT(per_ns <= tick_ns);
++    JARVIS_ASSERT(arch::Timer::remaining() <= 1);
++#elif defined(CONFIG_ARCH_AARCH64)
++    constexpr uint64_t k_arm_ms = 50;
++    constexpr uint64_t k_ns_slack = 55000000ULL;
++    arch::Timer::oneshot(k_arm_ms);
++    JARVIS_ASSERT(arch::Timer::remaining() > 0);
++    const uint64_t rem_ns = arch::Timer::remaining_ns();
++    JARVIS_ASSERT(rem_ns > 0);
++    JARVIS_ASSERT(rem_ns <= k_ns_slack);
++#elif defined(CONFIG_ARCH_RISCV64)
++    // mtimecmp is unreadable from S-mode: specified behavior is 0/0.
++    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining());
++    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining_ns());
++#else
++    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining_ns());
++#endif
++    JARVIS_TEST_PASS();
++}
++
++void register_hrt_monotonic_tests() {
++    Logger::info("Registering hrt_monotonic tests");
++    JARVIS_REGISTER_TEST(hrt_freq_nonzero_after_calibrate);
++    JARVIS_REGISTER_TEST(hrt_ns_monotonic_non_decrease);
++    JARVIS_REGISTER_TEST(hrt_active_source_valid);
++    JARVIS_REGISTER_TEST(hrt_test_ticks_determinism);
++    JARVIS_REGISTER_TEST(hrt_oneshot_remaining_ns);
++}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 4ae59a18..28f3a21c 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -199,6 +199,7 @@ void register_buffer_pool_deterministic_tests();
+ void register_no_op_new_tests();
+ void register_stress_hrt_tests();
+ void register_scheduler_hrt_tests();
++void register_hrt_monotonic_tests();
+ void register_syscall_fastpath_tests();
+ void register_fpu_inv_tests();
+ void register_cap_shm_tests();
+@@ -617,6 +618,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // runs cleanly inside `all` without -icount.  Class-scoped icount in the
+     // Makefile gives it hard deterministic timing when run standalone.
+     {"stress_hrt", []() { register_stress_hrt_tests(); }},
++    {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
+ 
+     // -- safe: curated subset with TF_RELEASE tests --
+     {"safe",
+@@ -839,6 +841,7 @@ static void register_all_tests() {
+     register_preemption_tests();
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
++    register_hrt_monotonic_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+@@ -999,6 +1002,7 @@ static void register_all_tests_second_half() {
+     register_no_op_new_tests();
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
++    register_hrt_monotonic_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index d97f8445..4abab81b 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -105,6 +105,7 @@ __attribute__((weak)) void register_irqguard_audit_tests() {}
+ __attribute__((weak)) void register_memory_safety_tests() {}
+ __attribute__((weak)) void register_sporadic_server_tests() {}
+ __attribute__((weak)) void register_atomic_tests() {}
++__attribute__((weak)) void register_hrt_monotonic_tests() {}
+ __attribute__((weak)) void register_cross_arch_tests() {}
+ #if defined(CONFIG_ARCH_AARCH64)
+ __attribute__((weak)) void register_aarch64_tests() {}
 diff --git a/test-history.txt b/test-history.txt
-index 3d50c6f6..63a408a5 100644
+index 384a3059..74cb2f63 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1060,3 +1060,10 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 20:10:55 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
- 2026-09-15 20:12:01 all PASSED: 1363 FAILED: 0 TIME: 106561ms
- 2026-09-15 20:12:26 all PASSED: 85 FAILED: 0 TIME: 17059ms
-+2026-09-15 20:25:21 tlb_latency PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:27:06 ipi_batching PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:27:06 invpcid PASSED: 4 FAILED: 0 TIME: 19s
-+2026-09-15 20:27:06 pcid PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:27:06 lazy_tlb PASSED: 4 FAILED: 0 TIME: 20s
-+2026-09-15 20:28:13 all PASSED: 1363 FAILED: 0 TIME: 57339ms
-+2026-09-15 20:28:35 all PASSED: 85 FAILED: 0 TIME: 4085ms
+@@ -1069,3 +1069,11 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-15 20:28:35 all PASSED: 85 FAILED: 0 TIME: 4085ms
+ 2026-09-15 21:22:58 all PASSED: 1363 FAILED: 0 TIME: 363866ms
+ 2026-09-15 21:23:20 all PASSED: 85 FAILED: 0 TIME: 16851ms
++2026-09-16 08:44:26 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 483ms
++2026-09-16 08:49:20 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 597ms
++2026-09-16 08:49:47 hal_timer PASSED: 5 FAILED: 0 TIME: 520ms
++2026-09-16 08:50:12 hal_apic PASSED: 3 FAILED: 0 TIME: 395ms
++2026-09-16 08:50:36 timing_core PASSED: 19 FAILED: 0 TIME: 6481ms
++2026-09-16 08:51:07 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 18821ms
++2026-09-16 08:51:37 stress_hrt PASSED: 2 FAILED: 0 TIME: 17911ms
++2026-09-16 08:53:15 all PASSED: 1368 FAILED: 0 TIME: 539833ms

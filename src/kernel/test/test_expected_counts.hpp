@@ -260,6 +260,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // hrt — hard real-time measurement under QEMU -icount (issue #101)
     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
+    {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
 };
 
 static constexpr size_t k_expected_count_size =

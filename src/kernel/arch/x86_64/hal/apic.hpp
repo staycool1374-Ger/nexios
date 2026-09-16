@@ -47,6 +47,20 @@ public:
     /// @brief Read the current APIC timer count.
     static uint32_t timer_current_count();
 
+    /// @brief Whether CPU+APIC support TSC-deadline mode (issue #16).
+    /// Valid after init() probed CPUID leaf 1 (ECX bit 24).
+    /// @return true when TSC-deadline mode is available.
+    static bool has_tsc_deadline() { return tsc_deadline_supported_ != 0; }
+
+    /// @brief Arm a one-shot TSC deadline (issue #16; timer-wheel use).
+    /// Fail-closed: false when the APIC is off, ns is 0, or TSC-deadline
+    /// mode is unavailable. Steals the LAPIC timer: the caller must
+    /// re-arm the periodic tick (timer_init + timer_start at the boot
+    /// rate) after expiry.
+    /// @param ns Delay in nanoseconds (0 = no-op, returns false).
+    /// @return true when the deadline was armed.
+    static bool arm_deadline(uint64_t ns);
+
     /// @brief Check whether the CPU supports an APIC.
     static bool is_apic_supported();
 

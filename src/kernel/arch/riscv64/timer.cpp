@@ -29,6 +29,9 @@ namespace arch {
 
 constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::timer_freq_hz_ = 0;
+constinit TickSource Timer::active_source_ = TickSource::MTIME;
+constinit uint64_t Timer::last_ns_ = 0;
+constinit bool Timer::calibrated_ = false;
 
 /// @brief Initialize the timer, set frequency, and register the IRQ handler.
 /// @param frequency_hz Desired tick frequency in Hz.
@@ -98,6 +101,35 @@ void Timer::set_ticks_for_test(uint64_t value) {
 /// @return Timer frequency in Hz.
 uint64_t Timer::tsc_freq_hz() {
     return timer_freq_hz_;
+}
+
+TickSource Timer::active_source() {
+    return active_source_;
+}
+
+uint64_t Timer::freq_hz() {
+    return timer_freq_hz_;
+}
+
+bool Timer::calibrate() {
+    if (!calibrated_) {
+        calibrated_ = true;
+        if (timer_freq_hz_ == 0) {
+            timer_freq_hz_ = 10000000;
+        }
+        active_source_ = TickSource::MTIME;
+    }
+    return timer_freq_hz_ != 0;
+}
+
+uint64_t Timer::ns_monotonic() {
+    return detail::monotonic_commit(&last_ns_, ns());
+}
+
+uint64_t Timer::remaining_ns() {
+    // mtimecmp is not readable from S-mode: no sub-tick remainder.
+    (void)remaining();
+    return 0;
 }
 
 /// @brief Arm a one-shot timer via SBI.

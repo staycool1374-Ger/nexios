@@ -30,6 +30,9 @@ namespace arch {
 constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::counter_freq_hz_ = 0;
 uint32_t Timer::tick_interval_ = 0;
+constinit TickSource Timer::active_source_ = TickSource::GENERIC_COUNTER;
+constinit uint64_t Timer::last_ns_ = 0;
+constinit bool Timer::calibrated_ = false;
 
 /// @brief Initialise the timer with a given tick frequency and register the IRQ
 /// handler.
@@ -94,6 +97,41 @@ void Timer::handle_irq(uint64_t ip) {
 /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
 uint64_t Timer::tsc_freq_hz() {
     return counter_freq_hz_;
+}
+
+TickSource Timer::active_source() {
+    return active_source_;
+}
+
+uint64_t Timer::freq_hz() {
+    return counter_freq_hz_;
+}
+
+bool Timer::calibrate() {
+    if (!calibrated_) {
+        calibrated_ = true;
+        if (counter_freq_hz_ == 0) {
+            uint64_t freq{};
+            asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+            counter_freq_hz_ = freq;
+        }
+        active_source_ = TickSource::GENERIC_COUNTER;
+    }
+    return counter_freq_hz_ != 0;
+}
+
+uint64_t Timer::ns_monotonic() {
+    return detail::monotonic_commit(&last_ns_, ns());
+}
+
+uint64_t Timer::remaining_ns() {
+    const uint64_t freq = counter_freq_hz_;
+    if (freq == 0) {
+        return 0;
+    }
+    const uint64_t tval = remaining();
+    return (tval / freq) * 1000000000ULL +
+           ((tval % freq) * 1000000000ULL) / freq;
 }
 
 /// @brief Override the tick counter (used in test isolation).
