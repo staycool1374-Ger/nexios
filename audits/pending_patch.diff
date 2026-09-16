@@ -1,387 +1,803 @@
-diff --git a/audits/report-20260916-130230.md b/audits/report-20260916-130230.md
+diff --git a/audits/rejected_patch.diff b/audits/rejected_patch.diff
+index b7b76af6..6d6a4305 100644
+--- a/audits/rejected_patch.diff
++++ b/audits/rejected_patch.diff
+@@ -1,19 +1,71 @@
+-diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
+---- a/src/kernel/arch/x86_64/hal/pcid.cpp
+-+++ b/src/kernel/arch/x86_64/hal/pcid.cpp
+-@@ -101,6 +101,15 @@ void pcid_free(uint16_t pcid) {
+-     if (pcid == PCID_KERNEL)
+-         return;
+-     live_clear(pcid);
+-+    // Issue #156 (audit S1): a freed PCID is immediately reusable, but the
+-+    // freed address space's entries tagged with it survive in the TLB
+-+    // (tagged switches no longer flush, and VMM::free_user_pages leaves
+-+    // flushing to the caller). Purge them with one same-root CR3 reload
+-+    // (NoFlush bit clear, so all PCID-tagged entries are invalidated
+-+    // locally); the old table is destroyed right after, so nothing can
+-+    // re-cache this ID in the meantime.
+-+    if (g_supported)
+-+        write_cr3(read_cr3() & ~0xFFFULL);
++diff --git a/src/kernel/time/timer_wheel.cpp b/src/kernel/time/timer_wheel.cpp
++--- a/src/kernel/time/timer_wheel.cpp
+++++ b/src/kernel/time/timer_wheel.cpp
++@@ -460,6 +460,12 @@ bool TimerWheel::arm(uint32_t cpu, uint64
++     if (cpu >= CONFIG_MAX_CPUS || callback == nullptr || out == nullptr) {
++         return false;
++     }
+++    // SIL3 fail-closed (audit issue #17): production services only the BSP
+++    // wheel — Scheduler::on_tick() returns early for APs and ap_tick() has
+++    // no TimerWheel hook (spec section 3.4.4 dispatch-only). An armed AP
+++    // timer would report success yet never expire, so reject it outright
+++    // until AP servicing lands.
+++    if (cpu != 0) {
+++        return false;
+++    }
++     sync::IrqSpinLockGuard guard(lock_);
++     ensure_init_locked();
++     CpuWheel& wheel = wheels_[cpu];
++diff --git a/src/kernel/time/timer_wheel.hpp b/src/kernel/time/timer_wheel.hpp
++--- a/src/kernel/time/timer_wheel.hpp
+++++ b/src/kernel/time/timer_wheel.hpp
++@@ -676,7 +676,8 @@ class TimerWheel {
++     /// @brief Arm a one-shot expiry (O(1)).
++     /// Fail-closed: false on invalid cpu, null callback/context-out,
++     /// or a full wheel (caller keeps its fallback; no eviction).
++-    /// @param cpu Owning CPU index (< CONFIG_MAX_CPUS).
+++    /// @param cpu Owning CPU index; must be 0 (BSP). Non-BSP CPUs are
+++    /// rejected: production never services their wheels (AP dispatch-only).
++     /// @param expiry_ns Absolute expiry in monotonic ns (#16 clock).
++     /// @param callback Expiry callback (non-null).
++     /// @param context Opaque callback context (carries owner identity).
++diff --git a/src/kernel/test/test_timer_wheel.cpp b/src/kernel/test/test_timer_wheel.cpp
++--- a/src/kernel/test/test_timer_wheel.cpp
+++++ b/src/kernel/test/test_timer_wheel.cpp
++@@ -288,9 +288,9 @@ JARVIS_TEST(wheel_pop_cap_defers_without_
+  }
+ 
+- uint64_t pcid_epoch() {
++ // Runmode: kernel
++-// Testidea: per-CPU wheels are isolated (arm on cpu 1, tick cpu 0).
++-// Input: arm on cpu 1, on_tick cpu 0 past expiry, on_tick cpu 1
++-// Expect: cpu-0 tick silent, cpu-1 tick fires
+++// Testidea: non-BSP arm is fail-closed (production never ticks AP wheels).
+++// Input: arm on cpu 1, on_tick cpu 1 past expiry
+++// Expect: arm false, live_count 0, tick silent, fired == 0
++ // Depends: time::TimerWheel per-CPU routing
++ JARVIS_TEST(wheel_cpu_isolation, "PRE: none | POST: none") {
++     time::TimerWheel::snapshot_reset();
++@@ -303,15 +303,15 @@ JARVIS_TEST(wheel_cpu_isolation, "PRE: no
++                      time::TimerWheel::live_count(CONFIG_MAX_CPUS));
++ #else
+++    // Production services only the BSP wheel (Scheduler::on_tick AP
+++    // early-return; ap_tick has no wheel hook), so arm() must fail
+++    // closed for non-BSP CPUs instead of reporting success without expiry.
++     uint64_t fired = 0;
++     time::TimerWheel::Handle handle{};
++-    JARVIS_ASSERT(time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
++-                                        &fired, &handle));
+++    JARVIS_ASSERT(!time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
+++                                         &fired, &handle));
+++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(1));
++     JARVIS_ASSERT_EQ((uint32_t)0,
++-                     time::TimerWheel::on_tick(k_base_ns + 1000, 0));
+++                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
++     JARVIS_ASSERT_EQ((uint64_t)0, fired);
++-    JARVIS_ASSERT_EQ((uint64_t)1, time::TimerWheel::live_count(1));
++-    JARVIS_ASSERT_EQ((uint32_t)1,
++-                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
++-    JARVIS_ASSERT_EQ((uint64_t)1, fired);
++ #endif
++     JARVIS_TEST_PASS();
++ }
+diff --git a/audits/report-20260916-133544.md b/audits/report-20260916-133544.md
 new file mode 100644
-index 00000000..4c99f210
+index 00000000..90cfd931
 --- /dev/null
-+++ b/audits/report-20260916-130230.md
-@@ -0,0 +1,13 @@
-+# AUDIT REPORT 20260916-130230
++++ b/audits/report-20260916-133544.md
+@@ -0,0 +1,20 @@
++# AUDIT REPORT 20260916-133544
 +PATCH: audits/pending_patch.diff
-+FILES: src/kernel/arch/aarch64/timer.cpp, src/kernel/arch/hal/timer.hpp, src/kernel/arch/riscv64/timer.cpp, src/kernel/arch/x86_64/hal/apic.cpp, src/kernel/arch/x86_64/hal/apic.hpp, src/kernel/arch/x86_64/hal/hpet.cpp, src/kernel/arch/x86_64/hal/hpet.hpp, src/kernel/arch/x86_64/hal/timer.cpp, src/kernel/nexios_config.h, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_hr_clock.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_weak_stubs.cpp
++FILES: src/kernel/task/scheduler.cpp, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_isolate.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_timer_wheel.cpp, src/kernel/test/test_weak_stubs.cpp, src/kernel/time/timer_wheel.cpp, src/kernel/time/timer_wheel.hpp
 +
 +## FINDINGS
-+- [S3] src/kernel/arch/x86_64/hal/timer.cpp:267 — plain (non-atomic) active_source_ read/write across ns_monotonic()/calibrate() refresh path
-+  WHY: Single-byte boot-stable label with only a TSC→TSC_DEADLINE promotion means any stale read is transient and frequency-identical, so hardening to explicit atomic access is optional.
-+- [S3] src/kernel/arch/x86_64/hal/hpet.cpp:40 — CONFIG_HAS_HPET conditional has identical fail-closed outcomes on both branches (present_ = false)
-+  WHY: Dead conditional is intentional until ACPI/VMM mapping exists and never dereferences HPET_PHYS_BASE, so it is a forward-compat stub rather than a behavior divergence.
-+- [S3] src/kernel/arch/x86_64/hal/apic.hpp:57 — Timer::oneshot()/APIC::arm_deadline() steal the LAPIC timer (set_timer_oneshot clears periodic re-arm) with restore assigned to the caller
-+  WHY: Steal-and-restore discipline is documented in the header contract and honored by the test (timer_init + timer_start before further asserts) with no production caller yet, so the residual risk sits with the future #17 wheel, not this patch.
++- [S2] src/kernel/time/timer_wheel.cpp:460 — arm() returns success for any cpu < CONFIG_MAX_CPUS, but production only ever services CPU 0: the single on_tick call site (scheduler.cpp:2004) sits after the AP early-return (ap_tick() has no wheel hook, spec dispatch-only), so an AP-armed timer reports armed yet silently never expires.
++  WHY: Success-without-service breaks the arm contract and the patch's own fail-closed convention, a silent liveness hole for timeout/watchdog producers.
++- [S3] src/kernel/time/timer_wheel.cpp:515 — on_tick holds arch::IrqGuard across the callback loop (guard not scoped to the locked section; lock released manually at :568 but IRQs stay off through up to 8 callbacks), extending the tick IRQ-off window by unbounded callback time.
++  WHY: IRQ latency in ISR context should cover only the bounded scan, not arbitrary callbacks.
++- [S3] src/kernel/task/scheduler.cpp:2004 — wheel callbacks fire while the outer scheduler_lock_ is held (call site inside the lock_acquired region), so the header's "lock released before callbacks" guarantee covers only the wheel lock and the must-not-reschedule/block callback contract is documented-only and statically unenforced.
++  WHY: Any future #18 producer callback needing scheduler services deadlocks the tick on the non-recursive lock.
++- [S3] src/kernel/time/timer_wheel.hpp:670 — Handle stores cpu/slot as uint8_t with no static_assert binding CONFIG_MAX_CPUS <= 255 / kMaxTimersPerCpu <= 256, so a future config bump silently truncates the narrowing casts in arm().
++  WHY: Valid today (CONFIG_MAX_CPUS=8) but the invariant is unchecked at compile time.
++- [S3] src/kernel/time/timer_wheel.cpp:568 — on_tick releases the spinlock via manual lock_.unlock() instead of an RAII guard released before callbacks, fragile on panic/early-exit paths (all other entry points use IrqSpinLockGuard).
++  WHY: Non-RAII unlock risks a permanently held lock with IRQs disabled if the path ever gains an early exit.
++
++## PATCH
++audits/rejected_patch.diff was written (applies on top of audits/pending_patch.diff): makes arm() fail-closed for cpu != 0 with BSP-only rationale, updates the arm doc, and reworks wheel_cpu_isolation to assert the rejection.
++
++DECISION: REJECTED
+diff --git a/audits/report-20260916-134406.md b/audits/report-20260916-134406.md
+new file mode 100644
+index 00000000..a099c77b
+--- /dev/null
++++ b/audits/report-20260916-134406.md
+@@ -0,0 +1,14 @@
++# AUDIT REPORT 20260916-134406
++PATCH: audits/pending_patch.diff
++FILES: src/kernel/task/scheduler.cpp, src/kernel/test/test_expected_counts.hpp, src/kernel/test/test_isolate.cpp, src/kernel/test/test_registry.cpp, src/kernel/test/test_timer_wheel.cpp, src/kernel/test/test_weak_stubs.cpp, src/kernel/time/timer_wheel.cpp, src/kernel/time/timer_wheel.hpp
++
++## FINDINGS
++- None. All five iteration-1 findings verified fixed in-tree (patch lines cited):
++  - (1) S2 AP-arm fail-closed: timer_wheel.cpp:478-485 (`if (cpu != 0) return false;` + rationale comment), hpp doc 711-712, test wheel_cpu_isolation (test_timer_wheel.cpp:305-332) asserts `!arm(1,...)`, live_count 0, silent tick. Single-CPU fallback branch (CONFIG_MAX_CPUS<2) uses out-of-range cpu, also fail-closed via the cpu>=CONFIG_MAX_CPUS guard. WHY: an armed-but-never-serviced AP timer can no longer report success.
++  - (2) S3 IrqGuard scope: timer_wheel.cpp:538-598 guard lives inside the detach block; fire loop at 599-601 runs after scope close, and lock_.unlock() at 597 precedes both. WHY: no IRQ-off window or spinlock is held across callbacks.
++  - (3) S3 scheduler_lock_ contract: scheduler.cpp:17-22 call-site comment (callbacks non-blocking, must not take scheduler services or reschedule); header contract at timer_wheel.hpp:670-672,695-696,728-729 already documented. WHY: residual is documentation-only enforcement, S3 at most per brief.
++  - (4) S3 static_assert: timer_wheel.hpp:705-706 (`CONFIG_MAX_CPUS <= 255`, `kMaxTimersPerCpu <= 256`). WHY: Handle uint8_t cpu/slot widths are compile-time bound.
++  - (5) S3 manual unlock pairing: comment at timer_wheel.cpp:543-545; verified no `return` between try_lock success (547-549) and lock_.unlock() (597) — only `break` out of the selection loop; the two `return 0` paths (532-534 pre-lock bounds check, 547-549 try_lock failure) hold no lock. WHY: the manual unlock cannot leak.
++  - Test-only born-expired fix: future_base() = ns_monotonic() + 10s (test_timer_wheel.cpp:140-142); all 8 tests derive base from it (171,197,218,243,275,307,341,367); no fixed 1e9/1000000000 base remains in the diff (only the 10000000000ULL offset); +10s is unreachable by real ticks in a ms-scale test while production on_tick uses live now_ns. WHY: armed timers can no longer be born-expired by suite-position clock drift.
 +
 +DECISION: APPROVED
 diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
-index bd9ff28f..5c5f5b5b 100644
+index 5c5f5b5b..fae64ea5 100644
 --- a/prompts/LEARNINGS.md
 +++ b/prompts/LEARNINGS.md
 @@ -20,6 +20,11 @@
  
  <!-- Append new entries below; newest first. -->
  
-+### #16 — HRT monotonic clock: TickSource + ns_monotonic + oneshot/remaining (2026-09-16)
-+- **Learned:** (1) x86_64 `Timer::oneshot/periodic/remaining` were declared but never defined — linkable only because nothing referenced them (`test_hal` stubs document the gap); filling them is additive but their LAPIC delegation steals the system tick, so tests must steal-and-restore via the `apic_timer_oneshot` re-init pattern before further asserts. (2) `mk/cpp-rules.*.gen.mk` (arch-specific ones are git-ignored) regenerate only when `mk/rules.mk`/`Makefile` change — every new `.cpp` needs `rm mk/cpp-rules.<arch>.gen.mk` before building, for each arch. (3) Cross-arch compile can be verified per-TU with `-fsyntax-only` + the exact per-arch flags when full cross builds die on a pre-existing unrelated error (here `tlb_shootdown` on baseline, confirmed via `stash -u` + rebuild). (4) `calibrate()` idempotency needs the label refresh separated from the frequency work: APIC CPUID caps probe after `Timer::init`, so a cached TSC label must promote to TSC_DEADLINE on repeat calls.
-+- **Adapted:** `arch::Timer::resolve_source` (preference chain TSC→HPET→PIT, `CONFIG_HRT_*` knobs), `detail::monotonic_commit` CAS clamp (atomics-only `last_ns_`), overflow-split tick/ns/TSC conversions (1 h clamp), fail-closed `hpet::probe` (no MMIO touch until ACPI/VMM mapping lands); audits/report-20260916-130230.md (APPROVED, 3x S3 carried to #17: plain `active_source_` access, HPET stub, LAPIC steal-and-restore contract).
-+- **Style re-surface:** CODING_STYLE §5 (ENSURE-free reachable paths — all calibration/timeout/zero-freq paths fail closed with returns, never panics), §10.3/10.6 (all new locals initialized, descriptive names), §11.6 (atomics all-or-nothing on `last_ns_`/`deadline_tsc_`; `active_source_` documented single-writer exception), §12 test-first (stub class wired + green before implementation, `test-history.txt` row per run).
++### #17 — Event-timer wheel: static slot table + generation handles (2026-09-16)
++- **Learned:** (1) An armed-but-never-serviced timer is a silent liveness hole: with the tick hook BSP-only (AP early-return), arm() must fail closed for cpu != 0 — caught by audit iter-1 S2, not by tests (unit tests happily tick any cpu). (2) Test expiry bases must derive from the LIVE clock: a fixed synthetic base below the suite-position clock makes timers born-expired and turns asserts into ISR timing luck (flaked at position 1318 in `all` while green standalone; fixed via ns_monotonic()+10s). (3) Auditor corrective patches can be corrupt/hallucinated line numbers — always `git apply --check` first, then implement manually per findings; the S2 intent still applied verbatim. (4) New top-level kernel dirs need no mk changes (SRC find auto-globs) but DO need gen.mk regen per arch like any new .cpp. (5) `pending_patch.diff` regenerated post-staging via `git diff HEAD` excluding itself; new-file coverage needs `git add -N` first with a `grep -c '^diff --git'` count check.
++- **Adapted:** src/kernel/time/timer_wheel.{hpp,cpp} (IrqSpinLockGuard arm/cancel, try-lock-skip + earliest-8 + unlock-before-fire on_tick, snapshot_reset with generation bump), Scheduler::on_tick hook position (after DeadlineList scan, before alarms) + callback contract comment, test_timer_wheel.cpp (8 deterministic tests, live-based expiries); audits/report-20260916-134406.md (APPROVED iter-2).
++- **Style re-surface:** CODING_STYLE §11 (no spinlock across reschedule — wheel never reschedules; IrqSpinLockGuard short sections; ISR try-lock-skip per TlbShootdown precedent), §12.2 (generation-tagged handles, kInvalidGeneration skip, LIFO-reuse test), §5 (fail-closed arm/cancel/BSPreject, ENSURE-free), §7 test-first (stubs green before impl, history row per run).
 +
- ### #25 — Close-out: belated C1 implementation audit (2026-09-14)
- - **Learned:** (1) A phase can ship gated but unaudited — the C1 commit message carried gates with zero audit evidence, and the gap survived 4 subsequent issues because every later audit scoped itself to its own diff. Close-out check: every merged phase needs a DECISION artifact, not just gates. (2) Auditing a historical diff works when scoped honestly: cover the commit as-landed, and explicitly delimit later deltas to their own reports instead of re-litigating. (3) Cross-issue scope accounting (what split to #26/#27/#60/#151 vs what stayed) is the actual close criterion for a parent issue — the spec status flip belongs with it.
- - **Adapted:** audits/report-2026-09-14T19-36-04Z.md (S3-only APPROVED); docs/specs/per-cpu-smp.md → IMPLEMENTED.
-diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
-index 494013c8..28e1d0fb 100644
---- a/src/kernel/arch/aarch64/timer.cpp
-+++ b/src/kernel/arch/aarch64/timer.cpp
-@@ -30,6 +30,9 @@ namespace arch {
- constinit uint64_t Timer::ticks_ = 0;
- uint64_t Timer::counter_freq_hz_ = 0;
- uint32_t Timer::tick_interval_ = 0;
-+constinit TickSource Timer::active_source_ = TickSource::GENERIC_COUNTER;
-+constinit uint64_t Timer::last_ns_ = 0;
-+constinit bool Timer::calibrated_ = false;
+ ### #16 — HRT monotonic clock: TickSource + ns_monotonic + oneshot/remaining (2026-09-16)
+ - **Learned:** (1) x86_64 `Timer::oneshot/periodic/remaining` were declared but never defined — linkable only because nothing referenced them (`test_hal` stubs document the gap); filling them is additive but their LAPIC delegation steals the system tick, so tests must steal-and-restore via the `apic_timer_oneshot` re-init pattern before further asserts. (2) `mk/cpp-rules.*.gen.mk` (arch-specific ones are git-ignored) regenerate only when `mk/rules.mk`/`Makefile` change — every new `.cpp` needs `rm mk/cpp-rules.<arch>.gen.mk` before building, for each arch. (3) Cross-arch compile can be verified per-TU with `-fsyntax-only` + the exact per-arch flags when full cross builds die on a pre-existing unrelated error (here `tlb_shootdown` on baseline, confirmed via `stash -u` + rebuild). (4) `calibrate()` idempotency needs the label refresh separated from the frequency work: APIC CPUID caps probe after `Timer::init`, so a cached TSC label must promote to TSC_DEADLINE on repeat calls.
+ - **Adapted:** `arch::Timer::resolve_source` (preference chain TSC→HPET→PIT, `CONFIG_HRT_*` knobs), `detail::monotonic_commit` CAS clamp (atomics-only `last_ns_`), overflow-split tick/ns/TSC conversions (1 h clamp), fail-closed `hpet::probe` (no MMIO touch until ACPI/VMM mapping lands); audits/report-20260916-130230.md (APPROVED, 3x S3 carried to #17: plain `active_source_` access, HPET stub, LAPIC steal-and-restore contract).
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index f58c3764..0e2a9465 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -22,6 +22,7 @@
  
- /// @brief Initialise the timer with a given tick frequency and register the IRQ
- /// handler.
-@@ -96,6 +99,41 @@ uint64_t Timer::tsc_freq_hz() {
-     return counter_freq_hz_;
- }
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/memory/tlb_shootdown.hpp>
++#include <kernel/time/timer_wheel.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/gdt.hpp>
+@@ -1997,6 +1998,15 @@ void Scheduler::on_tick() noexcept {
+ #endif
+ #endif // CONFIG_DEADLINE_MONITOR_TASK
  
-+TickSource Timer::active_source() {
-+    return active_source_;
-+}
++        // Issue #17: event-timer wheel expiries for this CPU. Pure callee
++        // of the tick (no timer programming, no source reads): now_ns
++        // comes from the #16 monotonic clock. Bounded pop cap; skipped
++        // expiries stay armed for the next tick. Callbacks run under the
++        // outer scheduler_lock_: they must be non-blocking and must not
++        // take scheduler services or reschedule (audit #17 contract).
++        time::TimerWheel::on_tick(arch::Timer::ns_monotonic(),
++                                  sched_cpu());
 +
-+uint64_t Timer::freq_hz() {
-+    return counter_freq_hz_;
-+}
-+
-+bool Timer::calibrate() {
-+    if (!calibrated_) {
-+        calibrated_ = true;
-+        if (counter_freq_hz_ == 0) {
-+            uint64_t freq{};
-+            asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-+            counter_freq_hz_ = freq;
-+        }
-+        active_source_ = TickSource::GENERIC_COUNTER;
-+    }
-+    return counter_freq_hz_ != 0;
-+}
-+
-+uint64_t Timer::ns_monotonic() {
-+    return detail::monotonic_commit(&last_ns_, ns());
-+}
-+
-+uint64_t Timer::remaining_ns() {
-+    const uint64_t freq = counter_freq_hz_;
-+    if (freq == 0) {
-+        return 0;
-+    }
-+    const uint64_t tval = remaining();
-+    return (tval / freq) * 1000000000ULL +
-+           ((tval % freq) * 1000000000ULL) / freq;
-+}
-+
- /// @brief Override the tick counter (used in test isolation).
- /// @param[in] value Value to set ticks_ to.
- void Timer::set_ticks_for_test(uint64_t value) {
-diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
-index f7c82fba..8ab8b158 100644
---- a/src/kernel/arch/hal/timer.hpp
-+++ b/src/kernel/arch/hal/timer.hpp
-@@ -29,6 +29,39 @@
- 
- namespace arch {
- 
-+/// @brief Tick source backing the HRT monotonic clock (issue #16).
-+enum class TickSource : uint8_t {
-+    PIT = 0,            ///< Legacy PIT channel 0 (fallback).
-+    TSC = 1,            ///< Calibrated TSC over PIT/APIC tick.
-+    TSC_DEADLINE = 2,   ///< TSC with APIC TSC-deadline mode.
-+    HPET = 3,           ///< HPET main counter (when probed).
-+    GENERIC_COUNTER = 4,///< AArch64 generic counter (CNTFRQ/CNTPCT).
-+    MTIME = 5,          ///< RISC-V mtime.
-+    TEST = 6            ///< Test override (unused by production).
-+};
-+
-+namespace detail {
-+/// @brief Lock-free monotonic commit: stores max(*cell, now).
-+/// @param cell Pointer to the last-reported value (atomics-only).
-+/// @param now New sample.
-+/// @return Monotonic value to report.
-+inline uint64_t monotonic_commit(uint64_t* cell, uint64_t now) {
-+    uint64_t prev = __atomic_load_n(cell, __ATOMIC_ACQUIRE);
-+    while (now > prev) {
-+        uint64_t expect = prev;
-+        const bool swapped = __atomic_compare_exchange_n(
-+            cell, &expect, now, false, __ATOMIC_ACQ_REL,
-+            __ATOMIC_ACQUIRE);
-+        if (swapped) {
-+            prev = now;
-+            break;
-+        }
-+        prev = expect;
-+    }
-+    return (now > prev) ? now : prev;
-+}
-+} // namespace detail
-+
- /// @cond
- #if defined(CONFIG_ARCH_X86_64)
- /// @endcond
-@@ -46,6 +79,22 @@ class Timer {
-     /// @brief Estimate nanoseconds since boot.
-     /// @return Approximate elapsed nanoseconds.
-     static uint64_t ns();
-+    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
-+    /// Never decreases on the calling CPU (lock-free last-value clamp).
-+    /// @return Monotonic elapsed nanoseconds.
-+    static uint64_t ns_monotonic();
-+    /// @brief Which source backs ns_monotonic() (set by calibrate()).
-+    /// @return Active tick source.
-+    static TickSource active_source();
-+    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
-+    /// Fail-closed: falls back down TSC → HPET → PIT, frequency stays
-+    /// nonzero. Refreshes the source label on repeat calls (APIC caps
-+    /// are probed after Timer::init).
-+    /// @return true on the preferred source, false on fallback.
-+    static bool calibrate();
-+    /// @brief Unified backing frequency in Hz (0 before calibrate()).
-+    /// @return Backing frequency in Hz.
-+    static uint64_t freq_hz();
-     /// @brief Change the tick frequency at runtime.
-     /// @param frequency_hz New tick rate in Hz.
-     static void set_frequency(uint32_t frequency_hz);
-@@ -57,25 +106,43 @@ class Timer {
-     static void set_ticks_for_test(uint64_t value);
- 
-     /// @brief Schedule a one-shot timer interrupt.
--    /// @param ticks_from_now Number of ticks from now.
-+    /// Delegates to the APIC timer when active; on PIT-only configs the
-+    /// IRQ is not reprogrammed (system tick preservation) and only the
-+    /// software deadline is armed for remaining()/remaining_ns().
-+    /// @param ticks_from_now Number of coarse ticks from now (0 = disarm).
-     static void oneshot(uint64_t ticks_from_now);
-     /// @brief Configure a periodic timer interrupt.
--    /// @param period_ticks Period in ticks.
-+    /// @param period_ticks Period in coarse ticks (0 = disarm).
-     static void periodic(uint64_t period_ticks);
--    /// @brief Get the remaining ticks on the current timer.
--    /// @return Remaining ticks.
-+    /// @brief Get the remaining ticks on the armed deadline.
-+    /// @return Remaining coarse ticks (0 when disarmed or expired).
-     static uint64_t remaining();
-+    /// @brief Sub-tick nanoseconds remaining on the armed deadline.
-+    /// @return Remaining nanoseconds (0 when disarmed or expired).
-+    static uint64_t remaining_ns();
-     /// @brief Return the calibrated TSC frequency in Hz.
-     static uint64_t tsc_freq_hz();
- 
-   private:
--    /// @brief Calibrate the TSC frequency using the PIT.
--    /// @param frequency_hz Target PIT frequency.
-+    /// @brief Calibrate the TSC frequency using the PIT as a reference.
-+    /// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with
-+    /// increasing measurement windows and picks the first result that
-+    /// falls in a plausible range (50 MHz – 100 GHz), bounded in wall
-+    /// time by CONFIG_HRT_CALIBRATION_TIMEOUT_MS (50 MHz floor).
-+    /// @param frequency_hz The PIT frequency used as the timing reference.
-     static void calibrate_tsc(uint32_t frequency_hz);
-+    /// @brief Resolve active_source_/calibrate_ok_ from calibrated state.
-+    static void resolve_source();
-     /// @brief PIT base input frequency (1.193182 MHz).
-     static constexpr uint32_t PIT_BASE_FREQ = 1193182;
-     static constinit uint64_t ticks_;
-     static constinit uint64_t tsc_freq_hz_;
-+    static constinit TickSource active_source_;
-+    static constinit uint64_t last_ns_;
-+    static constinit uint64_t deadline_tsc_;
-+    static constinit uint32_t last_freq_hz_;
-+    static constinit bool calibrated_;
-+    static constinit bool calibrate_ok_;
+         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
+         // only tasks affine to this CPU (AP-affine tasks are not serviced).
+         // Issue #154: executed_ticks is execution time — only the
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 5eccc6c9..50541c17 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -261,6 +261,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // hrt — hard real-time measurement under QEMU -icount (issue #101)
+     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
+     {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
++    {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
  };
  
- /// @cond
-@@ -91,12 +158,21 @@ class Timer {
-     static uint64_t ticks();
-     /// @brief Estimate nanoseconds since boot.
-     static uint64_t ns();
-+    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
-+    static uint64_t ns_monotonic();
-+    /// @brief Which source backs ns_monotonic() (set by calibrate()).
-+    static TickSource active_source();
-+    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
-+    /// @return true on the preferred source, false on fallback.
-+    static bool calibrate();
-+    /// @brief Unified backing frequency in Hz (0 before calibrate()).
-+    static uint64_t freq_hz();
-     /// @brief Change the tick frequency at runtime.
-     static void set_frequency(uint32_t frequency_hz);
-     /// @brief Handle a timer interrupt.
-     /// @param ip Instruction pointer from interrupt frame.
-     static void handle_irq(uint64_t ip);
--    /// @brief Override the tick count (test support).
-+    /// @brief Override the tick counter (test support).
-     static void set_ticks_for_test(uint64_t value);
+ static constexpr size_t k_expected_count_size =
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 91fe8a61..b9aebddc 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -47,6 +47,7 @@
+ // Issue #158: shootdown queue/quarantine reset (clears lists only;
+ // PMM rewind owns any held pages, so no freeing here).
+ #include <kernel/memory/tlb_shootdown.hpp>
++#include <kernel/time/timer_wheel.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/cap/mmio.hpp>
+@@ -792,6 +793,9 @@ void snapshot_restore(const char *test_name) {
+     arch::pcid_test_reset();
+ #endif
+     TlbShootdown::reset();
++    // Reset the event-timer wheel (issue #17) so a test that armed timers
++    // can never leak a live entry or a reusable handle into the next cycle.
++    kernel::time::TimerWheel::snapshot_reset();
+     if (corr > 0) {
+         Logger::raw_write("[SCHED] corruption_count=");
+         Logger::print_dec(corr);
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 28f3a21c..5902e636 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -200,6 +200,7 @@ void register_no_op_new_tests();
+ void register_stress_hrt_tests();
+ void register_scheduler_hrt_tests();
+ void register_hrt_monotonic_tests();
++void register_timer_wheel_tests();
+ void register_syscall_fastpath_tests();
+ void register_fpu_inv_tests();
+ void register_cap_shm_tests();
+@@ -619,6 +620,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // Makefile gives it hard deterministic timing when run standalone.
+     {"stress_hrt", []() { register_stress_hrt_tests(); }},
+     {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
++    {"timer_wheel", []() { register_timer_wheel_tests(); }},
  
-     /// @brief Schedule a one-shot timer interrupt.
-@@ -105,6 +181,8 @@ class Timer {
-     static void periodic(uint64_t period_ticks);
-     /// @brief Get the remaining ticks on the current timer.
-     static uint64_t remaining();
-+    /// @brief Sub-tick nanoseconds remaining on the current timer.
-+    static uint64_t remaining_ns();
-     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
-     static uint64_t tsc_freq_hz();
- 
-@@ -113,6 +191,9 @@ class Timer {
-     static constinit uint64_t counter_freq_hz_;
-     /// @brief Current compare interval in counter ticks (re-arm value).
-     static constinit uint32_t tick_interval_;
-+    static constinit TickSource active_source_;
-+    static constinit uint64_t last_ns_;
-+    static constinit bool calibrated_;
- };
- 
- /// @cond
-@@ -128,6 +209,15 @@ class Timer {
-     static uint64_t ticks();
-     /// @brief Estimate nanoseconds since boot.
-     static uint64_t ns();
-+    /// @brief Monotonic nanoseconds since boot (issue #16, IRQ-safe).
-+    static uint64_t ns_monotonic();
-+    /// @brief Which source backs ns_monotonic() (set by calibrate()).
-+    static TickSource active_source();
-+    /// @brief One-time source calibration (BOOT_ONLY, idempotent).
-+    /// @return true on the preferred source, false on fallback.
-+    static bool calibrate();
-+    /// @brief Unified backing frequency in Hz (0 before calibrate()).
-+    static uint64_t freq_hz();
-     /// @brief Change the tick frequency at runtime.
-     static void set_frequency(uint32_t frequency_hz);
-     /// @brief Handle a timer interrupt.
-@@ -142,12 +232,17 @@ class Timer {
-     static void periodic(uint64_t period_ticks);
-     /// @brief Get the remaining ticks on the current timer.
-     static uint64_t remaining();
-+    /// @brief Sub-tick nanoseconds remaining (0: mtimecmp unreadable).
-+    static uint64_t remaining_ns();
-     /// @brief Return the calibrated counter frequency in Hz (x86 TSC alias).
-     static uint64_t tsc_freq_hz();
- 
-   private:
-     static constinit uint64_t ticks_;
-     static constinit uint64_t timer_freq_hz_;
-+    static constinit TickSource active_source_;
-+    static constinit uint64_t last_ns_;
-+    static constinit bool calibrated_;
- };
- 
- /// @cond
-diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
-index d103e265..629571f7 100644
---- a/src/kernel/arch/riscv64/timer.cpp
-+++ b/src/kernel/arch/riscv64/timer.cpp
-@@ -29,6 +29,9 @@ namespace arch {
- 
- constinit uint64_t Timer::ticks_ = 0;
- uint64_t Timer::timer_freq_hz_ = 0;
-+constinit TickSource Timer::active_source_ = TickSource::MTIME;
-+constinit uint64_t Timer::last_ns_ = 0;
-+constinit bool Timer::calibrated_ = false;
- 
- /// @brief Initialize the timer, set frequency, and register the IRQ handler.
- /// @param frequency_hz Desired tick frequency in Hz.
-@@ -100,6 +103,35 @@ uint64_t Timer::tsc_freq_hz() {
-     return timer_freq_hz_;
- }
- 
-+TickSource Timer::active_source() {
-+    return active_source_;
+     // -- safe: curated subset with TF_RELEASE tests --
+     {"safe",
+@@ -842,6 +844,7 @@ static void register_all_tests() {
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
+     register_hrt_monotonic_tests();
++    register_timer_wheel_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+@@ -1003,6 +1006,7 @@ static void register_all_tests_second_half() {
+     register_stress_hrt_tests();
+     register_scheduler_hrt_tests();
+     register_hrt_monotonic_tests();
++    register_timer_wheel_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+diff --git a/src/kernel/test/test_timer_wheel.cpp b/src/kernel/test/test_timer_wheel.cpp
+new file mode 100644
+index 00000000..f2c41265
+--- /dev/null
++++ b/src/kernel/test/test_timer_wheel.cpp
+@@ -0,0 +1,294 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_timer_wheel.cpp
++/// @brief Event-timer wheel tests (issue #17, v0.4.7).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/arch/timer.hpp>
++#include <kernel/time/timer_wheel.hpp>
++
++using namespace kernel;
++
++namespace {
++
++// Expiry base derived from the LIVE clock: armed timers must sit above the
++// real monotonic time, otherwise the production on_tick hook (real ticks
++// with real now_ns) expires them early and the test becomes ISR timing
++// luck. +10 s is unreachable inside a millisecond-scale test.
++uint64_t future_base() {
++    return arch::Timer::ns_monotonic() + 10000000000ULL;
 +}
 +
-+uint64_t Timer::freq_hz() {
-+    return timer_freq_hz_;
++/// @brief Counting callback: increments the pointed-to counter.
++void flag_fire(void* context) {
++    ++(*static_cast<uint64_t*>(context));
 +}
 +
-+bool Timer::calibrate() {
-+    if (!calibrated_) {
-+        calibrated_ = true;
-+        if (timer_freq_hz_ == 0) {
-+            timer_freq_hz_ = 10000000;
-+        }
-+        active_source_ = TickSource::MTIME;
++/// @brief Fire-order log for earliest-first verification.
++uint64_t g_fire_order[16] = {};
++uint64_t g_fire_pos = 0;
++
++/// @brief Order-recording callback: appends the pointed-to id.
++void order_fire(void* context) {
++    const uint64_t id = *static_cast<const uint64_t*>(context);
++    if (g_fire_pos < 16) {
++        g_fire_order[g_fire_pos] = id;
++        ++g_fire_pos;
 +    }
-+    return timer_freq_hz_ != 0;
 +}
 +
-+uint64_t Timer::ns_monotonic() {
-+    return detail::monotonic_commit(&last_ns_, ns());
++} // namespace
++
++// Runmode: kernel
++// Testidea: arm-then-expire fires the callback exactly once at expiry.
++// Input: arm(cb, expiry=live_base+100), tick live_base+99/+100/+200
++// Expect: silent before expiry, exactly one fire at expiry, silent after
++// Depends: time::TimerWheel::arm/cancel/on_tick
++JARVIS_TEST(wheel_arm_expire_fires_once, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handle{};
++    JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 100, flag_fire,
++                                        &fired, &handle));
++    JARVIS_ASSERT_EQ((uint64_t)1, time::TimerWheel::live_count(0));
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 99, 0));
++    JARVIS_ASSERT_EQ((uint64_t)0, fired);
++    JARVIS_ASSERT_EQ((uint32_t)1,
++                     time::TimerWheel::on_tick(base_ns + 100, 0));
++    JARVIS_ASSERT_EQ((uint64_t)1, fired);
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 200, 0));
++    JARVIS_ASSERT_EQ((uint64_t)1, fired);
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
 +}
 +
-+uint64_t Timer::remaining_ns() {
-+    // mtimecmp is not readable from S-mode: no sub-tick remainder.
-+    (void)remaining();
-+    return 0;
++// Runmode: kernel
++// Testidea: cancel-before-expiry never fires and invalidates the handle.
++// Input: arm, cancel, on_tick past expiry; cancel again
++// Expect: fired == 0, first cancel true, second cancel false
++// Depends: time::TimerWheel::cancel
++JARVIS_TEST(wheel_cancel_before_expiry, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handle{};
++    JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 50, flag_fire,
++                                        &fired, &handle));
++    JARVIS_ASSERT(time::TimerWheel::cancel(handle));
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 1000, 0));
++    JARVIS_ASSERT_EQ((uint64_t)0, fired);
++    JARVIS_ASSERT(!time::TimerWheel::cancel(handle));
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
 +}
 +
- /// @brief Arm a one-shot timer via SBI.
- /// @param ticks_from_now Number of milliseconds from now to fire.
- void Timer::oneshot(uint64_t ticks_from_now) {
-diff --git a/src/kernel/arch/x86_64/hal/apic.cpp b/src/kernel/arch/x86_64/hal/apic.cpp
-index 07a47c4b..885360ab 100644
---- a/src/kernel/arch/x86_64/hal/apic.cpp
-+++ b/src/kernel/arch/x86_64/hal/apic.cpp
-@@ -420,6 +420,14 @@ uint32_t APIC::timer_current_count() {
-     return lapic_rd(REG_TIMER_CURCNT);
- }
- 
-+bool APIC::arm_deadline(uint64_t ns) {
-+    if (!enabled_ || ns == 0 || tsc_deadline_supported_ == 0) {
++// Runmode: kernel
++// Testidea: recycled slots reject stale-generation handles.
++// Input: arm A, cancel A, arm B (same slot), cancel with A's handle
++// Expect: stale cancel false, live handle cancels true
++// Depends: time::TimerWheel generation tags
++JARVIS_TEST(wheel_stale_generation_rejected, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handle_a{};
++    time::TimerWheel::Handle handle_b{};
++    JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 50, flag_fire,
++                                        &fired, &handle_a));
++    JARVIS_ASSERT(time::TimerWheel::cancel(handle_a));
++    // Free-list is LIFO: the next arm deterministically reuses A's slot.
++    JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 60, flag_fire,
++                                        &fired, &handle_b));
++    JARVIS_ASSERT_EQ(handle_a.slot, handle_b.slot);
++    JARVIS_ASSERT(handle_a.generation != handle_b.generation);
++    JARVIS_ASSERT(!time::TimerWheel::cancel(handle_a));
++    JARVIS_ASSERT(time::TimerWheel::cancel(handle_b));
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: full wheel rejects arm; freed slots recycle with new generation.
++// Input: arm kMaxTimersPerCpu timers, arm once more, cancel one, arm again
++// Expect: overflow arm false; post-cancel arm true with bumped generation
++// Depends: time::TimerWheel::arm capacity bound
++JARVIS_TEST(wheel_exhaustion_and_recycle, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handles[time::TimerWheel::kMaxTimersPerCpu];
++    for (uint32_t arm_idx = 0; arm_idx < time::TimerWheel::kMaxTimersPerCpu;
++         ++arm_idx) {
++        JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 1000 + arm_idx,
++                                            flag_fire, &fired,
++                                            &handles[arm_idx]));
++    }
++    JARVIS_ASSERT_EQ((uint64_t)time::TimerWheel::kMaxTimersPerCpu,
++                     time::TimerWheel::live_count(0));
++    time::TimerWheel::Handle overflow{};
++    JARVIS_ASSERT(!time::TimerWheel::arm(0, base_ns + 2000, flag_fire,
++                                         &fired, &overflow));
++    JARVIS_ASSERT(time::TimerWheel::cancel(handles[0]));
++    time::TimerWheel::Handle recycled{};
++    JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 3000, flag_fire,
++                                        &fired, &recycled));
++    JARVIS_ASSERT_EQ(handles[0].slot, recycled.slot);
++    JARVIS_ASSERT(handles[0].generation != recycled.generation);
++    time::TimerWheel::snapshot_reset();
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: pop cap defers overflow expiries to the next tick without loss.
++// Input: arm 10 timers at staggered expiries, on_tick twice past all
++// Expect: first tick fires the 8 earliest in order, second fires the rest
++// Depends: time::TimerWheel::on_tick pop cap
++JARVIS_TEST(wheel_pop_cap_defers_without_loss, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    g_fire_pos = 0;
++    uint64_t ids[10] = {};
++    for (uint64_t id_idx = 0; id_idx < 10; ++id_idx) {
++        ids[id_idx] = id_idx;
++        time::TimerWheel::Handle handle{};
++        JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 10 + id_idx,
++                                            order_fire, &ids[id_idx],
++                                            &handle));
++    }
++    JARVIS_ASSERT_EQ((uint32_t)8,
++                     time::TimerWheel::on_tick(base_ns + 19, 0));
++    JARVIS_ASSERT_EQ((uint64_t)8, g_fire_pos);
++    for (uint64_t order_idx = 0; order_idx < 8; ++order_idx) {
++        JARVIS_ASSERT_EQ(order_idx, g_fire_order[order_idx]);
++    }
++    JARVIS_ASSERT_EQ((uint32_t)2,
++                     time::TimerWheel::on_tick(base_ns + 19, 0));
++    JARVIS_ASSERT_EQ((uint64_t)10, g_fire_pos);
++    JARVIS_ASSERT_EQ((uint64_t)8, g_fire_order[8]);
++    JARVIS_ASSERT_EQ((uint64_t)9, g_fire_order[9]);
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: non-BSP arm is fail-closed (production never ticks AP wheels).
++// Input: arm on cpu 1, on_tick cpu 1 past expiry
++// Expect: arm false, live_count 0, tick silent, fired == 0
++// Depends: time::TimerWheel per-CPU routing
++JARVIS_TEST(wheel_cpu_isolation, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++#if CONFIG_MAX_CPUS < 2
++    time::TimerWheel::Handle bad_handle{};
++    uint64_t fired = 0;
++    JARVIS_ASSERT(!time::TimerWheel::arm(CONFIG_MAX_CPUS, base_ns + 50,
++                                         flag_fire, &fired, &bad_handle));
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 1000,
++                                               CONFIG_MAX_CPUS));
++    JARVIS_ASSERT_EQ((uint64_t)0,
++                     time::TimerWheel::live_count(CONFIG_MAX_CPUS));
++#else
++    // Production services only the BSP wheel (Scheduler::on_tick AP
++    // early-return; ap_tick has no wheel hook), so arm() must fail
++    // closed for non-BSP CPUs instead of reporting success without expiry.
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handle{};
++    JARVIS_ASSERT(!time::TimerWheel::arm(1, base_ns + 50, flag_fire,
++                                         &fired, &handle));
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(1));
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 1000, 1));
++    JARVIS_ASSERT_EQ((uint64_t)0, fired);
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: snapshot_reset disarms everything and invalidates handles.
++// Input: arm 3 timers, snapshot_reset, on_tick far future
++// Expect: fired == 0, live_count == 0, old cancels false
++// Depends: time::TimerWheel::snapshot_reset
++JARVIS_TEST(wheel_snapshot_reset_clears, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    time::TimerWheel::Handle handles[3];
++    for (uint32_t arm_idx = 0; arm_idx < 3; ++arm_idx) {
++        JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 100 + arm_idx,
++                                            flag_fire, &fired,
++                                            &handles[arm_idx]));
++    }
++    time::TimerWheel::snapshot_reset();
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_ASSERT_EQ((uint32_t)0,
++                     time::TimerWheel::on_tick(base_ns + 100000, 0));
++    JARVIS_ASSERT_EQ((uint64_t)0, fired);
++    for (uint32_t cancel_idx = 0; cancel_idx < 3; ++cancel_idx) {
++        JARVIS_ASSERT(!time::TimerWheel::cancel(handles[cancel_idx]));
++    }
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: arm/cancel/expire burst leaves zero live entries (leak check).
++// Input: arm N, cancel half, expire rest via on_tick
++// Expect: live_count == 0 at end (ResourceTracker zero-delta automatic)
++// Depends: time::TimerWheel::live_count
++JARVIS_TEST(wheel_burst_leaves_zero_live, "PRE: none | POST: none") {
++    time::TimerWheel::snapshot_reset();
++    const uint64_t base_ns = future_base();
++    uint64_t fired = 0;
++    constexpr uint32_t k_burst = 16;
++    time::TimerWheel::Handle handles[k_burst];
++    for (uint32_t arm_idx = 0; arm_idx < k_burst; ++arm_idx) {
++        JARVIS_ASSERT(time::TimerWheel::arm(0, base_ns + 10 + arm_idx,
++                                            flag_fire, &fired,
++                                            &handles[arm_idx]));
++    }
++    for (uint32_t cancel_idx = 0; cancel_idx < k_burst; cancel_idx += 2) {
++        JARVIS_ASSERT(time::TimerWheel::cancel(handles[cancel_idx]));
++    }
++    for (int round = 0;
++         round < 4 && time::TimerWheel::live_count(0) > 0; ++round) {
++        time::TimerWheel::on_tick(base_ns + 100, 0);
++    }
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
++    JARVIS_ASSERT_EQ((uint64_t)(k_burst / 2), fired);
++    JARVIS_TEST_PASS();
++}
++
++void register_timer_wheel_tests() {
++    Logger::info("Registering timer_wheel tests");
++    JARVIS_REGISTER_TEST(wheel_arm_expire_fires_once);
++    JARVIS_REGISTER_TEST(wheel_cancel_before_expiry);
++    JARVIS_REGISTER_TEST(wheel_stale_generation_rejected);
++    JARVIS_REGISTER_TEST(wheel_exhaustion_and_recycle);
++    JARVIS_REGISTER_TEST(wheel_pop_cap_defers_without_loss);
++    JARVIS_REGISTER_TEST(wheel_cpu_isolation);
++    JARVIS_REGISTER_TEST(wheel_snapshot_reset_clears);
++    JARVIS_REGISTER_TEST(wheel_burst_leaves_zero_live);
++}
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 4abab81b..1b48c75a 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -106,6 +106,7 @@ __attribute__((weak)) void register_memory_safety_tests() {}
+ __attribute__((weak)) void register_sporadic_server_tests() {}
+ __attribute__((weak)) void register_atomic_tests() {}
+ __attribute__((weak)) void register_hrt_monotonic_tests() {}
++__attribute__((weak)) void register_timer_wheel_tests() {}
+ __attribute__((weak)) void register_cross_arch_tests() {}
+ #if defined(CONFIG_ARCH_AARCH64)
+ __attribute__((weak)) void register_aarch64_tests() {}
+diff --git a/src/kernel/time/timer_wheel.cpp b/src/kernel/time/timer_wheel.cpp
+new file mode 100644
+index 00000000..edbc0c38
+--- /dev/null
++++ b/src/kernel/time/timer_wheel.cpp
+@@ -0,0 +1,223 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file timer_wheel.cpp
++/// @brief Per-CPU O(1) event-timer wheel (issue #17, v0.4.7).
++
++#include <kernel/time/timer_wheel.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/sync/irq_spinlock_guard.hpp>
++
++namespace kernel {
++namespace time {
++
++sync::SpinLock TimerWheel::lock_;
++TimerWheel::CpuWheel TimerWheel::wheels_[CONFIG_MAX_CPUS];
++bool TimerWheel::initialized_ = false;
++
++void TimerWheel::ensure_init_locked() noexcept {
++    if (initialized_) {
++        return;
++    }
++    for (uint32_t cpu_idx = 0; cpu_idx < CONFIG_MAX_CPUS; ++cpu_idx) {
++        CpuWheel& wheel = wheels_[cpu_idx];
++        for (uint32_t slot_idx = 0; slot_idx < kMaxTimersPerCpu;
++             ++slot_idx) {
++            Slot& slot = wheel.slots[slot_idx];
++            slot.armed = false;
++            slot.generation = kInvalidGeneration;
++            slot.expiry_ns = 0;
++            slot.callback = nullptr;
++            slot.context = nullptr;
++            slot.next_free = slot_idx + 1;
++        }
++        wheel.slots[kMaxTimersPerCpu - 1].next_free = kInvalidSlot;
++        wheel.free_head = 0;
++        wheel.live_count = 0;
++    }
++    initialized_ = true;
++}
++
++bool TimerWheel::arm(uint32_t cpu, uint64_t expiry_ns,
++                     ExpireCallback callback, void* context,
++                     Handle* out) noexcept {
++    if (cpu >= CONFIG_MAX_CPUS || callback == nullptr || out == nullptr) {
 +        return false;
 +    }
-+    set_timer_oneshot(ns);
++    // SIL 3 fail-closed (audit #17): production services only the BSP
++    // wheel — Scheduler::on_tick() returns early for APs and ap_tick()
++    // has no TimerWheel hook (dispatch-only). An armed AP timer would
++    // report success yet never expire, so reject it outright until AP
++    // servicing lands.
++    if (cpu != 0) {
++        return false;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    ensure_init_locked();
++    CpuWheel& wheel = wheels_[cpu];
++    if (wheel.free_head == kInvalidSlot) {
++        return false;
++    }
++    const uint32_t slot_idx = wheel.free_head;
++    Slot& slot = wheel.slots[slot_idx];
++    wheel.free_head = slot.next_free;
++    ++slot.generation;
++    if (slot.generation == kInvalidGeneration) {
++        ++slot.generation;
++    }
++    slot.armed = true;
++    slot.expiry_ns = expiry_ns;
++    slot.callback = callback;
++    slot.context = context;
++    slot.next_free = kInvalidSlot;
++    ++wheel.live_count;
++    out->cpu = static_cast<uint8_t>(cpu);
++    out->slot = static_cast<uint8_t>(slot_idx);
++    out->generation = slot.generation;
 +    return true;
 +}
 +
- // ─── Bus frequency calibration (periodic mode only) ──────────────────────
- uint32_t APIC::calibrate_bus_hz() {
-     // One-shot mode: write a known initial count, measure elapsed TSC
-diff --git a/src/kernel/arch/x86_64/hal/apic.hpp b/src/kernel/arch/x86_64/hal/apic.hpp
-index e03d1397..3d297173 100644
---- a/src/kernel/arch/x86_64/hal/apic.hpp
-+++ b/src/kernel/arch/x86_64/hal/apic.hpp
-@@ -47,6 +47,20 @@ public:
-     /// @brief Read the current APIC timer count.
-     static uint32_t timer_current_count();
- 
-+    /// @brief Whether CPU+APIC support TSC-deadline mode (issue #16).
-+    /// Valid after init() probed CPUID leaf 1 (ECX bit 24).
-+    /// @return true when TSC-deadline mode is available.
-+    static bool has_tsc_deadline() { return tsc_deadline_supported_ != 0; }
++bool TimerWheel::cancel(const Handle& handle) noexcept {
++    if (handle.cpu >= CONFIG_MAX_CPUS || handle.slot >= kMaxTimersPerCpu) {
++        return false;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    ensure_init_locked();
++    CpuWheel& wheel = wheels_[handle.cpu];
++    Slot& slot = wheel.slots[handle.slot];
++    if (!slot.armed || slot.generation != handle.generation) {
++        return false;
++    }
++    slot.armed = false;
++    slot.callback = nullptr;
++    slot.context = nullptr;
++    slot.next_free = wheel.free_head;
++    wheel.free_head = handle.slot;
++    --wheel.live_count;
++    return true;
++}
 +
-+    /// @brief Arm a one-shot TSC deadline (issue #16; timer-wheel use).
-+    /// Fail-closed: false when the APIC is off, ns is 0, or TSC-deadline
-+    /// mode is unavailable. Steals the LAPIC timer: the caller must
-+    /// re-arm the periodic tick (timer_init + timer_start at the boot
-+    /// rate) after expiry.
-+    /// @param ns Delay in nanoseconds (0 = no-op, returns false).
-+    /// @return true when the deadline was armed.
-+    static bool arm_deadline(uint64_t ns);
++uint32_t TimerWheel::on_tick(uint64_t now_ns, uint32_t cpu) noexcept {
++    if (cpu >= CONFIG_MAX_CPUS) {
++        return 0;
++    }
++    ExpireCallback callbacks[kMaxExpirePerTick];
++    void* contexts[kMaxExpirePerTick];
++    uint32_t fire_count = 0;
++    {
++        // ISR-safe: IF is already clear on the tick path; try_lock skips
++        // on contention instead of spinning on a task-held lock
++        // (TlbShootdown precedent). Skipped expiries stay armed for the
++        // next tick. The IRQ-off window covers only the bounded scan:
++        // callbacks fire after restore (audit #17). Straight-line
++        // pairing: no returns between try_lock and unlock, so the manual
++        // unlock cannot leak the lock.
++        arch::IrqGuard irq_guard{};
++        if (!lock_.try_lock()) {
++            return 0;
++        }
++        ensure_init_locked();
++        CpuWheel& wheel = wheels_[cpu];
++        uint8_t due_idx[kMaxTimersPerCpu];
++        uint32_t due_count = 0;
++        for (uint32_t slot_idx = 0; slot_idx < kMaxTimersPerCpu;
++             ++slot_idx) {
++            const Slot& slot = wheel.slots[slot_idx];
++            if (slot.armed && slot.expiry_ns <= now_ns) {
++                due_idx[due_count] = static_cast<uint8_t>(slot_idx);
++                ++due_count;
++            }
++        }
++        // Earliest-first selection of at most kMaxExpirePerTick entries.
++        uint8_t fire_idx[kMaxExpirePerTick];
++        bool taken[kMaxTimersPerCpu] = {};
++        while (fire_count < kMaxExpirePerTick && fire_count < due_count) {
++            uint32_t best_pos = kInvalidSlot;
++            uint64_t best_expiry = 0;
++            for (uint32_t pos = 0; pos < due_count; ++pos) {
++                if (taken[pos]) {
++                    continue;
++                }
++                const uint64_t cand =
++                    wheel.slots[due_idx[pos]].expiry_ns;
++                if (best_pos == kInvalidSlot || cand < best_expiry) {
++                    best_pos = pos;
++                    best_expiry = cand;
++                }
++            }
++            if (best_pos == kInvalidSlot) {
++                break;
++            }
++            taken[best_pos] = true;
++            fire_idx[fire_count] = due_idx[best_pos];
++            ++fire_count;
++        }
++        for (uint32_t fire_pos = 0; fire_pos < fire_count; ++fire_pos) {
++            Slot& slot = wheel.slots[fire_idx[fire_pos]];
++            callbacks[fire_pos] = slot.callback;
++            contexts[fire_pos] = slot.context;
++            slot.armed = false;
++            slot.callback = nullptr;
++            slot.context = nullptr;
++            slot.next_free = wheel.free_head;
++            wheel.free_head = fire_idx[fire_pos];
++            --wheel.live_count;
++        }
++        lock_.unlock();
++    }
++    for (uint32_t fire_pos = 0; fire_pos < fire_count; ++fire_pos) {
++        callbacks[fire_pos](contexts[fire_pos]);
++    }
++    return fire_count;
++}
 +
-     /// @brief Check whether the CPU supports an APIC.
-     static bool is_apic_supported();
- 
-diff --git a/src/kernel/arch/x86_64/hal/hpet.cpp b/src/kernel/arch/x86_64/hal/hpet.cpp
++uint32_t TimerWheel::live_count(uint32_t cpu) noexcept {
++    if (cpu >= CONFIG_MAX_CPUS) {
++        return 0;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    ensure_init_locked();
++    return wheels_[cpu].live_count;
++}
++
++void TimerWheel::snapshot_reset() noexcept {
++    sync::IrqSpinLockGuard guard(lock_);
++    ensure_init_locked();
++    for (uint32_t cpu_idx = 0; cpu_idx < CONFIG_MAX_CPUS; ++cpu_idx) {
++        CpuWheel& wheel = wheels_[cpu_idx];
++        for (uint32_t slot_idx = 0; slot_idx < kMaxTimersPerCpu;
++             ++slot_idx) {
++            Slot& slot = wheel.slots[slot_idx];
++            slot.armed = false;
++            ++slot.generation;
++            if (slot.generation == kInvalidGeneration) {
++                ++slot.generation;
++            }
++            slot.expiry_ns = 0;
++            slot.callback = nullptr;
++            slot.context = nullptr;
++            slot.next_free = slot_idx + 1;
++        }
++        wheel.slots[kMaxTimersPerCpu - 1].next_free = kInvalidSlot;
++        wheel.free_head = 0;
++        wheel.live_count = 0;
++    }
++}
++
++} // namespace time
++} // namespace kernel
+diff --git a/src/kernel/time/timer_wheel.hpp b/src/kernel/time/timer_wheel.hpp
 new file mode 100644
-index 00000000..fc80b4a5
+index 00000000..2e6ed162
 --- /dev/null
-+++ b/src/kernel/arch/x86_64/hal/hpet.cpp
-@@ -0,0 +1,66 @@
++++ b/src/kernel/time/timer_wheel.hpp
+@@ -0,0 +1,121 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -400,707 +816,124 @@ index 00000000..fc80b4a5
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file hpet.cpp
-+/// @brief Minimal HPET probe for the HRT tick-source chain (issue #16).
-+
-+#include <kernel/arch/x86_64/hal/hpet.hpp>
-+
-+namespace arch::hpet {
-+
-+namespace {
-+/// @brief Probe latch (set on first call; probe is idempotent).
-+constinit bool probed_ = false;
-+/// @brief Cached presence result.
-+constinit bool present_ = false;
-+/// @brief Cached frequency in Hz (0 when absent).
-+constinit uint64_t cached_freq_hz_ = 0;
-+} // namespace
-+
-+bool probe() {
-+    if (probed_) {
-+        return present_;
-+    }
-+    probed_ = true;
-+#if CONFIG_HAS_HPET
-+    // Fail-closed: HPET_PHYS_BASE sits above the HHDM identity window, so
-+    // a raw dereference would fault. ACPI-table discovery plus a VMM
-+    // mapping must publish a readable base before this path trusts the
-+    // capabilities register (follow-up work, not issue #16).
-+    present_ = false;
-+#else
-+    present_ = false;
-+#endif
-+    return present_;
-+}
-+
-+uint64_t freq_hz() {
-+    if (!probe()) {
-+        return 0;
-+    }
-+    return cached_freq_hz_;
-+}
-+
-+uint64_t counter() {
-+    if (!probe()) {
-+        return 0;
-+    }
-+    return 0;
-+}
-+
-+} // namespace arch::hpet
-diff --git a/src/kernel/arch/x86_64/hal/hpet.hpp b/src/kernel/arch/x86_64/hal/hpet.hpp
-new file mode 100644
-index 00000000..61f0f9d9
---- /dev/null
-+++ b/src/kernel/arch/x86_64/hal/hpet.hpp
-@@ -0,0 +1,55 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file hpet.hpp
-+/// @brief Minimal HPET probe for the HRT tick-source chain (issue #16).
++/// @file timer_wheel.hpp
++/// @brief Per-CPU O(1) event-timer wheel (issue #17, v0.4.7).
++///
++/// Static slot-table queue powering bounded sleeps, driver timeouts,
++/// deadline release queues, and watchdog pre-timeouts. Pure callee of
++/// the system tick: never programs timers, never reads the tick source
++/// (the caller passes now_ns), never blocks or reschedules. Callbacks
++/// run in tick context and must only set flags / mark wake objects —
++/// deferred wake application belongs to task context (#18 producers).
 +
 +#pragma once
 +
 +#include <types.hpp>
 +#include <kernel/nexios_config.h>
++#include <kernel/sync/spinlock.hpp>
 +
-+namespace arch::hpet {
++namespace kernel {
++namespace time {
 +
-+/// @brief HPET MMIO base (from the ACPI HPET table address field).
-+static constexpr uint64_t HPET_PHYS_BASE = 0xFED00000ULL;
-+/// @brief General capabilities and ID register offset.
-+static constexpr uint64_t HPET_REG_CAP = 0x000ULL;
-+/// @brief Main counter register offset.
-+static constexpr uint64_t HPET_REG_COUNTER = 0x0F0ULL;
-+/// @brief Period mask in the capabilities register (femtoseconds).
-+static constexpr uint64_t HPET_CAP_PERIOD_MASK = 0xFFFFFFFF00000000ULL;
-+/// @brief Period shift in the capabilities register.
-+static constexpr uint64_t HPET_CAP_PERIOD_SHIFT = 32ULL;
-+/// @brief Femtoseconds per second (period → frequency conversion).
-+static constexpr uint64_t HPET_FEMTO_PER_SEC = 1000000000000000ULL;
++/// @brief Per-CPU event-timer wheel with generation-tagged handles.
++class TimerWheel {
++  public:
++    /// @brief Timer slots per CPU (static bound; scan is O(1)-amortized).
++    static constexpr uint32_t kMaxTimersPerCpu = 64;
++    /// @brief Max expiries fired per on_tick call (RT bound, TlbShootdown
++    /// precedent). Overflow stays armed and fires on subsequent ticks.
++    static constexpr uint32_t kMaxExpirePerTick = 8;
++    /// @brief Free-list terminator / invalid slot marker.
++    static constexpr uint32_t kInvalidSlot = 0xFFFFFFFFu;
++    /// @brief Generation value that is never issued (fail-closed stale).
++    static constexpr uint32_t kInvalidGeneration = 0u;
++    /// @brief Expiry callback: runs in tick context, must be non-blocking
++    /// and must not reschedule, block, or allocate.
++    using ExpireCallback = void (*)(void*);
 +
-+/// @brief Probe for an HPET (idempotent, fail-closed).
-+/// Returns false until ACPI-table discovery plus a VMM mapping make the
-+/// base readable; CONFIG_HAS_HPET gates the register path. Never faults:
-+/// without a mapping the probe reports absent.
-+/// @return true when an HPET is present and readable.
-+bool probe();
-+/// @brief HPET frequency in Hz (0 when absent).
-+/// @return Frequency in Hz, or 0.
-+uint64_t freq_hz();
-+/// @brief HPET main counter value (0 when absent).
-+/// @return Counter value, or 0.
-+uint64_t counter();
++    /// @brief Opaque arm receipt; validate generation on every use.
++    struct Handle {
++        uint8_t cpu;
++        uint8_t slot;
++        uint32_t generation;
++    };
++    static_assert(CONFIG_MAX_CPUS <= 255, "Handle.cpu width");
++    static_assert(kMaxTimersPerCpu <= 256, "Handle.slot width");
 +
-+} // namespace arch::hpet
-diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
-index ff7bc68c..e9fd69b4 100644
---- a/src/kernel/arch/x86_64/hal/timer.cpp
-+++ b/src/kernel/arch/x86_64/hal/timer.cpp
-@@ -25,16 +25,79 @@
- #include <kernel/arch/idt.hpp>
- #include <kernel/arch/apic.hpp>
- #include <kernel/arch/x86_64/hal/percpu.hpp>
-+#include <kernel/arch/x86_64/hal/hpet.hpp>
-+#include <kernel/bootparams.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/arch/idt.hpp>
- #include <kernel/profiling/sampler.hpp>
- 
- namespace arch {
- 
-+namespace {
-+/// @brief Maximum deadline span (1 hour in ns): bounds all products.
-+static constexpr uint64_t k_max_deadline_ns = 3600000000000ULL;
-+/// @brief Calibration timeout floor (50 MHz in ticks per ms).
-+static constexpr uint64_t k_timeout_ticks_per_ms = 50000ULL;
-+/// @brief Plausible TSC range (50 MHz – 100 GHz).
-+static constexpr uint64_t k_tsc_min_hz = 50000000ULL;
-+static constexpr uint64_t k_tsc_max_hz = 100000000000ULL;
-+/// @brief Fail-closed TSC frequency when calibration finds nothing.
-+static constexpr uint64_t k_fallback_tsc_hz = 2000000000ULL;
++    /// @brief Arm a one-shot expiry (O(1)).
++    /// Fail-closed: false on invalid cpu, null callback/context-out,
++    /// or a full wheel (caller keeps its fallback; no eviction).
++    /// @param cpu Owning CPU index; must be 0 (BSP). Non-BSP CPUs are
++    /// rejected: production never services their wheels (AP dispatch-only).
++    /// @param expiry_ns Absolute expiry in monotonic ns (#16 clock).
++    /// @param callback Expiry callback (non-null).
++    /// @param context Opaque callback context (carries owner identity).
++    /// @param out Receipt handle (non-null).
++    /// @return true when armed.
++    static bool arm(uint32_t cpu, uint64_t expiry_ns,
++                    ExpireCallback callback, void* context,
++                    Handle* out) noexcept;
++    /// @brief Cancel an armed expiry (O(1)).
++    /// Stale handles (wrong generation, disarmed slot) fail closed.
++    /// @param handle Receipt from arm().
++    /// @return true when an armed entry was cancelled.
++    static bool cancel(const Handle& handle) noexcept;
++    /// @brief Tick hook: fire due expiries for one CPU (bounded).
++    /// ISR-safe: try-lock, skip on contention (fires next tick instead).
++    /// Fires at most kMaxExpirePerTick earliest-due callbacks; the lock
++    /// is released before callbacks run (re-entrant arm/cancel safe).
++    /// @param now_ns Current monotonic ns (caller-provided, #16 clock).
++    /// @param cpu CPU index to service.
++    /// @return Number of callbacks fired.
++    static uint32_t on_tick(uint64_t now_ns, uint32_t cpu) noexcept;
++    /// @brief Armed entry count for one CPU (introspection/test only).
++    /// @param cpu CPU index.
++    /// @return Live count (0 on invalid cpu).
++    static uint32_t live_count(uint32_t cpu) noexcept;
++    /// @brief Disarm everything, invalidate all handles (test isolation).
++    /// Bumps every generation so pre-reset handles fail closed.
++    static void snapshot_reset() noexcept;
 +
-+/// @brief Convert coarse ticks to nanoseconds without 64-bit overflow.
-+/// @param tick_count Coarse tick count.
-+/// @param rate_hz Tick rate in Hz.
-+/// @return Nanoseconds clamped to k_max_deadline_ns (0 when rate is 0).
-+uint64_t ticks_to_ns(uint64_t tick_count, uint64_t rate_hz) {
-+    if (rate_hz == 0) {
-+        return 0;
-+    }
-+    const uint64_t cap_ticks = 3600ULL * rate_hz;
-+    if (tick_count > cap_ticks) {
-+        return k_max_deadline_ns;
-+    }
-+    const uint64_t whole = tick_count / rate_hz;
-+    const uint64_t part = tick_count % rate_hz;
-+    return whole * 1000000000ULL + (part * 1000000000ULL) / rate_hz;
-+}
++  private:
++    struct Slot {
++        bool armed;
++        uint32_t generation;
++        uint64_t expiry_ns;
++        ExpireCallback callback;
++        void* context;
++        uint32_t next_free;
++    };
++    struct CpuWheel {
++        Slot slots[kMaxTimersPerCpu];
++        uint32_t free_head;
++        uint32_t live_count;
++    };
 +
-+/// @brief Convert nanoseconds to a TSC delta without 64-bit overflow.
-+/// @param delay_ns Delay in nanoseconds (clamped to k_max_deadline_ns).
-+/// @param freq_hz TSC frequency in Hz.
-+/// @return TSC delta (0 when freq is 0).
-+uint64_t hrt_ns_to_tsc(uint64_t delay_ns, uint64_t freq_hz) {
-+    if (freq_hz == 0) {
-+        return 0;
-+    }
-+    uint64_t bounded_ns = delay_ns;
-+    if (bounded_ns > k_max_deadline_ns) {
-+        bounded_ns = k_max_deadline_ns;
-+    }
-+    const uint64_t whole = bounded_ns / 1000000000ULL;
-+    const uint64_t part = bounded_ns % 1000000000ULL;
-+    const uint64_t part_hi = part / 1000ULL;
-+    const uint64_t part_lo = part % 1000ULL;
-+    return whole * freq_hz + part_hi * freq_hz / 1000000ULL +
-+           part_lo * freq_hz / 1000000000ULL;
-+}
-+} // namespace
++    /// @brief One-time free-list build (call with lock held).
++    static void ensure_init_locked() noexcept;
 +
- /// @brief Monotonic tick counter, incremented on each timer IRQ.
- constinit uint64_t Timer::ticks_ = 0;
- /// @brief Calibrated TSC frequency in Hz.
- constinit uint64_t Timer::tsc_freq_hz_ = 0;
-+/// @brief Active HRT tick source (set by resolve_source).
-+constinit TickSource Timer::active_source_ = TickSource::PIT;
-+/// @brief Last reported monotonic sample (atomics-only, see ns_monotonic).
-+constinit uint64_t Timer::last_ns_ = 0;
-+/// @brief Armed deadline in TSC units (0 = disarmed).
-+constinit uint64_t Timer::deadline_tsc_ = 0;
-+/// @brief Tick rate passed to init() (for tick/ns conversion).
-+constinit uint32_t Timer::last_freq_hz_ = 0;
-+/// @brief Calibration latch (calibrate() is idempotent).
-+constinit bool Timer::calibrated_ = false;
-+/// @brief Cached calibration result (true = preferred source).
-+constinit bool Timer::calibrate_ok_ = false;
- 
- /// @brief Initialise the system timer.
- /// When CONFIG_USE_APIC_TIMER=1 and the APIC was successfully enabled, the
-@@ -43,6 +106,7 @@ constinit uint64_t Timer::tsc_freq_hz_ = 0;
- void Timer::init(uint32_t frequency_hz) {
-     // Always calibrate TSC using the PIT (it's the most reliable method
-     // across QEMU/hardware, and is independent of the tick source).
-+    last_freq_hz_ = frequency_hz;
-     calibrate_tsc(frequency_hz);
- 
-     #if CONFIG_USE_APIC_TIMER
-@@ -117,18 +181,29 @@ void Timer::handle_irq(uint64_t ip) {
- }
- 
- /// @brief Calibrate the TSC frequency using the PIT as a reference.
--/// Performs up to 12 iterations with increasing measurement windows and picks
--/// the first result that falls in a plausible range (50 MHz – 100 GHz).
-+/// Performs up to CONFIG_HRT_CALIBRATION_RETRIES iterations with increasing
-+/// measurement windows and picks the first result that falls in a plausible
-+/// range (50 MHz – 100 GHz). Bounded in wall time by
-+/// CONFIG_HRT_CALIBRATION_TIMEOUT_MS at a 50 MHz floor; on failure the
-+/// fail-closed 2 GHz default applies. Resolves the HRT source label.
- /// @param frequency_hz The PIT frequency used as the timing reference.
- void Timer::calibrate_tsc(uint32_t frequency_hz) {
-     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
-+    calibrated_ = true;
-+    const uint64_t cal_start = rdtsc();
-+    const uint64_t timeout_ticks =
-+        (uint64_t)CONFIG_HRT_CALIBRATION_TIMEOUT_MS *
-+        k_timeout_ticks_per_ms;
- 
--    for (int retry = 0; retry < 12; ++retry) {
-+    for (int retry = 0; retry < CONFIG_HRT_CALIBRATION_RETRIES; ++retry) {
-+        if (rdtsc() - cal_start > timeout_ticks) {
-+            break;
-+        }
-         outb(0x43, 0x00);
-         uint16_t c0 = inb(0x40) | ((uint16_t)inb(0x40) << 8);
-         uint64_t t0 = rdtsc();
- 
--        uint64_t tsc_target = t0 + 50000ULL * (1 << retry);
-+        uint64_t tsc_target = t0 + 50000ULL * (1ULL << retry);
-         while (rdtsc() < tsc_target) {
-             asm volatile("pause" : : : "memory");
-         }
-@@ -148,14 +223,72 @@ void Timer::calibrate_tsc(uint32_t frequency_hz) {
-         if (count_delta > 0 && tsc_delta > 0) {
-             uint64_t pit_ticks = (uint64_t)count_delta * 2;
-             tsc_freq_hz_ = (tsc_delta * PIT_BASE_FREQ) / pit_ticks;
--            if (tsc_freq_hz_ >= 50000000ULL &&
--                tsc_freq_hz_ <= 100000000000ULL) {
-+            if (tsc_freq_hz_ >= k_tsc_min_hz &&
-+                tsc_freq_hz_ <= k_tsc_max_hz) {
-+                resolve_source();
-                 return;
-             }
-         }
-     }
- 
--    tsc_freq_hz_ = 2000000000ULL;
-+    tsc_freq_hz_ = k_fallback_tsc_hz;
-+    resolve_source();
-+}
++    static sync::SpinLock lock_;
++    static CpuWheel wheels_[CONFIG_MAX_CPUS];
++    static bool initialized_;
++};
 +
-+/// @brief Resolve active_source_/calibrate_ok_ from calibrated state.
-+/// Preference chain (CONFIG_HRT_SOURCE_PREFERENCE): prefer HPET (2) takes
-+/// a probed HPET; otherwise a valid TSC wins; a probed HPET is the auto
-+/// (0) fallback; anything else records PIT with the fail-closed frequency.
-+void Timer::resolve_source() {
-+    const bool hpet_ok =
-+        hpet::probe() && hpet::freq_hz() != 0;
-+    const bool tsc_ok = tsc_freq_hz_ >= k_tsc_min_hz &&
-+                        tsc_freq_hz_ <= k_tsc_max_hz;
-+    if (CONFIG_HRT_SOURCE_PREFERENCE == 2 && hpet_ok) {
-+        active_source_ = TickSource::HPET;
-+        calibrate_ok_ = true;
-+        return;
-+    }
-+    if (tsc_ok) {
-+        calibrate_ok_ = true;
-+        active_source_ = APIC::has_tsc_deadline() ? TickSource::TSC_DEADLINE
-+                                                  : TickSource::TSC;
-+        return;
-+    }
-+    if (hpet_ok) {
-+        active_source_ = TickSource::HPET;
-+        calibrate_ok_ = true;
-+        return;
-+    }
-+    active_source_ = TickSource::PIT;
-+    calibrate_ok_ = false;
-+}
-+
-+TickSource Timer::active_source() {
-+    return active_source_;
-+}
-+
-+uint64_t Timer::freq_hz() {
-+    return tsc_freq_hz_;
-+}
-+
-+bool Timer::calibrate() {
-+    if (!calibrated_) {
-+        calibrated_ = true;
-+        uint32_t ref_hz = last_freq_hz_;
-+        if (ref_hz == 0) {
-+            ref_hz = CONFIG_TICK_HZ;
-+        }
-+        calibrate_tsc(ref_hz);
-+        return calibrate_ok_;
-+    }
-+    // Frequency is stable; refresh the label only (APIC CPUID caps are
-+    // probed after Timer::init, so a TSC label may promote to
-+    // TSC_DEADLINE once the APIC is up).
-+    if (active_source_ == TickSource::TSC && APIC::has_tsc_deadline()) {
-+        active_source_ = TickSource::TSC_DEADLINE;
-+    }
-+    return calibrate_ok_;
- }
- 
- /// @brief Return the calibrated TSC frequency in Hz.
-@@ -176,6 +309,97 @@ uint64_t Timer::ns() {
-     return sec * 1000000000ULL + (rem * 1000000000ULL) / tsc_freq_hz_;
- }
- 
-+uint64_t Timer::ns_monotonic() {
-+    uint64_t sample = 0;
-+    if (active_source_ == TickSource::HPET) {
-+        const uint64_t hpet_freq = hpet::freq_hz();
-+        if (hpet_freq != 0) {
-+            const uint64_t hpet_cnt = hpet::counter();
-+            const uint64_t sec = hpet_cnt / hpet_freq;
-+            const uint64_t rem = hpet_cnt % hpet_freq;
-+            sample = sec * 1000000000ULL + (rem * 1000000000ULL) / hpet_freq;
-+        }
-+    } else {
-+        sample = ns();
-+    }
-+    return detail::monotonic_commit(&last_ns_, sample);
-+}
-+
-+void Timer::oneshot(uint64_t ticks_from_now) {
-+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
-+    if (boot_hz == 0 || ticks_from_now == 0) {
-+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
-+        return;
-+    }
-+    const uint64_t delay_ns = ticks_to_ns(ticks_from_now, boot_hz);
-+    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
-+        arch::APIC::set_timer_oneshot(delay_ns);
-+    }
-+    // PIT-only configs keep the system tick: only the software deadline
-+    // is armed (the #17 wheel owns IRQ-backed bounded waits).
-+    const uint64_t freq = tsc_freq_hz();
-+    if (freq == 0) {
-+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
-+        return;
-+    }
-+    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(delay_ns, freq),
-+                     __ATOMIC_RELEASE);
-+}
-+
-+void Timer::periodic(uint64_t period_ticks) {
-+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
-+    if (boot_hz == 0 || period_ticks == 0) {
-+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
-+        return;
-+    }
-+    const uint64_t period_ns = ticks_to_ns(period_ticks, boot_hz);
-+    if (arch::APIC::is_enabled() && arch::APIC::is_timer_active()) {
-+        arch::APIC::set_timer_periodic(period_ns);
-+    }
-+    const uint64_t freq = tsc_freq_hz();
-+    if (freq == 0) {
-+        __atomic_store_n(&deadline_tsc_, 0ULL, __ATOMIC_RELEASE);
-+        return;
-+    }
-+    __atomic_store_n(&deadline_tsc_, rdtsc() + hrt_ns_to_tsc(period_ns, freq),
-+                     __ATOMIC_RELEASE);
-+}
-+
-+uint64_t Timer::remaining() {
-+    const uint64_t rem_ns = remaining_ns();
-+    if (rem_ns == 0) {
-+        return 0;
-+    }
-+    const uint64_t boot_hz = kernel::BootParams::instance().timer_hz;
-+    if (boot_hz == 0) {
-+        return 0;
-+    }
-+    // Ceil to ticks so a live (nonzero ns) deadline never reads 0.
-+    const uint64_t whole = rem_ns / 1000000000ULL;
-+    const uint64_t part = rem_ns % 1000000000ULL;
-+    return whole * boot_hz + (part * boot_hz + 1000000000ULL - 1) / 1000000000ULL;
-+}
-+
-+uint64_t Timer::remaining_ns() {
-+    const uint64_t deadline =
-+        __atomic_load_n(&deadline_tsc_, __ATOMIC_ACQUIRE);
-+    if (deadline == 0) {
-+        return 0;
-+    }
-+    const uint64_t freq = tsc_freq_hz();
-+    if (freq == 0) {
-+        return 0;
-+    }
-+    const uint64_t now = rdtsc();
-+    if (now >= deadline) {
-+        return 0;
-+    }
-+    const uint64_t delta = deadline - now;
-+    const uint64_t sec = delta / freq;
-+    const uint64_t rem = delta % freq;
-+    return sec * 1000000000ULL + (rem * 1000000000ULL) / freq;
-+}
-+
- /// @brief Override the tick counter (test support).
- /// @param value Value to assign to the tick counter.
- void Timer::set_ticks_for_test(uint64_t value) {
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 090e3eb0..4e0eb5c0 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -477,6 +477,27 @@
- #define CONFIG_HAS_HPET 0
- #endif
- 
-+// ---------------------------------------------------------------------------
-+// HRT monotonic clock (issue #16, v0.4.7 "Enhance HRT")
-+// ---------------------------------------------------------------------------
-+/// 64-bit nanosecond width for ns_monotonic() (documents wrap period).
-+#ifndef CONFIG_HRT_NS_WIDTH
-+#define CONFIG_HRT_NS_WIDTH 64
-+#endif
-+/// PIT-anchored TSC calibration attempts (x86_64, bounded loop).
-+#ifndef CONFIG_HRT_CALIBRATION_RETRIES
-+#define CONFIG_HRT_CALIBRATION_RETRIES 12
-+#endif
-+/// Wall-clock bound for the whole TSC calibration (ms, 50 MHz floor).
-+#ifndef CONFIG_HRT_CALIBRATION_TIMEOUT_MS
-+#define CONFIG_HRT_CALIBRATION_TIMEOUT_MS 500
-+#endif
-+/// Tick-source preference: 0 = auto, 1 = prefer TSC(-deadline),
-+/// 2 = prefer HPET when probed.
-+#ifndef CONFIG_HRT_SOURCE_PREFERENCE
-+#define CONFIG_HRT_SOURCE_PREFERENCE 1
-+#endif
-+
- /// Enable Priority Ceiling Protocol for Mutex.
- /// When set, each mutex has a static priority_ceiling (= max priority of any
- /// task that may lock it). The system ceiling is the max of all held mutex
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 6b5c0b66..5eccc6c9 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -260,6 +260,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
- 
-     // hrt — hard real-time measurement under QEMU -icount (issue #101)
-     {"stress_hrt",            2,    0,       0      },  // rdtsc baseline canary + IPC-under-stress hard-bound (TF_KERNEL)
-+    {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
- };
- 
- static constexpr size_t k_expected_count_size =
-diff --git a/src/kernel/test/test_hr_clock.cpp b/src/kernel/test/test_hr_clock.cpp
-new file mode 100644
-index 00000000..98ba6703
---- /dev/null
-+++ b/src/kernel/test/test_hr_clock.cpp
-@@ -0,0 +1,181 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_hr_clock.cpp
-+/// @brief High-resolution monotonic clock tests (issue #16, v0.4.7).
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/nexios_config.h>
-+#if defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/apic.hpp>
-+#include <kernel/bootparams.hpp>
-+#endif
-+
-+using namespace kernel;
-+
-+// Runmode: kernel
-+// Testidea: calibrate() leaves a nonzero unified frequency (fail-closed).
-+// Input: Call calibrate() twice (idempotency), read freq_hz()
-+// Expect: freq_hz() != 0 and stable across both calls
-+// Depends: arch::Timer::calibrate, arch::Timer::freq_hz
-+JARVIS_TEST(hrt_freq_nonzero_after_calibrate, "PRE: none | POST: none") {
-+    const bool first_ok = arch::Timer::calibrate();
-+    const uint64_t freq_first = arch::Timer::freq_hz();
-+    JARVIS_ASSERT(freq_first != 0);
-+    JARVIS_ASSERT(arch::Timer::tsc_freq_hz() != 0);
-+    const bool second_ok = arch::Timer::calibrate();
-+    JARVIS_ASSERT(first_ok == second_ok);
-+    JARVIS_ASSERT_EQ(freq_first, arch::Timer::freq_hz());
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_ASSERT_EQ(freq_first, arch::Timer::tsc_freq_hz());
-+#endif
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: ns_monotonic() never decreases across successive reads.
-+// Input: Read ns_monotonic() and ns() several times
-+// Expect: Each sample >= previous sample
-+// Depends: arch::Timer::ns_monotonic, arch::Timer::ns
-+JARVIS_TEST(hrt_ns_monotonic_non_decrease, "PRE: none | POST: none") {
-+    uint64_t prev_mono = arch::Timer::ns_monotonic();
-+    for (int sample_idx = 0; sample_idx < 4; ++sample_idx) {
-+        const uint64_t cur_mono = arch::Timer::ns_monotonic();
-+        JARVIS_ASSERT(cur_mono >= prev_mono);
-+        prev_mono = cur_mono;
-+    }
-+    const uint64_t ns_first = arch::Timer::ns();
-+    const uint64_t ns_second = arch::Timer::ns();
-+    JARVIS_ASSERT(ns_second >= ns_first);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: active_source() reports a configured, valid tick source.
-+// Input: Read active_source() after calibrate()
-+// Expect: Source matches build config (never HPET when disabled; x86_64
-+//         TSC_DEADLINE/TSC/PIT; aarch64 GENERIC_COUNTER; riscv64 MTIME)
-+// Depends: arch::Timer::active_source, CONFIG_HAS_HPET
-+JARVIS_TEST(hrt_active_source_valid, "PRE: none | POST: none") {
-+    (void)arch::Timer::calibrate();
-+    const arch::TickSource src = arch::Timer::active_source();
-+#if defined(CONFIG_ARCH_X86_64)
-+#if CONFIG_HAS_HPET
-+    JARVIS_ASSERT(src == arch::TickSource::HPET ||
-+                  src == arch::TickSource::TSC ||
-+                  src == arch::TickSource::TSC_DEADLINE ||
-+                  src == arch::TickSource::PIT);
-+#else
-+    JARVIS_ASSERT(src != arch::TickSource::HPET);
-+    if (arch::APIC::has_tsc_deadline()) {
-+        JARVIS_ASSERT(src == arch::TickSource::TSC_DEADLINE);
-+    } else {
-+        JARVIS_ASSERT(src == arch::TickSource::TSC ||
-+                      src == arch::TickSource::PIT);
-+    }
-+#endif
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    JARVIS_ASSERT(src == arch::TickSource::GENERIC_COUNTER);
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    JARVIS_ASSERT(src == arch::TickSource::MTIME);
-+#else
-+    JARVIS_ASSERT(src != arch::TickSource::TEST);
-+#endif
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: set_ticks_for_test() round-trips without disturbing ns_monotonic().
-+// Input: Override ticks, read back; sample ns_monotonic() across override
-+// Expect: ticks() returns test values; ns_monotonic() still non-decreasing
-+// Depends: arch::Timer::set_ticks_for_test, arch::Timer::ticks
-+JARVIS_TEST(hrt_test_ticks_determinism, "PRE: none | POST: none") {
-+    const uint64_t mono_before = arch::Timer::ns_monotonic();
-+    arch::Timer::set_ticks_for_test(0x1234ABCDULL);
-+    JARVIS_ASSERT_EQ((uint64_t)0x1234ABCDULL, arch::Timer::ticks());
-+    arch::Timer::set_ticks_for_test(0x0ULL);
-+    JARVIS_ASSERT_EQ((uint64_t)0x0ULL, arch::Timer::ticks());
-+    const uint64_t mono_after = arch::Timer::ns_monotonic();
-+    JARVIS_ASSERT(mono_after >= mono_before);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: oneshot() arms a sub-tick deadline visible via remaining_ns().
-+// Input: Arm oneshot(N ticks), read remaining()/remaining_ns() immediately
-+// Expect: 0 < remaining() <= N, 0 < remaining_ns() <= N * ns_per_tick;
-+//         system tick restored afterwards (no tick freeze for later tests)
-+// Depends: arch::Timer::oneshot/periodic/remaining/remaining_ns,
-+//         arch::APIC::timer_init/timer_start, BootParams::timer_hz
-+JARVIS_TEST(hrt_oneshot_remaining_ns, "PRE: none | POST: none") {
-+#if defined(CONFIG_ARCH_X86_64)
-+    if (!arch::APIC::is_enabled() || !arch::APIC::is_timer_active()) {
-+        Logger::warn("HRT oneshot skipped (APIC timer inactive)");
-+        JARVIS_TEST_PASS();
-+        return;
-+    }
-+    const uint64_t boot_hz = BootParams::instance().timer_hz;
-+    JARVIS_ASSERT(boot_hz != 0);
-+    constexpr uint64_t k_arm_ticks = 50;
-+    arch::Timer::oneshot(k_arm_ticks);
-+    const uint64_t rem_ticks = arch::Timer::remaining();
-+    JARVIS_ASSERT(rem_ticks > 0);
-+    JARVIS_ASSERT(rem_ticks <= k_arm_ticks);
-+    const uint64_t rem_ns = arch::Timer::remaining_ns();
-+    const uint64_t tick_ns = 1000000000ULL / boot_hz;
-+    JARVIS_ASSERT(rem_ns > 0);
-+    JARVIS_ASSERT(rem_ns <= k_arm_ticks * tick_ns);
-+    // Restore the periodic system tick BEFORE further asserts (cookbook
-+    // Rule 5): oneshot() disarms re-arm, so the tick would otherwise die
-+    // here for every later test in the class.
-+    arch::APIC::timer_init(static_cast<uint32_t>(boot_hz));
-+    arch::APIC::timer_start();
-+    // periodic() smoke at the running rate: re-arms the same 1-tick period
-+    // the tick already uses, so the tick keeps running unchanged.
-+    arch::Timer::periodic(1);
-+    const uint64_t per_ns = arch::Timer::remaining_ns();
-+    JARVIS_ASSERT(per_ns <= tick_ns);
-+    JARVIS_ASSERT(arch::Timer::remaining() <= 1);
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    constexpr uint64_t k_arm_ms = 50;
-+    constexpr uint64_t k_ns_slack = 55000000ULL;
-+    arch::Timer::oneshot(k_arm_ms);
-+    JARVIS_ASSERT(arch::Timer::remaining() > 0);
-+    const uint64_t rem_ns = arch::Timer::remaining_ns();
-+    JARVIS_ASSERT(rem_ns > 0);
-+    JARVIS_ASSERT(rem_ns <= k_ns_slack);
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    // mtimecmp is unreadable from S-mode: specified behavior is 0/0.
-+    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining());
-+    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining_ns());
-+#else
-+    JARVIS_ASSERT_EQ((uint64_t)0, arch::Timer::remaining_ns());
-+#endif
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_hrt_monotonic_tests() {
-+    Logger::info("Registering hrt_monotonic tests");
-+    JARVIS_REGISTER_TEST(hrt_freq_nonzero_after_calibrate);
-+    JARVIS_REGISTER_TEST(hrt_ns_monotonic_non_decrease);
-+    JARVIS_REGISTER_TEST(hrt_active_source_valid);
-+    JARVIS_REGISTER_TEST(hrt_test_ticks_determinism);
-+    JARVIS_REGISTER_TEST(hrt_oneshot_remaining_ns);
-+}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 4ae59a18..28f3a21c 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -199,6 +199,7 @@ void register_buffer_pool_deterministic_tests();
- void register_no_op_new_tests();
- void register_stress_hrt_tests();
- void register_scheduler_hrt_tests();
-+void register_hrt_monotonic_tests();
- void register_syscall_fastpath_tests();
- void register_fpu_inv_tests();
- void register_cap_shm_tests();
-@@ -617,6 +618,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     // runs cleanly inside `all` without -icount.  Class-scoped icount in the
-     // Makefile gives it hard deterministic timing when run standalone.
-     {"stress_hrt", []() { register_stress_hrt_tests(); }},
-+    {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
- 
-     // -- safe: curated subset with TF_RELEASE tests --
-     {"safe",
-@@ -839,6 +841,7 @@ static void register_all_tests() {
-     register_preemption_tests();
-     register_stress_hrt_tests();
-     register_scheduler_hrt_tests();
-+    register_hrt_monotonic_tests();
-     register_syscall_fastpath_tests();
-     register_fpu_inv_tests();
-     register_cap_shm_tests();
-@@ -999,6 +1002,7 @@ static void register_all_tests_second_half() {
-     register_no_op_new_tests();
-     register_stress_hrt_tests();
-     register_scheduler_hrt_tests();
-+    register_hrt_monotonic_tests();
-     register_syscall_fastpath_tests();
-     register_fpu_inv_tests();
-     register_cap_shm_tests();
-diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index d97f8445..4abab81b 100644
---- a/src/kernel/test/test_weak_stubs.cpp
-+++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -105,6 +105,7 @@ __attribute__((weak)) void register_irqguard_audit_tests() {}
- __attribute__((weak)) void register_memory_safety_tests() {}
- __attribute__((weak)) void register_sporadic_server_tests() {}
- __attribute__((weak)) void register_atomic_tests() {}
-+__attribute__((weak)) void register_hrt_monotonic_tests() {}
- __attribute__((weak)) void register_cross_arch_tests() {}
- #if defined(CONFIG_ARCH_AARCH64)
- __attribute__((weak)) void register_aarch64_tests() {}
++} // namespace time
++} // namespace kernel
 diff --git a/test-history.txt b/test-history.txt
-index 384a3059..74cb2f63 100644
+index 74cb2f63..9fc5f77a 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -1069,3 +1069,11 @@ SUMMARY: total=108 ok=106 fail=2
- 2026-09-15 20:28:35 all PASSED: 85 FAILED: 0 TIME: 4085ms
- 2026-09-15 21:22:58 all PASSED: 1363 FAILED: 0 TIME: 363866ms
- 2026-09-15 21:23:20 all PASSED: 85 FAILED: 0 TIME: 16851ms
-+2026-09-16 08:44:26 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 483ms
-+2026-09-16 08:49:20 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 597ms
-+2026-09-16 08:49:47 hal_timer PASSED: 5 FAILED: 0 TIME: 520ms
-+2026-09-16 08:50:12 hal_apic PASSED: 3 FAILED: 0 TIME: 395ms
-+2026-09-16 08:50:36 timing_core PASSED: 19 FAILED: 0 TIME: 6481ms
-+2026-09-16 08:51:07 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 18821ms
-+2026-09-16 08:51:37 stress_hrt PASSED: 2 FAILED: 0 TIME: 17911ms
-+2026-09-16 08:53:15 all PASSED: 1368 FAILED: 0 TIME: 539833ms
+@@ -1077,3 +1077,13 @@ SUMMARY: total=108 ok=106 fail=2
+ 2026-09-16 08:51:07 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 18821ms
+ 2026-09-16 08:51:37 stress_hrt PASSED: 2 FAILED: 0 TIME: 17911ms
+ 2026-09-16 08:53:15 all PASSED: 1368 FAILED: 0 TIME: 539833ms
++2026-09-16 15:26:08 timer_wheel PASSED: 8 FAILED: 0 TIME: 178ms
++2026-09-16 15:26:50 timer_wheel PASSED: 8 FAILED: 0 TIME: 176ms
++2026-09-16 15:27:14 timing_core PASSED: 19 FAILED: 0 TIME: 1566ms
++2026-09-16 15:27:38 hrt_monotonic PASSED: 5 FAILED: 0 TIME: 143ms
++2026-09-16 15:28:08 scheduler_hrt PASSED: 4 FAILED: 0 TIME: 66611ms
++2026-09-16 15:29:11 timer_wheel PASSED: 0 FAILED: 0 TIME: 0ms
++2026-09-16 15:30:31 all PASSED: 1376 FAILED: 0 TIME: 89746ms
++2026-09-16 15:38:26 timer_wheel PASSED: 8 FAILED: 0 TIME: 175ms
++2026-09-16 15:41:56 timer_wheel PASSED: 8 FAILED: 0 TIME: 729ms
++2026-09-16 15:43:02 all PASSED: 1376 FAILED: 0 TIME: 400280ms

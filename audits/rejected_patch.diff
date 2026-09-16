@@ -1,19 +1,71 @@
-diff --git a/src/kernel/arch/x86_64/hal/pcid.cpp b/src/kernel/arch/x86_64/hal/pcid.cpp
---- a/src/kernel/arch/x86_64/hal/pcid.cpp
-+++ b/src/kernel/arch/x86_64/hal/pcid.cpp
-@@ -101,6 +101,15 @@ void pcid_free(uint16_t pcid) {
-     if (pcid == PCID_KERNEL)
-         return;
-     live_clear(pcid);
-+    // Issue #156 (audit S1): a freed PCID is immediately reusable, but the
-+    // freed address space's entries tagged with it survive in the TLB
-+    // (tagged switches no longer flush, and VMM::free_user_pages leaves
-+    // flushing to the caller). Purge them with one same-root CR3 reload
-+    // (NoFlush bit clear, so all PCID-tagged entries are invalidated
-+    // locally); the old table is destroyed right after, so nothing can
-+    // re-cache this ID in the meantime.
-+    if (g_supported)
-+        write_cr3(read_cr3() & ~0xFFFULL);
+diff --git a/src/kernel/time/timer_wheel.cpp b/src/kernel/time/timer_wheel.cpp
+--- a/src/kernel/time/timer_wheel.cpp
++++ b/src/kernel/time/timer_wheel.cpp
+@@ -460,6 +460,12 @@ bool TimerWheel::arm(uint32_t cpu, uint64
+     if (cpu >= CONFIG_MAX_CPUS || callback == nullptr || out == nullptr) {
+         return false;
+     }
++    // SIL3 fail-closed (audit issue #17): production services only the BSP
++    // wheel — Scheduler::on_tick() returns early for APs and ap_tick() has
++    // no TimerWheel hook (spec section 3.4.4 dispatch-only). An armed AP
++    // timer would report success yet never expire, so reject it outright
++    // until AP servicing lands.
++    if (cpu != 0) {
++        return false;
++    }
+     sync::IrqSpinLockGuard guard(lock_);
+     ensure_init_locked();
+     CpuWheel& wheel = wheels_[cpu];
+diff --git a/src/kernel/time/timer_wheel.hpp b/src/kernel/time/timer_wheel.hpp
+--- a/src/kernel/time/timer_wheel.hpp
++++ b/src/kernel/time/timer_wheel.hpp
+@@ -676,7 +676,8 @@ class TimerWheel {
+     /// @brief Arm a one-shot expiry (O(1)).
+     /// Fail-closed: false on invalid cpu, null callback/context-out,
+     /// or a full wheel (caller keeps its fallback; no eviction).
+-    /// @param cpu Owning CPU index (< CONFIG_MAX_CPUS).
++    /// @param cpu Owning CPU index; must be 0 (BSP). Non-BSP CPUs are
++    /// rejected: production never services their wheels (AP dispatch-only).
+     /// @param expiry_ns Absolute expiry in monotonic ns (#16 clock).
+     /// @param callback Expiry callback (non-null).
+     /// @param context Opaque callback context (carries owner identity).
+diff --git a/src/kernel/test/test_timer_wheel.cpp b/src/kernel/test/test_timer_wheel.cpp
+--- a/src/kernel/test/test_timer_wheel.cpp
++++ b/src/kernel/test/test_timer_wheel.cpp
+@@ -288,9 +288,9 @@ JARVIS_TEST(wheel_pop_cap_defers_without_
  }
 
- uint64_t pcid_epoch() {
+ // Runmode: kernel
+-// Testidea: per-CPU wheels are isolated (arm on cpu 1, tick cpu 0).
+-// Input: arm on cpu 1, on_tick cpu 0 past expiry, on_tick cpu 1
+-// Expect: cpu-0 tick silent, cpu-1 tick fires
++// Testidea: non-BSP arm is fail-closed (production never ticks AP wheels).
++// Input: arm on cpu 1, on_tick cpu 1 past expiry
++// Expect: arm false, live_count 0, tick silent, fired == 0
+ // Depends: time::TimerWheel per-CPU routing
+ JARVIS_TEST(wheel_cpu_isolation, "PRE: none | POST: none") {
+     time::TimerWheel::snapshot_reset();
+@@ -303,15 +303,15 @@ JARVIS_TEST(wheel_cpu_isolation, "PRE: no
+                      time::TimerWheel::live_count(CONFIG_MAX_CPUS));
+ #else
++    // Production services only the BSP wheel (Scheduler::on_tick AP
++    // early-return; ap_tick has no wheel hook), so arm() must fail
++    // closed for non-BSP CPUs instead of reporting success without expiry.
+     uint64_t fired = 0;
+     time::TimerWheel::Handle handle{};
+-    JARVIS_ASSERT(time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
+-                                        &fired, &handle));
++    JARVIS_ASSERT(!time::TimerWheel::arm(1, k_base_ns + 50, flag_fire,
++                                         &fired, &handle));
++    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(1));
+     JARVIS_ASSERT_EQ((uint32_t)0,
+-                     time::TimerWheel::on_tick(k_base_ns + 1000, 0));
++                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
+     JARVIS_ASSERT_EQ((uint64_t)0, fired);
+-    JARVIS_ASSERT_EQ((uint64_t)1, time::TimerWheel::live_count(1));
+-    JARVIS_ASSERT_EQ((uint32_t)1,
+-                     time::TimerWheel::on_tick(k_base_ns + 1000, 1));
+-    JARVIS_ASSERT_EQ((uint64_t)1, fired);
+ #endif
+     JARVIS_TEST_PASS();
+ }

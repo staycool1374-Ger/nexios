@@ -47,6 +47,7 @@
 // Issue #158: shootdown queue/quarantine reset (clears lists only;
 // PMM rewind owns any held pages, so no freeing here).
 #include <kernel/memory/tlb_shootdown.hpp>
+#include <kernel/time/timer_wheel.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -792,6 +793,9 @@ void snapshot_restore(const char *test_name) {
     arch::pcid_test_reset();
 #endif
     TlbShootdown::reset();
+    // Reset the event-timer wheel (issue #17) so a test that armed timers
+    // can never leak a live entry or a reusable handle into the next cycle.
+    kernel::time::TimerWheel::snapshot_reset();
     if (corr > 0) {
         Logger::raw_write("[SCHED] corruption_count=");
         Logger::print_dec(corr);

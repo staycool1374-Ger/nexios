@@ -106,6 +106,7 @@ __attribute__((weak)) void register_memory_safety_tests() {}
 __attribute__((weak)) void register_sporadic_server_tests() {}
 __attribute__((weak)) void register_atomic_tests() {}
 __attribute__((weak)) void register_hrt_monotonic_tests() {}
+__attribute__((weak)) void register_timer_wheel_tests() {}
 __attribute__((weak)) void register_cross_arch_tests() {}
 #if defined(CONFIG_ARCH_AARCH64)
 __attribute__((weak)) void register_aarch64_tests() {}

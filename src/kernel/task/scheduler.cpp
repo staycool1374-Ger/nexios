@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
+#include <kernel/time/timer_wheel.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/gdt.hpp>
@@ -1996,6 +1997,15 @@ void Scheduler::on_tick() noexcept {
         }
 #endif
 #endif // CONFIG_DEADLINE_MONITOR_TASK
+
+        // Issue #17: event-timer wheel expiries for this CPU. Pure callee
+        // of the tick (no timer programming, no source reads): now_ns
+        // comes from the #16 monotonic clock. Bounded pop cap; skipped
+        // expiries stay armed for the next tick. Callbacks run under the
+        // outer scheduler_lock_: they must be non-blocking and must not
+        // take scheduler services or reschedule (audit #17 contract).
+        time::TimerWheel::on_tick(arch::Timer::ns_monotonic(),
+                                  sched_cpu());
 
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).
