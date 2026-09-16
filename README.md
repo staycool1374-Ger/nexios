@@ -77,6 +77,46 @@ Most hobby and embedded RTOS projects (FreeRTOS, Zephyr, STK) are **scheduler li
 
 ---
 
+## What's the user's advantage
+
+NexIOS can be used as a rapid application development (RAD) system without re-flashing.
+By streaming user binaries via `rsync` (or a network/serial stream) into an in-memory loop device (`/dev/ram0`), developers achieve sub-second test iterations with complete fault isolation.
+
+### Key Architectural Advantages
+
+* **Zero-Flash Iteration:** No wear on SD cards, no kernel reflashing, zero reboot overhead.
+* **Instant Dynamic Execution:** User-space ELFs are parsed, mapped into 4-level page tables, and assigned explicit CSpace capability domains dynamically.
+* **Hard Fault Isolation:** If a deployed binary triggers a memory fault (e.g., null pointer dereference), the ARM64 MMU traps the exception. The kernel revokes the task's CSpace capabilities and reclaims memory pools while the OS, shell, and loop device remain fully operational.
+
+---
+
+### 1. Build the User Binary
+Compile your C++20 freestanding application against the NexIOS syscall headers using the cross-toolchain:
+
+`aarch64-none-elf-g++ -O2 -std=c++20 -fno-exceptions -fno-rtti -Wl,-T user_task.ld main.cpp -o my_app.elf`
+
+### 2. Stream to RAM-Disk
+Transfer the compiled ELF binary directly to a mounted loop device on the running target:
+
+`rsync -avz --progress my_app.elf nexios@192.168.1.50:/tmp/my_app.elf`
+
+### 3. Execute via POSIX Shell
+Run the application dynamically from the NexIOS console:
+
+`nexios> runelf /tmp/my_app.elf`
+
+### 4. Crash Recovery & Hot-Fix Loop
+If the user application crashes:
+
+`[KERNEL FAULT] Core 1: Data Abort at EL0 (FAR: 0x0000000000000000)`
+`[CSPACE] Revoking capabilities for PID 4...`
+`[REAPER] Task 4 terminated cleanly. Kernel resources reclaimed.`
+`nexios>`
+
+Fix the code on your host, re-run `rsync`, and restart the task from the shell.
+
+---
+
 ## Demo
 
 <p align="center">
