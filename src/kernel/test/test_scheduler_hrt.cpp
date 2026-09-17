@@ -241,6 +241,10 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
 
     auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
     JARVIS_ASSERT(hammer != nullptr);
+    // Pinned FIXED (issue #19): background-hammer interference model is
+    // priority-based; an EDF hammer would starve (earliest + never blocks)
+    // or never run (latest, vacuous pass).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
 
     auto *receiver = TaskControlBlock::create(
         []() {
@@ -259,6 +263,7 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
         },
         20, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     __atomic_store_n(&g_receiver_id, receiver->id, __ATOMIC_RELEASE);
 
     auto *measurer = TaskControlBlock::create(
@@ -316,6 +321,7 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(measurer != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*measurer, SchedPolicy::FIXED));
 
     {
         arch::IrqGuard guard;
@@ -367,6 +373,10 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
 
     auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
     JARVIS_ASSERT(hammer != nullptr);
+    // Pinned FIXED (issue #19): background-hammer interference model is
+    // priority-based; an EDF hammer would starve (earliest + never blocks)
+    // or never run (latest, vacuous pass).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
 
     auto *woken = TaskControlBlock::create(
         []() {
@@ -384,6 +394,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
         },
         30, 10);
     JARVIS_ASSERT(woken != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*woken, SchedPolicy::FIXED));
     woken->user_data = &g_gate;
 
     auto *measurer = TaskControlBlock::create(
@@ -442,6 +453,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
         },
         11, 10);
     JARVIS_ASSERT(measurer != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*measurer, SchedPolicy::FIXED));
 
     {
         arch::IrqGuard guard;

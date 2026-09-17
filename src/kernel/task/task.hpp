@@ -192,6 +192,11 @@ struct TaskTimes {
     uint64_t wcet_ticks;     ///< configured WCET bound (0 = implicit 100%)
 };
 
+/// @brief Dispatch-policy selector (issue #19, global EDF with exemptions).
+///        AUTO (default): finite-deadline non-exempt tasks dispatch EDF,
+///        everything else FIXED.  FIXED/EDF force the class explicitly.
+enum class SchedPolicy { AUTO = 0, FIXED = 1, EDF = 2 };
+
 /// @brief Task control block — represents a single thread of execution.
 /// @note Includes scheduling parameters, register context, and stack info.
 struct TaskControlBlock {
@@ -247,7 +252,9 @@ struct TaskControlBlock {
            base_priority(0), period_ticks(0), deadline_ticks(0),
            deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
            remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
-           exec_stamp_ns(0), wcet_ticks(0), wcet_overrun_fired(false),
+           exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
+           edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
+           in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
@@ -303,6 +310,18 @@ struct TaskControlBlock {
     /// @brief ns_monotonic() sample at the last charge point; the next
     ///        charge bills (now - stamp) (issue #21).
     uint64_t exec_stamp_ns;
+    /// @brief Dispatch class override (issue #19).  AUTO = decided by the
+    ///        eligibility rule (finite deadline + not exempt -> EDF).
+    SchedPolicy sched_policy;
+    /// @brief Exempt from EDF dispatch even with a finite deadline
+    ///        (issue #19 — daemons, harness/PID 1).
+    bool edf_exempt;
+    /// @brief Intrusive links for the per-CPU EDF-ready list (issue #19).
+    ///        A task is in at most one dispatch queue (bitmap or EDF).
+    TaskControlBlock *edf_next_;
+    TaskControlBlock *edf_prev_;
+    /// @brief True while linked in the EDF-ready list (issue #19).
+    bool in_edf_queue_;
     uint64_t
         wcet_ticks; ///< explicit WCET for utilisation calc; 0 = implicit 100%
     bool wcet_overrun_fired; ///< latch to fire WCET handler once per period

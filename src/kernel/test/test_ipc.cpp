@@ -108,6 +108,10 @@ TaskControlBlock *spawn_draining_receiver(uint64_t &recv_ok) {
         11, 10);
     if (receiver == nullptr)
         return nullptr;
+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
+    // order (see callers); EDF would reorder by creation-tick phase.
+    if (!Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED))
+        return nullptr;
     receiver->user_data = &rctx;
     return receiver;
 }
@@ -546,6 +550,9 @@ JARVIS_TEST(ipc_block_sender_adds_to_list, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
@@ -611,6 +618,9 @@ JARVIS_TEST(ipc_wake_sender_removes_from_list, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
@@ -676,6 +686,9 @@ JARVIS_TEST(ipc_wake_sender_terminated, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
@@ -741,6 +754,9 @@ JARVIS_TEST(ipc_wake_sender_restores_priority, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
@@ -804,6 +820,9 @@ JARVIS_TEST(ipc_send_block_full, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
@@ -855,6 +874,8 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): same-period handshake, priority order.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     g_receiver_id = receiver->id;
 
     auto *sender = TaskControlBlock::create(
@@ -872,6 +893,10 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): the handshake below assumes the sender
+    // (prio 12) dispatches before the receiver (prio 11); EDF would order
+    // by creation-tick deadline phase instead.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     // Add both tasks atomically so the timer ISR always sees both ready
     // (preventing the receiver from being scheduled before the sender).
     {
@@ -950,6 +975,9 @@ JARVIS_TEST(ipc_sender_unblocked_on_receiver_exit, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
+    // priority order; EDF deadline order would starve the handshake.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     Scheduler::add_task(*sender);
     Scheduler::reschedule();

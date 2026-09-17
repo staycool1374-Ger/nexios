@@ -946,6 +946,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19: memset already zero
+    tcb->edf_exempt = false;               // (AUTO=0); explicit for clarity
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
     tcb->remaining_ticks = period_ticks;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
@@ -1165,6 +1170,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
+    tcb->edf_exempt = false;
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
     tcb->remaining_ticks = period_ticks;
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
@@ -1357,6 +1367,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
+    tcb->edf_exempt = false;               // no policy inheritance)
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
     tcb->remaining_ticks = parent->remaining_ticks;
     tcb->exit_code = 0;
     tcb->waiting_child_pid = 0;

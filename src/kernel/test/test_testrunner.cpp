@@ -213,11 +213,14 @@ JARVIS_TEST(harness_blocked_sender_wakes,
 
 // Runmode: kernel
 // Testidea: in_ready_queue_ flag after re-enqueue via the real
-// add_task → remove → set_task_ready lifecycle (real dispatch).
+// add_task → remove → set_task_ready lifecycle (real dispatch).  Pinned
+// FIXED (issue #19): the flag under test is bitmap membership, and a
+// periodic task would otherwise dispatch EDF and never set it.
 JARVIS_TEST(harness_snapshot_inrq_consistency,
             "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
     {
         // Register + assert membership atomically: a tick firing between
         // add_task and the assert could dispatch t (prio 11 > harness 10),
@@ -239,6 +242,7 @@ JARVIS_TEST(harness_snapshot_inrq_consistency,
 
     auto *t2 = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(t2 != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t2, SchedPolicy::FIXED));
     {
         // Same atomicity: no tick may dispatch t2 before the membership
         // asserts below (see the t registration above).
@@ -329,9 +333,16 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
     static constexpr uint64_t CYCLES = 20;
 
     for (uint64_t cycle = 0; cycle < CYCLES; ++cycle) {
-        // Simulate the pattern of a typical test: create user tasks
-        auto *sender = TaskControlBlock::create_user([]() {}, 5, 10, 8_KiB);
-        auto *receiver = TaskControlBlock::create_user([]() {}, 5, 10, 8_KiB);
+        // Simulate the pattern of a typical test: create user tasks.
+        // NO_PERIOD (issue #19): these kernel lambdas have no user return
+        // path and must never dispatch (pre-EDF they never ran — worker
+        // prio 11 always won; under EDF an earlier deadline would dispatch
+        // them first and they would spin forever).  They exist only as
+        // page-table owners for the BufferPool free below.
+        auto *sender = TaskControlBlock::create_user(
+            []() {}, 5, TaskControlBlock::NO_PERIOD, 8_KiB);
+        auto *receiver = TaskControlBlock::create_user(
+            []() {}, 5, TaskControlBlock::NO_PERIOD, 8_KiB);
         if (!sender || !receiver)
             continue;
         Scheduler::add_task(*sender);
@@ -508,6 +519,11 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
 
     auto *task = TaskControlBlock::create([]() {}, 5, 10);
     if (!task) { JARVIS_TEST_PASS(); return; }
+    // Pinned FIXED (issue #19): this task is a page-table owner, never a
+    // runner — pre-EDF it never dispatched (harness prio 10 > 5).  Under
+    // global EDF it would run, terminate, and invalidate the Phase 2/4
+    // page-table surgery below.
+    Scheduler::set_sched_policy(*task, SchedPolicy::FIXED);
     // v0.4.0 MP-1: create() already assigned a private kernel-half PML4 —
     // do NOT overwrite it (that would leak the create()-allocated page).
     if (!task->page_table_) { JARVIS_TEST_PASS(); return; }

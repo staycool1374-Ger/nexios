@@ -98,6 +98,9 @@ JARVIS_TEST(preemption_needs_switch_higher_priority, "PRE: none | POST: none") {
 JARVIS_TEST(preemption_needs_switch_equal_priority, "PRE: none | POST: none") {
     auto *equal = TaskControlBlock::create([]() {}, 10, 10);
     JARVIS_ASSERT(equal != nullptr);
+    // Pinned FIXED (issue #19): equal-priority no-switch is a fixed-policy
+    // property; an EDF task would (correctly) preempt a deadline-less task.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*equal, SchedPolicy::FIXED));
     Scheduler::add_task(*equal);
 
     bool result = Scheduler::needs_switch();
@@ -123,6 +126,11 @@ JARVIS_TEST(preemption_needs_switch_blocked_higher, "PRE: none | POST: none") {
 
     auto *child = TaskControlBlock::create(preemption_forever_child_entry, 5, 10);
     JARVIS_ASSERT(child != nullptr);
+    // Pinned FIXED (issue #19): this test proves a BLOCKED higher-priority
+    // task does not force a switch; the forever child must not become an
+    // EDF task (it would correctly preempt and flip the expectation).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
     parent->add_child(child);
     ctx.child_id_ = child->id;
 

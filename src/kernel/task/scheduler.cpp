@@ -302,6 +302,160 @@ static inline bool is_poisoned_block(const void *p) noexcept {
 #endif
 }
 
+// ---------------------------------------------------------------------------
+// EDF dispatch (issue #19 — global EDF with exemptions).
+//
+// A second dispatch queue per CPU holds EDF-eligible tasks ordered by
+// absolute deadline.  A task is in at most one queue (bitmap or EDF);
+// in_edf_queue_/in_ready_queue_ are authoritative.  All ops run under the
+// caller's scheduler_lock_/IRQ-off discipline, mirroring the bitmap path.
+// ---------------------------------------------------------------------------
+/// @brief Per-CPU EDF-ready list head (intrusive, deadline-ordered).
+struct EdfReadyList {
+    TaskControlBlock *head_ = nullptr;
+};
+static EdfReadyList edf_ready_[CONFIG_MAX_CPUS];
+
+/// @brief EDF eligibility (issue #19): explicit EDF forces the class but
+///        still needs a finite deadline (fail-closed); AUTO maps
+///        finite-deadline non-exempt tasks; everything else stays FIXED.
+static bool edf_eligible(const TaskControlBlock &t) noexcept {
+    if (t.deadline_ticks == 0)
+        return false; // I-4: untracked exclusion
+    if (t.period_ticks == 0 ||
+        t.period_ticks == TaskControlBlock::NO_PERIOD)
+        return false;
+    if (t.sched_policy == SchedPolicy::FIXED)
+        return false;
+    if (t.sched_policy == SchedPolicy::EDF)
+        return true;
+    return !t.edf_exempt; // AUTO
+}
+
+/// @brief EDF order: earlier absolute deadline wins; ties break by higher
+///        effective priority, then lower id (deterministic; same-period
+///        tasks dispatch exactly as under fixed priorities).
+static bool edf_earlier(const TaskControlBlock &a,
+                        const TaskControlBlock &b) noexcept {
+    if (a.deadline_ticks != b.deadline_ticks)
+        return a.deadline_ticks < b.deadline_ticks;
+    uint64_t pa = Scheduler::effective_priority(&a);
+    uint64_t pb = Scheduler::effective_priority(&b);
+    if (pa != pb)
+        return pa > pb;
+    return a.id < b.id;
+}
+
+/// @brief Ordered insert into CPU c's EDF list.  Caller guarantees the task
+///        is not already queued (guarded anyway — never double-link).
+static void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
+    if (t.in_edf_queue_)
+        return;
+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
+    TaskControlBlock *prev = nullptr;
+    for (TaskControlBlock *c = l.head_; c != nullptr; c = c->edf_next_) {
+        if (edf_earlier(t, *c))
+            break;
+        prev = c;
+    }
+    t.edf_prev_ = prev;
+    if (prev != nullptr) {
+        t.edf_next_ = prev->edf_next_;
+        prev->edf_next_ = &t;
+    } else {
+        t.edf_next_ = l.head_;
+        l.head_ = &t;
+    }
+    if (t.edf_next_ != nullptr)
+        t.edf_next_->edf_prev_ = &t;
+    t.in_edf_queue_ = true;
+}
+
+/// @brief Unlink from CPU c's EDF list (no-op when not queued).
+static void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
+    if (!t.in_edf_queue_)
+        return;
+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
+    if (t.edf_prev_ != nullptr)
+        t.edf_prev_->edf_next_ = t.edf_next_;
+    else
+        l.head_ = t.edf_next_;
+    if (t.edf_next_ != nullptr)
+        t.edf_next_->edf_prev_ = t.edf_prev_;
+    t.edf_next_ = nullptr;
+    t.edf_prev_ = nullptr;
+    t.in_edf_queue_ = false;
+}
+
+/// @brief Re-sort a queued EDF task after its key changed (deadline re-arm,
+///        priority move).  No-op when not queued.
+static void edf_resort(TaskControlBlock &t) noexcept {
+    if (!t.in_edf_queue_)
+        return;
+    uint64_t cpu = Scheduler::queue_target(t);
+    edf_remove(t, cpu);
+    edf_insert(t, cpu);
+}
+
+/// @brief Re-home a queued task after an eligibility change
+///        (policy/exempt/period).  Caller holds scheduler_lock_.  The
+///        running current task is never queued — it re-routes on its next
+///        enqueue_ready.  Without this, an exempted task stays stranded in
+///        the EDF list (which then evicts it as ineligible) and is never
+///        dispatched again (issue #19 boot wedge).
+static void migrate_dispatch_queue(TaskControlBlock &t) noexcept {
+    if (&t == Scheduler::current_task())
+        return;
+    bool was_queued = t.in_ready_queue_ || t.in_edf_queue_;
+    if (t.in_ready_queue_) {
+        Scheduler::rq_task(t).remove(t, t.rq_priority_);
+        t.in_ready_queue_ = false;
+    }
+    if (t.in_edf_queue_)
+        edf_remove(t, Scheduler::queue_target(t));
+    if (was_queued)
+        Scheduler::enqueue_ready(t);
+}
+
+/// @brief Earliest dispatchable EDF task on the calling CPU, or nullptr.
+///        Lazily drops stale heads (dead/moved/ineligible), mirroring the
+///        bitmap candidate loop in next_task().
+static TaskControlBlock *edf_peek_valid_own() noexcept {
+    uint64_t cpu = Scheduler::sched_cpu();
+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
+    while (l.head_ != nullptr) {
+        TaskControlBlock *c = l.head_;
+        if (c->magic != TaskControlBlock::TCB_MAGIC || !edf_eligible(*c) ||
+            (c->state != TaskState::READY &&
+             c->state != TaskState::RUNNING) ||
+            Scheduler::queue_target(*c) != cpu) {
+            edf_remove(*c, cpu);
+            continue;
+        }
+        return c;
+    }
+    return nullptr;
+}
+
+/// @brief The EDF task that should preempt the current task, or nullptr.
+///        Shared by needs_switch(), next_task() and reschedule() so the
+///        arm and the dispatch decision can never disagree.
+static TaskControlBlock *edf_preempt_candidate() noexcept {
+    TaskControlBlock *e = edf_peek_valid_own();
+    if (e == nullptr)
+        return nullptr;
+    TaskControlBlock *cur = Scheduler::current_task();
+    if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC)
+        return e;
+    if (cur->state != TaskState::READY && cur->state != TaskState::RUNNING)
+        return e;
+    if (!edf_eligible(*cur))
+        return e;
+    if (e != cur && edf_earlier(*e, *cur))
+        return e;
+    return nullptr;
+}
+
 uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
     // FIX(sched-race): t->priority and t->sporadic_server->state_ are plain
     // (non-atomic, non-volatile) fields mutated concurrently by the timer ISR
@@ -370,10 +524,25 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
         }
         target = 0;
     }
+    // Issue #19: EDF-eligible tasks dispatch from the deadline-ordered
+    // list, never the bitmap.  Single routing point — a task is in at
+    // most one queue; cross-queue moves unlink first (S2 guard).
+    if (edf_eligible(task)) {
+        if (task.in_ready_queue_) {
+            rq_for(target).remove(task, task.rq_priority_);
+            task.in_ready_queue_ = false;
+        }
+        edf_insert(task, target);
+        return;
+    }
+    if (task.in_edf_queue_)
+        edf_remove(task, target);
     rq_for(target).enqueue(task, effective_priority(&task));
 }
 
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
+    if (task.in_edf_queue_)
+        edf_remove(task, queue_target(task));
     rq_task(task).remove(task, effective_priority(&task));
 }
 
@@ -386,6 +555,12 @@ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
 // causing missed preemptions or priority inversion.
 void Scheduler::move_priority(TaskControlBlock &task, uint64_t old_prio,
                                uint64_t new_prio) noexcept {
+    // Issue #19: EDF tasks are not bitmap members — re-sort the deadline
+    // list instead (priority feeds the tie-break), never touch the bitmap.
+    if (task.in_edf_queue_) {
+        edf_resort(task);
+        return;
+    }
     rq_task(task).move_priority(task, old_prio, new_prio);
 }
 
@@ -676,7 +851,14 @@ void Scheduler::mailbox_drain() noexcept {
             task->state == TaskState::REAPED)
             continue;
         task->state = TaskState::READY;
-        rq_task(*task).enqueue(*task, effective_priority(task));
+        // Issue #19: route through enqueue_ready so EDF-eligible tasks
+        // land in the deadline list (a direct bitmap enqueue here would
+        // strand an EDF task in the wrong queue).
+        task->in_ready_queue_ = false;
+        task->in_edf_queue_ = false;
+        task->edf_next_ = nullptr;
+        task->edf_prev_ = nullptr;
+        enqueue_ready(*task);
     }
 }
 
@@ -1138,10 +1320,14 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // orphan the task until the next lazy rebuild, causing the calling
     // test's tight `while (state != TERMINATED) reschedule();` loop to
     // constantly dequeue → lazy-rebuild → dequeue (infinite livelock).
-    auto *next = rq_own().peek_highest();
-        if (next && next != &task) {
-            switch_to_task(&task, *next, nullptr);
-        }
+    // Issue #19: consult the EDF queue first — it is invisible to the
+    // bitmap peek, and stranding an EDF successor wedges the same way.
+    auto *next = edf_peek_valid_own();
+    if (next == nullptr)
+        next = rq_own().peek_highest();
+    if (next && next != &task) {
+        switch_to_task(&task, *next, nullptr);
+    }
     }
 }
 
@@ -1154,6 +1340,62 @@ void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
     out.exec_period_ns = task.exec_period_ns;
     out.executed_ticks = task.executed_ticks;
     out.wcet_ticks = task.wcet_ticks;
+}
+
+bool Scheduler::set_sched_policy(TaskControlBlock &task,
+                                 SchedPolicy policy) noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    if (policy == SchedPolicy::EDF) {
+        // Fail-closed: EDF without a finite deadline is meaningless.
+        if (task.period_ticks == 0 ||
+            task.period_ticks == TaskControlBlock::NO_PERIOD ||
+            task.deadline_ticks == 0)
+            return false;
+    }
+    task.sched_policy = policy;
+    // Migrate queue membership to the new eligibility (issue #19).
+    migrate_dispatch_queue(task);
+    return true;
+}
+
+void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    task.edf_exempt = exempt;
+    // Same migration as a policy change: an exempted task must leave the
+    // EDF list for the bitmap (and vice versa), or it is stranded.
+    migrate_dispatch_queue(task);
+}
+
+void Scheduler::assign_deadline_priority(TaskControlBlock &task) noexcept {
+    // Deadline-monotonic: shorter relative deadline (period) maps to a
+    // higher fixed priority.  Log2 compression maps the unbounded period
+    // domain into the DM band; the clamp keeps idle/background (0-1) and
+    // system (121-127) bands intact.  Aperiodic tasks are not assignable.
+    if (task.period_ticks == 0 ||
+        task.period_ticks == TaskControlBlock::NO_PERIOD)
+        return;
+    uint64_t lz = 0;
+    for (uint64_t p = task.period_ticks; (p >> (lz + 1)) > 0 && lz < 63;
+         ++lz) {
+    }
+    uint64_t span = CONFIG_DM_PRIO_MAX - CONFIG_DM_PRIO_MIN;
+    uint64_t prio = (lz >= span)
+                        ? CONFIG_DM_PRIO_MIN
+                        : CONFIG_DM_PRIO_MAX - lz;
+    if (prio == task.priority)
+        return;
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    task.priority = prio;
+    task.base_priority = prio;
+    // Re-bucket (bitmap) or re-sort (EDF tie-break) so the new value
+    // takes effect immediately (FIX rms-o1 contract).
+    if (task.in_edf_queue_)
+        edf_resort(task);
+    else if (task.in_ready_queue_)
+        rq_task(task).move_priority(task, task.rq_priority_, prio);
 }
 
 TaskControlBlock *const Scheduler::ID_TOMBSTONE =
@@ -1286,10 +1528,16 @@ void Scheduler::add_task(TaskControlBlock &task) {
     if (task.period_ticks > 0 && task.deadline_ticks > 0) {
         deadline_list_.insert(task);
     }
+    // Issue #19: route through enqueue_ready so EDF-eligible tasks land in
+    // the deadline-ordered list.  A direct bitmap enqueue here would make
+    // every new deadline task priority-dispatched (EDF silently dead).
     task.in_ready_queue_ = false;
     task.runq_next_ = nullptr;
     task.runq_prev_ = nullptr;
-    rq_task(task).enqueue(task, effective_priority(&task));
+    task.in_edf_queue_ = false;
+    task.edf_next_ = nullptr;
+    task.edf_prev_ = nullptr;
+    enqueue_ready(task);
     kernel::test::ResourceTracker::instance().track_task_add();
 
     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
@@ -1486,6 +1734,13 @@ bool Scheduler::needs_switch() noexcept {
         current->state != TaskState::RUNNING)
         return true;
 
+    // Issue #19: earlier-deadline EDF preemption.  Cross-class comparison
+    // stays priority-based below, so exempt/system tasks keep exact
+    // current behavior — EDF only ADDS a preemption source, never removes
+    // the bitmap one.
+    if (edf_preempt_candidate() != nullptr)
+        return true;
+
     uint64_t cur_eff = effective_priority(current);
     // O(1): check if any higher-priority task exists in the ready queue
     uint64_t highest_ready = rq_own().highest_ready_priority();
@@ -1495,6 +1750,13 @@ bool Scheduler::needs_switch() noexcept {
 TaskControlBlock *Scheduler::next_task() noexcept {
     if (all_tasks_.size() <= 1)
         return own_idle();
+
+    // Issue #19: the EDF candidate agreed with needs_switch() — dispatch
+    // it first so the arm and the decision can never disagree.
+    if (auto *edf_next = edf_preempt_candidate()) {
+        edf_remove(*edf_next, sched_cpu());
+        return edf_next;
+    }
 
     {
         // Issue #25 C1: dequeue from the OWN queue only (no stealing);
@@ -2121,6 +2383,9 @@ void Scheduler::on_tick() noexcept {
                     // Issue #21: new period, fresh budget clock (this
                     // tick was already billed into the old period above).
                     task->exec_period_ns = 0;
+                    // Issue #19: the absolute deadline moved — re-sort a
+                    // queued EDF task so dispatch order tracks it.
+                    edf_resort(*task);
 #if CONFIG_DEADLINE_MISS_DETECTION && !CONFIG_DEADLINE_MONITOR_TASK
                     task->deadline_ticks += task->period_ticks;
                     task->deadline_missed = false;
@@ -2292,8 +2557,10 @@ void Scheduler::on_tick() noexcept {
                     uint64_t old_eff = effective_priority(t);
                     ss->process_replenishments(current_tick);
                     uint64_t new_eff = effective_priority(t);
+                    // Issue #19: route through Scheduler::move_priority so
+                    // EDF-queued tasks re-sort instead of bitmap-moving.
                     if (old_eff != new_eff && t != cur)
-                        rq_task(*t).move_priority(*t, old_eff, new_eff);
+                        Scheduler::move_priority(*t, old_eff, new_eff);
                 }
                 if (t == cur && ss->is_active()) {
                     if (!ss->consume(current_tick)) {
@@ -2562,6 +2829,10 @@ void Scheduler::cleanup_test_tasks() noexcept {
     set_current_ptr(idle_task_);
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         rq_for(c).reset();
+    // Issue #19: drop EDF heads with the bitmaps (queued tasks are dead;
+    // a stale head would dangle at freed blocks).
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        edf_ready_[c].head_ = nullptr;
     quiesce_exit();
 }
 
@@ -3283,8 +3554,14 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         (is_test_active() && harness_task_ptr_ != nullptr &&
          current == harness_task_ptr_ &&
          current->state == TaskState::RUNNING);
+    // Issue #19: EDF urgency overrides harness protection (same
+    // switch_to_task machinery as priority preemption — the harness is
+    // requeued to the bitmap and resumes when the EDF queue drains).
+    // Without this, an EDF-ready task never preempts a spinning harness
+    // once need_resched is clear (bitmap is blind to the EDF queue).
     if (harness_nonpreempt &&
-        !__atomic_load_n(&Scheduler::SwSlots::need_resched(), __ATOMIC_ACQUIRE)) {
+        !__atomic_load_n(&Scheduler::SwSlots::need_resched(), __ATOMIC_ACQUIRE) &&
+        edf_preempt_candidate() == nullptr) {
         uint64_t cur_prio = effective_priority(current);
         uint64_t highest_ready = rq_own().highest_ready_priority();
         if (highest_ready < cur_prio)
@@ -3359,6 +3636,12 @@ void Scheduler::reschedule() noexcept {
     // the switch is deferred (INV-4) and the actual dequeue happens in
     // rate_monotonic_schedule() -> next_task() on the next timer tick.
     auto *next = rq_own().peek_highest();
+    // Issue #19: an EDF arrival preempts even when the bitmap peek shows
+    // nothing better — the bitmap cannot see the EDF queue.  Arm
+    // unconditionally: bitmap-head early returns below (idle/non-READY
+    // head) must never swallow EDF urgency.  A spurious arm is harmless —
+    // next_task() re-validates on the tick.
+    bool edf_preempt = (edf_preempt_candidate() != nullptr);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     {
         IPC_SCHED_TRACE("[RS]", "cur=", current->id, "next=",
@@ -3367,14 +3650,23 @@ void Scheduler::reschedule() noexcept {
                         "nt=", (uint64_t)all_tasks_.size());
     }
 #endif
-    if (!next || next == current)
+    if (edf_preempt) {
+        __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        return;
+    }
+
+    if ((!next || next == current))
         return;
 
-    if (next == own_idle() && current->state == TaskState::RUNNING)
-        return;
+    if (next != nullptr) {
+        if (next == own_idle() && current->state == TaskState::RUNNING)
+            return;
 
-    if (next->state != TaskState::READY && next->state != TaskState::RUNNING)
-        return;
+        if (next->state != TaskState::READY &&
+            next->state != TaskState::RUNNING)
+            return;
+    }
 
     // IrqGuard destructor re-enables IRQs here, allowing the timer ISR to
     // fire and acquire scheduler_lock_ for rate_monotonic_schedule().
@@ -3607,20 +3899,27 @@ void Scheduler::reset_ready_queue() noexcept {
 void Scheduler::rebuild_ready_queue() noexcept {
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         rq_for(c).reset();
+    // Issue #19: EDF heads must reset exactly like the bitmap queues.
+    // Re-inserting below without clearing links the same task twice
+    // (stale neighbor links + fresh insert) — a list cycle that hangs
+    // the timer ISR on its next scan.
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        edf_ready_[c].head_ = nullptr;
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (t->magic != TaskControlBlock::TCB_MAGIC)
             continue;
+        // Clear membership first (enqueue refuses already-flagged nodes).
+        // Issue #19: route through enqueue_ready so EDF-eligible tasks
+        // land in the deadline list, not the bitmap (direct bitmap
+        // enqueue here would corrupt dispatch).
+        t->in_ready_queue_ = false;
+        t->in_edf_queue_ = false;
+        t->runq_next_ = nullptr;
+        t->runq_prev_ = nullptr;
+        t->edf_next_ = nullptr;
+        t->edf_prev_ = nullptr;
         if (t->state == TaskState::READY) {
-            // Clear the flag first: enqueue() (TaskQueue::push_back) refuses to
-            // re-add a node whose flag is already set, which would otherwise
-            // leave the task out of the physical queue while the flag wrongly
-            // claims membership.
-            t->in_ready_queue_ = false;
-            rq_task(*t).enqueue(*t, effective_priority(t));
-        } else {
-            t->in_ready_queue_ = false;
-            t->runq_next_ = nullptr;
-            t->runq_prev_ = nullptr;
+            enqueue_ready(*t);
         }
     }
 }
@@ -3649,6 +3948,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     (void)rq_bitmap_lo;
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         rq_for(c).reset();
+    // Issue #19: EDF heads are rebuilt from membership flags at the end
+    // of restore_task_fields — clear here so no stale head survives.
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+        edf_ready_[c].head_ = nullptr;
 
     {
 #if defined(CONFIG_ARCH_X86_64)
@@ -3728,6 +4031,11 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
         out[idx].rq_priority = t->rq_priority_;
+        out[idx].edf_next = t->edf_next_;
+        out[idx].edf_prev = t->edf_prev_;
+        out[idx].in_edf_queue = t->in_edf_queue_;
+        out[idx].sched_policy = t->sched_policy;
+        out[idx].edf_exempt = t->edf_exempt;
         out[idx].cpu_affinity = t->cpu_affinity;
         out[idx].iopb_slot = t->iopb_slot_;
         ++idx;
@@ -3811,11 +4119,29 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->runq_prev_ = saved[j].runq_prev;
             t->in_ready_queue_ = saved[j].in_ready_queue;
             t->rq_priority_ = saved[j].rq_priority;
+            t->edf_next_ = saved[j].edf_next;
+            t->edf_prev_ = saved[j].edf_prev;
+            t->in_edf_queue_ = saved[j].in_edf_queue;
+            t->sched_policy = saved[j].sched_policy;
+            t->edf_exempt = saved[j].edf_exempt;
             t->cpu_affinity = saved[j].cpu_affinity;
             t->iopb_slot_ = saved[j].iopb_slot;
             break;
         }
         ++t_idx;
+    }
+    // Issue #19: rebuild EDF heads from the restored membership flags.
+    // Order is re-derived by ordered insert (deterministic function of the
+    // keys); bitmap heads come from restore_pod(), EDF has no POD — the
+    // flags are authoritative.
+    for (auto *t = all_tasks_.first_ptr(); t;
+         t = all_tasks_.next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC || !t->in_edf_queue_)
+            continue;
+        t->in_edf_queue_ = false; // edf_insert refuses flagged nodes
+        t->edf_next_ = nullptr;
+        t->edf_prev_ = nullptr;
+        edf_insert(*t, queue_target(*t));
     }
 }
 

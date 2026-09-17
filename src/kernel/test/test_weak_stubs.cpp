@@ -109,6 +109,7 @@ __attribute__((weak)) void register_atomic_tests() {}
 __attribute__((weak)) void register_hrt_monotonic_tests() {}
 __attribute__((weak)) void register_timer_wheel_tests() {}
 __attribute__((weak)) void register_task_metering_tests() {}
+__attribute__((weak)) void register_sched_edf_tests() {}
 __attribute__((weak)) void register_cross_arch_tests() {}
 #if defined(CONFIG_ARCH_AARCH64)
 __attribute__((weak)) void register_aarch64_tests() {}

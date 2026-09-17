@@ -180,6 +180,9 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
+    // order; EDF would order by creation-tick deadline phase.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     receiver->state = TaskState::BLOCKED;
     Scheduler::register_task(*receiver);
 
@@ -218,6 +221,9 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
         },
         20, 10);
     JARVIS_ASSERT(high != nullptr);
+    // Pinned FIXED (issue #19): must preempt the polling receiver by
+    // priority; EDF would not preempt an earlier-deadline receiver.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
     high->user_data = &sctx;
     Scheduler::add_task(*high);
     Scheduler::reschedule();
@@ -402,6 +408,8 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(low != nullptr);
+    // Pinned FIXED (issue #19): see ipc_priority_inversion above.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
     low->state = TaskState::BLOCKED;
     Scheduler::register_task(*low);
 
@@ -437,6 +445,9 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
         },
         20, 10);
     JARVIS_ASSERT(high != nullptr);
+    // Pinned FIXED (issue #19): must preempt the polling receiver by
+    // priority; EDF would not preempt an earlier-deadline receiver.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
     high->user_data = &sctx;
     Scheduler::add_task(*high);
     Scheduler::reschedule();

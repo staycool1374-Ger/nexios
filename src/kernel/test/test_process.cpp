@@ -370,10 +370,15 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
 JARVIS_TEST(process_cleanup_removes_from_parent, "PRE: none | POST: none") {
     auto *parent = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(parent != nullptr);
+    // Pinned FIXED (issue #19): fixtures must not dispatch mid-body
+    // (pre-EDF prio 5 never preempted the harness); an EDF dispatch would
+    // terminate them and corrupt the list asserts below.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
     Scheduler::add_task(*parent);
 
     auto *child = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
 
     parent->add_child(child);
     JARVIS_ASSERT_EQ(1ULL, parent->num_children);

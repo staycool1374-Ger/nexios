@@ -186,9 +186,13 @@ TEST_CLASS(IpcConcurrentSenders) {
     // (ipc.cpp:244) wakes ANY BLOCKED destination, so a gate-blocked receiver
     // is woken by the first sender, self-terminates, and leaves a freed TCB in
     // the semaphore waiter list (ROADMAP v0.3.9 teardown gap).  A forever task
-    // is never BLOCKED, so sends never spuriously wake it.
+    // is never BLOCKED, so sends never spuriously wake it.  Pinned FIXED
+    // (issue #19): an EDF forever task with the earliest deadline would
+    // starve the bounded senders (correct EDF — unbounded tasks need
+    // admission, #20); the senders stay EDF and preempt it by urgency.
     auto *receiver = kernel::test::create_forever_task(11, 10, "recv-container");
     CT_ASSERT(receiver != nullptr);
+    CT_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     Scheduler::reschedule();
     uint64_t recv_id = receiver->id;
 
@@ -435,11 +439,14 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
     // under one arch::IrqGuard.  The receiver uses an EMPTY lambda — it must
     // NOT block on a gate: a gate-blocked task stays physically in the ready
     // queue (INV-2, Semaphore::wait never dequeues) and the scheduler
-    // re-selects it, producing the H2-family runq desync.  The sender (prio
-    // 12) runs first, blocks on the full queue; the receiver then runs its
-    // empty lambda to termination, whose cleanup wakes the blocked sender.
+    // re-selects it, producing the H2-family runq desync.  Pinned FIXED
+    // (issue #19): the sender (prio 12) must run first and block on the
+    // full queue; EDF would order by creation-tick deadline phase and
+    // could dispatch the receiver first (terminating it before the
+    // sender blocks, hanging the handshake below).
     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
     CT_ASSERT(receiver != nullptr);
+    CT_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
 
     // Fill the receiver's queue so a real sender blocks.
     Message fill{};
@@ -475,6 +482,7 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
         },
         12, 10);
     CT_ASSERT(sender != nullptr);
+    CT_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
     {
         arch::IrqGuard _guard;
@@ -526,12 +534,17 @@ TEST_CLASS(IpcPriorityOrderedWake) {
         self->msg_queue.push(fill);
 
     // 3 senders at distinct priorities (higher number = more urgent).
+    // Pinned FIXED (issue #19): this test proves PRIORITY-ordered wakeup —
+    // EDF would order the same-period senders by deadline phase instead.
     auto *hi = TaskControlBlock::create(ipc_prio_sender_entry, 16, 10);
     auto *mid = TaskControlBlock::create(ipc_prio_sender_entry, 14, 10);
     auto *lo = TaskControlBlock::create(ipc_prio_sender_entry, 12, 10);
     JARVIS_ASSERT(hi != nullptr);
     JARVIS_ASSERT(mid != nullptr);
     JARVIS_ASSERT(lo != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hi, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*mid, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*lo, SchedPolicy::FIXED));
     hi->user_data = &s_wake_flags[0];
     mid->user_data = &s_wake_flags[1];
     lo->user_data = &s_wake_flags[2];

@@ -130,6 +130,9 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): handshake choreography assumes priority
+    // order (sender prio 12 first).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     g_receiver_id = receiver->id;
 
     auto *sender = TaskControlBlock::create(
@@ -150,6 +153,7 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     JARVIS_ASSERT(sender->is_user_ == false); // kernel task (MP-1)
 
     {
@@ -192,6 +196,8 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
     // message arrives — the sender delivers before blocking in send_sync, so
     // hlt is immediately woken; replies to the sender each round.  hlt (not a
     // bounded spin) lets the timer ISR dispatch the sender between rounds.
+    // Pinned FIXED (issue #19): 100-round choreography assumes priority
+    // order; EDF deadline phase would desync the rendezvous.
     auto *receiver = TaskControlBlock::create(
         []() {
             for (uint64_t i = 0; i < 100; ++i) {
@@ -209,6 +215,8 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
             g_receiver_done = 1;
         },
         11, 10);
+    JARVIS_ASSERT(receiver != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
 
     // Sender (prio 12): send_sync blocks the sender each round (kernel
     // reply-wait), so the receiver is dispatched, replies, and the sender
@@ -231,6 +239,7 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     JARVIS_ASSERT(receiver != nullptr);
     g_receiver_id = receiver->id;
 

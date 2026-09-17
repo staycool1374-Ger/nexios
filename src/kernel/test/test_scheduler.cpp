@@ -77,6 +77,9 @@ JARVIS_TEST(scheduler_task_count, "PRE: none | POST: none") {
 
     auto *new_task = TaskControlBlock::create([]() {}, 1, 10);
     JARVIS_ASSERT(new_task != nullptr);
+    // Pinned FIXED (issue #19): fixture must not dispatch mid-body (see
+    // scheduler_remove_task below).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*new_task, SchedPolicy::FIXED));
     Scheduler::add_task(*new_task);
     JARVIS_ASSERT_EQ(cnt_before + 1, Scheduler::task_count());
 
@@ -164,6 +167,10 @@ JARVIS_TEST(scheduler_remove_task, "PRE: none | POST: none") {
 
     auto *new_task = TaskControlBlock::create([]() {}, 1, 10);
     JARVIS_ASSERT(new_task != nullptr);
+    // Pinned FIXED (issue #19): this fixture must not dispatch mid-body
+    // (pre-EDF prio 1 never preempted the harness); an EDF dispatch would
+    // terminate it and corrupt the count asserts below.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*new_task, SchedPolicy::FIXED));
     Scheduler::add_task(*new_task);
     JARVIS_ASSERT_EQ(cnt_before + 1, Scheduler::task_count());
 
@@ -218,6 +225,12 @@ JARVIS_TEST(scheduler_preemptive_priority, "PRE: none | POST: none") {
 
     auto *high = TaskControlBlock::create([]() {}, 15, 5);
     JARVIS_ASSERT(high != nullptr);
+
+    // Pinned FIXED (issue #19): this test proves priority selection through
+    // next_task(); same-period tasks would otherwise order by creation-tick
+    // deadline phase under EDF.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
 
     // IRQs off across both add_task calls + next_task(): both empty-lambda
     // tasks must stay READY in the queue.  A timer ISR dispatching either one

@@ -75,8 +75,10 @@ JARVIS_TEST(ipc_receive_was_blocked_restores_state, "PRE: none | POST: none") {
 // Testidea: Verifies that IPC::send_sync() restores the was_blocked flag
 // correctly. Input: Create sender and receiver tasks. Sender calls send_sync,
 // receiver replies. Expect: was_blocked flag is set during blocking, restored
-// to READY after reply. Depends: kernel::IPC, kernel::MessageQueue,
-// kernel::Scheduler
+// to READY after reply. The sender runs first deterministically under BOTH
+// policies (fixed: prio 12 > 11; EDF: shorter period ⇒ earlier deadline,
+// issue #19) so the receiver's bounded poll always finds the message.
+// Depends: kernel::IPC, kernel::MessageQueue, kernel::Scheduler
 JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
             "PRE: none | POST: none") {
     static uint64_t g_receiver_id = 0;
@@ -118,7 +120,11 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
             JARVIS_ASSERT(ok);
             JARVIS_ASSERT_EQ(99ULL, reply.type);
         },
-        12, 10);
+        // Shorter period than the receiver (10): the sender runs first
+        // deterministically under EDF (earlier deadline) as well as under
+        // fixed priorities (12 > 11) — issue #19.  Same-period tasks would
+        // order by creation-tick phase under EDF and flake the handshake.
+        12, 5);
     JARVIS_ASSERT(sender != nullptr);
 
     // Register both cooperating tasks under one IrqGuard so a timer tick
@@ -132,9 +138,10 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
     auto *original = Scheduler::current_task();
     // Yield to the *receiver* (not the sender): next_task() skips whatever is
     // current_task_ptr_, so yielding to the receiver makes next_task() return
-    // the higher-priority sender (prio 12 > 11), which runs first, sends, and
-    // blocks; the receiver then runs and replies.  Yielding to the sender would
-    // set it current and get it skipped+discarded, deadlocking the handshake.
+    // the sender first — by priority (12 > 11) and by deadline (period 5 < 10,
+    // issue #19).  The sender sends and blocks; the receiver then runs and
+    // replies.  Yielding to the sender would set it current and get it
+    // skipped+discarded, deadlocking the handshake.
     kernel::test::yield_as(*receiver);
 
     // Drive the sender→receiver→sender handshake to completion.  A single

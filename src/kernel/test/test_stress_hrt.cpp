@@ -184,6 +184,10 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
     // net-zero memory/IPC activity — every allocation is paired with its free,
     // every IPC send is a self-roundtrip released before the next.  When off:
     // idle (hlt) so phase A is unperturbed.  Exits when g_rt_done is set.
+    // Pinned FIXED (issue #19): the test measures interference from a
+    // LOW-priority background hammer — a priority-interference model.  As an
+    // EDF task it would either starve the RT pair (earliest deadline +
+    // never blocks) or never run (latest deadline, vacuous pass).
     auto *hammer = TaskControlBlock::create(
         []() {
             while (__atomic_load_n(&g_rt_done, __ATOMIC_ACQUIRE) == 0) {
@@ -212,6 +216,7 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
         },
         1, 10);
     JARVIS_ASSERT(hammer != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
 
     // Receiver (prio 29): replies to every RT request.
     auto *receiver = TaskControlBlock::create(
@@ -231,6 +236,9 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
         },
         29, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED with the hammerer below (issue #19): the RT pair must
+    // preempt by priority, not by deadline phase.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     __atomic_store_n(&g_receiver_id, receiver->id, __ATOMIC_RELEASE);
 
     // RT task (prio 30): phase A baseline (hammerer off), phase B stress
@@ -295,6 +303,7 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
         },
         30, 10);
     JARVIS_ASSERT(rt != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*rt, SchedPolicy::FIXED));
 
     {
         arch::IrqGuard guard;

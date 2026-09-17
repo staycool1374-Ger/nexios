@@ -522,6 +522,11 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
     tcb->exec_ns_total = 0;
     tcb->exec_period_ns = 0;
     tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
+    tcb->edf_exempt = false;
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
     tcb->remaining_ticks = 0;
     tcb->deadline_ticks = arch::Timer::ticks();
     tcb->page_table_ = 0;

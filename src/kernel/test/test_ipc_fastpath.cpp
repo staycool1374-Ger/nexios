@@ -152,8 +152,12 @@ TaskControlBlock *spawn_fast_receiver(FastIpcCtx &ctx) {
             c->payload_[5] = frame.word(5);
         },
         11, 10);
-    if (t)
+    if (t) {
+        // Pinned FIXED (issue #19): fast-path rendezvous assumes priority
+        // order (see callers).
+        Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
         t->user_data = &ctx;
+    }
     return t;
 }
 
@@ -446,6 +450,8 @@ JARVIS_TEST(fast_send_sync_oversized_reply_stays_queued,
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): same-period handshake, priority order.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
 
     auto *receiver = TaskControlBlock::create(
@@ -531,12 +537,16 @@ JARVIS_TEST(fast_send_full_queue_blocks, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): the woken sender (prio 12) must preempt
+    // the infinite-loop receiver; EDF would starve it (later deadline).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     fill_queue(*receiver);
     register_blocked_receiver(*receiver);
     sctx.peer_id_ = receiver->id;
 
     auto *sender = spawn_fast_sender(sctx);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     Scheduler::add_task(*sender);
     Scheduler::reschedule();
     while (sender->state != TaskState::BLOCKED)
@@ -635,6 +645,8 @@ JARVIS_TEST(fast_send_sync_roundtrip, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): same-period handshake, priority order.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
 
     auto *receiver = TaskControlBlock::create(
         []() {
@@ -665,6 +677,8 @@ JARVIS_TEST(fast_send_sync_roundtrip, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): same-period handshake, priority order.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     sctx.peer_id_ = receiver->id;
     sender->user_data = &sctx;
     receiver->user_data = &rctx;
@@ -850,6 +864,8 @@ JARVIS_TEST(fast_hybrid_mixed_queue, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    // Pinned FIXED (issue #19): same-period handshake, priority order.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
 
     {

@@ -244,6 +244,13 @@ JARVIS_TEST(o1_scheduler_dequeues_highest, "PRE: none | POST: none") {
     SimpleTaskPtr high(TaskControlBlock::create([]() {}, 15, 20));
     JARVIS_ASSERT(low && high);
 
+    // This test targets the O(1) BITMAP dispatcher specifically: pin both
+    // tasks FIXED so global EDF (issue #19) does not reorder them by
+    // creation-tick deadline phase.  Same-period tasks would otherwise
+    // dispatch by deadline skew instead of priority.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
+
     // Register AND select under one IrqGuard (cookbook Rule 2): a timer tick
     // between add_task and next_task would dispatch the prio-15 empty-lambda
     // task (self-terminates), so next_task() then returns idle.

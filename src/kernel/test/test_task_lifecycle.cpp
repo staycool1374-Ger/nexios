@@ -110,6 +110,9 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
     // sender blocks (the same registration-ordering rule as the waitpid test).
     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
+    // order; EDF would order by creation-tick deadline phase.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
 
     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {
         kernel::Message fill_msg{};
@@ -143,6 +146,7 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
 
     // Register both under an IRQ guard so the timer cannot dispatch the
@@ -211,9 +215,12 @@ JARVIS_TEST(task_reparent_preserves_resources, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent != nullptr);
 
     // Child below harness priority (10) so it stays READY-but-orphaned while
-    // the parent (prio 11) runs and self-terminates.
+    // the parent (prio 11) runs and self-terminates.  Pinned FIXED
+    // (issue #19): this priority choreography is the test's premise.
     auto *child = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
     parent->add_child(child);
     JARVIS_ASSERT(parent->num_children == 1);
 
@@ -378,6 +385,9 @@ JARVIS_TEST(task_cleanup_frees_msg_queue_with_blocked_senders,
     // tick can dispatch the receiver before the sender blocks.
     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
+    // order; EDF would order by creation-tick deadline phase.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
 
     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {
         Message fill_msg{};
@@ -411,6 +421,7 @@ JARVIS_TEST(task_cleanup_frees_msg_queue_with_blocked_senders,
         },
         12, 10);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
     sender->user_data = &sctx;
 
     {

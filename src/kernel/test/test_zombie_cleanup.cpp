@@ -45,6 +45,10 @@ static void self_term_entry() {
 JARVIS_TEST(test_release_zombie_self, "PRE: none | POST: none") {
     auto *task = TaskControlBlock::create(self_term_entry, 20, 10);
     JARVIS_ASSERT(task != nullptr);
+    // Pinned FIXED (issue #19): dispatches by priority exactly as pre-EDF
+    // (20 > harness 10); EDF would also dispatch it but the zombie-count
+    // asserts below assume no mid-test double-append races.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*task, SchedPolicy::FIXED));
     Scheduler::add_task(*task);
 
     for (int h = 0; h < 50 && task->state != TaskState::TERMINATED; ++h) {
@@ -73,6 +77,10 @@ JARVIS_TEST(test_zombie_starvation_watchdog, "PRE: none | POST: none") {
     for (uint64_t i = 0; i < COUNT; ++i) {
         tasks[i] = TaskControlBlock::create([]() {}, 5, 10);
         JARVIS_ASSERT(tasks[i] != nullptr);
+        // Pinned FIXED (issue #19): counting fixtures must not dispatch
+        // mid-loop (see zombie_drain_multiple above).
+        JARVIS_ASSERT(
+            Scheduler::set_sched_policy(*tasks[i], SchedPolicy::FIXED));
         Scheduler::add_task(*tasks[i]);
     }
     for (uint64_t i = 0; i < COUNT; ++i)
@@ -130,6 +138,11 @@ JARVIS_TEST(zombie_drain_multiple, "PRE: none | POST: none") {
     for (uint64_t i = 0; i < 3; ++i) {
         tasks[i] = TaskControlBlock::create([]() {}, 5, 10);
         JARVIS_ASSERT(tasks[i] != nullptr);
+        // Pinned FIXED (issue #19): counting fixtures must not dispatch
+        // mid-loop (an EDF dispatch would self-terminate them and the
+        // loop's terminate() would double-append zombies).
+        JARVIS_ASSERT(
+            Scheduler::set_sched_policy(*tasks[i], SchedPolicy::FIXED));
         Scheduler::add_task(*tasks[i]);
     }
 

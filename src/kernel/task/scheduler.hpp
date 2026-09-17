@@ -207,6 +207,23 @@ class Scheduler {
     ///        first when it is the running task so the sample includes time
     ///        up to the call (charge-before-read).
     static void read_times(TaskControlBlock &task, TaskTimes &out) noexcept;
+    /// @brief Force a task's dispatch class (issue #19, global EDF with
+    ///        exemptions).  EDF without a finite deadline is refused
+    ///        (fail-closed).  Migrates live queue membership to the new
+    ///        eligibility; the running current re-routes on next enqueue.
+    /// @return True on success, false when EDF was requested without a
+    ///         finite deadline.
+    static bool set_sched_policy(TaskControlBlock &task,
+                                 SchedPolicy policy) noexcept;
+    /// @brief Exempt (or un-exempt) a task from EDF dispatch (issue #19).
+    ///        Migrates live queue membership like set_sched_policy, so a
+    ///        task exempted after queueing is never stranded.
+    static void set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept;
+    /// @brief Deadline-monotonic priority assignment (issue #19): shorter
+    ///        relative deadline maps to a higher fixed priority inside the
+    ///        DM band (CONFIG_DM_PRIO_MIN..MAX).  Aperiodic tasks are not
+    ///        assignable (no-op).  Re-buckets/re-sorts immediately.
+    static void assign_deadline_priority(TaskControlBlock &task) noexcept;
     /// @brief True for real-time tasks (strict period set, issue #61).
     ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
     static bool is_rt_task(const TaskControlBlock &task) noexcept;
@@ -524,6 +541,14 @@ class Scheduler {
         TaskControlBlock *runq_prev;
         bool in_ready_queue;
         uint64_t rq_priority;
+        /// @brief EDF-ready intrusive list pointers + membership (issue
+        ///        #19, POD copy — same in-place rationale as runq links).
+        TaskControlBlock *edf_next;
+        TaskControlBlock *edf_prev;
+        bool in_edf_queue;
+        /// @brief Dispatch policy + exemption (issue #19).
+        SchedPolicy sched_policy;
+        bool edf_exempt;
         /// @brief CPU affinity bitmask (issue #25 C1).
         uint64_t cpu_affinity;
         uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
@@ -692,14 +717,19 @@ class Scheduler {
     }
     /// @brief True when t is physically queued on CPU c's ready queue
     ///        (issue #25 C1 test accessor; scans c's buckets, no mutation).
+    ///        Issue #19: also true for EDF-queued tasks (deadline list,
+    ///        per-CPU by affinity target) — placement is queue-agnostic.
     static bool is_queued_on(const TaskControlBlock &t, uint64_t cpu) noexcept {
-        if (!t.in_ready_queue_)
+        if (t.in_ready_queue_) {
+            const ReadyQueueManager &rq = ready_queues_[cpu % CONFIG_MAX_CPUS];
+            for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p) {
+                if (rq.queue(p).contains(t))
+                    return true;
+            }
             return false;
-        const ReadyQueueManager &rq = ready_queues_[cpu % CONFIG_MAX_CPUS];
-        for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p) {
-            if (rq.queue(p).contains(t))
-                return true;
         }
+        if (t.in_edf_queue_)
+            return queue_target(t) == (cpu % CONFIG_MAX_CPUS);
         return false;
     }
     /// @brief Current task on CPU c (issue #25 C1 test accessor).

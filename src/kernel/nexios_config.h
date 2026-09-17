@@ -984,6 +984,17 @@
 #define CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE 0
 #endif
 
+/// Deadline-monotonic priority band for assign_deadline_priority()
+/// (issue #19).  DM maps shorter relative deadlines to higher priorities
+/// within [MIN, MAX]; 0-1 stay idle/background-adjacent, 121-127 stay
+/// reserved for system tasks (deadline monitor runs at 127).
+#ifndef CONFIG_DM_PRIO_MIN
+#define CONFIG_DM_PRIO_MIN 2
+#endif
+#ifndef CONFIG_DM_PRIO_MAX
+#define CONFIG_DM_PRIO_MAX 120
+#endif
+
 /// Decouple deadline scanning from the timer ISR via a dedicated watchdog task.
 /// When >0, scheduler spawns [deadline-mon] at priority 127 during init().
 /// The monitor waits on an atomic flag (lock-free handoff) and calls

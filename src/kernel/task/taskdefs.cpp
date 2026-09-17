@@ -311,6 +311,10 @@ void reboot_from_table() {
                     task->init_sporadic_server(def.ss_budget, def.ss_period,
                                                def.ss_bg_prio,
                                                def.ss_budget_granularity);
+                    // Issue #19: daemon servers stay priority-dispatched
+                    // (exempt from global EDF) — their IPC latency budget
+                    // is governed by fixed priorities + admission (#20).
+                    Scheduler::set_edf_exempt(*task, true);
                 }
             }
             break;
@@ -358,6 +362,11 @@ void reboot_from_table() {
         auto *init_task = Scheduler::find_task(1);
         if (init_task) {
             Scheduler::set_harness_task(init_task);
+            // Issue #19: PID 1 stays priority-dispatched (exempt from
+            // global EDF) — preserves the BUGS#021 non-preemption guard
+            // under the new dispatcher.  Migrates the live queue
+            // membership (init was EDF-queued at add_task time).
+            Scheduler::set_edf_exempt(*init_task, true);
         }
     }
 
