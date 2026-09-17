@@ -31,17 +31,22 @@ static constexpr uint64_t SPRIO_INVALID = ~0ULL;
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
-                          uint64_t bg_prio,
-                          uint64_t budget_granularity) noexcept {
-    budget_c_ = budget_c;
-    period_t_ = period_t;
+                          uint64_t bg_prio, uint64_t budget_granularity,
+                          ServerMode mode) noexcept {
+    // Fail-safe clamps (noexcept: no error return): a zero period would
+    // break replenishment timing downstream; budget above period is
+    // unadmittable (taskdefs validate_all rejects it at the table).
+    period_t_ = (period_t > 0) ? period_t : 1;
+    budget_c_ = (budget_c <= period_t_) ? budget_c : period_t_;
     base_priority_ = SPRIO_INVALID; // caller should set externally
     bg_priority_ = bg_prio;
     budget_granularity_ = (budget_granularity > 0) ? budget_granularity : 1;
-    budget_remaining_ = budget_c;
+    mode_ = mode;
+    budget_remaining_ = budget_c_;
     consumed_since_active_ = 0;
     activation_time_ = 0;
     consume_counter_ = 0;
+    last_periodic_tick_ = 0;
     state_ = IDLE;
     replenishment_head_ = 0;
     replenishment_tail_ = 0;
@@ -50,10 +55,14 @@ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
 }
 
 void SporadicServer::on_activation(uint64_t now) noexcept {
-    if (state_ != IDLE)
-        return;
-
-    // Server was idle — a new aperiodic job has arrived.
+    if (state_ == EXHAUSTED)
+        return; // budget gone: stays demoted until replenished (all modes).
+    if (state_ == ACTIVE)
+        return; // already handling work (all modes preserve budget here).
+    // IDLE -> ACTIVE.  DEFERRABLE preserves budget_remaining_ across idle
+    // (no reset — that is the deferrable trade-off, documented in the
+    // header); SPORADIC likewise runs on whatever budget is present.
+    // BACKGROUND records work-present only (priority never promotes).
     state_ = ACTIVE;
     activation_time_ = now;
     consumed_since_active_ = 0;
@@ -70,8 +79,11 @@ void SporadicServer::on_completion(uint64_t now) noexcept {
     if (state_ != ACTIVE)
         return;
 
-    // Server goes idle — schedule a replenishment for what was consumed.
-    if (consumed_since_active_ > 0) {
+    // SPORADIC: schedule a replenishment for what was consumed.
+    // DEFERRABLE/BACKGROUND: no per-completion replenishment — the periodic
+    // top-up in process_replenishments() restores to full C at period
+    // boundaries, and preserved budget carries across idle by design.
+    if (mode_ == ServerMode::SPORADIC && consumed_since_active_ > 0) {
         schedule_replenishment(activation_time_ + period_t_,
                                consumed_since_active_);
     }
@@ -110,8 +122,11 @@ bool SporadicServer::consume(uint64_t now) noexcept {
     consumed_since_active_++;
 
     if (budget_remaining_ == 0) {
-        // Budget exhausted — schedule replenishment and drop to background.
-        if (consumed_since_active_ > 0) {
+        // Budget exhausted — SPORADIC schedules its replenishment and drops
+        // to background; DEFERRABLE/BACKGROUND rely on the periodic top-up
+        // in process_replenishments() (no per-exhaustion ring entry, so the
+        // top-up stays the single restore path and accounting stays exact).
+        if (mode_ == ServerMode::SPORADIC && consumed_since_active_ > 0) {
             schedule_replenishment(activation_time_ + period_t_,
                                    consumed_since_active_);
         }
@@ -126,6 +141,29 @@ bool SporadicServer::consume(uint64_t now) noexcept {
 }
 
 void SporadicServer::process_replenishments(uint64_t now) noexcept {
+    // DEFERRABLE/BACKGROUND periodic top-up (issue #22): restore to full C
+    // at every period boundary instead of per-activation replenishment.
+    // Bounded catch-up (≤2 periods) so a long stall cannot loop; the ring
+    // below stays empty for these modes (no double restore).
+    if (mode_ != ServerMode::SPORADIC && period_t_ > 0 &&
+        now >= last_periodic_tick_ + period_t_) {
+        uint64_t steps = 0;
+        while (now >= last_periodic_tick_ + period_t_ && steps < 2) {
+            last_periodic_tick_ += period_t_;
+            ++steps;
+        }
+        budget_remaining_ = budget_c_;
+        if (state_ == EXHAUSTED) {
+            // M-8 parity: only EXHAUSTED may leave its state here; IDLE
+            // without work stays IDLE (else the next on_activation, which
+            // requires IDLE, would stall — same hazard as the SS path).
+            // ACTIVE stays ACTIVE (budget restored mid-burst).
+            state_ = ACTIVE;
+#if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK
+            sporadic_server_deadline_handler(this, 1);
+#endif
+        }
+    }
     while (replenishment_count_ > 0) {
         Replenishment r = replenishments_[replenishment_head_];
         if (r.time > now)

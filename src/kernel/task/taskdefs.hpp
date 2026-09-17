@@ -24,6 +24,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <kernel/task/sporadic_server.hpp>
 
 namespace kernel {
 namespace task {
@@ -70,6 +71,11 @@ struct TaskDef {
     size_t user_stack_size; ///< for USER_ELF (0 = default 32_KiB)
 
     bool is_shell; ///< call Scheduler::set_shell_task after creation
+
+    ServerMode ss_mode = ServerMode::SPORADIC; ///< server discipline
+                                              ///< (issue #22; trailing so
+                                              ///< existing rows keep binding;
+                                              ///< default = SPORADIC)
 };
 
 /// @brief Kills all tasks (except idle), spawns the system from g_task_defs[],

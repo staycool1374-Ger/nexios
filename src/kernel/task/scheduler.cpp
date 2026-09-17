@@ -319,6 +319,10 @@ static EdfReadyList edf_ready_[CONFIG_MAX_CPUS];
 /// @brief EDF eligibility (issue #19): explicit EDF forces the class but
 ///        still needs a finite deadline (fail-closed); AUTO maps
 ///        finite-deadline non-exempt tasks; everything else stays FIXED.
+///        Issue #22: BACKGROUND-server tasks never enter EDF — they are
+///        idle-time only by contract and must not preempt by deadline
+///        (they dispatch at bg priority via the bitmap when nothing else
+///        is ready; daemons additionally carry edf_exempt from spawn).
 static bool edf_eligible(const TaskControlBlock &t) noexcept {
     if (t.deadline_ticks == 0)
         return false; // I-4: untracked exclusion
@@ -326,6 +330,9 @@ static bool edf_eligible(const TaskControlBlock &t) noexcept {
         t.period_ticks == TaskControlBlock::NO_PERIOD)
         return false;
     if (t.sched_policy == SchedPolicy::FIXED)
+        return false;
+    if (t.get_sporadic_server() != nullptr &&
+        t.get_sporadic_server()->is_background())
         return false;
     if (t.sched_policy == SchedPolicy::EDF)
         return true;
@@ -1479,6 +1486,19 @@ Scheduler::check_wcet_locked(const TaskControlBlock &t) noexcept {
     return errors::SCHED_ERR_OK;
 }
 
+/// @brief Frozen admission numerator (issues #20/#22): explicit WCET, else
+///        the attached server's max budget C (mode-agnostic — SPORADIC,
+///        DEFERRABLE and BACKGROUND all expose C via max_budget(), so
+///        server budgets count identically without any gate change), else
+///        remaining_ticks.  Caller guarantees t is non-exempt (period > 0).
+static uint64_t server_budget_for_admission(const TaskControlBlock &t) noexcept {
+    if (t.wcet_ticks > 0)
+        return t.wcet_ticks;
+    if (t.get_sporadic_server() != nullptr)
+        return t.get_sporadic_server()->max_budget();
+    return t.remaining_ticks;
+}
+
 errors::SchedulerError Scheduler::admission_check_locked(
     const TaskControlBlock &candidate, uint64_t *out_util,
     uint32_t *out_bound) noexcept {
@@ -1510,21 +1530,11 @@ errors::SchedulerError Scheduler::admission_check_locked(
         if (admission_exempted(*t))
             continue;
         ++real_tasks;
-        uint64_t wcet =
-            t->wcet_ticks > 0
-                ? t->wcet_ticks
-                : (t->get_sporadic_server()
-                       ? t->get_sporadic_server()->max_budget()
-                       : t->remaining_ticks);
+        uint64_t wcet = server_budget_for_admission(*t);
         total_util += (wcet * 1000000) / t->period_ticks;
     }
     ++real_tasks;
-    uint64_t cwcet =
-        candidate.wcet_ticks > 0
-            ? candidate.wcet_ticks
-            : (candidate.get_sporadic_server()
-                   ? candidate.get_sporadic_server()->max_budget()
-                   : candidate.remaining_ticks);
+    uint64_t cwcet = server_budget_for_admission(candidate);
     total_util += (cwcet * 1000000) / candidate.period_ticks;
     uint32_t bound = real_tasks <= LIU_LEYLAND_MAX_TASKS
                          ? LIU_LEYLAND_BOUNDS[real_tasks]
@@ -1652,12 +1662,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
                 continue;
             if (t->period_ticks > 0) {
                 ++real_tasks;
-                uint64_t wcet =
-                    t->wcet_ticks > 0
-                        ? t->wcet_ticks
-                        : (t->get_sporadic_server()
-                               ? t->get_sporadic_server()->max_budget()
-                               : t->remaining_ticks);
+                uint64_t wcet = server_budget_for_admission(*t);
                 uint64_t util = (wcet * 1000000) / t->period_ticks;
                 total_util += util;
             }

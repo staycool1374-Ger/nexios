@@ -139,6 +139,10 @@ template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
                 return false;
             if (d.ss_budget > d.ss_period)
                 return false;
+            // Issue #22: BACKGROUND never runs above bg — a non-idle bg
+            // priority would silently promote best-effort work over RT tasks.
+            if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
+                return false;
             if (name_empty(d.daemon_name))
                 return false;
             if (!d.set_pid_fn || !d.get_pid_fn)
@@ -310,7 +314,8 @@ void reboot_from_table() {
                 if (def.type == TaskType::SPORADIC_SERVER) {
                     task->init_sporadic_server(def.ss_budget, def.ss_period,
                                                def.ss_bg_prio,
-                                               def.ss_budget_granularity);
+                                               def.ss_budget_granularity,
+                                               def.ss_mode);
                     // Issue #19: daemon servers stay priority-dispatched
                     // (exempt from global EDF) — their IPC latency budget
                     // is governed by fixed priorities + admission (#20).

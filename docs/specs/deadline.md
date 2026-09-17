@@ -135,7 +135,13 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   NO_PERIOD, zero-deadline excluded).  The void `add_task()` legacy path
   stays advisory warn-only (cannot fail); wakeups of admitted tasks
   (`set_task_ready`) are never re-gated — the per-tick O(n_tasks) scan
-  cost stays bounded |
+  cost stays bounded.
+  Issue #22 addendum: DEFERRABLE/BACKGROUND server budgets plug into the
+  numerator identically (`max_budget()==C`, mode-agnostic helper
+  `server_budget_for_admission`); exemption-before-WCET and
+  boot/wakeup-never-gated are unchanged.  BACKGROUND tasks additionally
+  never enter EDF dispatch (idle-time only); per-mode interference and
+  starvation contracts are specified in sporadic_server.hpp. |
 | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
 | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
 

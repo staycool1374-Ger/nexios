@@ -32,6 +32,14 @@
 namespace kernel {
 namespace task {
 
+/// @brief Budget-replenishment discipline for SporadicServer (issue #22).
+/// Namespace scope so TaskDef/task APIs can name it without the class.
+enum class ServerMode : uint8_t {
+    SPORADIC = 0,   ///< POSIX.1b per-activation replenishment (default).
+    DEFERRABLE = 1, ///< Budget preserved across idle; periodic full top-up.
+    BACKGROUND = 2, ///< Never above bg_priority_ (idle-time only).
+};
+
 /// @brief Per-instance Sporadic Server controller.
 ///
 /// Tracks execution budget C and replenishment period T for a single
@@ -40,6 +48,20 @@ namespace task {
 ///   - consume() on every timer tick the server executes,
 ///   - on_completion() when the server goes idle before budget exhaustion,
 ///   - process_replenishments() once per timer tick.
+///
+/// Server modes (issue #22) share the budget/replenish state machine:
+///   - SPORADIC: POSIX.1b — consumed budget is replenished exactly once per
+///     activation at activation+T (conservative; admitted RT sets stay
+///     schedulable underC/T analysis).
+///   - DEFERRABLE: budget is preserved across idle and restored to full C
+///     at every period boundary (not per activation).  Back-to-back bursts
+///     are possible, so admitted interference is HIGHER than the SS
+///     analysis — the admission gate still counts full C (conservative),
+///     but prefer SPORADIC for hard RT work.
+///   - BACKGROUND: the server never runs above bg_priority_ (best-effort,
+///     idle-time only).  Starvation-free for the RT set by construction
+///     (BG consumes only time no RT task wants); BG itself may starve
+///     under ~100% RT load — that is the documented contract.
 ///
 /// All times are in integer ticks.  No libc, no FP, no dynamic allocation.
 class SporadicServer : public KernelObject {
@@ -82,9 +104,12 @@ class SporadicServer : public KernelObject {
     /// = less urgent).
     /// @param budget_granularity Ticks per budget unit (default:
     /// CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY).
+    /// @param mode               Replenishment discipline (default SPORADIC;
+    /// existing callers unchanged).
     void init(uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
               uint64_t budget_granularity =
-                  CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY) noexcept;
+                  CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY,
+              ServerMode mode = ServerMode::SPORADIC) noexcept;
 
     // ---- Event interface ----
 
@@ -121,15 +146,34 @@ class SporadicServer : public KernelObject {
         return budget_remaining_ > 0;
     }
 
-    /// @return Current effective priority (background if exhausted, normal
-    /// otherwise).
+    /// @return Current effective priority.  SPORADIC/DEFERRABLE run at base
+    /// priority with budget and demote to background when exhausted;
+    /// BACKGROUND always returns bg_priority_ (never promoted — idle-time
+    /// only by construction).  has_budget() remains the execution gate.
     uint64_t current_priority() const noexcept {
+        if (mode_ == ServerMode::BACKGROUND)
+            return bg_priority_;
         return (state_ == EXHAUSTED) ? bg_priority_ : base_priority_;
     }
 
     /// @return Remaining execution budget in ticks.
     uint64_t remaining_budget() const noexcept {
         return budget_remaining_;
+    }
+
+    /// @return The configured replenishment discipline (issue #22).
+    ServerMode mode() const noexcept {
+        return mode_;
+    }
+
+    /// @return true when mode is DEFERRABLE.
+    bool is_deferrable() const noexcept {
+        return mode_ == ServerMode::DEFERRABLE;
+    }
+
+    /// @return true when mode is BACKGROUND.
+    bool is_background() const noexcept {
+        return mode_ == ServerMode::BACKGROUND;
     }
 
     /// @return C (maximum budget per period).
@@ -182,12 +226,14 @@ class SporadicServer : public KernelObject {
     uint64_t base_priority_;      ///  Normal scheduling priority.
     uint64_t bg_priority_;        ///  Background priority when exhausted.
     uint64_t budget_granularity_; ///  Ticks per budget unit.
+    ServerMode mode_;             ///  Replenishment discipline (issue #22).
 
     // ---- Dynamic state ----
     uint64_t budget_remaining_;      ///< Remaining budget for current period.
     uint64_t consumed_since_active_; ///< Budget consumed since last activation.
     uint64_t activation_time_; ///< Tick of most recent idle->active transition.
     uint64_t consume_counter_; ///< Tick counter for granularity skip.
+    uint64_t last_periodic_tick_; ///< Last DEFERRABLE/BACKGROUND top-up tick.
     State state_;
 
     // ---- Replenishment queue (circular buffer) ----

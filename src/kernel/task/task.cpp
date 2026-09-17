@@ -128,7 +128,7 @@ _task_trampoline(void (*entry)()) {
 ///        from the MemPool.  Idempotent (returns early if already set).
 void TaskControlBlock::init_sporadic_server(
     uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
-    uint64_t budget_granularity) noexcept {
+    uint64_t budget_granularity, task::ServerMode mode) noexcept {
     if (sporadic_server)
         return;
     auto *ss = static_cast<task::SporadicServer *>(
@@ -143,7 +143,7 @@ void TaskControlBlock::init_sporadic_server(
     memset(ss, 0, sizeof(task::SporadicServer));
     new (ss) task::SporadicServer;
     ss->mark_pool_backed();
-    ss->init(budget_c, period_t, bg_prio, budget_granularity);
+    ss->init(budget_c, period_t, bg_prio, budget_granularity, mode);
     ss->set_base_priority(priority);
     attach_object(ss);
     sporadic_server = ss;

@@ -1,488 +1,425 @@
-diff --git a/docs/specs/configuration.md b/docs/specs/configuration.md
-index 695314b7..a83859d8 100644
---- a/docs/specs/configuration.md
-+++ b/docs/specs/configuration.md
-@@ -99,7 +99,7 @@ feeds must be re-validated** (check-config cross-check).
- ### 1.9 Hooks & Policies
- `CONFIG_IDLE_HOOK` / `CONFIG_TICK_HOOK` / `CONFIG_INIT_HOOK` (0) ·
- `CONFIG_OOM_HOOK` (0) · `CONFIG_OOM_POLICY` (0) ·
--`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (0) ·
-+`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (1, issue #20) ·
- `CONFIG_ZOMBIE_STARVATION_LIMIT` (32).
- 
- ### 1.10 Deadline / WCET Feature Set (the matrix dimensions)
 diff --git a/docs/specs/deadline.md b/docs/specs/deadline.md
-index 31e3a1bf..043669a3 100644
+index 043669a3..5ce8a950 100644
 --- a/docs/specs/deadline.md
 +++ b/docs/specs/deadline.md
-@@ -126,7 +126,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
- | I-5 | TERMINATED tasks skipped by the scan |
- | I-6 | DEMOTE floor at priority 1; every change re-bucketed via `move_priority` |
- | I-7 | Scan integrity counter advances exactly 1 per completed scan |
--| I-8 | **Liu-Leyland is advisory** (warning-only at add_task) — no admission gate; the real guarantee is bounded per-tick cost (O(n_tasks)) |
-+| I-8 | **Liu-Leyland is enforced at create** (issue #20): `add_task_err()`
-+  runs WCET-validity + LUB admission BEFORE any table/queue/tracker
-+  mutation and returns `SCHED_ERR_WCET_INVALID` /
-+  `SCHED_ERR_ADMISSION_DENIED` fail-closed (zero side effects; the caller
-+  retries later = defer, or frees the TCB = reject).  Scope: periodic
-+  non-exempt tasks only (idle, corrupt-magic, edf-exempt, aperiodic /
-+  NO_PERIOD, zero-deadline excluded).  The void `add_task()` legacy path
-+  stays advisory warn-only (cannot fail); wakeups of admitted tasks
-+  (`set_task_ready`) are never re-gated — the per-tick O(n_tasks) scan
-+  cost stays bounded |
+@@ -135,7 +135,13 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
+   NO_PERIOD, zero-deadline excluded).  The void `add_task()` legacy path
+   stays advisory warn-only (cannot fail); wakeups of admitted tasks
+   (`set_task_ready`) are never re-gated — the per-tick O(n_tasks) scan
+-  cost stays bounded |
++  cost stays bounded.
++  Issue #22 addendum: DEFERRABLE/BACKGROUND server budgets plug into the
++  numerator identically (`max_budget()==C`, mode-agnostic helper
++  `server_budget_for_admission`); exemption-before-WCET and
++  boot/wakeup-never-gated are unchanged.  BACKGROUND tasks additionally
++  never enter EDF dispatch (idle-time only); per-mode interference and
++  starvation contracts are specified in sporadic_server.hpp. |
  | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
  | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
  
-diff --git a/docs/specs/oom-rt.md b/docs/specs/oom-rt.md
-index 4ca40ae1..af1898ba 100644
---- a/docs/specs/oom-rt.md
-+++ b/docs/specs/oom-rt.md
-@@ -13,10 +13,11 @@ and starve lower-priority tasks.  Every allocation failure must (a) be detected
- at the call site, (b) propagate a defined error, and (c) never leave the
- scheduler/allocator in a corrupt state.
- 
--## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default OFF]
-+## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default ON]
- 
- ```
-- init_memory_budget(total_pages)  (global budget after PMM init)
-+ init_memory_budget(total_pages)  (global budget after PMM init, issue #20 —
-+        kernel.cpp sizes it from PMM capacity right after PMM::init)
-         │
-  TaskControlBlock::create()
-         │ deduct CONFIG_DEFAULT_STACK_PAGES from global budget
-@@ -27,7 +28,8 @@ scheduler/allocator in a corrupt state.
-         ▼
-  TaskControlBlock::cleanup() returns pages to the budget
- ```
--- `CONFIG_MEMORY_BUDGET` default 0 (disabled) — current behavior preserved.
-+- `CONFIG_MEMORY_BUDGET` default 1 (enabled, issue #20) — sized at boot;
-+  per-task `memory_budget_pages_ == 0` keeps unlimited semantics.
- - `memory_budget_pages_`/`memory_used_pages_` on the TCB (set 0 at create).
- - **`clone_kernel_pml4` rollback [IMPLEMENTED]:** a real
-   `JARVIS_TEST(vmm_clone_failure_rollback)` replaces the historical STUB-8;
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index d115efc3..80870be1 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -739,6 +739,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
- 
-     }
-     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
-+    // Issue #20: size the global memory budget from PMM capacity so the
-+    // create()-time admission gate (CONFIG_MEMORY_BUDGET, default ON) is
-+    // live from boot.  Slight overcount (kernel image, VMM tables) is
-+    // harmless: PMM alloc remains the hard gate with budget rollback.
-+#if CONFIG_MEMORY_BUDGET
-+    kernel::Scheduler::init_memory_budget(mem_size / arch::PAGE_SIZE);
-+#endif
-     kernel::VMM::init();
- 
-     // Reserve the Multiboot2 info structure GRUB placed above the kernel
-diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
-index 2cd40fd8..d61639a4 100644
---- a/src/kernel/memory/pmm.cpp
-+++ b/src/kernel/memory/pmm.cpp
-@@ -375,7 +375,11 @@ uint64_t PMM::alloc_page() {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
- #if CONFIG_MEMORY_BUDGET
-     auto *cur = Scheduler::current_task();
-+    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
-+    // default).  Without the > 0 guard every task (used=0, budget=0) would
-+    // fail every alloc once the global default flipped ON.
-     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-+        cur->memory_budget_pages_ > 0 &&
-         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
-         return 0;
-     }
-@@ -436,7 +440,9 @@ uint64_t PMM::alloc_contiguous(size_t count) {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
- #if CONFIG_MEMORY_BUDGET
-     auto *cur = Scheduler::current_task();
-+    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
-     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-+        cur->memory_budget_pages_ > 0 &&
-         cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
-         return 0;
-     }
-@@ -517,7 +523,9 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
-     sync::IrqSpinLockGuard lock(pmm_lock_);
- #if CONFIG_MEMORY_BUDGET
-     auto *cur = Scheduler::current_task();
-+    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
-     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
-+        cur->memory_budget_pages_ > 0 &&
-         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
-         return 0;
-     }
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index e7b67dc9..8f3576ef 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -951,9 +951,10 @@
- /// Per-task memory budget enforcement.
- /// When non-zero, TaskControlBlock::create() deducts stack pages from a
- /// global system budget; alloc_page() checks the calling task's budget.
--/// Default: 0 (no budget enforcement — current behaviour).
-+/// Default: 1 (budget enforcement on — issue #20; sized at boot from PMM
-+/// total pages via Scheduler::init_memory_budget; per-task 0 == unlimited).
- #ifndef CONFIG_MEMORY_BUDGET
--#define CONFIG_MEMORY_BUDGET 0
-+#define CONFIG_MEMORY_BUDGET 1
- #endif
- 
- /// If non-zero, declares weak symbol init_hook() after daemon init complete.
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index e0f8839b..61a9e203 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -43,7 +43,15 @@ uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
-     auto *child = TaskControlBlock::clone(regs);
-     if (!child)
-         return static_cast<uint64_t>(-1);
--    Scheduler::add_task(*child);
-+    // Issue #20: fork goes through the enforced admission gate.  On denial
-+    // the child was never registered, so destroy() teardown is safe
-+    // (remove paths no-op on absent entries); the parent is unaffected and
-+    // the caller sees -1 (fail-closed, no zombie birth, no parent wake).
-+    errors::SchedulerError adm = Scheduler::add_task_err(*child);
-+    if (adm != errors::SCHED_ERR_OK) {
-+        TaskControlBlock::destroy(child);
-+        return static_cast<uint64_t>(-1);
-+    }
-     return child->id;
- }
- 
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 5c792c70..109d68c4 100644
+index 109d68c4..ec2dffe6 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -1443,6 +1443,101 @@ static constexpr uint32_t LIU_LEYLAND_BOUNDS[LIU_LEYLAND_MAX_TASKS + 1] = {
-     710592, 709409,  708378, 707472, 706669, 705952, 705298};
- static constexpr uint32_t LIU_LEYLAND_LIMIT = 693147;
- 
-+// ---------------------------------------------------------------------------
-+// Issue #20 — enforced admission control (upgrades deadline.md I-8 from
-+// advisory warn-only to a fail-closed gate).  All helpers are
-+// allocation-free integer math with no logging; the caller (add_task_err)
-+// holds scheduler_lock_ throughout, so the check-and-enqueue is atomic.
-+// Wakeups of already-admitted tasks (set_task_ready) are deliberately NOT
-+// re-gated: denying a wakeup would wedge IPC waiters (deadlock risk, see
-+// the H2 history) — admission is a create-time gate, the standard
-+// real-time doctrine (once admitted, guaranteed).
-+// ---------------------------------------------------------------------------
-+
-+bool Scheduler::admission_exempted(const TaskControlBlock &t) noexcept {
-+    if (is_idle_task(&t))
-+        return true;
-+    if (t.magic != TaskControlBlock::TCB_MAGIC)
-+        return true; // corrupt: never counted (fail-closed elsewhere)
-+    if (t.edf_exempt)
-+        return true; // SS daemons, harness (taskdefs spawn sites)
-+    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
-+        return true; // aperiodic / untracked (I-4)
-+    if (t.deadline_ticks == 0)
-+        return true;
-+    return false;
-+}
-+
-+errors::SchedulerError
-+Scheduler::check_wcet_locked(const TaskControlBlock &t) noexcept {
-+    if (t.wcet_ticks == 0)
-+        return errors::SCHED_ERR_OK; // implicit 100%: validated via LUB sum
-+    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
-+        return errors::SCHED_ERR_WCET_INVALID; // explicit WCET, untracked task
-+    if (t.wcet_ticks > t.period_ticks)
-+        return errors::SCHED_ERR_WCET_INVALID;
-+    return errors::SCHED_ERR_OK;
-+}
-+
-+errors::SchedulerError Scheduler::admission_check_locked(
-+    const TaskControlBlock &candidate, uint64_t *out_util,
-+    uint32_t *out_bound) noexcept {
-+    // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
-+    // I-8 scope text exactly ("periodic non-exempt tasks only").  An
-+    // otherwise-exempt task (boot daemon, aperiodic) carrying a stale
-+    // explicit WCET must never be rejected — denying a boot daemon would
-+    // wedge the boot.  WCET-validity binds only tasks inside the gate.
-+    if (admission_exempted(candidate)) {
-+        if (out_util != nullptr)
-+            *out_util = 0;
-+        if (out_bound != nullptr)
-+            *out_bound = 0;
-+        return errors::SCHED_ERR_OK;
-+    }
-+    errors::SchedulerError w = check_wcet_locked(candidate);
-+    if (w != errors::SCHED_ERR_OK)
-+        return w;
-+    // Numerator rule frozen from the advisory path: explicit WCET, else the
-+    // sporadic-server max budget, else remaining_ticks.  S2 note: wcet <=
-+    // period <= NO_PERIOD (2^32-1), so wcet*1000000 < 2^63 — no overflow;
-+    // period == 0 is excluded above, so the divide is safe.
-+    uint64_t total_util = 0;
-+    uint64_t real_tasks = 0;
-+    for (TaskControlBlock *t = all_tasks_.first_ptr(); t != nullptr;
-+         t = all_tasks_.next_ptr(t)) {
-+        if (t->id == candidate.id)
-+            continue; // re-check safe: never double-count the candidate
-+        if (admission_exempted(*t))
-+            continue;
-+        ++real_tasks;
-+        uint64_t wcet =
-+            t->wcet_ticks > 0
-+                ? t->wcet_ticks
-+                : (t->get_sporadic_server()
-+                       ? t->get_sporadic_server()->max_budget()
-+                       : t->remaining_ticks);
-+        total_util += (wcet * 1000000) / t->period_ticks;
-+    }
-+    ++real_tasks;
-+    uint64_t cwcet =
-+        candidate.wcet_ticks > 0
-+            ? candidate.wcet_ticks
-+            : (candidate.get_sporadic_server()
-+                   ? candidate.get_sporadic_server()->max_budget()
-+                   : candidate.remaining_ticks);
-+    total_util += (cwcet * 1000000) / candidate.period_ticks;
-+    uint32_t bound = real_tasks <= LIU_LEYLAND_MAX_TASKS
-+                         ? LIU_LEYLAND_BOUNDS[real_tasks]
-+                         : LIU_LEYLAND_LIMIT;
-+    if (out_util != nullptr)
-+        *out_util = total_util;
-+    if (out_bound != nullptr)
-+        *out_bound = bound;
-+    if (total_util > bound)
-+        return errors::SCHED_ERR_ADMISSION_DENIED;
-+    return errors::SCHED_ERR_OK;
-+}
-+
- // ---------------------------------------------------------------------------
- // Init / lifecycle
- // ---------------------------------------------------------------------------
-@@ -1543,6 +1638,10 @@ void Scheduler::add_task(TaskControlBlock &task) {
-     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
-                  task.id, task.priority);
- 
-+    // Issue #20: legacy ADVISORY path — warn-only by design (void return
-+    // cannot report denial; silently deferring would break every caller
-+    // that assumes enqueue).  New production paths (fork, exec) and all
-+    // admission-sensitive code must use add_task_err(), the enforced gate.
-     // Liu-Leyland LUB admission test
-     if (task.period_ticks > 0 && task.period_ticks <= 100) {
-         uint64_t total_util = 0;
-@@ -4399,12 +4498,34 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
-         return SCHED_ERR_TABLE_FULL;
-     if (id_table_find(task.id) != nullptr)
-         return SCHED_ERR_DUPLICATE_ID;
-+    // Issue #20: enforced admission BEFORE any mutation — a denial leaves
-+    // tables, queues, and the ResourceTracker untouched (fail-closed); the
-+    // caller retries later (defer) or frees the TCB.  Logging stays outside
-+    // the helper (allocation-free path); one warn here is cold-path only.
-+    uint64_t util = 0;
-+    uint32_t bound = 0;
-+    SchedulerError adm = admission_check_locked(task, &util, &bound);
-+    if (adm != SCHED_ERR_OK) {
-+        Logger::warn("Scheduler: admission denied task %u (err=%u, "
-+                     "util=%u > bound=%u)",
-+                     task.id, static_cast<uint64_t>(adm), util, bound);
-+        return adm;
-+    }
-     all_tasks_.append(task);
-     if (task.period_ticks > 0 && task.deadline_ticks > 0) {
-         deadline_list_.insert(task);
-     }
-     ENSURE(id_table_insert(task.id, &task) && "id_table full in add_task_err");
--    rq_task(task).enqueue(task, effective_priority(&task));
-+    // Issue #19/#20: single routing point via enqueue_ready (the old direct
-+    // bitmap enqueue was EDF-blind — every deadline task dispatched by
-+    // priority).  id_table_ membership precedes enqueue (H2 orphan guard).
-+    task.in_ready_queue_ = false;
-+    task.runq_next_ = nullptr;
-+    task.runq_prev_ = nullptr;
-+    task.in_edf_queue_ = false;
-+    task.edf_next_ = nullptr;
-+    task.edf_prev_ = nullptr;
-+    enqueue_ready(task);
-     kernel::test::ResourceTracker::instance().track_task_add();
-     return SCHED_ERR_OK;
+@@ -319,6 +319,10 @@ static EdfReadyList edf_ready_[CONFIG_MAX_CPUS];
+ /// @brief EDF eligibility (issue #19): explicit EDF forces the class but
+ ///        still needs a finite deadline (fail-closed); AUTO maps
+ ///        finite-deadline non-exempt tasks; everything else stays FIXED.
++///        Issue #22: BACKGROUND-server tasks never enter EDF — they are
++///        idle-time only by contract and must not preempt by deadline
++///        (they dispatch at bg priority via the bitmap when nothing else
++///        is ready; daemons additionally carry edf_exempt from spawn).
+ static bool edf_eligible(const TaskControlBlock &t) noexcept {
+     if (t.deadline_ticks == 0)
+         return false; // I-4: untracked exclusion
+@@ -327,6 +331,9 @@ static bool edf_eligible(const TaskControlBlock &t) noexcept {
+         return false;
+     if (t.sched_policy == SchedPolicy::FIXED)
+         return false;
++    if (t.get_sporadic_server() != nullptr &&
++        t.get_sporadic_server()->is_background())
++        return false;
+     if (t.sched_policy == SchedPolicy::EDF)
+         return true;
+     return !t.edf_exempt; // AUTO
+@@ -1479,6 +1486,19 @@ Scheduler::check_wcet_locked(const TaskControlBlock &t) noexcept {
+     return errors::SCHED_ERR_OK;
  }
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 1e48d9a5..08260570 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -118,7 +118,36 @@ class Scheduler {
-     /// @return SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if task table is
-     /// full,
-     ///         SCHED_ERR_DUPLICATE_ID if task ID already exists.
-+    ///         Issue #20: additionally SCHED_ERR_WCET_INVALID (WCET exceeds
-+    ///         period or period untracked) and SCHED_ERR_ADMISSION_DENIED
-+    ///         (Liu-Leyland bound would be exceeded).  Denial happens BEFORE
-+    ///         any table/queue/tracker mutation (zero side effects); the
-+    ///         caller owns the TCB and retries later (defer) or frees it.
-+    ///         This is the enforced admission path — the void add_task()
-+    ///         below retains advisory warn-only semantics for legacy callers
-+    ///         that cannot fail.
-     static errors::SchedulerError add_task_err(TaskControlBlock &task);
-+    /// @brief Issue #20: WCET validity for one task (allocation-free, no
-+    ///        logging).  Caller must hold scheduler_lock_.
-+    /// @return SCHED_ERR_OK, or SCHED_ERR_WCET_INVALID when an explicit
-+    ///         WCET exceeds its period or is set on an untracked task.
-+    static errors::SchedulerError
-+    check_wcet_locked(const TaskControlBlock &task) noexcept;
-+    /// @brief Issue #20: true when t is excluded from the LUB numerator
-+    ///        (idle, corrupt-magic, edf-exempt, aperiodic/NO_PERIOD, or
-+    ///        zero deadline — mirrors the I-4 untracked rule).
-+    static bool admission_exempted(const TaskControlBlock &task) noexcept;
-+    /// @brief Issue #20: Liu-Leyland utilization including the candidate.
-+    ///        Caller must hold scheduler_lock_.  Allocation-free integer
-+    ///        math, no logging.  The candidate's own live entry (if any)
-+    ///        is skipped so re-checks never double-count.
-+    /// @param out_util Total scaled utilization (may be nullptr).
-+    /// @param out_bound LUB bound for the resulting task count (may be null).
-+    /// @return SCHED_ERR_OK, SCHED_ERR_WCET_INVALID, or
-+    ///         SCHED_ERR_ADMISSION_DENIED.
-+    static errors::SchedulerError
-+    admission_check_locked(const TaskControlBlock &candidate,
-+                           uint64_t *out_util, uint32_t *out_bound) noexcept;
  
-     /// @brief Removes a task from the scheduler's run queue.
-     /// @param task Reference to the task to remove.
-diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
-index e7bf1df0..2bb1baf5 100644
---- a/src/kernel/task/scheduler_errors.hpp
-+++ b/src/kernel/task/scheduler_errors.hpp
-@@ -40,7 +40,9 @@ namespace kernel::errors {
-     X(ZOMBIE, 8, "Task is a zombie (freed but not reaped)")                    \
-     X(INVALID_MAGIC, 9, "Task control block magic invalid")                    \
-     X(NO_SHELL, 10, "Shell task not set")                                      \
--    X(INVALID_ARGS, 11, "Invalid arguments")
-+    X(INVALID_ARGS, 11, "Invalid arguments")                                   \
-+    X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
-+    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
++/// @brief Frozen admission numerator (issues #20/#22): explicit WCET, else
++///        the attached server's max budget C (mode-agnostic — SPORADIC,
++///        DEFERRABLE and BACKGROUND all expose C via max_budget(), so
++///        server budgets count identically without any gate change), else
++///        remaining_ticks.  Caller guarantees t is non-exempt (period > 0).
++static uint64_t server_budget_for_admission(const TaskControlBlock &t) noexcept {
++    if (t.wcet_ticks > 0)
++        return t.wcet_ticks;
++    if (t.get_sporadic_server() != nullptr)
++        return t.get_sporadic_server()->max_budget();
++    return t.remaining_ticks;
++}
++
+ errors::SchedulerError Scheduler::admission_check_locked(
+     const TaskControlBlock &candidate, uint64_t *out_util,
+     uint32_t *out_bound) noexcept {
+@@ -1510,21 +1530,11 @@ errors::SchedulerError Scheduler::admission_check_locked(
+         if (admission_exempted(*t))
+             continue;
+         ++real_tasks;
+-        uint64_t wcet =
+-            t->wcet_ticks > 0
+-                ? t->wcet_ticks
+-                : (t->get_sporadic_server()
+-                       ? t->get_sporadic_server()->max_budget()
+-                       : t->remaining_ticks);
++        uint64_t wcet = server_budget_for_admission(*t);
+         total_util += (wcet * 1000000) / t->period_ticks;
+     }
+     ++real_tasks;
+-    uint64_t cwcet =
+-        candidate.wcet_ticks > 0
+-            ? candidate.wcet_ticks
+-            : (candidate.get_sporadic_server()
+-                   ? candidate.get_sporadic_server()->max_budget()
+-                   : candidate.remaining_ticks);
++    uint64_t cwcet = server_budget_for_admission(candidate);
+     total_util += (cwcet * 1000000) / candidate.period_ticks;
+     uint32_t bound = real_tasks <= LIU_LEYLAND_MAX_TASKS
+                          ? LIU_LEYLAND_BOUNDS[real_tasks]
+@@ -1652,12 +1662,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
+                 continue;
+             if (t->period_ticks > 0) {
+                 ++real_tasks;
+-                uint64_t wcet =
+-                    t->wcet_ticks > 0
+-                        ? t->wcet_ticks
+-                        : (t->get_sporadic_server()
+-                               ? t->get_sporadic_server()->max_budget()
+-                               : t->remaining_ticks);
++                uint64_t wcet = server_budget_for_admission(*t);
+                 uint64_t util = (wcet * 1000000) / t->period_ticks;
+                 total_util += util;
+             }
+diff --git a/src/kernel/task/sporadic_server.cpp b/src/kernel/task/sporadic_server.cpp
+index 40b0df28..727d32ed 100644
+--- a/src/kernel/task/sporadic_server.cpp
++++ b/src/kernel/task/sporadic_server.cpp
+@@ -31,17 +31,22 @@ static constexpr uint64_t SPRIO_INVALID = ~0ULL;
  
- /// @brief Error codes returned by scheduler operations.
- // NOLINTNEXTLINE(performance-enum-size)
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 0a466e56..a183452c 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
-     {"selftest",            133,    0,       0      },  // same as safe
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1267,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19)
-+    {"all",                1408,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 134 cross-arch/filtered registrations (TCOUNT actual 1408, executed 1393)
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
+-                          uint64_t bg_prio,
+-                          uint64_t budget_granularity) noexcept {
+-    budget_c_ = budget_c;
+-    period_t_ = period_t;
++                          uint64_t bg_prio, uint64_t budget_granularity,
++                          ServerMode mode) noexcept {
++    // Fail-safe clamps (noexcept: no error return): a zero period would
++    // break replenishment timing downstream; budget above period is
++    // unadmittable (taskdefs validate_all rejects it at the table).
++    period_t_ = (period_t > 0) ? period_t : 1;
++    budget_c_ = (budget_c <= period_t_) ? budget_c : period_t_;
+     base_priority_ = SPRIO_INVALID; // caller should set externally
+     bg_priority_ = bg_prio;
+     budget_granularity_ = (budget_granularity > 0) ? budget_granularity : 1;
+-    budget_remaining_ = budget_c;
++    mode_ = mode;
++    budget_remaining_ = budget_c_;
+     consumed_since_active_ = 0;
+     activation_time_ = 0;
+     consume_counter_ = 0;
++    last_periodic_tick_ = 0;
+     state_ = IDLE;
+     replenishment_head_ = 0;
+     replenishment_tail_ = 0;
+@@ -50,10 +55,14 @@ void SporadicServer::init(uint64_t budget_c, uint64_t period_t,
+ }
  
-     // basic
-     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -265,6 +265,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
-     {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
-     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
-+    {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
+ void SporadicServer::on_activation(uint64_t now) noexcept {
+-    if (state_ != IDLE)
+-        return;
+-
+-    // Server was idle — a new aperiodic job has arrived.
++    if (state_ == EXHAUSTED)
++        return; // budget gone: stays demoted until replenished (all modes).
++    if (state_ == ACTIVE)
++        return; // already handling work (all modes preserve budget here).
++    // IDLE -> ACTIVE.  DEFERRABLE preserves budget_remaining_ across idle
++    // (no reset — that is the deferrable trade-off, documented in the
++    // header); SPORADIC likewise runs on whatever budget is present.
++    // BACKGROUND records work-present only (priority never promotes).
+     state_ = ACTIVE;
+     activation_time_ = now;
+     consumed_since_active_ = 0;
+@@ -70,8 +79,11 @@ void SporadicServer::on_completion(uint64_t now) noexcept {
+     if (state_ != ACTIVE)
+         return;
+ 
+-    // Server goes idle — schedule a replenishment for what was consumed.
+-    if (consumed_since_active_ > 0) {
++    // SPORADIC: schedule a replenishment for what was consumed.
++    // DEFERRABLE/BACKGROUND: no per-completion replenishment — the periodic
++    // top-up in process_replenishments() restores to full C at period
++    // boundaries, and preserved budget carries across idle by design.
++    if (mode_ == ServerMode::SPORADIC && consumed_since_active_ > 0) {
+         schedule_replenishment(activation_time_ + period_t_,
+                                consumed_since_active_);
+     }
+@@ -110,8 +122,11 @@ bool SporadicServer::consume(uint64_t now) noexcept {
+     consumed_since_active_++;
+ 
+     if (budget_remaining_ == 0) {
+-        // Budget exhausted — schedule replenishment and drop to background.
+-        if (consumed_since_active_ > 0) {
++        // Budget exhausted — SPORADIC schedules its replenishment and drops
++        // to background; DEFERRABLE/BACKGROUND rely on the periodic top-up
++        // in process_replenishments() (no per-exhaustion ring entry, so the
++        // top-up stays the single restore path and accounting stays exact).
++        if (mode_ == ServerMode::SPORADIC && consumed_since_active_ > 0) {
+             schedule_replenishment(activation_time_ + period_t_,
+                                    consumed_since_active_);
+         }
+@@ -126,6 +141,29 @@ bool SporadicServer::consume(uint64_t now) noexcept {
+ }
+ 
+ void SporadicServer::process_replenishments(uint64_t now) noexcept {
++    // DEFERRABLE/BACKGROUND periodic top-up (issue #22): restore to full C
++    // at every period boundary instead of per-activation replenishment.
++    // Bounded catch-up (≤2 periods) so a long stall cannot loop; the ring
++    // below stays empty for these modes (no double restore).
++    if (mode_ != ServerMode::SPORADIC && period_t_ > 0 &&
++        now >= last_periodic_tick_ + period_t_) {
++        uint64_t steps = 0;
++        while (now >= last_periodic_tick_ + period_t_ && steps < 2) {
++            last_periodic_tick_ += period_t_;
++            ++steps;
++        }
++        budget_remaining_ = budget_c_;
++        if (state_ == EXHAUSTED) {
++            // M-8 parity: only EXHAUSTED may leave its state here; IDLE
++            // without work stays IDLE (else the next on_activation, which
++            // requires IDLE, would stall — same hazard as the SS path).
++            // ACTIVE stays ACTIVE (budget restored mid-burst).
++            state_ = ACTIVE;
++#if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK
++            sporadic_server_deadline_handler(this, 1);
++#endif
++        }
++    }
+     while (replenishment_count_ > 0) {
+         Replenishment r = replenishments_[replenishment_head_];
+         if (r.time > now)
+diff --git a/src/kernel/task/sporadic_server.hpp b/src/kernel/task/sporadic_server.hpp
+index 70e60d2a..29d3bfd7 100644
+--- a/src/kernel/task/sporadic_server.hpp
++++ b/src/kernel/task/sporadic_server.hpp
+@@ -32,6 +32,14 @@
+ namespace kernel {
+ namespace task {
+ 
++/// @brief Budget-replenishment discipline for SporadicServer (issue #22).
++/// Namespace scope so TaskDef/task APIs can name it without the class.
++enum class ServerMode : uint8_t {
++    SPORADIC = 0,   ///< POSIX.1b per-activation replenishment (default).
++    DEFERRABLE = 1, ///< Budget preserved across idle; periodic full top-up.
++    BACKGROUND = 2, ///< Never above bg_priority_ (idle-time only).
++};
++
+ /// @brief Per-instance Sporadic Server controller.
+ ///
+ /// Tracks execution budget C and replenishment period T for a single
+@@ -41,6 +49,20 @@ namespace task {
+ ///   - on_completion() when the server goes idle before budget exhaustion,
+ ///   - process_replenishments() once per timer tick.
+ ///
++/// Server modes (issue #22) share the budget/replenish state machine:
++///   - SPORADIC: POSIX.1b — consumed budget is replenished exactly once per
++///     activation at activation+T (conservative; admitted RT sets stay
++///     schedulable underC/T analysis).
++///   - DEFERRABLE: budget is preserved across idle and restored to full C
++///     at every period boundary (not per activation).  Back-to-back bursts
++///     are possible, so admitted interference is HIGHER than the SS
++///     analysis — the admission gate still counts full C (conservative),
++///     but prefer SPORADIC for hard RT work.
++///   - BACKGROUND: the server never runs above bg_priority_ (best-effort,
++///     idle-time only).  Starvation-free for the RT set by construction
++///     (BG consumes only time no RT task wants); BG itself may starve
++///     under ~100% RT load — that is the documented contract.
++///
+ /// All times are in integer ticks.  No libc, no FP, no dynamic allocation.
+ class SporadicServer : public KernelObject {
+   public:
+@@ -82,9 +104,12 @@ class SporadicServer : public KernelObject {
+     /// = less urgent).
+     /// @param budget_granularity Ticks per budget unit (default:
+     /// CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY).
++    /// @param mode               Replenishment discipline (default SPORADIC;
++    /// existing callers unchanged).
+     void init(uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
+               uint64_t budget_granularity =
+-                  CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY) noexcept;
++                  CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY,
++              ServerMode mode = ServerMode::SPORADIC) noexcept;
+ 
+     // ---- Event interface ----
+ 
+@@ -121,9 +146,13 @@ class SporadicServer : public KernelObject {
+         return budget_remaining_ > 0;
+     }
+ 
+-    /// @return Current effective priority (background if exhausted, normal
+-    /// otherwise).
++    /// @return Current effective priority.  SPORADIC/DEFERRABLE run at base
++    /// priority with budget and demote to background when exhausted;
++    /// BACKGROUND always returns bg_priority_ (never promoted — idle-time
++    /// only by construction).  has_budget() remains the execution gate.
+     uint64_t current_priority() const noexcept {
++        if (mode_ == ServerMode::BACKGROUND)
++            return bg_priority_;
+         return (state_ == EXHAUSTED) ? bg_priority_ : base_priority_;
+     }
+ 
+@@ -132,6 +161,21 @@ class SporadicServer : public KernelObject {
+         return budget_remaining_;
+     }
+ 
++    /// @return The configured replenishment discipline (issue #22).
++    ServerMode mode() const noexcept {
++        return mode_;
++    }
++
++    /// @return true when mode is DEFERRABLE.
++    bool is_deferrable() const noexcept {
++        return mode_ == ServerMode::DEFERRABLE;
++    }
++
++    /// @return true when mode is BACKGROUND.
++    bool is_background() const noexcept {
++        return mode_ == ServerMode::BACKGROUND;
++    }
++
+     /// @return C (maximum budget per period).
+     uint64_t max_budget() const noexcept {
+         return budget_c_;
+@@ -182,12 +226,14 @@ class SporadicServer : public KernelObject {
+     uint64_t base_priority_;      ///  Normal scheduling priority.
+     uint64_t bg_priority_;        ///  Background priority when exhausted.
+     uint64_t budget_granularity_; ///  Ticks per budget unit.
++    ServerMode mode_;             ///  Replenishment discipline (issue #22).
+ 
+     // ---- Dynamic state ----
+     uint64_t budget_remaining_;      ///< Remaining budget for current period.
+     uint64_t consumed_since_active_; ///< Budget consumed since last activation.
+     uint64_t activation_time_; ///< Tick of most recent idle->active transition.
+     uint64_t consume_counter_; ///< Tick counter for granularity skip.
++    uint64_t last_periodic_tick_; ///< Last DEFERRABLE/BACKGROUND top-up tick.
+     State state_;
+ 
+     // ---- Replenishment queue (circular buffer) ----
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index b4678f8a..abc81670 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -128,7 +128,7 @@ _task_trampoline(void (*entry)()) {
+ ///        from the MemPool.  Idempotent (returns early if already set).
+ void TaskControlBlock::init_sporadic_server(
+     uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
+-    uint64_t budget_granularity) noexcept {
++    uint64_t budget_granularity, task::ServerMode mode) noexcept {
+     if (sporadic_server)
+         return;
+     auto *ss = static_cast<task::SporadicServer *>(
+@@ -143,7 +143,7 @@ void TaskControlBlock::init_sporadic_server(
+     memset(ss, 0, sizeof(task::SporadicServer));
+     new (ss) task::SporadicServer;
+     ss->mark_pool_backed();
+-    ss->init(budget_c, period_t, bg_prio, budget_granularity);
++    ss->init(budget_c, period_t, bg_prio, budget_granularity, mode);
+     ss->set_base_priority(priority);
+     attach_object(ss);
+     sporadic_server = ss;
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 8e568afc..8ed9f5d0 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -34,6 +34,7 @@
+ #include <kernel/sync/eventgroup.hpp>
+ #include <kernel/time/timer_wheel.hpp>
+ #include <kernel/memory/kernel_object.hpp>
++#include <kernel/task/sporadic_server.hpp>
+ #include <signal.hpp>
+ 
+ namespace kernel {
+@@ -715,10 +716,12 @@ struct TaskControlBlock {
+     /// @param bg_prio            Priority level when budget exhausted.
+     /// @param budget_granularity Ticks per budget unit (default:
+     /// CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY).
++    /// @param mode               Replenishment discipline (issue #22;
++    /// default SPORADIC keeps existing callers unchanged).
+     void init_sporadic_server(
+         uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
+-        uint64_t budget_granularity =
+-            CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY) noexcept;
++        uint64_t budget_granularity = CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY,
++        task::ServerMode mode = task::ServerMode::SPORADIC) noexcept;
+ 
+     /// @brief Attaches @p obj to this task's intrusive object list.
+     ///        The task takes ownership of exactly one reference
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index b34667da..be10daa1 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -139,6 +139,10 @@ template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
+                 return false;
+             if (d.ss_budget > d.ss_period)
+                 return false;
++            // Issue #22: BACKGROUND never runs above bg — a non-idle bg
++            // priority would silently promote best-effort work over RT tasks.
++            if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
++                return false;
+             if (name_empty(d.daemon_name))
+                 return false;
+             if (!d.set_pid_fn || !d.get_pid_fn)
+@@ -310,7 +314,8 @@ void reboot_from_table() {
+                 if (def.type == TaskType::SPORADIC_SERVER) {
+                     task->init_sporadic_server(def.ss_budget, def.ss_period,
+                                                def.ss_bg_prio,
+-                                               def.ss_budget_granularity);
++                                               def.ss_budget_granularity,
++                                               def.ss_mode);
+                     // Issue #19: daemon servers stay priority-dispatched
+                     // (exempt from global EDF) — their IPC latency budget
+                     // is governed by fixed priorities + admission (#20).
+diff --git a/src/kernel/task/taskdefs.hpp b/src/kernel/task/taskdefs.hpp
+index 2f488637..d44ef94f 100644
+--- a/src/kernel/task/taskdefs.hpp
++++ b/src/kernel/task/taskdefs.hpp
+@@ -24,6 +24,7 @@
+ #pragma once
+ 
+ #include <types.hpp>
++#include <kernel/task/sporadic_server.hpp>
+ 
+ namespace kernel {
+ namespace task {
+@@ -70,6 +71,11 @@ struct TaskDef {
+     size_t user_stack_size; ///< for USER_ELF (0 = default 32_KiB)
+ 
+     bool is_shell; ///< call Scheduler::set_shell_task after creation
++
++    ServerMode ss_mode = ServerMode::SPORADIC; ///< server discipline
++                                              ///< (issue #22; trailing so
++                                              ///< existing rows keep binding;
++                                              ///< default = SPORADIC)
  };
  
- static constexpr size_t k_expected_count_size =
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 09e75f1d..7354b009 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -204,6 +204,7 @@ void register_hrt_monotonic_tests();
- void register_timer_wheel_tests();
- void register_task_metering_tests();
- void register_sched_edf_tests();
-+void register_sched_admission_tests();
- void register_syscall_fastpath_tests();
- void register_fpu_inv_tests();
- void register_cap_shm_tests();
-@@ -627,6 +628,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"timer_wheel", []() { register_timer_wheel_tests(); }},
-     {"task_metering", []() { register_task_metering_tests(); }},
-     {"sched_edf", []() { register_sched_edf_tests(); }},
-+    {"sched_admission", []() { register_sched_admission_tests(); }},
- 
-     // -- safe: curated subset with TF_RELEASE tests --
-     {"safe",
-@@ -854,6 +856,7 @@ static void register_all_tests() {
-     register_timer_wheel_tests();
-     register_task_metering_tests();
-     register_sched_edf_tests();
-+    register_sched_admission_tests();
-     register_syscall_fastpath_tests();
-     register_fpu_inv_tests();
-     register_cap_shm_tests();
-@@ -1019,6 +1022,7 @@ static void register_all_tests_second_half() {
-     register_timer_wheel_tests();
-     register_task_metering_tests();
-     register_sched_edf_tests();
-+    register_sched_admission_tests();
-     register_syscall_fastpath_tests();
-     register_fpu_inv_tests();
-     register_cap_shm_tests();
-diff --git a/src/kernel/test/test_resource_exhaustion.cpp b/src/kernel/test/test_resource_exhaustion.cpp
-index 9f6103f4..d3401499 100644
---- a/src/kernel/test/test_resource_exhaustion.cpp
-+++ b/src/kernel/test/test_resource_exhaustion.cpp
-@@ -86,7 +86,13 @@ TEST_CLASS(FdTableExhaustion) {
- // Testidea: Create tasks until Scheduler's MAX_TASKS is reached.
- // Verify the next create/add fails, then cleanup restores capacity.
- // Input: Create MAX_TASKS tasks (minus existing), attempt one more.
--// Expect: Last add fails; after cleanup, task_count returns to baseline.
-+// Expect: when the fill loop hits exhaustion (created < 64) the extra
-+// create fails; when the reaper retires the empty-bodied fill tasks fast
-+// enough that capacity is never reached, no rejection is asserted (the
-+// premise does not hold) — teardown still verifies count restoration.
-+// Issue #20: hardened against the reaper-timing race (extra == nullptr
-+// asserted unconditionally failed on clean main whenever the reaper
-+// outran the fill loop).
- TEST_CLASS(TaskLimitReached) {
-     // Non-aborting assertion: records a failure (so the test still fails) but
-     // does NOT return, so subsequent teardown always runs.  The kernel reaper
-@@ -119,22 +125,33 @@ TEST_CLASS(TaskLimitReached) {
-     CHECK_NONFATAL(created > 0);
-     CHECK_NONFATAL(Scheduler::task_count() <= 64);
- 
--    // Attempt one more — must be rejected at capacity (create returns null).
-+    // Attempt one more — rejected at capacity (create returns null) ONLY
-+    // when the fill loop actually hit exhaustion.  If all 64 creates
-+    // succeeded, the reaper retired fill tasks fast enough that no capacity
-+    // bound was reached, so a further create legitimately succeeds.
-+    bool hit_capacity = (created < 64);
-     auto *extra = kernel::test::create_named_task([]() {}, 5, 10, "limit");
--    CHECK_NONFATAL(extra == nullptr);
-+    if (hit_capacity) {
-+        CHECK_NONFATAL(extra == nullptr);
-+    }
-     if (extra) {
-         kernel::test::terminate_and_drain(*extra);
-     }
- 
-     // Cleanup all created (unconditional — never skip teardown).
-+    // Sanctioned pattern (test_sched_helpers.hpp): terminate_if_live skips
-+    // reaped (0xDD-poisoned) and already-terminated tasks, so the reaper
-+    // retiring fill tasks mid-test can no longer cause teardown UAF; one
-+    // drain reaps all zombies exactly once.  The manual
-+    // remove_task+cleanup+delete sequence dereferenced reaped blocks
-+    // (remove_task magic-mismatch noise) and hung the class intermittently.
-     for (uint64_t i = 0; i < created; ++i) {
-         if (!tasks[i])
-             continue;
--        Scheduler::remove_task(*tasks[i]);
--        tasks[i]->cleanup();
--        delete tasks[i];
-+        kernel::test::terminate_if_live(tasks[i]);
-         tasks[i] = nullptr;
-     }
-+    Scheduler::drain_zombie_list();
- 
-     CHECK_NONFATAL(Scheduler::task_count() == baseline);
- #undef CHECK_NONFATAL
-diff --git a/src/kernel/test/test_sched_admission.cpp b/src/kernel/test/test_sched_admission.cpp
+ /// @brief Kills all tasks (except idle), spawns the system from g_task_defs[],
+diff --git a/src/kernel/test/test_aperiodic_servers.cpp b/src/kernel/test/test_aperiodic_servers.cpp
 new file mode 100644
-index 00000000..da88e47d
+index 00000000..bf50dc4c
 --- /dev/null
-+++ b/src/kernel/test/test_sched_admission.cpp
-@@ -0,0 +1,277 @@
++++ b/src/kernel/test/test_aperiodic_servers.cpp
+@@ -0,0 +1,266 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -501,51 +438,42 @@ index 00000000..da88e47d
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_sched_admission.cpp
-+/// @brief Enforced admission-control tests (issue #20, v0.4.8).
++/// @file test_aperiodic_servers.cpp
++/// @brief Deferrable + background server-mode tests (issue #22, v0.4.8).
 +///
-+/// DRIVEN: admission decisions are observed through REAL add_task_err()
-+/// outcomes on live TCBs — the harness never fakes utilization sums and
-+/// never mutates scheduler tables.  Denied TCBs are destroyed (never
-+/// registered ⇒ teardown no-ops); admitted tasks are terminated + drained.
-+/// Background load during tests is zero by construction (init/harness and
-+/// SS daemons are edf-exempt, shell/user-app are aperiodic, idle/monitor
-+/// are skipped), so explicit-WCET fills give deterministic bounds.
-+///
-+/// Liveness: every admitted task blocks on a test-local gate semaphore if
-+/// ever dispatched.  An empty-lambda entry would self-terminate on the
-+/// first timer tick (dispatch race: the task vanishes from the LUB scan
-+/// before the next setup call), flaking every multi-task assertion.
++/// DRIVEN: server state machines are driven through REAL init/activation/
++/// consume/completion/replenish calls on live objects; scheduler placement
++/// is observed through REAL add_task_err() outcomes and queue flags.
++/// Admitted tasks block on a gate semaphore if dispatched (issue #20
++/// dispatch-race lesson: empty entries self-terminate mid-setup).
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/syscall/syscall.hpp>
++#include <kernel/task/sporadic_server.hpp>
 +#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/io.hpp>
++#include <kernel/task/taskdefs.hpp>
 +#include <kernel/arch/irq_guard.hpp>
 +#include <kernel/sync/semaphore.hpp>
 +#include <kernel/nexios_config.h>
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
-+using kernel::errors::SchedulerError;
++using task::ServerMode;
++using task::SporadicServer;
 +
 +namespace {
 +
-+// Blocks forever on the gate carried via user_data (never posted during
-+// setup; posted once at teardown so a dispatched task can finish dying).
-+void gated_entry() {
++// Blocks on the gate carried via user_data if ever dispatched.
++void srv_gated_entry() {
 +    auto *self = Scheduler::current_task();
 +    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
 +    gate->wait();
 +}
 +
-+// Period-`period` task with explicit WCET (utilization = wcet/period).
-+TaskControlBlock *make_task(uint64_t wcet, uint64_t period,
-+                            sync::Semaphore *gate) {
-+    auto *t = TaskControlBlock::create(gated_entry, 11, period);
++TaskControlBlock *make_srv_task(uint64_t wcet, uint64_t period,
++                                sync::Semaphore *gate) {
++    auto *t = TaskControlBlock::create(srv_gated_entry, 11, period);
 +    if (t == nullptr)
 +        return nullptr;
 +    t->wcet_ticks = wcet;
@@ -553,9 +481,7 @@ index 00000000..da88e47d
 +    return t;
 +}
 +
-+// Destroy a TCB that was NEVER admitted (fail-closed ⇒ absent from every
-+// table; destroy() teardown paths no-op on absent entries).
-+void destroy_denied(TaskControlBlock *t) {
++void destroy_denied_srv(TaskControlBlock *t) {
 +    if (t == nullptr)
 +        return;
 +    JARVIS_ASSERT(Scheduler::find_task(t->id) == nullptr);
@@ -565,210 +491,280 @@ index 00000000..da88e47d
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: Liu-Leyland gate denies the task that would overrun the bound.
-+// Input: A(p100,w60) admitted (60<=100); B(p100,w60) would total 120>82.
-+// Expect: B → SCHED_ERR_ADMISSION_DENIED, absent from id_table_, no leak.
-+// Depends: Scheduler::admission_check_locked (issue #20)
-+JARVIS_TEST(admission_lub_rejects_overrun, "PRE: none | POST: none") {
++// Testidea: DEFERRABLE preserves budget across idle (no per-completion ring).
++// Input: DS(C=3,T=10); activate@0; consume 1; complete; reactivate.
++// Expect: remaining==2 and pending==0 after completion; still 2 after
++// reactivation (vs SS, which would schedule a replenishment).
++// Depends: SporadicServer::on_completion mode branch (issue #22)
++JARVIS_TEST(ds_preserves_budget_across_idle, "PRE: none | POST: none") {
++    SporadicServer ds;
++    ds.init(3, 10, 0, 1, ServerMode::DEFERRABLE);
++    JARVIS_ASSERT(ds.mode() == ServerMode::DEFERRABLE);
++    ds.on_activation(0);
++    JARVIS_ASSERT(ds.consume(0));
++    ds.on_completion(1);
++    JARVIS_ASSERT_EQ(2ULL, ds.remaining_budget());
++    JARVIS_ASSERT_EQ(0ULL, ds.pending_count());
++    ds.on_activation(2);
++    JARVIS_ASSERT_EQ(2ULL, ds.remaining_budget());
++    JARVIS_ASSERT_EQ(0ULL, ds.pending_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: DEFERRABLE restores to full C at the period boundary.
++// Input: DS(C=3,T=10); activate@0; consume 3 → EXHAUSTED; top-up at t=10.
++// Expect: remaining==3, state != EXHAUSTED, ring still empty.
++// Depends: SporadicServer::process_replenishments top-up (issue #22)
++JARVIS_TEST(ds_periodic_topup, "PRE: none | POST: none") {
++    SporadicServer ds;
++    ds.init(3, 10, 0, 1, ServerMode::DEFERRABLE);
++    ds.on_activation(0);
++    JARVIS_ASSERT(ds.consume(0));
++    JARVIS_ASSERT(ds.consume(1));
++    JARVIS_ASSERT(!ds.consume(2));
++    JARVIS_ASSERT(ds.state() == SporadicServer::EXHAUSTED);
++    ds.process_replenishments(10);
++    JARVIS_ASSERT_EQ(3ULL, ds.remaining_budget());
++    JARVIS_ASSERT(ds.state() != SporadicServer::EXHAUSTED);
++    JARVIS_ASSERT_EQ(0ULL, ds.pending_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: pin the documented DS/SS preservation trade-off end to end.
++// Input: C=4; bursts 2+2 back-to-back (no period elapse); then run the
++// period boundary at t=10 for both.
++// Expect: both serve all 4 ticks and demote (EXHAUSTED/bg); DS carries
++// zero ring debt and restores to full C at the boundary, while SS carries
++// 2 replenishment entries and restores only consumed amounts (rem 2).
++// Depends: DS vs SS completion/exhaustion/top-up paths (issue #22)
++JARVIS_TEST(ds_back_to_back_bursts, "PRE: none | POST: none") {
++    SporadicServer ds;
++    ds.init(4, 10, 0, 1, ServerMode::DEFERRABLE);
++    ds.set_base_priority(20);
++    SporadicServer ss;
++    ss.init(4, 10, 0);
++    ss.set_base_priority(20);
++    for (uint64_t burst = 0; burst < 2; ++burst) {
++        uint64_t now = burst * 2;
++        ds.on_activation(now);
++        ds.consume(now);
++        ds.consume(now + 1);
++        ds.on_completion(now + 1);
++        ss.on_activation(now);
++        ss.consume(now);
++        ss.consume(now + 1);
++        ss.on_completion(now + 1);
++    }
++    JARVIS_ASSERT_EQ(0ULL, ds.remaining_budget());
++    JARVIS_ASSERT_EQ(0ULL, ds.pending_count());
++    JARVIS_ASSERT(ds.state() == SporadicServer::EXHAUSTED);
++    JARVIS_ASSERT(ss.state() == SporadicServer::EXHAUSTED);
++    JARVIS_ASSERT_EQ(0ULL, ss.current_priority());
++    JARVIS_ASSERT_EQ(2ULL, ss.pending_count());
++    ds.process_replenishments(10);
++    ss.process_replenishments(10);
++    JARVIS_ASSERT_EQ(4ULL, ds.remaining_budget());
++    JARVIS_ASSERT_EQ(0ULL, ds.pending_count());
++    JARVIS_ASSERT_EQ(2ULL, ss.remaining_budget());
++    JARVIS_ASSERT_EQ(1ULL, ss.pending_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: BACKGROUND never promotes, full budget or not.
++// Input: BG(C=2,T=10,bg=0,base=20); drain fully; top-up.
++// Expect: current_priority()==0 throughout.
++// Depends: SporadicServer::current_priority BG rule (issue #22)
++JARVIS_TEST(bg_never_promotes, "PRE: none | POST: none") {
++    SporadicServer bg;
++    bg.init(2, 10, 0, 1, ServerMode::BACKGROUND);
++    bg.set_base_priority(20);
++    JARVIS_ASSERT(bg.is_background());
++    JARVIS_ASSERT_EQ(0ULL, bg.current_priority());
++    bg.on_activation(0);
++    JARVIS_ASSERT(bg.consume(0));
++    JARVIS_ASSERT_EQ(0ULL, bg.current_priority());
++    JARVIS_ASSERT(!bg.consume(1));
++    JARVIS_ASSERT_EQ(0ULL, bg.current_priority());
++    bg.process_replenishments(10);
++    JARVIS_ASSERT_EQ(2ULL, bg.remaining_budget());
++    JARVIS_ASSERT_EQ(0ULL, bg.current_priority());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: a non-exempt BACKGROUND task stays out of EDF dispatch while an
++// EDF-eligible RT task takes the deadline list (idle-time only, enforced
++// in edf_eligible — not just by daemon exempt flags).
++// Input: BG(p100, C=60) + RT(p100, wcet=10), both admitted, IRQs masked.
++// Expect: BG in bitmap (!in_edf_queue_), RT in EDF list.
++// Depends: edf_eligible BACKGROUND exclusion (issue #22)
++JARVIS_TEST(bg_no_edf_preempt, "PRE: none | POST: none") {
 +    sync::Semaphore gate;
 +    gate.init(0, 1);
-+    auto *a = make_task(60, 100, &gate);
-+    JARVIS_ASSERT(a != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
-+    auto *b = make_task(60, 100, &gate);
-+    JARVIS_ASSERT(b != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*b) ==
++    auto *bg = make_srv_task(0, 100, &gate);
++    JARVIS_ASSERT(bg != nullptr);
++    bg->init_sporadic_server(60, 100, 0, 1, ServerMode::BACKGROUND);
++    auto *rt = make_srv_task(10, 100, &gate);
++    JARVIS_ASSERT(rt != nullptr);
++    {
++        arch::IrqGuard irq;
++        JARVIS_ASSERT(Scheduler::add_task_err(*bg) ==
++                      errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(Scheduler::add_task_err(*rt) ==
++                      errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(!bg->in_edf_queue_);
++        JARVIS_ASSERT(rt->in_edf_queue_);
++    }
++    gate.post();
++    gate.post();
++    kernel::test::terminate_and_drain(*bg);
++    kernel::test::terminate_and_drain(*rt);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: admission counts every server mode's C identically; explicit
++// WCET still overrides the server budget.
++// Input: SS(C=60) admitted; DS(C=60) would total 120>82 → denied;
++// server task with wcet=5 counts 5 (60+5=65<=82 → admitted).
++// Expect: DENIED / OK as above; denied TCB absent from tables.
++// Depends: server_budget_for_admission helper (issues #20/#22)
++JARVIS_TEST(admission_counts_server_budgets, "PRE: none | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *ss = make_srv_task(0, 100, &gate);
++    JARVIS_ASSERT(ss != nullptr);
++    ss->init_sporadic_server(60, 100, 0);
++    JARVIS_ASSERT(ss->get_sporadic_server()->mode() ==
++                  ServerMode::SPORADIC);
++    JARVIS_ASSERT(Scheduler::add_task_err(*ss) == errors::SCHED_ERR_OK);
++    auto *ds = make_srv_task(0, 100, &gate);
++    JARVIS_ASSERT(ds != nullptr);
++    ds->init_sporadic_server(60, 100, 0, 1, ServerMode::DEFERRABLE);
++    JARVIS_ASSERT(Scheduler::add_task_err(*ds) ==
 +                  errors::SCHED_ERR_ADMISSION_DENIED);
-+    destroy_denied(b);
++    destroy_denied_srv(ds);
++    auto *ov = make_srv_task(5, 100, &gate);
++    JARVIS_ASSERT(ov != nullptr);
++    ov->init_sporadic_server(60, 100, 0);
++    JARVIS_ASSERT(Scheduler::add_task_err(*ov) == errors::SCHED_ERR_OK);
 +    gate.post();
-+    kernel::test::terminate_and_drain(*a);
++    gate.post();
++    kernel::test::terminate_and_drain(*ss);
++    kernel::test::terminate_and_drain(*ov);
 +    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: WCET exceeding the period is a config error, rejected first.
-+// Input: C(p100, wcet 200).
-+// Expect: C → SCHED_ERR_WCET_INVALID, never counted, no leak.
-+// Depends: Scheduler::check_wcet_locked (issue #20)
-+JARVIS_TEST(admission_wcet_exceeds_period_rejected,
-+            "PRE: none | POST: none") {
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *c = make_task(200, 100, &gate);
-+    JARVIS_ASSERT(c != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*c) ==
-+                  errors::SCHED_ERR_WCET_INVALID);
-+    destroy_denied(c);
-+    Scheduler::drain_zombie_list();
++// Testidea: 4-arg init and TaskDef defaults stay SPORADIC (compat).
++// Input: 4-arg init(C,T,bg); default-constructed TaskDef.
++// Expect: mode()==SPORADIC; TaskDef::ss_mode==SPORADIC.
++// Depends: ServerMode default args (issue #22)
++JARVIS_TEST(mode_compat_default, "PRE: none | POST: none") {
++    SporadicServer ss;
++    ss.init(5, 100, 2);
++    JARVIS_ASSERT(ss.mode() == ServerMode::SPORADIC);
++    JARVIS_ASSERT(!ss.is_deferrable());
++    JARVIS_ASSERT(!ss.is_background());
++    task::TaskDef def{};
++    JARVIS_ASSERT(def.ss_mode == ServerMode::SPORADIC);
 +    JARVIS_TEST_PASS();
 +}
 +
-+// Runmode: kernel
-+// Testidea: exemption precedes WCET-validity (audit S3): an untracked
-+// (aperiodic) task carrying an explicit WCET is exempt-admitted, never
-+// rejected — denying exempt tasks (e.g. boot daemons with stale WCET)
-+// would wedge the boot.  WCET-validity binds only gated tasks.
-+// Input: D(period 0, wcet 50).
-+// Expect: D → SCHED_ERR_OK (excluded from the LUB numerator).
-+// Depends: Scheduler::admission_check_locked exemption order (issue #20)
-+JARVIS_TEST(admission_wcet_untracked_exempt_admits, "PRE: none | POST: none") {
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *d = make_task(50, 0, &gate);
-+    JARVIS_ASSERT(d != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*d) == errors::SCHED_ERR_OK);
-+    gate.post();
-+    kernel::test::terminate_and_drain(*d);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
++void register_aperiodic_servers_tests() {
++    Logger::info("Registering aperiodic_servers tests");
++    JARVIS_REGISTER_TEST(ds_preserves_budget_across_idle);
++    JARVIS_REGISTER_TEST(ds_periodic_topup);
++    JARVIS_REGISTER_TEST(ds_back_to_back_bursts);
++    JARVIS_REGISTER_TEST(bg_never_promotes);
++    JARVIS_REGISTER_TEST(bg_no_edf_preempt);
++    JARVIS_REGISTER_TEST(admission_counts_server_budgets);
++    JARVIS_REGISTER_TEST(mode_compat_default);
 +}
-+
-+// Runmode: kernel
-+// Testidea: a lone implicit-100% task exactly meets the n=1 bound.
-+// Input: E(p100, wcet 0 → implicit 100); bound(1) == 1000000.
-+// Expect: admitted (100 > 100 is false); retry-after-free also admits
-+// (defer pattern: denial holds no state, so a later retry succeeds).
-+// Depends: Scheduler::admission_check_locked (issue #20)
-+JARVIS_TEST(admission_implicit_single_ok_defer_retries,
-+            "PRE: none | POST: none") {
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *e = make_task(0, 100, &gate);
-+    JARVIS_ASSERT(e != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*e) == errors::SCHED_ERR_OK);
-+    gate.post();
-+    kernel::test::terminate_and_drain(*e);
-+    auto *f = make_task(0, 100, &gate);
-+    JARVIS_ASSERT(f != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*f) == errors::SCHED_ERR_OK);
-+    gate.post();
-+    kernel::test::terminate_and_drain(*f);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: create()-time memory admission fails closed when the global
-+// budget is exhausted, and recovers fully on release.
-+// Input: reserve the entire remaining budget, then create().
-+// Expect: create → nullptr; after release, create succeeds again.
-+// Depends: TaskControlBlock::create budget gate + init_memory_budget (#20)
-+JARVIS_TEST(admission_memory_budget_denied_at_create,
-+            "PRE: none | POST: none") {
-+#if CONFIG_MEMORY_BUDGET
-+    uint64_t avail = Scheduler::remaining_memory_budget();
-+    JARVIS_ASSERT(avail > 0);
-+    JARVIS_ASSERT(Scheduler::reserve_memory_pages(avail));
-+    auto *g = TaskControlBlock::create(gated_entry, 11, 0);
-+    JARVIS_ASSERT(g == nullptr); // budget OOM: admission denied at create
-+    Scheduler::release_memory_pages(avail);
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *h = make_task(0, 0, &gate);
-+    JARVIS_ASSERT(h != nullptr);
-+    TaskControlBlock::destroy(h);
-+#else
-+    // Audit S3: budget APIs exist only under CONFIG_MEMORY_BUDGET (as does
-+    // the gate itself) — opt-out builds trivially pass to keep the class
-+    // count stable across configurations.
-+#endif
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: untracked/exempt tasks admit even when the system is overfull.
-+// Input: overfill to a confirmed denial; then aperiodic, NO_PERIOD, and
-+// edf-exempt periodic tasks.
-+// Expect: all three → SCHED_ERR_OK (excluded from the LUB numerator).
-+// Depends: Scheduler::admission_exempted (issue #20)
-+JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *a = make_task(60, 100, &gate);
-+    JARVIS_ASSERT(a != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
-+    auto *full = make_task(60, 100, &gate);
-+    JARVIS_ASSERT(full != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*full) ==
-+                  errors::SCHED_ERR_ADMISSION_DENIED);
-+    destroy_denied(full);
-+    auto *ap = make_task(0, 0, &gate);
-+    JARVIS_ASSERT(ap != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*ap) == errors::SCHED_ERR_OK);
-+    auto *np = make_task(0, TaskControlBlock::NO_PERIOD, &gate);
-+    JARVIS_ASSERT(np != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*np) == errors::SCHED_ERR_OK);
-+    auto *ex = make_task(90, 100, &gate);
-+    JARVIS_ASSERT(ex != nullptr);
-+    ex->edf_exempt = true; // mirrors the taskdefs daemon spawn site
-+    JARVIS_ASSERT(Scheduler::add_task_err(*ex) == errors::SCHED_ERR_OK);
-+    gate.post();
-+    gate.post();
-+    gate.post();
-+    gate.post();
-+    kernel::test::terminate_and_drain(*a);
-+    kernel::test::terminate_and_drain(*ap);
-+    kernel::test::terminate_and_drain(*np);
-+    kernel::test::terminate_and_drain(*ex);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: fork under an overfull system fails closed with no leak.
-+// Input: dispatched forker(p100,w5) + fill A(p100,w60) = 65%; the forked
-+// child (implicit 100%) would total 165 > bound(3) = 72.
-+// Expect: sys_fork → -1; parent unaffected; no ResourceTracker delta.
-+// Depends: Syscall::sys_fork admission path (issue #20)
-+JARVIS_TEST(admission_fork_denied_no_leak, "PRE: none | POST: none") {
-+    static volatile uint64_t g_fork_ret = 0;
-+    g_fork_ret = 0;
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *fill = make_task(60, 100, &gate);
-+    JARVIS_ASSERT(fill != nullptr);
-+    JARVIS_ASSERT(Scheduler::add_task_err(*fill) == errors::SCHED_ERR_OK);
-+    auto *forker = TaskControlBlock::create(
-+        []() {
-+            uint64_t regs[22] = {};
-+            g_fork_ret = Syscall::handle(
-+                static_cast<uint64_t>(SyscallNumber::FORK), 0, 0, 0, 0, regs);
-+        },
-+        11, 100);
-+    JARVIS_ASSERT(forker != nullptr);
-+    forker->wcet_ticks = 5;
-+    Scheduler::add_task(*forker);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(forker);
-+    JARVIS_ASSERT(g_fork_ret == static_cast<uint64_t>(-1));
-+    kernel::test::terminate_if_live(forker);
-+    gate.post();
-+    kernel::test::terminate_and_drain(*fill);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_sched_admission_tests() {
-+    Logger::info("Registering sched_admission tests");
-+    JARVIS_REGISTER_TEST(admission_lub_rejects_overrun);
-+    JARVIS_REGISTER_TEST(admission_wcet_exceeds_period_rejected);
-+    JARVIS_REGISTER_TEST(admission_wcet_untracked_exempt_admits);
-+    JARVIS_REGISTER_TEST(admission_implicit_single_ok_defer_retries);
-+    JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_create);
-+    JARVIS_REGISTER_TEST(admission_exemptions_untracked);
-+    JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
-+}
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index a183452c..bd642c44 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
+     {"selftest",            133,    0,       0      },  // same as safe
+     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+-    {"all",                1408,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 134 cross-arch/filtered registrations (TCOUNT actual 1408, executed 1393)
++    {"all",                1415,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 134 cross-arch/filtered registrations (TCOUNT actual 1415, executed 1400)
+ 
+     // basic
+     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+@@ -266,6 +266,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
+     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
+     {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
++    {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
+ };
+ 
+ static constexpr size_t k_expected_count_size =
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 7354b009..2a9f672c 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -205,6 +205,7 @@ void register_timer_wheel_tests();
+ void register_task_metering_tests();
+ void register_sched_edf_tests();
+ void register_sched_admission_tests();
++void register_aperiodic_servers_tests();
+ void register_syscall_fastpath_tests();
+ void register_fpu_inv_tests();
+ void register_cap_shm_tests();
+@@ -629,6 +630,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"task_metering", []() { register_task_metering_tests(); }},
+     {"sched_edf", []() { register_sched_edf_tests(); }},
+     {"sched_admission", []() { register_sched_admission_tests(); }},
++    {"aperiodic_servers", []() { register_aperiodic_servers_tests(); }},
+ 
+     // -- safe: curated subset with TF_RELEASE tests --
+     {"safe",
+@@ -857,6 +859,7 @@ static void register_all_tests() {
+     register_task_metering_tests();
+     register_sched_edf_tests();
+     register_sched_admission_tests();
++    register_aperiodic_servers_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
+@@ -1023,6 +1026,7 @@ static void register_all_tests_second_half() {
+     register_task_metering_tests();
+     register_sched_edf_tests();
+     register_sched_admission_tests();
++    register_aperiodic_servers_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+     register_cap_shm_tests();
 diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index 9de6ad47..b0cd7159 100644
+index b0cd7159..18df198b 100644
 --- a/src/kernel/test/test_weak_stubs.cpp
 +++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -110,6 +110,7 @@ __attribute__((weak)) void register_hrt_monotonic_tests() {}
- __attribute__((weak)) void register_timer_wheel_tests() {}
+@@ -111,6 +111,7 @@ __attribute__((weak)) void register_timer_wheel_tests() {}
  __attribute__((weak)) void register_task_metering_tests() {}
  __attribute__((weak)) void register_sched_edf_tests() {}
-+__attribute__((weak)) void register_sched_admission_tests() {}
+ __attribute__((weak)) void register_sched_admission_tests() {}
++__attribute__((weak)) void register_aperiodic_servers_tests() {}
  __attribute__((weak)) void register_cross_arch_tests() {}
  #if defined(CONFIG_ARCH_AARCH64)
  __attribute__((weak)) void register_aarch64_tests() {}
+diff --git a/src/lib/test.hpp b/src/lib/test.hpp
+index e476a6f4..b7f3a3c3 100644
+--- a/src/lib/test.hpp
++++ b/src/lib/test.hpp
+@@ -92,7 +92,7 @@ public:
+     static const char* current_test_name();
+ 
+ private:
+-    static constexpr size_t MAX_TESTS = 1408;
++    static constexpr size_t MAX_TESTS = 1415;
+     static constexpr size_t MAX_CLASSES = 64;
+     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
+     static TestCase tests_[MAX_TESTS];

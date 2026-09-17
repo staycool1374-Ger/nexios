@@ -34,6 +34,7 @@
 #include <kernel/sync/eventgroup.hpp>
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/kernel_object.hpp>
+#include <kernel/task/sporadic_server.hpp>
 #include <signal.hpp>
 
 namespace kernel {
@@ -715,10 +716,12 @@ struct TaskControlBlock {
     /// @param bg_prio            Priority level when budget exhausted.
     /// @param budget_granularity Ticks per budget unit (default:
     /// CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY).
+    /// @param mode               Replenishment discipline (issue #22;
+    /// default SPORADIC keeps existing callers unchanged).
     void init_sporadic_server(
         uint64_t budget_c, uint64_t period_t, uint64_t bg_prio,
-        uint64_t budget_granularity =
-            CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY) noexcept;
+        uint64_t budget_granularity = CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY,
+        task::ServerMode mode = task::ServerMode::SPORADIC) noexcept;
 
     /// @brief Attaches @p obj to this task's intrusive object list.
     ///        The task takes ownership of exactly one reference

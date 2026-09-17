@@ -205,6 +205,7 @@ void register_timer_wheel_tests();
 void register_task_metering_tests();
 void register_sched_edf_tests();
 void register_sched_admission_tests();
+void register_aperiodic_servers_tests();
 void register_syscall_fastpath_tests();
 void register_fpu_inv_tests();
 void register_cap_shm_tests();
@@ -629,6 +630,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"task_metering", []() { register_task_metering_tests(); }},
     {"sched_edf", []() { register_sched_edf_tests(); }},
     {"sched_admission", []() { register_sched_admission_tests(); }},
+    {"aperiodic_servers", []() { register_aperiodic_servers_tests(); }},
 
     // -- safe: curated subset with TF_RELEASE tests --
     {"safe",
@@ -857,6 +859,7 @@ static void register_all_tests() {
     register_task_metering_tests();
     register_sched_edf_tests();
     register_sched_admission_tests();
+    register_aperiodic_servers_tests();
     register_syscall_fastpath_tests();
     register_fpu_inv_tests();
     register_cap_shm_tests();
@@ -1023,6 +1026,7 @@ static void register_all_tests_second_half() {
     register_task_metering_tests();
     register_sched_edf_tests();
     register_sched_admission_tests();
+    register_aperiodic_servers_tests();
     register_syscall_fastpath_tests();
     register_fpu_inv_tests();
     register_cap_shm_tests();
