@@ -1,5 +1,29 @@
 # Completed Roadmap Items
 
+## v0.4.10 — Interactive Efficiency (RELEASED 2026-09-17)
+
+**Purpose:** Idle-efficient interactive shell and SMP-by-default release
+runs, plus top display correctness (unmilestoned follow-ups to v0.4.9).
+
+- **Shell Notify-nap** (#174) — readline/top-refresh/cmd_read sleep in
+  `Notify::wait` on a wheel-armed 20ms timeout instead of pause-spin
+  (uniform serial + PS/2, no ISR changes; cancel-first, fail-closed).
+  Placement-new for the file-static Notify (no `__cxa_atexit`
+  freestanding). Measured: cpuinfo IDLE 80% over 4s (was 100% spin).
+- **2-CPU default run-release-mode** (#174) — `-smp 2` appended for
+  CLASS=none + release + x86_64 only (gates/debug untouched). Verified:
+  MADT ncpus=2, AP parked, zero Liu-Leyland warnings (per-CPU
+  partitioned admission holds by construction).
+- **Top display fixes** (#174 + #172 follow-up) — sys/user ≤100 clamps;
+  wall-clock sliding windows (ticks lag wall ~0.6x under TCG, inflated
+  every share); PD_USE% `!` flag gated on explicit WCET.
+- **PD_USE% WCET gate** (#172 follow-up) — overrun flag only with
+  `wcet_ticks > 0`, both shapes pinned in test.
+
+Gates at completion (2026-09-17): debug `all` **1445/1445**, release
+`all` **85/85**, `selftest` **134/134**, `make build` Errors 0. SIL 3
+APPROVED (#174; #172-follow-up fix covered by class gates).
+
 ## v0.4.9 — IRQ Blocking + Audit (RELEASED 2026-09-17)
 
 **Purpose:** Interrupt-driven storage I/O, verified bounded-blocking
