@@ -95,15 +95,16 @@ Compile your C++20 freestanding application against the NexIOS syscall headers u
 
 `aarch64-none-elf-g++ -O2 -std=c++20 -fno-exceptions -fno-rtti -Wl,-T user_task.ld main.cpp -o my_app.elf`
 
-### 2. Stream to RAM-Disk
+### 2. Stream to RAM-Disk and load binary
 Transfer the compiled ELF binary directly to a mounted loop device on the running target:
 
 `rsync -avz --progress my_app.elf nexios@192.168.1.50:/tmp/my_app.elf`
+`nexios> loadelf /tmp/my_app.elf`
 
 ### 3. Execute via POSIX Shell
 Run the application dynamically from the NexIOS console:
 
-`nexios> runelf /tmp/my_app.elf`
+`nexios> runelf `
 
 ### 4. Crash Recovery & Hot-Fix Loop
 If the user application crashes:
