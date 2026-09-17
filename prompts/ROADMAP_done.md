@@ -1,5 +1,28 @@
 # Completed Roadmap Items
 
+## v0.4.8 — Enhance Deadline Scheduling (RELEASED 2026-09-17)
+
+**Purpose:** Deadline-monotonic assignment + global EDF dispatch, enforced
+Liu-Leyland admission, deferrable/background servers, per-CPU partitioned
+bounds, boot admission self-test. Milestone v0.4.8 has 0 open issues.
+
+- **Deadline-aware preemptive scheduling** (#19) — DM band 2–120 +
+  global EDF with 5 exemptions; sched_edf (7).
+- **Per-task execution-time metering + SYS_TIMES=79** (#21) —
+  charge/stamp helpers; task_metering (7).
+- **Enforced admission control** (#20) — LUB+WCET gate in add_task_err,
+  fork via gate, memory budget default ON; sched_admission (7).
+- **Aperiodic & deferrable servers** (#22) — ServerMode + periodic
+  top-up + BG idle-only; aperiodic_servers (7).
+- **SMP admission extension** (#23) — per-CPU bounds, set_affinity_err
+  gate, balancer probe; sched_affinity +1, smp_sched +5.
+- **Kernel self-test of admission bounds** (#24) — boot self-test line
+  + sched_admission_verify (7).
+
+Gates at completion (2026-09-17): debug `all` **1413/1413**, release
+`all` **85/85**, `make build` Errors 0. SIL 3 APPROVED per issue
+(#19, #21, #20 iter-2, #22, #23, #24; audit reports under `audits/`).
+
 ## v0.4.7 — Enhance HRT (RELEASED 2026-09-16)
 
 **Purpose:** High-resolution monotonic clock, per-CPU event-timer wheel,

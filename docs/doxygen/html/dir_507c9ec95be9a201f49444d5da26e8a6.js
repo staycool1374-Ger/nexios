@@ -1,5 +1,7 @@
 var dir_507c9ec95be9a201f49444d5da26e8a6 =
 [
+    [ "admission_selftest.cpp", "admission__selftest_8cpp.html", "admission__selftest_8cpp" ],
+    [ "admission_selftest.hpp", "admission__selftest_8hpp.html", "admission__selftest_8hpp" ],
     [ "all_tasks_registry.cpp", "all__tasks__registry_8cpp.html", "all__tasks__registry_8cpp" ],
     [ "all_tasks_registry.hpp", "all__tasks__registry_8hpp.html", "all__tasks__registry_8hpp" ],
     [ "deadline_list.cpp", "deadline__list_8cpp.html", null ],

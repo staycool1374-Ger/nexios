@@ -102,6 +102,7 @@ var annotated_dup =
       [ "CpuContext", "structkernel_1_1_cpu_context.html", "structkernel_1_1_cpu_context" ],
       [ "CRC32", "classkernel_1_1_c_r_c32.html", null ],
       [ "DeadlineList", "classkernel_1_1_deadline_list.html", "classkernel_1_1_deadline_list" ],
+      [ "EdfReadyList", "structkernel_1_1_edf_ready_list.html", "structkernel_1_1_edf_ready_list" ],
       [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
       [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
       [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],

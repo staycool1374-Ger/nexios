@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ae7fc9a59f78d98d18c2d3c5a25ec2193" id="r_ae7fc9a59f78d98d18c2d3c5a25ec2193"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae7fc9a59f78d98d18c2d3c5a25ec2193">dmesg_task_main</a> ()</td></tr>
+<tr class="memitem:adc36214616607d88fa61adf5386788e4" id="r_adc36214616607d88fa61adf5386788e4"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc36214616607d88fa61adf5386788e4">taskdefs_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a6c2e4859b68a0571d2f50dda0efba2a8" id="r_a6c2e4859b68a0571d2f50dda0efba2a8"><td class="memItemLeft">const TaskDef *&#160;</td><td class="memItemRight"><a class="el" href="#a6c2e4859b68a0571d2f50dda0efba2a8">taskdefs_at</a> (<a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> i) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a134c6b74e9d9bc36270fd82a843ea357" id="r_a134c6b74e9d9bc36270fd82a843ea357"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a134c6b74e9d9bc36270fd82a843ea357">taskdefs_server_params_valid</a> (const TaskDef &amp;d) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#acecadff66d32071ad6d02265945cc76a">taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memitem:a7f227dc40c3e02534d8c4640812236c7" id="r_a7f227dc40c3e02534d8c4640812236c7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7f227dc40c3e02534d8c4640812236c7">reboot_from_table</a> ()</td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
@@ -168,6 +172,112 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="namespacekernel_1_1task_a7f227dc40c3e02534d8c4640812236c7_cgraph.png" border="0" usemap="#anamespacekernel_1_1task_a7f227dc40c3e02534d8c4640812236c7_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 1 -->
 </div>
+
+</div>
+</div>
+<a id="a6c2e4859b68a0571d2f50dda0efba2a8" name="a6c2e4859b68a0571d2f50dda0efba2a8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c2e4859b68a0571d2f50dda0efba2a8">&#9670;&#160;</a></span>taskdefs_at()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const TaskDef * kernel::task::taskdefs_at </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>i</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1task_a6c2e4859b68a0571d2f50dda0efba2a8_cgraph.png" border="0" usemap="#anamespacekernel_1_1task_a6c2e4859b68a0571d2f50dda0efba2a8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="adc36214616607d88fa61adf5386788e4" name="adc36214616607d88fa61adf5386788e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adc36214616607d88fa61adf5386788e4">&#9670;&#160;</a></span>taskdefs_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::task::taskdefs_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a134c6b74e9d9bc36270fd82a843ea357" name="a134c6b74e9d9bc36270fd82a843ea357"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a134c6b74e9d9bc36270fd82a843ea357">&#9670;&#160;</a></span>taskdefs_server_params_valid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::task::taskdefs_server_params_valid </td>
+          <td>(</td>
+          <td class="paramtype">const TaskDef &amp;</td>          <td class="paramname"><span class="paramname"><em>d</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acecadff66d32071ad6d02265945cc76a" name="acecadff66d32071ad6d02265945cc76a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acecadff66d32071ad6d02265945cc76a">&#9670;&#160;</a></span>taskdefs_valid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::task::taskdefs_valid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
 
 </div>
 </div>

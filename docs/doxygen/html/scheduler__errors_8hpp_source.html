@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -158,27 +158,29 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__err
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span><span class="preprocessor">    X(ZOMBIE, 8, &quot;Task is a zombie (freed but not reaped)&quot;)                    \</span></div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="preprocessor">    X(INVALID_MAGIC, 9, &quot;Task control block magic invalid&quot;)                    \</span></div>
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">    X(NO_SHELL, 10, &quot;Shell task not set&quot;)                                      \</span></div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">    X(INVALID_ARGS, 11, &quot;Invalid arguments&quot;)</span></div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span></div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="comment">// NOLINTNEXTLINE(performance-enum-size)</span></div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="keyword">enum</span> SchedulerError : <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> {</div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">#define X(name, num, msg) SCHED_ERR_##name = (num),</span></div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    SCHEDULER_ERROR_CODES</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">#undef X</span></div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>};</div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">error_string</a>(SchedulerError e) {</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    <span class="keywordflow">switch</span> (e) {</div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="preprocessor">#define X(name, num, msg)                                                      \</span></div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="preprocessor">    case SCHED_ERR_##name:                                                     \</span></div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">        return msg;</span></div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>        SCHEDULER_ERROR_CODES</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">#undef X</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    }</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown scheduler error&quot;</span>;</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>}</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span> </div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>} <span class="comment">// namespace kernel::errors</span></div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">    X(INVALID_ARGS, 11, &quot;Invalid arguments&quot;)                                   \</span></div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="preprocessor">    X(ADMISSION_DENIED, 12, &quot;Admission denied: Liu-Leyland bound exceeded&quot;)    \</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">    X(WCET_INVALID, 13, &quot;Invalid WCET: exceeds period or period untracked&quot;)</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span></div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="comment">// NOLINTNEXTLINE(performance-enum-size)</span></div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="keyword">enum</span> SchedulerError : <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> {</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">#define X(name, num, msg) SCHED_ERR_##name = (num),</span></div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>    SCHEDULER_ERROR_CODES</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="preprocessor">#undef X</span></div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>};</div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span></div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="keyword">template</span> &lt;&gt; <span class="keyword">inline</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_function" href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">error_string</a>(SchedulerError e) {</div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    <span class="keywordflow">switch</span> (e) {</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">#define X(name, num, msg)                                                      \</span></div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="preprocessor">    case SCHED_ERR_##name:                                                     \</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">        return msg;</span></div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        SCHEDULER_ERROR_CODES</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="preprocessor">#undef X</span></div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    }</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordflow">return</span> <span class="stringliteral">&quot;Unknown scheduler error&quot;</span>;</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>}</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span> </div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>} <span class="comment">// namespace kernel::errors</span></div>
 <div class="ttc" id="aassert_8hpp_html"><div class="ttname"><a href="assert_8hpp.html">assert.hpp</a></div><div class="ttdoc">Debug assertion macros and the panic handler declaration.</div></div>
 <div class="ttc" id="anamespacekernel_1_1errors_html"><div class="ttname"><a href="namespacekernel_1_1errors.html">kernel::errors</a></div><div class="ttdoc">Primary template for per-module error-string lookup. Each module that defines error codes specialises...</div><div class="ttdef"><b>Definition</b> assert.hpp:34</div></div>
 <div class="ttc" id="anamespacekernel_1_1errors_html_a7a109eae637dbae8c0b5db75fad08745"><div class="ttname"><a href="namespacekernel_1_1errors.html#a7a109eae637dbae8c0b5db75fad08745">kernel::errors::error_string</a></div><div class="ttdeci">const char * error_string(E)</div><div class="ttdef"><b>Definition</b> assert.hpp:37</div></div>

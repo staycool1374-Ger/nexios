@@ -1,5 +1,6 @@
 var nexios__config_8h =
 [
+    [ "CONFIG_ADMISSION_SELFTEST", "nexios__config_8h.html#a3d316041cb01da0e73130da4b0eab404", null ],
     [ "CONFIG_ASSERT", "nexios__config_8h.html#af7dbe515e22f94aa374530a637f8418c", null ],
     [ "CONFIG_BUFFER_POOL_PAGES", "nexios__config_8h.html#a4bb3575fefad83e2c4c0679539f0e1b1", null ],
     [ "CONFIG_CANARY_GUARD", "nexios__config_8h.html#ad0e38363c716013f000005b049f48338", null ],
@@ -19,6 +20,8 @@ var nexios__config_8h =
     [ "CONFIG_DEADLINE_MISS_DETECTION", "nexios__config_8h.html#ad7f0edb3b1228f6361d92c6cfa81fc30", null ],
     [ "CONFIG_DEADLINE_MONITOR_PID", "nexios__config_8h.html#adbfd2982bfd8abcdb392578155755823", null ],
     [ "CONFIG_DEADLINE_MONITOR_TASK", "nexios__config_8h.html#a9a7951d5ba3d567a2f0e372fd5540a44", null ],
+    [ "CONFIG_DM_PRIO_MAX", "nexios__config_8h.html#a43d9dab37b65e95fa2ac5777a4de4d95", null ],
+    [ "CONFIG_DM_PRIO_MIN", "nexios__config_8h.html#a5455f1222d9acfec0d65194205357b96", null ],
     [ "CONFIG_DMESG_CAPACITY", "nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604", null ],
     [ "CONFIG_HAS_HPET", "nexios__config_8h.html#a835305cb9a116e1c539f8f2a6b880848", null ],
     [ "CONFIG_HAS_MPU", "nexios__config_8h.html#a95ce8c171faeb012773cd4f72a0f2935", null ],

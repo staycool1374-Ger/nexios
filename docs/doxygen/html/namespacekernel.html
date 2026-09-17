@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -159,6 +159,8 @@ Data Structures</h2></td></tr>
 <tr class="memitem:CRC32" id="r_CRC32"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_c_r_c32.html">CRC32</a></td></tr>
 <tr class="memitem:DeadlineList" id="r_DeadlineList"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_deadline_list.html">DeadlineList</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Intrusive doubly-linked list sorted by deadline_ticks ascending. Provides O(1) expired-detection by checking the head node only. Designed to replace the linear tasks_[] deadline scan in on_tick and scan_deadlines.  <a href="classkernel_1_1_deadline_list.html#details">More...</a><br /></td></tr>
+<tr class="memitem:EdfReadyList" id="r_EdfReadyList"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_edf_ready_list.html">EdfReadyList</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU EDF-ready list head (intrusive, deadline-ordered).  <a href="structkernel_1_1_edf_ready_list.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ErrorOr" id="r_ErrorOr"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_error_or.html">ErrorOr</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wraps a value or an error (similar to Rust's Result).  <a href="structkernel_1_1_error_or.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ErrorOr_3C_20void_20_3E" id="r_ErrorOr_3C_20void_20_3E"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_error_or_3_01void_01_4.html">ErrorOr&lt; void &gt;</a></td></tr>
@@ -313,6 +315,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
 <tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
 <tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
+<tr class="memitem:a5f757c7023bc8616bb0fd21b7c6d8f9f" id="r_a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5f757c7023bc8616bb0fd21b7c6d8f9f">admission_boot_selftest</a> () <a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verifies the admission gate math + budget gate + miss-action configuration during kernel init (issue #24).  <br /></td></tr>
 <tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bucket_of(const TaskControlBlock *t</td></tr>
 <tr class="memdesc:aef2c5f8888b21de09ec3a76f5b964885"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[].  <br /></td></tr>
 <tr class="memitem:a058eeb27b3f54e789e5f17935940c161" id="r_a058eeb27b3f54e789e5f17935940c161"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a058eeb27b3f54e789e5f17935940c161">while</a> (<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_ &amp;&amp;safe_tcb(<a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a>-&gt;pri_prev_)) <a class="el" href="#aec37532c2fb1a123d928e41e13297533">head</a></td></tr>
@@ -698,6 +702,40 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Find the priority bucket a node currently lives in. A task's stored t-&gt;priority may have been changed by priority inheritance WITHOUT the node being re-indexed, so we must NOT trust t-&gt;priority to locate the bucket. Instead climb pri_prev_ to the head of the node's chain and match it against heads_[]. </p>
+
+</div>
+</div>
+<a id="a5f757c7023bc8616bb0fd21b7c6d8f9f" name="a5f757c7023bc8616bb0fd21b7c6d8f9f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f757c7023bc8616bb0fd21b7c6d8f9f">&#9670;&#160;</a></span>admission_boot_selftest()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::admission_boot_selftest </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Verifies the admission gate math + budget gate + miss-action configuration during kernel init (issue #24). </p>
+<p>Contract: call once, after <a class="el" href="classkernel_1_1_scheduler.html#a1c8102c5c49bfeec7ddf89804d9b5bf3" title="Initialises the scheduler and creates the idle task.">Scheduler::init()</a> (scheduler + PMM/VMM + memory budget live) and before reboot_from_table() (tables still quiescent: idle [+ monitor] only). Single BSP. Performs ZERO allocation and ZERO scheduler-table mutation — synthetic stack TCBs are probed through the read-only admission helpers and never added; the budget check is a failed-reserve probe that cannot mutate the counter. Plain bool return (no test macros in the boot path): true logs one success line; false logs per-check errors and lets boot continue (fail-closed diagnostics — a diagnostic must never wedge the boot it guards). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a5f757c7023bc8616bb0fd21b7c6d8f9f_cgraph.png" border="0" usemap="#anamespacekernel_a5f757c7023bc8616bb0fd21b7c6d8f9f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
 
 </div>
 </div>
@@ -1163,7 +1201,7 @@ template&lt;typename T&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.png" border="0" usemap="#anamespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 1 -->
 </div>
 
 </div>
@@ -1207,7 +1245,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -1343,7 +1381,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph.png" border="0" usemap="#anamespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -1368,7 +1406,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -1435,7 +1473,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -1540,7 +1578,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -1582,7 +1620,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -1611,7 +1649,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -1636,7 +1674,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1665,7 +1703,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>

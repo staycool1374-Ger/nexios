@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -296,7 +296,7 @@ Macros</h2></td></tr>
 <tr class="memdesc:aaa67bf023e8838df96aa8ec37674ee90"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol oom_hook(size_t requested_size).  <br /></td></tr>
 <tr class="memitem:aed09cfec33d0062ef3e3e9b872f17cc2" id="r_aed09cfec33d0062ef3e3e9b872f17cc2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aed09cfec33d0062ef3e3e9b872f17cc2">CONFIG_OOM_POLICY</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:ab4d048869d4222593c9b0691268d36bf" id="r_ab4d048869d4222593c9b0691268d36bf"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ab4d048869d4222593c9b0691268d36bf">CONFIG_STATIC_POOLS_ONLY</a>&#160;&#160;&#160;0</td></tr>
-<tr class="memitem:a9cbca81eabffa4f1a76bc6230845e648" id="r_a9cbca81eabffa4f1a76bc6230845e648"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cbca81eabffa4f1a76bc6230845e648">CONFIG_MEMORY_BUDGET</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a9cbca81eabffa4f1a76bc6230845e648" id="r_a9cbca81eabffa4f1a76bc6230845e648"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9cbca81eabffa4f1a76bc6230845e648">CONFIG_MEMORY_BUDGET</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a5f748bfe245b9c25fb556172a5e4f2e5" id="r_a5f748bfe245b9c25fb556172a5e4f2e5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5f748bfe245b9c25fb556172a5e4f2e5">CONFIG_INIT_HOOK</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memdesc:a5f748bfe245b9c25fb556172a5e4f2e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">If non-zero, declares weak symbol init_hook() after daemon init complete.  <br /></td></tr>
 <tr class="memitem:afd4dfde1bb949f7e03c90dea7fe274f9" id="r_afd4dfde1bb949f7e03c90dea7fe274f9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afd4dfde1bb949f7e03c90dea7fe274f9">CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</a>&#160;&#160;&#160;1</td></tr>
@@ -305,8 +305,11 @@ Macros</h2></td></tr>
 <tr class="memdesc:ad7f0edb3b1228f6361d92c6cfa81fc30"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable deadline miss detection in on_tick(). Default: 1 (enabled).  <br /></td></tr>
 <tr class="memitem:a5347bb9dbf512963efd21650e2d3961c" id="r_a5347bb9dbf512963efd21650e2d3961c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5347bb9dbf512963efd21650e2d3961c">CONFIG_WCET_OVERRUN_DETECTION</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:afa71e737433cca1a4223e904afcf0a9c" id="r_afa71e737433cca1a4223e904afcf0a9c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#afa71e737433cca1a4223e904afcf0a9c">CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a5455f1222d9acfec0d65194205357b96" id="r_a5455f1222d9acfec0d65194205357b96"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a5455f1222d9acfec0d65194205357b96">CONFIG_DM_PRIO_MIN</a>&#160;&#160;&#160;2</td></tr>
+<tr class="memitem:a43d9dab37b65e95fa2ac5777a4de4d95" id="r_a43d9dab37b65e95fa2ac5777a4de4d95"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a43d9dab37b65e95fa2ac5777a4de4d95">CONFIG_DM_PRIO_MAX</a>&#160;&#160;&#160;120</td></tr>
 <tr class="memitem:a9a7951d5ba3d567a2f0e372fd5540a44" id="r_a9a7951d5ba3d567a2f0e372fd5540a44"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9a7951d5ba3d567a2f0e372fd5540a44">CONFIG_DEADLINE_MONITOR_TASK</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a515a1e55a71216c50a7d94659c372998" id="r_a515a1e55a71216c50a7d94659c372998"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a515a1e55a71216c50a7d94659c372998">CONFIG_DEADLINE_ACTION</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a3d316041cb01da0e73130da4b0eab404" id="r_a3d316041cb01da0e73130da4b0eab404"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3d316041cb01da0e73130da4b0eab404">CONFIG_ADMISSION_SELFTEST</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:adbfd2982bfd8abcdb392578155755823" id="r_adbfd2982bfd8abcdb392578155755823"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adbfd2982bfd8abcdb392578155755823">CONFIG_DEADLINE_MONITOR_PID</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:af7dbe515e22f94aa374530a637f8418c" id="r_af7dbe515e22f94aa374530a637f8418c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af7dbe515e22f94aa374530a637f8418c">CONFIG_ASSERT</a>(expr)</td></tr>
 </table><table class="memberdecls">
@@ -319,6 +322,21 @@ Functions</h2></td></tr>
 <div class="textblock"><p>Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in 20+ files get a single configuration home. </p>
 <p>Every #define has a Doxygen comment explaining its effect, valid range, and default value. Override any define before including this header to customise the build. </p>
 </div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="a3d316041cb01da0e73130da4b0eab404" name="a3d316041cb01da0e73130da4b0eab404"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d316041cb01da0e73130da4b0eab404">&#9670;&#160;</a></span>CONFIG_ADMISSION_SELFTEST</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_ADMISSION_SELFTEST&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Boot-time admission self-test (issue #24): read-only probes of the frozen LUB/WCET/budget gate math + miss-action range check, run once after Scheduler::init (zero alloc, zero table mutation, one success line). Default: 1 (on). </p>
+
+</div>
+</div>
 <a id="af7dbe515e22f94aa374530a637f8418c" name="af7dbe515e22f94aa374530a637f8418c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#af7dbe515e22f94aa374530a637f8418c">&#9670;&#160;</a></span>CONFIG_ASSERT</h2>
 
@@ -610,6 +628,35 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>Decouple deadline scanning from the timer ISR via a dedicated watchdog task. When &gt;0, scheduler spawns [deadline-mon] at priority 127 during init(). The monitor waits on an atomic flag (lock-free handoff) and calls scan_deadlines() in task context where full scheduler_lock_ and inline KILL cleanup are safe. When 0, inline scanning in on_tick() is used. Default: 0 (inline). </p>
+
+</div>
+</div>
+<a id="a43d9dab37b65e95fa2ac5777a4de4d95" name="a43d9dab37b65e95fa2ac5777a4de4d95"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43d9dab37b65e95fa2ac5777a4de4d95">&#9670;&#160;</a></span>CONFIG_DM_PRIO_MAX</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DM_PRIO_MAX&#160;&#160;&#160;120</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5455f1222d9acfec0d65194205357b96" name="a5455f1222d9acfec0d65194205357b96"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5455f1222d9acfec0d65194205357b96">&#9670;&#160;</a></span>CONFIG_DM_PRIO_MIN</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DM_PRIO_MIN&#160;&#160;&#160;2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Deadline-monotonic priority band for assign_deadline_priority() (issue #19). DM maps shorter relative deadlines to higher priorities within [MIN, MAX]; 0-1 stay idle/background-adjacent, 121-127 stay reserved for system tasks (deadline monitor runs at 127). </p>
 
 </div>
 </div>
@@ -1743,11 +1790,11 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define CONFIG_MEMORY_BUDGET&#160;&#160;&#160;0</td>
+          <td class="memname">#define CONFIG_MEMORY_BUDGET&#160;&#160;&#160;1</td>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Per-task memory budget enforcement. When non-zero, TaskControlBlock::create() deducts stack pages from a global system budget; alloc_page() checks the calling task's budget. Default: 0 (no budget enforcement — current behaviour). </p>
+<p>Per-task memory budget enforcement. When non-zero, TaskControlBlock::create() deducts stack pages from a global system budget; alloc_page() checks the calling task's budget. Default: 1 (budget enforcement on — issue #20; sized at boot from PMM total pages via Scheduler::init_memory_budget; per-task 0 == unlimited). </p>
 
 </div>
 </div>

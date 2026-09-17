@@ -106,7 +106,11 @@ var namespacekernel =
     [ "sync", "namespacekernel_1_1sync.html", "namespacekernel_1_1sync" ],
     [ "task", "namespacekernel_1_1task.html", [
       [ "dmesg_task_main", "namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193", null ],
-      [ "reboot_from_table", "namespacekernel_1_1task.html#a7f227dc40c3e02534d8c4640812236c7", null ]
+      [ "reboot_from_table", "namespacekernel_1_1task.html#a7f227dc40c3e02534d8c4640812236c7", null ],
+      [ "taskdefs_at", "namespacekernel_1_1task.html#a6c2e4859b68a0571d2f50dda0efba2a8", null ],
+      [ "taskdefs_count", "namespacekernel_1_1task.html#adc36214616607d88fa61adf5386788e4", null ],
+      [ "taskdefs_server_params_valid", "namespacekernel_1_1task.html#a134c6b74e9d9bc36270fd82a843ea357", null ],
+      [ "taskdefs_valid", "namespacekernel_1_1task.html#acecadff66d32071ad6d02265945cc76a", null ]
     ] ],
     [ "test", "namespacekernel_1_1test.html", "namespacekernel_1_1test" ],
     [ "time", "namespacekernel_1_1time.html", "namespacekernel_1_1time" ],
@@ -120,6 +124,7 @@ var namespacekernel =
     [ "CpuContext", "structkernel_1_1_cpu_context.html", "structkernel_1_1_cpu_context" ],
     [ "CRC32", "classkernel_1_1_c_r_c32.html", null ],
     [ "DeadlineList", "classkernel_1_1_deadline_list.html", "classkernel_1_1_deadline_list" ],
+    [ "EdfReadyList", "structkernel_1_1_edf_ready_list.html", "structkernel_1_1_edf_ready_list" ],
     [ "ErrorOr", "structkernel_1_1_error_or.html", "structkernel_1_1_error_or" ],
     [ "ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", "structkernel_1_1_error_or_3_01void_01_4" ],
     [ "ExceptionSignalMap", "structkernel_1_1_exception_signal_map.html", "structkernel_1_1_exception_signal_map" ],
@@ -211,6 +216,7 @@ var namespacekernel =
       [ "CONT", "namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80", null ]
     ] ],
     [ "__attribute__", "namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885", null ],
+    [ "admission_boot_selftest", "namespacekernel.html#a5f757c7023bc8616bb0fd21b7c6d8f9f", null ],
     [ "atomic_acquire_fence", "namespacekernel.html#a0a3c6d96045314e760c63011e9568f9b", null ],
     [ "atomic_compare_exchange", "namespacekernel.html#abb19c90f47d9e7fb9a58a92ea6c56444", null ],
     [ "atomic_exchange", "namespacekernel.html#a3dd3bd74efa8bab6fd34d9ada348781d", null ],

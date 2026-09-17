@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -142,13 +142,14 @@ Functions</h2></td></tr>
 <tr class="memitem:af79f307559c7e2286e7dcc63b8aa739a" id="r_af79f307559c7e2286e7dcc63b8aa739a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af79f307559c7e2286e7dcc63b8aa739a">JARVIS_TEST</a> (sched_affinity_user_clamp, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aa8c630fd816514701618af650e8ca03f" id="r_aa8c630fd816514701618af650e8ca03f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa8c630fd816514701618af650e8ca03f">JARVIS_TEST</a> (sched_affinity_requeue_moves, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a5638ba116c2f2aaf5935465bc8251189" id="r_a5638ba116c2f2aaf5935465bc8251189"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5638ba116c2f2aaf5935465bc8251189">JARVIS_TEST</a> (sched_affinity_is_idle, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:af339e203413fe9900a8c67d516a7b1e2" id="r_af339e203413fe9900a8c67d516a7b1e2"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af339e203413fe9900a8c67d516a7b1e2">JARVIS_TEST</a> (sched_affinity_err_cpu0_ok, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a9b9c5fdf8161030a7b12289a97414f15" id="r_a9b9c5fdf8161030a7b12289a97414f15"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9b9c5fdf8161030a7b12289a97414f15">register_sched_affinity_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>CPU affinity tests (issue #25, Phase C1). Affinity is a bitmask (bit N = may run on CPU N) with lowest- set-bit targeting and no balancing in C1. All tests run on the BSP on every variant (single-CPU safe: cross-CPU targets direct-enqueue under the lock when no AP is up, so placement is observable without a second CPU). </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="aa4c4c6c0d2a2915f19b0cb770c8515c2" name="aa4c4c6c0d2a2915f19b0cb770c8515c2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa4c4c6c0d2a2915f19b0cb770c8515c2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa4c4c6c0d2a2915f19b0cb770c8515c2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -175,7 +176,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a70d35d6fba00612daaf316470c6bea7f" name="a70d35d6fba00612daaf316470c6bea7f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a70d35d6fba00612daaf316470c6bea7f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a70d35d6fba00612daaf316470c6bea7f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -201,8 +202,35 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="af339e203413fe9900a8c67d516a7b1e2" name="af339e203413fe9900a8c67d516a7b1e2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af339e203413fe9900a8c67d516a7b1e2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/7]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">sched_affinity_err_cpu0_ok</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__sched__affinity_8cpp_af339e203413fe9900a8c67d516a7b1e2_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_af339e203413fe9900a8c67d516a7b1e2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
 <a id="a5638ba116c2f2aaf5935465bc8251189" name="a5638ba116c2f2aaf5935465bc8251189"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5638ba116c2f2aaf5935465bc8251189">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a5638ba116c2f2aaf5935465bc8251189">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -223,13 +251,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__affinity_8cpp_a5638ba116c2f2aaf5935465bc8251189_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_a5638ba116c2f2aaf5935465bc8251189_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
 </div>
 <a id="a14ae63c6cb2e0dbbc994942e416ac84d" name="a14ae63c6cb2e0dbbc994942e416ac84d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a14ae63c6cb2e0dbbc994942e416ac84d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a14ae63c6cb2e0dbbc994942e416ac84d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -250,13 +278,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__affinity_8cpp_a14ae63c6cb2e0dbbc994942e416ac84d_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_a14ae63c6cb2e0dbbc994942e416ac84d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
 </div>
 <a id="aa8c630fd816514701618af650e8ca03f" name="aa8c630fd816514701618af650e8ca03f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa8c630fd816514701618af650e8ca03f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8c630fd816514701618af650e8ca03f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -277,13 +305,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__affinity_8cpp_aa8c630fd816514701618af650e8ca03f_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_aa8c630fd816514701618af650e8ca03f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
 </div>
 <a id="af79f307559c7e2286e7dcc63b8aa739a" name="af79f307559c7e2286e7dcc63b8aa739a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af79f307559c7e2286e7dcc63b8aa739a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#af79f307559c7e2286e7dcc63b8aa739a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/7]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -304,7 +332,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__affinity_8cpp_af79f307559c7e2286e7dcc63b8aa739a_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_af79f307559c7e2286e7dcc63b8aa739a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -327,7 +355,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__sched__affinity_8cpp_a9b9c5fdf8161030a7b12289a97414f15_cgraph.png" border="0" usemap="#atest__sched__affinity_8cpp_a9b9c5fdf8161030a7b12289a97414f15_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>

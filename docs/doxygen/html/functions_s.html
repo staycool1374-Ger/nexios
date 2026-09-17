@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -130,6 +130,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>scan_deadlines()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aabd465f67eed45ec2c20877a6f7398b8">kernel::Scheduler</a></li>
 <li>sched_cpu()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a08909dbd61fc213d9a5a36cc7b6c072a">kernel::Scheduler</a></li>
 <li>sched_ipi_handler()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a42d074c7f070204bd85737823bce150a">kernel::Scheduler</a></li>
+<li>sched_policy&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a070de214a76cbaa040b511236225ce25">kernel::Scheduler::TaskFields</a></li>
 <li>SCHED_VECTOR&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a119fe66aa1954384cb4b6d51758e73f2">arch::APIC</a></li>
 <li>ScopedCurrentTask()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_scoped_current_task.html#abaa46b4f89a7425f5c8618f79f766031">kernel::test::ScopedCurrentTask</a></li>
 <li>ScopedRef()&#160;:&#160;<a class="el" href="classkernel_1_1_scoped_ref.html#acb2546ff153c5e93e46d59ec1ce98cc1">kernel::ScopedRef</a></li>
@@ -141,12 +142,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>seq&#160;:&#160;<a class="el" href="structkernel_1_1diag_1_1_tcb_write_log.html#ae8786a6c83ff26718092ccadbc73fbee">kernel::diag::TcbWriteLog</a></li>
 <li>set()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#a698aa08d85c3fc99888ed1127aec69f8">kernel::PriorityMap</a></li>
 <li>set_affinity()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a596d9088e1f0680b0b636847a365ab96">kernel::Scheduler</a></li>
+<li>set_affinity_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#afd72a0a3a500b9a324188949d6a5e6b4">kernel::Scheduler</a></li>
 <li>set_bg()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a05b4f144a8f03a9786757289d9e62ac7">service::Terminal</a></li>
 <li>set_current()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a5a2b494bb6c3b184c9374e85be368804">kernel::Scheduler</a></li>
 <li>set_current_index()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a3c89637a429ed31290338b912cc8695d">kernel::Scheduler</a></li>
 <li>set_current_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a6c327d25c2a2293e83682bbdc0db5dcf">kernel::Scheduler</a></li>
 <li>set_current_test_name()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a05e2dd99478868128413378977a68aa4">kernel::test::Registry</a></li>
 <li>set_cursor_visible()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a6fea6970b6feea416b83d0bfcc429e20">service::Terminal</a></li>
+<li>set_edf_exempt()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a28ea3ffe024324a84d9006a97bd9dd1b">kernel::Scheduler</a></li>
 <li>set_enabled()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#a330435285840a524805f9b8d92ee7210">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#a330435285840a524805f9b8d92ee7210">Sampler</a></li>
 <li>set_entry_masked()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a56c4f0ee0d7d63101e3f90d43e589f4b">kernel::cap::MsixCap</a></li>
 <li>set_expected_count()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_registry.html#a9ac5c56090a4d834ccdc987923fe6ae4">kernel::test::Registry</a></li>
@@ -158,6 +161,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>set_priority()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a460f3e4e082b3a13c6966a350b270d23">kernel::Scheduler</a></li>
 <li>set_raw()&#160;:&#160;<a class="el" href="classkernel_1_1_priority_map.html#ae2c0e1d8c1477ffbc144b3b3a31792c8">kernel::PriorityMap</a>, <a class="el" href="classkernel_1_1_task_queue.html#aa5a4c0397d73f35c198c22b40e9e4d9e">kernel::TaskQueue</a></li>
 <li>set_sample_rate()&#160;:&#160;<a class="el" href="classkernel_1_1profiling_1_1_sampler.html#ae631e7c38c8858dd612c8a51ab9d50e9">kernel::profiling::Sampler</a>, <a class="el" href="class_sampler.html#ae631e7c38c8858dd612c8a51ab9d50e9">Sampler</a></li>
+<li>set_sched_policy()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#ad78e190e0aff46c0548846a223cfcc32">kernel::Scheduler</a></li>
 <li>set_shell_task()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a940a027ee35b641fd1c7fc73f9235c65">kernel::Scheduler</a></li>
 <li>set_slot_owner()&#160;:&#160;<a class="el" href="classkernel_1_1_irq_delivery.html#a37d8943431ec5c4159e1c553c82bc17e">kernel::IrqDelivery</a></li>
 <li>set_suppress_terminated_log()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aca1f956c7e183393301034d90657e0f5">kernel::Scheduler</a></li>

@@ -1,5 +1,8 @@
 var NAVTREEINDEX2 =
 {
+"classkernel_1_1cap_1_1_msix_cap.html#adfe540368bab35f9a1f83ff9a217ad4a":[2,0,3,1,9,6],
+"classkernel_1_1cap_1_1_untyped_mem.html":[0,0,3,3,10],
+"classkernel_1_1cap_1_1_untyped_mem.html":[2,0,3,1,10],
 "classkernel_1_1cap_1_1_untyped_mem.html#a03c3de003a74018c5fe9b768e3567bab":[0,0,3,3,10,7],
 "classkernel_1_1cap_1_1_untyped_mem.html#a03c3de003a74018c5fe9b768e3567bab":[2,0,3,1,10,7],
 "classkernel_1_1cap_1_1_untyped_mem.html#a0ca89d87404609bba763237c7200b164":[0,0,3,3,10,6],
@@ -246,8 +249,5 @@ var NAVTREEINDEX2 =
 "classkernel_1_1time_1_1_timer_wheel.html#a8e0c163853b1a0d016d5b5cb677c30f8":[2,0,3,12,0,1],
 "classservice_1_1_framebuffer.html":[0,0,7,0],
 "classservice_1_1_framebuffer.html":[2,0,4,0],
-"classservice_1_1_program_registry.html":[0,0,7,2],
-"classservice_1_1_program_registry.html":[2,0,4,2],
-"classservice_1_1_shell.html":[0,0,7,3],
-"classservice_1_1_shell.html":[2,0,4,3]
+"classservice_1_1_program_registry.html":[0,0,7,2]
 };

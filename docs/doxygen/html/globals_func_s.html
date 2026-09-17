@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.7</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,21 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_acpi_parse_info_default_contract()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af337fe856fbd3b2af20adb045a4da5d6">test_registry.gen.hpp</a></li>
 <li>setup_acpi_parse_scan_fail_closed()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab250b99048d12032874e764df7e44e1b">test_registry.gen.hpp</a></li>
 <li>setup_acpi_parse_scan_is_pure()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5915c85da2494a80964fba79b1a2f281">test_registry.gen.hpp</a></li>
+<li>setup_admission_counts_server_budgets()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0c7239fda5aaacd285fbfadab505cd7c">test_registry.gen.hpp</a></li>
+<li>setup_admission_exemptions_untracked()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac3bb0b552e34caa2ec1c7818c4946ac2">test_registry.gen.hpp</a></li>
+<li>setup_admission_fork_denied_no_leak()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7f7641c56e1228f4e8363345759977a9">test_registry.gen.hpp</a></li>
+<li>setup_admission_implicit_single_ok_defer_retries()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a83ac1c96d5f3497c790ef5f59c20001d">test_registry.gen.hpp</a></li>
+<li>setup_admission_lub_rejects_overrun()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a60f1ff5c793f5ac28ba1df22ff0dd25e">test_registry.gen.hpp</a></li>
+<li>setup_admission_memory_budget_denied_at_create()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac11d47e2be0e2fc32cd8a461936e57f9">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_background_table_guard()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab9305db554d9298e5292a96756d62037">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_boot_parity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a875062c3a44a7eca7ff26202ba7c71de">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_budget_exhaustion_roundtrip()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae1a580d9a1805ad21daa50807e0361f9">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_cross_mode_budget_parity()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab7d74f0e6ba6ceeccf0f4509d0f17028">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_defer_retry_after_reap()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a94e10a3c48b8c3cccebc7d519c00b1ee">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_percpu_epsilon()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a24de8eb2a3ef7682594dd48fcb78f5dd">test_registry.gen.hpp</a></li>
+<li>setup_admission_verify_taskdefs_server_budgets()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aaf19b215d5b46a4f9655eb8ecb545191">test_registry.gen.hpp</a></li>
+<li>setup_admission_wcet_exceeds_period_rejected()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab2c5523891bd441074f5de2873883309">test_registry.gen.hpp</a></li>
+<li>setup_admission_wcet_untracked_exempt_admits()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a97963577a5c17e7759693e6f33567bb8">test_registry.gen.hpp</a></li>
 <li>setup_ahci_deep_cmdheader_layout()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0df43d92ce69f0a1d96a6e8cb6037344">test_registry.gen.hpp</a></li>
 <li>setup_ahci_deep_cmdtable_layout()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a90d4b36bcaa13d663c205f90670f1282">test_registry.gen.hpp</a></li>
 <li>setup_ahci_deep_ncq_tag_encoding()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a00fcabccc6b4da58a7823370c98f7350">test_registry.gen.hpp</a></li>
@@ -170,6 +185,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_bench_spinlock_acquire_release()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a46d1c83e11b5bd5ecf887e465f9c1f15">test_registry.gen.hpp</a></li>
 <li>setup_bench_spinlock_try_lock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aabdf8f9e08f61e88f3d0f4618bb2e58c">test_registry.gen.hpp</a></li>
 <li>setup_bench_spsc_push_pop()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad62d5591ba03549eacfe743667ca76b0">test_registry.gen.hpp</a></li>
+<li>setup_bg_never_promotes()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a147753508078eed9abf0f5e08a88ec08">test_registry.gen.hpp</a></li>
+<li>setup_bg_no_edf_preempt()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a61625e8c8f9b57fee01f7e6e9b85cd30">test_registry.gen.hpp</a></li>
 <li>setup_block_device_create()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a46101971a7d92e5054a205f67c05639b">test_registry.gen.hpp</a></li>
 <li>setup_block_device_multiple_sectors()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8686871214e08d7802d4f3dd41775504">test_registry.gen.hpp</a></li>
 <li>setup_block_device_oob_read()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a2a28db80c8e944db810a103f1d217a2c">test_registry.gen.hpp</a></li>
@@ -345,6 +362,16 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_driver_registry_count()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aface228f315d54cb1c7213d59c47c911">test_registry.gen.hpp</a></li>
 <li>setup_driver_registry_find()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1c5261f21eab53d64c49b12857da96e1">test_registry.gen.hpp</a></li>
 <li>setup_driver_server_mmio_via_caps()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af4f33d571b61509f210eaff21e52a5dd">test_registry.gen.hpp</a></li>
+<li>setup_ds_back_to_back_bursts()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a205f0d9038c8f34edc9c38f72bcc0ca7">test_registry.gen.hpp</a></li>
+<li>setup_ds_periodic_topup()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4ec3060d0a2a182db123b8a1bbe12e71">test_registry.gen.hpp</a></li>
+<li>setup_ds_preserves_budget_across_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a8363db19cbec21e7df1252f3ae9ecfab">test_registry.gen.hpp</a></li>
+<li>setup_edf_dm_assign_clamps_to_band()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa5009b34edad512de9e4c1cf1f49e179">test_registry.gen.hpp</a></li>
+<li>setup_edf_dm_assign_orders_by_deadline()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6ac89daef31cbd0e1c7a0e540353e811">test_registry.gen.hpp</a></li>
+<li>setup_edf_earliest_dispatches_first()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aee4b7d910991570212ace7ccf6852bda">test_registry.gen.hpp</a></li>
+<li>setup_edf_equal_deadlines_no_thrash()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac517ed13f3b3d0fce77b91e5936d4bfc">test_registry.gen.hpp</a></li>
+<li>setup_edf_exempt_daemon_stays_fixed()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ad1b704ad9cfaa72cad391b1abd4aca60">test_registry.gen.hpp</a></li>
+<li>setup_edf_missed_deadline_recovers()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a5a3897d7ee992aaf9e6c30ef8b164153">test_registry.gen.hpp</a></li>
+<li>setup_edf_preempts_fixed()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a30d4cc1713581eef3991da08e8218ee7">test_registry.gen.hpp</a></li>
 <li>setup_elf_load_creates_user_stack()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af7376908b5d4f1557d2150d6a3d724af">test_registry.gen.hpp</a></li>
 <li>setup_elf_load_from_hhdm_buffer()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a069868199a9c4bd411eef15f9966e8ab">test_registry.gen.hpp</a></li>
 <li>setup_elf_load_init_task_common_called()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a754e41a014b629d0149f73a9942ecfda">test_registry.gen.hpp</a></li>
@@ -765,6 +792,13 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_merge_allocates_nothing()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a727d4d275a167c27a008c188505085d1">test_registry.gen.hpp</a></li>
 <li>setup_merge_equivalent_to_full_copy()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acac78ebc392b271616a07d26241f55fd">test_registry.gen.hpp</a></li>
 <li>setup_merge_idempotent()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ade9841c78c386e9ee933e19316c4afe6">test_registry.gen.hpp</a></li>
+<li>setup_meter_period_reload_resets_period_keeps_total()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7d745f34adbb4c121efb0c52b5bfdd58">test_registry.gen.hpp</a></li>
+<li>setup_meter_ready_task_accumulates_no_ns()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a58936c8ab361a59d3493f814904e6752">test_registry.gen.hpp</a></li>
+<li>setup_meter_switch_delta_accumulates()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7770a6ab95341538ca96cb1907941c71">test_registry.gen.hpp</a></li>
+<li>setup_meter_terminate_charges_final_quantum()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1c15ff182f7b3de095d50b23c6f6b4da">test_registry.gen.hpp</a></li>
+<li>setup_meter_times_null_buffer_fail_closed()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ac82486d7e5d0777de81579df10e7f0be">test_registry.gen.hpp</a></li>
+<li>setup_meter_times_other_pid_and_esrch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae4131651cb8076865a5f921cd54057a8">test_registry.gen.hpp</a></li>
+<li>setup_meter_times_self_grows()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa28eba9c56a15b546dd75b3c10f19373">test_registry.gen.hpp</a></li>
 <li>setup_mint_reduces_rights()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af15b682e9314575be12bf9d09c6dc48e">test_registry.gen.hpp</a></li>
 <li>setup_mmio_cap_create_io_bar_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acdfa505205acaeb10567597d2be557d6">test_registry.gen.hpp</a></li>
 <li>setup_mmio_cap_create_memory_bar_fields()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af5fc76d06e3a8148f6a049fe2f8d4173">test_registry.gen.hpp</a></li>
@@ -779,6 +813,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_mmio_user_revoke_invalidates_mapping()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa63a6f1b388d174fd2e228763ba6ab0e">test_registry.gen.hpp</a></li>
 <li>setup_mmio_user_syscall_dispatch()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a9d62fd441619a96e87185420e3b607ff">test_registry.gen.hpp</a></li>
 <li>setup_mmio_user_unmap_wrong_owner()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#af82f3b3dd22ebd90f563f24dc1a66cf4">test_registry.gen.hpp</a></li>
+<li>setup_mode_compat_default()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0a208154c8a863c2af2911d2692b3552">test_registry.gen.hpp</a></li>
 <li>setup_msix_cap_create_fields()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1cdbcb238093ea3848659b10c25c9077">test_registry.gen.hpp</a></li>
 <li>setup_msix_cap_entry_bounds_and_table()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3bca554c928f3b6d19a7c697914aec84">test_registry.gen.hpp</a></li>
 <li>setup_msix_cap_install_lookup_revoke()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a68b58f40a471c82a3caa3f4faa270099">test_registry.gen.hpp</a></li>
@@ -1034,6 +1069,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_sampler_symbol_lookup_range_bounds()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a15080d8efa803358d05cd40a4e0b97d7">test_registry.gen.hpp</a></li>
 <li>setup_sched_affinity_default_mask()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a957590db52d67ba32145a1f7013810c0">test_registry.gen.hpp</a></li>
 <li>setup_sched_affinity_empty_clamp()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7b6006b8b8c3fd4e862b1a669f180848">test_registry.gen.hpp</a></li>
+<li>setup_sched_affinity_err_cpu0_ok()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aff6c2f8f4666a1320ab8f4f86ce6a177">test_registry.gen.hpp</a></li>
 <li>setup_sched_affinity_is_idle()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a0bc0a35a1f8af98f8475bfaa39d38475">test_registry.gen.hpp</a></li>
 <li>setup_sched_affinity_lowest_bit_targets()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab4f9523bc6500a9431821e6528964e9e">test_registry.gen.hpp</a></li>
 <li>setup_sched_affinity_requeue_moves()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a665dc42133574fafb8d94a19c532ea97">test_registry.gen.hpp</a></li>
@@ -1166,10 +1202,15 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_func_s
 <li>setup_smp_madt_scan_finds_bsp()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a7ecf861329e28105167709c1c92d3651">test_registry.gen.hpp</a></li>
 <li>setup_smp_madt_scan_is_pure()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aa2ac216e208baec894ada22766829824">test_registry.gen.hpp</a></li>
 <li>setup_smp_sched_ap_runs_pinned()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#aeca70964b72ef541f91f49e60334bc90">test_registry.gen.hpp</a></li>
+<li>setup_smp_sched_balancer_moves_nonrt_keeps_rt()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3e9ecf3373629e7cbe027dff6cc5a8bf">test_registry.gen.hpp</a></li>
 <li>setup_smp_sched_bsp_unaffected()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a03a19ed93d8a2cbc9a2250b381293da0">test_registry.gen.hpp</a></li>
 <li>setup_smp_sched_cross_move()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a706115cbed9774b62630df38946a8c77">test_registry.gen.hpp</a></li>
+<li>setup_smp_sched_exempt_move_always_allowed()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a4e486bbb9c27d143bd01d21d6a115874">test_registry.gen.hpp</a></li>
 <li>setup_smp_sched_ipi_wake()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ae3e0f0399d8a3e43280fa6806e5399c4">test_registry.gen.hpp</a></li>
+<li>setup_smp_sched_percpu_add_denies_overloaded_cpu()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a32f5ec73d72f877e7b1c2661abb1033a">test_registry.gen.hpp</a></li>
+<li>setup_smp_sched_percpu_partition_divergence()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#acca215fed54915024b016cc3880c5dc6">test_registry.gen.hpp</a></li>
 <li>setup_smp_sched_queue_placement_fanout()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a77ef4e61ad962fa1057c92699157e920">test_registry.gen.hpp</a></li>
+<li>setup_smp_sched_set_affinity_denied_keeps_source()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a1e35286c268ede1a8c801bcbf7cfbed3">test_registry.gen.hpp</a></li>
 <li>setup_smp_sync_holder_migration()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#ab7973e86f7d324c27b1d791f9d79bb91">test_registry.gen.hpp</a></li>
 <li>setup_smp_sync_irq_guard_if_contract()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a6981b4bfea09ab3d82ef446968ac4b67">test_registry.gen.hpp</a></li>
 <li>setup_smp_sync_irq_guard_unlock_relock()&#160;:&#160;<a class="el" href="test__registry_8gen_8hpp.html#a3c67b66e64262c40532e4fa01bcb24c0">test_registry.gen.hpp</a></li>

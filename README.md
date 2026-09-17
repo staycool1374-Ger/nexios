@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.4.7-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.4.8-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.4.7 — Enhance HRT (1383 debug tests, 85 release tests, HRT monotonic clock, event-timer wheel, bounded-wait primitive)
+* **Status:** v0.4.8 — Enhance Deadline Scheduling (1413 debug tests, 85 release tests, DM assignment + global EDF dispatch, enforced Liu-Leyland admission, deferrable/background servers, per-CPU partitioned bounds, boot admission self-test)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.

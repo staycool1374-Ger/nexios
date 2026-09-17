@@ -83,6 +83,8 @@
 │   ├── report-2026-09-14T18-56-16Z.md
 │   ├── report-2026-09-14T19-36-04Z.md
 │   ├── report-2026-09-14T20-50-50Z.md
+│   ├── report-2026-09-17T14-30-00Z.md
+│   ├── report-2026-09-17T16-00-00Z.md
 │   ├── report-20260825083034.md
 │   ├── report-20260825T060240Z.md
 │   ├── report-20260825T120000Z.md
@@ -117,6 +119,11 @@
 │   ├── report-20260916-134406.md
 │   ├── report-20260916T185611Z.md
 │   ├── report-20260916T190325Z.md
+│   ├── report-20260916T205448Z.md
+│   ├── report-20260917T011510Z.md
+│   ├── report-20260917T101058Z.md
+│   ├── report-20260917T120000Z.md
+│   ├── report-20260917T123000Z.md
 │   ├── run_asil_audit.sh
 │   ├── run_code_review.sh
 │   ├── scheduler_audit.md
@@ -301,6 +308,13 @@
 │   │       ├── address_8hpp_source.html
 │   │       ├── address_8hpp.html
 │   │       ├── address_8hpp.js
+│   │       ├── admission__selftest_8cpp__incl.md5
+│   │       ├── admission__selftest_8cpp.html
+│   │       ├── admission__selftest_8cpp.js
+│   │       ├── admission__selftest_8hpp__dep__incl.md5
+│   │       ├── admission__selftest_8hpp_source.html
+│   │       ├── admission__selftest_8hpp.html
+│   │       ├── admission__selftest_8hpp.js
 │   │       ├── ahci__protocol_8hpp__dep__incl.md5
 │   │       ├── ahci__protocol_8hpp__incl.md5
 │   │       ├── ahci__protocol_8hpp_source.html
@@ -760,6 +774,7 @@
 │   │       ├── classkernel_1_1_scheduler_a42d074c7f070204bd85737823bce150a_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a43f0e681276d4db5f24a11e5e23d958e_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_a535b83f13ee7f4db1c7f1fc46a5a8727_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a593dad7197d614eb2d5f67e48d64bba1_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a596d9088e1f0680b0b636847a365ab96_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a5a2b494bb6c3b184c9374e85be368804_cgraph.md5
@@ -768,6 +783,7 @@
 │   │       ├── classkernel_1_1_scheduler_a5fe0e89b62ff62fbc33eac920bd0660b_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a6421e44dae2dd343f7f0e7064a89ad97_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a66efaa5a205ef6eb473f02603bc430c0_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_a69ac086975603396d9a13b92d0bb4c59_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a6cb4f7ab4207b34c9e4a278492fe8efc_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a6ce74ebd0c568fc4dbd19bc24c1d4f8c_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a6ec2aee2d32d08a9b747a4ef076e0257_cgraph.md5
@@ -780,7 +796,9 @@
 │   │       ├── classkernel_1_1_scheduler_a8378abad25413cddf0c6b92b2489dfcb_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a852663edfb9d43d51ca280727c2295a3_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a8672a015d5e35285915d39ce88e35084_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_a88184659dfbb7070ae8ac82d3cfc5d1d_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a885ca9872e1d389eb0a5a68e4db90a56_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_a88e2ee6d76a792ead0e59a889921cfba_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a8c06d8f568f07da6d9f749c4cec581b1_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a8c46258f8feca3ec4f56691ca491df8d_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_a8c7a0865a998b02ebf986bd029fa8202_cgraph.md5
@@ -804,7 +822,9 @@
 │   │       ├── classkernel_1_1_scheduler_adad603d784ed57a134fd9483ae5f881a_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_ae543d07405d0c21a092c2561cbfe6735_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_ae95c16cf7d774deef2e4957ac374a77f_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_af35195e65c2d701329579b3a7bb21b79_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_af386d3e6be031ea8e376b068d97b0e19_cgraph.md5
+│   │       ├── classkernel_1_1_scheduler_afd72a0a3a500b9a324188949d6a5e6b4_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_afe8481a5993e14cbd94b81c4f64bd7d0_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler_affd53a2cbc20336577d0b87d63714252_cgraph.md5
 │   │       ├── classkernel_1_1_scheduler.html
@@ -4044,6 +4064,7 @@
 │   │       ├── namespacekernel_1_1sync.html
 │   │       ├── namespacekernel_1_1sync.js
 │   │       ├── namespacekernel_1_1task_a23341a25427d54ae2f91ec33bb133c24_cgraph.md5
+│   │       ├── namespacekernel_1_1task_a6c2e4859b68a0571d2f50dda0efba2a8_cgraph.md5
 │   │       ├── namespacekernel_1_1task_a7f227dc40c3e02534d8c4640812236c7_cgraph.md5
 │   │       ├── namespacekernel_1_1task_ae7fc9a59f78d98d18c2d3c5a25ec2193_cgraph.md5
 │   │       ├── namespacekernel_1_1task.html
@@ -4130,6 +4151,7 @@
 │   │       ├── namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.md5
 │   │       ├── namespacekernel_a477db93fbbdf2a6d3cfc20606a525044_cgraph.md5
 │   │       ├── namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.md5
+│   │       ├── namespacekernel_a5f757c7023bc8616bb0fd21b7c6d8f9f_cgraph.md5
 │   │       ├── namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.md5
 │   │       ├── namespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph.md5
 │   │       ├── namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.md5
@@ -4278,6 +4300,7 @@
 │   │       ├── navtreeindex36.js
 │   │       ├── navtreeindex37.js
 │   │       ├── navtreeindex38.js
+│   │       ├── navtreeindex39.js
 │   │       ├── navtreeindex4.js
 │   │       ├── navtreeindex5.js
 │   │       ├── navtreeindex6.js
@@ -5316,6 +5339,9 @@
 │   │       ├── structkernel_1_1_driver__coll__graph.md5
 │   │       ├── structkernel_1_1_driver.html
 │   │       ├── structkernel_1_1_driver.js
+│   │       ├── structkernel_1_1_edf_ready_list__coll__graph.md5
+│   │       ├── structkernel_1_1_edf_ready_list.html
+│   │       ├── structkernel_1_1_edf_ready_list.js
 │   │       ├── structkernel_1_1_error_or__coll__graph.md5
 │   │       ├── structkernel_1_1_error_or_3_01void_01_4__coll__graph.md5
 │   │       ├── structkernel_1_1_error_or_3_01void_01_4.html
@@ -6059,6 +6085,12 @@
 │   │       ├── test__address_8cpp.html
 │   │       ├── test__address_8cpp.js
 │   │       ├── test__ahci__deep_8cpp.html
+│   │       ├── test__aperiodic__servers_8cpp__incl.md5
+│   │       ├── test__aperiodic__servers_8cpp_a105f7c0bb3a032b84722adca25e08783_cgraph.md5
+│   │       ├── test__aperiodic__servers_8cpp_a39c9ea14832553080ee0c9f0fd4e4c00_cgraph.md5
+│   │       ├── test__aperiodic__servers_8cpp_a8d6a49a992af08d0889b78ecbd2bd053_cgraph.md5
+│   │       ├── test__aperiodic__servers_8cpp.html
+│   │       ├── test__aperiodic__servers_8cpp.js
 │   │       ├── test__apic__timer_8cpp__incl.md5
 │   │       ├── test__apic__timer_8cpp_a5d9151e288ad51ef2a1474b7a6399683_cgraph.md5
 │   │       ├── test__apic__timer_8cpp_a7c7e736df5167300a77c592dbe901d65_cgraph.md5
@@ -7536,6 +7568,7 @@
 │   │       ├── test__registry_8cpp_a0c04e1be6dff5d2e2cb370b41dbf82ef_cgraph.md5
 │   │       ├── test__registry_8cpp_a0c458b019fbd948d622dac41e89f94b3_cgraph.md5
 │   │       ├── test__registry_8cpp_a0dd08c3292aaf585484267f753d2f909_cgraph.md5
+│   │       ├── test__registry_8cpp_a105f7c0bb3a032b84722adca25e08783_cgraph.md5
 │   │       ├── test__registry_8cpp_a10be64220ae82dd229d28dd75929225c_cgraph.md5
 │   │       ├── test__registry_8cpp_a13714cd376989323d066b68000c5ca93_cgraph.md5
 │   │       ├── test__registry_8cpp_a14b4277538eaecc51b54473f0dc8b07f_cgraph.md5
@@ -7550,7 +7583,9 @@
 │   │       ├── test__registry_8cpp_a211f27122b0ca43dee5fbbfe29063a71_cgraph.md5
 │   │       ├── test__registry_8cpp_a2178c2241b17f9314f48a154c3277a06_cgraph.md5
 │   │       ├── test__registry_8cpp_a2216e41bebc7922c50a3516076f1df2f_cgraph.md5
+│   │       ├── test__registry_8cpp_a22cf0671d7836344abf892342f66f790_cgraph.md5
 │   │       ├── test__registry_8cpp_a2407a554b127dc17ebd530e4c6e7202d_cgraph.md5
+│   │       ├── test__registry_8cpp_a241f5d3005e6a0c7c8df5c10e5cde8fa_cgraph.md5
 │   │       ├── test__registry_8cpp_a2869ae06e47101f041dbf01bd18e051c_cgraph.md5
 │   │       ├── test__registry_8cpp_a29b32412d246cf19e7f8a507d3e3397e_cgraph.md5
 │   │       ├── test__registry_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph.md5
@@ -7640,12 +7675,14 @@
 │   │       ├── test__registry_8cpp_aa022e8aa8f820e9c095346d1def39866_cgraph.md5
 │   │       ├── test__registry_8cpp_aa09b05210d38d6ee87f6ec676b1b69f5_cgraph.md5
 │   │       ├── test__registry_8cpp_aa1ee33b231f0a8f36f0d702c8c6a2964_cgraph.md5
+│   │       ├── test__registry_8cpp_aa35192b098047daa78dd1a11deaddaa8_cgraph.md5
 │   │       ├── test__registry_8cpp_aa5078f82fd254b291e6a49b7b7defdf1_cgraph.md5
 │   │       ├── test__registry_8cpp_aa59c860ec78de1ec56ff1fcac00994dd_cgraph.md5
 │   │       ├── test__registry_8cpp_aa8ad3f799634c9bf5f1a1580d604a61c_cgraph.md5
 │   │       ├── test__registry_8cpp_aa8c2a395545e38dc933007de776ce477_cgraph.md5
 │   │       ├── test__registry_8cpp_aa9c45cfc10c8edeb722e2df6b13b9267_cgraph.md5
 │   │       ├── test__registry_8cpp_aa9f37bd5f1eb1bb0acbb8ed99fdc5a33_cgraph.md5
+│   │       ├── test__registry_8cpp_aad7206d82b12c8e13e2dcaad96c8e058_cgraph.md5
 │   │       ├── test__registry_8cpp_aae15a79ba7cb568b6210f193130060ba_cgraph.md5
 │   │       ├── test__registry_8cpp_aaf07f2925f10df31499682002e797ee1_cgraph.md5
 │   │       ├── test__registry_8cpp_aafca8a4a2c2a9e7a9ef7d14f7f577c35_cgraph.md5
@@ -8304,6 +8341,28 @@
 │   │       ├── test__rtc_8cpp_aae15a79ba7cb568b6210f193130060ba_cgraph.md5
 │   │       ├── test__rtc_8cpp.html
 │   │       ├── test__rtc_8cpp.js
+│   │       ├── test__sched__admission__verify_8cpp__incl.md5
+│   │       ├── test__sched__admission__verify_8cpp_a04eb18eaa48d589a89d03c7a72762c4d_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_a22cf0671d7836344abf892342f66f790_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_a2d9b0629ba9c34800e74c68442ead6c0_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_a5ee9abf4d949704ea88a703ec000c6ae_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_a87344a1c30dd8b72e981e995b0f2b96f_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_ad2d374f998f2087d83d961ec866f6a08_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_ade0229cc3f0fc7f320194c0f54bbc045_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp_ae20e648379be1a569b57e9e45aa5732d_cgraph.md5
+│   │       ├── test__sched__admission__verify_8cpp.html
+│   │       ├── test__sched__admission__verify_8cpp.js
+│   │       ├── test__sched__admission_8cpp__incl.md5
+│   │       ├── test__sched__admission_8cpp_a241f5d3005e6a0c7c8df5c10e5cde8fa_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_a592c44cd74086493beeb3c8af4d83a21_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_a8ad23204cc4ac4ee9692b8e65daa59db_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_a944b2ad5b36d9ca0e93b916e8b8d5b22_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_a988bbb450a1672bd450d3bf09fa6bcf1_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_aaa6c88eb55367547af1f9ee44ea613db_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_abb4b085aef5a7f29860d517f401323eb_cgraph.md5
+│   │       ├── test__sched__admission_8cpp_ada5d5ffdcd332126fcb545598ca8da89_cgraph.md5
+│   │       ├── test__sched__admission_8cpp.html
+│   │       ├── test__sched__admission_8cpp.js
 │   │       ├── test__sched__affinity_8cpp__incl.md5
 │   │       ├── test__sched__affinity_8cpp_a14ae63c6cb2e0dbbc994942e416ac84d_cgraph.md5
 │   │       ├── test__sched__affinity_8cpp_a5638ba116c2f2aaf5935465bc8251189_cgraph.md5
@@ -8311,9 +8370,21 @@
 │   │       ├── test__sched__affinity_8cpp_a9b9c5fdf8161030a7b12289a97414f15_cgraph.md5
 │   │       ├── test__sched__affinity_8cpp_aa4c4c6c0d2a2915f19b0cb770c8515c2_cgraph.md5
 │   │       ├── test__sched__affinity_8cpp_aa8c630fd816514701618af650e8ca03f_cgraph.md5
+│   │       ├── test__sched__affinity_8cpp_af339e203413fe9900a8c67d516a7b1e2_cgraph.md5
 │   │       ├── test__sched__affinity_8cpp_af79f307559c7e2286e7dcc63b8aa739a_cgraph.md5
 │   │       ├── test__sched__affinity_8cpp.html
 │   │       ├── test__sched__affinity_8cpp.js
+│   │       ├── test__sched__edf_8cpp__incl.md5
+│   │       ├── test__sched__edf_8cpp_a22bafe0d9a923810bb8f41d9f50dd301_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_a4d5e7634af6495dd2143e3a0b345c6de_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_a58a00b8f6903c3cb38dbc22a739aed1c_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_a68d557c13c55093ca1321446e9d7d69e_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_a8e67e5f92317afb634504673bb68abdb_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_a9ca5c3675fc0160b843114f856fd6dae_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_aad7206d82b12c8e13e2dcaad96c8e058_cgraph.md5
+│   │       ├── test__sched__edf_8cpp_ab65afa03d36377427647314d3dc0c19b_cgraph.md5
+│   │       ├── test__sched__edf_8cpp.html
+│   │       ├── test__sched__edf_8cpp.js
 │   │       ├── test__sched__helpers_8hpp__dep__incl.md5
 │   │       ├── test__sched__helpers_8hpp__incl.md5
 │   │       ├── test__sched__helpers_8hpp_adaf685bd992e296e30fb7358c5f28b9a_cgraph.md5
@@ -8832,6 +8903,16 @@
 │   │       ├── test__task__lifecycle_8cpp_af25347fe3f7dfac1494cbac29bb5dc91_cgraph.md5
 │   │       ├── test__task__lifecycle_8cpp.html
 │   │       ├── test__task__lifecycle_8cpp.js
+│   │       ├── test__task__metering_8cpp__incl.md5
+│   │       ├── test__task__metering_8cpp_a325059549ba26006f7884d5562f04e09_cgraph.md5
+│   │       ├── test__task__metering_8cpp_a3561bccc16dd084eb9cbbd55353b5fc9_cgraph.md5
+│   │       ├── test__task__metering_8cpp_a5c6ff283420315676fd24e98efcbff04_cgraph.md5
+│   │       ├── test__task__metering_8cpp_aa35192b098047daa78dd1a11deaddaa8_cgraph.md5
+│   │       ├── test__task__metering_8cpp_ab59a3c9f3b38efa1c58c743035bb60ae_cgraph.md5
+│   │       ├── test__task__metering_8cpp_ac72379d061887482e554554bb4daba06_cgraph.md5
+│   │       ├── test__task__metering_8cpp_aec679a64e4e230e3dcccc1f367f5c539_cgraph.md5
+│   │       ├── test__task__metering_8cpp.html
+│   │       ├── test__task__metering_8cpp.js
 │   │       ├── test__task_8cpp__incl.md5
 │   │       ├── test__task_8cpp_a013cbe7e72b7456ede069b325e7d7e44_cgraph.md5
 │   │       ├── test__task_8cpp_a057418e4bf53bd513cb3cca706bb1c03_cgraph.md5
@@ -12579,6 +12660,8 @@
 │   │   │   ├── syscall.cpp
 │   │   │   └── syscall.hpp
 │   │   ├── task
+│   │   │   ├── admission_selftest.cpp
+│   │   │   ├── admission_selftest.hpp
 │   │   │   ├── all_tasks_registry.cpp
 │   │   │   ├── all_tasks_registry.hpp
 │   │   │   ├── deadline_list.cpp
@@ -12613,6 +12696,7 @@
 │   │   │   ├── task_ptr.hpp
 │   │   │   ├── test_acpi_parse.cpp
 │   │   │   ├── test_ahci_deep.cpp
+│   │   │   ├── test_aperiodic_servers.cpp
 │   │   │   ├── test_apic_timer.cpp
 │   │   │   ├── test_apic_tpr.cpp
 │   │   │   ├── test_atomic_context_switch.cpp
@@ -12757,7 +12841,10 @@
 │   │   │   ├── test_rlimit.cpp
 │   │   │   ├── test_rtc_datetime.cpp
 │   │   │   ├── test_rtc.cpp
+│   │   │   ├── test_sched_admission_verify.cpp
+│   │   │   ├── test_sched_admission.cpp
 │   │   │   ├── test_sched_affinity.cpp
+│   │   │   ├── test_sched_edf.cpp
 │   │   │   ├── test_sched_helpers.hpp
 │   │   │   ├── test_scheduler_hrt.cpp
 │   │   │   ├── test_scheduler.cpp
@@ -12794,6 +12881,7 @@
 │   │   │   ├── test_syscall_fuzz.cpp
 │   │   │   ├── test_syscall.cpp
 │   │   │   ├── test_task_lifecycle.cpp
+│   │   │   ├── test_task_metering.cpp
 │   │   │   ├── test_task.cpp
 │   │   │   ├── test_tcb_write_log.cpp
 │   │   │   ├── test_testrunner.cpp
@@ -13117,4 +13205,4 @@
     ├── yield-probe.c.d
     └── yield-probe.c.elf
 
-130 directories, 12988 files
+130 directories, 13076 files

@@ -21,6 +21,7 @@ var hierarchy =
     [ "kernel::iommu::dmar::DmarInfo", "structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html", null ],
     [ "kernel::log::DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", null ],
     [ "EarlyInitStub", "struct_early_init_stub.html", null ],
+    [ "kernel::EdfReadyList", "structkernel_1_1_edf_ready_list.html", null ],
     [ "kernel::elf::ElfLoader", "classkernel_1_1elf_1_1_elf_loader.html", null ],
     [ "kernel::ErrorOr&lt; T &gt;", "structkernel_1_1_error_or.html", null ],
     [ "kernel::ErrorOr&lt; void &gt;", "structkernel_1_1_error_or_3_01void_01_4.html", null ],

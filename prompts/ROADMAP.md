@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.8-dev | **Last Release:** v0.4.7 | **Completed milestones:** v0.2.x — v0.4.7 (see `ROADMAP_done.md`)
+**Build:** v0.4.8 | **Last Release:** v0.4.8 | **Completed milestones:** v0.2.x — v0.4.8 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -16,9 +16,9 @@
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
 ## Active Development
-- **v0.4.8 Enhance Deadline Scheduling** ([milestone 8](https://github.com/staycool1374-Ger/nexios/milestone/8)): #20, #22, #23, #24 open.
+- **v0.4.9 IRQ Blocking + Audit** ([milestone 9](https://github.com/staycool1374-Ger/nexios/milestone/9)): #64, #65, #66 open.
 - **v0.5.2 Userspace Subsystems** ([milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
-- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.7).
+- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.8).
 
 ## Topic Coverage Map (subsystem review 2026-09-17)
 | Topic | Status | Issues |
@@ -37,12 +37,6 @@
 | Symmetrical core isolation / CPU pinning | **open** | #167 |
 | Distributed runqueue load balancing | covered (closed: #61) | — |
 | Zero-copy IPC buffer pools | covered (closed: #11, #14, #106) | — |
-
-## v0.4.8 — Enhance Deadline Scheduling (ACTIVE)
-- #20 [open] Enforced admission control — Liu-Layland gate (was advisory I-8).
-- #22 [open] Aperiodic & deferrable servers — beside the sporadic server.
-- #23 [open] SMP admission extension — per-CPU bounds, partitioned EDF.
-- #24 [open] Kernel self-test of admission bounds.
 
 ## v0.4.9 — IRQ Blocking + Audit (OPEN)
 - #64 [open] AHCI completion ISR.

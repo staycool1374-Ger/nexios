@@ -1,5 +1,6 @@
 var scheduler_8cpp =
 [
+    [ "kernel::EdfReadyList", "structkernel_1_1_edf_ready_list.html", "structkernel_1_1_edf_ready_list" ],
     [ "debug_write", "scheduler_8cpp.html#a80e920b60042b6c2750fd88974610e99", null ],
     [ "debug_write_dec", "scheduler_8cpp.html#ac9b08212c79ab5465098caa93a4188bd", null ],
     [ "debug_write_hex", "scheduler_8cpp.html#afc833d2926e5dca3c9fbed32f7a7656a", null ],
