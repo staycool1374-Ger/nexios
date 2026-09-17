@@ -161,9 +161,13 @@ kernel PML4[0..255] · kernel stacks · PtPoolSnapshot · HHDM PD (undo huge spl
   `TF_RELEASE`, `TF_USER`, `TF_BENCH`.
 - Macros: `JARVIS_TEST(name, "PRE:..|POST:..")`, `JARVIS_TEST_SUITE`,
   `JARVIS_ASSERT*`, `JARVIS_REGISTER_TEST`, `TEST_CLASS`+`REGISTER_CLASS`.
-- `g_test_classes[]` maps a class name to `register_*_tests()` lambdas
-  (`buffer_pool`, `o1_scheduler`, `ipc_blocking`, `vfs`, `memory`,
-  `scheduler`, `safe`, `all`, `all-1`/`all-2`).
+- `g_test_classes[]` maps a class name to a `run_*_group()` helper
+  (one definition site per `register_*_tests()` call).  Fine-grained file
+  classes plus 16 structural aggregates (issue #173: `core ipc capability
+  proc_elf storage servers drivers hal smp smp_multicpu deadline ui
+  logging_debug random bench testrunner`) plus `safe`; the obsolete `all` /
+  `all-1` / `all-2` classes are removed, the scripted full run
+  (`make test-full` → `scripts/run_all_classes.sh`) replaces them.
 - `parse_test_config`: whitespace/`#`-separated class names; missing file →
   default `["safe"]`.
 - Entry points: `run_filtered(flags, isolation)`, `run_all()` (no isolation),
@@ -196,7 +200,7 @@ kernel PML4[0..255] · kernel stacks · PtPoolSnapshot · HHDM PD (undo huge spl
   ACPI/shutdown ports, `qemu_debug_exit(result)`, keyboard reset, `hlt`.
 - **Host verdict** (`tools/run-test.exp`): PASS iff `PLANNED==EXECUTED &&
   FAILED==0`; expected-panic patterns → PASS; unexpected `KERNEL PANIC:` → FAIL;
-  timeout (`TEST_TIMEOUT_ALL=250s` / `CLASS=120s`) → TIMEOUT; eof → QEMU_EXIT;
+  timeout (`TEST_TIMEOUT_ALL=250s` for core/smp_multicpu/ahci_live/iommu_live, else `TEST_TIMEOUT_CLASS=120s`) → TIMEOUT; eof → QEMU_EXIT;
   host stall-watchdog 220s of no serial growth → pkill.
 
 ## 7. Invariants (binding)

@@ -70,7 +70,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 **Parameters:**
 - `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64` (shorthand accepted, default: x86_64)
 - `<build>` — `debug`|`release`
-- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `all` (full suite) | `<name>` (specific class)
+- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (16 structural classes, issue #173) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
 
 **Key behaviours:**
 - Cross-arch: `run-release-mode arm` builds aarch64 release ELF and boots via `qemu-system-aarch64 -kernel`
@@ -85,7 +85,7 @@ make run-debug-mode                       # interactive x86_64 debug
 make run-release-mode                     # interactive x86_64 release
 make run-release-mode arm                 # interactive aarch64 release
 make run-release-mode riscv               # interactive riscv64 release
-make execute-test x86 debug all           # full debug suite
+make test-full x86 debug               # full debug suite (20 runs, one reboot each)
 make execute-test x86 release selftest    # CI gate
 ```
 
@@ -217,14 +217,14 @@ QEMU; use lldb instead.
 ## 14. Test Discipline for Kernel Development
 
 ### Targeted class verification (MANDATORY)
-- Verify kernel code changes using the **smallest applicable test class**, NOT `all`.
-- Examples: `vfs` for VFS/IPC/daemon changes, `buffer_pool` for buffer pool changes, `timer` for timer changes, etc.
-- The `all` target runs 745+ tests and takes **minutes** — only use for full release validation.
+- Verify kernel code changes using the **smallest applicable test class**, NOT `test-full`.
+- Examples: `storage` for VFS/IPC/daemon changes, `data_structures_buffer_pool` for buffer pool changes, `timing_core` for timer changes, etc.
+- `make test-full` runs 20 classes and takes **tens of minutes** — only use for full release validation.
 
 ### Full-suite log capture (MANDATORY)
-- When running `make execute-test ... all`, always capture the full output:
+- When running `make test-full`, always capture the full output:
   ```
-  make execute-test x86_64 debug all 2>&1 | tee /tmp/jarvis-all-$(date +%Y%m%d-%H%M%S).log
+  make test-full x86_64 debug 2>&1 | tee /tmp/jarvis-full-$(date +%Y%m%d-%H%M%S).log
   ```
 - This preserves the complete test log for later inspection (failures, warnings, serial output).
 - Without a log file, a truncated terminal buffer forces re-runs — wasteful.

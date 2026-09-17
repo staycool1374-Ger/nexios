@@ -57,7 +57,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 * When writing new stub tests, a pseudocode block is required inside the test function to document the intended test flow.
 
 ### 4. Verification & QEMU Validation
-- Run automated test suites via `make execute-test x86_64 debug all` (or `selftest` for CI gate).
+- Run automated test suites via `make test-full x86_64 debug` (or per-aggregate `make execute-test x86_64 debug <aggregate>`, `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
 
 ### 5. Bug Tracking & Documentation Updates
@@ -79,7 +79,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
-- Run `make execute-test x86_64 debug all` — this launches the kernel in QEMU and runs ALL registered tests via `run_registered(0)` (debug build, `all` test class). All must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the serial output shows the full test count (600+ tests, not ~96).
+- Run `make test-full x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (16 aggregates + 4 specials, issue #173). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 20 runs ok.
 - Check `prompts/testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
@@ -184,11 +184,11 @@ silently consumed by a match-all rule at the end of the Makefile.
 **Examples:**
 ```
 make execute-test x86_64 debug none           # interactive QEMU
-make execute-test x86_64 debug all            # full debug suite
-make execute-test x86_64 release all          # full release suite
+make test-full x86_64 debug                   # full debug suite (20 runs)
+make test-full x86_64 release                 # full release suite (20 runs)
 make execute-test x86_64 debug selftest       # CI gate
-make execute-test x86_64 debug fat32          # specific class
-make debug-test x86_64 debug all tools/gdb/test-batch.gdb  # GDB panic capture
+make execute-test x86_64 debug drivers        # specific aggregate
+make debug-test x86_64 debug core tools/gdb/test-batch.gdb  # GDB panic capture
 make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt  # GDB + serial interaction
 ```
 
@@ -202,7 +202,7 @@ The serial log is captured via `tee` to `/tmp/jarvis-serial.log` for all automat
 |------|--------|---------|
 | Build | `make debug` | — |
 | Selftest gate | `make execute-test x86_64 debug selftest` (safe class) | `timeout 360` — Makefile expect timeout 120s |
-| Full suite | `make execute-test x86_64 debug all` (all classes) | `timeout 360` — Makefile expect timeout 180s |
+| Full suite | `make test-full x86_64 debug` (16 aggregates + 4 specials) | `timeout 300` per class via script |
 
 The full suite step runs only if selftest passes (`if: success()`). Both steps use the host-side watchdog and expect-based result parsing (extracts PLANNED/EXECUTED/FAILED from the TEST SUMMARY block).
 
@@ -236,7 +236,7 @@ Summary block (after all tests):
 Both `run_filtered()` and `run_registered()` drain the UART TX FIFO (wait for LSR bits 5&6) before QEMU exit to prevent report truncation.
 
 ## GDB Debugging
-- **Batch surveillance (CI):** `make debug-test x86_64 debug all tools/gdb/test-batch.gdb`
+- **Batch surveillance (CI):** `make debug-test x86_64 debug core tools/gdb/test-batch.gdb`
 - **Custom GDB script:** `make debug-test x86_64 debug <class> <path-to-gdb-script>`
 - **Interactive GDB + serial:** `make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt`
 - **Manual (two terminals):** `make execute-test x86_64 debug none` in terminal 1, then `gdb build/kernel-debug.elf -ex 'target remote :1234' -x tools/gdb/init.gdb` in terminal 2
@@ -266,7 +266,7 @@ All mandatory coding rules, safety constraints, and error-handling patterns are 
 
 # Diagnostic Verification
 If a test fails or a regression is detected:
-- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance target (`make debug-test x86_64 debug all tools/gdb/test-batch.gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
+- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance target (`make debug-test x86_64 debug core tools/gdb/test-batch.gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
 - Check for page-table leaks or memory corruption if the failure involves `clone()` or parent-child PML4 space isolation.
 
 # Test Execution Rules (MANDATORY)
@@ -282,7 +282,7 @@ If a test fails or a regression is detected:
 |----------|--------|--------|
 | Kernel bugfix in subsystem X | `make execute-test x86_64 debug <class-X>` | Fastest feedback, isolates the subsystem |
 | Test harness / test-environment fix | `make execute-test x86_64 debug testrunner` | Validates harness integrity without kernel noise |
-| Release gate or full regression check | `make execute-test x86_64 debug all` | Only acceptable after per-class passes |
+| Release gate or full regression check | `make test-full x86_64 debug` | Only acceptable after per-aggregate passes |
 | CI / selftest | `make execute-test x86_64 debug selftest` | Matches CI pipeline |
 
 **Never** use `all` or `run_all_classes.sh` during active bugfixing — both are too time-consuming.

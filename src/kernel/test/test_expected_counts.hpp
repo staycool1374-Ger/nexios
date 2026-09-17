@@ -20,7 +20,6 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"safe",                134,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66)
     {"selftest",            134,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
-    {"all",                1460,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 1 affinity-err test + 5 smp per-CPU tests (issue #23) + 7 admission-verify tests (issue #24) + 5 ahci completion tests (issue #64) + 6 virtio-blk completion tests (issue #65) + 1 ATA_PIO absent-drive bound (issue #66) + 8 cpuinfo/top commands (issue #172) + 1 loadavg EMA math (issue #172 re-audit) + 134 cross-arch/filtered registrations (TCOUNT actual 1460, executed 1445)
 
     // basic
     {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
@@ -36,7 +35,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // synchronization
     {"synchronization_spinlock", 10, 0,      0      },  // spinlock(9) + spinlock_stress(1)
-    {"synchronization_sync", 13,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives
+    {"synchronization_sync", 19,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives + block-pattern (6)
     {"synchronization_locking", 19, 0,       0      },  // locking(13) + locking_stress(6)
     {"synchronization_lock_order",  4, 0,    0      },  // nested SpinLock acquisition order
     {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
@@ -190,7 +189,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 #endif
     {"deadline_recovery",     4,    0,       0      },  // DeadlineActionKillCleansUp + DeadlineDetectionMagicCheck + DeadlineDetectionMcdcCoverage + DeadlineActionNotifyMonitor
     {"deadline_action",       1,    0,       0      },  // single action-dispatch test per build (CONFIG_DEADLINE_ACTION)
-    {"deadline_ss",           2,    0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish
+    {"deadline_ss",           3,   0,       0      },  // SsExhaustionTriggersDeadline + SsDeadlineMissDuringReplenish + SsReplenishAfterMiss
 
     // timing
     {"timing_core",          19,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list + READY-no-charge regression (issue #154)
@@ -268,6 +267,25 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
+
+    // Structural/semantic aggregates (issue #173).  Values are filled
+    // from measured `dump-counts` output; 0 disables validation.
+    {"core",                427,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (issue #173)
+    {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
+    {"capability",          144,  0,       0      },  // all cap_* excl. iommu_live (issue #173)
+    {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
+    {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
+    {"servers",             42,   0,       0      },  // servers_* + services_framework (issue #173)
+    {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+    {"hal",                 107,  0,       0      },  // hal_* + exc_table + acpi + arch_cross (issue #173)
+    {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+    {"smp_multicpu",        15,   0,       0      },  // smp_bringup + smp_sched, needs -smp 2 (issue #173)
+    {"deadline",            115,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173)
+    {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
+    {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
+    {"random",              17,   0,       0      },  // random_* (issue #173)
+    {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
+    {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
 };
 
 static constexpr size_t k_expected_count_size =
@@ -309,25 +327,78 @@ inline bool validate_class_count(const char *name, size_t actual_count) {
 }
 
 inline void validate_all_consistency() {
-    size_t all_count = 0;
-    size_t sum_individual = 0;
+    // Issue #173: no `all` class anymore.  Every fine-grained class must
+    // be covered by at least one aggregate or by a scripted standalone
+    // special; `safe`/`selftest` are curated overlapping subsets and the
+    // foreign-arch classes are covered off-arch, so all four groups are
+    // excluded from the fine side of the comparison.  Intentional overlap
+    // is allowed and reported: hal_apic + apic_tpr are members of both
+    // `hal` and `smp` (HAL devices AND SMP coordination primitives), and
+    // `testrunner` names both a fine class and its aggregate.
+    static constexpr const char *k_aggregates[] = {
+        "core",         "ipc",      "capability", "proc_elf",
+        "storage",      "servers",  "drivers",    "hal",
+        "smp",          "smp_multicpu", "deadline", "ui",
+        "logging_debug", "random",  "bench",      "testrunner",
+        nullptr,
+    };
+    static constexpr const char *k_specials[] = {
+        "ahci_live", "iommu_live", "task_fpu", "task_tcb_log",
+        nullptr,
+    };
+    size_t sum_covered = 0;
+    size_t sum_fine = 0;
+    size_t sum_singletons = 0;  // testrunner fine + specials: counted
+                                // once each on the fine side
     for (size_t i = 0; i < k_expected_count_size; ++i) {
+        const char *name = k_expected_counts[i].name;
         size_t c = arch_count(k_expected_counts[i]);
-        if (__builtin_strcmp(k_expected_counts[i].name, "all") == 0) {
-            all_count = c;
-        } else if (__builtin_strcmp(k_expected_counts[i].name, "safe") != 0) {
-            sum_individual += c;
+        if (__builtin_strcmp(name, "safe") == 0 ||
+            __builtin_strcmp(name, "selftest") == 0 ||
+            __builtin_strcmp(name, "arch_aarch64") == 0 ||
+            __builtin_strcmp(name, "arch_riscv64") == 0) {
+            continue;
+        }
+        bool is_covered = false;
+        bool is_singleton = false;
+        for (const char *const *p = k_aggregates; *p != nullptr; ++p) {
+            if (__builtin_strcmp(name, *p) == 0) {
+                is_covered = true;
+                break;
+            }
+        }
+        if (!is_covered) {
+            for (const char *const *p = k_specials; *p != nullptr; ++p) {
+                if (__builtin_strcmp(name, *p) == 0) {
+                    is_covered = true;
+                    is_singleton = true;
+                    break;
+                }
+            }
+        } else if (__builtin_strcmp(name, "testrunner") == 0) {
+            is_singleton = true;
+        }
+        if (is_covered) {
+            sum_covered += c;
+        } else {
+            sum_fine += c;
+        }
+        if (is_singleton) {
+            sum_singletons += c;
         }
     }
-    if (all_count > 0 && sum_individual < all_count) {
-        Logger::warn("[TCOUNT] CONSISTENCY: sum(individual)=%u < all=%u -- "
-                     "some tests missing from individual class entries",
-                     (unsigned)sum_individual, (unsigned)all_count);
-    } else if (all_count > 0) {
+    if (sum_covered < sum_fine + sum_singletons) {
+        Logger::warn("[TCOUNT] CONSISTENCY: aggregates+specials=%u < "
+                     "fine+singletons=%u -- a fine class is uncovered",
+                     (unsigned)sum_covered,
+                     (unsigned)(sum_fine + sum_singletons));
+    } else {
         Logger::info(
-            "[TCOUNT] CONSISTENCY: sum(individual)=%u >= all=%u (overlap=%u)",
-            (unsigned)sum_individual, (unsigned)all_count,
-            (unsigned)(sum_individual - all_count));
+            "[TCOUNT] CONSISTENCY: aggregates+specials=%u >= "
+            "fine+singletons=%u (overlap=%u, incl. hal_apic+apic_tpr in "
+            "hal+smp)",
+            (unsigned)sum_covered, (unsigned)(sum_fine + sum_singletons),
+            (unsigned)(sum_covered - sum_fine - sum_singletons));
     }
 }
 

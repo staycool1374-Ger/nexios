@@ -134,10 +134,10 @@ If the branch does not match the intended role, do not proceed.
 - **ripgrep gotcha: never use `rg -rn`.** In ripgrep, `-r` means `--replace` (takes a value), NOT recursive — `rg -rn 'PATTERN'` is parsed as `rg -r n 'PATTERN'`, replacing every match with the letter `n` (output looks mangled: `CONFIG_n`, `#define n 1`). Ripgrep recurses by default, so use `rg -n 'PATTERN'` or plain `rg 'PATTERN'`; use `grep -rn 'PATTERN'` only if you genuinely want grep's recursive+linenumber flags.
 
 ## Test Result History (MANDATORY)
-- After EVERY test-class run (any `make execute-test x86_64 <build> <class>`, including `selftest`, `all`, `none`, or any named class), you MUST append exactly one row to `test-history.txt` in the workspace root.
+- After EVERY test-class run (any `make execute-test x86_64 <build> <class>`, including `selftest`, `none`, any aggregate, or any named class), you MUST append exactly one row to `test-history.txt` in the workspace root. `make test-full` appends one row per class automatically.
 - Each row format (single line, space-separated):
   `<YYYY-MM-DD HH:MM:SS> <test-class> PASSED: <n> FAILED: <n> TIME: <consumed-time>`
-  - `<test-class>` is the class argument passed to `make execute-test` (e.g. `ipc_blocking`, `all`, `selftest`).
+  - `<test-class>` is the class argument passed to `make execute-test` (e.g. `ipc_blocking`, `core`, `selftest`).
   - `<consumed-time>` is the wall-clock time the test invocation took (e.g. `1894ms` or `225s`); record the value reported by the harness if present, otherwise the measured elapsed time.
   - If the run ends without a PASS/FAIL summary (e.g. TIMEOUT / watchdog / kernel panic), record `PASSED: 0 FAILED: 0` and `TIME: <elapsed>` and note the abnormal termination in the row (append `STATUS: <TIMEOUT|PANIC|...>`).
 - Example row:
@@ -218,15 +218,15 @@ evidence-backed. Do not stack changes across steps.
 
 ### No Forward Scanning
 - Do not run test classes ahead of the current one. Do not read test code from other classes.
-- Do not run the "all" class until every individual class shows 0 failures.
+- Do not run `make test-full` until every aggregate shows 0 failures.
 
 ## Pre-Flight
 - Run `bash ~/jarvis/scripts/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
 - Confirm `graphify` CLI availability (`command -v graphify`) and `graphify-out/graph.json` exists before starting tasks. If MCP servers are configured (`mcp.json` / `opencode.json` `mcp` section), prefer MCP tools over raw CLI (see graphify section).
 
 ## Makefile Usage (MANDATORY — re-read this before every test invocation)
-- Only valid test target: `make execute-test <arch> <build> <class>`
-- Positional args: `<arch>` = `x86_64`, `<build>` = `debug`|`release`, `<class>` = `all`|`selftest`|`none`|`<name>`
+- Only valid test targets: `make execute-test <arch> <build> <class>` and `make test-full [arch] [build]`
+- Positional args: `<arch>` = `x86_64`, `<build>` = `debug`|`release`, `<class>` = `<aggregate>`|`selftest`|`none`|`<name>` (`make test-full` runs all 16 aggregates + 4 specials, one reboot per class; the `all` class is removed)
 - Do NOT use `make test-qemu`, `make test`, `TEST_CLASS=`, `CLASS=`, or any other pattern
 - Full reference in prompts/AGENTS-KERNEL-BRIEFING.md §6
 - Before running any test, paste the syntax from §6 of prompts/AGENTS-KERNEL-BRIEFING.md to verify
@@ -245,7 +245,7 @@ evidence-backed. Do not stack changes across steps.
 - **Crash reproduction:** simulate user input with `expect` scripts; strip components (test_fork, shell, release tests) to isolate
 - **Page-table fork bugs:** `clone()` shares PDPT/PD/PT pages — any `map_page_in_pml4` on child corrupts parent; fix: private PDPT copy for stack region
 - **Debug context-switch ring buffer** (`CONFIG_DEBUG`): each TCB has `debug_switch_ring[4]` — inspect via `p current->debug_switch_ring[current->debug_switch_idx % 4]`
-- **GDB debugging:** use `make debug-test x86_64 debug all tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
+- **GDB debugging:** use `make debug-test x86_64 debug core tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
 - **UART FIFO overflow:** 16-byte FIFO capacity; drain between write bursts; release tests use external expect scripting so only affects kernel self-test loopback
 
 ## Release Procedure
@@ -262,7 +262,7 @@ evidence-backed. Do not stack changes across steps.
   orphan re-enqueue, owner-resolution self-switch, elf_loader
   lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
   trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
-- Before running the release gate (`make execute-test x86_64 release all`),
+- Before running the release gate (`make test-full x86_64 release`),
   verify the macro is undefined:
   `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
   must show it commented out.  Re-enable only for targeted debug analysis,

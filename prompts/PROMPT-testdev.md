@@ -28,8 +28,8 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 
 ### 2. Workflow & Branching
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
-* **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `make execute-test x86 debug selftest` (safe class, fast) or `make execute-test x86 debug all` (full suite).
- * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`make execute-test x86 debug all`). `testbed` is never deleted.
+* **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `make execute-test x86 debug selftest` (safe class, fast) or `make test-full x86 debug` (full suite).
+ * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`make test-full x86 debug`). `testbed` is never deleted.
 
 ### Pseudocode in Stub Tests
 * Some stub tests contain `/* Pseudocode: ... */` comments describing intended behavior — use these for insight when implementing.
@@ -94,9 +94,9 @@ are consumed by a match-all rule at the end of the Makefile.
 **Examples:**
 ```
 make execute-test x86 debug selftest    # CI gate (safe class, fast)
-make execute-test x86 debug all         # full debug suite
-make execute-test x86 release all       # full release suite
-make execute-test x86 debug fat32       # specific class
+make test-full x86 debug                  # full debug suite (20 runs)
+make test-full x86 release                # full release suite (20 runs)
+make execute-test x86 debug drivers       # specific aggregate
 ```
 
 ### Host-Side Watchdog
@@ -109,14 +109,14 @@ The serial log is `tee`'d to `/tmp/jarvis-serial.log`; the first `tee` pipe exit
 |------|---------|
 | Build | `make debug` |
 | Selftest gate | `timeout 360 make execute-test x86 debug selftest` (safe class) |
-| Full suite | `timeout 360 make execute-test x86 debug all` (if selftest passes) |
+| Full suite | `make test-full x86 debug` (if selftest passes) |
 
 Both test steps use the host-side watchdog and expect-based parsing of the `TEST SUMMARY` block.
 
 ### Test Classes (defined in `test_registry.cpp`)
-Classes: `safe`, `all`, `scheduler`, `memory`, `ipc`, `vfs`, `process`, `syscall`, `arch`, `device`, `shell`, `net`, `security`, `debug`, `integration`, `stress`, `init`, `build`, `bench`, `sporadic`.
+Classes: `safe`, the 16 structural aggregates (`core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench testrunner`, issue #173), the 4 scripted specials (`ahci_live iommu_live task_fpu task_tcb_log`), plus fine-grained file classes.
 
-New test suites must be registered in the `all` class at minimum. If a suite belongs to a domain class, add it there too.
+New test suites must be registered in at least one aggregate (via a `run_*_group()` helper in `test_registry.cpp`) and counted in `test_expected_counts.hpp`. If a suite belongs to a fine-grained file class, add it there too.
 
 ### Registration Pattern (`test_registry.cpp`)
 Ensure clean mapping within the appropriate class lambda:
@@ -134,22 +134,32 @@ Then add `register_my_new_tests();` to the `all` class and any domain class (e.g
 ### Per-Architecture Test-Count Validation
 The file `src/kernel/test/test_expected_counts.hpp` contains a constexpr table of expected registration counts per class per architecture. After registering a class, `register_class()` calls `validate_class_count()` which warns if the actual count differs from expected — this catches tests added/removed without updating the table.
 
-**Consistency check:** `validate_all_consistency()` sums all individual class entries and verifies the total ≥ the "all" entry, ensuring no test registered in "all" is missing from every individual class.
+**Consistency check:** `validate_all_consistency()` verifies every fine-grained class is covered by at least one aggregate or scripted special (overlap allowed and reported, e.g. hal_apic+apic_tpr in `hal`+`smp`), ensuring no test runs outside the scripted full suite.
 
 **Rebuilding the table:** Use `make execute-test <arch> debug dump-counts` to collect fresh per-class counts. The `dump-counts` class triggers `dump_class_counts()` then `qemu_debug_exit(0)` — no interactive shell.
 
-**x86_64 counts (current):**
+**x86_64 counts (current, issue #173 aggregates + specials, measured via dump-counts):**
 | Class | Count |
 |---|---|
-| safe | 132 |
-| all | 720 |
-| scheduler | 85 |
-| memory | 45 |
-| ipc | 42 |
-| vfs | 146 |
-| process | 43 |
-| syscall | 28 |
-| arch | 59 |
+| safe / selftest | 134 |
+| core | 427 |
+| ipc | 79 |
+| capability | 144 |
+| proc_elf | 78 |
+| storage | 143 |
+| servers | 42 |
+| drivers | 94 |
+| hal | 107 |
+| smp | 81 |
+| smp_multicpu | 15 |
+| deadline | 115 |
+| ui | 68 |
+| logging_debug | 29 |
+| random | 17 |
+| bench | 22 |
+| testrunner | 16 |
+| ahci_live / iommu_live / task_tcb_log | 5 / 6 / 1 |
+| syscall_affinity (in core) | 4 |
 | cross_arch | 16 |
 | device | 33 |
 | shell | 22 |
@@ -164,4 +174,4 @@ The file `src/kernel/test/test_expected_counts.hpp` contains a constexpr table o
 | sporadic | 14 |
 | atomic | 12 |
 
-Consistency: sum(individual)=669, all=720 (51 tests only in "all" — no individual class covers them).
+Consistency: aggregates+specials=1489 >= fine+singletons=1480 (overlap=9: hal_apic+apic_tpr intentionally in `hal`+`smp`).

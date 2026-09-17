@@ -26,7 +26,7 @@ SHELL := /bin/bash
 #   src/kernel/test/ are built; all other test files are expected in
 #   $(EXTERNAL_TEST_DIR)/src/kernel/test/.
 #
-#   Example: make execute-test x86 debug all EXTERNAL_TEST_DIR=/path/to/tests
+#   Example: make execute-test x86 debug core EXTERNAL_TEST_DIR=/path/to/tests
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -338,10 +338,14 @@ endif
 # bring_up() wakes + parks it.  All other classes run single-CPU (the
 # bring-up is a staged-blob no-op there).
 # Phase C1 adds class=smp_sched (AP task execution) to the same variant.
+# Issue #173 adds class=smp_multicpu (smp_bringup + smp_sched aggregate).
 ifeq ($(CLASS),smp_bringup)
 QEMU_FLAGS += -smp 2
 endif
 ifeq ($(CLASS),smp_sched)
+QEMU_FLAGS += -smp 2
+endif
+ifeq ($(CLASS),smp_multicpu)
 QEMU_FLAGS += -smp 2
 endif
 
@@ -459,10 +463,7 @@ build/kernel/test/test_isolate.o: $(TEST_REGISTRY_GEN)
 
 test-registry-gen: $(TEST_REGISTRY_GEN)
 
-# Default target.  Only print help when `all` is the SOLE goal — otherwise it
-# collides with the `all` test class passed positionally to `execute-test`
-# (e.g. `make execute-test x86_64 debug all`), which would also trigger this
-# help target and interleave/cut the QEMU run.
+# Default target.  Only print help when `all` is the SOLE goal.
 all:
 	@if [ -z "$(MAKECMDGOALS)" ] || [ "$(MAKECMDGOALS)" = "all" ]; then \
 	    $(MAKE) help; \
@@ -517,11 +518,18 @@ help:
 	@echo "  [A] make execute-test <arch> <build> <class>  Unified test runner"
 	@echo "         <arch>  = x86|x86_64|arm|aarch64|riscv|riscv64"
 	@echo "         <build> = debug|release"
-	@echo "         <class> = none|selftest|all|<name>"
+	@echo "         <class> = none|selftest|<aggregate>|<name>"
 	@echo "           none     → interactive shell (no tests, mon:stdio)"
 	@echo "           selftest → safe class, auto-shutdown (CI gate, 120s)"
-	@echo "           all      → all classes, auto-shutdown (180s debug / 120s release)"
+	@echo "           <aggregate> → one of the 16 structural classes"
+	@echo "                      (core ipc capability proc_elf storage servers"
+	@echo "                       drivers hal smp smp_multicpu deadline ui"
+	@echo "                       logging_debug random bench testrunner),"
+	@echo "                       auto-shutdown (120s, 250s for core/smp_multicpu)"
 	@echo "           <name>   → specific test class, auto-shutdown (120s)"
+	@echo "  [A] make test-full [<arch> <build>]  Full suite: all 16 aggregates +"
+	@echo "         4 specials (ahci_live iommu_live task_fpu task_tcb_log),"
+	@echo "         one reboot per class (issue #173, replaces 'all')"
 	@echo "  [A] make debug-test <arch> <build> <class> <gdb-script>"
 	@echo "         GDB batch surveillance. QEMU with -s -S, runs gdb-script,"
 	@echo "         reports panic capture. 120s timeout."
@@ -549,8 +557,8 @@ help:
 	@echo "    make run-release-mode arm                 # interactive AArch64 release QEMU"
 	@echo "    make run-release-mode riscv               # interactive RISC-V 64 release QEMU"
 	@echo "    make execute-test x86 debug none          # interactive QEMU (verbose)"
-	@echo "    make execute-test x86 release all         # full release test suite"
-	@echo "    make debug-test x86 debug all tools/gdb/test-batch.gdb  # GDB panic capture"
+	@echo "    make execute-test x86 release selftest  # release smoke (safe class)"
+	@echo "    make debug-test x86 debug core tools/gdb/test-batch.gdb  # GDB panic capture"
 	@echo "    make debug-shell x86 debug none tools/gdb/init.gdb cmds.txt"
 
 # ------------------------------------------------------------------------------
@@ -884,7 +892,7 @@ execute-test:
 	    echo "Usage: make execute-test <arch> <build> <class>"; \
 	    echo "  arch:  x86|x86_64|arm|aarch64|riscv|riscv64"; \
 	    echo "  build: debug|release"; \
-	    echo "  class: none|selftest|all|<name>|dump-counts"; \
+	    echo "  class: none|selftest|<aggregate>|<name>|dump-counts"; \
 	    exit 1; \
 	fi; \
 	case "$(_BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
@@ -902,6 +910,8 @@ _do_execute_test:
 	printf '%s\n' "$${_class_file}" > initrd/tests/test-config.txt; \
 	if [ "$(CLASS)" = "iommu_live" ] && [ -z "$(OVMF_CODE)" ]; then \
 	    echo "ERROR: iommu_live requires OVMF_CODE (edk2-x86_64-code.fd)"; exit 1; fi; \
+	if [ "$(CLASS)" = "ahci_live" ] && [ -z "$(OVMF_CODE)" ]; then \
+	    echo "ERROR: ahci_live requires OVMF_CODE (edk2-x86_64-code.fd)"; exit 1; fi; \
  	if [ "$(CLASS)" = "none" ]; then \
  	    if [ "$(BUILD)" = "release" ] && [ "$(ARCH)" = "x86_64" ] && \
  	       [ -f "$(RELEASE_ISO)" ] && [ -f "release/.baked-test-config" ] && \
@@ -931,8 +941,17 @@ _do_execute_test:
 	elif [ "$(CLASS)" = "dump-counts" ]; then \
 	    $(call _run_dump_counts_qemu); \
 	else \
-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter all,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS))); \
+	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS))); \
 	fi
+
+# Full suite (issue #173, replaces the removed `all` class): run every
+# structural aggregate plus the 4 standalone specials, one reboot per
+# class, recording PASS/FAIL per class into test-history.txt.
+# Usage: make test-full [x86_64] [debug]  (arch/build optional positionals)
+test-full:
+	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(ARCH),$(call _map_arch,$(word 1,$(_ae))),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
+	@case "$(_BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
+	bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD)
 
 debug-test:
 	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(call _map_arch,$(word 1,$(_ae)))) $(eval _BUILD := $(word 2,$(_ae))) $(eval _CLASS := $(word 3,$(_ae))) $(eval _GDB := $(word 4,$(_ae)))
@@ -940,7 +959,7 @@ debug-test:
 	    echo "Usage: make debug-test <arch> <build> <class> <gdb-script>"; \
 	    echo "  arch:  x86|x86_64|arm|aarch64|riscv|riscv64"; \
 	    echo "  build: debug|release"; \
-	    echo "  class: none|selftest|all|<name>"; \
+	    echo "  class: none|selftest|<aggregate>|<name>"; \
 	    echo "  gdb-script: path to GDB batch script (e.g. tools/gdb/test-batch.gdb)"; \
 	    exit 1; \
 	fi; \
