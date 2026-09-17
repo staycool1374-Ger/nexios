@@ -154,13 +154,18 @@ Fix the code on your host, re-run `rsync`, and restart the task from the shell.
 
 - **Current work:** [GitHub Milestones](https://github.com/staycool1374-Ger/nexios/milestones) — open items tracked as Issues.
 - **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
-- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.7 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
+- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.8 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, Deadline Scheduling, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
 
 Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ---
 
 ## Recent Release Highlights
+
+### **v0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control**
+* **Deadline-Driven Dispatch:** Tasks with the earliest deadlines run first (Earliest-Deadline-First), with priorities auto-assigned from deadlines — time-critical work provably meets its timing guarantees.
+* **Guaranteed Admission:** The kernel now refuses new real-time tasks that would overload any CPU core (idle-time and background workloads exempt), so admitted tasks can never miss deadlines due to overcommit — including across task migration and multi-core placement.
+* **Flexible Aperiodic Service + Self-Verification:** Deferrable and background server modes handle bursty, non-periodic work beside classic sporadic servers, and every boot re-verifies the scheduling guarantees with a built-in admission self-test.
 
 ### **v0.4.7 — High-Resolution Time & Bounded Waits**
 * **Precise System Clock:** A calibrated, high-resolution monotonic timebase provides sub-millisecond accuracy for deadlines and latency measurements.
