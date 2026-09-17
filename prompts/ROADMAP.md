@@ -1,9 +1,10 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.8-dev | **Last Release:** v0.4.7 | **Completed milestones:** v0.2.x — v0.4.7
+**Build:** v0.4.8-dev | **Last Release:** v0.4.7 | **Completed milestones:** v0.2.x — v0.4.7 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
-> work items" rule for this file and requested a full sorted listing.
+> work items" rule for this file and requested a full sorted listing
+> (2026-09-17: reduced to OPEN items only, closed versions/items removed).
 > This file was generated from GitHub (`gh` API). Source of truth for state
 > remains the GitHub Issues / Milestones (`staycool1374-Ger/nexios`) —
 > do NOT check off items here; close them on GitHub. Regenerate (don't
@@ -15,116 +16,30 @@
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
 ## Active Development
-- **v0.4.8 Enhance Deadline Scheduling** ([milestone 8](https://github.com/staycool1374-Ger/nexios/milestone/8)): #20, #22, #23, #24 open (#19, #21 closed).
-- **v0.5.2 Userspace Subsystems** (NEW, [milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
+- **v0.4.8 Enhance Deadline Scheduling** ([milestone 8](https://github.com/staycool1374-Ger/nexios/milestone/8)): #20, #22, #23, #24 open.
+- **v0.5.2 Userspace Subsystems** ([milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
 - Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.7).
 
 ## Topic Coverage Map (subsystem review 2026-09-17)
 | Topic | Status | Issues |
 |---|---|---|
-| IOMMU / SMMU DMA protection | covered (closed) | #4, #9 |
-| Demand paging / CoW | **filed new** | #162 |
-| stac/clac (ARM64 PAN) | covered (closed) | #5 |
-| Paging / IRQ (RISC-V) | covered (open) | #29, #152 |
-| PLT/GOT runtime resolution | covered (closed) | #95 |
-| POSIX signals (sigaction/sigreturn) | **filed new** | #164 |
-| Stack unwinding (user-space) | **filed new** | #163 |
-| procfs enhancement | covered (open) | #54 |
-| tmpfs enhancement | **filed new** | #165 |
-| Mounting dynamically loaded drivers | **filed new** | #166 |
-| Distributed runqueue load balancing | covered (closed) | #61 |
-| Zero-copy IPC buffer pools | covered (closed) | #11, #14, #106 |
-
-## v0.4.2 — User-Space Infrastructure (CLOSED)
-- #1 [closed] Untyped child-split + sub-range carve — exhaustion-model retype.
-- #2 [closed] IRQ caps + user-space IRQ delivery (IrqCap).
-- #3 [closed] MMIO caps + fine-grained I/O delegation.
-- #4 [closed] IOMMU DMA protection (VT-d / AMD-Vi / SMMU) — identity-IOVA tables.
-- #5 [closed] MP-4.4 aarch64 PAN/PXN enablement — incl. PAN-sysreg stac/clac.
-- #6 [closed] Pending audits/refactorings under audits/ (P0–P8).
-- #7 [closed] User-space IRQ delivery system (NOTIFY mode).
-- #8 [closed] Fine-grained hardware I/O delegation (user MMIO maps).
-- #9 [closed] IOMMU DMA protection layer (live VT-d enablement).
-- #10 [closed] MSI-X vector infrastructure.
-- #91 [closed] bug: ISR_NOERR misclassification (#VE/#HV error codes).
-- #103 [closed] aarch64 deep_copy L3 descriptor bits.
-- #153 [closed] [S1] AP trampoline staging clobbers GRUB multiboot info.
-
-## v0.4.3 — Syscall Fastpath + FPU / Test-Enhancement Determinism (CLOSED)
-- #11 [closed] In-register IPC fastpath (SEND/RECEIVE/SEND_SYNC).
-- #12 [closed] External pager protocol (#PF delegation).
-- #13 [closed] Fault recovery & crash supervisor.
-- #14 [closed] Capability shared-memory granules (zero-copy).
-- #15 [closed] Priority-ordered blocked-sender wakeup.
-- #92 [closed] Design paper: syscall-fastpath.md.
-- #93 [closed] Design paper: fpu-context.md.
-- #101 [closed] Hard deterministic RT measurement under QEMU.
-- #102 [closed] Scheduler test assertions with time measurement.
-- #105 [closed] Fault isolation: external pager + crash supervisor.
-- #106 [closed] Zero-copy data path (SHM granules + ordered wake).
-- #107 [closed] External pager protocol paper requirement.
-- #119 [closed] AhciDriver::probe allocation (> MemPool class).
-- #120 [closed] aarch64 build break (iommu unused-variable).
-
-## v0.4.3 — Test-Coverage Completion (CLOSED)
-- #108 [closed] Coverage gap: AHCI deep paths.
-- #109 [closed] Coverage gap: procfs nodes.
-- #110 [closed] Coverage gap: keyboard scancodes.
-- #111 [closed] Coverage gap: pipe blocking semantics.
-- #112 [closed] Coverage gap: initrd cpio parser.
-- #113 [closed] Coverage gap: ACPI table parsing (incl. DMAR).
-- #114 [closed] Coverage gap: tmpfs corruption tests.
-- #115 [closed] Coverage gap: GDT layout.
-- #116 [closed] Coverage gap: RTC date math.
-- #117 [closed] Coverage gap: virtio_blk request path.
-- #118 [closed] Coverage gap: serial driver logic.
-
-## v0.4.4 — APIC + SMP / ELF Shared Objects (CLOSED)
-- #25 [closed] Local/IO APIC, X2APIC, per-CPU GDT/TSS, AP startup.
-- #26 [closed] TPR interrupt prioritization, core isolation.
-- #27 [closed] Per-CPU asm for isr_nesting_depth.
-- #60 [closed] hhdm_modified_ (VAR-17) re-audit.
-- #85 [closed] Test coverage: v0.4.x (18 modules).
-- #94 [closed] Design paper: per-cpu-smp.md.
-- #95 [closed] Design paper: elf-shared-libs.md (PLT/GOT, DT_NEEDED).
-- #141 [closed] Shell build_canonical_path drops leading '/'.
-- #142 [closed] Coverage denominator (duplicate C1/C2 symbols).
-- #143 [closed] Memory test adoption (safe_copy user-task gates).
-- #144 [closed] IrqThread teardown (ResourceTracker leak).
-- #145 [closed] Queue/Mutex uninitialised members (page fault).
-- #146 [closed] Queue()/Mutex() semifinal fix for #145.
-- #147 [closed] Coverage Phase A merge + HTML tree fixes.
-- #148 [closed] Threaded-IRQ dispatch wedge.
-- #149 [closed] safe_copy fault-recovery resume loop (S1).
-
-## v0.4.5 — Kernel Half Merge + Cache Coloring (CLOSED)
-- #61 [closed] Distributed runqueues, RT load balancer, affinity syscalls.
-- #62 [closed] Cache coloring allocator, SMP locks, WCET re-audit.
-- #96 [closed] Design paper: kernel-half-merge.md.
-- #151 [closed] fpu_owner per-CPU migration.
-- #154 [closed] executed_ticks charged to running task only (was: all READY).
-
-## v0.4.6 — TLB Shootdown (CLOSED)
-- #63 [closed] Epic: PCID/INVPCID/lazy shootdown/IPI batching/profiling.
-- #155 [closed] Reaper (PID 1) wait-for-child instead of spinning.
-- #156 [closed] PCID-tagged CR3 switches.
-- #157 [closed] Selective INVPCID invalidation.
-- #158 [closed] Lazy shootdown + deferred-free quarantine.
-- #159 [closed] IPI batching for shootdown delivery.
-- #160 [closed] Shootdown latency profiling.
-- #161 [closed] Race conditions and refactoring review.
-
-## v0.4.7 — Enhance HRT (CLOSED)
-- #16 [closed] High-resolution monotonic clock (TickSource + ns_monotonic).
-- #17 [closed] Per-CPU event-timer wheel (static slots + generations).
-- #18 [closed] Wheel-armed bounded receive (VULN-W3 close).
+| IOMMU / SMMU DMA protection | covered (closed: #4, #9) | — |
+| Demand paging / CoW | **open** | #162 |
+| stac/clac (ARM64 PAN) | covered (closed: #5) | — |
+| Paging / IRQ (RISC-V) | open | #29, #152 |
+| PLT/GOT runtime resolution | covered (closed: #95) | — |
+| POSIX signals (sigaction/sigreturn) | **open** | #164 |
+| Stack unwinding (user-space) | **open** | #163 |
+| procfs enhancement | open | #54 |
+| tmpfs enhancement | **open** | #165 |
+| Mounting dynamically loaded drivers | **open** | #166 |
+| Distributed runqueue load balancing | covered (closed: #61) | — |
+| Zero-copy IPC buffer pools | covered (closed: #11, #14, #106) | — |
 
 ## v0.4.8 — Enhance Deadline Scheduling (ACTIVE)
-- #19 [closed] Deadline-aware preemptive scheduling (DM + global EDF).
-- #20 [open] Enforced admission control (Liu-Layland gate, was advisory).
-- #21 [closed] Per-task execution-time metering (SYS_TIMES).
-- #22 [open] Aperiodic & deferrable servers.
-- #23 [open] SMP admission extension (partitioned EDF).
+- #20 [open] Enforced admission control — Liu-Layland gate (was advisory I-8).
+- #22 [open] Aperiodic & deferrable servers — beside the sporadic server.
+- #23 [open] SMP admission extension — per-CPU bounds, partitioned EDF.
 - #24 [open] Kernel self-test of admission bounds.
 
 ## v0.4.9 — IRQ Blocking + Audit (OPEN)
@@ -133,15 +48,10 @@
 - #66 [open] Bounded-blocking audit.
 
 ## v0.4.10 — Test-Coverage Closure, Areas < 80% (ACTIVE)
-- #124 [closed] kernel/vfs (45.6%).
-- #125 [closed] services/shell+terminal (40.3%).
 - #126 [open] lib (57.0%).
 - #127 [open] kernel/memory (57.1%).
-- #128 [closed] kernel/debug (8.3%).
-- #129 [closed] kernel/profiling (36.4%).
 - #130 [open] kernel/driver (63.6%).
 - #131 [open] top-level kernel/ (60.7%).
-- #132 [closed] kernel/sync (69.9%).
 - #133 [open] kernel/iommu (71.1%).
 - #134 [open] kernel/syscall (71.4%).
 - #135 [open] kernel/daemon (75.0%).
@@ -190,14 +100,6 @@
 - Phase 10 v1.0.0 Release Gate: #78 capability security; #79 deterministic HRT scheduling; #80 kernel minimality; #81 safety completeness; #82 full test gate; #83 SIL 3 audit approval; #84 userspace completeness.
 - RPi4 bare-metal bring-up: #31 aarch64 build cleanup; #32 board config; #33 U-Boot path; #34 PL011 console; #35 GIC-400; #36 RPi4 MMU layout; #37 per-arch test gate; #38 storage for initrd/ELFs; #39 mailbox/framebuffer.
 - Coverage trackers: #86 v0.5.x; #87 v0.6.x; #88 v0.7.x; #89 v0.8.x; #90 v0.9.x; #123 coverage Phase A (gcov).
-
-## Un-milestoned (CLOSED, historical)
-- #97 workflow state machine + gate script + FEEDBACK transition.
-- #99 multi-arch compile-clean (aarch64 + riscv64).
-- #100 aarch64 PMM OOM panic (meminit ordering).
-- #121 sampling profiler SMPL capture fix.
-- #122 per-class instrumented coverage + merged report.
-- #150 release stringop-overflow in checked_ptr sweep.
 
 ## Future Roadmap (Aspirational)
 - **Phase 4.6 (0.4.x):** User-Space Driver Infrastructure & Hardware Isolation
