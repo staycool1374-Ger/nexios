@@ -108,6 +108,97 @@ inline bool has_invpcid() {
 inline bool has_rdseed() {
     return (cpuid(7, 0).ebx & CPUID_EBX7_RDSEED) != 0;
 }
+/// @brief TSC-deadline timer feature bit (ECX, leaf 1).
+inline constexpr uint32_t CPUID_ECX1_TSC_DEADLINE = 1u << 24;
+/// @brief Check if the CPU supports TSC-deadline timer mode.
+/// @return true if the TSC-deadline feature bit is set.
+inline bool has_tsc_deadline() {
+    return (cpuid(1).ecx & CPUID_ECX1_TSC_DEADLINE) != 0;
+}
+/// @brief Check if the CPU has a local APIC.
+/// @return true if the APIC feature bit is set.
+inline bool has_apic() {
+    return (cpuid(1).edx & (1u << 9)) != 0;
+}
+
+/// @brief Read the CPU vendor string (12 chars + NUL).
+/// @param out Buffer of at least 13 bytes (EBX/EDX/ECX order, leaf 0).
+inline void cpuid_vendor(char *out) {
+    if (!out)
+        return;
+    CpuIdResult r = cpuid(0);
+    out[0] = static_cast<char>(r.ebx);
+    out[1] = static_cast<char>(r.ebx >> 8);
+    out[2] = static_cast<char>(r.ebx >> 16);
+    out[3] = static_cast<char>(r.ebx >> 24);
+    out[4] = static_cast<char>(r.edx);
+    out[5] = static_cast<char>(r.edx >> 8);
+    out[6] = static_cast<char>(r.edx >> 16);
+    out[7] = static_cast<char>(r.edx >> 24);
+    out[8] = static_cast<char>(r.ecx);
+    out[9] = static_cast<char>(r.ecx >> 8);
+    out[10] = static_cast<char>(r.ecx >> 16);
+    out[11] = static_cast<char>(r.ecx >> 24);
+    out[12] = '\0';
+}
+
+/// @brief Decode family/model/stepping from leaf 1 EAX (with extended
+/// bits for family 6/15).
+/// @param family_out Family id (non-null).
+/// @param model_out Model id (non-null).
+/// @param stepping_out Stepping id (non-null).
+inline void cpuid_family_model_stepping(uint32_t *family_out,
+                                        uint32_t *model_out,
+                                        uint32_t *stepping_out) {
+    if (!family_out || !model_out || !stepping_out)
+        return;
+    uint32_t eax = cpuid(1).eax;
+    uint32_t stepping = eax & 0xFu;
+    uint32_t base_model = (eax >> 4) & 0xFu;
+    uint32_t base_family = (eax >> 8) & 0xFu;
+    uint32_t ext_model = (eax >> 16) & 0xFu;
+    uint32_t ext_family = (eax >> 20) & 0xFFu;
+    uint32_t family = base_family;
+    if (family == 6 || family == 15)
+        family += ext_family;
+    uint32_t model = base_model;
+    if (family == 6 || family == 15)
+        model += ext_model << 4;
+    *family_out = family;
+    *model_out = model;
+    *stepping_out = stepping;
+}
+
+/// @brief Read the CPU brand string (48 chars + NUL, may be blank on
+/// VMs without branding).
+/// @param out Buffer of at least 49 bytes. Holds "(unknown)" when the
+/// extended leaves are unavailable.
+inline void cpuid_brand(char *out) {
+    if (!out)
+        return;
+    static constexpr uint32_t kBrandBytes = 48;
+    if (cpuid(0x80000000).eax < 0x80000004) {
+        const char *unknown = "(unknown)";
+        uint32_t i = 0;
+        while (unknown[i] && i < kBrandBytes) {
+            out[i] = unknown[i];
+            ++i;
+        }
+        out[i] = '\0';
+        return;
+    }
+    for (uint32_t leaf = 0; leaf < 3; ++leaf) {
+        CpuIdResult r = cpuid(0x80000002 + leaf);
+        uint32_t regs[4] = {r.eax, r.ebx, r.ecx, r.edx};
+        for (uint32_t w = 0; w < 4; ++w) {
+            for (uint32_t b = 0; b < 4; ++b) {
+                out[leaf * 16 + w * 4 + b] =
+                    static_cast<char>(regs[w] >> (b * 8));
+            }
+        }
+    }
+    out[kBrandBytes] = '\0';
+}
 
 } // namespace arch
 // NOLINTEND(bugprone-easily-swappable-parameters)

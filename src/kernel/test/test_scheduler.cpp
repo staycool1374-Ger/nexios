@@ -568,6 +568,49 @@ JARVIS_TEST(scheduler_no_spurious_switch, "PRE: none | POST: none") {
 // Expect: Each JARVIS_REGISTER_TEST call registers a test function for later
 // execution
 // Depends: test, logger, scheduler, task, pmm, vmm
+// Runmode: kernel
+// Testidea: loadavg_step integer EMA math (issue #172 re-audit): steps
+// move at ×1000000 precision (the ×1000 display scale alone truncated
+// every per-tick step to zero), saturate in [0, scale], fail closed on
+// zero window/scale, and converge toward a sustained sample.
+// Input: Pure loadavg_step() calls (no tasks, no ticks).
+// Expect: step(0,FULL,60000)=16; fixed points at 0/FULL; decay;
+//         zero-window/scale → 0; clamps; 60000 full-load steps > 500000.
+// Depends: Scheduler::loadavg_step
+JARVIS_TEST(scheduler_loadavg_step_math, "PRE: none | POST: none") {
+    constexpr uint64_t kScale = kernel::Scheduler::LOADAVG_SCALE;
+    constexpr uint64_t kWin = 60000;
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(16),
+                     kernel::Scheduler::loadavg_step(0, kScale, kWin,
+                                                     kScale));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     kernel::Scheduler::loadavg_step(0, 0, kWin, kScale));
+    JARVIS_ASSERT_EQ(kScale,
+                     kernel::Scheduler::loadavg_step(kScale, kScale, kWin,
+                                                     kScale));
+    // Decay from full toward zero stays in range.
+    uint64_t decayed =
+        kernel::Scheduler::loadavg_step(kScale, 0, kWin, kScale);
+    JARVIS_ASSERT(decayed < kScale);
+    JARVIS_ASSERT(decayed + kScale / kWin >= kScale - 1);
+    // Fail-closed guards.
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     kernel::Scheduler::loadavg_step(100, 200, 0, kScale));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     kernel::Scheduler::loadavg_step(100, 200, kWin, 0));
+    // Clamps.
+    JARVIS_ASSERT_EQ(kScale,
+                     kernel::Scheduler::loadavg_step(kScale + 5, kScale,
+                                                     kWin, kScale));
+    // Convergence: sustained full load moves the average (the ×1000 bug
+    // this pins: per-tick steps must be non-zero).
+    uint64_t avg = 0;
+    for (uint64_t i = 0; i < kWin; ++i)
+        avg = kernel::Scheduler::loadavg_step(avg, kScale, kWin, kScale);
+    JARVIS_ASSERT(avg > 500000);
+    JARVIS_TEST_PASS();
+}
+
 void register_scheduler_tests() {
     Logger::info("Registering scheduler tests");
     JARVIS_REGISTER_TEST(scheduler_task_count);
@@ -586,4 +629,5 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_add_duplicate_id);
     JARVIS_REGISTER_TEST(scheduler_equal_priority_fifo);
     JARVIS_REGISTER_TEST(scheduler_no_spurious_switch);
+    JARVIS_REGISTER_TEST(scheduler_loadavg_step_math);
 }

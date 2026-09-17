@@ -293,6 +293,15 @@ struct TaskControlBlock {
     TaskState state;
     uint64_t priority;
     uint64_t base_priority;
+    /// @brief Placement sentinel: running_on_cpu value for a task that was
+    ///        never dispatched (issue #172 — cpuinfo/top CPU column).
+    static constexpr uint64_t CPU_PLACEMENT_NONE =
+        static_cast<uint64_t>(-1);
+    /// @brief CPU the task was last dispatched on (issue #172).  Single
+    ///        writer (the dispatching CPU in switch_to_task, release-store);
+    ///        concurrent shell readers use acquire loads.  Never
+    ///        CPU_PLACEMENT_NONE after the first dispatch.
+    uint64_t running_on_cpu = CPU_PLACEMENT_NONE;
     /// @brief CPU affinity bitmask (issue #25 C1): bit N = may run on CPU N.
     ///        Default 0x1 (CPU0 — all pre-C1 behavior unchanged).
     uint64_t cpu_affinity = 1;

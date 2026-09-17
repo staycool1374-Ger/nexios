@@ -707,6 +707,66 @@ class Scheduler {
         return zombie_count_;
     }
 
+    /// @brief Snapshot the zombie list head into a caller array (issue
+    ///        #172, top zombie section).  Copies (at most max_out)
+    ///        entries under the zombie leaf lock, then returns the count
+    ///        copied.  Shell prints lock-free from the snapshot.
+    /// @param out Caller array of TaskControlBlock* (non-null).
+    /// @param max_out Array capacity.
+    /// @return Number of entries copied.
+    static uint64_t snapshot_zombies(TaskControlBlock **out,
+                                     uint64_t max_out) noexcept;
+
+    /// @brief Load-average scale (issue #172): internal precision ×1000000
+    ///        (accessors return per-mille).  The ×1000 display scale alone
+    ///        truncates every per-tick step to zero (|d| ≤ 1000 < N);
+    ///        ×1000000 moves ≈16/tick at full load (re-audit #172).
+    ///        Public: unit tests pin the EMA math in these units.
+    static constexpr uint64_t LOADAVG_SCALE = 1000000;
+    static constexpr uint64_t LOADAVG_DISPLAY_DIV = 1000;
+
+    /// @brief Load averages in per-mille (issue #172, top header).
+    /// @return Decayed non-idle CPU fraction × 1000.
+    static uint64_t loadavg_1min() noexcept {
+        return __atomic_load_n(&loadavg_1min_, __ATOMIC_ACQUIRE) /
+               LOADAVG_DISPLAY_DIV;
+    }
+    static uint64_t loadavg_5min() noexcept {
+        return __atomic_load_n(&loadavg_5min_, __ATOMIC_ACQUIRE) /
+               LOADAVG_DISPLAY_DIV;
+    }
+    static uint64_t loadavg_15min() noexcept {
+        return __atomic_load_n(&loadavg_15min_, __ATOMIC_ACQUIRE) /
+               LOADAVG_DISPLAY_DIV;
+    }
+
+    /// @brief Pure one-step integer EMA (issue #172 re-audit: test seam
+    ///        for the loadavg arithmetic — on_tick calls it, unit tests
+    ///        pin it).  Saturating: result stays in [0, scale].
+    /// @param avg Current average (0..scale).
+    /// @param instant New sample (0..scale).
+    /// @param window Window length in samples (> 0).
+    /// @param scale Full-scale value (> 0).
+    /// @return Updated average, clamped to [0, scale].
+    static uint64_t loadavg_step(uint64_t avg, uint64_t instant,
+                                 uint64_t window, uint64_t scale) noexcept {
+        if (window == 0 || scale == 0)
+            return 0;
+        if (avg > scale)
+            avg = scale;
+        if (instant > scale)
+            instant = scale;
+        int64_t diff = static_cast<int64_t>(instant) -
+                       static_cast<int64_t>(avg);
+        int64_t step = diff / static_cast<int64_t>(window);
+        int64_t updated = static_cast<int64_t>(avg) + step;
+        if (updated < 0)
+            updated = 0;
+        if (updated > static_cast<int64_t>(scale))
+            updated = static_cast<int64_t>(scale);
+        return static_cast<uint64_t>(updated);
+    }
+
     static void reset_zombie_list() noexcept {
         zombie_head_ = nullptr;
         zombie_tail_ = nullptr;
@@ -885,6 +945,13 @@ struct SwSlots {
     ///        (issue #61).  Own-CPU writes under scheduler_lock_;
     ///        readers use atomics; reset by reset_migration_counts().
     static uint64_t migration_count_[CONFIG_MAX_CPUS];
+    /// @brief Decayed load averages (issue #172, top loadavg triplet).
+    ///        Integer EMA of the per-tick non-idle sample, updated on the
+    ///        BSP on_tick() tail under scheduler_lock_; readers use
+    ///        atomic loads.  Tickless windows skip decay (stale, bounded).
+    static uint64_t loadavg_1min_;
+    static uint64_t loadavg_5min_;
+    static uint64_t loadavg_15min_;
     /// @brief Deadline-ordered intrusive list for O(1) expired-task detection.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static DeadlineList deadline_list_;

@@ -1023,6 +1023,24 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     }
 }
 
+uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
+                                     uint64_t max_out) noexcept {
+    if (!out || max_out == 0)
+        return 0;
+    // drain_zombie_list precedent: IrqGuard + leaf only (callers hold no
+    // lock).  Read-only copy — no list surgery, no free.
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
+    uint64_t copied = 0;
+    for (TaskControlBlock *task = zombie_head_;
+         task && copied < max_out; task = task->zombie_next_) {
+        if (task->magic != TaskControlBlock::TCB_MAGIC)
+            break;
+        out[copied++] = task;
+    }
+    return copied;
+}
+
 void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
     // Caller (on_tick tail) holds the global lock; take the leaf here
     // (order global→leaf). List surgery under both; free() runs per item
@@ -1488,6 +1506,9 @@ constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
 constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
 constinit uint64_t Scheduler::zombie_count_ = 0;
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
+uint64_t Scheduler::loadavg_1min_ = 0;
+uint64_t Scheduler::loadavg_5min_ = 0;
+uint64_t Scheduler::loadavg_15min_ = 0;
 sync::SpinLock Scheduler::scheduler_lock_;
 
 // Liu-Leyland Rate-Monotonic LUB bounds (scaled by 1000000)
@@ -1846,8 +1867,12 @@ void Scheduler::set_current_index(uint64_t idx) noexcept {
 }
 
 void Scheduler::set_current_task(TaskControlBlock *t) noexcept {
-    if (t && t->magic == TaskControlBlock::TCB_MAGIC)
+    if (t && t->magic == TaskControlBlock::TCB_MAGIC) {
+        // Issue #172: adoption path publishes placement like a dispatch.
+        __atomic_store_n(&t->running_on_cpu, Scheduler::sched_cpu(),
+                         __ATOMIC_RELEASE);
         set_current_ptr(t);
+    }
 }
 
 TaskControlBlock *Scheduler::task_at(uint64_t index) noexcept {
@@ -2588,6 +2613,32 @@ void Scheduler::on_tick() noexcept {
                         (1ULL << static_cast<uint64_t>(Signal::SIGALRM));
                 }
             }
+        }
+
+        // Issue #172: load-average decay (top triplet).  Integer EMA of
+        // the per-tick non-idle sample at LOADAVG_SCALE precision (the
+        // ×1000 display scale alone truncates every step to zero).
+        // Runs under the already-held scheduler_lock_; additive only, no
+        // alloc/log.  Tickless windows skip decay (stale, bounded —
+        // documented, not incorrect).
+        {
+            const uint64_t instant =
+                (running && !is_idle_task(running)) ? LOADAVG_SCALE : 0;
+            // N = ticks per window at CONFIG_TICK_HZ (guard: HZ is a
+            // non-zero build constant; windows ordered 1m < 5m < 15m).
+            constexpr uint64_t kTicks1m =
+                60ULL * static_cast<uint64_t>(CONFIG_TICK_HZ);
+            constexpr uint64_t kTicks5m = 5ULL * kTicks1m;
+            constexpr uint64_t kTicks15m = 15ULL * kTicks1m;
+            loadavg_1min_ =
+                loadavg_step(loadavg_1min_, instant, kTicks1m,
+                             LOADAVG_SCALE);
+            loadavg_5min_ =
+                loadavg_step(loadavg_5min_, instant, kTicks5m,
+                             LOADAVG_SCALE);
+            loadavg_15min_ =
+                loadavg_step(loadavg_15min_, instant, kTicks15m,
+                             LOADAVG_SCALE);
         }
 #if !CONFIG_DEADLINE_MONITOR_TASK
         __atomic_fetch_add(&deadline_detection_integrity, 1, __ATOMIC_RELEASE);
@@ -3613,6 +3664,12 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         Scheduler::enqueue_ready(*current);
     }
     next.state = TaskState::RUNNING;
+    // Issue #172: snapshot dispatch placement for cpuinfo/top.  Single
+    // writer (this CPU dispatching next), release-store; shell readers
+    // use acquire loads.  Placed at the single real-dispatch commit
+    // point (self-switch no-ops above return early and keep old value).
+    __atomic_store_n(&next.running_on_cpu, Scheduler::sched_cpu(),
+                     __ATOMIC_RELEASE);
 
     {
         arch::IrqGuard ig{};

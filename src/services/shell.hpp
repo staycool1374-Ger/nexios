@@ -48,6 +48,10 @@ public:
     /// @param help Help text shown in "help" command.
     /// @param func Handler function.
     static void register_command(const char* name, const char* help, CommandFunc func);
+    /// @brief Test-only: reset the top sliding-window ring (issue #172).
+    /// Tests need a deterministic window baseline; production never
+    /// resets (window continuity across refreshes).
+    static void top_reset_samples();
     /// @brief Main shell loop (reads input, dispatches commands).
     static void shell_task_main();
 
@@ -194,6 +198,10 @@ private:
     static void cmd_umask(int argc, const char** argv);
     /// @brief Built-in: process times.
     static void cmd_times(int argc, const char** argv);
+    /// @brief Built-in: show CPU information (issue #172).
+    static void cmd_cpuinfo(int argc, const char** argv);
+    /// @brief Built-in: task/CPU monitor, linux-top style (issue #172).
+    static void cmd_top(int argc, const char** argv);
     /// @brief Built-in: exit login shell.
     static void cmd_logout(int argc, const char** argv);
     /// @brief Built-in: directory stack.

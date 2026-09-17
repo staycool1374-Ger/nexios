@@ -34,6 +34,13 @@
 #include <services/terminal/terminal.hpp>
 #include <services/program.hpp>
 #include <kernel/vfs/vfs.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/sync/semaphore.hpp>
+#include <kernel/arch/timer.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/test/test_sched_helpers.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -85,6 +92,52 @@ size_t count_char(const char *text, char wanted) {
 void ensure_standard_mounts() {
     if (vfs::resolve("/tmp") == nullptr)
         vfs::reset_and_remount();
+}
+
+/// @brief Capture buffer for full top frames (task table exceeds 4 KiB).
+char top_out[8192];
+
+/// @brief Fixture gate: top test tasks park here until terminated.
+sync::Semaphore top_gate;
+
+/// @brief Blocking fixture entry (issue #172 top tests).
+void top_block_entry() {
+    top_gate.wait();
+}
+
+/// @brief Names a fixture task (bounded copy, NUL-terminated).
+void top_name_task(TaskControlBlock *t, const char *name) {
+    if (!t || !name)
+        return;
+    size_t i = 0;
+    while (name[i] && i + 1 < CONFIG_TASK_NAME_LEN) {
+        t->name[i] = name[i];
+        ++i;
+    }
+    t->name[i] = '\0';
+}
+
+/// @brief Spins until the timer tick advances (separates top sample
+/// frames so the sliding window is non-empty).
+void top_next_tick() {
+    uint64_t t0 = arch::Timer::ticks();
+    for (uint64_t i = 0; i < 10000000; ++i) {
+        if (arch::Timer::ticks() != t0)
+            break;
+        arch::pause();
+    }
+}
+
+/// @brief Index of needle in haystack, or UINT64_MAX when absent.
+uint64_t top_index_of(const char *hay, const char *needle) {
+    for (uint64_t i = 0; hay[i]; ++i) {
+        uint64_t j = 0;
+        while (needle[j] && hay[i + j] == needle[j])
+            ++j;
+        if (!needle[j])
+            return i;
+    }
+    return static_cast<uint64_t>(-1);
 }
 
 } // namespace
@@ -769,6 +822,265 @@ JARVIS_TEST(shell_version_meminfo_and_vfs_error,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: cpuinfo renders every contracted section (issue #172).
+// Input: Shell::execute("cpuinfo") with terminal capture.
+// Expect: Vendor/Family/Model/Stepping/Brand/Features labels, APIC +
+//         STATUS + CURRENT TASK + TICKS columns, Uptime footer, BSP row,
+//         and "--" IDLE% on the very first call (no baseline yet).
+// Depends: service::Shell, arch cpuid helpers
+JARVIS_TEST(shell_cpuinfo_fields_present, "PRE: none | POST: none") {
+    char out[4096];
+    run_shell("cpuinfo", out, sizeof(out));
+    bool ok = has(out, "Vendor") && has(out, "Family") &&
+              has(out, "Model") && has(out, "Stepping") &&
+              has(out, "Brand") && has(out, "Features") &&
+              has(out, "APIC") && has(out, "STATUS") &&
+              has(out, "CURRENT TASK") && has(out, "TICKS") &&
+              has(out, "Uptime") && has(out, "BSP") && has(out, "--");
+    JARVIS_ASSERT(ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: top snapshot header contract (issue #172, -d 0 = one frame).
+// Input: Shell::execute("top -d 0") with large capture.
+// Expect: load-average line, per-CPU bar line, TOT mean/max line,
+//         sys/user split labels, full task-table header incl. PD_USE%.
+// Depends: service::Shell
+JARVIS_TEST(shell_top_snapshot_header, "PRE: none | POST: none") {
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    bool ok = has(top_out, "load average") && has(top_out, "CPU0") &&
+              has(top_out, "TOT") && has(top_out, "avg") &&
+              has(top_out, "max") && has(top_out, "sys") &&
+              has(top_out, "user") && has(top_out, "PID") &&
+              has(top_out, "PD_USE%");
+    JARVIS_ASSERT(ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: top sorts CPU% desc with PID tiebreak (issue #172, linux
+// default).  Two blocked fixtures: B created first (lower PID, frozen
+// exec) and A (higher PID, seeded +5s exec).  A must sort first despite
+// the higher PID; B shows 0.0.
+// Input: Two top frames separated by one tick (non-empty window).
+// Expect: index("topA01") < index("topB01").
+// Depends: service::Shell, Scheduler task walk
+JARVIS_TEST(shell_top_sort_order, "PRE: none | POST: none") {
+    top_gate.init(0, 1);
+    auto *task_b = TaskControlBlock::create(top_block_entry, 6, 10000);
+    auto *task_a = TaskControlBlock::create(top_block_entry, 5, 10000);
+    JARVIS_ASSERT(task_a != nullptr);
+    JARVIS_ASSERT(task_b != nullptr);
+    top_name_task(task_a, "topA01");
+    top_name_task(task_b, "topB01");
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*task_b);
+        Scheduler::add_task(*task_a);
+    }
+    // Deterministic window: reset the global ring, capture the baseline
+    // frame, seed, wait one tick, capture the measuring frame.
+    service::Shell::top_reset_samples();
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    task_a->exec_ns_total += 5000000000ULL;
+    top_next_tick();
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    uint64_t ia = top_index_of(top_out, "topA01");
+    uint64_t ib = top_index_of(top_out, "topB01");
+    kernel::test::terminate_and_drain(*task_a);
+    kernel::test::terminate_and_drain(*task_b);
+    JARVIS_ASSERT(ia != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT(ib != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT(ia < ib);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: PD_USE% math + 90% flag + non-periodic dash (issue #172).
+// A periodic fixture (period 10000 ticks) shows seeded percentages;
+// the idle task (NO_PERIOD) shows a dash in PD_USE%.
+// Input: exec_period_ns seeded to 88% then 91% of the period.
+// Expect: "88%" without "88%!", then "91%!"; idle row ends with "-".
+// Depends: service::Shell
+JARVIS_TEST(shell_top_pd_use_math_and_flag, "PRE: none | POST: none") {
+    top_gate.init(0, 1);
+    auto *task = TaskControlBlock::create(top_block_entry, 5, 10000);
+    JARVIS_ASSERT(task != nullptr);
+    top_name_task(task, "topPD01");
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*task);
+    }
+    // 1 tick = 1e6 ns; period_ns = 10000 * 1e6.
+    task->exec_period_ns = 8800000000ULL; // 88%
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    bool seen88 = has(top_out, "88%") && !has(top_out, "88%!");
+    task->exec_period_ns = 9100000000ULL; // 91% -> flag
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    bool seen91 = has(top_out, "91%!");
+    // Idle row (NO_PERIOD): last field of its task-table line is "-".
+    // The NAME field renders padded (" idle        "); per-CPU "(idle)"
+    // current-task markers must not match instead.
+    uint64_t ishell = top_index_of(top_out, " idle        ");
+    bool shell_dash = false;
+    if (ishell != static_cast<uint64_t>(-1)) {
+        uint64_t inl = ishell;
+        while (top_out[inl] && top_out[inl] != '\n')
+            ++inl;
+        for (uint64_t k = (inl >= 8 ? inl - 8 : 0); k < inl; ++k) {
+            if (top_out[k] == '-')
+                shell_dash = true;
+        }
+    }
+    kernel::test::terminate_and_drain(*task);
+    JARVIS_ASSERT(seen88);
+    JARVIS_ASSERT(seen91);
+    JARVIS_ASSERT(shell_dash);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: affinity pin marker (issue #172): single-CPU mask renders
+// "N!", contiguous multi-CPU mask renders "a-b" without "!".
+// Input: Two fixtures with masks 1<<1 and 0b11.
+// Expect: Owning rows contain "1!" and "0-1" respectively.
+// Depends: service::Shell
+JARVIS_TEST(shell_top_affinity_pin_marker, "PRE: none | POST: none") {
+    top_gate.init(0, 1);
+    auto *pin = TaskControlBlock::create(top_block_entry, 5, 10000);
+    auto *multi = TaskControlBlock::create(top_block_entry, 5, 10000);
+    JARVIS_ASSERT(pin != nullptr);
+    JARVIS_ASSERT(multi != nullptr);
+    top_name_task(pin, "toppin01");
+    top_name_task(multi, "topmulti01");
+    pin->cpu_affinity = 1ULL << 1;
+    multi->cpu_affinity = 0b11ULL;
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*pin);
+        Scheduler::add_task(*multi);
+    }
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    uint64_t ipin = top_index_of(top_out, "toppin01");
+    uint64_t imulti = top_index_of(top_out, "topmulti01");
+    bool pin_ok = false;
+    bool multi_ok = false;
+    if (ipin != static_cast<uint64_t>(-1)) {
+        for (uint64_t k = ipin; k < ipin + 76 && top_out[k]; ++k) {
+            if (top_out[k] == '1' && top_out[k + 1] == '!')
+                pin_ok = true;
+        }
+    }
+    if (imulti != static_cast<uint64_t>(-1)) {
+        for (uint64_t k = imulti; k < imulti + 76 && top_out[k]; ++k) {
+            if (top_out[k] == '0' && top_out[k + 1] == '-' &&
+                top_out[k + 2] == '1')
+                multi_ok = true;
+        }
+    }
+    kernel::test::terminate_and_drain(*pin);
+    kernel::test::terminate_and_drain(*multi);
+    JARVIS_ASSERT(pin_ok);
+    JARVIS_ASSERT(multi_ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: zombie section lists PID/NAME/EXIT and vanishes when empty
+// (issue #172).  A terminated fixture (exit 3, not yet drained) must
+// appear; after drain_zombie_list the section header is gone.
+// Input: terminate fixture with code 3; top before/after drain.
+// Expect: Row with name + exit 3 present; then "Zombies (" absent.
+// Depends: service::Shell, Scheduler zombie list
+JARVIS_TEST(shell_top_zombie_rows_and_omission, "PRE: none | POST: none") {
+    top_gate.init(0, 1);
+    auto *task = TaskControlBlock::create(top_block_entry, 5, 10000);
+    JARVIS_ASSERT(task != nullptr);
+    top_name_task(task, "topzomb01");
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*task);
+    }
+    Scheduler::terminate(*task, 3);
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    uint64_t iz = top_index_of(top_out, "topzomb01");
+    bool row_ok = false;
+    if (iz != static_cast<uint64_t>(-1)) {
+        uint64_t inl = iz;
+        while (top_out[inl] && top_out[inl] != '\n')
+            ++inl;
+        // EXIT column = last 7 chars of the line; must show 3.
+        for (uint64_t k = (inl >= 7 ? inl - 7 : 0); k < inl; ++k) {
+            if (top_out[k] == '3')
+                row_ok = true;
+        }
+    }
+    bool section_ok = has(top_out, "Zombies (");
+    Scheduler::drain_zombie_list();
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    bool omitted = !has(top_out, "Zombies (");
+    JARVIS_ASSERT(row_ok);
+    JARVIS_ASSERT(section_ok);
+    JARVIS_ASSERT(omitted);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: sys/user split attribution (issue #172): a user fixture
+// with seeded exec shows a saturated CPU% row; sys/user labels render.
+// Input: is_user_ fixture + 5s exec seed, two frames over one tick.
+// Expect: sys/user labels present; user row at 100.0 (clamped).
+// Depends: service::Shell
+JARVIS_TEST(shell_top_sys_user_split, "PRE: none | POST: none") {
+    top_gate.init(0, 1);
+    auto *task = TaskControlBlock::create(top_block_entry, 5, 10000);
+    JARVIS_ASSERT(task != nullptr);
+    top_name_task(task, "topuser01");
+    task->is_user_ = true;
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*task);
+    }
+    service::Shell::top_reset_samples();
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    task->exec_ns_total += 5000000000ULL;
+    top_next_tick();
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    uint64_t iu = top_index_of(top_out, "topuser01");
+    bool row_max = false;
+    if (iu != static_cast<uint64_t>(-1)) {
+        for (uint64_t k = iu; k < iu + 76 && top_out[k]; ++k) {
+            if (top_out[k] == '1' && top_out[k + 1] == '0' &&
+                top_out[k + 2] == '0' && top_out[k + 3] == '.' &&
+                top_out[k + 4] == '0')
+                row_max = true;
+        }
+    }
+    bool labels = has(top_out, "sys ") && has(top_out, "user ");
+    kernel::test::terminate_and_drain(*task);
+    JARVIS_ASSERT(labels);
+    JARVIS_ASSERT(row_max);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: top usage contract (issue #172).
+// Input: "top -d xyz" and "top extra operand".
+// Expect: "Usage: top" for both.
+// Depends: service::Shell
+JARVIS_TEST(shell_top_usage_contract, "PRE: none | POST: none") {
+    char out[k_capture_size];
+    run_shell("top -d xyz", out, sizeof(out));
+    bool first = has(out, "Usage: top");
+    run_shell("top surplus", out, sizeof(out));
+    bool second = has(out, "Usage: top");
+    JARVIS_ASSERT(first);
+    JARVIS_ASSERT(second);
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_commands_tests() {
     Logger::info("Registering shell command-surface tests");
     JARVIS_REGISTER_TEST(shell_capture_observes_command_output);
@@ -793,4 +1105,12 @@ void register_shell_commands_tests() {
     JARVIS_REGISTER_TEST(shell_missing_operand_usage_contract);
     JARVIS_REGISTER_TEST(shell_source_rejects_unreadable_targets);
     JARVIS_REGISTER_TEST(shell_version_meminfo_and_vfs_error);
+    JARVIS_REGISTER_TEST(shell_cpuinfo_fields_present);
+    JARVIS_REGISTER_TEST(shell_top_snapshot_header);
+    JARVIS_REGISTER_TEST(shell_top_sort_order);
+    JARVIS_REGISTER_TEST(shell_top_pd_use_math_and_flag);
+    JARVIS_REGISTER_TEST(shell_top_affinity_pin_marker);
+    JARVIS_REGISTER_TEST(shell_top_zombie_rows_and_omission);
+    JARVIS_REGISTER_TEST(shell_top_sys_user_split);
+    JARVIS_REGISTER_TEST(shell_top_usage_contract);
 }

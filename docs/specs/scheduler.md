@@ -207,3 +207,25 @@ priorities, orphaned flags, dangling pointers).
   ordering and blocked-sender wakeup ordering — not confirmed implemented.
 - **SCHED-007:** non-nullable APIs `TaskControlBlock*` → `TaskControlBlock&`
   (incremental UAF hardening) — not yet landed.
+
+## 9. Observability — cpuinfo/top (issue #172)
+
+Read-only introspection for the shell monitor; no dispatch-path changes
+beyond one placement store:
+
+- **`running_on_cpu`** (TCB field, `CPU_PLACEMENT_NONE` = never dispatched):
+  single writer — the dispatching CPU stores `sched_cpu()` (release) at
+  the `switch_to_task` commit point (`next.state = RUNNING`) and in the
+  `set_current_task` adoption path; shell readers use acquire loads.
+  Never used for dispatch decisions (affinity/balancer own placement).
+- **Load averages** (`loadavg_1min_/5min_/15min_`): integer EMA of the
+  per-tick non-idle sample, updated on the BSP `on_tick()` tail under
+  the already-held `scheduler_lock_` (additive only, no alloc/log);
+  `N = 60/300/900 × CONFIG_TICK_HZ`.  Stored at ×1000000 internal
+  precision (a ×1000 quantum truncates every per-tick step to zero);
+  accessors divide by 1000 back to per-mille for display.  Tickless
+  windows skip decay (stale, bounded).  Readers via atomic accessors.
+- **Zombie snapshot** (`snapshot_zombies(out, max)`): copies list entries
+  under IrqGuard + zombie leaf (drain_zombie_list precedent, read-only —
+  no surgery, no free); shell prints lock-free from the snapshot with
+  magic + TERMINATED/REAPED filtering.

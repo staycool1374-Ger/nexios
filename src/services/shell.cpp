@@ -49,6 +49,10 @@
 #include <test.hpp>
 #include <string.hpp>
 #include <constants.hpp>
+#include <kernel/arch/hal/cpuid.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/percpu.hpp>
+#endif
 
 namespace {
 
@@ -170,6 +174,8 @@ void Shell::init() {
     register_command("ulimit",  "Resource limits",                   cmd_ulimit);
     register_command("umask",   "File creation mask",                cmd_umask);
     register_command("times",   "Process times",                     cmd_times);
+    register_command("cpuinfo", "Show CPU information",              cmd_cpuinfo);
+    register_command("top",     "Task/CPU monitor (top [-d SECS])",  cmd_top);
     register_command("logout",  "Exit login shell",                  cmd_logout);
     register_command("dirs",    "Directory stack",                   cmd_dirs);
     register_command("pushd",   "Push directory to stack",           cmd_pushd);
@@ -834,6 +840,738 @@ void Shell::cmd_tasks(int, const char**) {
     Terminal::write("\nZombies: ");
     print_uint(zcount);
     Terminal::write("\n");
+}
+
+// ──────────────────────────────────────────────
+//  Issue #172: cpuinfo / top shared helpers (shell-task-owned, no locks)
+// ──────────────────────────────────────────────
+namespace {
+
+// Fixed-width field printer (same contract as cmd_tasks' local field()).
+void top_field(const char *s, int width, bool right) {
+    int len = 0;
+    while (s[len] && len < width)
+        ++len;
+    if (right) {
+        for (int i = len; i < width; ++i)
+            Terminal::putchar(' ');
+    }
+    for (int i = 0; i < len; ++i)
+        Terminal::putchar(s[i]);
+    if (!right) {
+        for (int i = len; i < width; ++i)
+            Terminal::putchar(' ');
+    }
+    Terminal::putchar(' ');
+}
+
+// Scratch decimal renderer (single-threaded shell: one shared buffer).
+const char *top_num(uint64_t v) {
+    static char numbuf[24];
+    char rev[24];
+    int r = 0;
+    if (v == 0)
+        rev[r++] = '0';
+    while (v > 0 && r < 23) {
+        rev[r++] = static_cast<char>('0' + (v % 10));
+        v /= 10;
+    }
+    int p = 0;
+    while (r > 0)
+        numbuf[p++] = rev[--r];
+    numbuf[p] = '\0';
+    return numbuf;
+}
+
+// Per-mille (0..1000) as "d.d" percent, e.g. 312 -> "31.2".
+const char *top_pct1(uint64_t per_mille) {
+    static char pctbuf[16];
+    if (per_mille > 1000)
+        per_mille = 1000;
+    uint64_t whole = per_mille / 10;
+    uint64_t frac = per_mille % 10;
+    int p = 0;
+    char rev[8];
+    int r = 0;
+    if (whole == 0)
+        rev[r++] = '0';
+    while (whole > 0 && r < 7) {
+        rev[r++] = static_cast<char>('0' + (whole % 10));
+        whole /= 10;
+    }
+    while (r > 0)
+        pctbuf[p++] = rev[--r];
+    pctbuf[p++] = '.';
+    pctbuf[p++] = static_cast<char>('0' + frac);
+    pctbuf[p] = '\0';
+    return pctbuf;
+}
+
+// Scaled (x1000) loadavg as "d.dd", e.g. 420 -> "0.42".
+const char *top_loadavg(uint64_t scaled) {
+    static char labuf[16];
+    uint64_t whole = scaled / 1000;
+    uint64_t frac = (scaled % 1000) / 10;
+    int p = 0;
+    char rev[8];
+    int r = 0;
+    if (whole == 0)
+        rev[r++] = '0';
+    while (whole > 0 && r < 7) {
+        rev[r++] = static_cast<char>('0' + (whole % 10));
+        whole /= 10;
+    }
+    while (r > 0)
+        labuf[p++] = rev[--r];
+    labuf[p++] = '.';
+    labuf[p++] = static_cast<char>('0' + (frac / 10));
+    labuf[p++] = static_cast<char>('0' + (frac % 10));
+    labuf[p] = '\0';
+    return labuf;
+}
+
+// Affinity mask rendering: single CPU -> "N!", low-contiguous range ->
+// "a-b", else up-to-4 comma list with "+" overflow.
+const char *top_affin_str(uint64_t mask) {
+    static char abuf[24];
+    int p = 0;
+    uint64_t first = 0;
+    uint64_t count = 0;
+    uint64_t last = 0;
+    bool contiguous = true;
+    for (uint64_t c = 0; c < 64; ++c) {
+        if (mask & (1ULL << c)) {
+            if (count == 0)
+                first = c;
+            else if (c != last + 1)
+                contiguous = false;
+            last = c;
+            ++count;
+        }
+    }
+    if (count == 0) {
+        abuf[p++] = '-';
+    } else if (count == 1) {
+        const char *n = top_num(first);
+        int i = 0;
+        while (n[i] && p < 22)
+            abuf[p++] = n[i++];
+        abuf[p++] = '!';
+    } else if (contiguous) {
+        const char *a = top_num(first);
+        int i = 0;
+        while (a[i] && p < 22)
+            abuf[p++] = a[i++];
+        abuf[p++] = '-';
+        const char *b = top_num(last);
+        i = 0;
+        while (b[i] && p < 22)
+            abuf[p++] = b[i++];
+    } else {
+        uint64_t shown = 0;
+        for (uint64_t c = 0; c < 64 && shown < 4; ++c) {
+            if (mask & (1ULL << c)) {
+                if (shown > 0 && p < 22)
+                    abuf[p++] = ',';
+                const char *n = top_num(c);
+                int i = 0;
+                while (n[i] && p < 22)
+                    abuf[p++] = n[i++];
+                ++shown;
+            }
+        }
+        if (count > shown && p < 23)
+            abuf[p++] = '+';
+    }
+    abuf[p] = '\0';
+    return abuf;
+}
+
+// Sliding-window sample ring (issue #172): one frame per refresh holding
+// every tracked task's exec total.  Shell-task-owned, single-threaded.
+constexpr uint64_t TOP_SAMPLES = 5;
+struct TopFrame {
+    uint64_t tick = 0;
+    uint64_t n = 0;
+    uint64_t ids[CONFIG_MAX_TASKS] = {};
+    uint64_t execs[CONFIG_MAX_TASKS] = {};
+    bool users[CONFIG_MAX_TASKS] = {};
+};
+TopFrame top_frames[TOP_SAMPLES] = {};
+uint64_t top_frame_count = 0;
+
+// Capture one frame (locked read_times per task, same cost as tasks walk).
+void top_capture_frame() {
+    TopFrame next{};
+    next.tick = arch::Timer::ticks();
+    uint64_t count = kernel::Scheduler::task_count();
+    for (uint64_t i = 0; i < count && next.n < CONFIG_MAX_TASKS; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (!t || t->magic != kernel::TaskControlBlock::TCB_MAGIC)
+            continue;
+        kernel::TaskTimes times{};
+        kernel::Scheduler::read_times(*t, times);
+        next.ids[next.n] = t->id;
+        next.execs[next.n] = times.exec_ns_total;
+        next.users[next.n] = t->is_user_;
+        ++next.n;
+    }
+    for (uint64_t i = TOP_SAMPLES - 1; i > 0; --i)
+        top_frames[i] = top_frames[i - 1];
+    top_frames[0] = next;
+    ++top_frame_count;
+}
+
+// Per-mille CPU% of one task over the window (newest vs oldest frame).
+// Returns 0 with found=false until two frames exist (first draw: 0.0,
+// linux parity).
+bool top_exec_delta(uint64_t id, uint64_t *delta_ns, uint64_t *window_ns,
+                    bool *found);
+uint64_t top_task_per_mille(uint64_t id, bool *found) {
+    uint64_t delta_ns = 0;
+    uint64_t window_ns = 0;
+    if (!top_exec_delta(id, &delta_ns, &window_ns, found) || window_ns == 0)
+        return 0;
+    return (delta_ns >= window_ns) ? 1000 : (delta_ns * 1000) / window_ns;
+}
+
+// Exec-ns delta of one task over the window + the window length.
+// found=false until two frames exist or the id is absent from either.
+bool top_exec_delta(uint64_t id, uint64_t *delta_ns, uint64_t *window_ns,
+                    bool *found) {
+    if (found)
+        *found = false;
+    if (delta_ns)
+        *delta_ns = 0;
+    if (window_ns)
+        *window_ns = 0;
+    if (top_frame_count < 2)
+        return false;
+    const TopFrame &fresh = top_frames[0];
+    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].tick != 0
+                                 ? top_frames[TOP_SAMPLES - 1]
+                                 : top_frames[top_frame_count - 1];
+    if (fresh.tick <= oldest.tick)
+        return false;
+    uint64_t fresh_exec = 0;
+    uint64_t old_exec = 0;
+    bool have_fresh = false;
+    bool have_old = false;
+    for (uint64_t i = 0; i < fresh.n; ++i) {
+        if (fresh.ids[i] == id) {
+            fresh_exec = fresh.execs[i];
+            have_fresh = true;
+            break;
+        }
+    }
+    for (uint64_t i = 0; i < oldest.n; ++i) {
+        if (oldest.ids[i] == id) {
+            old_exec = oldest.execs[i];
+            have_old = true;
+            break;
+        }
+    }
+    if (!have_fresh || !have_old)
+        return false;
+    if (found)
+        *found = true;
+    // Tick = 1ms (mirror cmd_uptime math): window_ns = dticks * 1e6.
+    uint64_t window = (fresh.tick - oldest.tick) * 1000000ULL;
+    if (window_ns)
+        *window_ns = window;
+    if (delta_ns)
+        *delta_ns =
+            (fresh_exec >= old_exec) ? fresh_exec - old_exec : 0;
+    return true;
+}
+
+// Window length in ns (0 until two frames exist).
+uint64_t top_window_ns() {
+    if (top_frame_count < 2)
+        return 0;
+    const TopFrame &fresh = top_frames[0];
+    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].tick != 0
+                                 ? top_frames[TOP_SAMPLES - 1]
+                                 : top_frames[top_frame_count - 1];
+    if (fresh.tick <= oldest.tick)
+        return 0;
+    return (fresh.tick - oldest.tick) * 1000000ULL;
+}
+
+// Test-only reset implementation (ring state is anon-namespace-local).
+void top_reset_samples_impl() {
+    for (uint64_t i = 0; i < TOP_SAMPLES; ++i)
+        top_frames[i] = TopFrame{};
+    top_frame_count = 0;
+}
+
+} // namespace
+
+void Shell::cmd_cpuinfo(int, const char**) {
+    uint64_t ncpus = kernel::Scheduler::up_cpu_count();
+    if (ncpus > CONFIG_MAX_CPUS)
+        ncpus = CONFIG_MAX_CPUS;
+
+    Terminal::write("CPU information (");
+#if defined(CONFIG_ARCH_X86_64)
+    Terminal::write("x86_64");
+#elif defined(CONFIG_ARCH_AARCH64)
+    Terminal::write("aarch64");
+#elif defined(CONFIG_ARCH_RISCV64)
+    Terminal::write("riscv64");
+#else
+    Terminal::write("unknown");
+#endif
+    Terminal::write(", ");
+    print_uint(ncpus);
+    Terminal::write(ncpus == 1 ? " CPU online)\n" : " CPUs online)\n");
+
+#if defined(CONFIG_ARCH_X86_64)
+    char vendor[13];
+    char brand[49];
+    uint32_t family = 0;
+    uint32_t model = 0;
+    uint32_t step = 0;
+    arch::cpuid_vendor(vendor);
+    arch::cpuid_brand(brand);
+    arch::cpuid_family_model_stepping(&family, &model, &step);
+    Terminal::write("Vendor  : ");
+    Terminal::write(vendor);
+    Terminal::write("        Family ");
+    print_uint(family);
+    Terminal::write("  Model ");
+    print_uint(model);
+    Terminal::write("  Stepping ");
+    print_uint(step);
+    Terminal::putchar('\n');
+    Terminal::write("Brand   : ");
+    Terminal::write(brand);
+    Terminal::putchar('\n');
+    Terminal::write("Features:");
+    uint32_t edx1 = arch::cpuid(1).edx;
+    uint32_t ecx1 = arch::cpuid(1).ecx;
+    struct CpuFeat {
+        uint32_t mask;
+        bool ecx;
+        bool leaf7;
+        const char *name;
+    };
+    static constexpr CpuFeat feats[] = {
+        {arch::CPUID_EDX1_FPU, false, false, "FPU"},
+        {arch::CPUID_EDX1_FXSR, false, false, "FXSR"},
+        {arch::CPUID_EDX1_SSE, false, false, "SSE"},
+        {arch::CPUID_EDX1_SSE2, false, false, "SSE2"},
+        {arch::CPUID_ECX1_SSE3, true, false, "SSE3"},
+        {arch::CPUID_ECX1_SSSE3, true, false, "SSSE3"},
+        {arch::CPUID_ECX1_SSE4_1, true, false, "SSE4_1"},
+        {arch::CPUID_ECX1_SSE4_2, true, false, "SSE4_2"},
+        {arch::CPUID_ECX1_RDRAND, true, false, "RDRAND"},
+        {arch::CPUID_ECX1_PCID, true, false, "PCID"},
+        {arch::CPUID_EBX7_INVPCID, false, true, "INVPCID"},
+        {arch::CPUID_EBX7_RDSEED, false, true, "RDSEED"},
+        {1u << 9, false, false, "APIC"},
+        {arch::CPUID_ECX1_TSC_DEADLINE, true, false, "TSC-DEADLINE"},
+    };
+    for (uint32_t i = 0; i < sizeof(feats) / sizeof(feats[0]); ++i) {
+        uint32_t reg = feats[i].ecx ? ecx1 : edx1;
+        // Leaf-7 EBX bits live in a different leaf — probe directly.
+        if (feats[i].leaf7)
+            reg = arch::cpuid(7, 0).ebx;
+        if (reg & feats[i].mask) {
+            Terminal::putchar(' ');
+            Terminal::write(feats[i].name);
+        }
+    }
+    Terminal::putchar('\n');
+#else
+    Terminal::write("Vendor  : (unknown, non-x86_64)\n");
+#endif
+
+    Terminal::write("\n");
+    top_field("CPU", 4, true);
+    top_field("APIC", 5, true);
+    top_field("STATUS", 7, false);
+    top_field("CURRENT TASK", 13, false);
+    top_field("IDLE%", 6, true);
+    top_field("TICKS", 9, true);
+    Terminal::write("\n");
+    // Idle baseline: first call stores it and prints "--" (no delta yet).
+    static uint64_t idle_base_ns[CONFIG_MAX_CPUS] = {};
+    static uint64_t idle_base_wall = 0;
+    static bool idle_baselined = false;
+    uint64_t wall_now = arch::Timer::ns_monotonic();
+    uint64_t ticks_now = arch::Timer::ticks();
+    // IDLE% from the calling CPU's idle-task exec delta (issue #172);
+    // other rows show "--" (their idle tasks are not addressable here).
+    uint64_t here = kernel::Scheduler::sched_cpu();
+    auto *idle = kernel::Scheduler::own_idle();
+    for (uint64_t c = 0; c < ncpus; ++c) {
+        top_field(top_num(c), 4, true);
+#if defined(CONFIG_ARCH_X86_64)
+        top_field(top_num(arch::per_cpu[c].lapic_id), 5, true);
+#else
+        top_field("-", 5, true);
+#endif
+        top_field(c == 0 ? "BSP" : "AP", 7, false);
+        auto *cur = kernel::Scheduler::current_on_cpu(c);
+        top_field(cur ? cur->name : "-", 13, false);
+        uint64_t idle_pct = 0;
+        bool have_pct = false;
+        if (c == here && idle) {
+            kernel::TaskTimes times{};
+            kernel::Scheduler::read_times(*idle, times);
+            if (idle_baselined && wall_now > idle_base_wall) {
+                uint64_t idle_d = (times.exec_ns_total >= idle_base_ns[c])
+                                      ? times.exec_ns_total - idle_base_ns[c]
+                                      : 0;
+                uint64_t wall_d = wall_now - idle_base_wall;
+                idle_pct = (idle_d >= wall_d)
+                               ? 100
+                               : (idle_d * 100) / wall_d;
+                have_pct = true;
+            }
+            idle_base_ns[c] = times.exec_ns_total;
+        }
+        top_field(have_pct ? top_num(idle_pct) : "--", 6, true);
+        top_field(top_num(ticks_now), 9, true);
+        Terminal::write("\n");
+    }
+    idle_base_wall = wall_now;
+    idle_baselined = true;
+
+    uint64_t secs = ticks_now / 1000;
+    Terminal::write("\nUptime: ");
+    print_uint(secs);
+    Terminal::write(" s   Tick: 1000 Hz   Scheduler: DM + global EDF\n");
+}
+
+// One collected top row (snapshot values; cpu_pct filled post-sort key).
+struct TopRow {
+    kernel::TaskControlBlock *task = nullptr;
+    uint64_t id = 0;
+    uint64_t cpu_pct = 0; // per-mille over the sliding window
+    uint64_t exec_ms = 0;
+    uint64_t pd_use_pct = 0; // 0..100, UINT64_MAX = dash (non-periodic)
+    uint64_t exec_period_ns = 0;
+    uint64_t period_ticks = 0;
+    bool is_idle = false;
+};
+
+// Render one full top frame (issue #172).  Snapshot semantics: capture a
+// sample frame first (feeds the sliding window), then collect/sort/render.
+// First frame shows CPU% 0.0 (linux parity — no window yet).
+void top_render_frame(uint64_t delay_secs) {
+    top_capture_frame();
+
+    uint64_t ncpus = kernel::Scheduler::up_cpu_count();
+    if (ncpus > CONFIG_MAX_CPUS)
+        ncpus = CONFIG_MAX_CPUS;
+    if (ncpus == 0)
+        ncpus = 1;
+
+    // Collect rows (bounded walk, magic-validated like cmd_tasks).
+    TopRow rows[CONFIG_MAX_TASKS] = {};
+    uint64_t nrows = 0;
+    uint64_t nrun = 0;
+    uint64_t nblocked = 0;
+    uint64_t count = kernel::Scheduler::task_count();
+    for (uint64_t i = 0; i < count && nrows < CONFIG_MAX_TASKS; ++i) {
+        auto *t = kernel::Scheduler::task_at(i);
+        if (!t || t->magic != kernel::TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (t->state == kernel::TaskState::RUNNING)
+            ++nrun;
+        if (t->state == kernel::TaskState::BLOCKED)
+            ++nblocked;
+        TopRow &row = rows[nrows++];
+        row.task = t;
+        row.id = t->id;
+        row.cpu_pct = top_task_per_mille(t->id, nullptr);
+        kernel::TaskTimes times{};
+        kernel::Scheduler::read_times(*t, times);
+        row.exec_ms = times.exec_ns_total / 1000000ULL;
+        row.exec_period_ns = times.exec_period_ns;
+        row.period_ticks = t->period_ticks;
+        row.is_idle = kernel::Scheduler::is_idle_task(t);
+        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD ||
+            t->period_ticks == 0) {
+            row.pd_use_pct = UINT64_MAX; // dash
+        } else {
+            // ns_per_tick = 1e6 (tick = 1ms, mirror cmd_uptime math).
+            uint64_t period_ns = t->period_ticks * 1000000ULL;
+            row.pd_use_pct = (period_ns == 0)
+                                 ? UINT64_MAX
+                                 : (times.exec_period_ns * 100) / period_ns;
+            if (row.pd_use_pct > 100)
+                row.pd_use_pct = 100;
+        }
+    }
+
+    // Sort: CPU% desc, PID asc tiebreak (linux default).  Insertion sort,
+    // small N (cmd_tasks precedent).
+    for (uint64_t i = 1; i < nrows; ++i) {
+        TopRow key = rows[i];
+        uint64_t j = i;
+        while (j > 0 && (rows[j - 1].cpu_pct < key.cpu_pct ||
+                         (rows[j - 1].cpu_pct == key.cpu_pct &&
+                          rows[j - 1].id > key.id))) {
+            rows[j] = rows[j - 1];
+            --j;
+        }
+        rows[j] = key;
+    }
+
+    uint64_t zcount = kernel::Scheduler::zombie_count();
+    uint64_t ticks_now = arch::Timer::ticks();
+    uint64_t up_secs = ticks_now / 1000;
+
+    // Header.
+    Terminal::write("top - ");
+    print_uint(up_secs);
+    Terminal::write(" s up, ");
+    print_uint(ncpus);
+    Terminal::write(ncpus == 1 ? " CPU, " : " CPUs, ");
+    print_uint(nrows);
+    Terminal::write(" tasks (");
+    print_uint(nrun);
+    Terminal::write(" run, ");
+    print_uint(nblocked);
+    Terminal::write(" blocked, ");
+    print_uint(zcount);
+    Terminal::write(" zombies)  refresh ");
+    print_uint(delay_secs);
+    Terminal::write("s  [q=quit]\n");
+    Terminal::write("load average (non-idle CPU fraction): ");
+    Terminal::write(top_loadavg(kernel::Scheduler::loadavg_1min()));
+    Terminal::putchar(' ');
+    Terminal::write(top_loadavg(kernel::Scheduler::loadavg_5min()));
+    Terminal::putchar(' ');
+    Terminal::write(top_loadavg(kernel::Scheduler::loadavg_15min()));
+    Terminal::write("   [1 / 5 / 15 min]\n");
+
+    // Per-CPU bars + sys/user split + TOT mean/max.  Non-idle exec per CPU
+    // comes from task deltas attributed by running_on_cpu (deltas accrue
+    // only while running, so last-placement attribution is exact).
+    uint64_t window_ns = top_window_ns();
+    uint64_t cpu_busy_ns[CONFIG_MAX_CPUS] = {};
+    uint64_t cpu_sys_ns[CONFIG_MAX_CPUS] = {};
+    uint64_t cpu_user_ns[CONFIG_MAX_CPUS] = {};
+    if (window_ns > 0) {
+        for (uint64_t i = 0; i < nrows; ++i) {
+            uint64_t delta = 0;
+            uint64_t win = 0;
+            bool found = false;
+            if (!top_exec_delta(rows[i].id, &delta, &win, &found) || !found)
+                continue;
+            if (rows[i].is_idle)
+                continue;
+            uint64_t cpu = __atomic_load_n(&rows[i].task->running_on_cpu,
+                                           __ATOMIC_ACQUIRE);
+            if (cpu >= CONFIG_MAX_CPUS)
+                continue;
+            cpu_busy_ns[cpu] += delta;
+            if (rows[i].task->is_user_)
+                cpu_user_ns[cpu] += delta;
+            else
+                cpu_sys_ns[cpu] += delta;
+        }
+    }
+    uint64_t tot_pct = 0;
+    uint64_t max_pct = 0;
+    uint64_t max_cpu = 0;
+    uint64_t tot_sys = 0;
+    uint64_t tot_user = 0;
+    for (uint64_t c = 0; c < ncpus; ++c) {
+        uint64_t pct = (window_ns == 0)
+                           ? 0
+                           : (cpu_busy_ns[c] >= window_ns)
+                                 ? 100
+                                 : (cpu_busy_ns[c] * 100) / window_ns;
+        uint64_t sys = (window_ns == 0)
+                           ? 0
+                           : (cpu_sys_ns[c] * 100) / window_ns;
+        uint64_t user = (window_ns == 0)
+                            ? 0
+                            : (cpu_user_ns[c] * 100) / window_ns;
+        tot_pct += pct;
+        tot_sys += sys;
+        tot_user += user;
+        if (c == 0 || pct > max_pct) {
+            max_pct = pct;
+            max_cpu = c;
+        }
+        auto *cur = kernel::Scheduler::current_on_cpu(c);
+        Terminal::write("CPU");
+        print_uint(c);
+        Terminal::write(" [");
+        constexpr int kBarCells = 26;
+        uint64_t filled = (pct * kBarCells) / 100;
+        for (int b = 0; b < kBarCells; ++b)
+            Terminal::putchar(b < static_cast<int>(filled) ? '#' : '-');
+        Terminal::write("] ");
+        top_field(top_num(pct), 3, true);
+        Terminal::write("%  (");
+        Terminal::write(cur ? cur->name : "-");
+        Terminal::write(")   sys ");
+        print_uint(sys);
+        Terminal::write("% / user ");
+        print_uint(user);
+        Terminal::write("%\n");
+    }
+    tot_pct = (ncpus == 0) ? 0 : tot_pct / ncpus;
+    Terminal::write("TOT  [");
+    constexpr int kTotCells = 26;
+    uint64_t tot_filled = (tot_pct * kTotCells) / 100;
+    for (int b = 0; b < kTotCells; ++b)
+        Terminal::putchar(b < static_cast<int>(tot_filled) ? '#' : '-');
+    Terminal::write("] ");
+    top_field(top_num(tot_pct), 3, true);
+    Terminal::write("%  avg ");
+    print_uint(tot_pct);
+    Terminal::write("% / max ");
+    print_uint(max_pct);
+    Terminal::write("% (CPU");
+    print_uint(max_cpu);
+    Terminal::write(")   sys ");
+    print_uint(ncpus == 0 ? 0 : tot_sys / ncpus);
+    Terminal::write("% / user ");
+    print_uint(ncpus == 0 ? 0 : tot_user / ncpus);
+    Terminal::write("%\n\n");
+
+    // Task table.
+    top_field("PID", 5, true);
+    top_field("NAME", 11, false);
+    top_field("STATE", 8, false);
+    top_field("CPU", 4, true);
+    top_field("AFFIN", 4, false);
+    top_field("PRIO", 5, true);
+    top_field("PERIOD", 6, true);
+    top_field("WCET", 5, true);
+    top_field("EXEC_MS", 6, true);
+    top_field("CPU%", 5, true);
+    top_field("PD_USE%", 7, true);
+    Terminal::write("\n");
+    for (uint64_t i = 0; i < nrows; ++i) {
+        auto *t = rows[i].task;
+        top_field(top_num(t->id), 5, true);
+        top_field(t->name, 11, false);
+        top_field(state_name(t->state), 8, false);
+        uint64_t cpu =
+            __atomic_load_n(&t->running_on_cpu, __ATOMIC_ACQUIRE);
+        if (cpu == kernel::TaskControlBlock::CPU_PLACEMENT_NONE)
+            top_field("-", 4, true);
+        else
+            top_field(top_num(cpu), 4, true);
+        top_field(top_affin_str(t->cpu_affinity), 4, false);
+        top_field(top_num(t->priority), 5, true);
+        if (t->period_ticks == kernel::TaskControlBlock::NO_PERIOD ||
+            t->period_ticks == 0)
+            top_field("-", 6, true);
+        else
+            top_field(top_num(t->period_ticks), 6, true);
+        top_field(top_num(t->wcet_ticks), 5, true);
+        top_field(top_num(rows[i].exec_ms), 6, true);
+        if (rows[i].is_idle)
+            top_field("-", 5, true);
+        else
+            top_field(top_pct1(rows[i].cpu_pct), 5, true);
+        if (rows[i].pd_use_pct == UINT64_MAX) {
+            top_field("-", 7, true);
+        } else {
+            char pdbuf[10];
+            const char *n = top_num(rows[i].pd_use_pct);
+            int p = 0;
+            while (n[p] && p < 7) {
+                pdbuf[p] = n[p];
+                ++p;
+            }
+            pdbuf[p++] = '%';
+            if (rows[i].pd_use_pct > 90 && p < 9)
+                pdbuf[p++] = '!';
+            pdbuf[p] = '\0';
+            top_field(pdbuf, 7, true);
+        }
+        Terminal::write("\n");
+    }
+
+    // Zombie section (omitted when empty).
+    if (zcount > 0) {
+        Terminal::write("\nZombies (");
+        print_uint(zcount);
+        Terminal::write(", awaiting reap):\n");
+        top_field("PID", 5, true);
+        top_field("NAME", 11, false);
+        top_field("EXIT", 6, true);
+        Terminal::write("\n");
+        kernel::TaskControlBlock *zs[CONFIG_MAX_TASKS] = {};
+        uint64_t nz =
+            kernel::Scheduler::snapshot_zombies(zs, CONFIG_MAX_TASKS);
+        for (uint64_t i = 0; i < nz; ++i) {
+            auto *z = zs[i];
+            if (!z || z->magic != kernel::TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (z->state != kernel::TaskState::TERMINATED &&
+                z->state != kernel::TaskState::REAPED)
+                continue;
+            top_field(top_num(z->id), 5, true);
+            top_field(z->name, 11, false);
+            top_field(top_num(z->exit_code), 6, true);
+            Terminal::write("\n");
+        }
+    }
+}
+
+void Shell::top_reset_samples() {
+    top_reset_samples_impl();
+}
+
+void Shell::cmd_top(int argc, const char** argv) {
+    // top [-d SECS]: default 1s refresh; -d 0 = single snapshot; q quits.
+    uint64_t delay_secs = 1;
+    if (argc == 1) {
+        delay_secs = 1;
+    } else if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'd' &&
+               argv[1][2] == '\0') {
+        const char *p = argv[2];
+        if (*p == '\0') {
+            Terminal::write("Usage: top [-d SECS]\n");
+            return;
+        }
+        delay_secs = 0;
+        uint64_t digits = 0;
+        while (*p) {
+            if (*p < '0' || *p > '9' || digits >= 6) {
+                Terminal::write("Usage: top [-d SECS]\n");
+                return;
+            }
+            delay_secs = delay_secs * 10 +
+                         static_cast<uint64_t>(*p - '0');
+            ++p;
+            ++digits;
+        }
+    } else {
+        Terminal::write("Usage: top [-d SECS]\n");
+        return;
+    }
+
+    for (;;) {
+        Terminal::clear();
+        top_render_frame(delay_secs);
+        if (delay_secs == 0)
+            break;
+        uint64_t deadline = arch::Timer::ticks() + delay_secs * 1000;
+        bool quit = false;
+        while (arch::Timer::ticks() < deadline) {
+            char c = 0;
+            if (arch::Keyboard::getchar(c) && (c == 'q' || c == 'Q')) {
+                quit = true;
+                break;
+            }
+            arch::pause();
+        }
+        if (quit)
+            break;
+    }
 }
 
 void Shell::cmd_meminfo(int, const char**) {
