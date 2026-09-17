@@ -156,6 +156,7 @@ bool AhciDriver::port_wait_ready(uint8_t port, uint64_t timeout_us) {
         if (!(tfd & (TFD_BSY | TFD_DRQ)))
             return true;
         arch::io_wait();
+        arch::pause();
     }
     Logger::error("ahci: port %u timeout waiting for ready (TFD=0x%x)", port,
                   port_read(port, PORT_TFD));

@@ -26,6 +26,7 @@
 #include <kernel/driver/block_device.hpp>
 #include <kernel/driver/ahci_protocol.hpp>
 #include <kernel/driver/ahci.hpp>
+#include <kernel/driver/ata_pio.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -191,6 +192,20 @@ JARVIS_TEST(ahci_hba_probe, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Absent-drive contract (#66): init() on an unused IDE port
+// base (no hardware answers, status reads 0xFF) must fail fast via the
+// early reject — never entering the bounded poll, never hanging.
+// Input: AtaPioDriver on port base 0x250 (nothing mapped there on the
+//        QEMU default machine); init().
+// Expect: Returns false promptly (floating-bus 0xFF reject).
+// Depends: kernel::block::AtaPioDriver
+JARVIS_TEST(ata_pio_absent_drive_init_false, "PRE: none | POST: none") {
+    kernel::block::AtaPioDriver drv(0x250, 0xE0);
+    JARVIS_ASSERT(!drv.init());
+    JARVIS_TEST_PASS();
+}
+
 void register_block_device_tests() {
     Logger::info("Registering Block Device tests");
 
@@ -202,6 +217,7 @@ void register_block_device_tests() {
     JARVIS_REGISTER_RELEASE_TEST(block_device_raw_buffer_access);
     JARVIS_REGISTER_RELEASE_TEST(ata_pio_identify);
     JARVIS_REGISTER_RELEASE_TEST(ata_pio_read_write_sector);
+    JARVIS_REGISTER_TEST(ata_pio_absent_drive_init_false);
     JARVIS_REGISTER_TEST(ahci_protocol_struct_sizes);
     JARVIS_REGISTER_TEST(ahci_protocol_constants);
     JARVIS_REGISTER_TEST(ahci_hba_probe);

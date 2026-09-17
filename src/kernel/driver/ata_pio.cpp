@@ -108,6 +108,7 @@ bool AtaPioDriver::poll_status(bool wait_for_bsy) {
                 return true;
         }
         io_wait();
+        pause();
     }
     return false;
 }

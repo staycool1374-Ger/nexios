@@ -186,8 +186,9 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 - Vector 33; threaded mode = `IrqThread::create(33, prio 50, ...)`.
 - `handle_irq` reads STATUS/DATA, updates `mods_` byte-atomic (valid lock-free
   SPSC producer pattern — audit V-5 dismissed), translates scancode → ASCII,
-  `push_ring`.  ⚠️ **FLAW-10 (OPEN):** `init()` has an **unbounded** PS/2
-  output-buffer drain loop — must be capped like the second bounded drain.
+  `push_ring`.  FLAW-10 RESOLVED (2026-08-16, `357c62a1`; verified issue
+  #66): `init()` drains are capped (first drain 16 = i8042 depth, ACK
+  drain 4) with `pause()`, break-on-empty.
 
 ## 7. Binding Invariants
 
@@ -197,10 +198,17 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
    wait on the event-timer wheel (RESOLVED FLAW-05, issue #64; polling
    fallback stays bounded by a tick deadline); virtio-blk
    `submit_request` is a scheduler-blocked wait on the same wheel
-   (RESOLVED FLAW-06, issue #65; 1M bounded poll fallback);
-   serial (FLAW-08), keyboard
-   drain (FLAW-10) must become bounded loops or scheduler-blocked waits.
+   (RESOLVED FLAW-06, issue #65; 1M bounded poll fallback); serial TX/RX
+   are bounded polls (`SERIAL_TX/RX_WAIT_ITERS = 1000000` + `pause()`;
+   TX-expiry drops, RX-expiry returns `'\0'` — RESOLVED FLAW-08, x86_64
+   and aarch64 PL011 alike per issue #66) and the keyboard init drains
+   are capped (16 + 4 + `pause()` — RESOLVED FLAW-10).
    Timeout values are the *blocked-wait bound*, not a spin bound.
+   Accepted bounded-poll exceptions (issue #66 audit): virtio-net TX
+   completion (1M + `pause()`, outside the device lock — no TX ISR exists
+   in-tree, so wheel-blocking has no waker; RX is poll-model by design),
+   ATA-PIO (legacy, no IRQ/DMA by hardware contract; `ATA_POLL_TIMEOUT`
+   + false-propagation), and boot/pre-ISR bring-up (no task to BLOCK).
 3. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
    AHCI port command state) needs a `SpinLock` via `IrqSpinLockGuard`;
    callbacks invoked only after release, from stack-captured locals; no
@@ -225,7 +233,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | **RESOLVED (2026-09-17, issue #64)** — MSI ISR + PORT_IE/GHC_IE ordering; teardown drains waiters under port locks before freeing |
 | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | **RESOLVED (2026-09-17, issue #64)** — scheduler-blocked bounded wait on the event-timer wheel; bounded poll fallback |
 | FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | **RESOLVED (2026-09-17, issue #65)** — MSI-X/MSI used-ring ISR + single embedded record + scheduler-blocked bounded wait (100ms); 1M bounded poll fallback |
-| FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
+| FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics; aarch64 PL011 bounded likewise (2026-09-17, issue #66) |
 | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
 
 # §9 FLAW Fix Plan (v0.4.1)

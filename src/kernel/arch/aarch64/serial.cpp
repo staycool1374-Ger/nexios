@@ -42,6 +42,12 @@ namespace arch {
 /// arch::Serial::write_count contract in arch/hal/serial.hpp).
 static volatile uint64_t s_serial_write_count = 0;
 
+// Bounded-poll contracts (issue #66, mirrors x86_64 FLAW-08): the PL011
+// status spins below are capped; TX expiry drops the byte, RX expiry
+// returns '\0'.  Never an unbounded wait.
+static constexpr int SERIAL_TX_WAIT_ITERS = 1000000;
+static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
+
 /// @brief Initialise the PL011 UART at 115200 baud (default QEMU virt config).
 /// Disables UART, clears pending interrupts, sets baud rate, enables TX/RX.
 void Serial::init() {
@@ -57,18 +63,30 @@ void Serial::init() {
 }
 
 /// @brief Write a single character to the serial port.
-/// Translates LF to CR+LF. Waits for TX FIFO to have space before writing.
+/// Translates LF to CR+LF. Waits (bounded) for TX FIFO space; drops the
+/// byte when the UART never drains.
 /// @param[in] c Character to transmit.
 void Serial::putchar(char c) {
     if (c == '\n') {
-        while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5))
-            ;
-        mmio_write32(UART_BASE + UART_DR / 4, '\r');
+        int i = 0;
+        for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
+            if ((mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5)) == 0)
+                break;
+            arch::pause();
+        }
+        if (i < SERIAL_TX_WAIT_ITERS)
+            mmio_write32(UART_BASE + UART_DR / 4, '\r');
     }
-    while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5))
-        ;
-    mmio_write32(UART_BASE + UART_DR / 4, c);
-    __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
+    int i = 0;
+    for (i = 0; i < SERIAL_TX_WAIT_ITERS; ++i) {
+        if ((mmio_read32(UART_BASE + UART_FR / 4) & (1 << 5)) == 0)
+            break;
+        arch::pause();
+    }
+    if (i < SERIAL_TX_WAIT_ITERS) {
+        mmio_write32(UART_BASE + UART_DR / 4, c);
+        __atomic_fetch_add(&s_serial_write_count, 1U, __ATOMIC_RELAXED);
+    }
 }
 
 /// @brief Returns the number of characters written to the serial console
@@ -78,12 +96,18 @@ uint64_t Serial::write_count() noexcept {
     return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
 }
 
-/// @brief Read a single character from the serial port (blocking).
-/// Waits for RX FIFO to contain data before reading.
+/// @brief Read a single character from the serial port.
+/// Waits (bounded) for RX FIFO data; returns '\0' when nothing arrives.
 /// @return The received character (lower 8 bits of data register).
 char Serial::getchar() {
-    while (mmio_read32(UART_BASE + UART_FR / 4) & (1 << 4))
-        ;
+    int i = 0;
+    for (i = 0; i < SERIAL_RX_WAIT_ITERS; ++i) {
+        if ((mmio_read32(UART_BASE + UART_FR / 4) & (1 << 4)) == 0)
+            break;
+        arch::pause();
+    }
+    if (i >= SERIAL_RX_WAIT_ITERS)
+        return '\0'; // no data (not a valid console character)
     return mmio_read32(UART_BASE + UART_DR / 4) & 0xFF;
 }
 
