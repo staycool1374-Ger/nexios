@@ -124,11 +124,20 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   Ordering: write header/data, `avail->ring[idx]=idx`, fence, `avail->idx++`,
   fence, `virtio_notify` kick.  Completion: busy-poll `used->idx` (≤ 1M),
   status == `VIRTIO_BLK_S_OK`, memcpy out.
-  **FLAW-06 (BOUNDED — M-2 ledger update, 2026-08-25):** the poll is capped at
-  1M iterations and now snapshots `used->idx` BEFORE `virtio_notify` (FLAW-03
-  pattern), and the whole submit chain is serialized under a device mutex
-  (H-3).  A fully IRQ-driven blocked wait (ISR walking the used_ ring + wait
-  primitive) remains Phase 4.7 roadmap scope.
+  **FLAW-06 (RESOLVED — issue #65):** the 1M poll is now the fail-closed
+  fallback.  The primary path is IRQ-driven: MSI-X (table entry 0 via
+  `QUEUE_MSIX_VECTOR`, re-selecting queue 0 first) with MSI fallback, a
+  raw IDT handler draining the used ring, a single embedded completion
+  record (single in-flight request under the H-3 device mutex), and
+  `submit_request` completing via a scheduler-blocked bounded wait on the
+  event-timer wheel (100ms bound, `sys_irq_wait` single-registration
+  pattern).  Used-ring consumption matches `used->idx` advance past the
+  pre-notify snapshot plus the echoed head-descriptor id (pure
+  `match_completion`, unit-tested); the ISR validates and wakes outside
+  the leaf `compl_lock_` (`IrqSpinLockGuard`); teardown masks the queue
+  vector and drains an armed waiter with an error wake before freeing.
+  Without MSI-X/MSI (or with no task context / wheel-arm failure) the
+  bounded 1M poll is preserved bit-identically.
 
 ## 6. Interrupt Layer (x86_64)
 
@@ -186,8 +195,10 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
    state is statically embedded; enforced by the `irq_alloc` test class.
 2. **Bounded blocking everywhere.** AHCI `wait_cmd` is a scheduler-blocked
    wait on the event-timer wheel (RESOLVED FLAW-05, issue #64; polling
-   fallback stays bounded by a tick deadline);
-   virtio `submit_request` (1M spins, FLAW-06), serial (FLAW-08), keyboard
+   fallback stays bounded by a tick deadline); virtio-blk
+   `submit_request` is a scheduler-blocked wait on the same wheel
+   (RESOLVED FLAW-06, issue #65; 1M bounded poll fallback);
+   serial (FLAW-08), keyboard
    drain (FLAW-10) must become bounded loops or scheduler-blocked waits.
    Timeout values are the *blocked-wait bound*, not a spin bound.
 3. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
@@ -213,7 +224,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 | FLAW-03 virtio-net ring races | virtio_net.cpp | **RESOLVED (2026-08-16, `a8fe7bd9`)** — lock + tx_inflight_; poll consume/recycle/advance atomic; used-snapshot-before-notify |
 | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | **RESOLVED (2026-09-17, issue #64)** — MSI ISR + PORT_IE/GHC_IE ordering; teardown drains waiters under port locks before freeing |
 | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | **RESOLVED (2026-09-17, issue #64)** — scheduler-blocked bounded wait on the event-timer wheel; bounded poll fallback |
-| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | BOUNDED (§5) — 1M cap + used-idx pre-notify snapshot + device mutex; IRQ-driven wait = Phase 4.7 |
+| FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | **RESOLVED (2026-09-17, issue #65)** — MSI-X/MSI used-ring ISR + single embedded record + scheduler-blocked bounded wait (100ms); 1M bounded poll fallback |
 | FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
 | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
 

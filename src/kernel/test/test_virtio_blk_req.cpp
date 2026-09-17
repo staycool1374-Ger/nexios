@@ -214,10 +214,19 @@ void pump_available() {
 }
 
 /// @brief Device task (prio 5): waits for the submitter's go signal,
-/// services the request, then terminates.
+/// services the request, simulates the completion ISR wire (sets the ISR
+/// status byte and invokes handle_irq() directly — no real MSI-X on the
+/// mock), then terminates.
 void pump_task_entry() {
     g_go.wait();
     pump_available();
+    // ISR-wire simulation (#65): the device raised the queue interrupt.
+    // Harmless when the submitter took the poll fallback (no armed
+    // waiter — the record is just marked done).
+    g_vio.notify_kick = 1;
+    if (g_drv)
+        g_drv->handle_irq();
+    g_vio.notify_kick = 0;
 }
 
 /// @brief Submitter task (prio 11): posts the device go signal and runs
@@ -242,13 +251,13 @@ void submit_task_entry() {
 }
 
 /// @brief Runs one request through the real submit path; the fake-device
-/// task completes the chain from a higher-priority dispatch.  NOTE: the
-/// driver's internal completion poll (~1M iterations) is shorter than one
-/// scheduler tick on single-CPU QEMU, so the submitter reliably observes
-/// the bounded timeout while the device-side completion (descriptor
-/// chain service, DMA payload, status byte, used-ring cookie) is fully
-/// deterministic and is what the driven tests assert.
+/// task completes the chain from a higher-priority dispatch.  The mock
+/// has no MSI-X capability, so the IRQ path is engaged via the
+/// test-simulated arming (#65): the submitter takes the scheduler-blocked
+/// wait and the device task's simulated ISR wakes it — the new tests
+/// assert g_submit.ok to prove the BLOCKED path (not the poll fallback).
 void run_driven_request(uint64_t sector, bool is_write, bool inject_error) {
+    g_drv->test_simulate_irq_armed();
     g_submit = SubmitCtx{};
     g_submit.sector = sector;
     g_submit.is_write = is_write;
@@ -529,6 +538,214 @@ JARVIS_TEST(virtio_blk_req_used_ring_cookie, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: match_completion basic contract: the single flight completes
+// when the used index advanced past the pre-notify snapshot AND the
+// newest entry echoes the head id; no advance (or id mismatch) means no
+// completion.
+// Input: (used_before, used_now, used_id, head_idx) tuples.
+// Expect: (5, 6, 3, 3) → done; (5, 5, 3, 3) → not done; (5, 6, 7, 3) →
+//         not done (stale/faulty entry never reports success).
+// Depends: block::VirtioBlkDriver::match_completion
+JARVIS_TEST(virtio_blk_irq_match_basic, "PRE: iocd | POST: none") {
+    bool done = false;
+    JARVIS_ASSERT(
+        block::VirtioBlkDriver::match_completion(5, 6, 3, 3, &done));
+    JARVIS_ASSERT(done);
+    JARVIS_ASSERT(
+        block::VirtioBlkDriver::match_completion(5, 5, 3, 3, &done));
+    JARVIS_ASSERT(!done);
+    JARVIS_ASSERT(
+        block::VirtioBlkDriver::match_completion(5, 6, 7, 3, &done));
+    JARVIS_ASSERT(!done);
+    // Wrap-safe: 0xFFFF → 0x0000 is an advance, not a stall.
+    JARVIS_ASSERT(
+        block::VirtioBlkDriver::match_completion(0xFFFF, 0, 3, 3, &done));
+    JARVIS_ASSERT(done);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: match_completion fail-closed contract: null out-param must
+// not crash (ISR-adjacent robustness).
+// Input: Null out_done.
+// Expect: Returns false, no fault.
+// Depends: block::VirtioBlkDriver::match_completion
+JARVIS_TEST(virtio_blk_irq_match_null, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(
+        !block::VirtioBlkDriver::match_completion(5, 6, 3, 3, nullptr));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Synchronous ISR recording (#65): with a used entry + status
+// pushed by hand, handle_irq() records the completion (isr_completions
+// bumps) without any task involved.  On the mock, enable_irq() must fail
+// closed (no MSI-X capability) and leave polling intact.
+// Input: init_driver(); hand-pushed used entry {id 0, len 512} + OK
+//        status + ISR byte; direct handle_irq() call.
+// Expect: handle_irq() true; isr_completions() == 1; enable_irq() false
+//         with msi_armed() false.
+// Depends: block::VirtioBlkDriver
+JARVIS_TEST(virtio_blk_irq_isr_records_completion, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(init_driver());
+    auto *used = va_of<VirtqUsed>(g_qp.used);
+    used->ring[0] = VirtqUsedElem{0, 512};
+    __atomic_store_n(&used->idx, static_cast<uint16_t>(1),
+                     __ATOMIC_RELEASE);
+    g_vio.notify_kick = 1; // simulated ISR status byte (queue interrupt)
+    bool consumed = g_drv->handle_irq();
+    uint64_t completions = g_drv->isr_completions();
+    g_vio.notify_kick = 0;
+    bool enabled = g_drv->enable_irq();
+    bool armed = g_drv->msi_armed();
+    destroy_driver();
+    JARVIS_ASSERT(consumed);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1), completions);
+    JARVIS_ASSERT(!enabled);
+    JARVIS_ASSERT(!armed);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Blocked-wait roundtrip (#65): the driven request completes
+// through the scheduler-blocked path — the submitter returns true (woken
+// by the simulated ISR, not the poll fallback) and an ISR completion was
+// recorded.
+// Input: Driven read_sector(7) with simulated IRQ arming.
+// Expect: g_submit.ok true; isr_completions() > 0.
+// Depends: block::VirtioBlkDriver
+JARVIS_TEST(virtio_blk_irq_blocked_wait_roundtrip, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(init_driver());
+    for (int i = 0; i < 512; ++i)
+        g_fake_disk[7][i] = static_cast<uint8_t>(i ^ 0x3E);
+    run_driven_request(7, false, false);
+    bool ok = g_submit.ok;
+    uint64_t completions = g_drv->isr_completions();
+    bool payload_ok = g_submit.buf[0] == static_cast<uint8_t>(0 ^ 0x3E);
+    destroy_driver();
+    JARVIS_ASSERT(ok);
+    JARVIS_ASSERT(completions > 0);
+    JARVIS_ASSERT(payload_ok);
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+// Waiter task for the teardown-drain test: blocks in read_sector until
+// woken (error) or timed out; reports the outcome via g_submit.ok.
+void drain_waiter_task_entry() {
+    g_submit.ok = g_drv->read_sector(9, g_submit.buf);
+}
+// Phase-1 worker for the timeout test: blocks in read_sector with no
+// device pump so the wheel timeout retires it.
+void timeout_worker_task_entry() {
+    g_submit.ok = g_drv->read_sector(1, g_submit.buf);
+}
+} // namespace
+
+// Runmode: kernel
+// Testidea: Blocked-wait timeout retires cleanly (#65): with no device
+// pump, the armed wait expires via the wheel, returns false, leaves no
+// stuck waiter, and the ring stays usable for the next request.  The
+// block happens in a worker task — the test task itself must never
+// BLOCK (its scheduler slot is the harness's own control plane).
+// Input: init + simulated arming; worker-task read_sector (no pump).
+// Expect: false; a subsequent driven request still succeeds.
+// Depends: block::VirtioBlkDriver
+JARVIS_TEST(virtio_blk_irq_timeout_retires, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(init_driver());
+    g_drv->test_simulate_irq_armed();
+    g_submit = SubmitCtx{};
+    auto *worker =
+        TaskControlBlock::create(timeout_worker_task_entry, 11, 10);
+    JARVIS_ASSERT(worker != nullptr);
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*worker);
+    }
+    auto *original = Scheduler::current_task();
+    Scheduler::reschedule();
+    bool worker_done = false;
+    for (int i = 0; i < 20000000; ++i) {
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        if (worker->state == TaskState::TERMINATED ||
+            !TaskControlBlock::is_valid(worker)) {
+            worker_done = true;
+            break;
+        }
+        arch::pause();
+    }
+    bool ok = worker_done && !g_submit.ok;
+    Scheduler::set_current(*original);
+    kernel::test::terminate_and_drain(*worker);
+    // No stuck waiter: the timeout resume path disarmed the record on the
+    // same instance (direct proof — not just a fresh-instance recovery).
+    bool no_stuck_waiter = !g_drv->has_armed_waiter();
+    bool still_armed = g_drv->msi_armed();
+    // Recovery on a fresh instance (phase 1 pushed an avail entry no pump
+    // ever consumed, so the same rings would pump twice and trip the
+    // harness's exact-once check — the wait machinery itself is proven
+    // reusable by still_armed + no_stuck_waiter above).
+    destroy_driver();
+    JARVIS_ASSERT(init_driver());
+    run_driven_request(1, false, false);
+    bool recovered = g_submit.ok;
+    destroy_driver();
+    JARVIS_ASSERT(worker_done);
+    JARVIS_ASSERT(ok);
+    JARVIS_ASSERT(no_stuck_waiter);
+    JARVIS_ASSERT(still_armed);
+    JARVIS_ASSERT(recovered);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Teardown drains an armed waiter (#65, §12.3): with a task
+// BLOCKED in wait_request, disable_irq() must error-wake it (no
+// stranding) and disarm the vector; the driver stays destroyable.
+// Input: init + simulated arming; waiter task blocks; harness spins
+//        until BLOCKED, then disable_irq().
+// Expect: waiter returns false; msi_armed() false afterwards.
+// Depends: block::VirtioBlkDriver
+JARVIS_TEST(virtio_blk_irq_teardown_drains_waiter, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(init_driver());
+    g_drv->test_simulate_irq_armed();
+    g_submit = SubmitCtx{};
+    auto *waiter = TaskControlBlock::create(drain_waiter_task_entry, 11, 10);
+    JARVIS_ASSERT(waiter != nullptr);
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*waiter);
+    }
+    auto *original = Scheduler::current_task();
+    Scheduler::reschedule();
+    // Wait until the waiter parks BLOCKED (bounded — never disable blind).
+    bool parked = false;
+    for (int i = 0; i < 20000000; ++i) {
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        if (waiter->state == TaskState::BLOCKED) {
+            parked = true;
+            break;
+        }
+        if (waiter->state == TaskState::TERMINATED)
+            break;
+        arch::pause();
+    }
+    if (parked)
+        g_drv->disable_irq();
+    bool drained_armed = g_drv->msi_armed();
+    Scheduler::set_current(*original);
+    kernel::test::terminate_and_drain(*waiter);
+    bool waiter_failed = !g_submit.ok;
+    destroy_driver();
+    JARVIS_ASSERT(parked);
+    JARVIS_ASSERT(waiter_failed);
+    JARVIS_ASSERT(!drained_armed);
+    JARVIS_TEST_PASS();
+}
+
 void register_virtio_blk_req_tests() {
     Logger::info("Registering virtio blk request tests");
     JARVIS_REGISTER_TEST(virtio_blk_req_init_and_config);
@@ -538,4 +755,10 @@ void register_virtio_blk_req_tests() {
     JARVIS_REGISTER_TEST(virtio_blk_req_write_roundtrip);
     JARVIS_REGISTER_TEST(virtio_blk_req_status_error_mapping);
     JARVIS_REGISTER_TEST(virtio_blk_req_used_ring_cookie);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_match_basic);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_match_null);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_isr_records_completion);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_blocked_wait_roundtrip);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_timeout_retires);
+    JARVIS_REGISTER_TEST(virtio_blk_irq_teardown_drains_waiter);
 }

@@ -22,6 +22,13 @@
 #include <kernel/driver/virtio_blk.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/arch/pci.hpp>
+#include <kernel/arch/hal/idt.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 #include <logger.hpp>
 #include <string.hpp>
 #include <lib/atomic.hpp>
@@ -31,11 +38,22 @@ using namespace arch;
 
 namespace kernel::block {
 
+// TU-local ISR target (#65): set when the completion handler is
+// registered, cleared on disable/teardown.  Never crosses TUs.
+namespace {
+VirtioBlkDriver *g_virtio_blk_isr_target = nullptr;
+} // namespace
+
 VirtioBlkDriver::VirtioBlkDriver(arch::VirtioTransport &transport)
     : transport_(transport) {
 }
 
 VirtioBlkDriver::~VirtioBlkDriver() {
+    // #65: disarm the completion ISR first (masks the queue vector, acks
+    // ISR status, drains an armed waiter with an error wake) so no
+    // in-flight completion path can touch the freed queue pages.
+    disable_irq();
+
     if (desc_phys_)
         PMM::free_page(desc_phys_);
     if (avail_phys_)
@@ -110,6 +128,161 @@ bool VirtioBlkDriver::init() {
                  static_cast<uint64_t>(sector_count_) * BLOCK_SIZE /
                      (static_cast<uint64_t>(1024) * 1024));
 
+    // #65: arm the completion ISR after the queue is live.  Fail-closed:
+    // without MSI-X/MSI the bounded polling wait is preserved and no
+    // queue-vector/ISR state is armed without a handler.
+    last_seen_used_ = used_->idx;
+    if (!enable_irq()) {
+        Logger::info("virtio-blk: completion ISR unavailable — polling wait");
+    }
+
+    return true;
+}
+
+// ──────────────────────────────────────────────
+//  Completion wait (#65)
+// ──────────────────────────────────────────────
+
+bool VirtioBlkDriver::match_completion(uint16_t used_before,
+                                       uint16_t used_now, uint32_t used_id,
+                                       uint16_t head_idx, bool *out_done) {
+    if (!out_done)
+        return false;
+    // Single flight: an advance past the pre-notify snapshot is ours iff
+    // the newest entry echoes our head descriptor.  An id mismatch means
+    // a stale entry (late completion of a timed-out request reusing this
+    // head) or a faulty device — never report success on it.
+    *out_done = (used_now != used_before) && (used_id == head_idx);
+    return true;
+}
+
+bool VirtioBlkDriver::wait_request_poll(uint16_t used_snapshot) {
+    // M-2 interim bound: the former unbounded poll is capped at 1M
+    // iterations with pause() between checks.  Preserved verbatim as the
+    // fail-closed fallback (no ISR, no task context, wheel-arm failure).
+    int timeout = 1000000;
+    while (used_->idx == used_snapshot && --timeout > 0) {
+        kernel::atomic_fence();
+        arch::pause();
+    }
+    if (timeout <= 0) {
+        Logger::error("virtio-blk: request timeout");
+        return false;
+    }
+    return true;
+}
+
+bool VirtioBlkDriver::finish_request(bool is_read, uint8_t *data) {
+    // Check status
+    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+    if (*status_ptr != VIRTIO_BLK_S_OK) {
+        Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
+        return false;
+    }
+
+    // Copy data back for reads
+    if (is_read) {
+        memcpy(data, dma_buf_ + sizeof(VirtioBlkReqHdr), BLOCK_SIZE);
+    }
+    return true;
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+bool VirtioBlkDriver::wait_request(uint16_t used_snapshot,
+                                   uint16_t head_idx) {
+    // #65: scheduler-blocked bounded wait (closes FLAW-06).  Falls back
+    // to the bounded poll when no IRQ is armed, no task context exists,
+    // or the wheel arm fails (a BLOCKED task with no waker would park).
+    if (irq_vector_ == 0)
+        return wait_request_poll(used_snapshot);
+    TaskControlBlock *cur = Scheduler::current_task();
+    if (!cur)
+        return wait_request_poll(used_snapshot);
+    if (CONFIG_TICK_HZ == 0)
+        return wait_request_poll(used_snapshot);
+
+    // Same order as the retired 1M spin (~single-digit ms): fail fast.
+    const uint64_t timeout_ticks = VIRTIO_BLK_WAIT_TIMEOUT_US / 1000 + 1;
+    bool armed = IPC::recv_wait_arm(*cur, timeout_ticks);
+    if (!armed)
+        return wait_request_poll(used_snapshot);
+
+    // Single registration (sys_irq_wait pattern): fast-path completion
+    // check + waiter arm + BLOCKED under one lock scope, then dequeue +
+    // reschedule outside the lock.  Never re-register in a loop.
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        uint16_t used_now = used_->idx;
+        bool done = false;
+        if (used_now != used_snapshot) {
+            uint16_t newest =
+                used_->ring[(used_now - 1) % queue_size_].id;
+            match_completion(used_snapshot, used_now, newest, head_idx,
+                             &done);
+        }
+        if (done) {
+            IPC::recv_wait_cancel(*cur);
+            return true;
+        }
+        compl_.done = false;
+        compl_.status = 0xFF;
+        compl_.waiter = cur;
+        compl_.waiter_gen = cur->generation;
+        compl_.arm_used = used_snapshot;
+        compl_.head_idx = head_idx;
+        cur->state = TaskState::BLOCKED;
+    }
+
+    Scheduler::dequeue_ready(*cur);
+    Scheduler::reschedule();
+
+    // reschedule() is deferred: spin on BLOCKED until the ISR completion
+    // wake or the scheduler timeout-apply walk restores READY.  With
+    // interrupts off no wake can arrive: roll back and poll.
+    if (arch::interrupts_enabled()) {
+        while (cur->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+    } else {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        if (compl_.waiter == cur) {
+            compl_.waiter = nullptr;
+            compl_.waiter_gen = 0;
+        }
+        cur->state = TaskState::RUNNING;
+        Scheduler::enqueue_ready(*cur);
+        IPC::recv_wait_cancel(*cur);
+        return wait_request_poll(used_snapshot);
+    }
+
+    // Woken: consume the completion record (delivery beats timeout).
+    // The status snapshot is consumed here too: the teardown drain wakes
+    // with done=true but status=0xFF (error sentinel, §12.3), which must
+    // retire as failure — the live status byte may still hold a stale OK.
+    bool done = false;
+    uint8_t status = 0xFF;
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        done = compl_.done;
+        status = compl_.status;
+        if (compl_.waiter == cur) {
+            compl_.waiter = nullptr;
+            compl_.waiter_gen = 0;
+        }
+    }
+    IPC::recv_wait_cancel(*cur);
+    if (!done) {
+        // Timeout: retire exactly like the poll path (log + false).
+        Logger::error("virtio-blk: request timeout");
+        return false;
+    }
+    if (status != VIRTIO_BLK_S_OK) {
+        // Teardown error wake (or a device-reported failure snapshotted
+        // by the ISR): same failure semantics as finish_request.
+        Logger::error("virtio-blk: request failed (status=%d)", status);
+        return false;
+    }
     return true;
 }
 
@@ -176,35 +349,173 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     // Kick the device
     arch::virtio_notify(transport_, 0);
 
-    // Poll for completion (bounded busy wait — acceptable interim for block
-    // I/O; a full IRQ-driven blocked wait is roadmap Phase 4.7 scope).
-    int timeout = 1000000;
-    while (used_->idx == used_idx && --timeout > 0) {
-        kernel::atomic_fence();
-    }
-    if (timeout <= 0) {
-        Logger::error("virtio-blk: request timeout");
+    // #65: scheduler-blocked bounded wait (poll fallback preserved).
+    // The head descriptor id identifies our completion in the used ring.
+    if (!wait_request(used_idx, idx)) {
         submit_lock_.unlock();
         return false;
     }
 
-    // Check status
-    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
-        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
-    if (*status_ptr != VIRTIO_BLK_S_OK) {
-        Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
+    if (!finish_request(is_read, data)) {
         submit_lock_.unlock();
         return false;
-    }
-
-    // Copy data back for reads
-    if (is_read) {
-        memcpy(data, data_area, BLOCK_SIZE);
     }
 
     avail_idx_ = static_cast<uint16_t>(avail_idx_ + 1);
     submit_lock_.unlock();
     return true;
+}
+
+// ──────────────────────────────────────────────
+//  Completion ISR (#65)
+// ──────────────────────────────────────────────
+
+/// @brief Read-and-ack the device ISR status byte (virtio 1.0: a read
+/// returns queue/config interrupt bits and clears them).  Null-guarded:
+/// an unmapped ISR window means no interrupt.
+uint8_t VirtioBlkDriver::read_isr_status() const {
+    if (transport_.isr_cfg.virt_addr == 0)
+        return 0;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *reg =
+        reinterpret_cast<volatile uint8_t *>(transport_.isr_cfg.virt_addr);
+    return *reg;
+}
+
+void VirtioBlkDriver::isr_entry(uint64_t vector, uint64_t, uint64_t) {
+    VirtioBlkDriver *target = g_virtio_blk_isr_target;
+    if (!target || vector != target->irq_vector_)
+        return;
+    target->handle_irq();
+}
+
+bool VirtioBlkDriver::handle_irq() {
+    // Collect-under-lock: drain new used-ring entries, match the armed
+    // head id, capture the waiter into stack locals.
+    TaskControlBlock *wake_task = nullptr;
+    uint32_t wake_gen = 0;
+
+    uint8_t isr = read_isr_status();
+    if (isr == 0)
+        return false;
+
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        kernel::atomic_fence();
+        uint16_t used_now = used_->idx;
+        // Bounded drain (≤ queue_size_): a coalesced/stray entry can never
+        // stick the ring, and last_seen_used_ always advances.
+        for (uint16_t pos = last_seen_used_;
+             pos != used_now &&
+             static_cast<uint16_t>(pos - last_seen_used_) < queue_size_;
+             pos = static_cast<uint16_t>(pos + 1)) {
+            uint16_t slot = static_cast<uint16_t>(pos % queue_size_);
+            uint32_t entry_id = used_->ring[slot].id;
+            last_seen_used_ = static_cast<uint16_t>(pos + 1);
+            // Every newly-drained entry is an ISR-observed completion,
+            // waiter or not (introspection counts what the ISR consumed).
+            ++isr_completions_;
+            if (!compl_.waiter || compl_.done)
+                continue;
+            if (pos < compl_.arm_used)
+                continue;
+            bool done = false;
+            match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
+                             compl_.head_idx, &done);
+            if (!done)
+                continue;
+            compl_.done = true;
+            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+            compl_.status = *status_ptr;
+            wake_task = compl_.waiter;
+            wake_gen = compl_.waiter_gen;
+            compl_.waiter = nullptr;
+            compl_.waiter_gen = 0;
+        }
+    }
+
+    // Wake-outside-lock (Notify discipline): liveness + BLOCKED +
+    // generation, reject TERMINATED/REAPED.  No reschedule() from ISR.
+    if (wake_task) {
+        if (TaskControlBlock::is_valid(wake_task) &&
+            wake_task->generation == wake_gen &&
+            wake_task->state == TaskState::BLOCKED) {
+            Scheduler::set_task_ready(*wake_task);
+        }
+    }
+    return true;
+}
+
+bool VirtioBlkDriver::enable_irq() {
+#if defined(CONFIG_ARCH_X86_64)
+    if (irq_vector_ != 0)
+        return true;
+    // MSI-X first (per-queue entry), MSI fallback, else fail-closed poll.
+    // The #64 writew fix covers both enable paths — no pci.cpp change.
+    uint8_t vec = arch::pci_enable_msix(transport_.bdf, 0, 0);
+    if (vec == 0)
+        vec = arch::pci_enable_msi(transport_.bdf, 0);
+    if (vec == 0) {
+        Logger::info("virtio-blk: no MSI-X/MSI — staying on polling wait");
+        return false;
+    }
+    // Registration order: IDT handler first, then the queue vector, so a
+    // queue interrupt is never vectored nowhere (the #64 root-cause
+    // class).  QUEUE_MSIX_VECTOR takes the MSI-X table ENTRY (0), not the
+    // CPU vector; the MSI fallback needs no queue programming (single
+    // message).  Re-select queue 0 first: QUEUE_SEL is shared state.
+    g_virtio_blk_isr_target = this;
+    arch::IDT::register_handler_raw(vec, &VirtioBlkDriver::isr_entry);
+    arch::virtio_write_common16(transport_, VIRTIO_COMMON_QUEUE_SEL, 0);
+    arch::virtio_write_common16(transport_, VIRTIO_COMMON_QUEUE_MSIX_VECTOR,
+                                0);
+    (void)read_isr_status(); // ack stale status
+    irq_vector_ = vec;
+    irq_allocated_ = true;
+    Logger::info("virtio-blk: completion ISR armed on vector %u", vec);
+    return true;
+#else
+    return false;
+#endif
+}
+
+void VirtioBlkDriver::disable_irq() {
+#if defined(CONFIG_ARCH_X86_64)
+    if (irq_vector_ == 0)
+        return;
+    // Teardown order: mask the queue vector first (no new ISR entries),
+    // then drain an armed waiter with an error wake under the lock, then
+    // release PCI/IDT ownership (real allocations only — a
+    // test-simulated arming owns nothing).
+    arch::virtio_write_common16(transport_, VIRTIO_COMMON_QUEUE_SEL, 0);
+    arch::virtio_write_common16(transport_, VIRTIO_COMMON_QUEUE_MSIX_VECTOR,
+                                VIRTIO_NO_VECTOR);
+    (void)read_isr_status();
+    TaskControlBlock *drained = nullptr;
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_);
+        if (compl_.waiter) {
+            drained = compl_.waiter;
+            compl_.waiter = nullptr;
+            compl_.waiter_gen = 0;
+            compl_.done = true;
+            compl_.status = 0xFF; // sentinel → error return, never stranding
+        }
+    }
+    // Wakers own the wakeup contract (§12.3).
+    if (drained && TaskControlBlock::is_valid(drained) &&
+        drained->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*drained);
+    }
+    if (irq_allocated_) {
+        g_virtio_blk_isr_target = nullptr;
+        arch::IDT::register_handler_raw(irq_vector_, nullptr);
+        arch::pci_free_vector(irq_vector_);
+    }
+    irq_vector_ = 0;
+    irq_allocated_ = false;
+#endif
 }
 
 bool VirtioBlkDriver::read_sector(uint64_t lba, uint8_t *buffer) {
