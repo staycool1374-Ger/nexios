@@ -33,6 +33,8 @@
 | procfs enhancement | open | #54 |
 | tmpfs enhancement | **open** | #165 |
 | Mounting dynamically loaded drivers | **open** | #166 |
+| SMMUv3 Stage-2 translation | **open** | #168 |
+| Symmetrical core isolation / CPU pinning | **open** | #167 |
 | Distributed runqueue load balancing | covered (closed: #61) | — |
 | Zero-copy IPC buffer pools | covered (closed: #11, #14, #106) | — |
 
@@ -79,12 +81,15 @@
 - #104 [open] aarch64 fork/clone EL0 smoke test.
 - #152 [open] riscv64 map/unmap hhdm/identity flags (follow-up of #60).
 
-## v0.5.2 — Userspace Subsystems (NEW, OPEN)
-- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
+## v0.5.2 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.
 - #164 [open] POSIX signals: sigaction/sigreturn — disposition table, delivery, restore.
 - #165 [open] tmpfs enhancement — large files, fsync semantics, lookup cache, fewer fixed limits.
 - #166 [open] Mounting dynamically loaded drivers — ELF load, cap-gated bind, registry lifecycle.
+
+## v0.5.3 — Hardware Isolation (NEW, OPEN)
+- #167 [open] Symmetrical core isolation / CPU pinning — isolated RT cores, mandatory pinning, IRQ/balancer exclusion (wired into #23).
+- #168 [open] SMMUv3 Stage-2 translation — STE/CD programming, CMDQ invalidations, IORT discovery, QEMU virt integration.
 
 ## v0.6.0 — User-ELF Bring-up to Run (OPEN)
 - #41 [open] Per-task software watchdog (SYS_WATCHDOG_CREATE).
