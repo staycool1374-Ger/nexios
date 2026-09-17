@@ -36,8 +36,10 @@
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/memory/mempool.hpp>
+#include "test_sched_helpers.hpp"
 
 using namespace kernel;
 
@@ -116,6 +118,15 @@ void placement_probe_entry() {
     for (;;) {
         arch::hlt();
     }
+}
+
+// Issue #23: semaphore-gated entry for partitioned-admission tests —
+// admitted tasks block on first dispatch (never self-terminate mid-setup,
+// never burn the CPU), keeping LUB scans and queue placement stable.
+void smp_gate_entry() {
+    auto *self = Scheduler::current_task();
+    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
+    gate->wait();
 }
 
 } // namespace
@@ -300,6 +311,249 @@ JARVIS_TEST(smp_sched_queue_placement_fanout, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #23: partitioned-admission test helpers — gated entries keep
+// admitted tasks alive across setup windows (never self-terminate on a
+// tick the way empty lambdas do); placement asserts run under one
+// IrqGuard (cookbook Rule 2).
+static TaskControlBlock *smp_make_task(uint64_t wcet, uint64_t period,
+                                       sync::Semaphore *gate) {
+    auto *t = TaskControlBlock::create(smp_gate_entry, 11, period);
+    if (t == nullptr)
+        return nullptr;
+    t->wcet_ticks = wcet;
+    t->user_data = gate;
+    return t;
+}
+
+static void smp_destroy_denied(TaskControlBlock *t) {
+    if (t == nullptr)
+        return;
+    JARVIS_ASSERT(Scheduler::find_task(t->id) == nullptr);
+    TaskControlBlock::destroy(t);
+}
+
+// Runmode: kernel
+// Testidea: per-CPU bound denies an overloaded destination partition.
+// Input: A(60%) pinned to CPU1 (CPU0 when no AP), then B(60%) same target.
+// Expect: A admitted; B → SCHED_ERR_ADMISSION_DENIED with tables and
+// ResourceTracker unchanged (destroy_denied asserts absence).
+// Depends: admission_check_cpu_locked via add_task_err (issue #23)
+JARVIS_TEST(smp_sched_percpu_add_denies_overloaded_cpu,
+            "PRE: none | POST: none") {
+    bool has_ap = smp::ap_count() > 0;
+    uint64_t cpu1 = has_ap ? 0x2 : 0x1;
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    // NOTE: B is positioned BEFORE A is added — the void set_affinity
+    // wrapper runs the same destination probe, so positioning onto an
+    // already-full CPU is (correctly) refused with the old mask kept.
+    auto *b = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(b != nullptr);
+    Scheduler::set_affinity(*b, cpu1);
+    auto *a = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(a != nullptr);
+    Scheduler::set_affinity(*a, cpu1);
+    {
+        arch::IrqGuard irq;
+        JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
+        JARVIS_ASSERT(Scheduler::add_task_err(*b) ==
+                      errors::SCHED_ERR_ADMISSION_DENIED);
+    }
+    smp_destroy_denied(b);
+    gate.post();
+    kernel::test::terminate_and_drain(*a);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: affinity move into a saturated partition is denied and the
+// source placement is fully retained (fail-closed migration gate).
+// Input: M(implicit 100%) on CPU0 + F(60%) on CPU1; move M→CPU1.
+// Expect (AP): DENIED, mask still 0x1, queued on 0 not 1. No AP:
+// clamp no-op OK (masks collapse to CPU0 by design).
+// Depends: Scheduler::set_affinity_err (issue #23)
+JARVIS_TEST(smp_sched_set_affinity_denied_keeps_source,
+            "PRE: none | POST: none") {
+    bool has_ap = smp::ap_count() > 0;
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    auto *m = smp_make_task(0, 100, &gate);
+    JARVIS_ASSERT(m != nullptr);
+    auto *f = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(f != nullptr);
+    if (has_ap)
+        Scheduler::set_affinity(*f, 0x2);
+    {
+        arch::IrqGuard irq;
+        JARVIS_ASSERT(Scheduler::add_task_err(*m) == errors::SCHED_ERR_OK);
+        errors::SchedulerError fr = Scheduler::add_task_err(*f);
+        if (has_ap) {
+            JARVIS_ASSERT(fr == errors::SCHED_ERR_OK);
+        } else {
+            // No AP: F collapses onto CPU0 (M implicit 100% + 60 > 82),
+            // so the fill itself is denied here — the move leg below is
+            // smp2-only (single-CPU clamp moves are covered in
+            // sched_affinity_err_cpu0_ok).
+            JARVIS_ASSERT(fr == errors::SCHED_ERR_ADMISSION_DENIED);
+            smp_destroy_denied(f);
+            f = nullptr;
+        }
+        if (has_ap) {
+            errors::SchedulerError r =
+                Scheduler::set_affinity_err(*m, 0x2);
+            JARVIS_ASSERT(r == errors::SCHED_ERR_ADMISSION_DENIED);
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), m->cpu_affinity);
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                             Scheduler::queue_target(*m));
+            JARVIS_ASSERT(Scheduler::is_queued_on(*m, 0));
+            JARVIS_ASSERT(!Scheduler::is_queued_on(*m, 1));
+        } else {
+            JARVIS_ASSERT(Scheduler::set_affinity_err(*m, 0x1) ==
+                          errors::SCHED_ERR_OK);
+        }
+    }
+    gate.post();
+    kernel::test::terminate_and_drain(*m);
+    if (f != nullptr)
+        kernel::test::terminate_and_drain(*f);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: exempt moves are always allowed, even into a saturated CPU.
+// Input: saturate CPU1 (60%), add aperiodic task on CPU0, move it to CPU1.
+// Expect: move returns OK, mask + queue follow the target on both
+// variants (single-CPU collapses to a no-op OK).
+// Depends: set_affinity_err exemption path (issue #23)
+JARVIS_TEST(smp_sched_exempt_move_always_allowed,
+            "PRE: none | POST: none") {
+    bool has_ap = smp::ap_count() > 0;
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    auto *fill = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(fill != nullptr);
+    if (has_ap)
+        Scheduler::set_affinity(*fill, 0x2);
+    auto *ap = smp_make_task(0, 0, &gate);
+    JARVIS_ASSERT(ap != nullptr);
+    {
+        arch::IrqGuard irq;
+        JARVIS_ASSERT(Scheduler::add_task_err(*fill) ==
+                      errors::SCHED_ERR_OK);
+        JARVIS_ASSERT(Scheduler::add_task_err(*ap) == errors::SCHED_ERR_OK);
+        JARVIS_ASSERT(Scheduler::set_affinity_err(
+                          *ap, has_ap ? 0x2 : 0x1) == errors::SCHED_ERR_OK);
+        if (has_ap) {
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x2), ap->cpu_affinity);
+            JARVIS_ASSERT(Scheduler::is_queued_on(*ap, 1));
+        }
+    }
+    gate.post();
+    gate.post();
+    kernel::test::terminate_and_drain(*fill);
+    kernel::test::terminate_and_drain(*ap);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: balancer_tick moves only non-RT tasks (RT never selected —
+// the structural migration-safety property) and honors the destination
+// probe for whatever it moves.
+// Input: 1 periodic RT task + 4 aperiodic mask-0x3 tasks on CPU0.
+// Expect (AP): migration_count[0] >= 1, RT still targets CPU0, every
+// moved task targets CPU1. No AP: early return, counts unchanged.
+// Depends: balancer_tick candidate filter + probe (issues #61/#23)
+JARVIS_TEST(smp_sched_balancer_moves_nonrt_keeps_rt,
+            "PRE: none | POST: none") {
+    bool has_ap = smp::ap_count() > 0;
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    auto *rt = smp_make_task(0, 10, &gate);
+    JARVIS_ASSERT(rt != nullptr);
+    TaskControlBlock *workers[4] = {};
+    for (uint64_t i = 0; i < 4; ++i) {
+        workers[i] = smp_make_task(0, 0, &gate);
+        JARVIS_ASSERT(workers[i] != nullptr);
+        if (has_ap)
+            Scheduler::set_affinity(*workers[i], 0x3);
+    }
+    {
+        arch::IrqGuard irq;
+        Scheduler::add_task(*rt);
+        for (uint64_t i = 0; i < 4; ++i)
+            Scheduler::add_task(*workers[i]);
+        Scheduler::reset_migration_counts();
+        Scheduler::balancer_tick();
+        if (!has_ap) {
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                             Scheduler::migration_count(0));
+        } else {
+            JARVIS_ASSERT(Scheduler::migration_count(0) >= 1);
+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                             Scheduler::queue_target(*rt));
+            uint64_t moved = 0;
+            for (uint64_t i = 0; i < 4; ++i) {
+                if (Scheduler::queue_target(*workers[i]) == 1)
+                    ++moved;
+            }
+            JARVIS_ASSERT(moved >= 1);
+        }
+    }
+    gate.post();
+    kernel::test::terminate_and_drain(*rt);
+    for (uint64_t i = 0; i < 4; ++i)
+        kernel::test::terminate_and_drain(*workers[i]);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: partitioned admission diverges from the legacy global sum:
+// system-wide 130% still admits when no single partition is overfull.
+// Input: A(60%) CPU0 + B(60%) CPU1, then C(wcet 10) CPU0 (70<=82).
+// Expect: all three admitted (single-CPU: B targets CPU0 and is denied
+// instead — 120>82 — while A and C still admit; the partition key, not
+// the global sum, decides in both cases).
+// Depends: admission_check_cpu_locked partition key (issue #23)
+JARVIS_TEST(smp_sched_percpu_partition_divergence,
+            "PRE: none | POST: none") {
+    bool has_ap = smp::ap_count() > 0;
+    sync::Semaphore gate;
+    gate.init(0, 1);
+    auto *a = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(a != nullptr);
+    auto *b = smp_make_task(60, 100, &gate);
+    JARVIS_ASSERT(b != nullptr);
+    auto *c = smp_make_task(10, 100, &gate);
+    JARVIS_ASSERT(c != nullptr);
+    if (has_ap) {
+        Scheduler::set_affinity(*b, 0x2);
+    }
+    {
+        arch::IrqGuard irq;
+        JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
+        errors::SchedulerError rb = Scheduler::add_task_err(*b);
+        if (has_ap) {
+            JARVIS_ASSERT(rb == errors::SCHED_ERR_OK);
+        } else {
+            JARVIS_ASSERT(rb == errors::SCHED_ERR_ADMISSION_DENIED);
+            smp_destroy_denied(b);
+            b = nullptr;
+        }
+        JARVIS_ASSERT(Scheduler::add_task_err(*c) == errors::SCHED_ERR_OK);
+    }
+    gate.post();
+    kernel::test::terminate_and_drain(*a);
+    if (b != nullptr)
+        kernel::test::terminate_and_drain(*b);
+    kernel::test::terminate_and_drain(*c);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 void register_smp_sched_tests() {
     Logger::info("Registering smp sched tests");
     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
@@ -307,5 +561,10 @@ void register_smp_sched_tests() {
     JARVIS_REGISTER_TEST(smp_sched_bsp_unaffected);
     JARVIS_REGISTER_TEST(smp_sched_cross_move);
     JARVIS_REGISTER_TEST(smp_sched_queue_placement_fanout);
+    JARVIS_REGISTER_TEST(smp_sched_percpu_add_denies_overloaded_cpu);
+    JARVIS_REGISTER_TEST(smp_sched_set_affinity_denied_keeps_source);
+    JARVIS_REGISTER_TEST(smp_sched_exempt_move_always_allowed);
+    JARVIS_REGISTER_TEST(smp_sched_balancer_moves_nonrt_keeps_rt);
+    JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
 }
 #endif // CONFIG_ARCH_X86_64

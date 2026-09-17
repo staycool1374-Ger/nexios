@@ -148,6 +148,15 @@ class Scheduler {
     static errors::SchedulerError
     admission_check_locked(const TaskControlBlock &candidate,
                            uint64_t *out_util, uint32_t *out_bound) noexcept;
+    /// @brief Issue #23: partitioned-EDF LUB bound for one CPU.  Identical
+    ///        to admission_check_locked except only tasks with
+    ///        queue_target(t) == cpu (modulo MAX_CPUS) enter the numerator;
+    ///        the candidate is always counted (on cpu).  Caller must hold
+    ///        scheduler_lock_.  Allocation-free, no logging.  This is the
+    ///        hook a future CPU-pinning mode (#167) will reuse.
+    static errors::SchedulerError admission_check_cpu_locked(
+        const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
+        uint32_t *out_bound) noexcept;
 
     /// @brief Removes a task from the scheduler's run queue.
     /// @param task Reference to the task to remove.
@@ -210,9 +219,25 @@ class Scheduler {
     ///        Empty mask clamps to CPU0 (+warn); user tasks force CPU0
     ///        (shared-TSS limitation); bits beyond up-CPUs clamp (+warn);
     ///        tasks running on another CPU are refused (warn).
+    ///        Legacy warn-only wrapper around set_affinity_err (issue #23):
+    ///        denial (destination-CPU bound) is logged and swallowed here;
+    ///        fallible callers (syscall) must use set_affinity_err.
     /// @param task Target TCB.
     /// @param mask Affinity bitmask.
     static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
+    /// @brief Fallible affinity move with destination-CPU admission probe
+    ///        (issue #23, partitioned EDF).  Same clamp/refuse/move
+    ///        machinery as set_affinity, plus: when the effective target
+    ///        differs and the task is non-exempt, the destination partition
+    ///        bound is probed BEFORE any mutation — denial returns
+    ///        SCHED_ERR_ADMISSION_DENIED (or WCET_INVALID) with mask,
+    ///        queues, EDF lists and tracker untouched.  Exempt moves are
+    ///        always allowed.  This is the hook a future CPU-pinning mode
+    ///        (#167) will reuse.
+    /// @return SCHED_ERR_OK (moved or no-op), SCHED_ERR_ADMISSION_DENIED,
+    ///         SCHED_ERR_WCET_INVALID.
+    static errors::SchedulerError
+    set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept;
 
     /// @brief RT load balancer tick (issue #61): migrate queued
     ///        aperiodic kernel tasks from the busiest up-CPU to the

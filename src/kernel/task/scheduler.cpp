@@ -647,7 +647,8 @@ static uint64_t sched_up_cpus() noexcept {
 #endif
 }
 
-void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
+errors::SchedulerError
+Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
     // Quiesce window fences the lock-free AP current-apply path (spec
     // §3.4.5): with arms cancelled and AP dispatch parked, the running
     // check below is stable across the dequeue+enqueue.
@@ -677,19 +678,47 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
     if (is_current_on_any_cpu(&task) && &task != current_task()) {
         Logger::warn("sched: set_affinity id=%u refused (running)", task.id);
         quiesce_exit();
-        return;
+        return errors::SCHED_ERR_OK; // no-op refuse: legacy success contract
     }
     if (task.cpu_affinity != mask) {
+        // Issue #23: partitioned-EDF destination probe BEFORE any mutation.
+        // The candidate is counted on the destination partition; denial
+        // leaves mask, queues, EDF lists and tracker untouched
+        // (fail-closed).  Exempt moves are always allowed.
+        uint64_t m = (mask != 0) ? mask : 1U;
+        uint64_t new_target =
+            static_cast<uint64_t>(__builtin_ctzll(m));
+        if (new_target >= CONFIG_MAX_CPUS)
+            new_target = 0;
+        if (new_target != queue_target(task) &&
+            !admission_exempted(task)) {
+            uint64_t util = 0;
+            uint32_t bound = 0;
+            errors::SchedulerError adm =
+                admission_check_cpu_locked(task, new_target, &util, &bound);
+            if (adm != errors::SCHED_ERR_OK) {
+                Logger::warn("sched: set_affinity id=%u denied move to "
+                             "CPU%u (err=%u, util=%u > bound=%u)",
+                             task.id, new_target,
+                             static_cast<uint64_t>(adm), util, bound);
+                quiesce_exit();
+                return adm;
+            }
+        }
         // Issue #25 C1: preserve queue membership across the move.  A
         // queued-but-BLOCKED task (legal: placement is stable across ticks
         // since nothing can dispatch it) must land in the new CPU's queue;
         // the old code only re-enqueued READY tasks and silently dropped
         // BLOCKED ones (smp_sched_cross_move).  was_queued covers every
         // state; the READY disjunct keeps the unqueued-READY enqueue.
-        bool was_queued = task.in_ready_queue_;
+        // Issue #23: route through the single enqueue/dequeue points so an
+        // EDF-eligible task moves between deadline lists, not bitmaps
+        // (a direct bitmap move would strand it in the wrong queue; the
+        // EDF pop lazily drops non-READY heads, so BLOCKED placement is
+        // equally safe in either queue).
+        bool was_queued = task.in_ready_queue_ || task.in_edf_queue_;
         if (was_queued) {
-            rq_task(task).remove(task, task.rq_priority_);
-            task.in_ready_queue_ = false;
+            dequeue_ready(task);
         }
         task.cpu_affinity = mask;
         // Issue #25 C1: never enqueue a task the scheduler doesn't own.
@@ -703,12 +732,18 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
         bool owned = (Scheduler::find_task(task.id) == &task);
         if (was_queued ||
             (owned && task.state == TaskState::READY &&
-             !task.in_ready_queue_)) {
-            task.in_ready_queue_ = false;
-            rq_task(task).enqueue(task, effective_priority(&task));
+             !task.in_ready_queue_ && !task.in_edf_queue_)) {
+            enqueue_ready(task);
         }
     }
     quiesce_exit();
+    return errors::SCHED_ERR_OK;
+}
+
+void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
+    // Issue #23: legacy warn-only wrapper — denial is logged inside
+    // set_affinity_err and swallowed here; fallible callers use _err.
+    (void)set_affinity_err(task, mask);
 }
 
 // ---------------------------------------------------------------------------
@@ -799,6 +834,19 @@ void Scheduler::balancer_tick() noexcept {
         }
         if (candidate == nullptr)
             break;
+        // Issue #23: partitioned-EDF destination probe BEFORE the move.
+        // Today's candidates are always non-RT (is_rt_task filter above),
+        // hence admission-exempt, so this passes — it is the enforcement
+        // point that keeps migration schedulable if an RT class ever
+        // becomes migratable, and the hook #167 CPU-pinning will reuse.
+        // Denial stops balancing for this tick (break: depths are
+        // unchanged, so re-scanning would reselect the same candidate;
+        // next tick retries).  No move, no count bump, no logging.
+        if (!admission_exempted(*candidate) &&
+            admission_check_cpu_locked(*candidate, idle, nullptr, nullptr) !=
+                errors::SCHED_ERR_OK) {
+            break;
+        }
         // Move + re-pin (queue==target invariant, same as set_affinity;
         // remove() clears the queue flags, enqueue() re-arms them).
         rq_for(busy).remove(*candidate, candidate->rq_priority_);
@@ -1502,6 +1550,17 @@ static uint64_t server_budget_for_admission(const TaskControlBlock &t) noexcept 
 errors::SchedulerError Scheduler::admission_check_locked(
     const TaskControlBlock &candidate, uint64_t *out_util,
     uint32_t *out_bound) noexcept {
+    // Issue #23: the global gate is the single-partition special case keyed
+    // on the candidate's own target — one math path, no duplication, no
+    // behavior change on single-CPU.
+    return admission_check_cpu_locked(candidate, queue_target(candidate),
+                                      out_util, out_bound);
+}
+
+errors::SchedulerError Scheduler::admission_check_cpu_locked(
+    const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
+    uint32_t *out_bound) noexcept {
+    cpu %= CONFIG_MAX_CPUS;
     // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
     // I-8 scope text exactly ("periodic non-exempt tasks only").  An
     // otherwise-exempt task (boot daemon, aperiodic) carrying a stale
@@ -1528,6 +1587,11 @@ errors::SchedulerError Scheduler::admission_check_locked(
         if (t->id == candidate.id)
             continue; // re-check safe: never double-count the candidate
         if (admission_exempted(*t))
+            continue;
+        // Issue #23: partitioned accounting — only tasks targeting this
+        // CPU enter this partition's numerator (queue_target: lowest-set
+        // affinity bit, empty mask reads as CPU0).
+        if (queue_target(*t) != cpu)
             continue;
         ++real_tasks;
         uint64_t wcet = server_budget_for_admission(*t);
@@ -4507,9 +4571,13 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
     // tables, queues, and the ResourceTracker untouched (fail-closed); the
     // caller retries later (defer) or frees the TCB.  Logging stays outside
     // the helper (allocation-free path); one warn here is cold-path only.
+    // Issue #23: partitioned gate — the candidate is checked against its
+    // own target CPU's bound (queue_target), not the global sum.
     uint64_t util = 0;
     uint32_t bound = 0;
-    SchedulerError adm = admission_check_locked(task, &util, &bound);
+    uint64_t target = queue_target(task);
+    SchedulerError adm =
+        admission_check_cpu_locked(task, target, &util, &bound);
     if (adm != SCHED_ERR_OK) {
         Logger::warn("Scheduler: admission denied task %u (err=%u, "
                      "util=%u > bound=%u)",

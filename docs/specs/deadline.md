@@ -141,7 +141,15 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   `server_budget_for_admission`); exemption-before-WCET and
   boot/wakeup-never-gated are unchanged.  BACKGROUND tasks additionally
   never enter EDF dispatch (idle-time only); per-mode interference and
-  starvation contracts are specified in sporadic_server.hpp. |
+  starvation contracts are specified in sporadic_server.hpp.
+  Issue #23 addendum: partitioned EDF — the gate is evaluated per CPU
+  over tasks with `queue_target(t) == cpu`
+  (`admission_check_cpu_locked`); the legacy global entry delegates
+  keyed on the candidate's own target.  Affinity moves probe the
+  destination partition before mutation (`set_affinity_err`,
+  fail-closed); the balancer probes before each move (its candidates
+  are non-RT/exempt today, so the probe is an invariant point for
+  future RT migration and #167 pinning). |
 | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
 | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
 

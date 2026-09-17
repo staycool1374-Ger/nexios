@@ -187,6 +187,31 @@ JARVIS_TEST(sched_affinity_is_idle, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: set_affinity_err succeeds on the same-CPU path and preserves
+//           placement; the void wrapper stays behavior-identical.
+// Input: periodic BLOCKED task, registered; set_affinity_err(t, 0x1).
+// Expect: SCHED_ERR_OK, mask 0x1, still queued on 0 (single-CPU;
+// cross-CPU destination gating is covered in smp_sched under smp2).
+// Depends: Scheduler::set_affinity_err (issue #23)
+JARVIS_TEST(sched_affinity_err_cpu0_ok, "PRE: none | POST: none") {
+    auto *t = TaskControlBlock::create([]() {}, 10, 10);
+    JARVIS_ASSERT(t != nullptr);
+    t->state = TaskState::BLOCKED;
+    arch::IrqGuard irq_guard{};
+    Scheduler::register_task(*t);
+    Scheduler::enqueue_ready(*t);
+    JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
+    JARVIS_ASSERT(Scheduler::set_affinity_err(*t, 0x1) ==
+                  errors::SCHED_ERR_OK);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), t->cpu_affinity);
+    JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
+    Scheduler::remove_task(*t);
+    t->cleanup();
+    MemPool::free(t);
+    JARVIS_TEST_PASS();
+}
+
 void register_sched_affinity_tests() {
     Logger::info("Registering sched affinity tests");
     JARVIS_REGISTER_TEST(sched_affinity_default_mask);
@@ -195,4 +220,5 @@ void register_sched_affinity_tests() {
     JARVIS_REGISTER_TEST(sched_affinity_user_clamp);
     JARVIS_REGISTER_TEST(sched_affinity_requeue_moves);
     JARVIS_REGISTER_TEST(sched_affinity_is_idle);
+    JARVIS_REGISTER_TEST(sched_affinity_err_cpu0_ok);
 }

@@ -300,7 +300,10 @@ uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
     if (t == nullptr)
         return static_cast<uint64_t>(-1);
-    Scheduler::set_affinity(*t, arg1);
+    // Issue #23: destination-CPU admission denial propagates as -1
+    // (fail-closed); clamp/no-op paths still succeed with 0.
+    if (Scheduler::set_affinity_err(*t, arg1) != errors::SCHED_ERR_OK)
+        return static_cast<uint64_t>(-1);
     return 0;
 }
 
