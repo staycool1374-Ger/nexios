@@ -375,7 +375,11 @@ uint64_t PMM::alloc_page() {
     sync::IrqSpinLockGuard lock(pmm_lock_);
 #if CONFIG_MEMORY_BUDGET
     auto *cur = Scheduler::current_task();
+    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
+    // default).  Without the > 0 guard every task (used=0, budget=0) would
+    // fail every alloc once the global default flipped ON.
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+        cur->memory_budget_pages_ > 0 &&
         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
         return 0;
     }
@@ -436,7 +440,9 @@ uint64_t PMM::alloc_contiguous(size_t count) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
 #if CONFIG_MEMORY_BUDGET
     auto *cur = Scheduler::current_task();
+    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+        cur->memory_budget_pages_ > 0 &&
         cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
         return 0;
     }
@@ -517,7 +523,9 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
 #if CONFIG_MEMORY_BUDGET
     auto *cur = Scheduler::current_task();
+    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
+        cur->memory_budget_pages_ > 0 &&
         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
         return 0;
     }

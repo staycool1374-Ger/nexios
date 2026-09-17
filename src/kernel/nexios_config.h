@@ -951,9 +951,10 @@
 /// Per-task memory budget enforcement.
 /// When non-zero, TaskControlBlock::create() deducts stack pages from a
 /// global system budget; alloc_page() checks the calling task's budget.
-/// Default: 0 (no budget enforcement — current behaviour).
+/// Default: 1 (budget enforcement on — issue #20; sized at boot from PMM
+/// total pages via Scheduler::init_memory_budget; per-task 0 == unlimited).
 #ifndef CONFIG_MEMORY_BUDGET
-#define CONFIG_MEMORY_BUDGET 0
+#define CONFIG_MEMORY_BUDGET 1
 #endif
 
 /// If non-zero, declares weak symbol init_hook() after daemon init complete.

@@ -126,7 +126,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
 | I-5 | TERMINATED tasks skipped by the scan |
 | I-6 | DEMOTE floor at priority 1; every change re-bucketed via `move_priority` |
 | I-7 | Scan integrity counter advances exactly 1 per completed scan |
-| I-8 | **Liu-Leyland is advisory** (warning-only at add_task) — no admission gate; the real guarantee is bounded per-tick cost (O(n_tasks)) |
+| I-8 | **Liu-Leyland is enforced at create** (issue #20): `add_task_err()`
+  runs WCET-validity + LUB admission BEFORE any table/queue/tracker
+  mutation and returns `SCHED_ERR_WCET_INVALID` /
+  `SCHED_ERR_ADMISSION_DENIED` fail-closed (zero side effects; the caller
+  retries later = defer, or frees the TCB = reject).  Scope: periodic
+  non-exempt tasks only (idle, corrupt-magic, edf-exempt, aperiodic /
+  NO_PERIOD, zero-deadline excluded).  The void `add_task()` legacy path
+  stays advisory warn-only (cannot fail); wakeups of admitted tasks
+  (`set_task_ready`) are never re-gated — the per-tick O(n_tasks) scan
+  cost stays bounded |
 | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
 | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
 

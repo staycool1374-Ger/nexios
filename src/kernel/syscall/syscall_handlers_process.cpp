@@ -43,7 +43,15 @@ uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
     auto *child = TaskControlBlock::clone(regs);
     if (!child)
         return static_cast<uint64_t>(-1);
-    Scheduler::add_task(*child);
+    // Issue #20: fork goes through the enforced admission gate.  On denial
+    // the child was never registered, so destroy() teardown is safe
+    // (remove paths no-op on absent entries); the parent is unaffected and
+    // the caller sees -1 (fail-closed, no zombie birth, no parent wake).
+    errors::SchedulerError adm = Scheduler::add_task_err(*child);
+    if (adm != errors::SCHED_ERR_OK) {
+        TaskControlBlock::destroy(child);
+        return static_cast<uint64_t>(-1);
+    }
     return child->id;
 }
 

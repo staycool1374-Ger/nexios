@@ -40,7 +40,9 @@ namespace kernel::errors {
     X(ZOMBIE, 8, "Task is a zombie (freed but not reaped)")                    \
     X(INVALID_MAGIC, 9, "Task control block magic invalid")                    \
     X(NO_SHELL, 10, "Shell task not set")                                      \
-    X(INVALID_ARGS, 11, "Invalid arguments")
+    X(INVALID_ARGS, 11, "Invalid arguments")                                   \
+    X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
+    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
 
 /// @brief Error codes returned by scheduler operations.
 // NOLINTNEXTLINE(performance-enum-size)

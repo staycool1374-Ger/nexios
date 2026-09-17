@@ -1444,6 +1444,101 @@ static constexpr uint32_t LIU_LEYLAND_BOUNDS[LIU_LEYLAND_MAX_TASKS + 1] = {
 static constexpr uint32_t LIU_LEYLAND_LIMIT = 693147;
 
 // ---------------------------------------------------------------------------
+// Issue #20 — enforced admission control (upgrades deadline.md I-8 from
+// advisory warn-only to a fail-closed gate).  All helpers are
+// allocation-free integer math with no logging; the caller (add_task_err)
+// holds scheduler_lock_ throughout, so the check-and-enqueue is atomic.
+// Wakeups of already-admitted tasks (set_task_ready) are deliberately NOT
+// re-gated: denying a wakeup would wedge IPC waiters (deadlock risk, see
+// the H2 history) — admission is a create-time gate, the standard
+// real-time doctrine (once admitted, guaranteed).
+// ---------------------------------------------------------------------------
+
+bool Scheduler::admission_exempted(const TaskControlBlock &t) noexcept {
+    if (is_idle_task(&t))
+        return true;
+    if (t.magic != TaskControlBlock::TCB_MAGIC)
+        return true; // corrupt: never counted (fail-closed elsewhere)
+    if (t.edf_exempt)
+        return true; // SS daemons, harness (taskdefs spawn sites)
+    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
+        return true; // aperiodic / untracked (I-4)
+    if (t.deadline_ticks == 0)
+        return true;
+    return false;
+}
+
+errors::SchedulerError
+Scheduler::check_wcet_locked(const TaskControlBlock &t) noexcept {
+    if (t.wcet_ticks == 0)
+        return errors::SCHED_ERR_OK; // implicit 100%: validated via LUB sum
+    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
+        return errors::SCHED_ERR_WCET_INVALID; // explicit WCET, untracked task
+    if (t.wcet_ticks > t.period_ticks)
+        return errors::SCHED_ERR_WCET_INVALID;
+    return errors::SCHED_ERR_OK;
+}
+
+errors::SchedulerError Scheduler::admission_check_locked(
+    const TaskControlBlock &candidate, uint64_t *out_util,
+    uint32_t *out_bound) noexcept {
+    // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
+    // I-8 scope text exactly ("periodic non-exempt tasks only").  An
+    // otherwise-exempt task (boot daemon, aperiodic) carrying a stale
+    // explicit WCET must never be rejected — denying a boot daemon would
+    // wedge the boot.  WCET-validity binds only tasks inside the gate.
+    if (admission_exempted(candidate)) {
+        if (out_util != nullptr)
+            *out_util = 0;
+        if (out_bound != nullptr)
+            *out_bound = 0;
+        return errors::SCHED_ERR_OK;
+    }
+    errors::SchedulerError w = check_wcet_locked(candidate);
+    if (w != errors::SCHED_ERR_OK)
+        return w;
+    // Numerator rule frozen from the advisory path: explicit WCET, else the
+    // sporadic-server max budget, else remaining_ticks.  S2 note: wcet <=
+    // period <= NO_PERIOD (2^32-1), so wcet*1000000 < 2^63 — no overflow;
+    // period == 0 is excluded above, so the divide is safe.
+    uint64_t total_util = 0;
+    uint64_t real_tasks = 0;
+    for (TaskControlBlock *t = all_tasks_.first_ptr(); t != nullptr;
+         t = all_tasks_.next_ptr(t)) {
+        if (t->id == candidate.id)
+            continue; // re-check safe: never double-count the candidate
+        if (admission_exempted(*t))
+            continue;
+        ++real_tasks;
+        uint64_t wcet =
+            t->wcet_ticks > 0
+                ? t->wcet_ticks
+                : (t->get_sporadic_server()
+                       ? t->get_sporadic_server()->max_budget()
+                       : t->remaining_ticks);
+        total_util += (wcet * 1000000) / t->period_ticks;
+    }
+    ++real_tasks;
+    uint64_t cwcet =
+        candidate.wcet_ticks > 0
+            ? candidate.wcet_ticks
+            : (candidate.get_sporadic_server()
+                   ? candidate.get_sporadic_server()->max_budget()
+                   : candidate.remaining_ticks);
+    total_util += (cwcet * 1000000) / candidate.period_ticks;
+    uint32_t bound = real_tasks <= LIU_LEYLAND_MAX_TASKS
+                         ? LIU_LEYLAND_BOUNDS[real_tasks]
+                         : LIU_LEYLAND_LIMIT;
+    if (out_util != nullptr)
+        *out_util = total_util;
+    if (out_bound != nullptr)
+        *out_bound = bound;
+    if (total_util > bound)
+        return errors::SCHED_ERR_ADMISSION_DENIED;
+    return errors::SCHED_ERR_OK;
+}
+
+// ---------------------------------------------------------------------------
 // Init / lifecycle
 // ---------------------------------------------------------------------------
 
@@ -1543,6 +1638,10 @@ void Scheduler::add_task(TaskControlBlock &task) {
     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
                  task.id, task.priority);
 
+    // Issue #20: legacy ADVISORY path — warn-only by design (void return
+    // cannot report denial; silently deferring would break every caller
+    // that assumes enqueue).  New production paths (fork, exec) and all
+    // admission-sensitive code must use add_task_err(), the enforced gate.
     // Liu-Leyland LUB admission test
     if (task.period_ticks > 0 && task.period_ticks <= 100) {
         uint64_t total_util = 0;
@@ -4399,12 +4498,34 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
         return SCHED_ERR_TABLE_FULL;
     if (id_table_find(task.id) != nullptr)
         return SCHED_ERR_DUPLICATE_ID;
+    // Issue #20: enforced admission BEFORE any mutation — a denial leaves
+    // tables, queues, and the ResourceTracker untouched (fail-closed); the
+    // caller retries later (defer) or frees the TCB.  Logging stays outside
+    // the helper (allocation-free path); one warn here is cold-path only.
+    uint64_t util = 0;
+    uint32_t bound = 0;
+    SchedulerError adm = admission_check_locked(task, &util, &bound);
+    if (adm != SCHED_ERR_OK) {
+        Logger::warn("Scheduler: admission denied task %u (err=%u, "
+                     "util=%u > bound=%u)",
+                     task.id, static_cast<uint64_t>(adm), util, bound);
+        return adm;
+    }
     all_tasks_.append(task);
     if (task.period_ticks > 0 && task.deadline_ticks > 0) {
         deadline_list_.insert(task);
     }
     ENSURE(id_table_insert(task.id, &task) && "id_table full in add_task_err");
-    rq_task(task).enqueue(task, effective_priority(&task));
+    // Issue #19/#20: single routing point via enqueue_ready (the old direct
+    // bitmap enqueue was EDF-blind — every deadline task dispatched by
+    // priority).  id_table_ membership precedes enqueue (H2 orphan guard).
+    task.in_ready_queue_ = false;
+    task.runq_next_ = nullptr;
+    task.runq_prev_ = nullptr;
+    task.in_edf_queue_ = false;
+    task.edf_next_ = nullptr;
+    task.edf_prev_ = nullptr;
+    enqueue_ready(task);
     kernel::test::ResourceTracker::instance().track_task_add();
     return SCHED_ERR_OK;
 }

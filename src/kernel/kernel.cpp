@@ -739,6 +739,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
     }
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
+    // Issue #20: size the global memory budget from PMM capacity so the
+    // create()-time admission gate (CONFIG_MEMORY_BUDGET, default ON) is
+    // live from boot.  Slight overcount (kernel image, VMM tables) is
+    // harmless: PMM alloc remains the hard gate with budget rollback.
+#if CONFIG_MEMORY_BUDGET
+    kernel::Scheduler::init_memory_budget(mem_size / arch::PAGE_SIZE);
+#endif
     kernel::VMM::init();
 
     // Reserve the Multiboot2 info structure GRUB placed above the kernel

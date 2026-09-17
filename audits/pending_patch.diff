@@ -1,1243 +1,488 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 1a69a864..7b1ca605 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -522,6 +522,11 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-     tcb->exec_stamp_ns = 0;
-+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
-+    tcb->edf_exempt = false;
-+    tcb->edf_next_ = nullptr;
-+    tcb->edf_prev_ = nullptr;
-+    tcb->in_edf_queue_ = false;
-     tcb->remaining_ticks = 0;
-     tcb->deadline_ticks = arch::Timer::ticks();
-     tcb->page_table_ = 0;
+diff --git a/docs/specs/configuration.md b/docs/specs/configuration.md
+index 695314b7..a83859d8 100644
+--- a/docs/specs/configuration.md
++++ b/docs/specs/configuration.md
+@@ -99,7 +99,7 @@ feeds must be re-validated** (check-config cross-check).
+ ### 1.9 Hooks & Policies
+ `CONFIG_IDLE_HOOK` / `CONFIG_TICK_HOOK` / `CONFIG_INIT_HOOK` (0) ·
+ `CONFIG_OOM_HOOK` (0) · `CONFIG_OOM_POLICY` (0) ·
+-`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (0) ·
++`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (1, issue #20) ·
+ `CONFIG_ZOMBIE_STARVATION_LIMIT` (32).
+ 
+ ### 1.10 Deadline / WCET Feature Set (the matrix dimensions)
+diff --git a/docs/specs/deadline.md b/docs/specs/deadline.md
+index 31e3a1bf..043669a3 100644
+--- a/docs/specs/deadline.md
++++ b/docs/specs/deadline.md
+@@ -126,7 +126,16 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
+ | I-5 | TERMINATED tasks skipped by the scan |
+ | I-6 | DEMOTE floor at priority 1; every change re-bucketed via `move_priority` |
+ | I-7 | Scan integrity counter advances exactly 1 per completed scan |
+-| I-8 | **Liu-Leyland is advisory** (warning-only at add_task) — no admission gate; the real guarantee is bounded per-tick cost (O(n_tasks)) |
++| I-8 | **Liu-Leyland is enforced at create** (issue #20): `add_task_err()`
++  runs WCET-validity + LUB admission BEFORE any table/queue/tracker
++  mutation and returns `SCHED_ERR_WCET_INVALID` /
++  `SCHED_ERR_ADMISSION_DENIED` fail-closed (zero side effects; the caller
++  retries later = defer, or frees the TCB = reject).  Scope: periodic
++  non-exempt tasks only (idle, corrupt-magic, edf-exempt, aperiodic /
++  NO_PERIOD, zero-deadline excluded).  The void `add_task()` legacy path
++  stays advisory warn-only (cannot fail); wakeups of admitted tasks
++  (`set_task_ready`) are never re-gated — the per-tick O(n_tasks) scan
++  cost stays bounded |
+ | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
+ | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
+ 
+diff --git a/docs/specs/oom-rt.md b/docs/specs/oom-rt.md
+index 4ca40ae1..af1898ba 100644
+--- a/docs/specs/oom-rt.md
++++ b/docs/specs/oom-rt.md
+@@ -13,10 +13,11 @@ and starve lower-priority tasks.  Every allocation failure must (a) be detected
+ at the call site, (b) propagate a defined error, and (c) never leave the
+ scheduler/allocator in a corrupt state.
+ 
+-## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default OFF]
++## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default ON]
+ 
+ ```
+- init_memory_budget(total_pages)  (global budget after PMM init)
++ init_memory_budget(total_pages)  (global budget after PMM init, issue #20 —
++        kernel.cpp sizes it from PMM capacity right after PMM::init)
+         │
+  TaskControlBlock::create()
+         │ deduct CONFIG_DEFAULT_STACK_PAGES from global budget
+@@ -27,7 +28,8 @@ scheduler/allocator in a corrupt state.
+         ▼
+  TaskControlBlock::cleanup() returns pages to the budget
+ ```
+-- `CONFIG_MEMORY_BUDGET` default 0 (disabled) — current behavior preserved.
++- `CONFIG_MEMORY_BUDGET` default 1 (enabled, issue #20) — sized at boot;
++  per-task `memory_budget_pages_ == 0` keeps unlimited semantics.
+ - `memory_budget_pages_`/`memory_used_pages_` on the TCB (set 0 at create).
+ - **`clone_kernel_pml4` rollback [IMPLEMENTED]:** a real
+   `JARVIS_TEST(vmm_clone_failure_rollback)` replaces the historical STUB-8;
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index d115efc3..80870be1 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -739,6 +739,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+ 
+     }
+     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
++    // Issue #20: size the global memory budget from PMM capacity so the
++    // create()-time admission gate (CONFIG_MEMORY_BUDGET, default ON) is
++    // live from boot.  Slight overcount (kernel image, VMM tables) is
++    // harmless: PMM alloc remains the hard gate with budget rollback.
++#if CONFIG_MEMORY_BUDGET
++    kernel::Scheduler::init_memory_budget(mem_size / arch::PAGE_SIZE);
++#endif
+     kernel::VMM::init();
+ 
+     // Reserve the Multiboot2 info structure GRUB placed above the kernel
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+index 2cd40fd8..d61639a4 100644
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -375,7 +375,11 @@ uint64_t PMM::alloc_page() {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+ #if CONFIG_MEMORY_BUDGET
+     auto *cur = Scheduler::current_task();
++    // Issue #20: per-task budget 0 == unlimited (no task sets a budget by
++    // default).  Without the > 0 guard every task (used=0, budget=0) would
++    // fail every alloc once the global default flipped ON.
+     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
++        cur->memory_budget_pages_ > 0 &&
+         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
+         return 0;
+     }
+@@ -436,7 +440,9 @@ uint64_t PMM::alloc_contiguous(size_t count) {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+ #if CONFIG_MEMORY_BUDGET
+     auto *cur = Scheduler::current_task();
++    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
+     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
++        cur->memory_budget_pages_ > 0 &&
+         cur->memory_used_pages_ + count > cur->memory_budget_pages_) {
+         return 0;
+     }
+@@ -517,7 +523,9 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+ #if CONFIG_MEMORY_BUDGET
+     auto *cur = Scheduler::current_task();
++    // Issue #20: per-task budget 0 == unlimited (see alloc_page).
+     if (cur && cur->magic == TaskControlBlock::TCB_MAGIC &&
++        cur->memory_budget_pages_ > 0 &&
+         cur->memory_used_pages_ >= cur->memory_budget_pages_) {
+         return 0;
+     }
 diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 4e0eb5c0..e7b67dc9 100644
+index e7b67dc9..8f3576ef 100644
 --- a/src/kernel/nexios_config.h
 +++ b/src/kernel/nexios_config.h
-@@ -984,6 +984,17 @@
- #define CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE 0
+@@ -951,9 +951,10 @@
+ /// Per-task memory budget enforcement.
+ /// When non-zero, TaskControlBlock::create() deducts stack pages from a
+ /// global system budget; alloc_page() checks the calling task's budget.
+-/// Default: 0 (no budget enforcement — current behaviour).
++/// Default: 1 (budget enforcement on — issue #20; sized at boot from PMM
++/// total pages via Scheduler::init_memory_budget; per-task 0 == unlimited).
+ #ifndef CONFIG_MEMORY_BUDGET
+-#define CONFIG_MEMORY_BUDGET 0
++#define CONFIG_MEMORY_BUDGET 1
  #endif
  
-+/// Deadline-monotonic priority band for assign_deadline_priority()
-+/// (issue #19).  DM maps shorter relative deadlines to higher priorities
-+/// within [MIN, MAX]; 0-1 stay idle/background-adjacent, 121-127 stay
-+/// reserved for system tasks (deadline monitor runs at 127).
-+#ifndef CONFIG_DM_PRIO_MIN
-+#define CONFIG_DM_PRIO_MIN 2
-+#endif
-+#ifndef CONFIG_DM_PRIO_MAX
-+#define CONFIG_DM_PRIO_MAX 120
-+#endif
-+
- /// Decouple deadline scanning from the timer ISR via a dedicated watchdog task.
- /// When >0, scheduler spawns [deadline-mon] at priority 127 during init().
- /// The monitor waits on an atomic flag (lock-free handoff) and calls
+ /// If non-zero, declares weak symbol init_hook() after daemon init complete.
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index e0f8839b..61a9e203 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -43,7 +43,15 @@ uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
+     auto *child = TaskControlBlock::clone(regs);
+     if (!child)
+         return static_cast<uint64_t>(-1);
+-    Scheduler::add_task(*child);
++    // Issue #20: fork goes through the enforced admission gate.  On denial
++    // the child was never registered, so destroy() teardown is safe
++    // (remove paths no-op on absent entries); the parent is unaffected and
++    // the caller sees -1 (fail-closed, no zombie birth, no parent wake).
++    errors::SchedulerError adm = Scheduler::add_task_err(*child);
++    if (adm != errors::SCHED_ERR_OK) {
++        TaskControlBlock::destroy(child);
++        return static_cast<uint64_t>(-1);
++    }
+     return child->id;
+ }
+ 
 diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index e597985a..5c792c70 100644
+index 5c792c70..109d68c4 100644
 --- a/src/kernel/task/scheduler.cpp
 +++ b/src/kernel/task/scheduler.cpp
-@@ -302,6 +302,160 @@ static inline bool is_poisoned_block(const void *p) noexcept {
- #endif
- }
+@@ -1443,6 +1443,101 @@ static constexpr uint32_t LIU_LEYLAND_BOUNDS[LIU_LEYLAND_MAX_TASKS + 1] = {
+     710592, 709409,  708378, 707472, 706669, 705952, 705298};
+ static constexpr uint32_t LIU_LEYLAND_LIMIT = 693147;
  
 +// ---------------------------------------------------------------------------
-+// EDF dispatch (issue #19 — global EDF with exemptions).
-+//
-+// A second dispatch queue per CPU holds EDF-eligible tasks ordered by
-+// absolute deadline.  A task is in at most one queue (bitmap or EDF);
-+// in_edf_queue_/in_ready_queue_ are authoritative.  All ops run under the
-+// caller's scheduler_lock_/IRQ-off discipline, mirroring the bitmap path.
++// Issue #20 — enforced admission control (upgrades deadline.md I-8 from
++// advisory warn-only to a fail-closed gate).  All helpers are
++// allocation-free integer math with no logging; the caller (add_task_err)
++// holds scheduler_lock_ throughout, so the check-and-enqueue is atomic.
++// Wakeups of already-admitted tasks (set_task_ready) are deliberately NOT
++// re-gated: denying a wakeup would wedge IPC waiters (deadlock risk, see
++// the H2 history) — admission is a create-time gate, the standard
++// real-time doctrine (once admitted, guaranteed).
 +// ---------------------------------------------------------------------------
-+/// @brief Per-CPU EDF-ready list head (intrusive, deadline-ordered).
-+struct EdfReadyList {
-+    TaskControlBlock *head_ = nullptr;
-+};
-+static EdfReadyList edf_ready_[CONFIG_MAX_CPUS];
 +
-+/// @brief EDF eligibility (issue #19): explicit EDF forces the class but
-+///        still needs a finite deadline (fail-closed); AUTO maps
-+///        finite-deadline non-exempt tasks; everything else stays FIXED.
-+static bool edf_eligible(const TaskControlBlock &t) noexcept {
-+    if (t.deadline_ticks == 0)
-+        return false; // I-4: untracked exclusion
-+    if (t.period_ticks == 0 ||
-+        t.period_ticks == TaskControlBlock::NO_PERIOD)
-+        return false;
-+    if (t.sched_policy == SchedPolicy::FIXED)
-+        return false;
-+    if (t.sched_policy == SchedPolicy::EDF)
++bool Scheduler::admission_exempted(const TaskControlBlock &t) noexcept {
++    if (is_idle_task(&t))
 +        return true;
-+    return !t.edf_exempt; // AUTO
++    if (t.magic != TaskControlBlock::TCB_MAGIC)
++        return true; // corrupt: never counted (fail-closed elsewhere)
++    if (t.edf_exempt)
++        return true; // SS daemons, harness (taskdefs spawn sites)
++    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
++        return true; // aperiodic / untracked (I-4)
++    if (t.deadline_ticks == 0)
++        return true;
++    return false;
 +}
 +
-+/// @brief EDF order: earlier absolute deadline wins; ties break by higher
-+///        effective priority, then lower id (deterministic; same-period
-+///        tasks dispatch exactly as under fixed priorities).
-+static bool edf_earlier(const TaskControlBlock &a,
-+                        const TaskControlBlock &b) noexcept {
-+    if (a.deadline_ticks != b.deadline_ticks)
-+        return a.deadline_ticks < b.deadline_ticks;
-+    uint64_t pa = Scheduler::effective_priority(&a);
-+    uint64_t pb = Scheduler::effective_priority(&b);
-+    if (pa != pb)
-+        return pa > pb;
-+    return a.id < b.id;
++errors::SchedulerError
++Scheduler::check_wcet_locked(const TaskControlBlock &t) noexcept {
++    if (t.wcet_ticks == 0)
++        return errors::SCHED_ERR_OK; // implicit 100%: validated via LUB sum
++    if (t.period_ticks == 0 || t.period_ticks == TaskControlBlock::NO_PERIOD)
++        return errors::SCHED_ERR_WCET_INVALID; // explicit WCET, untracked task
++    if (t.wcet_ticks > t.period_ticks)
++        return errors::SCHED_ERR_WCET_INVALID;
++    return errors::SCHED_ERR_OK;
 +}
 +
-+/// @brief Ordered insert into CPU c's EDF list.  Caller guarantees the task
-+///        is not already queued (guarded anyway — never double-link).
-+static void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
-+    if (t.in_edf_queue_)
-+        return;
-+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
-+    TaskControlBlock *prev = nullptr;
-+    for (TaskControlBlock *c = l.head_; c != nullptr; c = c->edf_next_) {
-+        if (edf_earlier(t, *c))
-+            break;
-+        prev = c;
++errors::SchedulerError Scheduler::admission_check_locked(
++    const TaskControlBlock &candidate, uint64_t *out_util,
++    uint32_t *out_bound) noexcept {
++    // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
++    // I-8 scope text exactly ("periodic non-exempt tasks only").  An
++    // otherwise-exempt task (boot daemon, aperiodic) carrying a stale
++    // explicit WCET must never be rejected — denying a boot daemon would
++    // wedge the boot.  WCET-validity binds only tasks inside the gate.
++    if (admission_exempted(candidate)) {
++        if (out_util != nullptr)
++            *out_util = 0;
++        if (out_bound != nullptr)
++            *out_bound = 0;
++        return errors::SCHED_ERR_OK;
 +    }
-+    t.edf_prev_ = prev;
-+    if (prev != nullptr) {
-+        t.edf_next_ = prev->edf_next_;
-+        prev->edf_next_ = &t;
-+    } else {
-+        t.edf_next_ = l.head_;
-+        l.head_ = &t;
-+    }
-+    if (t.edf_next_ != nullptr)
-+        t.edf_next_->edf_prev_ = &t;
-+    t.in_edf_queue_ = true;
-+}
-+
-+/// @brief Unlink from CPU c's EDF list (no-op when not queued).
-+static void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
-+    if (!t.in_edf_queue_)
-+        return;
-+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
-+    if (t.edf_prev_ != nullptr)
-+        t.edf_prev_->edf_next_ = t.edf_next_;
-+    else
-+        l.head_ = t.edf_next_;
-+    if (t.edf_next_ != nullptr)
-+        t.edf_next_->edf_prev_ = t.edf_prev_;
-+    t.edf_next_ = nullptr;
-+    t.edf_prev_ = nullptr;
-+    t.in_edf_queue_ = false;
-+}
-+
-+/// @brief Re-sort a queued EDF task after its key changed (deadline re-arm,
-+///        priority move).  No-op when not queued.
-+static void edf_resort(TaskControlBlock &t) noexcept {
-+    if (!t.in_edf_queue_)
-+        return;
-+    uint64_t cpu = Scheduler::queue_target(t);
-+    edf_remove(t, cpu);
-+    edf_insert(t, cpu);
-+}
-+
-+/// @brief Re-home a queued task after an eligibility change
-+///        (policy/exempt/period).  Caller holds scheduler_lock_.  The
-+///        running current task is never queued — it re-routes on its next
-+///        enqueue_ready.  Without this, an exempted task stays stranded in
-+///        the EDF list (which then evicts it as ineligible) and is never
-+///        dispatched again (issue #19 boot wedge).
-+static void migrate_dispatch_queue(TaskControlBlock &t) noexcept {
-+    if (&t == Scheduler::current_task())
-+        return;
-+    bool was_queued = t.in_ready_queue_ || t.in_edf_queue_;
-+    if (t.in_ready_queue_) {
-+        Scheduler::rq_task(t).remove(t, t.rq_priority_);
-+        t.in_ready_queue_ = false;
-+    }
-+    if (t.in_edf_queue_)
-+        edf_remove(t, Scheduler::queue_target(t));
-+    if (was_queued)
-+        Scheduler::enqueue_ready(t);
-+}
-+
-+/// @brief Earliest dispatchable EDF task on the calling CPU, or nullptr.
-+///        Lazily drops stale heads (dead/moved/ineligible), mirroring the
-+///        bitmap candidate loop in next_task().
-+static TaskControlBlock *edf_peek_valid_own() noexcept {
-+    uint64_t cpu = Scheduler::sched_cpu();
-+    EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
-+    while (l.head_ != nullptr) {
-+        TaskControlBlock *c = l.head_;
-+        if (c->magic != TaskControlBlock::TCB_MAGIC || !edf_eligible(*c) ||
-+            (c->state != TaskState::READY &&
-+             c->state != TaskState::RUNNING) ||
-+            Scheduler::queue_target(*c) != cpu) {
-+            edf_remove(*c, cpu);
++    errors::SchedulerError w = check_wcet_locked(candidate);
++    if (w != errors::SCHED_ERR_OK)
++        return w;
++    // Numerator rule frozen from the advisory path: explicit WCET, else the
++    // sporadic-server max budget, else remaining_ticks.  S2 note: wcet <=
++    // period <= NO_PERIOD (2^32-1), so wcet*1000000 < 2^63 — no overflow;
++    // period == 0 is excluded above, so the divide is safe.
++    uint64_t total_util = 0;
++    uint64_t real_tasks = 0;
++    for (TaskControlBlock *t = all_tasks_.first_ptr(); t != nullptr;
++         t = all_tasks_.next_ptr(t)) {
++        if (t->id == candidate.id)
++            continue; // re-check safe: never double-count the candidate
++        if (admission_exempted(*t))
 +            continue;
-+        }
-+        return c;
++        ++real_tasks;
++        uint64_t wcet =
++            t->wcet_ticks > 0
++                ? t->wcet_ticks
++                : (t->get_sporadic_server()
++                       ? t->get_sporadic_server()->max_budget()
++                       : t->remaining_ticks);
++        total_util += (wcet * 1000000) / t->period_ticks;
 +    }
-+    return nullptr;
++    ++real_tasks;
++    uint64_t cwcet =
++        candidate.wcet_ticks > 0
++            ? candidate.wcet_ticks
++            : (candidate.get_sporadic_server()
++                   ? candidate.get_sporadic_server()->max_budget()
++                   : candidate.remaining_ticks);
++    total_util += (cwcet * 1000000) / candidate.period_ticks;
++    uint32_t bound = real_tasks <= LIU_LEYLAND_MAX_TASKS
++                         ? LIU_LEYLAND_BOUNDS[real_tasks]
++                         : LIU_LEYLAND_LIMIT;
++    if (out_util != nullptr)
++        *out_util = total_util;
++    if (out_bound != nullptr)
++        *out_bound = bound;
++    if (total_util > bound)
++        return errors::SCHED_ERR_ADMISSION_DENIED;
++    return errors::SCHED_ERR_OK;
 +}
 +
-+/// @brief The EDF task that should preempt the current task, or nullptr.
-+///        Shared by needs_switch(), next_task() and reschedule() so the
-+///        arm and the dispatch decision can never disagree.
-+static TaskControlBlock *edf_preempt_candidate() noexcept {
-+    TaskControlBlock *e = edf_peek_valid_own();
-+    if (e == nullptr)
-+        return nullptr;
-+    TaskControlBlock *cur = Scheduler::current_task();
-+    if (!cur || cur->magic != TaskControlBlock::TCB_MAGIC)
-+        return e;
-+    if (cur->state != TaskState::READY && cur->state != TaskState::RUNNING)
-+        return e;
-+    if (!edf_eligible(*cur))
-+        return e;
-+    if (e != cur && edf_earlier(*e, *cur))
-+        return e;
-+    return nullptr;
-+}
-+
- uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
-     // FIX(sched-race): t->priority and t->sporadic_server->state_ are plain
-     // (non-atomic, non-volatile) fields mutated concurrently by the timer ISR
-@@ -370,10 +524,25 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
-         }
-         target = 0;
-     }
-+    // Issue #19: EDF-eligible tasks dispatch from the deadline-ordered
-+    // list, never the bitmap.  Single routing point — a task is in at
-+    // most one queue; cross-queue moves unlink first (S2 guard).
-+    if (edf_eligible(task)) {
-+        if (task.in_ready_queue_) {
-+            rq_for(target).remove(task, task.rq_priority_);
-+            task.in_ready_queue_ = false;
-+        }
-+        edf_insert(task, target);
-+        return;
+ // ---------------------------------------------------------------------------
+ // Init / lifecycle
+ // ---------------------------------------------------------------------------
+@@ -1543,6 +1638,10 @@ void Scheduler::add_task(TaskControlBlock &task) {
+     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
+                  task.id, task.priority);
+ 
++    // Issue #20: legacy ADVISORY path — warn-only by design (void return
++    // cannot report denial; silently deferring would break every caller
++    // that assumes enqueue).  New production paths (fork, exec) and all
++    // admission-sensitive code must use add_task_err(), the enforced gate.
+     // Liu-Leyland LUB admission test
+     if (task.period_ticks > 0 && task.period_ticks <= 100) {
+         uint64_t total_util = 0;
+@@ -4399,12 +4498,34 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
+         return SCHED_ERR_TABLE_FULL;
+     if (id_table_find(task.id) != nullptr)
+         return SCHED_ERR_DUPLICATE_ID;
++    // Issue #20: enforced admission BEFORE any mutation — a denial leaves
++    // tables, queues, and the ResourceTracker untouched (fail-closed); the
++    // caller retries later (defer) or frees the TCB.  Logging stays outside
++    // the helper (allocation-free path); one warn here is cold-path only.
++    uint64_t util = 0;
++    uint32_t bound = 0;
++    SchedulerError adm = admission_check_locked(task, &util, &bound);
++    if (adm != SCHED_ERR_OK) {
++        Logger::warn("Scheduler: admission denied task %u (err=%u, "
++                     "util=%u > bound=%u)",
++                     task.id, static_cast<uint64_t>(adm), util, bound);
++        return adm;
 +    }
-+    if (task.in_edf_queue_)
-+        edf_remove(task, target);
-     rq_for(target).enqueue(task, effective_priority(&task));
- }
- 
- void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
-+    if (task.in_edf_queue_)
-+        edf_remove(task, queue_target(task));
-     rq_task(task).remove(task, effective_priority(&task));
- }
- 
-@@ -386,6 +555,12 @@ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
- // causing missed preemptions or priority inversion.
- void Scheduler::move_priority(TaskControlBlock &task, uint64_t old_prio,
-                                uint64_t new_prio) noexcept {
-+    // Issue #19: EDF tasks are not bitmap members — re-sort the deadline
-+    // list instead (priority feeds the tie-break), never touch the bitmap.
-+    if (task.in_edf_queue_) {
-+        edf_resort(task);
-+        return;
-+    }
-     rq_task(task).move_priority(task, old_prio, new_prio);
- }
- 
-@@ -676,7 +851,14 @@ void Scheduler::mailbox_drain() noexcept {
-             task->state == TaskState::REAPED)
-             continue;
-         task->state = TaskState::READY;
--        rq_task(*task).enqueue(*task, effective_priority(task));
-+        // Issue #19: route through enqueue_ready so EDF-eligible tasks
-+        // land in the deadline list (a direct bitmap enqueue here would
-+        // strand an EDF task in the wrong queue).
-+        task->in_ready_queue_ = false;
-+        task->in_edf_queue_ = false;
-+        task->edf_next_ = nullptr;
-+        task->edf_prev_ = nullptr;
-+        enqueue_ready(*task);
-     }
- }
- 
-@@ -1138,10 +1320,14 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-     // orphan the task until the next lazy rebuild, causing the calling
-     // test's tight `while (state != TERMINATED) reschedule();` loop to
-     // constantly dequeue → lazy-rebuild → dequeue (infinite livelock).
--    auto *next = rq_own().peek_highest();
--        if (next && next != &task) {
--            switch_to_task(&task, *next, nullptr);
--        }
-+    // Issue #19: consult the EDF queue first — it is invisible to the
-+    // bitmap peek, and stranding an EDF successor wedges the same way.
-+    auto *next = edf_peek_valid_own();
-+    if (next == nullptr)
-+        next = rq_own().peek_highest();
-+    if (next && next != &task) {
-+        switch_to_task(&task, *next, nullptr);
-+    }
-     }
- }
- 
-@@ -1156,6 +1342,62 @@ void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
-     out.wcet_ticks = task.wcet_ticks;
- }
- 
-+bool Scheduler::set_sched_policy(TaskControlBlock &task,
-+                                 SchedPolicy policy) noexcept {
-+    arch::IrqGuard irq_guard{};
-+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-+    if (policy == SchedPolicy::EDF) {
-+        // Fail-closed: EDF without a finite deadline is meaningless.
-+        if (task.period_ticks == 0 ||
-+            task.period_ticks == TaskControlBlock::NO_PERIOD ||
-+            task.deadline_ticks == 0)
-+            return false;
-+    }
-+    task.sched_policy = policy;
-+    // Migrate queue membership to the new eligibility (issue #19).
-+    migrate_dispatch_queue(task);
-+    return true;
-+}
-+
-+void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
-+    arch::IrqGuard irq_guard{};
-+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-+    task.edf_exempt = exempt;
-+    // Same migration as a policy change: an exempted task must leave the
-+    // EDF list for the bitmap (and vice versa), or it is stranded.
-+    migrate_dispatch_queue(task);
-+}
-+
-+void Scheduler::assign_deadline_priority(TaskControlBlock &task) noexcept {
-+    // Deadline-monotonic: shorter relative deadline (period) maps to a
-+    // higher fixed priority.  Log2 compression maps the unbounded period
-+    // domain into the DM band; the clamp keeps idle/background (0-1) and
-+    // system (121-127) bands intact.  Aperiodic tasks are not assignable.
-+    if (task.period_ticks == 0 ||
-+        task.period_ticks == TaskControlBlock::NO_PERIOD)
-+        return;
-+    uint64_t lz = 0;
-+    for (uint64_t p = task.period_ticks; (p >> (lz + 1)) > 0 && lz < 63;
-+         ++lz) {
-+    }
-+    uint64_t span = CONFIG_DM_PRIO_MAX - CONFIG_DM_PRIO_MIN;
-+    uint64_t prio = (lz >= span)
-+                        ? CONFIG_DM_PRIO_MIN
-+                        : CONFIG_DM_PRIO_MAX - lz;
-+    if (prio == task.priority)
-+        return;
-+    arch::IrqGuard irq_guard{};
-+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-+    task.priority = prio;
-+    task.base_priority = prio;
-+    // Re-bucket (bitmap) or re-sort (EDF tie-break) so the new value
-+    // takes effect immediately (FIX rms-o1 contract).
-+    if (task.in_edf_queue_)
-+        edf_resort(task);
-+    else if (task.in_ready_queue_)
-+        rq_task(task).move_priority(task, task.rq_priority_, prio);
-+}
-+
- TaskControlBlock *const Scheduler::ID_TOMBSTONE =
-     reinterpret_cast<TaskControlBlock *>(static_cast<uintptr_t>(1));
- 
-@@ -1286,10 +1528,16 @@ void Scheduler::add_task(TaskControlBlock &task) {
+     all_tasks_.append(task);
      if (task.period_ticks > 0 && task.deadline_ticks > 0) {
          deadline_list_.insert(task);
      }
-+    // Issue #19: route through enqueue_ready so EDF-eligible tasks land in
-+    // the deadline-ordered list.  A direct bitmap enqueue here would make
-+    // every new deadline task priority-dispatched (EDF silently dead).
-     task.in_ready_queue_ = false;
-     task.runq_next_ = nullptr;
-     task.runq_prev_ = nullptr;
+     ENSURE(id_table_insert(task.id, &task) && "id_table full in add_task_err");
 -    rq_task(task).enqueue(task, effective_priority(&task));
++    // Issue #19/#20: single routing point via enqueue_ready (the old direct
++    // bitmap enqueue was EDF-blind — every deadline task dispatched by
++    // priority).  id_table_ membership precedes enqueue (H2 orphan guard).
++    task.in_ready_queue_ = false;
++    task.runq_next_ = nullptr;
++    task.runq_prev_ = nullptr;
 +    task.in_edf_queue_ = false;
 +    task.edf_next_ = nullptr;
 +    task.edf_prev_ = nullptr;
 +    enqueue_ready(task);
      kernel::test::ResourceTracker::instance().track_task_add();
- 
-     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
-@@ -1486,6 +1734,13 @@ bool Scheduler::needs_switch() noexcept {
-         current->state != TaskState::RUNNING)
-         return true;
- 
-+    // Issue #19: earlier-deadline EDF preemption.  Cross-class comparison
-+    // stays priority-based below, so exempt/system tasks keep exact
-+    // current behavior — EDF only ADDS a preemption source, never removes
-+    // the bitmap one.
-+    if (edf_preempt_candidate() != nullptr)
-+        return true;
-+
-     uint64_t cur_eff = effective_priority(current);
-     // O(1): check if any higher-priority task exists in the ready queue
-     uint64_t highest_ready = rq_own().highest_ready_priority();
-@@ -1496,6 +1751,13 @@ TaskControlBlock *Scheduler::next_task() noexcept {
-     if (all_tasks_.size() <= 1)
-         return own_idle();
- 
-+    // Issue #19: the EDF candidate agreed with needs_switch() — dispatch
-+    // it first so the arm and the decision can never disagree.
-+    if (auto *edf_next = edf_preempt_candidate()) {
-+        edf_remove(*edf_next, sched_cpu());
-+        return edf_next;
-+    }
-+
-     {
-         // Issue #25 C1: dequeue from the OWN queue only (no stealing);
-         // candidates not affine here are skipped (defense-in-depth).
-@@ -2121,6 +2383,9 @@ void Scheduler::on_tick() noexcept {
-                     // Issue #21: new period, fresh budget clock (this
-                     // tick was already billed into the old period above).
-                     task->exec_period_ns = 0;
-+                    // Issue #19: the absolute deadline moved — re-sort a
-+                    // queued EDF task so dispatch order tracks it.
-+                    edf_resort(*task);
- #if CONFIG_DEADLINE_MISS_DETECTION && !CONFIG_DEADLINE_MONITOR_TASK
-                     task->deadline_ticks += task->period_ticks;
-                     task->deadline_missed = false;
-@@ -2292,8 +2557,10 @@ void Scheduler::on_tick() noexcept {
-                     uint64_t old_eff = effective_priority(t);
-                     ss->process_replenishments(current_tick);
-                     uint64_t new_eff = effective_priority(t);
-+                    // Issue #19: route through Scheduler::move_priority so
-+                    // EDF-queued tasks re-sort instead of bitmap-moving.
-                     if (old_eff != new_eff && t != cur)
--                        rq_task(*t).move_priority(*t, old_eff, new_eff);
-+                        Scheduler::move_priority(*t, old_eff, new_eff);
-                 }
-                 if (t == cur && ss->is_active()) {
-                     if (!ss->consume(current_tick)) {
-@@ -2562,6 +2829,10 @@ void Scheduler::cleanup_test_tasks() noexcept {
-     set_current_ptr(idle_task_);
-     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-         rq_for(c).reset();
-+    // Issue #19: drop EDF heads with the bitmaps (queued tasks are dead;
-+    // a stale head would dangle at freed blocks).
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+        edf_ready_[c].head_ = nullptr;
-     quiesce_exit();
+     return SCHED_ERR_OK;
  }
- 
-@@ -3283,8 +3554,14 @@ void Scheduler::rate_monotonic_schedule() noexcept {
-         (is_test_active() && harness_task_ptr_ != nullptr &&
-          current == harness_task_ptr_ &&
-          current->state == TaskState::RUNNING);
-+    // Issue #19: EDF urgency overrides harness protection (same
-+    // switch_to_task machinery as priority preemption — the harness is
-+    // requeued to the bitmap and resumes when the EDF queue drains).
-+    // Without this, an EDF-ready task never preempts a spinning harness
-+    // once need_resched is clear (bitmap is blind to the EDF queue).
-     if (harness_nonpreempt &&
--        !__atomic_load_n(&Scheduler::SwSlots::need_resched(), __ATOMIC_ACQUIRE)) {
-+        !__atomic_load_n(&Scheduler::SwSlots::need_resched(), __ATOMIC_ACQUIRE) &&
-+        edf_preempt_candidate() == nullptr) {
-         uint64_t cur_prio = effective_priority(current);
-         uint64_t highest_ready = rq_own().highest_ready_priority();
-         if (highest_ready < cur_prio)
-@@ -3359,6 +3636,12 @@ void Scheduler::reschedule() noexcept {
-     // the switch is deferred (INV-4) and the actual dequeue happens in
-     // rate_monotonic_schedule() -> next_task() on the next timer tick.
-     auto *next = rq_own().peek_highest();
-+    // Issue #19: an EDF arrival preempts even when the bitmap peek shows
-+    // nothing better — the bitmap cannot see the EDF queue.  Arm
-+    // unconditionally: bitmap-head early returns below (idle/non-READY
-+    // head) must never swallow EDF urgency.  A spurious arm is harmless —
-+    // next_task() re-validates on the tick.
-+    bool edf_preempt = (edf_preempt_candidate() != nullptr);
- #if defined(CONFIG_DEBUG_IPC_SCHED)
-     {
-         IPC_SCHED_TRACE("[RS]", "cur=", current->id, "next=",
-@@ -3367,14 +3650,23 @@ void Scheduler::reschedule() noexcept {
-                         "nt=", (uint64_t)all_tasks_.size());
-     }
- #endif
--    if (!next || next == current)
-+    if (edf_preempt) {
-+        __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                         __ATOMIC_RELEASE);
-         return;
-+    }
- 
--    if (next == own_idle() && current->state == TaskState::RUNNING)
-+    if ((!next || next == current))
-         return;
- 
--    if (next->state != TaskState::READY && next->state != TaskState::RUNNING)
--        return;
-+    if (next != nullptr) {
-+        if (next == own_idle() && current->state == TaskState::RUNNING)
-+            return;
-+
-+        if (next->state != TaskState::READY &&
-+            next->state != TaskState::RUNNING)
-+            return;
-+    }
- 
-     // IrqGuard destructor re-enables IRQs here, allowing the timer ISR to
-     // fire and acquire scheduler_lock_ for rate_monotonic_schedule().
-@@ -3607,20 +3899,27 @@ void Scheduler::reset_ready_queue() noexcept {
- void Scheduler::rebuild_ready_queue() noexcept {
-     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-         rq_for(c).reset();
-+    // Issue #19: EDF heads must reset exactly like the bitmap queues.
-+    // Re-inserting below without clearing links the same task twice
-+    // (stale neighbor links + fresh insert) — a list cycle that hangs
-+    // the timer ISR on its next scan.
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+        edf_ready_[c].head_ = nullptr;
-     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
-         if (t->magic != TaskControlBlock::TCB_MAGIC)
-             continue;
-+        // Clear membership first (enqueue refuses already-flagged nodes).
-+        // Issue #19: route through enqueue_ready so EDF-eligible tasks
-+        // land in the deadline list, not the bitmap (direct bitmap
-+        // enqueue here would corrupt dispatch).
-+        t->in_ready_queue_ = false;
-+        t->in_edf_queue_ = false;
-+        t->runq_next_ = nullptr;
-+        t->runq_prev_ = nullptr;
-+        t->edf_next_ = nullptr;
-+        t->edf_prev_ = nullptr;
-         if (t->state == TaskState::READY) {
--            // Clear the flag first: enqueue() (TaskQueue::push_back) refuses to
--            // re-add a node whose flag is already set, which would otherwise
--            // leave the task out of the physical queue while the flag wrongly
--            // claims membership.
--            t->in_ready_queue_ = false;
--            rq_task(*t).enqueue(*t, effective_priority(t));
--        } else {
--            t->in_ready_queue_ = false;
--            t->runq_next_ = nullptr;
--            t->runq_prev_ = nullptr;
-+            enqueue_ready(*t);
-         }
-     }
- }
-@@ -3649,6 +3948,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
-     (void)rq_bitmap_lo;
-     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-         rq_for(c).reset();
-+    // Issue #19: EDF heads are rebuilt from membership flags at the end
-+    // of restore_task_fields — clear here so no stale head survives.
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
-+        edf_ready_[c].head_ = nullptr;
- 
-     {
- #if defined(CONFIG_ARCH_X86_64)
-@@ -3728,6 +4031,11 @@ void Scheduler::capture_task_fields(TaskFields *out) {
-         out[idx].runq_prev = t->runq_prev_;
-         out[idx].in_ready_queue = t->in_ready_queue_;
-         out[idx].rq_priority = t->rq_priority_;
-+        out[idx].edf_next = t->edf_next_;
-+        out[idx].edf_prev = t->edf_prev_;
-+        out[idx].in_edf_queue = t->in_edf_queue_;
-+        out[idx].sched_policy = t->sched_policy;
-+        out[idx].edf_exempt = t->edf_exempt;
-         out[idx].cpu_affinity = t->cpu_affinity;
-         out[idx].iopb_slot = t->iopb_slot_;
-         ++idx;
-@@ -3811,12 +4119,30 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             t->runq_prev_ = saved[j].runq_prev;
-             t->in_ready_queue_ = saved[j].in_ready_queue;
-             t->rq_priority_ = saved[j].rq_priority;
-+            t->edf_next_ = saved[j].edf_next;
-+            t->edf_prev_ = saved[j].edf_prev;
-+            t->in_edf_queue_ = saved[j].in_edf_queue;
-+            t->sched_policy = saved[j].sched_policy;
-+            t->edf_exempt = saved[j].edf_exempt;
-             t->cpu_affinity = saved[j].cpu_affinity;
-             t->iopb_slot_ = saved[j].iopb_slot;
-             break;
-         }
-         ++t_idx;
-     }
-+    // Issue #19: rebuild EDF heads from the restored membership flags.
-+    // Order is re-derived by ordered insert (deterministic function of the
-+    // keys); bitmap heads come from restore_pod(), EDF has no POD — the
-+    // flags are authoritative.
-+    for (auto *t = all_tasks_.first_ptr(); t;
-+         t = all_tasks_.next_ptr(t)) {
-+        if (t->magic != TaskControlBlock::TCB_MAGIC || !t->in_edf_queue_)
-+            continue;
-+        t->in_edf_queue_ = false; // edf_insert refuses flagged nodes
-+        t->edf_next_ = nullptr;
-+        t->edf_prev_ = nullptr;
-+        edf_insert(*t, queue_target(*t));
-+    }
- }
- 
- // ---------------------------------------------------------------------------
 diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index d64c6e7a..1e48d9a5 100644
+index 1e48d9a5..08260570 100644
 --- a/src/kernel/task/scheduler.hpp
 +++ b/src/kernel/task/scheduler.hpp
-@@ -207,6 +207,23 @@ class Scheduler {
-     ///        first when it is the running task so the sample includes time
-     ///        up to the call (charge-before-read).
-     static void read_times(TaskControlBlock &task, TaskTimes &out) noexcept;
-+    /// @brief Force a task's dispatch class (issue #19, global EDF with
-+    ///        exemptions).  EDF without a finite deadline is refused
-+    ///        (fail-closed).  Migrates live queue membership to the new
-+    ///        eligibility; the running current re-routes on next enqueue.
-+    /// @return True on success, false when EDF was requested without a
-+    ///         finite deadline.
-+    static bool set_sched_policy(TaskControlBlock &task,
-+                                 SchedPolicy policy) noexcept;
-+    /// @brief Exempt (or un-exempt) a task from EDF dispatch (issue #19).
-+    ///        Migrates live queue membership like set_sched_policy, so a
-+    ///        task exempted after queueing is never stranded.
-+    static void set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept;
-+    /// @brief Deadline-monotonic priority assignment (issue #19): shorter
-+    ///        relative deadline maps to a higher fixed priority inside the
-+    ///        DM band (CONFIG_DM_PRIO_MIN..MAX).  Aperiodic tasks are not
-+    ///        assignable (no-op).  Re-buckets/re-sorts immediately.
-+    static void assign_deadline_priority(TaskControlBlock &task) noexcept;
-     /// @brief True for real-time tasks (strict period set, issue #61).
-     ///        Periodic tasks never migrate; NO_PERIOD/aperiodic may.
-     static bool is_rt_task(const TaskControlBlock &task) noexcept;
-@@ -524,6 +541,14 @@ class Scheduler {
-         TaskControlBlock *runq_prev;
-         bool in_ready_queue;
-         uint64_t rq_priority;
-+        /// @brief EDF-ready intrusive list pointers + membership (issue
-+        ///        #19, POD copy — same in-place rationale as runq links).
-+        TaskControlBlock *edf_next;
-+        TaskControlBlock *edf_prev;
-+        bool in_edf_queue;
-+        /// @brief Dispatch policy + exemption (issue #19).
-+        SchedPolicy sched_policy;
-+        bool edf_exempt;
-         /// @brief CPU affinity bitmask (issue #25 C1).
-         uint64_t cpu_affinity;
-         uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
-@@ -692,14 +717,19 @@ class Scheduler {
-     }
-     /// @brief True when t is physically queued on CPU c's ready queue
-     ///        (issue #25 C1 test accessor; scans c's buckets, no mutation).
-+    ///        Issue #19: also true for EDF-queued tasks (deadline list,
-+    ///        per-CPU by affinity target) — placement is queue-agnostic.
-     static bool is_queued_on(const TaskControlBlock &t, uint64_t cpu) noexcept {
--        if (!t.in_ready_queue_)
-+        if (t.in_ready_queue_) {
-+            const ReadyQueueManager &rq = ready_queues_[cpu % CONFIG_MAX_CPUS];
-+            for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p) {
-+                if (rq.queue(p).contains(t))
-+                    return true;
-+            }
-             return false;
--        const ReadyQueueManager &rq = ready_queues_[cpu % CONFIG_MAX_CPUS];
--        for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING; ++p) {
--            if (rq.queue(p).contains(t))
--                return true;
-         }
-+        if (t.in_edf_queue_)
-+            return queue_target(t) == (cpu % CONFIG_MAX_CPUS);
-         return false;
-     }
-     /// @brief Current task on CPU c (issue #25 C1 test accessor).
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index ebebefbf..b4678f8a 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -946,6 +946,11 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-     tcb->exec_stamp_ns = 0;
-+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19: memset already zero
-+    tcb->edf_exempt = false;               // (AUTO=0); explicit for clarity
-+    tcb->edf_next_ = nullptr;
-+    tcb->edf_prev_ = nullptr;
-+    tcb->in_edf_queue_ = false;
-     tcb->remaining_ticks = period_ticks;
-     tcb->wcet_ticks = 0;
-     tcb->wcet_overrun_fired = false;
-@@ -1165,6 +1170,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-     tcb->exec_stamp_ns = 0;
-+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (AUTO=0; explicit)
-+    tcb->edf_exempt = false;
-+    tcb->edf_next_ = nullptr;
-+    tcb->edf_prev_ = nullptr;
-+    tcb->in_edf_queue_ = false;
-     tcb->remaining_ticks = period_ticks;
-     tcb->memory_budget_pages_ = 0;
-     tcb->memory_used_pages_ = 0;
-@@ -1357,6 +1367,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     tcb->exec_ns_total = 0;
-     tcb->exec_period_ns = 0;
-     tcb->exec_stamp_ns = 0;
-+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (clone starts AUTO;
-+    tcb->edf_exempt = false;               // no policy inheritance)
-+    tcb->edf_next_ = nullptr;
-+    tcb->edf_prev_ = nullptr;
-+    tcb->in_edf_queue_ = false;
-     tcb->remaining_ticks = parent->remaining_ticks;
-     tcb->exit_code = 0;
-     tcb->waiting_child_pid = 0;
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 62fefde7..8e568afc 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -192,6 +192,11 @@ struct TaskTimes {
-     uint64_t wcet_ticks;     ///< configured WCET bound (0 = implicit 100%)
- };
+@@ -118,7 +118,36 @@ class Scheduler {
+     /// @return SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if task table is
+     /// full,
+     ///         SCHED_ERR_DUPLICATE_ID if task ID already exists.
++    ///         Issue #20: additionally SCHED_ERR_WCET_INVALID (WCET exceeds
++    ///         period or period untracked) and SCHED_ERR_ADMISSION_DENIED
++    ///         (Liu-Leyland bound would be exceeded).  Denial happens BEFORE
++    ///         any table/queue/tracker mutation (zero side effects); the
++    ///         caller owns the TCB and retries later (defer) or frees it.
++    ///         This is the enforced admission path — the void add_task()
++    ///         below retains advisory warn-only semantics for legacy callers
++    ///         that cannot fail.
+     static errors::SchedulerError add_task_err(TaskControlBlock &task);
++    /// @brief Issue #20: WCET validity for one task (allocation-free, no
++    ///        logging).  Caller must hold scheduler_lock_.
++    /// @return SCHED_ERR_OK, or SCHED_ERR_WCET_INVALID when an explicit
++    ///         WCET exceeds its period or is set on an untracked task.
++    static errors::SchedulerError
++    check_wcet_locked(const TaskControlBlock &task) noexcept;
++    /// @brief Issue #20: true when t is excluded from the LUB numerator
++    ///        (idle, corrupt-magic, edf-exempt, aperiodic/NO_PERIOD, or
++    ///        zero deadline — mirrors the I-4 untracked rule).
++    static bool admission_exempted(const TaskControlBlock &task) noexcept;
++    /// @brief Issue #20: Liu-Leyland utilization including the candidate.
++    ///        Caller must hold scheduler_lock_.  Allocation-free integer
++    ///        math, no logging.  The candidate's own live entry (if any)
++    ///        is skipped so re-checks never double-count.
++    /// @param out_util Total scaled utilization (may be nullptr).
++    /// @param out_bound LUB bound for the resulting task count (may be null).
++    /// @return SCHED_ERR_OK, SCHED_ERR_WCET_INVALID, or
++    ///         SCHED_ERR_ADMISSION_DENIED.
++    static errors::SchedulerError
++    admission_check_locked(const TaskControlBlock &candidate,
++                           uint64_t *out_util, uint32_t *out_bound) noexcept;
  
-+/// @brief Dispatch-policy selector (issue #19, global EDF with exemptions).
-+///        AUTO (default): finite-deadline non-exempt tasks dispatch EDF,
-+///        everything else FIXED.  FIXED/EDF force the class explicitly.
-+enum class SchedPolicy { AUTO = 0, FIXED = 1, EDF = 2 };
-+
- /// @brief Task control block — represents a single thread of execution.
- /// @note Includes scheduling parameters, register context, and stack info.
- struct TaskControlBlock {
-@@ -247,7 +252,9 @@ struct TaskControlBlock {
-            base_priority(0), period_ticks(0), deadline_ticks(0),
-            deadline_missed(false), deadline_miss_count(0), executed_ticks(0),
-            remaining_ticks(0), exec_ns_total(0), exec_period_ns(0),
--           exec_stamp_ns(0), wcet_ticks(0), wcet_overrun_fired(false),
-+           exec_stamp_ns(0), sched_policy(SchedPolicy::AUTO),
-+           edf_exempt(false), edf_next_(nullptr), edf_prev_(nullptr),
-+           in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
-           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
-           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
-           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-@@ -303,6 +310,18 @@ struct TaskControlBlock {
-     /// @brief ns_monotonic() sample at the last charge point; the next
-     ///        charge bills (now - stamp) (issue #21).
-     uint64_t exec_stamp_ns;
-+    /// @brief Dispatch class override (issue #19).  AUTO = decided by the
-+    ///        eligibility rule (finite deadline + not exempt -> EDF).
-+    SchedPolicy sched_policy;
-+    /// @brief Exempt from EDF dispatch even with a finite deadline
-+    ///        (issue #19 — daemons, harness/PID 1).
-+    bool edf_exempt;
-+    /// @brief Intrusive links for the per-CPU EDF-ready list (issue #19).
-+    ///        A task is in at most one dispatch queue (bitmap or EDF).
-+    TaskControlBlock *edf_next_;
-+    TaskControlBlock *edf_prev_;
-+    /// @brief True while linked in the EDF-ready list (issue #19).
-+    bool in_edf_queue_;
-     uint64_t
-         wcet_ticks; ///< explicit WCET for utilisation calc; 0 = implicit 100%
-     bool wcet_overrun_fired; ///< latch to fire WCET handler once per period
-diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
-index 026ff494..b34667da 100644
---- a/src/kernel/task/taskdefs.cpp
-+++ b/src/kernel/task/taskdefs.cpp
-@@ -311,6 +311,10 @@ void reboot_from_table() {
-                     task->init_sporadic_server(def.ss_budget, def.ss_period,
-                                                def.ss_bg_prio,
-                                                def.ss_budget_granularity);
-+                    // Issue #19: daemon servers stay priority-dispatched
-+                    // (exempt from global EDF) — their IPC latency budget
-+                    // is governed by fixed priorities + admission (#20).
-+                    Scheduler::set_edf_exempt(*task, true);
-                 }
-             }
-             break;
-@@ -358,6 +362,11 @@ void reboot_from_table() {
-         auto *init_task = Scheduler::find_task(1);
-         if (init_task) {
-             Scheduler::set_harness_task(init_task);
-+            // Issue #19: PID 1 stays priority-dispatched (exempt from
-+            // global EDF) — preserves the BUGS#021 non-preemption guard
-+            // under the new dispatcher.  Migrates the live queue
-+            // membership (init was EDF-queued at add_task time).
-+            Scheduler::set_edf_exempt(*init_task, true);
-         }
-     }
+     /// @brief Removes a task from the scheduler's run queue.
+     /// @param task Reference to the task to remove.
+diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
+index e7bf1df0..2bb1baf5 100644
+--- a/src/kernel/task/scheduler_errors.hpp
++++ b/src/kernel/task/scheduler_errors.hpp
+@@ -40,7 +40,9 @@ namespace kernel::errors {
+     X(ZOMBIE, 8, "Task is a zombie (freed but not reaped)")                    \
+     X(INVALID_MAGIC, 9, "Task control block magic invalid")                    \
+     X(NO_SHELL, 10, "Shell task not set")                                      \
+-    X(INVALID_ARGS, 11, "Invalid arguments")
++    X(INVALID_ARGS, 11, "Invalid arguments")                                   \
++    X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
++    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
  
+ /// @brief Error codes returned by scheduler operations.
+ // NOLINTNEXTLINE(performance-enum-size)
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index dd0754bd..0a466e56 100644
+index 0a466e56..a183452c 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1260,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21)
-+    {"all",                1267,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19)
+-    {"all",                1267,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19)
++    {"all",                1408,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 134 cross-arch/filtered registrations (TCOUNT actual 1408, executed 1393)
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -264,6 +264,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"hrt_monotonic",         5,    0,       0      },  // HRT monotonic clock: calibrate fail-closed + ns monotonicity + source validity + test-ticks + oneshot sub-tick (issue #16)
+@@ -265,6 +265,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
      {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
-+    {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
+     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
++    {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
  };
  
  static constexpr size_t k_expected_count_size =
-diff --git a/src/kernel/test/test_ipc.cpp b/src/kernel/test/test_ipc.cpp
-index fe9e57ff..1d4b0f2e 100644
---- a/src/kernel/test/test_ipc.cpp
-+++ b/src/kernel/test/test_ipc.cpp
-@@ -108,6 +108,10 @@ TaskControlBlock *spawn_draining_receiver(uint64_t &recv_ok) {
-         11, 10);
-     if (receiver == nullptr)
-         return nullptr;
-+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
-+    // order (see callers); EDF would reorder by creation-tick phase.
-+    if (!Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED))
-+        return nullptr;
-     receiver->user_data = &rctx;
-     return receiver;
- }
-@@ -546,6 +550,9 @@ JARVIS_TEST(ipc_block_sender_adds_to_list, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-@@ -611,6 +618,9 @@ JARVIS_TEST(ipc_wake_sender_removes_from_list, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-@@ -676,6 +686,9 @@ JARVIS_TEST(ipc_wake_sender_terminated, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-@@ -741,6 +754,9 @@ JARVIS_TEST(ipc_wake_sender_restores_priority, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-@@ -804,6 +820,9 @@ JARVIS_TEST(ipc_send_block_full, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-@@ -855,6 +874,8 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): same-period handshake, priority order.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     g_receiver_id = receiver->id;
- 
-     auto *sender = TaskControlBlock::create(
-@@ -872,6 +893,10 @@ JARVIS_TEST(ipc_send_sync_roundtrip, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): the handshake below assumes the sender
-+    // (prio 12) dispatches before the receiver (prio 11); EDF would order
-+    // by creation-tick deadline phase instead.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     // Add both tasks atomically so the timer ISR always sees both ready
-     // (preventing the receiver from being scheduled before the sender).
-     {
-@@ -950,6 +975,9 @@ JARVIS_TEST(ipc_sender_unblocked_on_receiver_exit, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): IPC rendezvous choreography assumes
-+    // priority order; EDF deadline order would starve the handshake.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-diff --git a/src/kernel/test/test_ipc_blocking.cpp b/src/kernel/test/test_ipc_blocking.cpp
-index 028c2eb0..62c32fc8 100644
---- a/src/kernel/test/test_ipc_blocking.cpp
-+++ b/src/kernel/test/test_ipc_blocking.cpp
-@@ -75,8 +75,10 @@ JARVIS_TEST(ipc_receive_was_blocked_restores_state, "PRE: none | POST: none") {
- // Testidea: Verifies that IPC::send_sync() restores the was_blocked flag
- // correctly. Input: Create sender and receiver tasks. Sender calls send_sync,
- // receiver replies. Expect: was_blocked flag is set during blocking, restored
--// to READY after reply. Depends: kernel::IPC, kernel::MessageQueue,
--// kernel::Scheduler
-+// to READY after reply. The sender runs first deterministically under BOTH
-+// policies (fixed: prio 12 > 11; EDF: shorter period ⇒ earlier deadline,
-+// issue #19) so the receiver's bounded poll always finds the message.
-+// Depends: kernel::IPC, kernel::MessageQueue, kernel::Scheduler
- JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
-             "PRE: none | POST: none") {
-     static uint64_t g_receiver_id = 0;
-@@ -118,7 +120,11 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
-             JARVIS_ASSERT(ok);
-             JARVIS_ASSERT_EQ(99ULL, reply.type);
-         },
--        12, 10);
-+        // Shorter period than the receiver (10): the sender runs first
-+        // deterministically under EDF (earlier deadline) as well as under
-+        // fixed priorities (12 > 11) — issue #19.  Same-period tasks would
-+        // order by creation-tick phase under EDF and flake the handshake.
-+        12, 5);
-     JARVIS_ASSERT(sender != nullptr);
- 
-     // Register both cooperating tasks under one IrqGuard so a timer tick
-@@ -132,9 +138,10 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
-     auto *original = Scheduler::current_task();
-     // Yield to the *receiver* (not the sender): next_task() skips whatever is
-     // current_task_ptr_, so yielding to the receiver makes next_task() return
--    // the higher-priority sender (prio 12 > 11), which runs first, sends, and
--    // blocks; the receiver then runs and replies.  Yielding to the sender would
--    // set it current and get it skipped+discarded, deadlocking the handshake.
-+    // the sender first — by priority (12 > 11) and by deadline (period 5 < 10,
-+    // issue #19).  The sender sends and blocks; the receiver then runs and
-+    // replies.  Yielding to the sender would set it current and get it
-+    // skipped+discarded, deadlocking the handshake.
-     kernel::test::yield_as(*receiver);
- 
-     // Drive the sender→receiver→sender handshake to completion.  A single
-diff --git a/src/kernel/test/test_ipc_extended.cpp b/src/kernel/test/test_ipc_extended.cpp
-index 7218ca73..d4f1667a 100644
---- a/src/kernel/test/test_ipc_extended.cpp
-+++ b/src/kernel/test/test_ipc_extended.cpp
-@@ -180,6 +180,9 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
-+    // order; EDF would order by creation-tick deadline phase.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     receiver->state = TaskState::BLOCKED;
-     Scheduler::register_task(*receiver);
- 
-@@ -218,6 +221,9 @@ JARVIS_TEST(ipc_priority_inversion, "PRE: none | POST: none") {
-         },
-         20, 10);
-     JARVIS_ASSERT(high != nullptr);
-+    // Pinned FIXED (issue #19): must preempt the polling receiver by
-+    // priority; EDF would not preempt an earlier-deadline receiver.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
-     high->user_data = &sctx;
-     Scheduler::add_task(*high);
-     Scheduler::reschedule();
-@@ -402,6 +408,8 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(low != nullptr);
-+    // Pinned FIXED (issue #19): see ipc_priority_inversion above.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
-     low->state = TaskState::BLOCKED;
-     Scheduler::register_task(*low);
- 
-@@ -437,6 +445,9 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
-         },
-         20, 10);
-     JARVIS_ASSERT(high != nullptr);
-+    // Pinned FIXED (issue #19): must preempt the polling receiver by
-+    // priority; EDF would not preempt an earlier-deadline receiver.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
-     high->user_data = &sctx;
-     Scheduler::add_task(*high);
-     Scheduler::reschedule();
-diff --git a/src/kernel/test/test_ipc_fastpath.cpp b/src/kernel/test/test_ipc_fastpath.cpp
-index fe5de347..ff6a9390 100644
---- a/src/kernel/test/test_ipc_fastpath.cpp
-+++ b/src/kernel/test/test_ipc_fastpath.cpp
-@@ -152,8 +152,12 @@ TaskControlBlock *spawn_fast_receiver(FastIpcCtx &ctx) {
-             c->payload_[5] = frame.word(5);
-         },
-         11, 10);
--    if (t)
-+    if (t) {
-+        // Pinned FIXED (issue #19): fast-path rendezvous assumes priority
-+        // order (see callers).
-+        Scheduler::set_sched_policy(*t, SchedPolicy::FIXED);
-         t->user_data = &ctx;
-+    }
-     return t;
- }
- 
-@@ -446,6 +450,8 @@ JARVIS_TEST(fast_send_sync_oversized_reply_stays_queued,
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): same-period handshake, priority order.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
- 
-     auto *receiver = TaskControlBlock::create(
-@@ -531,12 +537,16 @@ JARVIS_TEST(fast_send_full_queue_blocks, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): the woken sender (prio 12) must preempt
-+    // the infinite-loop receiver; EDF would starve it (later deadline).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     fill_queue(*receiver);
-     register_blocked_receiver(*receiver);
-     sctx.peer_id_ = receiver->id;
- 
-     auto *sender = spawn_fast_sender(sctx);
-     JARVIS_ASSERT(sender != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     Scheduler::add_task(*sender);
-     Scheduler::reschedule();
-     while (sender->state != TaskState::BLOCKED)
-@@ -635,6 +645,8 @@ JARVIS_TEST(fast_send_sync_roundtrip, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): same-period handshake, priority order.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
- 
-     auto *receiver = TaskControlBlock::create(
-         []() {
-@@ -665,6 +677,8 @@ JARVIS_TEST(fast_send_sync_roundtrip, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): same-period handshake, priority order.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     sctx.peer_id_ = receiver->id;
-     sender->user_data = &sctx;
-     receiver->user_data = &rctx;
-@@ -850,6 +864,8 @@ JARVIS_TEST(fast_hybrid_mixed_queue, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    // Pinned FIXED (issue #19): same-period handshake, priority order.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
- 
-     {
-diff --git a/src/kernel/test/test_ipc_lock_free.cpp b/src/kernel/test/test_ipc_lock_free.cpp
-index 67f7d6c9..55fd98e2 100644
---- a/src/kernel/test/test_ipc_lock_free.cpp
-+++ b/src/kernel/test/test_ipc_lock_free.cpp
-@@ -130,6 +130,9 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): handshake choreography assumes priority
-+    // order (sender prio 12 first).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     g_receiver_id = receiver->id;
- 
-     auto *sender = TaskControlBlock::create(
-@@ -150,6 +153,7 @@ JARVIS_TEST(ipc_send_sync_no_cli, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     JARVIS_ASSERT(sender->is_user_ == false); // kernel task (MP-1)
- 
-     {
-@@ -192,6 +196,8 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
-     // message arrives — the sender delivers before blocking in send_sync, so
-     // hlt is immediately woken; replies to the sender each round.  hlt (not a
-     // bounded spin) lets the timer ISR dispatch the sender between rounds.
-+    // Pinned FIXED (issue #19): 100-round choreography assumes priority
-+    // order; EDF deadline phase would desync the rendezvous.
-     auto *receiver = TaskControlBlock::create(
-         []() {
-             for (uint64_t i = 0; i < 100; ++i) {
-@@ -209,6 +215,8 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
-             g_receiver_done = 1;
-         },
-         11, 10);
-+    JARVIS_ASSERT(receiver != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
- 
-     // Sender (prio 12): send_sync blocks the sender each round (kernel
-     // reply-wait), so the receiver is dispatched, replies, and the sender
-@@ -231,6 +239,7 @@ JARVIS_TEST(ipc_lock_free_throughput, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     JARVIS_ASSERT(receiver != nullptr);
-     g_receiver_id = receiver->id;
- 
-diff --git a/src/kernel/test/test_ipc_robustness.cpp b/src/kernel/test/test_ipc_robustness.cpp
-index 2c89dafd..e9b972d7 100644
---- a/src/kernel/test/test_ipc_robustness.cpp
-+++ b/src/kernel/test/test_ipc_robustness.cpp
-@@ -186,9 +186,13 @@ TEST_CLASS(IpcConcurrentSenders) {
-     // (ipc.cpp:244) wakes ANY BLOCKED destination, so a gate-blocked receiver
-     // is woken by the first sender, self-terminates, and leaves a freed TCB in
-     // the semaphore waiter list (ROADMAP v0.3.9 teardown gap).  A forever task
--    // is never BLOCKED, so sends never spuriously wake it.
-+    // is never BLOCKED, so sends never spuriously wake it.  Pinned FIXED
-+    // (issue #19): an EDF forever task with the earliest deadline would
-+    // starve the bounded senders (correct EDF — unbounded tasks need
-+    // admission, #20); the senders stay EDF and preempt it by urgency.
-     auto *receiver = kernel::test::create_forever_task(11, 10, "recv-container");
-     CT_ASSERT(receiver != nullptr);
-+    CT_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     Scheduler::reschedule();
-     uint64_t recv_id = receiver->id;
- 
-@@ -435,11 +439,14 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
-     // under one arch::IrqGuard.  The receiver uses an EMPTY lambda — it must
-     // NOT block on a gate: a gate-blocked task stays physically in the ready
-     // queue (INV-2, Semaphore::wait never dequeues) and the scheduler
--    // re-selects it, producing the H2-family runq desync.  The sender (prio
--    // 12) runs first, blocks on the full queue; the receiver then runs its
--    // empty lambda to termination, whose cleanup wakes the blocked sender.
-+    // re-selects it, producing the H2-family runq desync.  Pinned FIXED
-+    // (issue #19): the sender (prio 12) must run first and block on the
-+    // full queue; EDF would order by creation-tick deadline phase and
-+    // could dispatch the receiver first (terminating it before the
-+    // sender blocks, hanging the handshake below).
-     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
-     CT_ASSERT(receiver != nullptr);
-+    CT_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
- 
-     // Fill the receiver's queue so a real sender blocks.
-     Message fill{};
-@@ -475,6 +482,7 @@ TEST_CLASS(IpcBlockedSenderOnReceiverCleanup) {
-         },
-         12, 10);
-     CT_ASSERT(sender != nullptr);
-+    CT_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
-     {
-         arch::IrqGuard _guard;
-@@ -526,12 +534,17 @@ TEST_CLASS(IpcPriorityOrderedWake) {
-         self->msg_queue.push(fill);
- 
-     // 3 senders at distinct priorities (higher number = more urgent).
-+    // Pinned FIXED (issue #19): this test proves PRIORITY-ordered wakeup —
-+    // EDF would order the same-period senders by deadline phase instead.
-     auto *hi = TaskControlBlock::create(ipc_prio_sender_entry, 16, 10);
-     auto *mid = TaskControlBlock::create(ipc_prio_sender_entry, 14, 10);
-     auto *lo = TaskControlBlock::create(ipc_prio_sender_entry, 12, 10);
-     JARVIS_ASSERT(hi != nullptr);
-     JARVIS_ASSERT(mid != nullptr);
-     JARVIS_ASSERT(lo != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hi, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*mid, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*lo, SchedPolicy::FIXED));
-     hi->user_data = &s_wake_flags[0];
-     mid->user_data = &s_wake_flags[1];
-     lo->user_data = &s_wake_flags[2];
-diff --git a/src/kernel/test/test_o1_scheduler.cpp b/src/kernel/test/test_o1_scheduler.cpp
-index 65629867..6debe723 100644
---- a/src/kernel/test/test_o1_scheduler.cpp
-+++ b/src/kernel/test/test_o1_scheduler.cpp
-@@ -244,6 +244,13 @@ JARVIS_TEST(o1_scheduler_dequeues_highest, "PRE: none | POST: none") {
-     SimpleTaskPtr high(TaskControlBlock::create([]() {}, 15, 20));
-     JARVIS_ASSERT(low && high);
- 
-+    // This test targets the O(1) BITMAP dispatcher specifically: pin both
-+    // tasks FIXED so global EDF (issue #19) does not reorder them by
-+    // creation-tick deadline phase.  Same-period tasks would otherwise
-+    // dispatch by deadline skew instead of priority.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
-+
-     // Register AND select under one IrqGuard (cookbook Rule 2): a timer tick
-     // between add_task and next_task would dispatch the prio-15 empty-lambda
-     // task (self-terminates), so next_task() then returns idle.
-diff --git a/src/kernel/test/test_preemption.cpp b/src/kernel/test/test_preemption.cpp
-index f4c14da2..32cc3789 100644
---- a/src/kernel/test/test_preemption.cpp
-+++ b/src/kernel/test/test_preemption.cpp
-@@ -98,6 +98,9 @@ JARVIS_TEST(preemption_needs_switch_higher_priority, "PRE: none | POST: none") {
- JARVIS_TEST(preemption_needs_switch_equal_priority, "PRE: none | POST: none") {
-     auto *equal = TaskControlBlock::create([]() {}, 10, 10);
-     JARVIS_ASSERT(equal != nullptr);
-+    // Pinned FIXED (issue #19): equal-priority no-switch is a fixed-policy
-+    // property; an EDF task would (correctly) preempt a deadline-less task.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*equal, SchedPolicy::FIXED));
-     Scheduler::add_task(*equal);
- 
-     bool result = Scheduler::needs_switch();
-@@ -123,6 +126,11 @@ JARVIS_TEST(preemption_needs_switch_blocked_higher, "PRE: none | POST: none") {
- 
-     auto *child = TaskControlBlock::create(preemption_forever_child_entry, 5, 10);
-     JARVIS_ASSERT(child != nullptr);
-+    // Pinned FIXED (issue #19): this test proves a BLOCKED higher-priority
-+    // task does not force a switch; the forever child must not become an
-+    // EDF task (it would correctly preempt and flip the expectation).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
-     parent->add_child(child);
-     ctx.child_id_ = child->id;
- 
-diff --git a/src/kernel/test/test_process.cpp b/src/kernel/test/test_process.cpp
-index 207fba31..4c46472b 100644
---- a/src/kernel/test/test_process.cpp
-+++ b/src/kernel/test/test_process.cpp
-@@ -370,10 +370,15 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
- JARVIS_TEST(process_cleanup_removes_from_parent, "PRE: none | POST: none") {
-     auto *parent = TaskControlBlock::create([]() {}, 5, 10);
-     JARVIS_ASSERT(parent != nullptr);
-+    // Pinned FIXED (issue #19): fixtures must not dispatch mid-body
-+    // (pre-EDF prio 5 never preempted the harness); an EDF dispatch would
-+    // terminate them and corrupt the list asserts below.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
-     Scheduler::add_task(*parent);
- 
-     auto *child = TaskControlBlock::create([]() {}, 5, 10);
-     JARVIS_ASSERT(child != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
- 
-     parent->add_child(child);
-     JARVIS_ASSERT_EQ(1ULL, parent->num_children);
 diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 6c303608..09e75f1d 100644
+index 09e75f1d..7354b009 100644
 --- a/src/kernel/test/test_registry.cpp
 +++ b/src/kernel/test/test_registry.cpp
-@@ -203,6 +203,7 @@ void register_scheduler_hrt_tests();
- void register_hrt_monotonic_tests();
+@@ -204,6 +204,7 @@ void register_hrt_monotonic_tests();
  void register_timer_wheel_tests();
  void register_task_metering_tests();
-+void register_sched_edf_tests();
+ void register_sched_edf_tests();
++void register_sched_admission_tests();
  void register_syscall_fastpath_tests();
  void register_fpu_inv_tests();
  void register_cap_shm_tests();
-@@ -625,6 +626,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"hrt_monotonic", []() { register_hrt_monotonic_tests(); }},
+@@ -627,6 +628,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      {"timer_wheel", []() { register_timer_wheel_tests(); }},
      {"task_metering", []() { register_task_metering_tests(); }},
-+    {"sched_edf", []() { register_sched_edf_tests(); }},
+     {"sched_edf", []() { register_sched_edf_tests(); }},
++    {"sched_admission", []() { register_sched_admission_tests(); }},
  
      // -- safe: curated subset with TF_RELEASE tests --
      {"safe",
-@@ -851,6 +853,7 @@ static void register_all_tests() {
-     register_hrt_monotonic_tests();
+@@ -854,6 +856,7 @@ static void register_all_tests() {
      register_timer_wheel_tests();
      register_task_metering_tests();
-+    register_sched_edf_tests();
+     register_sched_edf_tests();
++    register_sched_admission_tests();
      register_syscall_fastpath_tests();
      register_fpu_inv_tests();
      register_cap_shm_tests();
-@@ -1015,6 +1018,7 @@ static void register_all_tests_second_half() {
-     register_hrt_monotonic_tests();
+@@ -1019,6 +1022,7 @@ static void register_all_tests_second_half() {
      register_timer_wheel_tests();
      register_task_metering_tests();
-+    register_sched_edf_tests();
+     register_sched_edf_tests();
++    register_sched_admission_tests();
      register_syscall_fastpath_tests();
      register_fpu_inv_tests();
      register_cap_shm_tests();
-diff --git a/src/kernel/test/test_sched_edf.cpp b/src/kernel/test/test_sched_edf.cpp
+diff --git a/src/kernel/test/test_resource_exhaustion.cpp b/src/kernel/test/test_resource_exhaustion.cpp
+index 9f6103f4..d3401499 100644
+--- a/src/kernel/test/test_resource_exhaustion.cpp
++++ b/src/kernel/test/test_resource_exhaustion.cpp
+@@ -86,7 +86,13 @@ TEST_CLASS(FdTableExhaustion) {
+ // Testidea: Create tasks until Scheduler's MAX_TASKS is reached.
+ // Verify the next create/add fails, then cleanup restores capacity.
+ // Input: Create MAX_TASKS tasks (minus existing), attempt one more.
+-// Expect: Last add fails; after cleanup, task_count returns to baseline.
++// Expect: when the fill loop hits exhaustion (created < 64) the extra
++// create fails; when the reaper retires the empty-bodied fill tasks fast
++// enough that capacity is never reached, no rejection is asserted (the
++// premise does not hold) — teardown still verifies count restoration.
++// Issue #20: hardened against the reaper-timing race (extra == nullptr
++// asserted unconditionally failed on clean main whenever the reaper
++// outran the fill loop).
+ TEST_CLASS(TaskLimitReached) {
+     // Non-aborting assertion: records a failure (so the test still fails) but
+     // does NOT return, so subsequent teardown always runs.  The kernel reaper
+@@ -119,22 +125,33 @@ TEST_CLASS(TaskLimitReached) {
+     CHECK_NONFATAL(created > 0);
+     CHECK_NONFATAL(Scheduler::task_count() <= 64);
+ 
+-    // Attempt one more — must be rejected at capacity (create returns null).
++    // Attempt one more — rejected at capacity (create returns null) ONLY
++    // when the fill loop actually hit exhaustion.  If all 64 creates
++    // succeeded, the reaper retired fill tasks fast enough that no capacity
++    // bound was reached, so a further create legitimately succeeds.
++    bool hit_capacity = (created < 64);
+     auto *extra = kernel::test::create_named_task([]() {}, 5, 10, "limit");
+-    CHECK_NONFATAL(extra == nullptr);
++    if (hit_capacity) {
++        CHECK_NONFATAL(extra == nullptr);
++    }
+     if (extra) {
+         kernel::test::terminate_and_drain(*extra);
+     }
+ 
+     // Cleanup all created (unconditional — never skip teardown).
++    // Sanctioned pattern (test_sched_helpers.hpp): terminate_if_live skips
++    // reaped (0xDD-poisoned) and already-terminated tasks, so the reaper
++    // retiring fill tasks mid-test can no longer cause teardown UAF; one
++    // drain reaps all zombies exactly once.  The manual
++    // remove_task+cleanup+delete sequence dereferenced reaped blocks
++    // (remove_task magic-mismatch noise) and hung the class intermittently.
+     for (uint64_t i = 0; i < created; ++i) {
+         if (!tasks[i])
+             continue;
+-        Scheduler::remove_task(*tasks[i]);
+-        tasks[i]->cleanup();
+-        delete tasks[i];
++        kernel::test::terminate_if_live(tasks[i]);
+         tasks[i] = nullptr;
+     }
++    Scheduler::drain_zombie_list();
+ 
+     CHECK_NONFATAL(Scheduler::task_count() == baseline);
+ #undef CHECK_NONFATAL
+diff --git a/src/kernel/test/test_sched_admission.cpp b/src/kernel/test/test_sched_admission.cpp
 new file mode 100644
-index 00000000..bd44cfec
+index 00000000..da88e47d
 --- /dev/null
-+++ b/src/kernel/test/test_sched_edf.cpp
-@@ -0,0 +1,354 @@
++++ b/src/kernel/test/test_sched_admission.cpp
+@@ -0,0 +1,277 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -1256,14 +501,21 @@ index 00000000..bd44cfec
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_sched_edf.cpp
-+/// @brief Deadline-aware preemptive scheduling tests (issue #19, v0.4.8).
++/// @file test_sched_admission.cpp
++/// @brief Enforced admission-control tests (issue #20, v0.4.8).
 +///
-+/// DRIVEN: dispatch order is observed through REAL dispatched tasks — the
-+/// harness never calls Scheduler::next_task()/on_tick() to fake a decision
-+/// and never mutates task deadline/priority fields.  Global EDF (finite
-+/// deadline, non-exempt) is exercised directly; exemptions mirror the
-+/// taskdefs spawn sites.
++/// DRIVEN: admission decisions are observed through REAL add_task_err()
++/// outcomes on live TCBs — the harness never fakes utilization sums and
++/// never mutates scheduler tables.  Denied TCBs are destroyed (never
++/// registered ⇒ teardown no-ops); admitted tasks are terminated + drained.
++/// Background load during tests is zero by construction (init/harness and
++/// SS daemons are edf-exempt, shell/user-app are aperiodic, idle/monitor
++/// are skipped), so explicit-WCET fills give deterministic bounds.
++///
++/// Liveness: every admitted task blocks on a test-local gate semaphore if
++/// ever dispatched.  An empty-lambda entry would self-terminate on the
++/// first timer tick (dispatch race: the task vanishes from the LUB scan
++/// before the next setup call), flaking every multi-task assertion.
 +
 +#include <test.hpp>
 +#include <logger.hpp>
@@ -1278,618 +530,245 @@ index 00000000..bd44cfec
 +#include "test_sched_helpers.hpp"
 +
 +using namespace kernel;
++using kernel::errors::SchedulerError;
 +
 +namespace {
 +
-+/// @brief Dispatch a task for real and wait for genuine termination.
-+static TaskControlBlock *run_edf_task(void (*entry)(), uint64_t prio,
-+                                      uint64_t period) {
-+    auto *t = TaskControlBlock::create(entry, prio, period);
++// Blocks forever on the gate carried via user_data (never posted during
++// setup; posted once at teardown so a dispatched task can finish dying).
++void gated_entry() {
++    auto *self = Scheduler::current_task();
++    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
++    gate->wait();
++}
++
++// Period-`period` task with explicit WCET (utilization = wcet/period).
++TaskControlBlock *make_task(uint64_t wcet, uint64_t period,
++                            sync::Semaphore *gate) {
++    auto *t = TaskControlBlock::create(gated_entry, 11, period);
 +    if (t == nullptr)
 +        return nullptr;
-+    Scheduler::add_task(*t);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
++    t->wcet_ticks = wcet;
++    t->user_data = gate;
 +    return t;
 +}
 +
-+static void release_edf_task(TaskControlBlock *t) {
++// Destroy a TCB that was NEVER admitted (fail-closed ⇒ absent from every
++// table; destroy() teardown paths no-op on absent entries).
++void destroy_denied(TaskControlBlock *t) {
 +    if (t == nullptr)
 +        return;
-+    kernel::test::terminate_if_live(t);
++    JARVIS_ASSERT(Scheduler::find_task(t->id) == nullptr);
++    TaskControlBlock::destroy(t);
 +}
 +
 +} // namespace
 +
 +// Runmode: kernel
-+// Testidea: DM assignment orders shorter deadlines to higher priorities.
-+// Input: Two FIXED tasks (periods 4 and 40); assign_deadline_priority both.
-+// Expect: shorter-period task gets strictly higher priority, both in band.
-+// Depends: Scheduler::assign_deadline_priority (issue #19)
-+JARVIS_TEST(edf_dm_assign_orders_by_deadline, "PRE: none | POST: none") {
-+    auto *short_task = TaskControlBlock::create([]() {}, 11, 4);
-+    auto *long_task = TaskControlBlock::create([]() {}, 11, 40);
-+    JARVIS_ASSERT(short_task != nullptr);
-+    JARVIS_ASSERT(long_task != nullptr);
-+    Scheduler::add_task(*short_task);
-+    Scheduler::add_task(*long_task);
-+    Scheduler::assign_deadline_priority(*short_task);
-+    Scheduler::assign_deadline_priority(*long_task);
-+    JARVIS_ASSERT(short_task->priority > long_task->priority);
-+    JARVIS_ASSERT(short_task->priority <= CONFIG_DM_PRIO_MAX);
-+    JARVIS_ASSERT(long_task->priority >= CONFIG_DM_PRIO_MIN);
-+    release_edf_task(short_task);
-+    release_edf_task(long_task);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: DM assignment clamps extremes into the band, off system bands.
-+// Input: Periods 1 and 0xFFFFFFFE; assign both.
-+// Expect: priorities within [2,120]; never 0/1, never >= 121.
-+// Depends: Scheduler::assign_deadline_priority clamping (issue #19)
-+JARVIS_TEST(edf_dm_assign_clamps_to_band, "PRE: none | POST: none") {
-+    auto *tiny = TaskControlBlock::create([]() {}, 11, 1);
-+    auto *huge =
-+        TaskControlBlock::create([]() {}, 11, 0xFFFFFFFEULL);
-+    JARVIS_ASSERT(tiny != nullptr);
-+    JARVIS_ASSERT(huge != nullptr);
-+    Scheduler::add_task(*tiny);
-+    Scheduler::add_task(*huge);
-+    Scheduler::assign_deadline_priority(*tiny);
-+    Scheduler::assign_deadline_priority(*huge);
-+    JARVIS_ASSERT(tiny->priority >= CONFIG_DM_PRIO_MIN);
-+    JARVIS_ASSERT(tiny->priority <= CONFIG_DM_PRIO_MAX);
-+    JARVIS_ASSERT(huge->priority >= CONFIG_DM_PRIO_MIN);
-+    JARVIS_ASSERT(huge->priority <= CONFIG_DM_PRIO_MAX);
-+    JARVIS_ASSERT(tiny->priority > huge->priority);
-+    release_edf_task(tiny);
-+    release_edf_task(huge);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: earliest absolute deadline dispatches first, priority ignored.
-+// Input: Low-prio task (prio 5, period 4) + high-prio task (prio 60,
-+//        period 400); both READY; reschedule; record run order.
-+// Expect: the prio-5 task runs first (earlier deadline).
-+// Depends: EDF dispatch in next_task (issue #19)
-+JARVIS_TEST(edf_earliest_dispatches_first, "PRE: none | POST: none") {
-+    static volatile uint64_t g_order = 0;
-+    static volatile uint64_t g_early_slot = 0;
-+    static volatile uint64_t g_late_slot = 0;
-+    g_order = 0;
-+    g_early_slot = 0;
-+    g_late_slot = 0;
-+
-+    auto *early = TaskControlBlock::create(
-+        []() {
-+            g_order = g_order + 1;
-+            g_early_slot = g_order;
-+        },
-+        5, 4);
-+    auto *late = TaskControlBlock::create(
-+        []() {
-+            g_order = g_order + 1;
-+            g_late_slot = g_order;
-+        },
-+        60, 400);
-+    JARVIS_ASSERT(early != nullptr);
-+    JARVIS_ASSERT(late != nullptr);
-+    Scheduler::add_task(*early);
-+    Scheduler::add_task(*late);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(early);
-+    kernel::test::wait_for_termination_safe(late);
-+    JARVIS_ASSERT_EQ(1ULL, g_early_slot);
-+    JARVIS_ASSERT_EQ(2ULL, g_late_slot);
-+    release_edf_task(early);
-+    release_edf_task(late);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: an EDF arrival preempts a running FIXED task.
-+// Input: Aperiodic FIXED runner (prio 11) spinning; low-prio EDF task
-+//        (prio 5, period 4) added mid-quantum; reschedule.
-+// Expect: EDF task dispatches while the runner is still mid-quantum
-+//         (priority dispatch alone could never preempt 11 with a 5).
-+// Depends: needs_switch EDF-preemption (issue #19)
-+JARVIS_TEST(edf_preempts_fixed, "PRE: none | POST: none") {
-+    static volatile uint64_t g_progress = 0;
-+    static volatile uint64_t g_edf_saw = 0;
-+    static volatile uint64_t g_edf_ran = 0;
-+    g_progress = 0;
-+    g_edf_saw = 0;
-+    g_edf_ran = 0;
-+
-+    auto *runner = TaskControlBlock::create(
-+        []() {
-+            for (uint64_t i = 0; i < 300000; ++i) {
-+                g_progress = i;
-+                arch::pause();
-+            }
-+        },
-+        11, TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(runner != nullptr);
-+    Scheduler::add_task(*runner);
-+    Scheduler::reschedule();
-+    // Bounded wait for the runner to be genuinely mid-quantum.
-+    for (uint64_t i = 0; i < 10000000 && g_progress <= 1000; ++i)
-+        arch::pause();
-+    JARVIS_ASSERT(g_progress > 1000);
-+
-+    auto *edf = TaskControlBlock::create(
-+        []() {
-+            g_edf_saw = g_progress;
-+            g_edf_ran = 1;
-+        },
-+        5, 4);
-+    JARVIS_ASSERT(edf != nullptr);
-+    Scheduler::add_task(*edf);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(edf);
-+    kernel::test::wait_for_termination_safe(runner);
-+    JARVIS_ASSERT_EQ(1ULL, g_edf_ran);
-+    JARVIS_ASSERT(g_edf_saw > 1000);
-+    release_edf_task(edf);
-+    release_edf_task(runner);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: equal deadlines never thrash or starve.
-+// Input: Two EDF tasks, same period 10, bounded progress loops.
-+// Expect: both terminate with full progress (no livelock/starvation).
-+// Depends: EDF tie-break (priority, then id) (issue #19)
-+JARVIS_TEST(edf_equal_deadlines_no_thrash, "PRE: none | POST: none") {
-+    static volatile uint64_t g_a = 0;
-+    static volatile uint64_t g_b = 0;
-+    g_a = 0;
-+    g_b = 0;
-+
-+    auto *a = TaskControlBlock::create(
-+        []() {
-+            for (uint64_t i = 0; i < 5000; ++i) {
-+                g_a = i;
-+                arch::pause();
-+            }
-+        },
-+        11, 10);
-+    auto *b = TaskControlBlock::create(
-+        []() {
-+            for (uint64_t i = 0; i < 5000; ++i) {
-+                g_b = i;
-+                arch::pause();
-+            }
-+        },
-+        11, 10);
-+    JARVIS_ASSERT(a != nullptr);
-+    JARVIS_ASSERT(b != nullptr);
-+    Scheduler::add_task(*a);
-+    Scheduler::add_task(*b);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(a);
-+    kernel::test::wait_for_termination_safe(b);
-+    JARVIS_ASSERT_EQ(4999ULL, g_a);
-+    JARVIS_ASSERT_EQ(4999ULL, g_b);
-+    release_edf_task(a);
-+    release_edf_task(b);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: exempt tasks stay priority-dispatched under global EDF.
-+// Input: Exempt task X (period 400, prio 60, edf_exempt) + FIXED task Y
-+//        (NO_PERIOD, prio 5); no EDF tasks present; both READY.
-+// Expect: X is bitmap-queued (not EDF-queued) and runs first.
-+// Depends: edf_exempt sites + eligibility rule (issue #19)
-+JARVIS_TEST(edf_exempt_daemon_stays_fixed, "PRE: none | POST: none") {
-+    static volatile uint64_t g_order = 0;
-+    static volatile uint64_t g_x_slot = 0;
-+    static volatile uint64_t g_y_slot = 0;
-+    g_order = 0;
-+    g_x_slot = 0;
-+    g_y_slot = 0;
-+
-+    auto *x = TaskControlBlock::create(
-+        []() {
-+            g_order = g_order + 1;
-+            g_x_slot = g_order;
-+        },
-+        60, 400);
-+    auto *y = TaskControlBlock::create(
-+        []() {
-+            g_order = g_order + 1;
-+            g_y_slot = g_order;
-+        },
-+        5, TaskControlBlock::NO_PERIOD);
-+    JARVIS_ASSERT(x != nullptr);
-+    JARVIS_ASSERT(y != nullptr);
-+    x->edf_exempt = true; // mirrors the taskdefs daemon spawn site
-+    Scheduler::add_task(*x);
-+    Scheduler::add_task(*y);
-+    // White-box proof of the exemption: finite deadline, yet bitmap.
-+    JARVIS_ASSERT(x->in_ready_queue_ == true);
-+    JARVIS_ASSERT(x->in_edf_queue_ == false);
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(x);
-+    kernel::test::wait_for_termination_safe(y);
-+    JARVIS_ASSERT_EQ(1ULL, g_x_slot);
-+    JARVIS_ASSERT_EQ(2ULL, g_y_slot);
-+    release_edf_task(x);
-+    release_edf_task(y);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: a missed deadline recovers — no wedge, future periods run.
-+// Input: EDF task (period 2) genuinely overruns 40 ticks, blocks on a
-+//        gate; scan observes the miss; gate posts; peer EDF task (period
-+//        40) runs briefly.  Both must terminate.
-+// Expect: overrunner miss_count >= 1; both tasks terminate cleanly.
-+// Depends: EDF dispatch + existing miss/reload machinery (issue #19)
-+JARVIS_TEST(edf_missed_deadline_recovers, "PRE: none | POST: none") {
++// Testidea: Liu-Leyland gate denies the task that would overrun the bound.
++// Input: A(p100,w60) admitted (60<=100); B(p100,w60) would total 120>82.
++// Expect: B → SCHED_ERR_ADMISSION_DENIED, absent from id_table_, no leak.
++// Depends: Scheduler::admission_check_locked (issue #20)
++JARVIS_TEST(admission_lub_rejects_overrun, "PRE: none | POST: none") {
 +    sync::Semaphore gate;
 +    gate.init(0, 1);
-+
-+    auto *over = TaskControlBlock::create(
-+        []() {
-+            sync::Semaphore *g = reinterpret_cast<sync::Semaphore *>(
-+                Scheduler::current_task()->user_data);
-+            uint64_t start = arch::Timer::ticks();
-+            while (arch::Timer::ticks() - start < 40)
-+                arch::pause();
-+            g->wait();
-+            while (Scheduler::current_task()->state == TaskState::BLOCKED)
-+                arch::pause();
-+        },
-+        11, 2);
-+    JARVIS_ASSERT(over != nullptr);
-+    over->user_data = &gate;
-+    Scheduler::add_task(*over);
-+    Scheduler::reschedule();
-+    // Unbounded (matches test_deadline_miss.cpp): the task genuinely needs
-+    // 40 ticks before it blocks; a short bound flakes under emulation.
-+    // A real failure to block trips the host watchdog (FAIL, never a hang).
-+    while (over->state != TaskState::BLOCKED)
-+        arch::pause();
-+    JARVIS_ASSERT(over->state == TaskState::BLOCKED);
-+    JARVIS_ASSERT(over->deadline_ticks < arch::Timer::ticks());
-+    kernel::test::trigger_deadline_monitor_scan();
-+    JARVIS_ASSERT(over->deadline_miss_count >= 1);
-+
-+    auto *peer = run_edf_task(
-+        []() {
-+            auto *self = Scheduler::current_task();
-+            while (self->executed_ticks < 2)
-+                arch::pause();
-+        },
-+        11, 40);
-+    JARVIS_ASSERT(peer != nullptr);
-+
++    auto *a = make_task(60, 100, &gate);
++    JARVIS_ASSERT(a != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
++    auto *b = make_task(60, 100, &gate);
++    JARVIS_ASSERT(b != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*b) ==
++                  errors::SCHED_ERR_ADMISSION_DENIED);
++    destroy_denied(b);
 +    gate.post();
-+    kernel::test::wait_for_termination_safe(over);
-+    release_edf_task(peer);
-+    release_edf_task(over);
++    kernel::test::terminate_and_drain(*a);
 +    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
-+void register_sched_edf_tests() {
-+    Logger::info("Registering sched_edf tests");
-+    JARVIS_REGISTER_TEST(edf_dm_assign_orders_by_deadline);
-+    JARVIS_REGISTER_TEST(edf_dm_assign_clamps_to_band);
-+    JARVIS_REGISTER_TEST(edf_earliest_dispatches_first);
-+    JARVIS_REGISTER_TEST(edf_preempts_fixed);
-+    JARVIS_REGISTER_TEST(edf_equal_deadlines_no_thrash);
-+    JARVIS_REGISTER_TEST(edf_exempt_daemon_stays_fixed);
-+    JARVIS_REGISTER_TEST(edf_missed_deadline_recovers);
++// Runmode: kernel
++// Testidea: WCET exceeding the period is a config error, rejected first.
++// Input: C(p100, wcet 200).
++// Expect: C → SCHED_ERR_WCET_INVALID, never counted, no leak.
++// Depends: Scheduler::check_wcet_locked (issue #20)
++JARVIS_TEST(admission_wcet_exceeds_period_rejected,
++            "PRE: none | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *c = make_task(200, 100, &gate);
++    JARVIS_ASSERT(c != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*c) ==
++                  errors::SCHED_ERR_WCET_INVALID);
++    destroy_denied(c);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
 +}
-diff --git a/src/kernel/test/test_scheduler.cpp b/src/kernel/test/test_scheduler.cpp
-index dbe01ea8..c61750e5 100644
---- a/src/kernel/test/test_scheduler.cpp
-+++ b/src/kernel/test/test_scheduler.cpp
-@@ -77,6 +77,9 @@ JARVIS_TEST(scheduler_task_count, "PRE: none | POST: none") {
- 
-     auto *new_task = TaskControlBlock::create([]() {}, 1, 10);
-     JARVIS_ASSERT(new_task != nullptr);
-+    // Pinned FIXED (issue #19): fixture must not dispatch mid-body (see
-+    // scheduler_remove_task below).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*new_task, SchedPolicy::FIXED));
-     Scheduler::add_task(*new_task);
-     JARVIS_ASSERT_EQ(cnt_before + 1, Scheduler::task_count());
- 
-@@ -164,6 +167,10 @@ JARVIS_TEST(scheduler_remove_task, "PRE: none | POST: none") {
- 
-     auto *new_task = TaskControlBlock::create([]() {}, 1, 10);
-     JARVIS_ASSERT(new_task != nullptr);
-+    // Pinned FIXED (issue #19): this fixture must not dispatch mid-body
-+    // (pre-EDF prio 1 never preempted the harness); an EDF dispatch would
-+    // terminate it and corrupt the count asserts below.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*new_task, SchedPolicy::FIXED));
-     Scheduler::add_task(*new_task);
-     JARVIS_ASSERT_EQ(cnt_before + 1, Scheduler::task_count());
- 
-@@ -219,6 +226,12 @@ JARVIS_TEST(scheduler_preemptive_priority, "PRE: none | POST: none") {
-     auto *high = TaskControlBlock::create([]() {}, 15, 5);
-     JARVIS_ASSERT(high != nullptr);
- 
-+    // Pinned FIXED (issue #19): this test proves priority selection through
-+    // next_task(); same-period tasks would otherwise order by creation-tick
-+    // deadline phase under EDF.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*low, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*high, SchedPolicy::FIXED));
 +
-     // IRQs off across both add_task calls + next_task(): both empty-lambda
-     // tasks must stay READY in the queue.  A timer ISR dispatching either one
-     // mid-window would run its empty body and self-terminate it, so next_task()
-diff --git a/src/kernel/test/test_scheduler_hrt.cpp b/src/kernel/test/test_scheduler_hrt.cpp
-index e3ccb2ca..ae7a95f7 100644
---- a/src/kernel/test/test_scheduler_hrt.cpp
-+++ b/src/kernel/test/test_scheduler_hrt.cpp
-@@ -241,6 +241,10 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
- 
-     auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
-     JARVIS_ASSERT(hammer != nullptr);
-+    // Pinned FIXED (issue #19): background-hammer interference model is
-+    // priority-based; an EDF hammer would starve (earliest + never blocks)
-+    // or never run (latest, vacuous pass).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
- 
-     auto *receiver = TaskControlBlock::create(
-         []() {
-@@ -259,6 +263,7 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
-         },
-         20, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     __atomic_store_n(&g_receiver_id, receiver->id, __ATOMIC_RELEASE);
- 
-     auto *measurer = TaskControlBlock::create(
-@@ -316,6 +321,7 @@ JARVIS_TEST(scheduler_hrt_ipc_wake_latency, "PRE: none | POST: none") {
-         },
-         11, 10);
-     JARVIS_ASSERT(measurer != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*measurer, SchedPolicy::FIXED));
- 
-     {
-         arch::IrqGuard guard;
-@@ -367,6 +373,10 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
- 
-     auto *hammer = TaskControlBlock::create([]() { hammerer_entry(); }, 1, 10);
-     JARVIS_ASSERT(hammer != nullptr);
-+    // Pinned FIXED (issue #19): background-hammer interference model is
-+    // priority-based; an EDF hammer would starve (earliest + never blocks)
-+    // or never run (latest, vacuous pass).
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
- 
-     auto *woken = TaskControlBlock::create(
-         []() {
-@@ -384,6 +394,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
-         },
-         30, 10);
-     JARVIS_ASSERT(woken != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*woken, SchedPolicy::FIXED));
-     woken->user_data = &g_gate;
- 
-     auto *measurer = TaskControlBlock::create(
-@@ -442,6 +453,7 @@ JARVIS_TEST(scheduler_hrt_semaphore_wake_latency,
-         },
-         11, 10);
-     JARVIS_ASSERT(measurer != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*measurer, SchedPolicy::FIXED));
- 
-     {
-         arch::IrqGuard guard;
-diff --git a/src/kernel/test/test_stress_hrt.cpp b/src/kernel/test/test_stress_hrt.cpp
-index 48659659..1e0f62ad 100644
---- a/src/kernel/test/test_stress_hrt.cpp
-+++ b/src/kernel/test/test_stress_hrt.cpp
-@@ -184,6 +184,10 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
-     // net-zero memory/IPC activity — every allocation is paired with its free,
-     // every IPC send is a self-roundtrip released before the next.  When off:
-     // idle (hlt) so phase A is unperturbed.  Exits when g_rt_done is set.
-+    // Pinned FIXED (issue #19): the test measures interference from a
-+    // LOW-priority background hammer — a priority-interference model.  As an
-+    // EDF task it would either starve the RT pair (earliest deadline +
-+    // never blocks) or never run (latest deadline, vacuous pass).
-     auto *hammer = TaskControlBlock::create(
-         []() {
-             while (__atomic_load_n(&g_rt_done, __ATOMIC_ACQUIRE) == 0) {
-@@ -212,6 +216,7 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
-         },
-         1, 10);
-     JARVIS_ASSERT(hammer != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*hammer, SchedPolicy::FIXED));
- 
-     // Receiver (prio 29): replies to every RT request.
-     auto *receiver = TaskControlBlock::create(
-@@ -231,6 +236,9 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
-         },
-         29, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED with the hammerer below (issue #19): the RT pair must
-+    // preempt by priority, not by deadline phase.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
-     __atomic_store_n(&g_receiver_id, receiver->id, __ATOMIC_RELEASE);
- 
-     // RT task (prio 30): phase A baseline (hammerer off), phase B stress
-@@ -295,6 +303,7 @@ JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
-         },
-         30, 10);
-     JARVIS_ASSERT(rt != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*rt, SchedPolicy::FIXED));
- 
-     {
-         arch::IrqGuard guard;
-diff --git a/src/kernel/test/test_task_lifecycle.cpp b/src/kernel/test/test_task_lifecycle.cpp
-index a896de83..5cc1a68b 100644
---- a/src/kernel/test/test_task_lifecycle.cpp
-+++ b/src/kernel/test/test_task_lifecycle.cpp
-@@ -110,6 +110,9 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
-     // sender blocks (the same registration-ordering rule as the waitpid test).
-     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
-+    // order; EDF would order by creation-tick deadline phase.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
- 
-     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {
-         kernel::Message fill_msg{};
-@@ -143,6 +146,7 @@ JARVIS_TEST(task_exit_wakes_blocked_senders, "PRE: none | POST: none") {
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
- 
-     // Register both under an IRQ guard so the timer cannot dispatch the
-@@ -211,9 +215,12 @@ JARVIS_TEST(task_reparent_preserves_resources, "PRE: none | POST: none") {
-     JARVIS_ASSERT(parent != nullptr);
- 
-     // Child below harness priority (10) so it stays READY-but-orphaned while
--    // the parent (prio 11) runs and self-terminates.
-+    // the parent (prio 11) runs and self-terminates.  Pinned FIXED
-+    // (issue #19): this priority choreography is the test's premise.
-     auto *child = TaskControlBlock::create([]() {}, 5, 10);
-     JARVIS_ASSERT(child != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
-     parent->add_child(child);
-     JARVIS_ASSERT(parent->num_children == 1);
- 
-@@ -378,6 +385,9 @@ JARVIS_TEST(task_cleanup_frees_msg_queue_with_blocked_senders,
-     // tick can dispatch the receiver before the sender blocks.
-     auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
-     JARVIS_ASSERT(receiver != nullptr);
-+    // Pinned FIXED (issue #19): rendezvous choreography assumes priority
-+    // order; EDF would order by creation-tick deadline phase.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
- 
-     for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i) {
-         Message fill_msg{};
-@@ -411,6 +421,7 @@ JARVIS_TEST(task_cleanup_frees_msg_queue_with_blocked_senders,
-         },
-         12, 10);
-     JARVIS_ASSERT(sender != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
-     sender->user_data = &sctx;
- 
-     {
-diff --git a/src/kernel/test/test_testrunner.cpp b/src/kernel/test/test_testrunner.cpp
-index 8f76c9e9..dcbba857 100644
---- a/src/kernel/test/test_testrunner.cpp
-+++ b/src/kernel/test/test_testrunner.cpp
-@@ -213,11 +213,14 @@ JARVIS_TEST(harness_blocked_sender_wakes,
- 
- // Runmode: kernel
- // Testidea: in_ready_queue_ flag after re-enqueue via the real
--// add_task → remove → set_task_ready lifecycle (real dispatch).
-+// add_task → remove → set_task_ready lifecycle (real dispatch).  Pinned
-+// FIXED (issue #19): the flag under test is bitmap membership, and a
-+// periodic task would otherwise dispatch EDF and never set it.
- JARVIS_TEST(harness_snapshot_inrq_consistency,
-             "PRE: none | POST: none") {
-     auto *t = TaskControlBlock::create([]() {}, 11, 10);
-     JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
-     {
-         // Register + assert membership atomically: a tick firing between
-         // add_task and the assert could dispatch t (prio 11 > harness 10),
-@@ -239,6 +242,7 @@ JARVIS_TEST(harness_snapshot_inrq_consistency,
- 
-     auto *t2 = TaskControlBlock::create([]() {}, 11, 10);
-     JARVIS_ASSERT(t2 != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t2, SchedPolicy::FIXED));
-     {
-         // Same atomicity: no tick may dispatch t2 before the membership
-         // asserts below (see the t registration above).
-@@ -329,9 +333,16 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
-     static constexpr uint64_t CYCLES = 20;
- 
-     for (uint64_t cycle = 0; cycle < CYCLES; ++cycle) {
--        // Simulate the pattern of a typical test: create user tasks
--        auto *sender = TaskControlBlock::create_user([]() {}, 5, 10, 8_KiB);
--        auto *receiver = TaskControlBlock::create_user([]() {}, 5, 10, 8_KiB);
-+        // Simulate the pattern of a typical test: create user tasks.
-+        // NO_PERIOD (issue #19): these kernel lambdas have no user return
-+        // path and must never dispatch (pre-EDF they never ran — worker
-+        // prio 11 always won; under EDF an earlier deadline would dispatch
-+        // them first and they would spin forever).  They exist only as
-+        // page-table owners for the BufferPool free below.
-+        auto *sender = TaskControlBlock::create_user(
-+            []() {}, 5, TaskControlBlock::NO_PERIOD, 8_KiB);
-+        auto *receiver = TaskControlBlock::create_user(
-+            []() {}, 5, TaskControlBlock::NO_PERIOD, 8_KiB);
-         if (!sender || !receiver)
-             continue;
-         Scheduler::add_task(*sender);
-@@ -508,6 +519,11 @@ JARVIS_TEST(harness_buffer_unmap_stale_safe,
- 
-     auto *task = TaskControlBlock::create([]() {}, 5, 10);
-     if (!task) { JARVIS_TEST_PASS(); return; }
-+    // Pinned FIXED (issue #19): this task is a page-table owner, never a
-+    // runner — pre-EDF it never dispatched (harness prio 10 > 5).  Under
-+    // global EDF it would run, terminate, and invalidate the Phase 2/4
-+    // page-table surgery below.
-+    Scheduler::set_sched_policy(*task, SchedPolicy::FIXED);
-     // v0.4.0 MP-1: create() already assigned a private kernel-half PML4 —
-     // do NOT overwrite it (that would leak the create()-allocated page).
-     if (!task->page_table_) { JARVIS_TEST_PASS(); return; }
++// Runmode: kernel
++// Testidea: exemption precedes WCET-validity (audit S3): an untracked
++// (aperiodic) task carrying an explicit WCET is exempt-admitted, never
++// rejected — denying exempt tasks (e.g. boot daemons with stale WCET)
++// would wedge the boot.  WCET-validity binds only gated tasks.
++// Input: D(period 0, wcet 50).
++// Expect: D → SCHED_ERR_OK (excluded from the LUB numerator).
++// Depends: Scheduler::admission_check_locked exemption order (issue #20)
++JARVIS_TEST(admission_wcet_untracked_exempt_admits, "PRE: none | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *d = make_task(50, 0, &gate);
++    JARVIS_ASSERT(d != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*d) == errors::SCHED_ERR_OK);
++    gate.post();
++    kernel::test::terminate_and_drain(*d);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: a lone implicit-100% task exactly meets the n=1 bound.
++// Input: E(p100, wcet 0 → implicit 100); bound(1) == 1000000.
++// Expect: admitted (100 > 100 is false); retry-after-free also admits
++// (defer pattern: denial holds no state, so a later retry succeeds).
++// Depends: Scheduler::admission_check_locked (issue #20)
++JARVIS_TEST(admission_implicit_single_ok_defer_retries,
++            "PRE: none | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *e = make_task(0, 100, &gate);
++    JARVIS_ASSERT(e != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*e) == errors::SCHED_ERR_OK);
++    gate.post();
++    kernel::test::terminate_and_drain(*e);
++    auto *f = make_task(0, 100, &gate);
++    JARVIS_ASSERT(f != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*f) == errors::SCHED_ERR_OK);
++    gate.post();
++    kernel::test::terminate_and_drain(*f);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: create()-time memory admission fails closed when the global
++// budget is exhausted, and recovers fully on release.
++// Input: reserve the entire remaining budget, then create().
++// Expect: create → nullptr; after release, create succeeds again.
++// Depends: TaskControlBlock::create budget gate + init_memory_budget (#20)
++JARVIS_TEST(admission_memory_budget_denied_at_create,
++            "PRE: none | POST: none") {
++#if CONFIG_MEMORY_BUDGET
++    uint64_t avail = Scheduler::remaining_memory_budget();
++    JARVIS_ASSERT(avail > 0);
++    JARVIS_ASSERT(Scheduler::reserve_memory_pages(avail));
++    auto *g = TaskControlBlock::create(gated_entry, 11, 0);
++    JARVIS_ASSERT(g == nullptr); // budget OOM: admission denied at create
++    Scheduler::release_memory_pages(avail);
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *h = make_task(0, 0, &gate);
++    JARVIS_ASSERT(h != nullptr);
++    TaskControlBlock::destroy(h);
++#else
++    // Audit S3: budget APIs exist only under CONFIG_MEMORY_BUDGET (as does
++    // the gate itself) — opt-out builds trivially pass to keep the class
++    // count stable across configurations.
++#endif
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: untracked/exempt tasks admit even when the system is overfull.
++// Input: overfill to a confirmed denial; then aperiodic, NO_PERIOD, and
++// edf-exempt periodic tasks.
++// Expect: all three → SCHED_ERR_OK (excluded from the LUB numerator).
++// Depends: Scheduler::admission_exempted (issue #20)
++JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *a = make_task(60, 100, &gate);
++    JARVIS_ASSERT(a != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
++    auto *full = make_task(60, 100, &gate);
++    JARVIS_ASSERT(full != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*full) ==
++                  errors::SCHED_ERR_ADMISSION_DENIED);
++    destroy_denied(full);
++    auto *ap = make_task(0, 0, &gate);
++    JARVIS_ASSERT(ap != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*ap) == errors::SCHED_ERR_OK);
++    auto *np = make_task(0, TaskControlBlock::NO_PERIOD, &gate);
++    JARVIS_ASSERT(np != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*np) == errors::SCHED_ERR_OK);
++    auto *ex = make_task(90, 100, &gate);
++    JARVIS_ASSERT(ex != nullptr);
++    ex->edf_exempt = true; // mirrors the taskdefs daemon spawn site
++    JARVIS_ASSERT(Scheduler::add_task_err(*ex) == errors::SCHED_ERR_OK);
++    gate.post();
++    gate.post();
++    gate.post();
++    gate.post();
++    kernel::test::terminate_and_drain(*a);
++    kernel::test::terminate_and_drain(*ap);
++    kernel::test::terminate_and_drain(*np);
++    kernel::test::terminate_and_drain(*ex);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: fork under an overfull system fails closed with no leak.
++// Input: dispatched forker(p100,w5) + fill A(p100,w60) = 65%; the forked
++// child (implicit 100%) would total 165 > bound(3) = 72.
++// Expect: sys_fork → -1; parent unaffected; no ResourceTracker delta.
++// Depends: Syscall::sys_fork admission path (issue #20)
++JARVIS_TEST(admission_fork_denied_no_leak, "PRE: none | POST: none") {
++    static volatile uint64_t g_fork_ret = 0;
++    g_fork_ret = 0;
++    sync::Semaphore gate;
++    gate.init(0, 1);
++    auto *fill = make_task(60, 100, &gate);
++    JARVIS_ASSERT(fill != nullptr);
++    JARVIS_ASSERT(Scheduler::add_task_err(*fill) == errors::SCHED_ERR_OK);
++    auto *forker = TaskControlBlock::create(
++        []() {
++            uint64_t regs[22] = {};
++            g_fork_ret = Syscall::handle(
++                static_cast<uint64_t>(SyscallNumber::FORK), 0, 0, 0, 0, regs);
++        },
++        11, 100);
++    JARVIS_ASSERT(forker != nullptr);
++    forker->wcet_ticks = 5;
++    Scheduler::add_task(*forker);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(forker);
++    JARVIS_ASSERT(g_fork_ret == static_cast<uint64_t>(-1));
++    kernel::test::terminate_if_live(forker);
++    gate.post();
++    kernel::test::terminate_and_drain(*fill);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++void register_sched_admission_tests() {
++    Logger::info("Registering sched_admission tests");
++    JARVIS_REGISTER_TEST(admission_lub_rejects_overrun);
++    JARVIS_REGISTER_TEST(admission_wcet_exceeds_period_rejected);
++    JARVIS_REGISTER_TEST(admission_wcet_untracked_exempt_admits);
++    JARVIS_REGISTER_TEST(admission_implicit_single_ok_defer_retries);
++    JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_create);
++    JARVIS_REGISTER_TEST(admission_exemptions_untracked);
++    JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
++}
 diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index 231586f7..9de6ad47 100644
+index 9de6ad47..b0cd7159 100644
 --- a/src/kernel/test/test_weak_stubs.cpp
 +++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -109,6 +109,7 @@ __attribute__((weak)) void register_atomic_tests() {}
- __attribute__((weak)) void register_hrt_monotonic_tests() {}
+@@ -110,6 +110,7 @@ __attribute__((weak)) void register_hrt_monotonic_tests() {}
  __attribute__((weak)) void register_timer_wheel_tests() {}
  __attribute__((weak)) void register_task_metering_tests() {}
-+__attribute__((weak)) void register_sched_edf_tests() {}
+ __attribute__((weak)) void register_sched_edf_tests() {}
++__attribute__((weak)) void register_sched_admission_tests() {}
  __attribute__((weak)) void register_cross_arch_tests() {}
  #if defined(CONFIG_ARCH_AARCH64)
  __attribute__((weak)) void register_aarch64_tests() {}
-diff --git a/src/kernel/test/test_zombie_cleanup.cpp b/src/kernel/test/test_zombie_cleanup.cpp
-index 42f4d583..df894816 100644
---- a/src/kernel/test/test_zombie_cleanup.cpp
-+++ b/src/kernel/test/test_zombie_cleanup.cpp
-@@ -45,6 +45,10 @@ static void self_term_entry() {
- JARVIS_TEST(test_release_zombie_self, "PRE: none | POST: none") {
-     auto *task = TaskControlBlock::create(self_term_entry, 20, 10);
-     JARVIS_ASSERT(task != nullptr);
-+    // Pinned FIXED (issue #19): dispatches by priority exactly as pre-EDF
-+    // (20 > harness 10); EDF would also dispatch it but the zombie-count
-+    // asserts below assume no mid-test double-append races.
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*task, SchedPolicy::FIXED));
-     Scheduler::add_task(*task);
- 
-     for (int h = 0; h < 50 && task->state != TaskState::TERMINATED; ++h) {
-@@ -73,6 +77,10 @@ JARVIS_TEST(test_zombie_starvation_watchdog, "PRE: none | POST: none") {
-     for (uint64_t i = 0; i < COUNT; ++i) {
-         tasks[i] = TaskControlBlock::create([]() {}, 5, 10);
-         JARVIS_ASSERT(tasks[i] != nullptr);
-+        // Pinned FIXED (issue #19): counting fixtures must not dispatch
-+        // mid-loop (see zombie_drain_multiple above).
-+        JARVIS_ASSERT(
-+            Scheduler::set_sched_policy(*tasks[i], SchedPolicy::FIXED));
-         Scheduler::add_task(*tasks[i]);
-     }
-     for (uint64_t i = 0; i < COUNT; ++i)
-@@ -130,6 +138,11 @@ JARVIS_TEST(zombie_drain_multiple, "PRE: none | POST: none") {
-     for (uint64_t i = 0; i < 3; ++i) {
-         tasks[i] = TaskControlBlock::create([]() {}, 5, 10);
-         JARVIS_ASSERT(tasks[i] != nullptr);
-+        // Pinned FIXED (issue #19): counting fixtures must not dispatch
-+        // mid-loop (an EDF dispatch would self-terminate them and the
-+        // loop's terminate() would double-append zombies).
-+        JARVIS_ASSERT(
-+            Scheduler::set_sched_policy(*tasks[i], SchedPolicy::FIXED));
-         Scheduler::add_task(*tasks[i]);
-     }
- 

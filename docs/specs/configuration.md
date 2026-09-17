@@ -99,7 +99,7 @@ feeds must be re-validated** (check-config cross-check).
 ### 1.9 Hooks & Policies
 `CONFIG_IDLE_HOOK` / `CONFIG_TICK_HOOK` / `CONFIG_INIT_HOOK` (0) ·
 `CONFIG_OOM_HOOK` (0) · `CONFIG_OOM_POLICY` (0) ·
-`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (0) ·
+`CONFIG_STATIC_POOLS_ONLY` (0) · `CONFIG_MEMORY_BUDGET` (1, issue #20) ·
 `CONFIG_ZOMBIE_STARVATION_LIMIT` (32).
 
 ### 1.10 Deadline / WCET Feature Set (the matrix dimensions)

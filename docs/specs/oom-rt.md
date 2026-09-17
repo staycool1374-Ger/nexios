@@ -13,10 +13,11 @@ and starve lower-priority tasks.  Every allocation failure must (a) be detected
 at the call site, (b) propagate a defined error, and (c) never leave the
 scheduler/allocator in a corrupt state.
 
-## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default OFF]
+## 2. Admission Control (`CONFIG_MEMORY_BUDGET`) [IMPLEMENTED, default ON]
 
 ```
- init_memory_budget(total_pages)  (global budget after PMM init)
+ init_memory_budget(total_pages)  (global budget after PMM init, issue #20 —
+        kernel.cpp sizes it from PMM capacity right after PMM::init)
         │
  TaskControlBlock::create()
         │ deduct CONFIG_DEFAULT_STACK_PAGES from global budget
@@ -27,7 +28,8 @@ scheduler/allocator in a corrupt state.
         ▼
  TaskControlBlock::cleanup() returns pages to the budget
 ```
-- `CONFIG_MEMORY_BUDGET` default 0 (disabled) — current behavior preserved.
+- `CONFIG_MEMORY_BUDGET` default 1 (enabled, issue #20) — sized at boot;
+  per-task `memory_budget_pages_ == 0` keeps unlimited semantics.
 - `memory_budget_pages_`/`memory_used_pages_` on the TCB (set 0 at create).
 - **`clone_kernel_pml4` rollback [IMPLEMENTED]:** a real
   `JARVIS_TEST(vmm_clone_failure_rollback)` replaces the historical STUB-8;

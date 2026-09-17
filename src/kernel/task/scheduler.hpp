@@ -118,7 +118,36 @@ class Scheduler {
     /// @return SCHED_ERR_OK on success, SCHED_ERR_TABLE_FULL if task table is
     /// full,
     ///         SCHED_ERR_DUPLICATE_ID if task ID already exists.
+    ///         Issue #20: additionally SCHED_ERR_WCET_INVALID (WCET exceeds
+    ///         period or period untracked) and SCHED_ERR_ADMISSION_DENIED
+    ///         (Liu-Leyland bound would be exceeded).  Denial happens BEFORE
+    ///         any table/queue/tracker mutation (zero side effects); the
+    ///         caller owns the TCB and retries later (defer) or frees it.
+    ///         This is the enforced admission path — the void add_task()
+    ///         below retains advisory warn-only semantics for legacy callers
+    ///         that cannot fail.
     static errors::SchedulerError add_task_err(TaskControlBlock &task);
+    /// @brief Issue #20: WCET validity for one task (allocation-free, no
+    ///        logging).  Caller must hold scheduler_lock_.
+    /// @return SCHED_ERR_OK, or SCHED_ERR_WCET_INVALID when an explicit
+    ///         WCET exceeds its period or is set on an untracked task.
+    static errors::SchedulerError
+    check_wcet_locked(const TaskControlBlock &task) noexcept;
+    /// @brief Issue #20: true when t is excluded from the LUB numerator
+    ///        (idle, corrupt-magic, edf-exempt, aperiodic/NO_PERIOD, or
+    ///        zero deadline — mirrors the I-4 untracked rule).
+    static bool admission_exempted(const TaskControlBlock &task) noexcept;
+    /// @brief Issue #20: Liu-Leyland utilization including the candidate.
+    ///        Caller must hold scheduler_lock_.  Allocation-free integer
+    ///        math, no logging.  The candidate's own live entry (if any)
+    ///        is skipped so re-checks never double-count.
+    /// @param out_util Total scaled utilization (may be nullptr).
+    /// @param out_bound LUB bound for the resulting task count (may be null).
+    /// @return SCHED_ERR_OK, SCHED_ERR_WCET_INVALID, or
+    ///         SCHED_ERR_ADMISSION_DENIED.
+    static errors::SchedulerError
+    admission_check_locked(const TaskControlBlock &candidate,
+                           uint64_t *out_util, uint32_t *out_bound) noexcept;
 
     /// @brief Removes a task from the scheduler's run queue.
     /// @param task Reference to the task to remove.
