@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.8 | **Last Release:** v0.4.8 | **Completed milestones:** v0.2.x — v0.4.8 (see `ROADMAP_done.md`)
+**Build:** v0.4.9-dev | **Last Release:** v0.4.8 | **Completed milestones:** v0.2.x — v0.4.8 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
