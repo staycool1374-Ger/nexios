@@ -50,6 +50,8 @@
 #include <string.hpp>
 #include <constants.hpp>
 #include <kernel/arch/hal/cpuid.hpp>
+#include <kernel/sync/notify.hpp>
+#include <kernel/time/timer_wheel.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #endif
@@ -87,6 +89,70 @@ static void shell_error_path(const char* cmd, const char* path, const char* msg)
 static void shell_vfs_error(const char* cmd, kernel::errors::VfsError err) {
     shell_error(cmd, kernel::errors::error_string(err));
 }
+
+// ──────────────────────────────────────────────
+//  Shell idle efficiency: Notify-nap instead of pause-spin.
+//  A shell-owned Notify woken by a wheel-armed timeout (uniform for
+//  serial + PS/2 — neither path needs an ISR change).  Single waiter
+//  discipline: the shell is cooperative single-threaded, so at most one
+//  nap is ever outstanding; cancel-first keeps the wheel clean.
+//  Fail-closed: any arm/wait failure degrades to one pause() iteration
+//  (the pre-nap behavior, bit-identical).
+// ──────────────────────────────────────────────
+namespace {
+// Shell-owned input notifier (Notify-nap): a file-static object with a
+// non-trivial destructor cannot live here (freestanding has no
+// __cxa_atexit) — lazy placement-new into aligned storage instead; the
+// shell lives forever so no destruction is ever needed.
+alignas(kernel::sync::Notify)
+uint8_t shell_input_notify_buf[sizeof(kernel::sync::Notify)] = {};
+bool shell_input_inited = false;
+kernel::sync::Notify &shell_input_notify() {
+    return *reinterpret_cast<kernel::sync::Notify *>(
+        shell_input_notify_buf);
+}
+kernel::time::TimerWheel::Handle shell_nap_handle{};
+bool shell_nap_armed = false;
+
+// Tick-context wake only: notify, never block/allocate/take foreign
+// locks (IrqDelivery NOTIFY-mode precedent: slot lock -> Notify leaf,
+// acyclic — notify() is already invoked from ISR context today).
+void shell_input_timeout_fire(void *context) {
+    (void)context;
+    shell_input_notify().notify(1);
+}
+
+void shell_idle_nap(uint64_t timeout_us) {
+    if (!shell_input_inited) {
+        new (shell_input_notify_buf) kernel::sync::Notify();
+        shell_input_notify().init();
+        shell_input_inited = true;
+    }
+    if (shell_nap_armed) {
+        kernel::time::TimerWheel::cancel(shell_nap_handle);
+        shell_nap_armed = false;
+    }
+    uint64_t budget_ns = (timeout_us > 0xFFFFFFFFFFFFULL)
+                             ? 0xFFFFFFFFFFFFFFFFULL
+                             : timeout_us * 1000ULL;
+    uint64_t now_ns = arch::Timer::ns_monotonic();
+    uint64_t expiry_ns = now_ns + budget_ns;
+    if (expiry_ns < now_ns)
+        expiry_ns = 0xFFFFFFFFFFFFFFFFULL;
+    kernel::time::TimerWheel::Handle handle{};
+    if (!kernel::time::TimerWheel::arm(0, expiry_ns,
+                                       shell_input_timeout_fire, nullptr,
+                                       &handle)) {
+        arch::pause();
+        return;
+    }
+    shell_nap_handle = handle;
+    shell_nap_armed = true;
+    shell_input_notify().wait();
+    shell_nap_armed = false;
+    kernel::time::TimerWheel::cancel(shell_nap_handle);
+}
+} // namespace
 
 static void background_task_wrapper() {
     auto* task = kernel::Scheduler::current_task();
@@ -436,7 +502,10 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
                     Terminal::putchar(buf[i]);
                 prompt_serial = arch::Serial::write_count();
             }
-            arch::pause();
+            // Idle nap instead of pause-spin (shell efficiency): sleep
+            // in Notify::wait up to 20ms, woken by the wheel timeout.
+            // Input latency stays ≤ one nap; CPU idles meanwhile.
+            shell_idle_nap(20000);
             continue;
         }
 
@@ -846,7 +915,6 @@ void Shell::cmd_tasks(int, const char**) {
 //  Issue #172: cpuinfo / top shared helpers (shell-task-owned, no locks)
 // ──────────────────────────────────────────────
 namespace {
-
 // Fixed-width field printer (same contract as cmd_tasks' local field()).
 void top_field(const char *s, int width, bool right) {
     int len = 0;
@@ -991,7 +1059,7 @@ const char *top_affin_str(uint64_t mask) {
 // every tracked task's exec total.  Shell-task-owned, single-threaded.
 constexpr uint64_t TOP_SAMPLES = 5;
 struct TopFrame {
-    uint64_t tick = 0;
+    uint64_t wall_ns = 0; // ns_monotonic at capture (wall domain)
     uint64_t n = 0;
     uint64_t ids[CONFIG_MAX_TASKS] = {};
     uint64_t execs[CONFIG_MAX_TASKS] = {};
@@ -1003,7 +1071,7 @@ uint64_t top_frame_count = 0;
 // Capture one frame (locked read_times per task, same cost as tasks walk).
 void top_capture_frame() {
     TopFrame next{};
-    next.tick = arch::Timer::ticks();
+    next.wall_ns = arch::Timer::ns_monotonic();
     uint64_t count = kernel::Scheduler::task_count();
     for (uint64_t i = 0; i < count && next.n < CONFIG_MAX_TASKS; ++i) {
         auto *t = kernel::Scheduler::task_at(i);
@@ -1048,10 +1116,10 @@ bool top_exec_delta(uint64_t id, uint64_t *delta_ns, uint64_t *window_ns,
     if (top_frame_count < 2)
         return false;
     const TopFrame &fresh = top_frames[0];
-    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].tick != 0
+    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].wall_ns != 0
                                  ? top_frames[TOP_SAMPLES - 1]
                                  : top_frames[top_frame_count - 1];
-    if (fresh.tick <= oldest.tick)
+    if (fresh.wall_ns <= oldest.wall_ns)
         return false;
     uint64_t fresh_exec = 0;
     uint64_t old_exec = 0;
@@ -1075,8 +1143,12 @@ bool top_exec_delta(uint64_t id, uint64_t *delta_ns, uint64_t *window_ns,
         return false;
     if (found)
         *found = true;
-    // Tick = 1ms (mirror cmd_uptime math): window_ns = dticks * 1e6.
-    uint64_t window = (fresh.tick - oldest.tick) * 1000000ULL;
+    // Wall-domain window (issue #174 follow-up): exec deltas come from
+    // the ns clock while ticks can lag wall time under emulation — a
+    // tick-derived window inflates every share (observed sys 349%).
+    uint64_t window = (fresh.wall_ns >= oldest.wall_ns)
+                          ? fresh.wall_ns - oldest.wall_ns
+                          : 0;
     if (window_ns)
         *window_ns = window;
     if (delta_ns)
@@ -1090,12 +1162,12 @@ uint64_t top_window_ns() {
     if (top_frame_count < 2)
         return 0;
     const TopFrame &fresh = top_frames[0];
-    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].tick != 0
+    const TopFrame &oldest = top_frames[TOP_SAMPLES - 1].wall_ns != 0
                                  ? top_frames[TOP_SAMPLES - 1]
                                  : top_frames[top_frame_count - 1];
-    if (fresh.tick <= oldest.tick)
+    if (fresh.wall_ns <= oldest.wall_ns)
         return 0;
-    return (fresh.tick - oldest.tick) * 1000000ULL;
+    return fresh.wall_ns - oldest.wall_ns;
 }
 
 // Test-only reset implementation (ring state is anon-namespace-local).
@@ -1579,7 +1651,8 @@ void Shell::cmd_top(int argc, const char** argv) {
                 quit = true;
                 break;
             }
-            arch::pause();
+            // Same idle nap as readline (top refresh wait efficiency).
+            shell_idle_nap(20000);
         }
         if (quit)
             break;
@@ -2470,7 +2543,11 @@ void Shell::cmd_read(int argc, const char** argv) {
         if (arch::inb(arch::COM1_LSR) & 1) { c = static_cast<char>(arch::inb(arch::COM1)); got = true; }
 #endif
         if (!got) got = arch::Keyboard::getchar(c);
-        if (!got) { arch::pause(); continue; }
+        if (!got) {
+            // Same idle nap as readline (read builtin efficiency).
+            shell_idle_nap(20000);
+            continue;
+        }
         if (c == '\r') c = '\n';
         if (c == '\n') { line[pos] = '\0'; break; }
         if ((c == '\b' || c == 0x7F) && pos > 0) { --pos; Terminal::putchar('\b'); continue; }

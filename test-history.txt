@@ -1252,3 +1252,8 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-17 19:04:11 all PASSED: 1444 FAILED: 1 TIME: UNRECORDED STATUS: tlb-lat-p99 single-test flake; standalone 4/4 + full rerun 1445/1445 green, zero code changes
 2026-09-17 19:18:02 all PASSED: 1445 FAILED: 0 TIME: 95436ms
 2026-09-17 21:51:14 shell_commands PASSED: 30 FAILED: 0 TIME: 914ms
+2026-09-17 22:12:09 shell_commands PASSED: 30 FAILED: 0 TIME: 1032ms
+2026-09-17 22:15:21 all PASSED: 1444 FAILED: 1 TIME: UNRECORDED STATUS: testrunner-ipc 1/17 timing flake (documented in-test); standalone green + full rerun 1445/1445 green, zero code changes
+2026-09-17 22:15:21 all PASSED: 1445 FAILED: 0 TIME: 142082ms
+2026-09-17 22:15:49 release_all PASSED: 85 FAILED: 0 TIME: 4140ms
+2026-09-17 22:16:31 selftest PASSED: 134 FAILED: 0 TIME: 31532ms

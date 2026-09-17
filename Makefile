@@ -273,6 +273,20 @@ QEMU_FLAGS_INTERACTIVE = -cdrom $(DEBUG_ISO) -m 256M \
                 $(QEMU_NET) $(QEMU_ARCH_FLAGS)
 QEMU_FLAGS_INTERACTIVE += -drive file=$(FAT32_DISK),format=raw,if=ide,index=1,media=disk
 endif
+# Interactive SMP default (shell/UX testing): run-release-mode boots with
+# 2 CPUs so MADT lists BSP + 1 AP and the AP parks as apidle (cpuinfo/top
+# show both).  Gated on CLASS=none (interactive shells only — test classes
+# keep their single-CPU topology; see the #23 variant-topology trap),
+# BUILD=release (run-debug-mode stays single-CPU) and ARCH=x86_64.
+# Evaluated in the sub-make where CLASS/BUILD/ARCH are set; harmless when
+# unset.
+ifeq ($(CLASS),none)
+ifeq ($(BUILD),release)
+ifeq ($(ARCH),x86_64)
+QEMU_FLAGS_INTERACTIVE += -smp 2
+endif
+endif
+endif
 
 # Live VT-d test variant (issue #9): class=iommu_live boots the kernel on the
 # q35 machine with the emulated Intel IOMMU (VT-d) attached.  The kernel ISO
