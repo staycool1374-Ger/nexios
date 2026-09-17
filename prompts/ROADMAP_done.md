@@ -22,6 +22,11 @@ discipline, live SMP/task monitoring. Milestone v0.4.9 has 0 open issues.
   zombies, per-CPU/total/avg/max loads, sys/user split); running_on_cpu
   snapshot + integer-EMA loadavg + zombie snapshot. Tests: shell (8),
   loadavg math (1).
+- **Shell idle efficiency + SMP default** (#174, unmilestoned follow-up)
+  — readline/top-refresh/cmd_read sleep in `Notify::wait` on a 20ms
+  wheel timeout (cpuinfo IDLE 80%, was 100% spin); `-smp 2` default for
+  run-release-mode (gates untouched); sys/user ≤100 clamps; wall-clock
+  top windows; PD_USE% flag gated on explicit WCET.
 
 Gates at completion (2026-09-17): debug `all` **1445/1445**, release
 `all` **85/85**, `selftest` **134/134**, `make build` Errors 0. SIL 3

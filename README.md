@@ -166,6 +166,7 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 * **No More Disk Polling:** Storage drivers (AHCI/virtio-blk) now sleep while the hardware works and wake on hardware interrupts — bounded waits replace core-blocking spins, with fail-closed polling fallbacks.
 * **Verified Blocking Discipline:** Every driver wait path audited — bounded loops or scheduler-mediated waits, never unbounded spins — with the guarantees pinned in the binding-invariants spec.
 * **See Inside the Machine:** New `cpuinfo` and `top` shell commands show per-CPU load, task placement and affinity, real period usage vs WCET, zombie processes, and system-vs-user load split — built for SMP correctness checks.
+* **Idle Shell & SMP by Default:** Interactive input sleeps in notification waits (near-0% idle CPU), the release shell boots 2-CPU SMP out of the box, and load displays follow the wall clock.
 
 ### **v0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control**
 * **Deadline-Driven Dispatch:** Tasks with the earliest deadlines run first (Earliest-Deadline-First), with priorities auto-assigned from deadlines — time-critical work provably meets its timing guarantees.
