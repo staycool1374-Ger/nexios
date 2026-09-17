@@ -55,27 +55,50 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 
 ## 3. AHCI (`ahci.cpp`)
 
-- **Init:** PCI find (class 01/06) → ABAR = BAR5 (validate `bar_count>5`,
-  `address!=0`) → map ABAR MMIO page-by-page → set bus master → read
-  `HBA_CAP`/`HBA_PI` → HBA reset (GHC_HR poll ≤ 10000) → enable
-  `GHC_AE|GHC_IE`.  ⚠️ **FLAW-04:** `GHC_IE` is asserted with **no ISR
-  registered**; only the polling `wait_cmd` acknowledges PORT_IS/HBA_IS.
-- **Port init:** SSTS DET==3 (online); stop DMA (clear CMD_ST/FRE, wait
-  CMD_CR/FR); clear SERR/IS; allocate CL (1 page), RFIS (1 page), CT[32]
-  (2 pages each), data buffers[32]; program PORT_CLB/FB; start FRE|ST.
-- **Command slot:** `alloc_slot()` = first clear bit in `PORT_CI|PORT_SACT`
-  (no per-slot lock — ⚠️ FLAW-04).  `start_cmd()`: zero CT+CH, build CmdFIS
-  (type 0x27, PM port 0x80|(tag<<3) for NCQ, `device=0xE0`), 48-bit LBA,
-  PRD[0] `(512-1)|IOC`, CmdHeader `cfl=5`, `atomic_fence()`, issue
-  `PORT_CI = 1<<slot`.  Commands: READ_DMA_EXT 0x25 / WRITE_DMA_EXT 0x35 /
-  READ/WRITE_FPDMA_QUEUED 0x60/0x61 / IDENTIFY 0xEC.
-- **`wait_cmd` error paths:** poll PORT_CI clear (≤ 5,000,000 × io_wait);
-  PORT_IS TFES → ack+false; TFD_ERR → clear+false; timeout → clear+false.
-  ⚠️ **FLAW-05 (OPEN):** an up-to-5-second busy spin that blocks the core and
-  starves equal/lower-priority tasks.  **Required:** per-slot completion
-  records + a real ISR + scheduler wake; `wait_cmd` becomes a bounded
-  blocked-wait.  ⚠️ **FLAW-04 teardown:** `~AhciDriver()` frees CL/RFIS/CT/
-  buffers with GHC_IE still enabled → in-flight completion ISR UAF.
+- **Init:** PCI find (class 01/06) → ABAR = BAR5 (validate
+  `bars[5].address != 0` and non-IO type — `bar_count` counts non-empty
+  BARs, not the register index, so it must not gate BAR5) → map ABAR MMIO
+  page-by-page → set bus master → read `HBA_CAP`/`HBA_PI` → HBA reset
+  (GHC_HR poll ≤ 10000) → enable `GHC_AE` only.  `GHC_IE` stays clear
+  until `enable_msi_irq()` wires a real ISR (invariant §7.4).
+  ATAPI ports are skipped (need PACKET IDENTIFY); the first IDENTIFY-able
+  SATA port wins (a zero-sector IDENTIFY keeps scanning).
+- **MSI completion ISR (issue #64, RESOLVES FLAW-04/05):**
+  `pci_enable_msi()` → `IDT::register_handler_raw()` → per-port
+  `PORT_IE = DHRS|DSS|SDBS|DPS|TFES|HBDS|HBFS|IFS|INFS` → `GHC_IE`, in that
+  order.  MSI unavailable (or non-x86_64) is fail-closed: `wait_cmd` keeps
+  the bounded polling path and `GHC_IE` is never set.  Requires 16-bit
+  config writes for the MSI/MSI-X control + data registers — a 32-bit
+  `writel` zeroes the adjacent Message-Address/Table register (found by
+  this work: interrupts were enabled but messaged nowhere).
+- **Per-slot completion records:** statically embedded
+  `compl_[8][32]` (`done` + `PORT_IS` snapshot + `waiter` + generation),
+  guarded by leaf `compl_lock_` via `IrqSpinLockGuard` (cli+lock; a plain
+  guard deadlocks when the ISR preempts a task-held lock).  The ISR scans
+  `HBA_IS` → `PORT_IS`, matches `match_completions(CI|SACT, armed, IS)`
+  (pure, unit-tested), acks status, captures waiters into stack locals and
+  wakes them outside the lock (`set_task_ready` after
+  is_valid + BLOCKED + generation + TERMINATED/REAPED checks; no
+  `reschedule()` from ISR context).
+- **`wait_cmd`:** single-registration blocked wait (`sys_irq_wait`
+  pattern) on the `IPC` wheel timeout (`recv_wait_arm`/`recv_wait_cancel`,
+  `recv_timed_out` applied by the scheduler tick walk): fast-path record
+  check + waiter arm + BLOCKED under one lock scope, then `dequeue_ready`
+  + `reschedule` outside, spin on `state == BLOCKED`; resume reads the
+  record first (delivery beats timeout).  Interrupts-off rolls back to
+  RUNNING + poll; wheel-arm failure stays RUNNING + poll (a BLOCKED task
+  with no waker would park forever).  Timeout retires the slot (clear CI)
+  exactly like the poll path; TFES → ack + false.
+- **Command header layout (fixed by this work):** AHCI 1.3.1 §4.2.2 —
+  DW0-low `opts` (CFL + A/W/P/R/B/C flags), DW0-high `prdtl`, DW1 `prdbc`
+  (32-bit).  The old layout put attrs at DW0-high (= PRDTL position, so
+  reads always transferred zero bytes) and a split PRDBC.  `start_cmd`
+  sets `opts = CFL(5) | WRITE`, `prdtl = 1`.
+- **Teardown:** `disable_msi_irq()` first — `GHC_IE` off, then per-port
+  `PORT_IE = 0` + ack + waiter drain (error wake) under the port locks,
+  then IDT unregister + vector free — so no in-flight ISR can touch freed
+  CL/RFIS/CT/data and no BLOCKED task outlives the driver (RESOLVES
+  FLAW-04 teardown UAF).
 
 ## 4. ATA-PIO (`ata_pio.cpp`)
 
@@ -161,7 +184,9 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 
 1. **No dynamic allocation in the IRQ path** (MemPool/PMM/heap) — completion
    state is statically embedded; enforced by the `irq_alloc` test class.
-2. **Bounded blocking everywhere.** AHCI `wait_cmd` (5M spins, FLAW-05),
+2. **Bounded blocking everywhere.** AHCI `wait_cmd` is a scheduler-blocked
+   wait on the event-timer wheel (RESOLVED FLAW-05, issue #64; polling
+   fallback stays bounded by a tick deadline);
    virtio `submit_request` (1M spins, FLAW-06), serial (FLAW-08), keyboard
    drain (FLAW-10) must become bounded loops or scheduler-blocked waits.
    Timeout values are the *blocked-wait bound*, not a spin bound.
@@ -186,8 +211,8 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 | FLAW-01 DmaEngine ISR/task race | dma.cpp | **RESOLVED (2026-08-16, `bf40f351`)** — IrqSpinLockGuard; callback-after-unlock from stack locals |
 | FLAW-02 PingPongDma index race | dma.cpp | **RESOLVED (2026-08-16, `bf40f351`)** — lock; start_next resolves directly; shutdown clears chain cb under lock |
 | FLAW-03 virtio-net ring races | virtio_net.cpp | **RESOLVED (2026-08-16, `a8fe7bd9`)** — lock + tx_inflight_; poll consume/recycle/advance atomic; used-snapshot-before-notify |
-| FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | OPEN (§3) |
-| FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | OPEN (§3) |
+| FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | **RESOLVED (2026-09-17, issue #64)** — MSI ISR + PORT_IE/GHC_IE ordering; teardown drains waiters under port locks before freeing |
+| FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | **RESOLVED (2026-09-17, issue #64)** — scheduler-blocked bounded wait on the event-timer wheel; bounded poll fallback |
 | FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | BOUNDED (§5) — 1M cap + used-idx pre-notify snapshot + device mutex; IRQ-driven wait = Phase 4.7 |
 | FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics |
 | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |

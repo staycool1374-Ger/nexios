@@ -29,13 +29,11 @@
 #include <string.hpp>
 
 namespace {
-/// @brief Destroys a probe()d driver exactly the way probe()'s own failure
-/// path does: explicit destructor + MemPool release (pool-backed object).
+/// @brief Destroys a probe()d driver via the driver's own destroy() —
+/// explicit destructor + PMM page release (probe() allocates from PMM,
+/// never MemPool; see AhciDriver::probe).
 void destroy_driver(kernel::block::AhciDriver *drv) {
-    if (!drv)
-        return;
-    drv->~AhciDriver();
-    kernel::MemPool::free(drv);
+    kernel::block::AhciDriver::destroy(drv);
 }
 } // namespace
 
@@ -47,19 +45,26 @@ using namespace kernel::block;
 // ============================================================================
 
 // Runmode: kernel
-// Testidea: Command-header layout the driver programs: 32 bytes with cfl
-// at 0, attrs at 2, prdbc at 4 and the 64-bit CTBA split at 8/12.
+// Testidea: Command-header layout the driver programs (AHCI 1.3.1
+// §4.2.2): 32 bytes with CFL+flags in DW0-low at 0, PRDTL in DW0-high
+// at 2, 32-bit PRDBC at 4 and the 64-bit CTBA split at 8/12.  A wrong
+// PRDTL offset starves DMA (QEMU reads PRDTL from DW0-high and refuses
+// zero-length tables); a split PRDBC would corrupt the transfer count.
 // Input: offsetof / sizeof on ahci::CmdHeader.
 // Expect: Exact offsets and size — HBA DMA reads these fields by offset.
 // Depends: ahci_protocol.hpp
 JARVIS_TEST(ahci_deep_cmdheader_layout, "PRE: iocd | POST: none") {
     static_assert(sizeof(ahci::CmdHeader) == 32, "CmdHeader must be 32B");
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-                     static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, cfl)));
+                     static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, opts)));
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
-                     static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, attrs)));
+                     static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, prdtl)));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                     static_cast<uint64_t>(sizeof(ahci::CmdHeader::prdtl)));
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(4),
                      static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, prdbc)));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(4),
+                     static_cast<uint64_t>(sizeof(ahci::CmdHeader::prdbc)));
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(8),
                      static_cast<uint64_t>(__builtin_offsetof(ahci::CmdHeader, ctba)));
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(12),
@@ -170,6 +175,106 @@ JARVIS_TEST(ahci_deep_register_constants, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: PORT_SIG device-signature contract the ATAPI skip relies on:
+// SATA 0x00000101, ATAPI 0xEB140101 (AHCI 1.3.1 §3.3.8).
+// Input: Protocol constants.
+// Expect: Documented values; ATAPI != SATA.
+// Depends: ahci_protocol.hpp
+JARVIS_TEST(ahci_deep_signature_constants, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x00000101),
+                     static_cast<uint64_t>(ahci::PORT_SIG_SATA));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0xEB140101),
+                     static_cast<uint64_t>(ahci::PORT_SIG_ATAPI));
+    JARVIS_ASSERT(ahci::PORT_SIG_SATA != ahci::PORT_SIG_ATAPI);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: match_completions basic contract: an armed slot whose CI bit
+// cleared completes without error; a still-issued slot does not.
+// Input: busy=0 (all retired), armed=bit 3, is=DHRS.
+// Expect: done=bit 3, error=0.
+// Depends: block::AhciDriver::match_completions
+JARVIS_TEST(ahci_deep_compl_match_basic, "PRE: iocd | POST: none") {
+    uint32_t done = 0xFFFFFFFF;
+    uint32_t err = 0xFFFFFFFF;
+    AhciDriver::match_completions(0, 1U << 3, ahci::PORT_IS_DHRS, &done,
+                                  &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1U << 3),
+                     static_cast<uint64_t>(done));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(err));
+    // Still-issued slot: no completion.
+    done = 0xFFFFFFFF;
+    err = 0xFFFFFFFF;
+    AhciDriver::match_completions(1U << 3, 1U << 3, 0, &done, &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(done));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(err));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: match_completions NCQ contract: busy = CI|SACT snapshot, so
+// a slot with SACT set (device-side NCQ activity) is NOT done even when
+// its CI bit cleared; both clear means retired.
+// Input: armed=bit 5; busy=(1<<5) [SACT only] vs busy=0.
+// Expect: SACT-only → done=0; neither → done=bit 5.
+// Depends: block::AhciDriver::match_completions
+JARVIS_TEST(ahci_deep_compl_match_ncq, "PRE: iocd | POST: none") {
+    uint32_t done = 0xFFFFFFFF;
+    uint32_t err = 0xFFFFFFFF;
+    AhciDriver::match_completions(1U << 5, 1U << 5, ahci::PORT_IS_SDBS,
+                                  &done, &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(done));
+    AhciDriver::match_completions(0, 1U << 5, ahci::PORT_IS_SDBS, &done,
+                                  &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1U << 5),
+                     static_cast<uint64_t>(done));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(err));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: match_completions error contract: TFES marks only the armed
+// slots that actually completed; unarmed slots are never reported even
+// when their CI bit cleared (the ISR only wakes registered waiters).
+// Input: busy=0, armed=bit 1, is=TFES|DHRS.
+// Expect: done=bit 1, error=bit 1; armed=0 → done=0, error=0.
+// Depends: block::AhciDriver::match_completions
+JARVIS_TEST(ahci_deep_compl_match_error, "PRE: iocd | POST: none") {
+    uint32_t done = 0xFFFFFFFF;
+    uint32_t err = 0xFFFFFFFF;
+    AhciDriver::match_completions(0, 1U << 1,
+                                  ahci::PORT_IS_TFES | ahci::PORT_IS_DHRS,
+                                  &done, &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1U << 1),
+                     static_cast<uint64_t>(done));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1U << 1),
+                     static_cast<uint64_t>(err));
+    // Unarmed: nothing reported despite retired hardware.
+    done = 0xFFFFFFFF;
+    err = 0xFFFFFFFF;
+    AhciDriver::match_completions(0, 0, ahci::PORT_IS_TFES, &done, &err);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(done));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(err));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: match_completions fail-closed contract: null out-params must
+// not crash (ISR-adjacent robustness).
+// Input: Null out_done / out_error.
+// Expect: Returns without writing (no fault).
+// Depends: block::AhciDriver::match_completions
+JARVIS_TEST(ahci_deep_compl_match_null, "PRE: iocd | POST: none") {
+    uint32_t done = 0;
+    AhciDriver::match_completions(0, 1, 0, nullptr, nullptr);
+    AhciDriver::match_completions(0, 1, 0, &done, nullptr);
+    AhciDriver::match_completions(0, 1, 0, nullptr, &done);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), static_cast<uint64_t>(done));
+    JARVIS_TEST_PASS();
+}
+
 // ============================================================================
 // ahci_live — real command path against the QEMU ICH9-AHCI (variant class)
 // ============================================================================
@@ -177,31 +282,14 @@ JARVIS_TEST(ahci_deep_register_constants, "PRE: iocd | POST: none") {
 // Runmode: kernel
 // Testidea: The q35 variant exposes a real ICH9-AHCI controller with an
 // attached disk — AhciDriver::probe() must find it, initialise the port
-// DMA engine and report a sane sector count.
-// DEFECT GATE (found by this coverage work): sizeof(AhciDriver) is
-// 16176 bytes while the largest MemPool size class is 8192, so
-// AhciDriver::probe()'s MemPool::alloc can never succeed and probe()
-// silently returns nullptr on EVERY machine (no ahci.cpp log line is
-// ever reached).  Until that production defect is fixed the live-drive
-// assertions are unreachable; the test then skips with the recorded
-// precondition and becomes live automatically once the pool/driver
-// mismatch is resolved.
+// DMA engine and report a sane sector count.  (Historical note: a prior
+// MemPool-vs-driver-size mismatch gated these tests; probe() now
+// allocates from PMM and destroy() mirrors it, so the gate is gone.)
 // Input: AhciDriver::probe() on the q35+AHCI machine.
-// Expect: With the precondition satisfiable: non-null driver;
-//         sector_count() > 0; sector_size() == 512; not read-only.
-//         Without it: documented skip (defect recorded on the coverage
-//         issue + the filed kernel defect).
-// Depends: block::AhciDriver, QEMU q35 ahci_live variant, MemPool
+// Expect: Non-null driver; sector_count() > 0; sector_size() == 512;
+//         not read-only.
+// Depends: block::AhciDriver, QEMU q35 ahci_live variant
 JARVIS_TEST(ahci_live_probe_finds_controller, "PRE: iocd | POST: none") {
-    void *pool_probe = kernel::MemPool::alloc(sizeof(AhciDriver));
-    kernel::MemPool::free(pool_probe);
-    if (pool_probe == nullptr) {
-        // Defect gate: the driver object cannot even be allocated, so
-        // probe() cannot exist in this build.  Skip with the contract
-        // documented (see DEFECT GATE above).
-        JARVIS_TEST_PASS();
-        return;
-    }
     AhciDriver *drv = AhciDriver::probe();
     if (drv) {
         uint64_t sectors = drv->sector_count();
@@ -224,12 +312,6 @@ JARVIS_TEST(ahci_live_probe_finds_controller, "PRE: iocd | POST: none") {
 // Expect: Both return true and the read-back matches the pattern.
 // Depends: block::AhciDriver
 JARVIS_TEST(ahci_live_write_read_roundtrip, "PRE: iocd | POST: none") {
-    void *pool_probe = kernel::MemPool::alloc(sizeof(AhciDriver));
-    kernel::MemPool::free(pool_probe);
-    if (pool_probe == nullptr) {
-        JARVIS_TEST_PASS(); // defect gate — see ahci_live_probe_finds_controller
-        return;
-    }
     AhciDriver *drv = AhciDriver::probe();
     if (drv) {
         uint8_t wbuf[512];
@@ -257,12 +339,6 @@ JARVIS_TEST(ahci_live_write_read_roundtrip, "PRE: iocd | POST: none") {
 // Expect: Sector 100 matches A, sector 101 matches B.
 // Depends: block::AhciDriver
 JARVIS_TEST(ahci_live_sector_isolation, "PRE: iocd | POST: none") {
-    void *pool_probe = kernel::MemPool::alloc(sizeof(AhciDriver));
-    kernel::MemPool::free(pool_probe);
-    if (pool_probe == nullptr) {
-        JARVIS_TEST_PASS(); // defect gate — see ahci_live_probe_finds_controller
-        return;
-    }
     AhciDriver *drv = AhciDriver::probe();
     if (drv) {
         uint8_t a[512];
@@ -290,6 +366,56 @@ JARVIS_TEST(ahci_live_sector_isolation, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: IRQ-driven completion (#64): with the MSI ISR armed, a
+// write/read roundtrip must complete through ISR-recorded completions
+// (isr_completions() > 0), proving wait_cmd took the scheduler-blocked
+// path instead of the polling fallback.
+// Input: probe(); assert msi_armed(); write/read sector 102.
+// Expect: msi_armed() true; roundtrip true; isr_completions() > 0.
+// Depends: block::AhciDriver, QEMU q35 ahci_live variant (ICH9 MSI)
+JARVIS_TEST(ahci_live_irq_roundtrip, "PRE: iocd | POST: none") {
+    AhciDriver *drv = AhciDriver::probe();
+    if (drv) {
+        bool armed = drv->msi_armed();
+        uint8_t wbuf[512];
+        uint8_t rbuf[512] = {};
+        for (int i = 0; i < 512; ++i)
+            wbuf[i] = static_cast<uint8_t>(i ^ 0x5A);
+        bool wrote = drv->write_sector(102, wbuf);
+        bool read = drv->read_sector(102, rbuf);
+        int cmp = memcmp(wbuf, rbuf, 512);
+        uint64_t completions = drv->isr_completions();
+        destroy_driver(drv);
+        JARVIS_ASSERT(armed);
+        JARVIS_ASSERT(wrote);
+        JARVIS_ASSERT(read);
+        JARVIS_ASSERT_EQ(0, cmp);
+        JARVIS_ASSERT(completions > 0);
+    }
+    JARVIS_ASSERT(drv != nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: IRQ error path (#64): an out-of-range LBA read must fail via
+// the ISR TFES recording (not via timeout), preserving the poll path's
+// error semantics on the blocked path.
+// Input: probe(); read_sector(sector_count() + 1000).
+// Expect: Returns false.
+// Depends: block::AhciDriver, QEMU q35 ahci_live variant
+JARVIS_TEST(ahci_live_irq_error_path, "PRE: iocd | POST: none") {
+    AhciDriver *drv = AhciDriver::probe();
+    if (drv) {
+        uint8_t rbuf[512] = {};
+        bool read = drv->read_sector(drv->sector_count() + 1000, rbuf);
+        destroy_driver(drv);
+        JARVIS_ASSERT(!read);
+    }
+    JARVIS_ASSERT(drv != nullptr);
+    JARVIS_TEST_PASS();
+}
+
 void register_ahci_deep_tests() {
     Logger::info("Registering ahci deep tests");
     JARVIS_REGISTER_TEST(ahci_deep_cmdheader_layout);
@@ -297,6 +423,11 @@ void register_ahci_deep_tests() {
     JARVIS_REGISTER_TEST(ahci_deep_prd_encoding);
     JARVIS_REGISTER_TEST(ahci_deep_ncq_tag_encoding);
     JARVIS_REGISTER_TEST(ahci_deep_register_constants);
+    JARVIS_REGISTER_TEST(ahci_deep_signature_constants);
+    JARVIS_REGISTER_TEST(ahci_deep_compl_match_basic);
+    JARVIS_REGISTER_TEST(ahci_deep_compl_match_ncq);
+    JARVIS_REGISTER_TEST(ahci_deep_compl_match_error);
+    JARVIS_REGISTER_TEST(ahci_deep_compl_match_null);
 }
 
 void register_ahci_live_tests() {
@@ -304,5 +435,7 @@ void register_ahci_live_tests() {
     JARVIS_REGISTER_TEST(ahci_live_probe_finds_controller);
     JARVIS_REGISTER_TEST(ahci_live_write_read_roundtrip);
     JARVIS_REGISTER_TEST(ahci_live_sector_isolation);
+    JARVIS_REGISTER_TEST(ahci_live_irq_roundtrip);
+    JARVIS_REGISTER_TEST(ahci_live_irq_error_path);
 }
 #endif // CONFIG_ARCH_X86_64

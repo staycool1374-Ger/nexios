@@ -92,7 +92,14 @@ public:
     static const char* current_test_name();
 
 private:
-    static constexpr size_t MAX_TESTS = 1428;
+    // Issue #64: 1433 registrations needed in `all` (1428 + 5 AHCI
+    // completion tests); 1440 leaves headroom for the #65/#66 additions.
+    // A full registry SILENTLY DROPS further registrations (error-logged
+    // only, gate still green) — bump this BEFORE adding tests, never after.
+    // 2026-09-17: `all` overflows even 1440 (duplicate registrations across
+    // the first/second halves?) — sized generously until the attempted
+    // total is known exactly; see issue #64 audit notes.
+    static constexpr size_t MAX_TESTS = 1536;
     static constexpr size_t MAX_CLASSES = 64;
     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
     static TestCase tests_[MAX_TESTS];

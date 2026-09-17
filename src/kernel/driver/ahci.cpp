@@ -27,8 +27,14 @@
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/hal/idt.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/ipc/ipc.hpp>
+#include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 #include <kernel/vfs/fat32.hpp>
 #include <logger.hpp>
 #include <string.hpp>
@@ -39,6 +45,19 @@ using namespace kernel::ahci;
 using namespace arch;
 
 namespace kernel::block {
+
+// TU-local ISR target (#64): set when the MSI handler is registered,
+// cleared on disable/teardown.  Never crosses translation units.
+namespace {
+AhciDriver *g_ahci_isr_target = nullptr;
+} // namespace
+
+/// PORT_IE completion mask (#64): completion FIS receipts + error bits.
+/// Uses the PORT_IS bit positions (protocol §PORT_IE contract).
+constexpr uint32_t PORT_IE_COMPLETION =
+    ahci::PORT_IS_DHRS | ahci::PORT_IS_DSS | ahci::PORT_IS_SDBS |
+    ahci::PORT_IS_DPS | ahci::PORT_IS_TFES | ahci::PORT_IS_HBDS |
+    ahci::PORT_IS_HBFS | ahci::PORT_IS_IFS | ahci::PORT_IS_INFS;
 
 // ──────────────────────────────────────────────
 //  MMIO Accessors
@@ -80,12 +99,16 @@ AhciDriver::~AhciDriver() {
     if (!init_done_)
         return;
 
-    // H-2 (audit-drivers-vfs-net-v0.4.2): clear per-port interrupt enable and
-    // any asserted status BEFORE stopping ports and freeing DMA memory, so no
-    // in-flight completion path can touch freed structures.  GHC_IE is never
-    // set (see init), but per-port PORT_IE is cleared defensively.
+    // #64: disarm the MSI ISR first — clears GHC_IE/PORT_IE under the
+    // port locks and drains armed waiters with an error wake, so no
+    // in-flight completion path can touch freed structures (FLAW-04) and
+    // no BLOCKED task outlives the driver (§12.3).
+    disable_msi_irq();
+
+    // H-2 (audit-drivers-vfs-net-v0.4.2): ack any asserted status BEFORE
+    // stopping ports and freeing DMA memory.  PORT_IE is already 0 via
+    // disable_msi_irq (or was never set on the polling path).
     for (uint8_t p = 0; p < port_count_; ++p) {
-        port_write(p, PORT_IE, 0);
         port_write(p, PORT_IS, 0xFFFFFFFF); // ack any pending status
     }
 
@@ -285,6 +308,20 @@ bool AhciDriver::port_init(uint8_t port) {
 //  Command Submission
 // ──────────────────────────────────────────────
 
+void AhciDriver::match_completions(uint32_t busy, uint32_t armed_mask,
+                                    uint32_t is, uint32_t *out_done,
+                                    uint32_t *out_error) {
+    if (!out_done || !out_error)
+        return;
+    // An armed slot completes when the controller cleared its issued bit:
+    // busy = CI|SACT snapshot, so a clear bit means command retired (plain
+    // DMA) or device-side completion via SDBS (NCQ).  Unarmed slots are
+    // never reported — the ISR only wakes registered waiters.
+    uint32_t done = armed_mask & ~busy;
+    *out_done = done;
+    *out_error = (is & ahci::PORT_IS_TFES) ? done : 0;
+}
+
 uint8_t AhciDriver::alloc_slot(uint8_t port) {
     uint32_t ci = port_read(port, PORT_CI);
     uint32_t sact = port_read(port, PORT_SACT);
@@ -348,15 +385,16 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
     prd.byte_count = (BLOCK_SIZE - 1) | PRD_IOC; // IOC on last (and only) PRD
     prd.reserved = 0;
 
-    // Build command header
-    ch->cfl = sizeof(ahci::CmdFIS) / sizeof(uint32_t); // 5 DWORDS
-    ch->attrs = 0;
+    // Build command header (AHCI 1.3.1 §4.2.2: DW0 = CFL + flags +
+    // PRDTL, DW1 = PRDBC).
+    ch->opts = sizeof(ahci::CmdFIS) / sizeof(uint32_t); // CFL = 5 DWORDS
+    ch->prdtl = 1; // one PRD entry (prd[0] below)
     if (!is_ncq && ata_cmd == ATA_CMD_WRITE_DMA_EXT) {
-        ch->attrs |= CMDHDR_WRITE;
+        ch->opts |= CMDHDR_WRITE;
     }
     if (is_ncq) {
         if (ata_cmd == ATA_CMD_WRITE_FPDMA_QUEUED) {
-            ch->attrs |= CMDHDR_WRITE;
+            ch->opts |= CMDHDR_WRITE;
         }
         // NCQ: PRD byte count is 0 (data size set via count field)
     }
@@ -374,7 +412,8 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
+bool AhciDriver::wait_cmd_poll(uint8_t port, uint8_t slot,
+                               uint64_t timeout_us) {
     // M-1 (audit-drivers-vfs-net-v0.4.2): the former 5,000,000-iteration
     // io_wait spin blocked the core for up to seconds — an outright WCET
     // violation.  Bound the poll by a tick deadline and yield with pause()
@@ -411,6 +450,262 @@ bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
         }
         arch::pause();
     }
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
+    // #64: IRQ-driven scheduler-blocked wait with a bounded timeout
+    // (closes FLAW-05).  Falls back to the bounded poll when no ISR is
+    // armed (no MSI vector) or no task context exists (boot IDENTIFY).
+    if (port >= AHCI_MAX_PORTS || slot >= ahci::AHCI_MAX_CMDS)
+        return false;
+    if (msi_vector_ == 0)
+        return wait_cmd_poll(port, slot, timeout_us);
+    TaskControlBlock *cur = Scheduler::current_task();
+    if (!cur)
+        return wait_cmd_poll(port, slot, timeout_us);
+    if (CONFIG_TICK_HZ == 0)
+        return wait_cmd_poll(port, slot, timeout_us);
+
+    // us → coarse ticks (CONFIG_TICK_HZ = 1000 → ms), same budget as poll.
+    const uint64_t timeout_ticks = timeout_us / 1000 + 1;
+    // Wheel arm failure (full wheel, non-BSP): the task must stay RUNNING
+    // — BLOCKED with no waker would park it forever (sys_receive pattern).
+    if (!IPC::recv_wait_arm(*cur, timeout_ticks))
+        return wait_cmd_poll(port, slot, timeout_us);
+
+    // Single registration (sys_irq_wait pattern): fast-path completion
+    // check + waiter arm + BLOCKED under one lock scope, then dequeue +
+    // reschedule outside the lock.  Never re-register in a loop.
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_[port]);
+        uint32_t ci = port_read(port, PORT_CI);
+        uint32_t sact = port_read(port, PORT_SACT);
+        uint32_t done = 0;
+        uint32_t err = 0;
+        match_completions(ci | sact, 1U << slot, port_read(port, PORT_IS),
+                          &done, &err);
+        if (done) {
+            IPC::recv_wait_cancel(*cur);
+            if (err) {
+                port_write(port, PORT_IS, port_read(port, PORT_IS));
+                return false;
+            }
+            return true;
+        }
+        compl_[port][slot].done = false;
+        compl_[port][slot].error_is = 0;
+        compl_[port][slot].waiter = cur;
+        compl_[port][slot].waiter_gen = cur->generation;
+        cur->state = TaskState::BLOCKED;
+    }
+
+    Scheduler::dequeue_ready(*cur);
+    Scheduler::reschedule();
+
+    // reschedule() is deferred: the task physically continues until the
+    // timer ISR applies the switch.  Spin on BLOCKED — the ISR completion
+    // wake (set_task_ready) or the scheduler's timeout-apply walk restores
+    // READY.  With interrupts off no wake can arrive: roll back and poll.
+    if (arch::interrupts_enabled()) {
+        while (cur->state == TaskState::BLOCKED) {
+            arch::pause();
+        }
+    } else {
+        sync::IrqSpinLockGuard guard(compl_lock_[port]);
+        if (compl_[port][slot].waiter == cur) {
+            compl_[port][slot].waiter = nullptr;
+            compl_[port][slot].waiter_gen = 0;
+        }
+        cur->state = TaskState::RUNNING;
+        Scheduler::enqueue_ready(*cur);
+        IPC::recv_wait_cancel(*cur);
+        return wait_cmd_poll(port, slot, timeout_us);
+    }
+
+    // Woken: consume the completion record (delivery beats timeout — the
+    // record is checked FIRST, mirroring sys_receive's inbox-first order).
+    bool done = false;
+    uint32_t err = 0;
+    {
+        sync::IrqSpinLockGuard guard(compl_lock_[port]);
+        done = compl_[port][slot].done;
+        err = compl_[port][slot].error_is;
+        if (compl_[port][slot].waiter == cur) {
+            compl_[port][slot].waiter = nullptr;
+            compl_[port][slot].waiter_gen = 0;
+        }
+    }
+    IPC::recv_wait_cancel(*cur);
+    if (!done) {
+        // Timeout: retire the issued slot exactly like the poll path.
+        port_write(port, PORT_CI, 1U << slot);
+        return false;
+    }
+    if (err & ahci::PORT_IS_TFES) {
+        Logger::error("ahci: cmd slot %u task file error (IS=0x%x SERR=0x%x)",
+                      slot, err, port_read(port, PORT_SERR));
+        port_write(port, PORT_IS, err); // acknowledge
+        return false;
+    }
+    return true;
+}
+
+// ──────────────────────────────────────────────
+//  MSI Completion ISR (#64)
+// ──────────────────────────────────────────────
+
+void AhciDriver::isr_entry(uint64_t vector, uint64_t, uint64_t) {
+    AhciDriver *target = g_ahci_isr_target;
+    if (!target || vector != target->msi_vector_)
+        return;
+    target->handle_irq();
+}
+
+bool AhciDriver::handle_irq() {
+    // Collect-under-lock: snapshot completions + capture waiters into
+    // stack locals under compl_lock_, ack status, then wake outside.
+    struct WakeEntry {
+        TaskControlBlock *task = nullptr;
+        uint32_t gen = 0;
+    };
+    WakeEntry wakes[ahci::AHCI_MAX_CMDS] = {};
+    uint8_t wake_count = 0;
+    bool consumed = false;
+
+    uint32_t hba_is = hba_read(HBA_IS);
+    for (uint8_t port = 0; port < port_count_ && port < AHCI_MAX_PORTS;
+         ++port) {
+        if (!(hba_is & (1U << port)))
+            continue;
+        uint32_t port_is = port_read(port, PORT_IS);
+        if (!port_is)
+            continue;
+        consumed = true;
+        // Ack port status first so a concurrent completion re-raises it
+        // instead of being lost.
+        port_write(port, PORT_IS, port_is);
+
+        uint32_t ci = port_read(port, PORT_CI);
+        uint32_t sact = port_read(port, PORT_SACT);
+        uint32_t armed = 0;
+        {
+            sync::IrqSpinLockGuard guard(compl_lock_[port]);
+            for (uint8_t slot = 0; slot < ahci::AHCI_MAX_CMDS; ++slot) {
+                if (compl_[port][slot].waiter)
+                    armed |= 1U << slot;
+            }
+            uint32_t done = 0;
+            uint32_t err = 0;
+            match_completions(ci | sact, armed, port_is, &done, &err);
+            for (uint8_t slot = 0; slot < ahci::AHCI_MAX_CMDS; ++slot) {
+                if (!(done & (1U << slot)))
+                    continue;
+                compl_[port][slot].done = true;
+                compl_[port][slot].error_is = port_is;
+                if (wake_count < ahci::AHCI_MAX_CMDS) {
+                    wakes[wake_count].task = compl_[port][slot].waiter;
+                    wakes[wake_count].gen =
+                        compl_[port][slot].waiter_gen;
+                    ++wake_count;
+                }
+                compl_[port][slot].waiter = nullptr;
+                compl_[port][slot].waiter_gen = 0;
+                ++isr_completions_;
+            }
+        }
+    }
+    if (consumed)
+        hba_write(HBA_IS, hba_is); // ack global status
+
+    // Wake-outside-lock (Notify discipline, irq_delivery precedent):
+    // validate liveness + BLOCKED + generation, reject TERMINATED/REAPED
+    // so a recycled TCB is never fed to the scheduler.  No reschedule()
+    // here — the ISR epilogue applies the deferred switch.
+    for (uint8_t i = 0; i < wake_count; ++i) {
+        TaskControlBlock *task = wakes[i].task;
+        if (!TaskControlBlock::is_valid(task))
+            continue;
+        if (task->generation != wakes[i].gen)
+            continue;
+        if (task->state != TaskState::BLOCKED)
+            continue;
+        Scheduler::set_task_ready(*task);
+    }
+    return consumed;
+}
+
+bool AhciDriver::enable_msi_irq(const arch::PciBdf &bdf) {
+#if defined(CONFIG_ARCH_X86_64)
+    if (msi_vector_ != 0)
+        return true;
+    uint8_t vec = arch::pci_enable_msi(bdf, 0); // BSP delivery
+    if (vec == 0) {
+        Logger::info("ahci: no MSI capability — staying on polling wait");
+        return false;
+    }
+    // Registration order: IDT handler first, then PORT_IE, then GHC_IE —
+    // GHC_IE must never be set without a wired ISR (spec §7.4).
+    g_ahci_isr_target = this;
+    arch::IDT::register_handler_raw(vec, &AhciDriver::isr_entry);
+    for (uint8_t port = 0; port < port_count_ && port < AHCI_MAX_PORTS;
+         ++port) {
+        port_write(port, PORT_IS, 0xFFFFFFFF); // ack stale status
+        port_write(port, PORT_IE, PORT_IE_COMPLETION);
+    }
+    hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_IE);
+    msi_vector_ = vec;
+    Logger::info("ahci: MSI completion ISR armed on vector %u", vec);
+    return true;
+#else
+    (void)bdf;
+    return false;
+#endif
+}
+
+void AhciDriver::disable_msi_irq() {
+#if defined(CONFIG_ARCH_X86_64)
+    if (msi_vector_ == 0)
+        return;
+    // Teardown order (closes FLAW-04 UAF): GHC_IE off first (no new ISR
+    // entries), then per-port IE clear + waiter drain under the port
+    // locks, then handler unregister + vector free.
+    hba_write(HBA_GHC, hba_read(HBA_GHC) & ~GHC_IE);
+    for (uint8_t port = 0; port < port_count_ && port < AHCI_MAX_PORTS;
+         ++port) {
+        TaskControlBlock *drained[ahci::AHCI_MAX_CMDS] = {};
+        uint8_t drained_count = 0;
+        {
+            sync::IrqSpinLockGuard guard(compl_lock_[port]);
+            port_write(port, PORT_IE, 0);
+            port_write(port, PORT_IS, 0xFFFFFFFF);
+            for (uint8_t slot = 0; slot < ahci::AHCI_MAX_CMDS; ++slot) {
+                if (compl_[port][slot].waiter &&
+                    drained_count < ahci::AHCI_MAX_CMDS) {
+                    drained[drained_count] = compl_[port][slot].waiter;
+                    ++drained_count;
+                    compl_[port][slot].waiter = nullptr;
+                    compl_[port][slot].waiter_gen = 0;
+                    compl_[port][slot].done = true;
+                    compl_[port][slot].error_is = 0xFFFFFFFF;
+                }
+            }
+        }
+        // Wakers own the wakeup contract (§12.3): drained waiters observe
+        // done + all-ones error → error return, never a stranding.
+        for (uint8_t i = 0; i < drained_count; ++i) {
+            if (!TaskControlBlock::is_valid(drained[i]))
+                continue;
+            if (drained[i]->state != TaskState::BLOCKED)
+                continue;
+            Scheduler::set_task_ready(*drained[i]);
+        }
+    }
+    g_ahci_isr_target = nullptr;
+    arch::IDT::register_handler_raw(msi_vector_, nullptr);
+    arch::pci_free_vector(msi_vector_);
+    msi_vector_ = 0;
+#endif
 }
 
 // ──────────────────────────────────────────────
@@ -512,8 +807,11 @@ bool AhciDriver::init() {
     Logger::info("ahci: found AHCI controller at %d:%d.%d", dev->bdf.bus,
                  dev->bdf.device, dev->bdf.function);
 
-    // Read ABAR (BAR 5)
-    if (dev->bar_count <= 5 || dev->bars[5].address == 0) {
+    // Read ABAR (BAR 5).  NOTE: bar_count counts non-empty BARs, not the
+    // register index — ICH9 leaves BAR0-4 empty, so bars[5] is valid with
+    // bar_count == 1.  Validate the slot itself, not the count.
+    if (dev->bars[5].address == 0 ||
+        dev->bars[5].type == arch::PciBarType::IO) {
         Logger::error("ahci: ABAR (BAR5) not valid");
         return false;
     }
@@ -557,11 +855,10 @@ bool AhciDriver::init() {
     }
     Logger::info("ahci: HBA reset complete");
 
-    // Enable AHCI.  H-2 (audit-drivers-vfs-net-v0.4.2): GHC_IE (global
-    // interrupt enable) must NOT be asserted — no ISR is registered, so an
-    // unacknowledged asserted line would stall the shared interrupt
-    // controller (freedom-from-interference).  Completion is polled via
-    // wait_cmd, which is sufficient and safe.
+    // Enable AHCI.  #64: GHC_IE (global interrupt enable) stays clear
+    // here — it is set only by enable_msi_irq() after the IDT handler is
+    // registered (spec §7.4: never set without a wired ISR).  Until then
+    // completion is polled via wait_cmd, which is sufficient and safe.
     hba_write(HBA_GHC, hba_read(HBA_GHC) | GHC_AE);
 
     // Initialize ports with devices
@@ -570,9 +867,17 @@ bool AhciDriver::init() {
             continue;
 
         if (port_init(p)) {
+            // Skip ATAPI (CD/DVD) devices: they need PACKET IDENTIFY, not
+            // the ATA IDENTIFY below.  Keep scanning for a SATA drive.
+            uint32_t port_sig = port_read(p, PORT_SIG);
+            if (port_sig == ahci::PORT_SIG_ATAPI) {
+                Logger::info("ahci: port %u ATAPI device — skipped", p);
+                continue;
+            }
             active_port_ = p;
 
             // Read sector count via IDENTIFY command
+            bool identified = false;
             uint8_t slot = alloc_slot(p);
             if (slot < AHCI_MAX_CMDS) {
                 auto &dbuf = data_bufs_[p][slot];
@@ -600,11 +905,20 @@ bool AhciDriver::init() {
                         }
                         Logger::info("ahci: port %u %lu sectors", p,
                                      sector_count_);
+                        if (sector_count_ > 0)
+                            identified = true;
                     }
                 }
             }
 
-            // Use first online port only
+            if (!identified) {
+                Logger::info("ahci: port %u IDENTIFY failed — trying next",
+                             p);
+                active_port_ = 0xFF;
+                continue;
+            }
+
+            // Use first identified port only
             break;
         }
     }
@@ -617,6 +931,13 @@ bool AhciDriver::init() {
     init_done_ = true;
     Logger::info("ahci: driver initialized (port %u, %lu sectors)",
                  active_port_, sector_count_);
+
+    // #64: arm the MSI completion ISR now that IDENTIFY (polling) is done.
+    // Failure is fail-closed: wait_cmd keeps the bounded polling path and
+    // GHC_IE is never set without a wired ISR (spec §7.4).
+    if (!enable_msi_irq(dev->bdf)) {
+        Logger::info("ahci: completion ISR unavailable — polling wait_cmd");
+    }
     return true;
 }
 
@@ -637,6 +958,18 @@ AhciDriver *AhciDriver::probe() {
         return nullptr;
     }
     return drv;
+}
+
+void AhciDriver::destroy(AhciDriver *drv) {
+    if (!drv)
+        return;
+    constexpr size_t kDriverPages =
+        (sizeof(AhciDriver) + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    const uint64_t phys =
+        reinterpret_cast<uint64_t>(drv) - arch::HHDM_OFFSET;
+    drv->~AhciDriver();
+    for (size_t i = 0; i < kDriverPages; ++i)
+        PMM::free_page(phys + i * arch::PAGE_SIZE);
 }
 
 } // namespace kernel::block

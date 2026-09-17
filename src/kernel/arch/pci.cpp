@@ -610,20 +610,24 @@ uint8_t pci_enable_msi(PciBdf bdf, uint8_t apic_id) {
     uint32_t addr = PCI_MSI_ADDR_BASE | (static_cast<uint32_t>(apic_id) << 12);
     pci_config_writel(pci_make_addr(bdf, cap + 4), addr);
 
-    // Message Data Register
+    // Message Data Register (16-bit — writew: a writel would zero the
+    // adjacent Mask Bits / reserved half).
     uint16_t data = PCI_MSI_DATA_FIXED | vec;
     uint8_t data_off =
         is_64 ? static_cast<uint8_t>(cap + 12) : static_cast<uint8_t>(cap + 8);
-    pci_config_writel(pci_make_addr(bdf, data_off), data);
+    pci_config_writew(pci_make_addr(bdf, data_off), data);
 
     // Upper Address (64-bit only)
     if (is_64) {
         pci_config_writel(pci_make_addr(bdf, cap + 8), 0);
     }
 
-    // Enable MSI, set MME = 0 (single message)
+    // Enable MSI, set MME = 0 (single message).  16-bit writew: the
+    // control register shares its dword with the Message Address low
+    // half (cap+4) — a writel zeroes the address just programmed above
+    // and MSI messages go nowhere (issue #64 root cause).
     ctrl = (ctrl & ~PCI_MSI_CTRL_MME_MASK) | PCI_MSI_CTRL_ENABLE;
-    pci_config_writel(pci_make_addr(bdf, cap + 2), ctrl);
+    pci_config_writew(pci_make_addr(bdf, cap + 2), ctrl);
 
     Logger::info("MSI: enabled on %d:%d.%d vector=%d", bdf.bus, bdf.device,
                  bdf.function, vec);
@@ -806,11 +810,13 @@ uint8_t pci_enable_msix(PciBdf bdf, uint16_t entry, uint8_t apic_id) {
     }
 
     // Enable MSI-X and unmask function (the table entry itself stays masked
-    // until a driver arms it).
+    // until a driver arms it).  16-bit writew: the control register shares
+    // its dword with the Table Offset/BIR register (cap+4) — a writel
+    // zeroes the table pointer (same bug class as pci_enable_msi).
     uint16_t ctrl = pci_config_readw(pci_make_addr(bdf, cap + 2));
     ctrl |= PCI_MSIX_CTRL_ENABLE;
     ctrl &= ~PCI_MSIX_CTRL_FUNCMASK;
-    pci_config_writel(pci_make_addr(bdf, cap + 2), ctrl);
+    pci_config_writew(pci_make_addr(bdf, cap + 2), ctrl);
     // Legacy contract: pci_enable_msix hands back a LIVE vector to the caller
     // (raw kernel path, no arm step) — unmask the entry now so delivery works.
     pci_msix_entry_set_masked(tbl, entry, false);

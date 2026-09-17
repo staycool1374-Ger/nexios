@@ -105,6 +105,12 @@ constexpr uint32_t PORT_CMD = 0x18;  // Command and Status
 constexpr uint32_t PORT_RESERVED0 = 0x1C; // (reserved)
 constexpr uint32_t PORT_TFD = 0x20;       // Task File Data
 constexpr uint32_t PORT_SIG = 0x24;       // Signature
+
+/// PORT_SIG device signatures (AHCI 1.3.1 §3.3.8).
+constexpr uint32_t PORT_SIG_SATA = 0x00000101;  // SATA drive
+constexpr uint32_t PORT_SIG_ATAPI = 0xEB140101; // ATAPI (CD/DVD) device
+constexpr uint32_t PORT_SIG_PM = 0x96690101;    // Port multiplier
+constexpr uint32_t PORT_SIG_SEMB = 0xC33C0101;  // Enclosure management
 constexpr uint32_t PORT_SSTS = 0x28;      // Serial ATA Status (SCR0)
 constexpr uint32_t PORT_SCTL = 0x2C;      // Serial ATA Control (SCR2)
 constexpr uint32_t PORT_SERR = 0x30;      // Serial ATA Error (SCR1)
@@ -205,16 +211,14 @@ constexpr uint32_t SERR_DIAG_C1 = 0x01000000; // CRC Error (non-transmit)
 /// Maximum command slots per port
 constexpr uint32_t AHCI_MAX_CMDS = 32;
 
-/// Command Header (32 bytes)
+/// Command Header (32 bytes, AHCI 1.3.1 §4.2.2).
 struct CmdHeader {
-    // DW0
-    uint16_t cfl;   // Command FIS Length in DWORDS (bits 0-4)
-    uint16_t attrs; // Attributes (bits 5-15: A=ATAPI, W=Write, C=ClearBusy,
-                    // P=Prefetch, R=Reset)
+    // DW0 low
+    uint16_t opts; // CFL[4:0] + flags A[5] W[6] P[7] R[8] B[9] C[10]
+    // DW0 high
+    uint16_t prdtl; // Physical Region Descriptor Table Length (entry count)
     // DW1
-    uint16_t prdbc; // Physical Region Descriptor Byte Count (transferred)
-    uint8_t pmp;    // Port Multiplier Port
-    uint8_t rsvd0;
+    uint32_t prdbc; // Physical Region Descriptor Byte Count (transferred)
     // DW2
     uint32_t ctba; // Command Table Descriptor Base Address (low 32)
     // DW3
