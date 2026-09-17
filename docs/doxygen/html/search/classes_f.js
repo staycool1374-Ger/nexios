@@ -19,5 +19,6 @@ var searchData=
   ['tlbshootdown_16',['TlbShootdown',['../classkernel_1_1_tlb_shootdown.html',1,'kernel']]],
   ['tm_17',['tm',['../structtm.html',1,'']]],
   ['tmpfsentry_18',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
-  ['tprguard_19',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
+  ['toprow_19',['TopRow',['../structservice_1_1_top_row.html',1,'service']]],
+  ['tprguard_20',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
 ];

@@ -1,5 +1,6 @@
 var NAVTREEINDEX11 =
 {
+"structfdt__header.html#a1aded707874a2c73f0f98ef8327b6a0f":[2,0,10,6],
 "structfdt__header.html#a208c61c9d30b049b9c5cfe26bed7cce1":[2,0,10,3],
 "structfdt__header.html#a2391f4d3f878ed789de2d641738c682d":[2,0,10,2],
 "structfdt__header.html#a38d6ec5e31d8559bb6dfc9b986517432":[2,0,10,7],
@@ -248,6 +249,5 @@ var NAVTREEINDEX11 =
 "structkernel_1_1_scheduler_1_1_task_fields.html#a97ae0ecfb669f8f11d73315c2d128390":[0,0,3,44,1,2],
 "structkernel_1_1_scheduler_1_1_task_fields.html#a97ae0ecfb669f8f11d73315c2d128390":[2,0,3,31,1,2],
 "structkernel_1_1_scheduler_1_1_task_fields.html#a97d6fb570527865aa28d3abf1b0f7a42":[0,0,3,44,1,14],
-"structkernel_1_1_scheduler_1_1_task_fields.html#a97d6fb570527865aa28d3abf1b0f7a42":[2,0,3,31,1,14],
-"structkernel_1_1_scheduler_1_1_task_fields.html#aa9502cbe1536e5fdfb0304fccd2229e6":[0,0,3,44,1,6]
+"structkernel_1_1_scheduler_1_1_task_fields.html#a97d6fb570527865aa28d3abf1b0f7a42":[2,0,3,31,1,14]
 };

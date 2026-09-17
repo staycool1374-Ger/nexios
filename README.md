@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.4.8-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.4.9-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.4.8 — Enhance Deadline Scheduling (1413 debug tests, 85 release tests, DM assignment + global EDF dispatch, enforced Liu-Leyland admission, deferrable/background servers, per-CPU partitioned bounds, boot admission self-test)
+* **Status:** v0.4.9 — IRQ Blocking + Audit (1445 debug tests, 85 release tests, MSI completion ISRs for AHCI + virtio-blk with scheduler-blocked bounded waits, bounded-blocking audit closure, shell cpuinfo/top monitor)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -154,13 +154,18 @@ Fix the code on your host, re-run `rsync`, and restart the task from the shell.
 
 - **Current work:** [GitHub Milestones](https://github.com/staycool1374-Ger/nexios/milestones) — open items tracked as Issues.
 - **Full backlog:** ~80 aspirational roadmap items as [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues) (labeled `feature`, grouped by phase).
-- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.8 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, Deadline Scheduling, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
+- **Implementation history (what's already done):** [`prompts/ROADMAP_done.md`](prompts/ROADMAP_done.md) — the complete audit trail of every shipped milestone from v0.3.7 through v0.4.9 (CSpace capability security, User-Space Infrastructure caps/IOMMU/MSI-X, SMP bring-up, Cache coloring, TLB Shootdown, High-Resolution Time, Deadline Scheduling, IRQ Blocking, and more), each entry with root-cause analyses, commit ranges, and validated test-gate results.
 
 Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ---
 
 ## Recent Release Highlights
+
+### **v0.4.9 — Interrupt-Driven I/O & Live System Monitoring**
+* **No More Disk Polling:** Storage drivers (AHCI/virtio-blk) now sleep while the hardware works and wake on hardware interrupts — bounded waits replace core-blocking spins, with fail-closed polling fallbacks.
+* **Verified Blocking Discipline:** Every driver wait path audited — bounded loops or scheduler-mediated waits, never unbounded spins — with the guarantees pinned in the binding-invariants spec.
+* **See Inside the Machine:** New `cpuinfo` and `top` shell commands show per-CPU load, task placement and affinity, real period usage vs WCET, zombie processes, and system-vs-user load split — built for SMP correctness checks.
 
 ### **v0.4.8 — Deadline-Aware Scheduling & Enforced Admission Control**
 * **Deadline-Driven Dispatch:** Tasks with the earliest deadlines run first (Earliest-Deadline-First), with priorities auto-assigned from deadlines — time-critical work provably meets its timing guarantees.

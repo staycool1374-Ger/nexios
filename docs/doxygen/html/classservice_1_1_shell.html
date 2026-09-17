@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -148,6 +148,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:abb9dbef3f563347dc1498f555291ede7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parses and executes a command string.  <br /></td></tr>
 <tr class="memitem:a7affcd5b709dc4b81499f9b3156dd254" id="r_a7affcd5b709dc4b81499f9b3156dd254"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7affcd5b709dc4b81499f9b3156dd254">register_command</a> (const char *name, const char *help, <a class="el" href="#a705f545a46e17f1d0a0f9da3f3399728">CommandFunc</a> func)</td></tr>
 <tr class="memdesc:a7affcd5b709dc4b81499f9b3156dd254"><td class="mdescLeft">&#160;</td><td class="mdescRight">Registers a new shell command.  <br /></td></tr>
+<tr class="memitem:a8c3bf7ba23fb56c1734f8c61f73c2f07" id="r_a8c3bf7ba23fb56c1734f8c61f73c2f07"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8c3bf7ba23fb56c1734f8c61f73c2f07">top_reset_samples</a> ()</td></tr>
+<tr class="memdesc:a8c3bf7ba23fb56c1734f8c61f73c2f07"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only: reset the top sliding-window ring (issue #172). Tests need a deterministic window baseline; production never resets (window continuity across refreshes).  <br /></td></tr>
 <tr class="memitem:ad4e5adf46f0f562f7b5a566fd53d37c0" id="r_ad4e5adf46f0f562f7b5a566fd53d37c0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad4e5adf46f0f562f7b5a566fd53d37c0">shell_task_main</a> ()</td></tr>
 <tr class="memdesc:ad4e5adf46f0f562f7b5a566fd53d37c0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main shell loop (reads input, dispatches commands).  <br /></td></tr>
 </table>
@@ -317,6 +319,33 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="classservice_1_1_shell_ad4e5adf46f0f562f7b5a566fd53d37c0_cgraph.png" border="0" usemap="#aclassservice_1_1_shell_ad4e5adf46f0f562f7b5a566fd53d37c0_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 3 -->
 </div>
+
+</div>
+</div>
+<a id="a8c3bf7ba23fb56c1734f8c61f73c2f07" name="a8c3bf7ba23fb56c1734f8c61f73c2f07"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8c3bf7ba23fb56c1734f8c61f73c2f07">&#9670;&#160;</a></span>top_reset_samples()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void service::Shell::top_reset_samples </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test-only: reset the top sliding-window ring (issue #172). Tests need a deterministic window baseline; production never resets (window continuity across refreshes). </p>
 
 </div>
 </div>

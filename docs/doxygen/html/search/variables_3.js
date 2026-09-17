@@ -37,8 +37,9 @@ var searchData=
   ['count_34',['count',['../classkernel_1_1cap_1_1_frame_cap.html#a0b2ff77a2f6faffb50b7190f75ebc057',1,'kernel::cap::FrameCap::count'],['../structkernel_1_1elf_1_1_map_out.html#a4a8601ae81cabc61337340527eb44a1a',1,'kernel::elf::MapOut::count'],['../struct_bench_result.html#a1f1c0f9c1e6cdc73ddc3c51e93d86814',1,'BenchResult::count'],['../structkernel_1_1vfs_1_1_pipe_buffer.html#a66a9e380ae7d9214ef5e8769ca41e0cf',1,'kernel::vfs::PipeBuffer::count'],['../structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4',1,'kernel::test::ClassSection::count']]],
   ['cpu_35',['cpu',['../structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#a8fc26e27405f766fe4634bbc4473d360',1,'kernel::time::TimerWheel::Handle']]],
   ['cpu_5faffinity_36',['cpu_affinity',['../structkernel_1_1_scheduler_1_1_task_fields.html#a3749b14b62fad5b1f55b4281964ad10a',1,'kernel::Scheduler::TaskFields']]],
-  ['crc32_37',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot']]],
-  ['cspace_5fid_38',['cspace_id',['../classkernel_1_1cap_1_1_c_node.html#a87d7d8fcc86582a72ba8a9d6a0312c55',1,'kernel::cap::CNode']]],
-  ['cur_5f_39',['cur_',['../structkernel_1_1_scheduler_1_1_task_iter.html#abb34ad4da599739fa2f81796987defed',1,'kernel::Scheduler::TaskIter']]],
-  ['current_40',['current',['../structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109',1,'kernel::CpuContext::current'],['../structkernel_1_1_sched_per_cpu_pod.html#a9f8fbe30bc522a1c112a22a2cb8d3a10',1,'kernel::SchedPerCpuPod::current']]]
+  ['cpu_5fpct_37',['cpu_pct',['../structservice_1_1_top_row.html#a4bb0223ba46269334a24514f4ab9866e',1,'service::TopRow']]],
+  ['crc32_38',['crc32',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#a6389ebdbd180c4ce63e9c7c2ff0582d6',1,'kernel::test::PtPoolSnapshot']]],
+  ['cspace_5fid_39',['cspace_id',['../classkernel_1_1cap_1_1_c_node.html#a87d7d8fcc86582a72ba8a9d6a0312c55',1,'kernel::cap::CNode']]],
+  ['cur_5f_40',['cur_',['../structkernel_1_1_scheduler_1_1_task_iter.html#abb34ad4da599739fa2f81796987defed',1,'kernel::Scheduler::TaskIter']]],
+  ['current_41',['current',['../structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109',1,'kernel::CpuContext::current'],['../structkernel_1_1_sched_per_cpu_pod.html#a9f8fbe30bc522a1c112a22a2cb8d3a10',1,'kernel::SchedPerCpuPod::current']]]
 ];

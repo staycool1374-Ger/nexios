@@ -1,5 +1,6 @@
 var NAVTREEINDEX10 =
 {
+"sampler_8hpp_source.html":[3,0,0,1,14,1],
 "scheduler_8cpp.html":[3,0,0,1,17,11],
 "scheduler_8cpp.html#a6563155e2fea5b3d4feb0ca6027ce7d1":[3,0,0,1,17,11,5],
 "scheduler_8cpp.html#a80e920b60042b6c2750fd88974610e99":[3,0,0,1,17,11,1],
@@ -248,6 +249,5 @@ var NAVTREEINDEX10 =
 "structcrypto_1_1_cha_cha_state.html":[2,0,1,0],
 "structcrypto_1_1_cha_cha_state.html#af5c400acee5e6bde18bd11cd9a100e8a":[0,0,1,0,0],
 "structcrypto_1_1_cha_cha_state.html#af5c400acee5e6bde18bd11cd9a100e8a":[2,0,1,0,0],
-"structfdt__header.html":[2,0,10],
-"structfdt__header.html#a1aded707874a2c73f0f98ef8327b6a0f":[2,0,10,6]
+"structfdt__header.html":[2,0,10]
 };

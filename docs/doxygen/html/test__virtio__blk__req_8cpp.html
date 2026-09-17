@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -147,6 +147,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a73f893f509e2bbc2f0d9db5cff1bcf00" id="r_a73f893f509e2bbc2f0d9db5cff1bcf00"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a73f893f509e2bbc2f0d9db5cff1bcf00">JARVIS_TEST</a> (virtio_blk_req_write_roundtrip, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a93b8d11c0ef8e1301d1b5f2048c8df5b" id="r_a93b8d11c0ef8e1301d1b5f2048c8df5b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a93b8d11c0ef8e1301d1b5f2048c8df5b">JARVIS_TEST</a> (virtio_blk_req_status_error_mapping, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:abd5cad02091e2e5112f82e1465794b5d" id="r_abd5cad02091e2e5112f82e1465794b5d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#abd5cad02091e2e5112f82e1465794b5d">JARVIS_TEST</a> (virtio_blk_req_used_ring_cookie, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:ab7cfbafb620d305a3da71dab967a348d" id="r_ab7cfbafb620d305a3da71dab967a348d"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ab7cfbafb620d305a3da71dab967a348d">JARVIS_TEST</a> (virtio_blk_irq_match_basic, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a5c4beef536a99e7baa2c3d3567b2d9be" id="r_a5c4beef536a99e7baa2c3d3567b2d9be"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5c4beef536a99e7baa2c3d3567b2d9be">JARVIS_TEST</a> (virtio_blk_irq_match_null, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a9f4f7c0092cad06c7095f831122d5391" id="r_a9f4f7c0092cad06c7095f831122d5391"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9f4f7c0092cad06c7095f831122d5391">JARVIS_TEST</a> (virtio_blk_irq_isr_records_completion, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a327a1582145e5b0945c38dc175f7c8f2" id="r_a327a1582145e5b0945c38dc175f7c8f2"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a327a1582145e5b0945c38dc175f7c8f2">JARVIS_TEST</a> (virtio_blk_irq_blocked_wait_roundtrip, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a782e1cf9f99f4f3772b48740a6a6cb53" id="r_a782e1cf9f99f4f3772b48740a6a6cb53"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a782e1cf9f99f4f3772b48740a6a6cb53">JARVIS_TEST</a> (virtio_blk_irq_timeout_retires, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:abfd079f83cb7444409cf25f94222b4d5" id="r_abfd079f83cb7444409cf25f94222b4d5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#abfd079f83cb7444409cf25f94222b4d5">JARVIS_TEST</a> (virtio_blk_irq_teardown_drains_waiter, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a19a5b38977096d64e4753e28834bd2b1" id="r_a19a5b38977096d64e4753e28834bd2b1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a19a5b38977096d64e4753e28834bd2b1">register_virtio_blk_req_tests</a> ()</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
@@ -174,8 +180,146 @@ Variables</h2></td></tr>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Virtio-blk request-path tests (milestone v0.4.3 issue #117). Drives VirtioBlkDriver against a mock VirtioTransport (plain in-memory common/notify/device config — the sanctioned mock-hardware pattern) and completes requests from a REAL higher-priority task acting as the device (reads the avail ring through HHDM, services the descriptor chain, advances the used ring), exercising descriptor chaining, notify, response parsing and completion cookies end-to-end. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a327a1582145e5b0945c38dc175f7c8f2" name="a327a1582145e5b0945c38dc175f7c8f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a327a1582145e5b0945c38dc175f7c8f2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_blocked_wait_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9f4f7c0092cad06c7095f831122d5391" name="a9f4f7c0092cad06c7095f831122d5391"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f4f7c0092cad06c7095f831122d5391">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_isr_records_completion</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab7cfbafb620d305a3da71dab967a348d" name="ab7cfbafb620d305a3da71dab967a348d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7cfbafb620d305a3da71dab967a348d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_match_basic</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c4beef536a99e7baa2c3d3567b2d9be" name="a5c4beef536a99e7baa2c3d3567b2d9be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c4beef536a99e7baa2c3d3567b2d9be">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_match_null</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abfd079f83cb7444409cf25f94222b4d5" name="abfd079f83cb7444409cf25f94222b4d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abfd079f83cb7444409cf25f94222b4d5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_teardown_drains_waiter</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__virtio__blk__req_8cpp_abfd079f83cb7444409cf25f94222b4d5_cgraph.png" border="0" usemap="#atest__virtio__blk__req_8cpp_abfd079f83cb7444409cf25f94222b4d5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a782e1cf9f99f4f3772b48740a6a6cb53" name="a782e1cf9f99f4f3772b48740a6a6cb53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a782e1cf9f99f4f3772b48740a6a6cb53">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">virtio_blk_irq_timeout_retires</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__virtio__blk__req_8cpp_a782e1cf9f99f4f3772b48740a6a6cb53_cgraph.png" border="0" usemap="#atest__virtio__blk__req_8cpp_a782e1cf9f99f4f3772b48740a6a6cb53_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
 <a id="a95a68e5b9edaa972a54283c34663ddb0" name="a95a68e5b9edaa972a54283c34663ddb0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a95a68e5b9edaa972a54283c34663ddb0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a95a68e5b9edaa972a54283c34663ddb0">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -196,7 +340,7 @@ Variables</h2></td></tr>
 </div>
 </div>
 <a id="a9404d16668cf5e3e27644b590699bfcd" name="a9404d16668cf5e3e27644b590699bfcd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9404d16668cf5e3e27644b590699bfcd">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a9404d16668cf5e3e27644b590699bfcd">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -217,7 +361,7 @@ Variables</h2></td></tr>
 </div>
 </div>
 <a id="abdc19a41d24d78266558c09887274d90" name="abdc19a41d24d78266558c09887274d90"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abdc19a41d24d78266558c09887274d90">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abdc19a41d24d78266558c09887274d90">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -238,13 +382,13 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__virtio__blk__req_8cpp_abdc19a41d24d78266558c09887274d90_cgraph.png" border="0" usemap="#atest__virtio__blk__req_8cpp_abdc19a41d24d78266558c09887274d90_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
 </div>
 <a id="a93b8d11c0ef8e1301d1b5f2048c8df5b" name="a93b8d11c0ef8e1301d1b5f2048c8df5b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a93b8d11c0ef8e1301d1b5f2048c8df5b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a93b8d11c0ef8e1301d1b5f2048c8df5b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -265,7 +409,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="acb5a3af47c01dd309f43ef5f8c998101" name="acb5a3af47c01dd309f43ef5f8c998101"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acb5a3af47c01dd309f43ef5f8c998101">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#acb5a3af47c01dd309f43ef5f8c998101">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -286,7 +430,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="abd5cad02091e2e5112f82e1465794b5d" name="abd5cad02091e2e5112f82e1465794b5d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abd5cad02091e2e5112f82e1465794b5d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abd5cad02091e2e5112f82e1465794b5d">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -307,7 +451,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a73f893f509e2bbc2f0d9db5cff1bcf00" name="a73f893f509e2bbc2f0d9db5cff1bcf00"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a73f893f509e2bbc2f0d9db5cff1bcf00">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a73f893f509e2bbc2f0d9db5cff1bcf00">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/13]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -328,7 +472,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__virtio__blk__req_8cpp_a73f893f509e2bbc2f0d9db5cff1bcf00_cgraph.png" border="0" usemap="#atest__virtio__blk__req_8cpp_a73f893f509e2bbc2f0d9db5cff1bcf00_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -351,7 +495,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__virtio__blk__req_8cpp_a19a5b38977096d64e4753e28834bd2b1_cgraph.png" border="0" usemap="#atest__virtio__blk__req_8cpp_a19a5b38977096d64e4753e28834bd2b1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>

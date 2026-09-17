@@ -3,7 +3,7 @@ var searchData=
   ['tag_0',['tag',['../structfdt__node__header.html#a8ae1bf8b4e0fb91e61edbbb82f458859',1,'fdt_node_header::tag'],['../structfdt__property.html#af00c5a0e4721be5da6c9433eeef7500b',1,'fdt_property::tag']]],
   ['tail_1',['tail',['../structkernel_1_1shm_1_1_shared_ring_header.html#ad25c10f7f14728cab273723ef7dd25de',1,'kernel::shm::SharedRingHeader']]],
   ['tainted_2',['tainted',['../structkernel_1_1test_1_1_pt_pool_snapshot.html#af910a0cc2780e163e87c19c243b1bfb8',1,'kernel::test::PtPoolSnapshot']]],
-  ['task_3',['task',['../structkernel_1_1vfs_1_1_pid_stat_vnode.html#ae94b0b56140e6789cf611dba16f0c2c6',1,'kernel::vfs::PidStatVnode::task'],['../structkernel_1_1vfs_1_1_pid_dir_vnode.html#ae66600164b12eff2116dbddea25b5853',1,'kernel::vfs::PidDirVnode::task']]],
+  ['task_3',['task',['../structkernel_1_1vfs_1_1_pid_stat_vnode.html#ae94b0b56140e6789cf611dba16f0c2c6',1,'kernel::vfs::PidStatVnode::task'],['../structkernel_1_1vfs_1_1_pid_dir_vnode.html#ae66600164b12eff2116dbddea25b5853',1,'kernel::vfs::PidDirVnode::task'],['../structservice_1_1_top_row.html#ad44b8d954e503cd18f9db7f9ff24cd22',1,'service::TopRow::task']]],
   ['task_5fid_4',['task_id',['../structkernel_1_1log_1_1_log_entry.html#ae2fa3e80940fff140a4fe337641f2092',1,'kernel::log::LogEntry']]],
   ['task_5fobj_5fnext_5f_5',['task_obj_next_',['../classkernel_1_1_kernel_object.html#ae1b6efc57e4770d3a325c69db75ffcab',1,'kernel::KernelObject']]],
   ['task_5fobj_5fprev_5f_6',['task_obj_prev_',['../classkernel_1_1_kernel_object.html#a18affd7a7315bac0d48df5136ceed782',1,'kernel::KernelObject']]],

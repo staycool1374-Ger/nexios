@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -219,314 +219,321 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test_8hpp_sour
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    <span class="keyword">static</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#a2e184916c79d80372a39ee0de29aaeb8">current_test_name</a>();</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span> </div>
 <div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span><span class="keyword">private</span>:</div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_TESTS = 1428;</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_CLASSES = 64;</div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="comment">// NOLINTBEGIN(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keyword">static</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_test_case.html">TestCase</a> tests_[MAX_TESTS];</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> count_;</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> passed_;</div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> failed_;</div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> test_count_;</div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> test_failed_;</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="keyword">static</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_class_section.html">ClassSection</a> sections_[MAX_CLASSES];</div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> class_count_;</div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> expected_count_;</div>
-<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    <span class="keyword">static</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* current_name_;</div>
-<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    <span class="comment">// NOLINTEND(bugprone-dynamic-static-initializers)</span></div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>};</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="comment">// Issue #64: 1433 registrations needed in `all` (1428 + 5 AHCI</span></div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    <span class="comment">// completion tests); 1440 leaves headroom for the #65/#66 additions.</span></div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>    <span class="comment">// A full registry SILENTLY DROPS further registrations (error-logged</span></div>
+<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="comment">// only, gate still green) — bump this BEFORE adding tests, never after.</span></div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="comment">// 2026-09-17: `all` overflows even 1440 (duplicate registrations across</span></div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span>    <span class="comment">// the first/second halves?) — sized generously until the attempted</span></div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>    <span class="comment">// total is known exactly; see issue #64 audit notes.</span></div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_TESTS = 1536;</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <span class="keywordtype">size_t</span> MAX_CLASSES = 64;</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>    <span class="comment">// NOLINTBEGIN(bugprone-dynamic-static-initializers)</span></div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>    <span class="keyword">static</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_test_case.html">TestCase</a> tests_[MAX_TESTS];</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> count_;</div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> passed_;</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> failed_;</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> test_count_;</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> test_failed_;</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>    <span class="keyword">static</span> <a class="code hl_struct" href="structkernel_1_1test_1_1_class_section.html">ClassSection</a> sections_[MAX_CLASSES];</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> class_count_;</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>    <span class="keyword">static</span> <span class="keywordtype">size_t</span> expected_count_;</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>    <span class="keyword">static</span> <span class="keyword">const</span> <span class="keywordtype">char</span>* current_name_;</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>    <span class="comment">// NOLINTEND(bugprone-dynamic-static-initializers)</span></div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>};</div>
 </div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span> </div>
-<div class="foldopen" id="foldopen00111" data-start="{" data-end="};">
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html">  111</a></span><span class="keyword">class </span><a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a> {</div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keyword">public</span>:</div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">  113</a></span>    <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>) : <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>(<a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>) {}</div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a">  114</a></span>    <span class="keyword">virtual</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a">~TestBase</a>() = <span class="keywordflow">default</span>;</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span> </div>
-<div class="foldopen" id="foldopen00116" data-start="{" data-end="}">
-<div class="line"><a id="l00116" name="l00116"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">  116</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">execute</a>() {</div>
-<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#a05e2dd99478868128413378977a68aa4">Registry::set_current_test_name</a>(<a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>);</div>
-<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">setUp</a>();</div>
-<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">run</a>();</div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">tearDown</a>();</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    }</div>
-</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span> </div>
+<div class="foldopen" id="foldopen00118" data-start="{" data-end="};">
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html">  118</a></span><span class="keyword">class </span><a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a> {</div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span><span class="keyword">public</span>:</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">  120</a></span>    <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">TestBase</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>) : <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>(<a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>) {}</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a">  121</a></span>    <span class="keyword">virtual</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a">~TestBase</a>() = <span class="keywordflow">default</span>;</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span> </div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">  123</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">setUp</a>() {}</div>
-<div class="line"><a id="l00124" name="l00124"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">  124</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">run</a>() = 0;</div>
-<div class="line"><a id="l00125" name="l00125"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">  125</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">tearDown</a>() {}</div>
-<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span> </div>
-<div class="line"><a id="l00127" name="l00127"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">  127</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>()<span class="keyword"> const </span>{ <span class="keywordflow">return</span> <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>; }</div>
-<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span> </div>
-<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span><span class="keyword">protected</span>:</div>
-<div class="foldopen" id="foldopen00130" data-start="{" data-end="}">
-<div class="line"><a id="l00130" name="l00130"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">  130</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">fail</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* file, <span class="keywordtype">int</span> line, <span class="keyword">const</span> <span class="keywordtype">char</span>* expr) {</div>
-<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>        <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">failed_</a> = <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#ae67f21b87c472fb381d3146a1e413d64">Registry::record_failure</a>(file, line, expr);</div>
-<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    }</div>
+<div class="foldopen" id="foldopen00123" data-start="{" data-end="}">
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">  123</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">execute</a>() {</div>
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#a05e2dd99478868128413378977a68aa4">Registry::set_current_test_name</a>(<a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>);</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">setUp</a>();</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">run</a>();</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">tearDown</a>();</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>    }</div>
 </div>
-<div class="foldopen" id="foldopen00134" data-start="{" data-end="}">
-<div class="line"><a id="l00134" name="l00134"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">  134</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">pass</a>() {</div>
-<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#abf323cc53e9953c7f1abd1777785d3ef">Registry::record_success</a>();</div>
-<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    }</div>
+<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span> </div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">  130</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">setUp</a>() {}</div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">  131</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">run</a>() = 0;</div>
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">  132</a></span>    <span class="keyword">virtual</span> <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">tearDown</a>() {}</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span> </div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">  134</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">name</a>()<span class="keyword"> const </span>{ <span class="keywordflow">return</span> <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>; }</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span> </div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span><span class="keyword">protected</span>:</div>
+<div class="foldopen" id="foldopen00137" data-start="{" data-end="}">
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">  137</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">fail</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* file, <span class="keywordtype">int</span> line, <span class="keyword">const</span> <span class="keywordtype">char</span>* expr) {</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>        <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">failed_</a> = <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#ae67f21b87c472fb381d3146a1e413d64">Registry::record_failure</a>(file, line, expr);</div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    }</div>
 </div>
-<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span> </div>
-<div class="line"><a id="l00138" name="l00138"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">  138</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>;</div>
-<div class="line"><a id="l00139" name="l00139"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">  139</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">failed_</a> = <span class="keyword">false</span>;</div>
-<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>};</div>
+<div class="foldopen" id="foldopen00141" data-start="{" data-end="}">
+<div class="line"><a id="l00141" name="l00141"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">  141</a></span>    <span class="keywordtype">void</span> <a class="code hl_function" href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">pass</a>() {</div>
+<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>        <a class="code hl_function" href="classkernel_1_1test_1_1_registry.html#abf323cc53e9953c7f1abd1777785d3ef">Registry::record_success</a>();</div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>    }</div>
 </div>
-<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span></div>
-<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *<a class="code hl_function" href="namespacekernel_1_1test.html#a0393b984f5bd8f8fa3e1014037f2dcd0">create_named_task</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
-<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span>                                     <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
-<div class="line"><a id="l00149" name="l00149"></a><span class="lineno">  149</span>                                     <span class="keyword">const</span> <span class="keywordtype">char</span> *tag = <span class="keyword">nullptr</span>);</div>
-<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span></div>
-<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a2f2ad7408a2984ebbc8a46b37f1e6f5f">add_task_named</a>(<a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> &amp;<a class="code hl_namespace" href="namespacekernel_1_1task.html">task</a>, <span class="keyword">const</span> <span class="keywordtype">char</span> *tag = <span class="keyword">nullptr</span>);</div>
-<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span> </div>
-<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a47e1961f61dd3427ce55333d8828a5de">run_all</a>();</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a1c32eb5484b7cdcad0ae45d94849f02b">run_safe</a>();</div>
-<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a9096f1bb9a2e4b1541226759b08c1ae5">run_filtered</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> required_flags, <span class="keywordtype">bool</span> use_isolation = <span class="keyword">true</span>);</div>
-<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span></div>
-<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ae1b9042f585e1bfaf6898aed96a403de">run_debug</a>();</div>
-<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a3e91e9cb699a855fe92a5294e1f9463b">run_benchmarks</a>();</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ae3930997b95bec7a00f32aecd001850a">run_release</a>();</div>
-<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a1b7421d43e0e94ec4c1f0005f25222e2">run_registered</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> required_flags);</div>
-<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ac69baaa93109936ecff8ff06f6fb827a">run_suite</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* suite_name);</div>
-<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a0fb9d643d01186cc11f1c2868176b39c">print_report</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> start_ns, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> end_ns);</div>
-<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span> </div>
-<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a2be813db3ba66a8c409d2c8c8e2d69da">set_kernel_entry_ns</a>();</div>
-<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span> </div>
-<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span><span class="preprocessor">#ifdef CONFIG_PROFILING</span></div>
-<div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span><span class="keywordtype">void</span> profiling_dump_samples();</div>
-<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span> </div>
-<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ac6959c848d7b1df0ba4eea129c708171">set_class_auto_shutdown</a>(<span class="keywordtype">bool</span> enabled);</div>
-<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span> </div>
-<div class="foldopen" id="foldopen00179" data-start="{" data-end="};">
-<div class="line"><a id="l00179" name="l00179"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html">  179</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1test_1_1_test_class.html">TestClass</a> {</div>
-<div class="line"><a id="l00180" name="l00180"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">  180</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">name</a>;</div>
-<div class="line"><a id="l00181" name="l00181"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">  181</a></span>    void (*<a class="code hl_variable" href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">register_all</a>)();</div>
-<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>};</div>
+<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span> </div>
+<div class="line"><a id="l00145" name="l00145"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">  145</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">name_</a>;</div>
+<div class="line"><a id="l00146" name="l00146"></a><span class="lineno"><a class="line" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">  146</a></span>    <span class="keywordtype">bool</span> <a class="code hl_variable" href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">failed_</a> = <span class="keyword">false</span>;</div>
+<div class="line"><a id="l00147" name="l00147"></a><span class="lineno">  147</span>};</div>
 </div>
+<div class="line"><a id="l00148" name="l00148"></a><span class="lineno">  148</span></div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span><a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *<a class="code hl_function" href="namespacekernel_1_1test.html#a0393b984f5bd8f8fa3e1014037f2dcd0">create_named_task</a>(<span class="keywordtype">void</span> (*entry)(), <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> priority,</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>                                     <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> period_ticks,</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>                                     <span class="keyword">const</span> <span class="keywordtype">char</span> *tag = <span class="keyword">nullptr</span>);</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span></div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a2f2ad7408a2984ebbc8a46b37f1e6f5f">add_task_named</a>(<a class="code hl_typedef" href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> &amp;<a class="code hl_namespace" href="namespacekernel_1_1task.html">task</a>, <span class="keyword">const</span> <span class="keywordtype">char</span> *tag = <span class="keyword">nullptr</span>);</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span> </div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a47e1961f61dd3427ce55333d8828a5de">run_all</a>();</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a1c32eb5484b7cdcad0ae45d94849f02b">run_safe</a>();</div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a9096f1bb9a2e4b1541226759b08c1ae5">run_filtered</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> required_flags, <span class="keywordtype">bool</span> use_isolation = <span class="keyword">true</span>);</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span></div>
+<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ae1b9042f585e1bfaf6898aed96a403de">run_debug</a>();</div>
+<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a3e91e9cb699a855fe92a5294e1f9463b">run_benchmarks</a>();</div>
+<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ae3930997b95bec7a00f32aecd001850a">run_release</a>();</div>
+<div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a1b7421d43e0e94ec4c1f0005f25222e2">run_registered</a>(<a class="code hl_typedef" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> required_flags);</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ac69baaa93109936ecff8ff06f6fb827a">run_suite</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* suite_name);</div>
+<div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a0fb9d643d01186cc11f1c2868176b39c">print_report</a>(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> start_ns, <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> end_ns);</div>
+<div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span> </div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a2be813db3ba66a8c409d2c8c8e2d69da">set_kernel_entry_ns</a>();</div>
+<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span> </div>
+<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span><span class="preprocessor">#ifdef CONFIG_PROFILING</span></div>
+<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span><span class="keywordtype">void</span> profiling_dump_samples();</div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span> </div>
-<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a47ad5e6d76deb150bf2cb8bf66bd3450">register_class</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* name);</div>
-<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a528c863464ccdb09e9f57510adee048d">dump_class_counts</a>();</div>
-<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span> </div>
-<div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span><span class="comment">// ============================================================================</span></div>
-<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span><span class="comment">// DRIVEN-TEST COOKBOOK — reference skeletons (documentation only, never called)</span></div>
-<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span><span class="comment">//</span></div>
-<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span><span class="comment">// Every kernel test must DRIVE the system to a state through real dispatch,</span></div>
-<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span><span class="comment">// then TRIGGER a real event (timer tick / ISR / syscall / real terminate),</span></div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span><span class="comment">// then VERIFY the reaction.  These skeletons capture the exact patterns that</span></div>
-<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span><span class="comment">// fix the observed parent/child and blocked-sender HANG classes.  A test that</span></div>
-<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span><span class="comment">// copies them is deterministic, leak-free, and cannot wedge the scheduler.</span></div>
-<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span><span class="comment">//</span></div>
-<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span><span class="comment">// MANDATORY RULES (each one stopped a real hang):</span></div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span><span class="comment">//   1. CREATE both TCBs first and set every field/queue BEFORE registering</span></div>
-<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span><span class="comment">//      either task with the scheduler.  The timer ISR fires between arbitrary</span></div>
-<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span><span class="comment">//      instructions, so a task added early can be dispatched (and terminate)</span></div>
-<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span><span class="comment">//      before the harness finishes arranging the scenario.</span></div>
-<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span><span class="comment">//   2. REGISTER multiple cooperating tasks under one `arch::IrqGuard` so no</span></div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span><span class="comment">//      timer tick can split the registration.  The higher-priority task that</span></div>
-<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span><span class="comment">//      must BLOCK runs first; the lower-priority peer runs after it blocks.</span></div>
-<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span><span class="comment">//   3. WAIT on observed task state (`task-&gt;state == TaskState::BLOCKED`) with</span></div>
-<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span><span class="comment">//      `asm volatile(&quot;pause&quot;)`.  Never assume ordering.</span></div>
-<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span><span class="comment">//   4. RECLAIM self-terminated tasks via `Scheduler::drain_zombie_list()`.</span></div>
-<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span><span class="comment">//      `Scheduler::terminate()` only marks a task TERMINATED and moves it to</span></div>
-<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span><span class="comment">//      the zombie list — it does NOT free the TCB.  Never follow it with</span></div>
-<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span><span class="comment">//      `remove_task()+cleanup()+delete` (double-free on a poisoned block).</span></div>
-<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span><span class="comment">//   5. CLEANUP BEFORE ASSERT: drain zombies / terminate stray live peers</span></div>
-<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span><span class="comment">//      BEFORE `JARVIS_ASSERT*`.  Assertions `return` on failure, so asserting</span></div>
-<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span><span class="comment">//      before cleanup leaks the TCB (observed as `PMM +17, Tasks +1`) or</span></div>
-<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span><span class="comment">//      leaves a live task that hangs the whole class.</span></div>
-<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span><span class="comment">//   6. External termination of a task blocked in `Semaphore::wait()` is SAFE</span></div>
-<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span><span class="comment">//      since v0.3.12: `TaskControlBlock::cleanup()` unlinks the task from the</span></div>
-<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span><span class="comment">//      semaphore&#39;s waiter list via the `waiting_on_semaphore` back-pointer</span></div>
-<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span><span class="comment">//      (v0.3.9 teardown gap closed).  Verify teardown with</span></div>
-<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span><span class="comment">//      `semaphore_waiter_teardown_on_terminate` — do not re-add the old</span></div>
-<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span><span class="comment">//      workaround (avoiding the scenario instead of testing it).</span></div>
-<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span><span class="comment">// ============================================================================</span></div>
-<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span></div>
-<div class="line"><a id="l00245" name="l00245"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">  245</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">__reference_parent_wait_child</a>() {}</div>
-<div class="line"><a id="l00246" name="l00246"></a><span class="lineno">  246</span></div>
-<div class="line"><a id="l00258" name="l00258"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">  258</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">__reference_single_terminating_task</a>() {}</div>
-<div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span></div>
-<div class="line"><a id="l00280" name="l00280"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">  280</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">__reference_blocked_sender_cleanup</a>() {}</div>
-<div class="line"><a id="l00281" name="l00281"></a><span class="lineno">  281</span> </div>
-<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span>} <span class="comment">// namespace test</span></div>
-<div class="line"><a id="l00283" name="l00283"></a><span class="lineno">  283</span>} <span class="comment">// namespace kernel</span></div>
-<div class="line"><a id="l00284" name="l00284"></a><span class="lineno">  284</span> </div>
-<div class="foldopen" id="foldopen00285" data-start="" data-end="">
-<div class="line"><a id="l00285" name="l00285"></a><span class="lineno"><a class="line" href="test_8hpp.html#a85f9a17a30cbbc792b991eada487723f">  285</a></span><span class="preprocessor">#define JARVIS_TEST(name, ...)                                                \</span></div>
-<div class="line"><a id="l00286" name="l00286"></a><span class="lineno">  286</span><span class="preprocessor">    void test_##name();                                                        \</span></div>
-<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span><span class="preprocessor">    void test_##name()</span></div>
+<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ac6959c848d7b1df0ba4eea129c708171">set_class_auto_shutdown</a>(<span class="keywordtype">bool</span> enabled);</div>
+<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span> </div>
+<div class="foldopen" id="foldopen00186" data-start="{" data-end="};">
+<div class="line"><a id="l00186" name="l00186"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html">  186</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structkernel_1_1test_1_1_test_class.html">TestClass</a> {</div>
+<div class="line"><a id="l00187" name="l00187"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">  187</a></span>    <span class="keyword">const</span> <span class="keywordtype">char</span>* <a class="code hl_variable" href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">name</a>;</div>
+<div class="line"><a id="l00188" name="l00188"></a><span class="lineno"><a class="line" href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">  188</a></span>    void (*<a class="code hl_variable" href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">register_all</a>)();</div>
+<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>};</div>
 </div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span> </div>
+<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a47ad5e6d76deb150bf2cb8bf66bd3450">register_class</a>(<span class="keyword">const</span> <span class="keywordtype">char</span>* name);</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a528c863464ccdb09e9f57510adee048d">dump_class_counts</a>();</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span> </div>
+<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span><span class="comment">// ============================================================================</span></div>
+<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span><span class="comment">// DRIVEN-TEST COOKBOOK — reference skeletons (documentation only, never called)</span></div>
+<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span><span class="comment">//</span></div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span><span class="comment">// Every kernel test must DRIVE the system to a state through real dispatch,</span></div>
+<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span><span class="comment">// then TRIGGER a real event (timer tick / ISR / syscall / real terminate),</span></div>
+<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span><span class="comment">// then VERIFY the reaction.  These skeletons capture the exact patterns that</span></div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span><span class="comment">// fix the observed parent/child and blocked-sender HANG classes.  A test that</span></div>
+<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span><span class="comment">// copies them is deterministic, leak-free, and cannot wedge the scheduler.</span></div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span><span class="comment">//</span></div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span><span class="comment">// MANDATORY RULES (each one stopped a real hang):</span></div>
+<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span><span class="comment">//   1. CREATE both TCBs first and set every field/queue BEFORE registering</span></div>
+<div class="line"><a id="l00205" name="l00205"></a><span class="lineno">  205</span><span class="comment">//      either task with the scheduler.  The timer ISR fires between arbitrary</span></div>
+<div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span><span class="comment">//      instructions, so a task added early can be dispatched (and terminate)</span></div>
+<div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span><span class="comment">//      before the harness finishes arranging the scenario.</span></div>
+<div class="line"><a id="l00208" name="l00208"></a><span class="lineno">  208</span><span class="comment">//   2. REGISTER multiple cooperating tasks under one `arch::IrqGuard` so no</span></div>
+<div class="line"><a id="l00209" name="l00209"></a><span class="lineno">  209</span><span class="comment">//      timer tick can split the registration.  The higher-priority task that</span></div>
+<div class="line"><a id="l00210" name="l00210"></a><span class="lineno">  210</span><span class="comment">//      must BLOCK runs first; the lower-priority peer runs after it blocks.</span></div>
+<div class="line"><a id="l00211" name="l00211"></a><span class="lineno">  211</span><span class="comment">//   3. WAIT on observed task state (`task-&gt;state == TaskState::BLOCKED`) with</span></div>
+<div class="line"><a id="l00212" name="l00212"></a><span class="lineno">  212</span><span class="comment">//      `asm volatile(&quot;pause&quot;)`.  Never assume ordering.</span></div>
+<div class="line"><a id="l00213" name="l00213"></a><span class="lineno">  213</span><span class="comment">//   4. RECLAIM self-terminated tasks via `Scheduler::drain_zombie_list()`.</span></div>
+<div class="line"><a id="l00214" name="l00214"></a><span class="lineno">  214</span><span class="comment">//      `Scheduler::terminate()` only marks a task TERMINATED and moves it to</span></div>
+<div class="line"><a id="l00215" name="l00215"></a><span class="lineno">  215</span><span class="comment">//      the zombie list — it does NOT free the TCB.  Never follow it with</span></div>
+<div class="line"><a id="l00216" name="l00216"></a><span class="lineno">  216</span><span class="comment">//      `remove_task()+cleanup()+delete` (double-free on a poisoned block).</span></div>
+<div class="line"><a id="l00217" name="l00217"></a><span class="lineno">  217</span><span class="comment">//   5. CLEANUP BEFORE ASSERT: drain zombies / terminate stray live peers</span></div>
+<div class="line"><a id="l00218" name="l00218"></a><span class="lineno">  218</span><span class="comment">//      BEFORE `JARVIS_ASSERT*`.  Assertions `return` on failure, so asserting</span></div>
+<div class="line"><a id="l00219" name="l00219"></a><span class="lineno">  219</span><span class="comment">//      before cleanup leaks the TCB (observed as `PMM +17, Tasks +1`) or</span></div>
+<div class="line"><a id="l00220" name="l00220"></a><span class="lineno">  220</span><span class="comment">//      leaves a live task that hangs the whole class.</span></div>
+<div class="line"><a id="l00221" name="l00221"></a><span class="lineno">  221</span><span class="comment">//   6. External termination of a task blocked in `Semaphore::wait()` is SAFE</span></div>
+<div class="line"><a id="l00222" name="l00222"></a><span class="lineno">  222</span><span class="comment">//      since v0.3.12: `TaskControlBlock::cleanup()` unlinks the task from the</span></div>
+<div class="line"><a id="l00223" name="l00223"></a><span class="lineno">  223</span><span class="comment">//      semaphore&#39;s waiter list via the `waiting_on_semaphore` back-pointer</span></div>
+<div class="line"><a id="l00224" name="l00224"></a><span class="lineno">  224</span><span class="comment">//      (v0.3.9 teardown gap closed).  Verify teardown with</span></div>
+<div class="line"><a id="l00225" name="l00225"></a><span class="lineno">  225</span><span class="comment">//      `semaphore_waiter_teardown_on_terminate` — do not re-add the old</span></div>
+<div class="line"><a id="l00226" name="l00226"></a><span class="lineno">  226</span><span class="comment">//      workaround (avoiding the scenario instead of testing it).</span></div>
+<div class="line"><a id="l00227" name="l00227"></a><span class="lineno">  227</span><span class="comment">// ============================================================================</span></div>
+<div class="line"><a id="l00228" name="l00228"></a><span class="lineno">  228</span></div>
+<div class="line"><a id="l00252" name="l00252"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">  252</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">__reference_parent_wait_child</a>() {}</div>
+<div class="line"><a id="l00253" name="l00253"></a><span class="lineno">  253</span></div>
+<div class="line"><a id="l00265" name="l00265"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">  265</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">__reference_single_terminating_task</a>() {}</div>
+<div class="line"><a id="l00266" name="l00266"></a><span class="lineno">  266</span></div>
+<div class="line"><a id="l00287" name="l00287"></a><span class="lineno"><a class="line" href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">  287</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">__reference_blocked_sender_cleanup</a>() {}</div>
 <div class="line"><a id="l00288" name="l00288"></a><span class="lineno">  288</span> </div>
-<div class="foldopen" id="foldopen00289" data-start="" data-end="">
-<div class="line"><a id="l00289" name="l00289"></a><span class="lineno"><a class="line" href="test_8hpp.html#acb011f9c5f9d8a4cc78c234a97855696">  289</a></span><span class="preprocessor">#define JARVIS_TEST_SUITE(suite, name, ...)                                   \</span></div>
-<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span><span class="preprocessor">    void test_##suite##_##name();                                              \</span></div>
-<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span><span class="preprocessor">    void test_##suite##_##name()</span></div>
+<div class="line"><a id="l00289" name="l00289"></a><span class="lineno">  289</span>} <span class="comment">// namespace test</span></div>
+<div class="line"><a id="l00290" name="l00290"></a><span class="lineno">  290</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span> </div>
+<div class="foldopen" id="foldopen00292" data-start="" data-end="">
+<div class="line"><a id="l00292" name="l00292"></a><span class="lineno"><a class="line" href="test_8hpp.html#a85f9a17a30cbbc792b991eada487723f">  292</a></span><span class="preprocessor">#define JARVIS_TEST(name, ...)                                                \</span></div>
+<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span><span class="preprocessor">    void test_##name();                                                        \</span></div>
+<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span><span class="preprocessor">    void test_##name()</span></div>
 </div>
-<div class="line"><a id="l00292" name="l00292"></a><span class="lineno">  292</span> </div>
-<div class="foldopen" id="foldopen00293" data-start="" data-end="">
-<div class="line"><a id="l00293" name="l00293"></a><span class="lineno"><a class="line" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">  293</a></span><span class="preprocessor">#define JARVIS_ASSERT(cond)                                                   \</span></div>
-<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span><span class="preprocessor">        if (!(cond)) {                                                         \</span></div>
-<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
-<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span><span class="preprocessor">                __FILE__, __LINE__, #cond);                                    \</span></div>
-<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span><span class="preprocessor">            return;                                                            \</span></div>
-<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span><span class="preprocessor">        }                                                                      \</span></div>
-<div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
-<div class="line"><a id="l00301" name="l00301"></a><span class="lineno">  301</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span> </div>
+<div class="foldopen" id="foldopen00296" data-start="" data-end="">
+<div class="line"><a id="l00296" name="l00296"></a><span class="lineno"><a class="line" href="test_8hpp.html#acb011f9c5f9d8a4cc78c234a97855696">  296</a></span><span class="preprocessor">#define JARVIS_TEST_SUITE(suite, name, ...)                                   \</span></div>
+<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span><span class="preprocessor">    void test_##suite##_##name();                                              \</span></div>
+<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span><span class="preprocessor">    void test_##suite##_##name()</span></div>
 </div>
-<div class="line"><a id="l00302" name="l00302"></a><span class="lineno">  302</span> </div>
-<div class="foldopen" id="foldopen00303" data-start="" data-end="">
-<div class="line"><a id="l00303" name="l00303"></a><span class="lineno"><a class="line" href="test_8hpp.html#a97a6a193c23a6c013f125d670fca1547">  303</a></span><span class="preprocessor">#define JARVIS_ASSERT_HEX_EQ(expected, actual)                                \</span></div>
-<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span><span class="preprocessor">        uint64_t _exp = static_cast&lt;uint64_t&gt;(expected);                       \</span></div>
-<div class="line"><a id="l00306" name="l00306"></a><span class="lineno">  306</span><span class="preprocessor">        uint64_t _act = static_cast&lt;uint64_t&gt;(actual);                         \</span></div>
-<div class="line"><a id="l00307" name="l00307"></a><span class="lineno">  307</span><span class="preprocessor">        if (_exp != _act) {                                                    \</span></div>
-<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
-<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span><span class="preprocessor">                __FILE__, __LINE__,                                            \</span></div>
-<div class="line"><a id="l00310" name="l00310"></a><span class="lineno">  310</span><span class="preprocessor">                #actual &quot; == &quot; #expected &quot; (exp=0x&quot; #expected &quot;)&quot;);            \</span></div>
-<div class="line"><a id="l00311" name="l00311"></a><span class="lineno">  311</span><span class="preprocessor">            return;                                                            \</span></div>
-<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span><span class="preprocessor">        }                                                                      \</span></div>
-<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
-<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span> </div>
+<div class="foldopen" id="foldopen00300" data-start="" data-end="">
+<div class="line"><a id="l00300" name="l00300"></a><span class="lineno"><a class="line" href="test_8hpp.html#a6be5a5c3dd0c6a401f58b591b07914f3">  300</a></span><span class="preprocessor">#define JARVIS_ASSERT(cond)                                                   \</span></div>
+<div class="line"><a id="l00301" name="l00301"></a><span class="lineno">  301</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00302" name="l00302"></a><span class="lineno">  302</span><span class="preprocessor">        if (!(cond)) {                                                         \</span></div>
+<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
+<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span><span class="preprocessor">                __FILE__, __LINE__, #cond);                                    \</span></div>
+<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span><span class="preprocessor">            return;                                                            \</span></div>
+<div class="line"><a id="l00306" name="l00306"></a><span class="lineno">  306</span><span class="preprocessor">        }                                                                      \</span></div>
+<div class="line"><a id="l00307" name="l00307"></a><span class="lineno">  307</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
+<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span> </div>
-<div class="foldopen" id="foldopen00316" data-start="" data-end="">
-<div class="line"><a id="l00316" name="l00316"></a><span class="lineno"><a class="line" href="test_8hpp.html#a49403c168ea4b3a44b7cebd4eb5178b8">  316</a></span><span class="preprocessor">#define JARVIS_ASSERT_EQ(expected, actual)                                    \</span></div>
-<div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00318" name="l00318"></a><span class="lineno">  318</span><span class="preprocessor">        if ((expected) != (actual)) {                                          \</span></div>
-<div class="line"><a id="l00319" name="l00319"></a><span class="lineno">  319</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
-<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span><span class="preprocessor">                __FILE__, __LINE__,                                            \</span></div>
-<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span><span class="preprocessor">                #actual &quot; != &quot; #expected);                                     \</span></div>
-<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span><span class="preprocessor">            return;                                                            \</span></div>
-<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span><span class="preprocessor">        }                                                                      \</span></div>
-<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
-<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span> </div>
+<div class="foldopen" id="foldopen00310" data-start="" data-end="">
+<div class="line"><a id="l00310" name="l00310"></a><span class="lineno"><a class="line" href="test_8hpp.html#a97a6a193c23a6c013f125d670fca1547">  310</a></span><span class="preprocessor">#define JARVIS_ASSERT_HEX_EQ(expected, actual)                                \</span></div>
+<div class="line"><a id="l00311" name="l00311"></a><span class="lineno">  311</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span><span class="preprocessor">        uint64_t _exp = static_cast&lt;uint64_t&gt;(expected);                       \</span></div>
+<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span><span class="preprocessor">        uint64_t _act = static_cast&lt;uint64_t&gt;(actual);                         \</span></div>
+<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span><span class="preprocessor">        if (_exp != _act) {                                                    \</span></div>
+<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
+<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span><span class="preprocessor">                __FILE__, __LINE__,                                            \</span></div>
+<div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span><span class="preprocessor">                #actual &quot; == &quot; #expected &quot; (exp=0x&quot; #expected &quot;)&quot;);            \</span></div>
+<div class="line"><a id="l00318" name="l00318"></a><span class="lineno">  318</span><span class="preprocessor">            return;                                                            \</span></div>
+<div class="line"><a id="l00319" name="l00319"></a><span class="lineno">  319</span><span class="preprocessor">        }                                                                      \</span></div>
+<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
+<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span> </div>
-<div class="foldopen" id="foldopen00327" data-start="" data-end="">
-<div class="line"><a id="l00327" name="l00327"></a><span class="lineno"><a class="line" href="test_8hpp.html#adecb4ba72098ef39a0f4f24b829f807c">  327</a></span><span class="preprocessor">#define JARVIS_TEST_PASS()                                                     \</span></div>
-<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span><span class="preprocessor">    kernel::test::Registry::record_success()</span></div>
+<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span> </div>
+<div class="foldopen" id="foldopen00323" data-start="" data-end="">
+<div class="line"><a id="l00323" name="l00323"></a><span class="lineno"><a class="line" href="test_8hpp.html#a49403c168ea4b3a44b7cebd4eb5178b8">  323</a></span><span class="preprocessor">#define JARVIS_ASSERT_EQ(expected, actual)                                    \</span></div>
+<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span><span class="preprocessor">        if ((expected) != (actual)) {                                          \</span></div>
+<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span><span class="preprocessor">            kernel::test::Registry::record_failure(                            \</span></div>
+<div class="line"><a id="l00327" name="l00327"></a><span class="lineno">  327</span><span class="preprocessor">                __FILE__, __LINE__,                                            \</span></div>
+<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span><span class="preprocessor">                #actual &quot; != &quot; #expected);                                     \</span></div>
+<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span><span class="preprocessor">            return;                                                            \</span></div>
+<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span><span class="preprocessor">        }                                                                      \</span></div>
+<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
+<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span> </div>
-<div class="foldopen" id="foldopen00330" data-start="" data-end="">
-<div class="line"><a id="l00330" name="l00330"></a><span class="lineno"><a class="line" href="test_8hpp.html#a94a59c91c6346de8eeff27bab97b2f51">  330</a></span><span class="preprocessor">#define JARVIS_FAIL(fmt, ...)                                                  \</span></div>
-<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span><span class="preprocessor">        kernel::test::Registry::record_failure_fmt(                            \</span></div>
-<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span><span class="preprocessor">            __FILE__, __LINE__, fmt, ##__VA_ARGS__);                           \</span></div>
-<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span><span class="preprocessor">        return;                                                                \</span></div>
-<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span> </div>
+<div class="foldopen" id="foldopen00334" data-start="" data-end="">
+<div class="line"><a id="l00334" name="l00334"></a><span class="lineno"><a class="line" href="test_8hpp.html#adecb4ba72098ef39a0f4f24b829f807c">  334</a></span><span class="preprocessor">#define JARVIS_TEST_PASS()                                                     \</span></div>
+<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span><span class="preprocessor">    kernel::test::Registry::record_success()</span></div>
 </div>
 <div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span> </div>
 <div class="foldopen" id="foldopen00337" data-start="" data-end="">
-<div class="line"><a id="l00337" name="l00337"></a><span class="lineno"><a class="line" href="test_8hpp.html#aa489f4f0e59be8f90da251140ac3f61d">  337</a></span><span class="preprocessor">#define JARVIS_ASSERT_FMT(cond, fmt, ...)                                      \</span></div>
+<div class="line"><a id="l00337" name="l00337"></a><span class="lineno"><a class="line" href="test_8hpp.html#a94a59c91c6346de8eeff27bab97b2f51">  337</a></span><span class="preprocessor">#define JARVIS_FAIL(fmt, ...)                                                  \</span></div>
 <div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span><span class="preprocessor">        if (!(cond)) {                                                         \</span></div>
-<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span><span class="preprocessor">            kernel::test::Registry::record_failure_fmt(                        \</span></div>
-<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span><span class="preprocessor">                __FILE__, __LINE__, fmt, ##__VA_ARGS__);                       \</span></div>
-<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span><span class="preprocessor">            return;                                                            \</span></div>
-<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span><span class="preprocessor">        }                                                                      \</span></div>
-<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
-<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span><span class="preprocessor">        kernel::test::Registry::record_failure_fmt(                            \</span></div>
+<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span><span class="preprocessor">            __FILE__, __LINE__, fmt, ##__VA_ARGS__);                           \</span></div>
+<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span><span class="preprocessor">        return;                                                                \</span></div>
+<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span> </div>
-<div class="foldopen" id="foldopen00347" data-start="" data-end="">
-<div class="line"><a id="l00347" name="l00347"></a><span class="lineno"><a class="line" href="test_8hpp.html#a374771e8d81b5baa372492a3979e5f73">  347</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_FLAGS(name, flags_)                              \</span></div>
-<div class="line"><a id="l00348" name="l00348"></a><span class="lineno">  348</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                         \</span></div>
-<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span><span class="preprocessor">            &quot;&quot;, #name, test_##name, nullptr, flags_                            \</span></div>
-<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span><span class="preprocessor">        };                                                                     \</span></div>
-<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                             \</span></div>
-<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span> </div>
+<div class="foldopen" id="foldopen00344" data-start="" data-end="">
+<div class="line"><a id="l00344" name="l00344"></a><span class="lineno"><a class="line" href="test_8hpp.html#aa489f4f0e59be8f90da251140ac3f61d">  344</a></span><span class="preprocessor">#define JARVIS_ASSERT_FMT(cond, fmt, ...)                                      \</span></div>
+<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span><span class="preprocessor">        if (!(cond)) {                                                         \</span></div>
+<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span><span class="preprocessor">            kernel::test::Registry::record_failure_fmt(                        \</span></div>
+<div class="line"><a id="l00348" name="l00348"></a><span class="lineno">  348</span><span class="preprocessor">                __FILE__, __LINE__, fmt, ##__VA_ARGS__);                       \</span></div>
+<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span><span class="preprocessor">            return;                                                            \</span></div>
+<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span><span class="preprocessor">        }                                                                      \</span></div>
+<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span><span class="preprocessor">        kernel::test::Registry::record_success();                              \</span></div>
+<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span> </div>
-<div class="foldopen" id="foldopen00355" data-start="" data-end="">
-<div class="line"><a id="l00355" name="l00355"></a><span class="lineno"><a class="line" href="test_8hpp.html#ac06709245437cdd63dee99d87fbd39c2">  355</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST(name)                                            \</span></div>
-<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span><span class="preprocessor">    JARVIS_REGISTER_TEST_FLAGS(name, kernel::test::TF_KERNEL)</span></div>
+<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span> </div>
+<div class="foldopen" id="foldopen00354" data-start="" data-end="">
+<div class="line"><a id="l00354" name="l00354"></a><span class="lineno"><a class="line" href="test_8hpp.html#a374771e8d81b5baa372492a3979e5f73">  354</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_FLAGS(name, flags_)                              \</span></div>
+<div class="line"><a id="l00355" name="l00355"></a><span class="lineno">  355</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                         \</span></div>
+<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span><span class="preprocessor">            &quot;&quot;, #name, test_##name, nullptr, flags_                            \</span></div>
+<div class="line"><a id="l00358" name="l00358"></a><span class="lineno">  358</span><span class="preprocessor">        };                                                                     \</span></div>
+<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                             \</span></div>
+<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span> </div>
-<div class="foldopen" id="foldopen00358" data-start="" data-end="">
-<div class="line"><a id="l00358" name="l00358"></a><span class="lineno"><a class="line" href="test_8hpp.html#ace88e8d25337f01fa0b540f62b0889e7">  358</a></span><span class="preprocessor">#define JARVIS_REGISTER_RELEASE_TEST(name)                                    \</span></div>
-<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span><span class="preprocessor">    JARVIS_REGISTER_TEST_FLAGS(name, kernel::test::TF_RELEASE)</span></div>
+<div class="line"><a id="l00361" name="l00361"></a><span class="lineno">  361</span> </div>
+<div class="foldopen" id="foldopen00362" data-start="" data-end="">
+<div class="line"><a id="l00362" name="l00362"></a><span class="lineno"><a class="line" href="test_8hpp.html#ac06709245437cdd63dee99d87fbd39c2">  362</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST(name)                                            \</span></div>
+<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span><span class="preprocessor">    JARVIS_REGISTER_TEST_FLAGS(name, kernel::test::TF_KERNEL)</span></div>
 </div>
-<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span> </div>
-<div class="foldopen" id="foldopen00361" data-start="" data-end="">
-<div class="line"><a id="l00361" name="l00361"></a><span class="lineno"><a class="line" href="test_8hpp.html#a898e9992b56f0e0b33e86dba5b5afa59">  361</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, flags_)                 \</span></div>
-<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span><span class="preprocessor">    do {                                                                       \</span></div>
-<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                         \</span></div>
-<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span><span class="preprocessor">            #suite, #name, test_##suite##_##name, nullptr, flags_              \</span></div>
-<div class="line"><a id="l00365" name="l00365"></a><span class="lineno">  365</span><span class="preprocessor">        };                                                                     \</span></div>
-<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                             \</span></div>
-<div class="line"><a id="l00367" name="l00367"></a><span class="lineno">  367</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span> </div>
+<div class="foldopen" id="foldopen00365" data-start="" data-end="">
+<div class="line"><a id="l00365" name="l00365"></a><span class="lineno"><a class="line" href="test_8hpp.html#ace88e8d25337f01fa0b540f62b0889e7">  365</a></span><span class="preprocessor">#define JARVIS_REGISTER_RELEASE_TEST(name)                                    \</span></div>
+<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span><span class="preprocessor">    JARVIS_REGISTER_TEST_FLAGS(name, kernel::test::TF_RELEASE)</span></div>
 </div>
-<div class="line"><a id="l00368" name="l00368"></a><span class="lineno">  368</span> </div>
-<div class="foldopen" id="foldopen00369" data-start="" data-end="">
-<div class="line"><a id="l00369" name="l00369"></a><span class="lineno"><a class="line" href="test_8hpp.html#ab8f70fab26dfe2f99dbbf29a783b8244">  369</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_SUITE(suite, name)                                \</span></div>
-<div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span><span class="preprocessor">    JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, kernel::test::TF_KERNEL)</span></div>
+<div class="line"><a id="l00367" name="l00367"></a><span class="lineno">  367</span> </div>
+<div class="foldopen" id="foldopen00368" data-start="" data-end="">
+<div class="line"><a id="l00368" name="l00368"></a><span class="lineno"><a class="line" href="test_8hpp.html#a898e9992b56f0e0b33e86dba5b5afa59">  368</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, flags_)                 \</span></div>
+<div class="line"><a id="l00369" name="l00369"></a><span class="lineno">  369</span><span class="preprocessor">    do {                                                                       \</span></div>
+<div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                         \</span></div>
+<div class="line"><a id="l00371" name="l00371"></a><span class="lineno">  371</span><span class="preprocessor">            #suite, #name, test_##suite##_##name, nullptr, flags_              \</span></div>
+<div class="line"><a id="l00372" name="l00372"></a><span class="lineno">  372</span><span class="preprocessor">        };                                                                     \</span></div>
+<div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                             \</span></div>
+<div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00371" name="l00371"></a><span class="lineno">  371</span> </div>
-<div class="foldopen" id="foldopen00372" data-start="" data-end="">
-<div class="line"><a id="l00372" name="l00372"></a><span class="lineno"><a class="line" href="test_8hpp.html#aea3010f67d1cac2e436b9cbe6915a317">  372</a></span><span class="preprocessor">#define JARVIS_REGISTER_RELEASE_TEST_SUITE(suite, name)                       \</span></div>
-<div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span><span class="preprocessor">    JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, kernel::test::TF_RELEASE)</span></div>
+<div class="line"><a id="l00375" name="l00375"></a><span class="lineno">  375</span> </div>
+<div class="foldopen" id="foldopen00376" data-start="" data-end="">
+<div class="line"><a id="l00376" name="l00376"></a><span class="lineno"><a class="line" href="test_8hpp.html#ab8f70fab26dfe2f99dbbf29a783b8244">  376</a></span><span class="preprocessor">#define JARVIS_REGISTER_TEST_SUITE(suite, name)                                \</span></div>
+<div class="line"><a id="l00377" name="l00377"></a><span class="lineno">  377</span><span class="preprocessor">    JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, kernel::test::TF_KERNEL)</span></div>
 </div>
-<div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span> </div>
-<div class="line"><a id="l00375" name="l00375"></a><span class="lineno">  375</span><span class="comment">// NOLINTBEGIN(bugprone-macro-parentheses)</span></div>
-<div class="line"><a id="l00376" name="l00376"></a><span class="lineno">  376</span><span class="preprocessor">#ifndef __clang__</span></div>
-<div class="line"><a id="l00377" name="l00377"></a><span class="lineno"><a class="line" href="test_8hpp.html#aad8a8d3a88163a9f5bc99478d042d6d9">  377</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_PUSH    _Pragma(&quot;GCC diagnostic push&quot;)</span></div>
-<div class="line"><a id="l00378" name="l00378"></a><span class="lineno"><a class="line" href="test_8hpp.html#a63090b98936c40fe36959666f20e9b5a">  378</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_IGNORE  _Pragma(&quot;GCC diagnostic ignored \&quot;-Wanalyzer-possible-null-dereference\&quot;&quot;)</span></div>
-<div class="line"><a id="l00379" name="l00379"></a><span class="lineno"><a class="line" href="test_8hpp.html#a150303e01ba93eb38c6b6fe25a02ca17">  379</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_POP     _Pragma(&quot;GCC diagnostic pop&quot;)</span></div>
-<div class="line"><a id="l00380" name="l00380"></a><span class="lineno">  380</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00381" name="l00381"></a><span class="lineno">  381</span><span class="preprocessor">#define TEST_CLASS_DIAG_PUSH</span></div>
-<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span><span class="preprocessor">#define TEST_CLASS_DIAG_IGNORE</span></div>
-<div class="line"><a id="l00383" name="l00383"></a><span class="lineno">  383</span><span class="preprocessor">#define TEST_CLASS_DIAG_POP</span></div>
-<div class="line"><a id="l00384" name="l00384"></a><span class="lineno">  384</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00385" name="l00385"></a><span class="lineno">  385</span> </div>
-<div class="foldopen" id="foldopen00386" data-start="" data-end="">
-<div class="line"><a id="l00386" name="l00386"></a><span class="lineno"><a class="line" href="test_8hpp.html#a90a8db2c8cb10c09750f1f73a0bbf01c">  386</a></span><span class="preprocessor">#define TEST_CLASS(name)                                                      \</span></div>
-<div class="line"><a id="l00387" name="l00387"></a><span class="lineno">  387</span><span class="preprocessor">    class name : public kernel::test::TestBase {                              \</span></div>
-<div class="line"><a id="l00388" name="l00388"></a><span class="lineno">  388</span><span class="preprocessor">    public:                                                                   \</span></div>
-<div class="line"><a id="l00389" name="l00389"></a><span class="lineno">  389</span><span class="preprocessor">        name() : TestBase(#name) {}                                           \</span></div>
-<div class="line"><a id="l00390" name="l00390"></a><span class="lineno">  390</span><span class="preprocessor">        void run() override;                                                  \</span></div>
-<div class="line"><a id="l00391" name="l00391"></a><span class="lineno">  391</span><span class="preprocessor">    };                                                                        \</span></div>
-<div class="line"><a id="l00392" name="l00392"></a><span class="lineno">  392</span><span class="preprocessor">    TEST_CLASS_DIAG_PUSH                                                      \</span></div>
-<div class="line"><a id="l00393" name="l00393"></a><span class="lineno">  393</span><span class="preprocessor">    TEST_CLASS_DIAG_IGNORE                                                    \</span></div>
-<div class="line"><a id="l00394" name="l00394"></a><span class="lineno">  394</span><span class="preprocessor">    static kernel::test::TestBase* _factory_##name() { return new name(); }   \</span></div>
-<div class="line"><a id="l00395" name="l00395"></a><span class="lineno">  395</span><span class="preprocessor">    TEST_CLASS_DIAG_POP                                                       \</span></div>
-<div class="line"><a id="l00396" name="l00396"></a><span class="lineno">  396</span><span class="preprocessor">    void name::run()</span></div>
+<div class="line"><a id="l00378" name="l00378"></a><span class="lineno">  378</span> </div>
+<div class="foldopen" id="foldopen00379" data-start="" data-end="">
+<div class="line"><a id="l00379" name="l00379"></a><span class="lineno"><a class="line" href="test_8hpp.html#aea3010f67d1cac2e436b9cbe6915a317">  379</a></span><span class="preprocessor">#define JARVIS_REGISTER_RELEASE_TEST_SUITE(suite, name)                       \</span></div>
+<div class="line"><a id="l00380" name="l00380"></a><span class="lineno">  380</span><span class="preprocessor">    JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, kernel::test::TF_RELEASE)</span></div>
 </div>
-<div class="line"><a id="l00397" name="l00397"></a><span class="lineno">  397</span><span class="comment">// NOLINTEND(bugprone-macro-parentheses)</span></div>
-<div class="line"><a id="l00398" name="l00398"></a><span class="lineno">  398</span> </div>
-<div class="foldopen" id="foldopen00399" data-start="" data-end="">
-<div class="line"><a id="l00399" name="l00399"></a><span class="lineno"><a class="line" href="test_8hpp.html#ace9d865ef1ecb142666cd0beb9c51af3">  399</a></span><span class="preprocessor">#define REGISTER_CLASS_FLAGS(name, flags_)                                    \</span></div>
-<div class="line"><a id="l00400" name="l00400"></a><span class="lineno">  400</span><span class="preprocessor">    do {                                                                      \</span></div>
-<div class="line"><a id="l00401" name="l00401"></a><span class="lineno">  401</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                        \</span></div>
-<div class="line"><a id="l00402" name="l00402"></a><span class="lineno">  402</span><span class="preprocessor">            &quot;&quot;, #name, nullptr, _factory_##name, flags_                       \</span></div>
-<div class="line"><a id="l00403" name="l00403"></a><span class="lineno">  403</span><span class="preprocessor">        };                                                                    \</span></div>
-<div class="line"><a id="l00404" name="l00404"></a><span class="lineno">  404</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                            \</span></div>
-<div class="line"><a id="l00405" name="l00405"></a><span class="lineno">  405</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00381" name="l00381"></a><span class="lineno">  381</span> </div>
+<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span><span class="comment">// NOLINTBEGIN(bugprone-macro-parentheses)</span></div>
+<div class="line"><a id="l00383" name="l00383"></a><span class="lineno">  383</span><span class="preprocessor">#ifndef __clang__</span></div>
+<div class="line"><a id="l00384" name="l00384"></a><span class="lineno"><a class="line" href="test_8hpp.html#aad8a8d3a88163a9f5bc99478d042d6d9">  384</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_PUSH    _Pragma(&quot;GCC diagnostic push&quot;)</span></div>
+<div class="line"><a id="l00385" name="l00385"></a><span class="lineno"><a class="line" href="test_8hpp.html#a63090b98936c40fe36959666f20e9b5a">  385</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_IGNORE  _Pragma(&quot;GCC diagnostic ignored \&quot;-Wanalyzer-possible-null-dereference\&quot;&quot;)</span></div>
+<div class="line"><a id="l00386" name="l00386"></a><span class="lineno"><a class="line" href="test_8hpp.html#a150303e01ba93eb38c6b6fe25a02ca17">  386</a></span><span class="preprocessor">#define TEST_CLASS_DIAG_POP     _Pragma(&quot;GCC diagnostic pop&quot;)</span></div>
+<div class="line"><a id="l00387" name="l00387"></a><span class="lineno">  387</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00388" name="l00388"></a><span class="lineno">  388</span><span class="preprocessor">#define TEST_CLASS_DIAG_PUSH</span></div>
+<div class="line"><a id="l00389" name="l00389"></a><span class="lineno">  389</span><span class="preprocessor">#define TEST_CLASS_DIAG_IGNORE</span></div>
+<div class="line"><a id="l00390" name="l00390"></a><span class="lineno">  390</span><span class="preprocessor">#define TEST_CLASS_DIAG_POP</span></div>
+<div class="line"><a id="l00391" name="l00391"></a><span class="lineno">  391</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00392" name="l00392"></a><span class="lineno">  392</span> </div>
+<div class="foldopen" id="foldopen00393" data-start="" data-end="">
+<div class="line"><a id="l00393" name="l00393"></a><span class="lineno"><a class="line" href="test_8hpp.html#a90a8db2c8cb10c09750f1f73a0bbf01c">  393</a></span><span class="preprocessor">#define TEST_CLASS(name)                                                      \</span></div>
+<div class="line"><a id="l00394" name="l00394"></a><span class="lineno">  394</span><span class="preprocessor">    class name : public kernel::test::TestBase {                              \</span></div>
+<div class="line"><a id="l00395" name="l00395"></a><span class="lineno">  395</span><span class="preprocessor">    public:                                                                   \</span></div>
+<div class="line"><a id="l00396" name="l00396"></a><span class="lineno">  396</span><span class="preprocessor">        name() : TestBase(#name) {}                                           \</span></div>
+<div class="line"><a id="l00397" name="l00397"></a><span class="lineno">  397</span><span class="preprocessor">        void run() override;                                                  \</span></div>
+<div class="line"><a id="l00398" name="l00398"></a><span class="lineno">  398</span><span class="preprocessor">    };                                                                        \</span></div>
+<div class="line"><a id="l00399" name="l00399"></a><span class="lineno">  399</span><span class="preprocessor">    TEST_CLASS_DIAG_PUSH                                                      \</span></div>
+<div class="line"><a id="l00400" name="l00400"></a><span class="lineno">  400</span><span class="preprocessor">    TEST_CLASS_DIAG_IGNORE                                                    \</span></div>
+<div class="line"><a id="l00401" name="l00401"></a><span class="lineno">  401</span><span class="preprocessor">    static kernel::test::TestBase* _factory_##name() { return new name(); }   \</span></div>
+<div class="line"><a id="l00402" name="l00402"></a><span class="lineno">  402</span><span class="preprocessor">    TEST_CLASS_DIAG_POP                                                       \</span></div>
+<div class="line"><a id="l00403" name="l00403"></a><span class="lineno">  403</span><span class="preprocessor">    void name::run()</span></div>
 </div>
-<div class="line"><a id="l00406" name="l00406"></a><span class="lineno">  406</span> </div>
-<div class="foldopen" id="foldopen00407" data-start="" data-end="">
-<div class="line"><a id="l00407" name="l00407"></a><span class="lineno"><a class="line" href="test_8hpp.html#a1102009e7794c6401082aa06a3838921">  407</a></span><span class="preprocessor">#define REGISTER_CLASS(name)                                                  \</span></div>
-<div class="line"><a id="l00408" name="l00408"></a><span class="lineno">  408</span><span class="preprocessor">    REGISTER_CLASS_FLAGS(name, kernel::test::TF_KERNEL)</span></div>
+<div class="line"><a id="l00404" name="l00404"></a><span class="lineno">  404</span><span class="comment">// NOLINTEND(bugprone-macro-parentheses)</span></div>
+<div class="line"><a id="l00405" name="l00405"></a><span class="lineno">  405</span> </div>
+<div class="foldopen" id="foldopen00406" data-start="" data-end="">
+<div class="line"><a id="l00406" name="l00406"></a><span class="lineno"><a class="line" href="test_8hpp.html#ace9d865ef1ecb142666cd0beb9c51af3">  406</a></span><span class="preprocessor">#define REGISTER_CLASS_FLAGS(name, flags_)                                    \</span></div>
+<div class="line"><a id="l00407" name="l00407"></a><span class="lineno">  407</span><span class="preprocessor">    do {                                                                      \</span></div>
+<div class="line"><a id="l00408" name="l00408"></a><span class="lineno">  408</span><span class="preprocessor">        static constexpr kernel::test::TestCase tc = {                        \</span></div>
+<div class="line"><a id="l00409" name="l00409"></a><span class="lineno">  409</span><span class="preprocessor">            &quot;&quot;, #name, nullptr, _factory_##name, flags_                       \</span></div>
+<div class="line"><a id="l00410" name="l00410"></a><span class="lineno">  410</span><span class="preprocessor">        };                                                                    \</span></div>
+<div class="line"><a id="l00411" name="l00411"></a><span class="lineno">  411</span><span class="preprocessor">        kernel::test::Registry::register_test(tc);                            \</span></div>
+<div class="line"><a id="l00412" name="l00412"></a><span class="lineno">  412</span><span class="preprocessor">    } while (0)</span></div>
 </div>
-<div class="line"><a id="l00409" name="l00409"></a><span class="lineno">  409</span> </div>
-<div class="foldopen" id="foldopen00410" data-start="" data-end="">
-<div class="line"><a id="l00410" name="l00410"></a><span class="lineno"><a class="line" href="test_8hpp.html#ade6c7976dfdd68610815dca74c7be91d">  410</a></span><span class="preprocessor">#define REGISTER_RELEASE_CLASS(name)                                          \</span></div>
-<div class="line"><a id="l00411" name="l00411"></a><span class="lineno">  411</span><span class="preprocessor">    REGISTER_CLASS_FLAGS(name, kernel::test::TF_RELEASE)</span></div>
+<div class="line"><a id="l00413" name="l00413"></a><span class="lineno">  413</span> </div>
+<div class="foldopen" id="foldopen00414" data-start="" data-end="">
+<div class="line"><a id="l00414" name="l00414"></a><span class="lineno"><a class="line" href="test_8hpp.html#a1102009e7794c6401082aa06a3838921">  414</a></span><span class="preprocessor">#define REGISTER_CLASS(name)                                                  \</span></div>
+<div class="line"><a id="l00415" name="l00415"></a><span class="lineno">  415</span><span class="preprocessor">    REGISTER_CLASS_FLAGS(name, kernel::test::TF_KERNEL)</span></div>
 </div>
-<div class="line"><a id="l00412" name="l00412"></a><span class="lineno">  412</span> </div>
-<div class="foldopen" id="foldopen00413" data-start="" data-end="">
-<div class="line"><a id="l00413" name="l00413"></a><span class="lineno"><a class="line" href="test_8hpp.html#aa54f4bdd6c8fab31d7b1c3f9a778f440">  413</a></span><span class="preprocessor">#define CT_ASSERT(cond)                                                       \</span></div>
-<div class="line"><a id="l00414" name="l00414"></a><span class="lineno">  414</span><span class="preprocessor">    do {                                                                      \</span></div>
-<div class="line"><a id="l00415" name="l00415"></a><span class="lineno">  415</span><span class="preprocessor">        if (!(cond)) {                                                        \</span></div>
-<div class="line"><a id="l00416" name="l00416"></a><span class="lineno">  416</span><span class="preprocessor">            fail(__FILE__, __LINE__, #cond);                                  \</span></div>
-<div class="line"><a id="l00417" name="l00417"></a><span class="lineno">  417</span><span class="preprocessor">            return;                                                           \</span></div>
-<div class="line"><a id="l00418" name="l00418"></a><span class="lineno">  418</span><span class="preprocessor">        }                                                                     \</span></div>
-<div class="line"><a id="l00419" name="l00419"></a><span class="lineno">  419</span><span class="preprocessor">        pass();                                                               \</span></div>
-<div class="line"><a id="l00420" name="l00420"></a><span class="lineno">  420</span><span class="preprocessor">    } while (0)</span></div>
+<div class="line"><a id="l00416" name="l00416"></a><span class="lineno">  416</span> </div>
+<div class="foldopen" id="foldopen00417" data-start="" data-end="">
+<div class="line"><a id="l00417" name="l00417"></a><span class="lineno"><a class="line" href="test_8hpp.html#ade6c7976dfdd68610815dca74c7be91d">  417</a></span><span class="preprocessor">#define REGISTER_RELEASE_CLASS(name)                                          \</span></div>
+<div class="line"><a id="l00418" name="l00418"></a><span class="lineno">  418</span><span class="preprocessor">    REGISTER_CLASS_FLAGS(name, kernel::test::TF_RELEASE)</span></div>
+</div>
+<div class="line"><a id="l00419" name="l00419"></a><span class="lineno">  419</span> </div>
+<div class="foldopen" id="foldopen00420" data-start="" data-end="">
+<div class="line"><a id="l00420" name="l00420"></a><span class="lineno"><a class="line" href="test_8hpp.html#aa54f4bdd6c8fab31d7b1c3f9a778f440">  420</a></span><span class="preprocessor">#define CT_ASSERT(cond)                                                       \</span></div>
+<div class="line"><a id="l00421" name="l00421"></a><span class="lineno">  421</span><span class="preprocessor">    do {                                                                      \</span></div>
+<div class="line"><a id="l00422" name="l00422"></a><span class="lineno">  422</span><span class="preprocessor">        if (!(cond)) {                                                        \</span></div>
+<div class="line"><a id="l00423" name="l00423"></a><span class="lineno">  423</span><span class="preprocessor">            fail(__FILE__, __LINE__, #cond);                                  \</span></div>
+<div class="line"><a id="l00424" name="l00424"></a><span class="lineno">  424</span><span class="preprocessor">            return;                                                           \</span></div>
+<div class="line"><a id="l00425" name="l00425"></a><span class="lineno">  425</span><span class="preprocessor">        }                                                                     \</span></div>
+<div class="line"><a id="l00426" name="l00426"></a><span class="lineno">  426</span><span class="preprocessor">        pass();                                                               \</span></div>
+<div class="line"><a id="l00427" name="l00427"></a><span class="lineno">  427</span><span class="preprocessor">    } while (0)</span></div>
 </div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_registry_html"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html">kernel::test::Registry</a></div><div class="ttdef"><b>Definition</b> test.hpp:60</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_a05e2dd99478868128413378977a68aa4"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#a05e2dd99478868128413378977a68aa4">kernel::test::Registry::set_current_test_name</a></div><div class="ttdeci">static void set_current_test_name(const char *name)</div><div class="ttdef"><b>Definition</b> test.cpp:130</div></div>
@@ -552,18 +559,18 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test_8hpp_sour
 <div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_ae1c6719a50dda5616660226460c8fbdf"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#ae1c6719a50dda5616660226460c8fbdf">kernel::test::Registry::count</a></div><div class="ttdeci">static size_t count()</div><div class="ttdef"><b>Definition</b> test.cpp:88</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_ae2797911154428cb63e49c7003c7250a"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#ae2797911154428cb63e49c7003c7250a">kernel::test::Registry::class_section</a></div><div class="ttdeci">static const ClassSection * class_section(size_t i)</div><div class="ttdef"><b>Definition</b> test.cpp:90</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_registry_html_ae67f21b87c472fb381d3146a1e413d64"><div class="ttname"><a href="classkernel_1_1test_1_1_registry.html#ae67f21b87c472fb381d3146a1e413d64">kernel::test::Registry::record_failure</a></div><div class="ttdeci">static void record_failure(const char *file, int line, const char *expr)</div><div class="ttdef"><b>Definition</b> test.cpp:94</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a></div><div class="ttdef"><b>Definition</b> test.hpp:111</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a032cc2a5f4432b575f97644a68513d83"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">kernel::test::TestBase::name</a></div><div class="ttdeci">const char * name() const</div><div class="ttdef"><b>Definition</b> test.hpp:127</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a0acce9502c554489db15a24ecdd43326"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">kernel::test::TestBase::fail</a></div><div class="ttdeci">void fail(const char *file, int line, const char *expr)</div><div class="ttdef"><b>Definition</b> test.hpp:130</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a0cebebeb512d636d7aa505eac6a268ba"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">kernel::test::TestBase::tearDown</a></div><div class="ttdeci">virtual void tearDown()</div><div class="ttdef"><b>Definition</b> test.hpp:125</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a2dbb31c427fe664032adff15e728f668"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">kernel::test::TestBase::execute</a></div><div class="ttdeci">void execute()</div><div class="ttdef"><b>Definition</b> test.hpp:116</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a></div><div class="ttdef"><b>Definition</b> test.hpp:118</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a032cc2a5f4432b575f97644a68513d83"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">kernel::test::TestBase::name</a></div><div class="ttdeci">const char * name() const</div><div class="ttdef"><b>Definition</b> test.hpp:134</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a0acce9502c554489db15a24ecdd43326"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a0acce9502c554489db15a24ecdd43326">kernel::test::TestBase::fail</a></div><div class="ttdeci">void fail(const char *file, int line, const char *expr)</div><div class="ttdef"><b>Definition</b> test.hpp:137</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a0cebebeb512d636d7aa505eac6a268ba"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a0cebebeb512d636d7aa505eac6a268ba">kernel::test::TestBase::tearDown</a></div><div class="ttdeci">virtual void tearDown()</div><div class="ttdef"><b>Definition</b> test.hpp:132</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a2dbb31c427fe664032adff15e728f668"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a2dbb31c427fe664032adff15e728f668">kernel::test::TestBase::execute</a></div><div class="ttdeci">void execute()</div><div class="ttdef"><b>Definition</b> test.hpp:123</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a4c0175612d2ff4a7940500bf48cc5a82"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">kernel::test::TestBase::run</a></div><div class="ttdeci">virtual void run()=0</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a65169196f9556bd9e35e7248b6773acf"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">kernel::test::TestBase::pass</a></div><div class="ttdeci">void pass()</div><div class="ttdef"><b>Definition</b> test.hpp:134</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a8f5b879eeecec1b8052e368e24c697b2"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">kernel::test::TestBase::TestBase</a></div><div class="ttdeci">TestBase(const char *name)</div><div class="ttdef"><b>Definition</b> test.hpp:113</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_acdf9c9fc17d26b810757cc0bc047c695"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">kernel::test::TestBase::failed_</a></div><div class="ttdeci">bool failed_</div><div class="ttdef"><b>Definition</b> test.hpp:139</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a65169196f9556bd9e35e7248b6773acf"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a65169196f9556bd9e35e7248b6773acf">kernel::test::TestBase::pass</a></div><div class="ttdeci">void pass()</div><div class="ttdef"><b>Definition</b> test.hpp:141</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a8f5b879eeecec1b8052e368e24c697b2"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">kernel::test::TestBase::TestBase</a></div><div class="ttdeci">TestBase(const char *name)</div><div class="ttdef"><b>Definition</b> test.hpp:120</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_acdf9c9fc17d26b810757cc0bc047c695"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#acdf9c9fc17d26b810757cc0bc047c695">kernel::test::TestBase::failed_</a></div><div class="ttdeci">bool failed_</div><div class="ttdef"><b>Definition</b> test.hpp:146</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_ade0e5482ab43dd1ab71c296033c77b3a"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a">kernel::test::TestBase::~TestBase</a></div><div class="ttdeci">virtual ~TestBase()=default</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_aee8fe1db5fd925449a29cf2c8b520dc0"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">kernel::test::TestBase::name_</a></div><div class="ttdeci">const char * name_</div><div class="ttdef"><b>Definition</b> test.hpp:138</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_af76d8e4a5b1cacde0f101fa0b1e246b8"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">kernel::test::TestBase::setUp</a></div><div class="ttdeci">virtual void setUp()</div><div class="ttdef"><b>Definition</b> test.hpp:123</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_aee8fe1db5fd925449a29cf2c8b520dc0"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#aee8fe1db5fd925449a29cf2c8b520dc0">kernel::test::TestBase::name_</a></div><div class="ttdeci">const char * name_</div><div class="ttdef"><b>Definition</b> test.hpp:145</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_af76d8e4a5b1cacde0f101fa0b1e246b8"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">kernel::test::TestBase::setUp</a></div><div class="ttdeci">virtual void setUp()</div><div class="ttdef"><b>Definition</b> test.hpp:130</div></div>
 <div class="ttc" id="alogger_8hpp_html"><div class="ttname"><a href="logger_8hpp.html">logger.hpp</a></div><div class="ttdoc">Kernel logger subsystem with verbosity tiers and color output.</div></div>
 <div class="ttc" id="anamespacekernel_1_1task_html"><div class="ttname"><a href="namespacekernel_1_1task.html">kernel::task</a></div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:21</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html"><div class="ttname"><a href="namespacekernel_1_1test.html">kernel::test</a></div><div class="ttdef"><b>Definition</b> global_state.cpp:111</div></div>
@@ -582,15 +589,15 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test_8hpp_sour
 <div class="ttc" id="anamespacekernel_1_1test_html_a47ad5e6d76deb150bf2cb8bf66bd3450"><div class="ttname"><a href="namespacekernel_1_1test.html#a47ad5e6d76deb150bf2cb8bf66bd3450">kernel::test::register_class</a></div><div class="ttdeci">bool register_class(const char *name)</div><div class="ttdef"><b>Definition</b> test_registry.cpp:1055</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a47e1961f61dd3427ce55333d8828a5de"><div class="ttname"><a href="namespacekernel_1_1test.html#a47e1961f61dd3427ce55333d8828a5de">kernel::test::run_all</a></div><div class="ttdeci">void run_all()</div><div class="ttdef"><b>Definition</b> test.cpp:315</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a528c863464ccdb09e9f57510adee048d"><div class="ttname"><a href="namespacekernel_1_1test.html#a528c863464ccdb09e9f57510adee048d">kernel::test::dump_class_counts</a></div><div class="ttdeci">void dump_class_counts()</div><div class="ttdef"><b>Definition</b> test_registry.cpp:1076</div></div>
-<div class="ttc" id="anamespacekernel_1_1test_html_a68c5cfee0683071fada1d3dc75bdf640"><div class="ttname"><a href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">kernel::test::__reference_blocked_sender_cleanup</a></div><div class="ttdeci">void __reference_blocked_sender_cleanup()</div><div class="ttdoc">Reference skeleton for a REAL blocked-sender / receiver-cleanup pattern. Blueprint for task_exit_wake...</div><div class="ttdef"><b>Definition</b> test.hpp:280</div></div>
+<div class="ttc" id="anamespacekernel_1_1test_html_a68c5cfee0683071fada1d3dc75bdf640"><div class="ttname"><a href="namespacekernel_1_1test.html#a68c5cfee0683071fada1d3dc75bdf640">kernel::test::__reference_blocked_sender_cleanup</a></div><div class="ttdeci">void __reference_blocked_sender_cleanup()</div><div class="ttdoc">Reference skeleton for a REAL blocked-sender / receiver-cleanup pattern. Blueprint for task_exit_wake...</div><div class="ttdef"><b>Definition</b> test.hpp:287</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a9096f1bb9a2e4b1541226759b08c1ae5"><div class="ttname"><a href="namespacekernel_1_1test.html#a9096f1bb9a2e4b1541226759b08c1ae5">kernel::test::run_filtered</a></div><div class="ttdeci">void run_filtered(uint8_t required_flags, bool use_isolation)</div><div class="ttdef"><b>Definition</b> test.cpp:368</div></div>
-<div class="ttc" id="anamespacekernel_1_1test_html_ab584113a25d60b899d516fe3897879a3"><div class="ttname"><a href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">kernel::test::__reference_single_terminating_task</a></div><div class="ttdeci">void __reference_single_terminating_task()</div><div class="ttdoc">Reference skeleton for ONE self-terminating dispatched task. Blueprint for task_exit_cleans_all_ipc_o...</div><div class="ttdef"><b>Definition</b> test.hpp:258</div></div>
+<div class="ttc" id="anamespacekernel_1_1test_html_ab584113a25d60b899d516fe3897879a3"><div class="ttname"><a href="namespacekernel_1_1test.html#ab584113a25d60b899d516fe3897879a3">kernel::test::__reference_single_terminating_task</a></div><div class="ttdeci">void __reference_single_terminating_task()</div><div class="ttdoc">Reference skeleton for ONE self-terminating dispatched task. Blueprint for task_exit_cleans_all_ipc_o...</div><div class="ttdef"><b>Definition</b> test.hpp:265</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_ac6959c848d7b1df0ba4eea129c708171"><div class="ttname"><a href="namespacekernel_1_1test.html#ac6959c848d7b1df0ba4eea129c708171">kernel::test::set_class_auto_shutdown</a></div><div class="ttdeci">void set_class_auto_shutdown(bool enabled)</div><div class="ttdef"><b>Definition</b> test.cpp:762</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_ac69baaa93109936ecff8ff06f6fb827a"><div class="ttname"><a href="namespacekernel_1_1test.html#ac69baaa93109936ecff8ff06f6fb827a">kernel::test::run_suite</a></div><div class="ttdeci">void run_suite(const char *suite_name)</div><div class="ttdef"><b>Definition</b> test.cpp:766</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_ae1b9042f585e1bfaf6898aed96a403de"><div class="ttname"><a href="namespacekernel_1_1test.html#ae1b9042f585e1bfaf6898aed96a403de">kernel::test::run_debug</a></div><div class="ttdeci">void run_debug()</div><div class="ttdoc">Run all registered non-benchmark tests.</div><div class="ttdef"><b>Definition</b> test.cpp:525</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_ae3930997b95bec7a00f32aecd001850a"><div class="ttname"><a href="namespacekernel_1_1test.html#ae3930997b95bec7a00f32aecd001850a">kernel::test::run_release</a></div><div class="ttdeci">void run_release()</div><div class="ttdef"><b>Definition</b> test.cpp:533</div></div>
 <div class="ttc" id="anamespacekernel_1_1test_html_af219b4b081470c65fb5140fbabdd424c"><div class="ttname"><a href="namespacekernel_1_1test.html#af219b4b081470c65fb5140fbabdd424c">kernel::test::TaskControlBlock</a></div><div class="ttdeci">kernel::TaskControlBlock TaskControlBlock</div><div class="ttdef"><b>Definition</b> test.hpp:35</div></div>
-<div class="ttc" id="anamespacekernel_1_1test_html_afa45bf4b825aaa40d82b153beaa60142"><div class="ttname"><a href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">kernel::test::__reference_parent_wait_child</a></div><div class="ttdeci">void __reference_parent_wait_child()</div><div class="ttdoc">Reference skeleton for a REAL parent-WAITPID / child-exit pattern. Blueprint for tests such as schedu...</div><div class="ttdef"><b>Definition</b> test.hpp:245</div></div>
+<div class="ttc" id="anamespacekernel_1_1test_html_afa45bf4b825aaa40d82b153beaa60142"><div class="ttname"><a href="namespacekernel_1_1test.html#afa45bf4b825aaa40d82b153beaa60142">kernel::test::__reference_parent_wait_child</a></div><div class="ttdeci">void __reference_parent_wait_child()</div><div class="ttdoc">Reference skeleton for a REAL parent-WAITPID / child-exit pattern. Blueprint for tests such as schedu...</div><div class="ttdef"><b>Definition</b> test.hpp:252</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="astructkernel_1_1test_1_1_class_section_html"><div class="ttname"><a href="structkernel_1_1test_1_1_class_section.html">kernel::test::ClassSection</a></div><div class="ttdef"><b>Definition</b> test.hpp:54</div></div>
 <div class="ttc" id="astructkernel_1_1test_1_1_class_section_html_a514bd317958e33d9f501903acd64a9b4"><div class="ttname"><a href="structkernel_1_1test_1_1_class_section.html#a514bd317958e33d9f501903acd64a9b4">kernel::test::ClassSection::count</a></div><div class="ttdeci">size_t count</div><div class="ttdef"><b>Definition</b> test.hpp:57</div></div>
@@ -601,9 +608,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test_8hpp_sour
 <div class="ttc" id="astructkernel_1_1test_1_1_test_case_html_a39e5c24072d39bdc46a4af7248895f6e"><div class="ttname"><a href="structkernel_1_1test_1_1_test_case.html#a39e5c24072d39bdc46a4af7248895f6e">kernel::test::TestCase::func</a></div><div class="ttdeci">void(* func)()</div><div class="ttdef"><b>Definition</b> test.hpp:49</div></div>
 <div class="ttc" id="astructkernel_1_1test_1_1_test_case_html_a66093080dd7b91955a30f464bf3913e3"><div class="ttname"><a href="structkernel_1_1test_1_1_test_case.html#a66093080dd7b91955a30f464bf3913e3">kernel::test::TestCase::name</a></div><div class="ttdeci">const char * name</div><div class="ttdef"><b>Definition</b> test.hpp:48</div></div>
 <div class="ttc" id="astructkernel_1_1test_1_1_test_case_html_af4765d0746e3055730a7fd1e39e3acbf"><div class="ttname"><a href="structkernel_1_1test_1_1_test_case.html#af4765d0746e3055730a7fd1e39e3acbf">kernel::test::TestCase::flags</a></div><div class="ttdeci">uint8_t flags</div><div class="ttdef"><b>Definition</b> test.hpp:51</div></div>
-<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html">kernel::test::TestClass</a></div><div class="ttdef"><b>Definition</b> test.hpp:179</div></div>
-<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html_ac4c2bc1cbab77cc8005a1f0f732e2ed7"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">kernel::test::TestClass::register_all</a></div><div class="ttdeci">void(* register_all)()</div><div class="ttdef"><b>Definition</b> test.hpp:181</div></div>
-<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html_ae7b79fe2971d8edd00857f5c0ce6d26b"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">kernel::test::TestClass::name</a></div><div class="ttdeci">const char * name</div><div class="ttdef"><b>Definition</b> test.hpp:180</div></div>
+<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html">kernel::test::TestClass</a></div><div class="ttdef"><b>Definition</b> test.hpp:186</div></div>
+<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html_ac4c2bc1cbab77cc8005a1f0f732e2ed7"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html#ac4c2bc1cbab77cc8005a1f0f732e2ed7">kernel::test::TestClass::register_all</a></div><div class="ttdeci">void(* register_all)()</div><div class="ttdef"><b>Definition</b> test.hpp:188</div></div>
+<div class="ttc" id="astructkernel_1_1test_1_1_test_class_html_ae7b79fe2971d8edd00857f5c0ce6d26b"><div class="ttname"><a href="structkernel_1_1test_1_1_test_class.html#ae7b79fe2971d8edd00857f5c0ce6d26b">kernel::test::TestClass::name</a></div><div class="ttdeci">const char * name</div><div class="ttdef"><b>Definition</b> test.hpp:187</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a0ba18cab9bd5513695cbe748e9bb4879"><div class="ttname"><a href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> types.hpp:24</div></div>
 <div class="ttc" id="atypes_8hpp_html_a4fd212339282cce62b0d2700490de00f"><div class="ttname"><a href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> types.hpp:27</div></div>

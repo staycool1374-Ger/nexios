@@ -1,5 +1,33 @@
 # Completed Roadmap Items
 
+## v0.4.9 — IRQ Blocking + Audit (RELEASED 2026-09-17)
+
+**Purpose:** Interrupt-driven storage I/O, verified bounded-blocking
+discipline, live SMP/task monitoring. Milestone v0.4.9 has 0 open issues.
+
+- **AHCI completion ISR** (#64) — MSI vector + per-slot records +
+  scheduler-blocked bounded `wait_cmd`; sched-blocking replaces the 5s
+  spin (FLAW-04/05 RESOLVED). Fixed en route: MSI `writel` clobber,
+  CmdHeader PRDTL layout, BAR-count check, ATAPI skip, PMM `destroy()`,
+  registry cap 1428→1536. Tests: ahci_deep (10), ahci_live (5).
+- **virtio-blk completion ISR** (#65) — MSI-X/MSI used-ring drain +
+  single embedded record + blocked `submit_request` (100ms bound),
+  1M bounded poll fallback (FLAW-06 RESOLVED; one REJECT-fix cycle on
+  the teardown error wake). Tests: virtio_blk_req (13).
+- **Bounded-blocking audit** (#66) — 22-path verdict (serial/keyboard
+  already bounded; virtio-net TX carved out); aarch64 PL011 bounded;
+  `pause()` hardening; ATA_PIO absent-drive test; §7.2 closure.
+- **UX: cpuinfo/top** (#172) — snapshot CPU screen + linux-style task
+  monitor (refresh, CPU%-desc sort, sliding window, PD_USE% + 90% flag,
+  zombies, per-CPU/total/avg/max loads, sys/user split); running_on_cpu
+  snapshot + integer-EMA loadavg + zombie snapshot. Tests: shell (8),
+  loadavg math (1).
+
+Gates at completion (2026-09-17): debug `all` **1445/1445**, release
+`all` **85/85**, `selftest` **134/134**, `make build` Errors 0. SIL 3
+APPROVED per issue (#65 after one REJECT-fix cycle; #172 advisories
+fixed, not deferred; audit reports under `audits/`).
+
 ## v0.4.8 — Enhance Deadline Scheduling (RELEASED 2026-09-17)
 
 **Purpose:** Deadline-monotonic assignment + global EDF dispatch, enforced

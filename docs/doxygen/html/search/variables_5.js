@@ -11,6 +11,8 @@ var searchData=
   ['error_8',['error',['../structkernel_1_1_error_or.html#ae81b3dc9706f1ee04faf1262ef9d950a',1,'kernel::ErrorOr::error'],['../structkernel_1_1_error_or_3_01void_01_4.html#ae671f6e03e40d9ce0083fc281b712664',1,'kernel::ErrorOr&lt; void &gt;::error']]],
   ['error_5fcode_9',['error_code',['../structkernel_1_1log_1_1_log_entry.html#a9dbc8a02bef01b71e3189a54ca25b872',1,'kernel::log::LogEntry::error_code'],['../kernel_8cpp.html#a62fb24a5114b3a2c8227926f8f0adaa2',1,'error_code:&#160;kernel.cpp']]],
   ['event_5fgroups_10',['event_groups',['../structkernel_1_1test_1_1_resource_counters.html#a1131ca1fcc19919cf835bfa90b68f12f',1,'kernel::test::ResourceCounters']]],
-  ['executed_5fticks_11',['executed_ticks',['../structkernel_1_1_scheduler_1_1_task_fields.html#a64ac58a847682a5727b3182b7060de3b',1,'kernel::Scheduler::TaskFields']]],
-  ['exit_5fcode_12',['exit_code',['../structkernel_1_1ipc_1_1_death_record.html#a0ebe234721f0e64431671d7beecfe696',1,'kernel::ipc::DeathRecord::exit_code'],['../structkernel_1_1_scheduler_1_1_task_fields.html#ac06af7f69711aa38a8eacdf18402b41a',1,'kernel::Scheduler::TaskFields::exit_code']]]
+  ['exec_5fms_11',['exec_ms',['../structservice_1_1_top_row.html#afb8a78d8599ea24a53c0f4e6e7083563',1,'service::TopRow']]],
+  ['exec_5fperiod_5fns_12',['exec_period_ns',['../structservice_1_1_top_row.html#a9b793cc5b821c0967c170f9652533741',1,'service::TopRow']]],
+  ['executed_5fticks_13',['executed_ticks',['../structkernel_1_1_scheduler_1_1_task_fields.html#a64ac58a847682a5727b3182b7060de3b',1,'kernel::Scheduler::TaskFields']]],
+  ['exit_5fcode_14',['exit_code',['../structkernel_1_1ipc_1_1_death_record.html#a0ebe234721f0e64431671d7beecfe696',1,'kernel::ipc::DeathRecord::exit_code'],['../structkernel_1_1_scheduler_1_1_task_fields.html#ac06af7f69711aa38a8eacdf18402b41a',1,'kernel::Scheduler::TaskFields::exit_code']]]
 ];

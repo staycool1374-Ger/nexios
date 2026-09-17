@@ -1,5 +1,6 @@
 var NAVTREEINDEX9 =
 {
+"nexios__config_8h.html#a0bef3e0da616c80c28e1f7671b03401d":[3,0,0,1,31,84],
 "nexios__config_8h.html#a0c3cfd9ed7438076d36385368e245b04":[3,0,0,1,31,94],
 "nexios__config_8h.html#a0c463c0a261b2aded2e61cc266e61b38":[3,0,0,1,31,50],
 "nexios__config_8h.html#a0e8bd4d6885656c82396aadaf5d70290":[3,0,0,1,31,109],
@@ -248,6 +249,5 @@ var NAVTREEINDEX9 =
 "rwlock_8hpp.html":[3,0,0,1,15,9],
 "rwlock_8hpp_source.html":[3,0,0,1,15,9],
 "sampler_8cpp.html":[3,0,0,1,14,0],
-"sampler_8hpp.html":[3,0,0,1,14,1],
-"sampler_8hpp_source.html":[3,0,0,1,14,1]
+"sampler_8hpp.html":[3,0,0,1,14,1]
 };

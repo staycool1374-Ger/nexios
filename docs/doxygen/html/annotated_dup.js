@@ -131,7 +131,8 @@ var annotated_dup =
       [ "FramebufferInfo", "structservice_1_1_framebuffer_info.html", "structservice_1_1_framebuffer_info" ],
       [ "ProgramRegistry", "classservice_1_1_program_registry.html", "classservice_1_1_program_registry" ],
       [ "Shell", "classservice_1_1_shell.html", "classservice_1_1_shell" ],
-      [ "Terminal", "classservice_1_1_terminal.html", null ]
+      [ "Terminal", "classservice_1_1_terminal.html", null ],
+      [ "TopRow", "structservice_1_1_top_row.html", "structservice_1_1_top_row" ]
     ] ],
     [ "adopt_lock_t", "structadopt__lock__t.html", null ],
     [ "BenchResult", "struct_bench_result.html", "struct_bench_result" ],

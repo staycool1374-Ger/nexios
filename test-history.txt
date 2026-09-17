@@ -1250,3 +1250,4 @@ SUMMARY: total=108 ok=106 fail=2
 2026-09-17 19:07:46 release_all PASSED: 85 FAILED: 0 TIME: 4110ms
 2026-09-17 19:08:24 selftest PASSED: 134 FAILED: 0 TIME: 29661ms
 2026-09-17 19:04:11 all PASSED: 1444 FAILED: 1 TIME: UNRECORDED STATUS: tlb-lat-p99 single-test flake; standalone 4/4 + full rerun 1445/1445 green, zero code changes
+2026-09-17 19:18:02 all PASSED: 1445 FAILED: 0 TIME: 95436ms

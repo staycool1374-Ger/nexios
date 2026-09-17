@@ -222,6 +222,7 @@ var NAVTREEINDEX8 =
 "namespaceprograms.html#ad545c26b18a1f65f60afb5b4ed3eb6bf":[0,0,6,1],
 "namespaces.html":[0,0],
 "namespaceservice.html":[0,0,7],
+"namespaceservice.html#ac166acc18384f5d391e098a0a4a85840":[0,0,7,6],
 "net_8cpp.html":[3,0,0,1,13,5],
 "net_8hpp.html":[3,0,0,1,13,6],
 "net_8hpp_source.html":[3,0,0,1,13,6],
@@ -248,6 +249,5 @@ var NAVTREEINDEX8 =
 "nexios__config_8h.html#a08b1decd478ffc1359ac5e6385741d61":[3,0,0,1,31,117],
 "nexios__config_8h.html#a099e380af1009e729fb8652beb22adb5":[3,0,0,1,31,13],
 "nexios__config_8h.html#a0b5fcae55cc325a4a22a0fbbaaa943c9":[3,0,0,1,31,33],
-"nexios__config_8h.html#a0b9c9423efd7e8b9bd77eea32bac9c93":[3,0,0,1,31,100],
-"nexios__config_8h.html#a0bef3e0da616c80c28e1f7671b03401d":[3,0,0,1,31,84]
+"nexios__config_8h.html#a0b9c9423efd7e8b9bd77eea32bac9c93":[3,0,0,1,31,100]
 };

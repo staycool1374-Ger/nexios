@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.9-dev | **Last Release:** v0.4.8 | **Completed milestones:** v0.2.x — v0.4.8 (see `ROADMAP_done.md`)
+**Build:** v0.4.9 | **Last Release:** v0.4.9 | **Completed milestones:** v0.2.x — v0.4.9 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -16,9 +16,9 @@
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
 ## Active Development
-- **v0.4.9 IRQ Blocking + Audit** ([milestone 9](https://github.com/staycool1374-Ger/nexios/milestone/9)): #64, #65, #66 open.
+- **v0.4.10 Test-Coverage Closure** ([milestone 10](https://github.com/staycool1374-Ger/nexios/milestone/10)): coverage issues open.
 - **v0.5.2 Userspace Subsystems** ([milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
-- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.8).
+- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.9).
 
 ## Topic Coverage Map (subsystem review 2026-09-17)
 | Topic | Status | Issues |
@@ -38,10 +38,11 @@
 | Distributed runqueue load balancing | covered (closed: #61) | — |
 | Zero-copy IPC buffer pools | covered (closed: #11, #14, #106) | — |
 
-## v0.4.9 — IRQ Blocking + Audit (OPEN)
-- #64 [open] AHCI completion ISR.
-- #65 [open] virtio-blk completion ISR.
-- #66 [open] Bounded-blocking audit.
+## v0.4.9 — IRQ Blocking + Audit (RELEASED 2026-09-17, see ROADMAP_done.md)
+- #64 [closed] AHCI completion ISR.
+- #65 [closed] virtio-blk completion ISR.
+- #66 [closed] Bounded-blocking audit.
+- #172 [closed] UX: cpuinfo/top commands.
 
 ## v0.4.10 — Test-Coverage Closure, Areas < 80% (ACTIVE)
 - #126 [open] lib (57.0%).

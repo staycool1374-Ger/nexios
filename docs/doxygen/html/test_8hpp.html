@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -400,7 +400,7 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
 <div class="ttc" id="anamespacekernel_1_1test_html_a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8"><div class="ttname"><a href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a></div><div class="ttdeci">@ TF_RELEASE</div><div class="ttdef"><b>Definition</b> test.hpp:39</div></div>
-<div class="ttc" id="atest_8hpp_html_a374771e8d81b5baa372492a3979e5f73"><div class="ttname"><a href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:347</div></div>
+<div class="ttc" id="atest_8hpp_html_a374771e8d81b5baa372492a3979e5f73"><div class="ttname"><a href="#a374771e8d81b5baa372492a3979e5f73">JARVIS_REGISTER_TEST_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:354</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -423,7 +423,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a>(suite, name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8">kernel::test::TF_RELEASE</a>)</div>
-<div class="ttc" id="atest_8hpp_html_a898e9992b56f0e0b33e86dba5b5afa59"><div class="ttname"><a href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:361</div></div>
+<div class="ttc" id="atest_8hpp_html_a898e9992b56f0e0b33e86dba5b5afa59"><div class="ttname"><a href="#a898e9992b56f0e0b33e86dba5b5afa59">JARVIS_REGISTER_TEST_SUITE_FLAGS</a></div><div class="ttdeci">#define JARVIS_REGISTER_TEST_SUITE_FLAGS(suite, name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:368</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -613,7 +613,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a>(name, <a class="code hl_enumvalue" href="namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252">kernel::test::TF_KERNEL</a>)</div>
-<div class="ttc" id="atest_8hpp_html_ace9d865ef1ecb142666cd0beb9c51af3"><div class="ttname"><a href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a></div><div class="ttdeci">#define REGISTER_CLASS_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:399</div></div>
+<div class="ttc" id="atest_8hpp_html_ace9d865ef1ecb142666cd0beb9c51af3"><div class="ttname"><a href="#ace9d865ef1ecb142666cd0beb9c51af3">REGISTER_CLASS_FLAGS</a></div><div class="ttdeci">#define REGISTER_CLASS_FLAGS(name, flags_)</div><div class="ttdef"><b>Definition</b> test.hpp:406</div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -686,10 +686,10 @@ Functions</h2></td></tr>
 <div class="line">static kernel::test::TestBase* _factory_##name() { <span class="keywordflow">return</span> <span class="keyword">new</span> name(); }   \</div>
 <div class="line">TEST_CLASS_DIAG_POP                                                       \</div>
 <div class="line">void name::run()</div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a></div><div class="ttdef"><b>Definition</b> test.hpp:111</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a032cc2a5f4432b575f97644a68513d83"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">kernel::test::TestBase::name</a></div><div class="ttdeci">const char * name() const</div><div class="ttdef"><b>Definition</b> test.hpp:127</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html">kernel::test::TestBase</a></div><div class="ttdef"><b>Definition</b> test.hpp:118</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a032cc2a5f4432b575f97644a68513d83"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a032cc2a5f4432b575f97644a68513d83">kernel::test::TestBase::name</a></div><div class="ttdeci">const char * name() const</div><div class="ttdef"><b>Definition</b> test.hpp:134</div></div>
 <div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a4c0175612d2ff4a7940500bf48cc5a82"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a4c0175612d2ff4a7940500bf48cc5a82">kernel::test::TestBase::run</a></div><div class="ttdeci">virtual void run()=0</div></div>
-<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a8f5b879eeecec1b8052e368e24c697b2"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">kernel::test::TestBase::TestBase</a></div><div class="ttdeci">TestBase(const char *name)</div><div class="ttdef"><b>Definition</b> test.hpp:113</div></div>
+<div class="ttc" id="aclasskernel_1_1test_1_1_test_base_html_a8f5b879eeecec1b8052e368e24c697b2"><div class="ttname"><a href="classkernel_1_1test_1_1_test_base.html#a8f5b879eeecec1b8052e368e24c697b2">kernel::test::TestBase::TestBase</a></div><div class="ttdeci">TestBase(const char *name)</div><div class="ttdef"><b>Definition</b> test.hpp:120</div></div>
 </div><!-- fragment -->
 </div>
 </div>

@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['id_0',['id',['../structkernel_1_1_scheduler_1_1_task_fields.html#a07e1d4833f77b1a0063ff8052e7643a3',1,'kernel::Scheduler::TaskFields']]],
+  ['id_0',['id',['../structkernel_1_1_scheduler_1_1_task_fields.html#a07e1d4833f77b1a0063ff8052e7643a3',1,'kernel::Scheduler::TaskFields::id'],['../structservice_1_1_top_row.html#a2b92bcfac023b097449721cb68371fe0',1,'service::TopRow::id']]],
   ['idx_1',['idx',['../structkernel_1_1_scheduler_1_1_task_iter.html#adce55c15a181b553c9350f64d11d5c4d',1,'kernel::Scheduler::TaskIter']]],
   ['in_5fedf_5fqueue_2',['in_edf_queue',['../structkernel_1_1_scheduler_1_1_task_fields.html#a97d6fb570527865aa28d3abf1b0f7a42',1,'kernel::Scheduler::TaskFields']]],
   ['in_5fready_5fqueue_3',['in_ready_queue',['../structkernel_1_1_scheduler_1_1_task_fields.html#a60135de4e18f5dd456e5ed869e5df9e2',1,'kernel::Scheduler::TaskFields']]],
@@ -26,6 +26,7 @@ var searchData=
   ['irq_5fvirtio3_23',['IRQ_VIRTIO3',['../namespacearch.html#abafa01b25d7e7e2b081d6ecc5058eb5d',1,'arch']]],
   ['irq_5fvirtio4_24',['IRQ_VIRTIO4',['../namespacearch.html#a9c39a084cebdfc926cd28dd5ac4bd7f1',1,'arch']]],
   ['is_5fdir_25',['is_dir',['../structinitrd_1_1_initrd_entry.html#a48e95a6e7d3e3e0f77113e60847c9670',1,'initrd::InitrdEntry']]],
-  ['is_5fuser_26',['is_user',['../classkernel_1_1cap_1_1_frame_cap.html#a9b8bba20072966fe71fd381c24201b25',1,'kernel::cap::FrameCap::is_user'],['../classkernel_1_1cap_1_1_untyped_mem.html#a75d0d58fcc87227e654d2255e72ec231',1,'kernel::cap::UntypedMem::is_user']]],
-  ['isr_5fnesting_5fdepth_27',['isr_nesting_depth',['../namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48',1,'kernel::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp']]]
+  ['is_5fidle_26',['is_idle',['../structservice_1_1_top_row.html#a6851d887f29f5b59ac0e1c4f069a562a',1,'service::TopRow']]],
+  ['is_5fuser_27',['is_user',['../classkernel_1_1cap_1_1_frame_cap.html#a9b8bba20072966fe71fd381c24201b25',1,'kernel::cap::FrameCap::is_user'],['../classkernel_1_1cap_1_1_untyped_mem.html#a75d0d58fcc87227e654d2255e72ec231',1,'kernel::cap::UntypedMem::is_user']]],
+  ['isr_5fnesting_5fdepth_28',['isr_nesting_depth',['../namespacekernel.html#a5fbbc3448d7b738e78241f86230e0f48',1,'kernel::isr_nesting_depth'],['../global__state_8cpp.html#a749dfb81c6c748a8fe63fae0d81f2926',1,'isr_nesting_depth:&#160;global_state.cpp']]]
 ];

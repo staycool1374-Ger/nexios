@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -292,6 +292,9 @@ Static Public Attributes</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-member-group" class="groupheader"><a id="member-group" name="member-group"></a>
 Test-isolation helpers</h2></td></tr>
+<tr class="memitem:adfb3b2f598049466e2b48a0aee96c3d9" id="r_adfb3b2f598049466e2b48a0aee96c3d9"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adfb3b2f598049466e2b48a0aee96c3d9">LOADAVG_SCALE</a> = 1000000</td></tr>
+<tr class="memdesc:adfb3b2f598049466e2b48a0aee96c3d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load-average scale (issue #172): internal precision ×1000000 (accessors return per-mille). The ×1000 display scale alone truncates every per-tick step to zero (|d| ≤ 1000 &lt; N); ×1000000 moves ≈16/tick at full load (re-audit #172). Public: unit tests pin the EMA math in these units.  <br /></td></tr>
+<tr class="memitem:aea490393d92cca79f525dda574e96983" id="r_aea490393d92cca79f525dda574e96983"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aea490393d92cca79f525dda574e96983">LOADAVG_DISPLAY_DIV</a> = 1000</td></tr>
 <tr class="memitem:a87db2c94d70b94cdc81de27fd519f71c" id="r_a87db2c94d70b94cdc81de27fd519f71c"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a87db2c94d70b94cdc81de27fd519f71c">snapshot_max_tasks</a> ()</td></tr>
 <tr class="memitem:aab329dc8044aa9af0f574cfeebf9863f" id="r_aab329dc8044aa9af0f574cfeebf9863f"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aab329dc8044aa9af0f574cfeebf9863f">snapshot_id_size</a> ()</td></tr>
 <tr class="memitem:a4625d7361b1e39ef0b913b698d797ece" id="r_a4625d7361b1e39ef0b913b698d797ece"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4625d7361b1e39ef0b913b698d797ece">snapshot_task_fields_size</a> ()</td></tr>
@@ -331,6 +334,14 @@ Test-isolation helpers</h2></td></tr>
 <tr class="memdesc:a66efaa5a205ef6eb473f02603bc430c0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opportunistic try-variant of <a class="el" href="#a0dd60567b314b96f16c4ba03a2ddecf9" title="Idle-task cleanup step: pop one zombie from the list and free its resources. Called from the idle mai...">cleanup_step()</a> for VMM teardown paths that can run nested under a zombie-leaf holder (flush/drain free paths). Skips when contended.  <br /></td></tr>
 <tr class="memitem:a12d6760a23050c89d2d65bc86ac5e032" id="r_a12d6760a23050c89d2d65bc86ac5e032"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a12d6760a23050c89d2d65bc86ac5e032">zombie_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a12d6760a23050c89d2d65bc86ac5e032"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the zombie list (used by snapshot_restore to prevent dangling pointers after MemPool restoration).  <br /></td></tr>
+<tr class="memitem:abba7c4e61baa2c7a2e835b3d6a443e7d" id="r_abba7c4e61baa2c7a2e835b3d6a443e7d"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abba7c4e61baa2c7a2e835b3d6a443e7d">snapshot_zombies</a> (TaskControlBlock **out, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> max_out) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:abba7c4e61baa2c7a2e835b3d6a443e7d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the zombie list head into a caller array (issue #172, top zombie section). Copies (at most max_out) entries under the zombie leaf lock, then returns the count copied. Shell prints lock-free from the snapshot.  <br /></td></tr>
+<tr class="memitem:a57de2e75b31a04c67a30a0762d3705fd" id="r_a57de2e75b31a04c67a30a0762d3705fd"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a57de2e75b31a04c67a30a0762d3705fd">loadavg_1min</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a57de2e75b31a04c67a30a0762d3705fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load averages in per-mille (issue #172, top header).  <br /></td></tr>
+<tr class="memitem:a7ae2f1c2c7c7773139993bb5256414de" id="r_a7ae2f1c2c7c7773139993bb5256414de"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7ae2f1c2c7c7773139993bb5256414de">loadavg_5min</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:a0c06ba681fa842fc5f2f82699d09971c" id="r_a0c06ba681fa842fc5f2f82699d09971c"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0c06ba681fa842fc5f2f82699d09971c">loadavg_15min</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memitem:aac7b9114e87c0554cc7907e3f05e6023" id="r_aac7b9114e87c0554cc7907e3f05e6023"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aac7b9114e87c0554cc7907e3f05e6023">loadavg_step</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> avg, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> instant, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> window, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scale) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aac7b9114e87c0554cc7907e3f05e6023"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure one-step integer EMA (issue #172 re-audit: test seam for the loadavg arithmetic — on_tick calls it, unit tests pin it). Saturating: result stays in [0, scale].  <br /></td></tr>
 <tr class="memitem:a1b3612d8eada548ee8dd2621baf78cc5" id="r_a1b3612d8eada548ee8dd2621baf78cc5"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1b3612d8eada548ee8dd2621baf78cc5">reset_zombie_list</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memitem:af386d3e6be031ea8e376b068d97b0e19" id="r_af386d3e6be031ea8e376b068d97b0e19"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af386d3e6be031ea8e376b068d97b0e19">defer_kill</a> (TaskControlBlock *task) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:af386d3e6be031ea8e376b068d97b0e19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deferred-kill: add a task to the deferred kill list for safe cleanup outside the try_lock critical section.  <br /></td></tr>
@@ -2040,6 +2051,135 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a0c06ba681fa842fc5f2f82699d09971c" name="a0c06ba681fa842fc5f2f82699d09971c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c06ba681fa842fc5f2f82699d09971c">&#9670;&#160;</a></span>loadavg_15min()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::loadavg_15min </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a57de2e75b31a04c67a30a0762d3705fd" name="a57de2e75b31a04c67a30a0762d3705fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a57de2e75b31a04c67a30a0762d3705fd">&#9670;&#160;</a></span>loadavg_1min()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::loadavg_1min </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Load averages in per-mille (issue #172, top header). </p>
+<dl class="section return"><dt>Returns</dt><dd>Decayed non-idle CPU fraction × 1000. </dd></dl>
+
+</div>
+</div>
+<a id="a7ae2f1c2c7c7773139993bb5256414de" name="a7ae2f1c2c7c7773139993bb5256414de"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ae2f1c2c7c7773139993bb5256414de">&#9670;&#160;</a></span>loadavg_5min()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::loadavg_5min </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac7b9114e87c0554cc7907e3f05e6023" name="aac7b9114e87c0554cc7907e3f05e6023"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac7b9114e87c0554cc7907e3f05e6023">&#9670;&#160;</a></span>loadavg_step()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::loadavg_step </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>avg</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>instant</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>window</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>scale</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Pure one-step integer EMA (issue #172 re-audit: test seam for the loadavg arithmetic — on_tick calls it, unit tests pin it). Saturating: result stays in [0, scale]. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">avg</td><td>Current average (0..scale). </td></tr>
+    <tr><td class="paramname">instant</td><td>New sample (0..scale). </td></tr>
+    <tr><td class="paramname">window</td><td>Window length in samples (&gt; 0). </td></tr>
+    <tr><td class="paramname">scale</td><td>Full-scale value (&gt; 0). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Updated average, clamped to [0, scale]. </dd></dl>
+
+</div>
+</div>
 <a id="ace626f0336bf030f74f984cf5d926eca" name="ace626f0336bf030f74f984cf5d926eca"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ace626f0336bf030f74f984cf5d926eca">&#9670;&#160;</a></span>migration_count()</h2>
 
@@ -3377,6 +3517,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Set the current task directly by pointer (unambiguous; avoids the index-convention mismatch between <a class="el" href="#a6ec2aee2d32d08a9b747a4ef076e0257" title="Returns the index of the current task (computed from pointer, O(n) for snapshot compatibility; prefer...">current_index()</a>/set_current_index() (raw <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> order) and <a class="el" href="#a77133baf25c2e9530f2b1709d881d1dc" title="Returns the task at a given index in the task array.">task_at()</a> (idle-reserved)). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a6c327d25c2a2293e83682bbdc0db5dcf_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a6c327d25c2a2293e83682bbdc0db5dcf_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 61 -->
+</div>
 
 </div>
 </div>
@@ -3510,7 +3656,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a460f3e4e082b3a13c6966a350b270d23_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 61 -->
+<!-- MAP 62 -->
 </div>
 
 </div>
@@ -3575,7 +3721,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a940a027ee35b641fd1c7fc73f9235c65_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 62 -->
+<!-- MAP 63 -->
 </div>
 
 </div>
@@ -3635,7 +3781,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a23ee01af257a861430a00f4f426c6cbd_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 63 -->
+<!-- MAP 64 -->
 </div>
 
 </div>
@@ -3742,6 +3888,45 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="abba7c4e61baa2c7a2e835b3d6a443e7d" name="abba7c4e61baa2c7a2e835b3d6a443e7d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abba7c4e61baa2c7a2e835b3d6a443e7d">&#9670;&#160;</a></span>snapshot_zombies()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::snapshot_zombies </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock **</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>max_out</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Snapshot the zombie list head into a caller array (issue #172, top zombie section). Copies (at most max_out) entries under the zombie leaf lock, then returns the count copied. Shell prints lock-free from the snapshot. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">out</td><td>Caller array of TaskControlBlock* (non-null). </td></tr>
+    <tr><td class="paramname">max_out</td><td>Array capacity. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of entries copied. </dd></dl>
+
+</div>
+</div>
 <a id="a902ff9913bdb3c981b9665c46f08a530" name="a902ff9913bdb3c981b9665c46f08a530"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a902ff9913bdb3c981b9665c46f08a530">&#9670;&#160;</a></span>sporadic_count()</h2>
 
@@ -3797,7 +3982,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 64 -->
+<!-- MAP 65 -->
 </div>
 
 </div>
@@ -3896,7 +4081,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 65 -->
+<!-- MAP 66 -->
 </div>
 
 </div>
@@ -3930,7 +4115,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 66 -->
+<!-- MAP 67 -->
 </div>
 
 </div>
@@ -3991,7 +4176,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 67 -->
+<!-- MAP 68 -->
 </div>
 
 </div>
@@ -4066,6 +4251,52 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Production balancer cadence in BSP ticks (issue #61). </p>
+
+</div>
+</div>
+<a id="aea490393d92cca79f525dda574e96983" name="aea490393d92cca79f525dda574e96983"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea490393d92cca79f525dda574e96983">&#9670;&#160;</a></span>LOADAVG_DISPLAY_DIV</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::LOADAVG_DISPLAY_DIV = 1000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adfb3b2f598049466e2b48a0aee96c3d9" name="adfb3b2f598049466e2b48a0aee96c3d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adfb3b2f598049466e2b48a0aee96c3d9">&#9670;&#160;</a></span>LOADAVG_SCALE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::LOADAVG_SCALE = 1000000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Load-average scale (issue #172): internal precision ×1000000 (accessors return per-mille). The ×1000 display scale alone truncates every per-tick step to zero (|d| ≤ 1000 &lt; N); ×1000000 moves ≈16/tick at full load (re-audit #172). Public: unit tests pin the EMA math in these units. </p>
 
 </div>
 </div>

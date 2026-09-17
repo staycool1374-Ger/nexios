@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.8</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
    </div>
   </td>
  </tr>
@@ -195,9 +195,85 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('x86__64_2hal_2
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_rdseed() {</div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    <span class="keywordflow">return</span> (cpuid(7, 0).ebx &amp; CPUID_EBX7_RDSEED) != 0;</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>}</div>
-<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span> </div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>} <span class="comment">// namespace arch</span></div>
-<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span><span class="comment">// NOLINTEND(bugprone-easily-swappable-parameters)</span></div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> CPUID_ECX1_TSC_DEADLINE = 1u &lt;&lt; 24;</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_tsc_deadline() {</div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>    <span class="keywordflow">return</span> (cpuid(1).ecx &amp; CPUID_ECX1_TSC_DEADLINE) != 0;</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>}</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span><span class="keyword">inline</span> <span class="keywordtype">bool</span> has_apic() {</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>    <span class="keywordflow">return</span> (cpuid(1).edx &amp; (1u &lt;&lt; 9)) != 0;</div>
+<div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>}</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span></div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_vendor(<span class="keywordtype">char</span> *out) {</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keywordflow">if</span> (!out)</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>        <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00129" name="l00129"></a><span class="lineno">  129</span>    CpuIdResult r = cpuid(0);</div>
+<div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>    out[0] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ebx);</div>
+<div class="line"><a id="l00131" name="l00131"></a><span class="lineno">  131</span>    out[1] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ebx &gt;&gt; 8);</div>
+<div class="line"><a id="l00132" name="l00132"></a><span class="lineno">  132</span>    out[2] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ebx &gt;&gt; 16);</div>
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno">  133</span>    out[3] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ebx &gt;&gt; 24);</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    out[4] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.edx);</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    out[5] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.edx &gt;&gt; 8);</div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>    out[6] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.edx &gt;&gt; 16);</div>
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    out[7] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.edx &gt;&gt; 24);</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>    out[8] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ecx);</div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span>    out[9] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ecx &gt;&gt; 8);</div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>    out[10] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ecx &gt;&gt; 16);</div>
+<div class="line"><a id="l00141" name="l00141"></a><span class="lineno">  141</span>    out[11] = <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(r.ecx &gt;&gt; 24);</div>
+<div class="line"><a id="l00142" name="l00142"></a><span class="lineno">  142</span>    out[12] = <span class="charliteral">&#39;\0&#39;</span>;</div>
+<div class="line"><a id="l00143" name="l00143"></a><span class="lineno">  143</span>}</div>
+<div class="line"><a id="l00144" name="l00144"></a><span class="lineno">  144</span></div>
+<div class="line"><a id="l00150" name="l00150"></a><span class="lineno">  150</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_family_model_stepping(<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *family_out,</div>
+<div class="line"><a id="l00151" name="l00151"></a><span class="lineno">  151</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *model_out,</div>
+<div class="line"><a id="l00152" name="l00152"></a><span class="lineno">  152</span>                                        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *stepping_out) {</div>
+<div class="line"><a id="l00153" name="l00153"></a><span class="lineno">  153</span>    <span class="keywordflow">if</span> (!family_out || !model_out || !stepping_out)</div>
+<div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>        <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> eax = cpuid(1).eax;</div>
+<div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> stepping = eax &amp; 0xFu;</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> base_model = (eax &gt;&gt; 4) &amp; 0xFu;</div>
+<div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> base_family = (eax &gt;&gt; 8) &amp; 0xFu;</div>
+<div class="line"><a id="l00159" name="l00159"></a><span class="lineno">  159</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ext_model = (eax &gt;&gt; 16) &amp; 0xFu;</div>
+<div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> ext_family = (eax &gt;&gt; 20) &amp; 0xFFu;</div>
+<div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> family = base_family;</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <span class="keywordflow">if</span> (family == 6 || family == 15)</div>
+<div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>        family += ext_family;</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>    <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> model = base_model;</div>
+<div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    <span class="keywordflow">if</span> (family == 6 || family == 15)</div>
+<div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>        model += ext_model &lt;&lt; 4;</div>
+<div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>    *family_out = family;</div>
+<div class="line"><a id="l00168" name="l00168"></a><span class="lineno">  168</span>    *model_out = model;</div>
+<div class="line"><a id="l00169" name="l00169"></a><span class="lineno">  169</span>    *stepping_out = stepping;</div>
+<div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span>}</div>
+<div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span></div>
+<div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span><span class="keyword">inline</span> <span class="keywordtype">void</span> cpuid_brand(<span class="keywordtype">char</span> *out) {</div>
+<div class="line"><a id="l00177" name="l00177"></a><span class="lineno">  177</span>    <span class="keywordflow">if</span> (!out)</div>
+<div class="line"><a id="l00178" name="l00178"></a><span class="lineno">  178</span>        <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00179" name="l00179"></a><span class="lineno">  179</span>    <span class="keyword">static</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> kBrandBytes = 48;</div>
+<div class="line"><a id="l00180" name="l00180"></a><span class="lineno">  180</span>    <span class="keywordflow">if</span> (cpuid(0x80000000).eax &lt; 0x80000004) {</div>
+<div class="line"><a id="l00181" name="l00181"></a><span class="lineno">  181</span>        <span class="keyword">const</span> <span class="keywordtype">char</span> *unknown = <span class="stringliteral">&quot;(unknown)&quot;</span>;</div>
+<div class="line"><a id="l00182" name="l00182"></a><span class="lineno">  182</span>        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> i = 0;</div>
+<div class="line"><a id="l00183" name="l00183"></a><span class="lineno">  183</span>        <span class="keywordflow">while</span> (unknown[i] &amp;&amp; i &lt; kBrandBytes) {</div>
+<div class="line"><a id="l00184" name="l00184"></a><span class="lineno">  184</span>            out[i] = unknown[i];</div>
+<div class="line"><a id="l00185" name="l00185"></a><span class="lineno">  185</span>            ++i;</div>
+<div class="line"><a id="l00186" name="l00186"></a><span class="lineno">  186</span>        }</div>
+<div class="line"><a id="l00187" name="l00187"></a><span class="lineno">  187</span>        out[i] = <span class="charliteral">&#39;\0&#39;</span>;</div>
+<div class="line"><a id="l00188" name="l00188"></a><span class="lineno">  188</span>        <span class="keywordflow">return</span>;</div>
+<div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>    }</div>
+<div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>    <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> leaf = 0; leaf &lt; 3; ++leaf) {</div>
+<div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>        CpuIdResult r = cpuid(0x80000002 + leaf);</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>        <a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> <a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>[4] = {r.eax, r.ebx, r.ecx, r.edx};</div>
+<div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span>        <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> w = 0; w &lt; 4; ++w) {</div>
+<div class="line"><a id="l00194" name="l00194"></a><span class="lineno">  194</span>            <span class="keywordflow">for</span> (<a class="code hl_typedef" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> b = 0; b &lt; 4; ++b) {</div>
+<div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span>                out[leaf * 16 + w * 4 + b] =</div>
+<div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>                    <span class="keyword">static_cast&lt;</span><span class="keywordtype">char</span><span class="keyword">&gt;</span>(<a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>[w] &gt;&gt; (b * 8));</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>            }</div>
+<div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span>        }</div>
+<div class="line"><a id="l00199" name="l00199"></a><span class="lineno">  199</span>    }</div>
+<div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span>    out[kBrandBytes] = <span class="charliteral">&#39;\0&#39;</span>;</div>
+<div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>}</div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span> </div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>} <span class="comment">// namespace arch</span></div>
+<div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span><span class="comment">// NOLINTEND(bugprone-easily-swappable-parameters)</span></div>
+<div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1284</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:31</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 <div class="ttc" id="atypes_8hpp_html_a398ec93d6bf48539b258a3dd78e32c82"><div class="ttname"><a href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></div><div class="ttdeci">unsigned int uint32_t</div><div class="ttdef"><b>Definition</b> types.hpp:26</div></div>

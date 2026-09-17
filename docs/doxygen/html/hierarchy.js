@@ -139,6 +139,7 @@ var hierarchy =
     [ "kernel::TlbShootdown", "classkernel_1_1_tlb_shootdown.html", null ],
     [ "tm", "structtm.html", null ],
     [ "kernel::vfs::TmpfsEntry", "structkernel_1_1vfs_1_1_tmpfs_entry.html", null ],
+    [ "service::TopRow", "structservice_1_1_top_row.html", null ],
     [ "arch::TprGuard", "classarch_1_1_tpr_guard.html", null ],
     [ "UniquePtr&lt; T, Deleter &gt;", "class_unique_ptr.html", null ],
     [ "kernel::Utsname", "structkernel_1_1_utsname.html", null ],
