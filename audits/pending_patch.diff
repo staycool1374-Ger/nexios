@@ -1,347 +1,499 @@
 diff --git a/docs/specs/deadline.md b/docs/specs/deadline.md
-index 5ce8a950..044bb590 100644
+index 044bb590..e7b9e101 100644
 --- a/docs/specs/deadline.md
 +++ b/docs/specs/deadline.md
-@@ -141,7 +141,15 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
-   `server_budget_for_admission`); exemption-before-WCET and
-   boot/wakeup-never-gated are unchanged.  BACKGROUND tasks additionally
-   never enter EDF dispatch (idle-time only); per-mode interference and
--  starvation contracts are specified in sporadic_server.hpp. |
-+  starvation contracts are specified in sporadic_server.hpp.
-+  Issue #23 addendum: partitioned EDF — the gate is evaluated per CPU
-+  over tasks with `queue_target(t) == cpu`
-+  (`admission_check_cpu_locked`); the legacy global entry delegates
-+  keyed on the candidate's own target.  Affinity moves probe the
-+  destination partition before mutation (`set_affinity_err`,
-+  fail-closed); the balancer probes before each move (its candidates
-+  are non-RT/exempt today, so the probe is an invariant point for
-+  future RT migration and #167 pinning). |
+@@ -149,7 +149,13 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
+   destination partition before mutation (`set_affinity_err`,
+   fail-closed); the balancer probes before each move (its candidates
+   are non-RT/exempt today, so the probe is an invariant point for
+-  future RT migration and #167 pinning). |
++  future RT migration and #167 pinning).
++  Issue #24 addendum: boot-time + test-class verification closes the
++  §5 WCET-overrun / oom-rt §5 verification gap without changing gate
++  semantics — `admission_boot_selftest()` (CONFIG_ADMISSION_SELFTEST,
++  after Scheduler::init) pins admit-math/WCET/budget/miss-action-range
++  through read-only probes (zero alloc, zero table mutation), and the
++  `sched_admission_verify` class covers the end-to-end journeys. |
  | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
  | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
  
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index 61a9e203..77dc978c 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -300,7 +300,10 @@ uint64_t Syscall::sys_set_affinity(uint64_t arg0, uint64_t arg1, uint64_t,
-     auto *t = (arg0 == 0) ? syscall_task() : Scheduler::find_task(arg0);
-     if (t == nullptr)
-         return static_cast<uint64_t>(-1);
--    Scheduler::set_affinity(*t, arg1);
-+    // Issue #23: destination-CPU admission denial propagates as -1
-+    // (fail-closed); clamp/no-op paths still succeed with 0.
-+    if (Scheduler::set_affinity_err(*t, arg1) != errors::SCHED_ERR_OK)
-+        return static_cast<uint64_t>(-1);
-     return 0;
- }
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 80870be1..a930f319 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -37,6 +37,7 @@
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/iommu/iommu.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/task/admission_selftest.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
+@@ -847,6 +848,15 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     // PfA-A: scheduler boot configuration flows down from kernel_init instead
+     // of being hardcoded defaults reachable as globals.
+     kernel::Scheduler::init(kernel::SchedulerConfig{});
++#if CONFIG_ADMISSION_SELFTEST
++    // Issue #24: boot-time admission self-test — read-only probes of the
++    // frozen gate math (no alloc, no table mutation, single BSP).  Logs
++    // one line on success; errors are fail-closed diagnostics, boot
++    // continues (a diagnostic must never wedge the boot it guards).
++    if (!kernel::admission_boot_selftest()) {
++        debug_write("[BOOT] admission self-test FAILED (see log above)\n");
++    }
++#endif
  
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index ec2dffe6..a4051ff3 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -647,7 +647,8 @@ static uint64_t sched_up_cpus() noexcept {
+     // Init task (PID 1) — mounts fstab, runs /etc/rc, then blocks as reaper.
+     // Priority 0 as background reaper; init_task_main raises itself to 10
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 8f3576ef..3cada8f7 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -1014,6 +1014,14 @@
+ #define CONFIG_DEADLINE_ACTION 0
  #endif
- }
  
--void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
-+errors::SchedulerError
-+Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
-     // Quiesce window fences the lock-free AP current-apply path (spec
-     // §3.4.5): with arms cancelled and AP dispatch parked, the running
-     // check below is stable across the dequeue+enqueue.
-@@ -677,19 +678,47 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
-     if (is_current_on_any_cpu(&task) && &task != current_task()) {
-         Logger::warn("sched: set_affinity id=%u refused (running)", task.id);
-         quiesce_exit();
--        return;
-+        return errors::SCHED_ERR_OK; // no-op refuse: legacy success contract
-     }
-     if (task.cpu_affinity != mask) {
-+        // Issue #23: partitioned-EDF destination probe BEFORE any mutation.
-+        // The candidate is counted on the destination partition; denial
-+        // leaves mask, queues, EDF lists and tracker untouched
-+        // (fail-closed).  Exempt moves are always allowed.
-+        uint64_t m = (mask != 0) ? mask : 1U;
-+        uint64_t new_target =
-+            static_cast<uint64_t>(__builtin_ctzll(m));
-+        if (new_target >= CONFIG_MAX_CPUS)
-+            new_target = 0;
-+        if (new_target != queue_target(task) &&
-+            !admission_exempted(task)) {
-+            uint64_t util = 0;
-+            uint32_t bound = 0;
-+            errors::SchedulerError adm =
-+                admission_check_cpu_locked(task, new_target, &util, &bound);
-+            if (adm != errors::SCHED_ERR_OK) {
-+                Logger::warn("sched: set_affinity id=%u denied move to "
-+                             "CPU%u (err=%u, util=%u > bound=%u)",
-+                             task.id, new_target,
-+                             static_cast<uint64_t>(adm), util, bound);
-+                quiesce_exit();
-+                return adm;
-+            }
-+        }
-         // Issue #25 C1: preserve queue membership across the move.  A
-         // queued-but-BLOCKED task (legal: placement is stable across ticks
-         // since nothing can dispatch it) must land in the new CPU's queue;
-         // the old code only re-enqueued READY tasks and silently dropped
-         // BLOCKED ones (smp_sched_cross_move).  was_queued covers every
-         // state; the READY disjunct keeps the unqueued-READY enqueue.
--        bool was_queued = task.in_ready_queue_;
-+        // Issue #23: route through the single enqueue/dequeue points so an
-+        // EDF-eligible task moves between deadline lists, not bitmaps
-+        // (a direct bitmap move would strand it in the wrong queue; the
-+        // EDF pop lazily drops non-READY heads, so BLOCKED placement is
-+        // equally safe in either queue).
-+        bool was_queued = task.in_ready_queue_ || task.in_edf_queue_;
-         if (was_queued) {
--            rq_task(task).remove(task, task.rq_priority_);
--            task.in_ready_queue_ = false;
-+            dequeue_ready(task);
-         }
-         task.cpu_affinity = mask;
-         // Issue #25 C1: never enqueue a task the scheduler doesn't own.
-@@ -703,12 +732,18 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
-         bool owned = (Scheduler::find_task(task.id) == &task);
-         if (was_queued ||
-             (owned && task.state == TaskState::READY &&
--             !task.in_ready_queue_)) {
--            task.in_ready_queue_ = false;
--            rq_task(task).enqueue(task, effective_priority(&task));
-+             !task.in_ready_queue_ && !task.in_edf_queue_)) {
-+            enqueue_ready(task);
-         }
-     }
-     quiesce_exit();
-+    return errors::SCHED_ERR_OK;
++/// Boot-time admission self-test (issue #24): read-only probes of the
++/// frozen LUB/WCET/budget gate math + miss-action range check, run once
++/// after Scheduler::init (zero alloc, zero table mutation, one success
++/// line).  Default: 1 (on).
++#ifndef CONFIG_ADMISSION_SELFTEST
++#define CONFIG_ADMISSION_SELFTEST 1
++#endif
++
+ /// PID of the monitor task to notify when CONFIG_DEADLINE_ACTION == 4.
+ /// Set to 0 to disable notification delivery at compile time.
+ #ifndef CONFIG_DEADLINE_MONITOR_PID
+diff --git a/src/kernel/task/admission_selftest.cpp b/src/kernel/task/admission_selftest.cpp
+new file mode 100644
+index 00000000..52b069f3
+--- /dev/null
++++ b/src/kernel/task/admission_selftest.cpp
+@@ -0,0 +1,161 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file admission_selftest.cpp
++/// @brief Boot-time admission self-test (issue #24): read-only probes of
++///        the frozen gate math.  No allocation, no table mutation.
++
++#include <kernel/task/admission_selftest.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/nexios_config.h>
++#include <logger.hpp>
++#include <string.hpp>
++
++namespace kernel {
++
++// Miss-action configuration is a build-time contract: only actions
++// 0..4 exist (deadline.md §3).  The runtime check below mirrors this.
++static_assert(CONFIG_DEADLINE_ACTION <= 4,
++              "CONFIG_DEADLINE_ACTION out of range 0..4 (deadline.md §3)");
++
++namespace {
++
++// Synthetic probe candidate: stack-constructed, never added to any table
++// (all helpers used here only READ it; the id can never collide with a
++// live task).  No vtable use (no virtual calls on this path), no ctor.
++void make_probe_candidate(TaskControlBlock &cand, uint64_t wcet,
++                          uint64_t period, uint64_t deadline, bool exempt,
++                          uint64_t affinity) noexcept {
++    // Same memset discipline as TaskControlBlock::create (task.cpp): the
++    // stack object is zeroed then fields are assigned; no virtual calls
++    // are made on this path, so the zeroed vptr is never dereferenced.
++    memset(&cand, 0, sizeof(cand));
++    cand.magic = TaskControlBlock::TCB_MAGIC;
++    cand.id = ~0ULL;
++    cand.state = TaskState::READY;
++    cand.priority = 11;
++    cand.base_priority = 11;
++    cand.cpu_affinity = affinity;
++    cand.period_ticks = period;
++    cand.deadline_ticks = deadline;
++    cand.wcet_ticks = wcet;
++    cand.remaining_ticks = period;
++    cand.sched_policy = SchedPolicy::AUTO;
++    cand.edf_exempt = exempt;
 +}
 +
-+void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
-+    // Issue #23: legacy warn-only wrapper — denial is logged inside
-+    // set_affinity_err and swallowed here; fallible callers use _err.
-+    (void)set_affinity_err(task, mask);
++} // namespace
++
++bool admission_boot_selftest() noexcept {
++    bool ok = true;
++
++    // (a) Admit-math pin: on the quiescent boot table (idle [+ monitor],
++    // both skipped) a 60%-of-100 probe must admit with EXACT outputs
++    // (util 600000, single-task bound 1000000).  Any drift in the frozen
++    // numerator, the partition key, or the LUB table trips this.
++    // Audit note: admission_check_cpu_locked is documented caller-holds-
++    // lock; the waiver is safe here by construction — single BSP with
++    // interrupts still disabled at this boot stage (no sti yet in
++    // kernel.cpp), no second task context exists, and the helper is
++    // allocation-free/read-only (the timer ISR takes the lock by
++    // try_lock and skips on contention, so it can never block on us).
++    {
++        TaskControlBlock cand{};
++        make_probe_candidate(cand, 60, 100, 1000, false, 1);
++        uint64_t util = 0;
++        uint32_t bound = 0;
++        errors::SchedulerError r = Scheduler::admission_check_cpu_locked(
++            cand, 0, &util, &bound);
++        if (r != errors::SCHED_ERR_OK || util != 600000 ||
++            bound != 1000000) {
++            Logger::error("admission self-test: admit-math mismatch "
++                          "(err=%u util=%u bound=%u)",
++                          static_cast<uint64_t>(r), util, bound);
++            ok = false;
++        }
++    }
++
++    // (b) WCET-validity + exemption order: explicit WCET past the period
++    // is rejected; an exempt task with a stale WCET is admitted (never
++    // gate exempt tasks — denying boot daemons would wedge the boot).
++    {
++        TaskControlBlock bad{};
++        make_probe_candidate(bad, 200, 100, 1000, false, 1);
++        if (Scheduler::admission_check_cpu_locked(bad, 0, nullptr,
++                                                  nullptr) !=
++            errors::SCHED_ERR_WCET_INVALID) {
++            Logger::error(
++                "admission self-test: wcet>period not rejected");
++            ok = false;
++        }
++        TaskControlBlock stale{};
++        make_probe_candidate(stale, 50, 0, 0, true, 1);
++        if (Scheduler::admission_check_cpu_locked(stale, 0, nullptr,
++                                                  nullptr) !=
++            errors::SCHED_ERR_OK) {
++            Logger::error(
++                "admission self-test: exempt task wrongly gated");
++            ok = false;
++        }
++    }
++
++    // (c) Budget-exhaustion gate: the global budget must be live (sized at
++    // boot) and a reserve beyond it must fail WITHOUT mutating the
++    // counter (failed reserve returns false before decrementing).
++    // Compiled out with the gate itself under CONFIG_MEMORY_BUDGET=0.
++#if CONFIG_MEMORY_BUDGET
++    {
++        uint64_t avail = Scheduler::remaining_memory_budget();
++        if (avail == 0) {
++            Logger::error(
++                "admission self-test: memory budget not sized at boot");
++            ok = false;
++        } else if (Scheduler::reserve_memory_pages(avail + 1)) {
++            Logger::error(
++                "admission self-test: over-budget reserve wrongly granted");
++            Scheduler::release_memory_pages(avail + 1);
++            ok = false;
++        } else if (Scheduler::remaining_memory_budget() != avail) {
++            Logger::error(
++                "admission self-test: failed reserve mutated the budget");
++            ok = false;
++        }
++    }
++#endif
++
++    // (d) Miss-action wiring: the configured action is in range (mirrors
++    // the static_assert above for the exact binary under test).  Handler
++    // behavior itself is covered by the deadline_* test classes — the
++    // boot path invokes nothing.
++    if (CONFIG_DEADLINE_ACTION > 4) {
++        Logger::error("admission self-test: deadline action %u out of "
++                      "range 0..4",
++                      CONFIG_DEADLINE_ACTION);
++        ok = false;
++    }
++
++    if (ok) {
++        Logger::info("[BOOT] admission self-test OK "
++                     "(lub-math/wcet/budget/miss-action=%u)",
++                     CONFIG_DEADLINE_ACTION);
++    }
++    return ok;
++}
++
++} // namespace kernel
+diff --git a/src/kernel/task/admission_selftest.hpp b/src/kernel/task/admission_selftest.hpp
+new file mode 100644
+index 00000000..7943e242
+--- /dev/null
++++ b/src/kernel/task/admission_selftest.hpp
+@@ -0,0 +1,41 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file admission_selftest.hpp
++/// @brief Boot-time admission self-test entry point (issue #24).
++
++#pragma once
++
++namespace kernel {
++
++/// @brief Verifies the admission gate math + budget gate + miss-action
++///        configuration during kernel init (issue #24).
++///
++/// Contract: call once, after Scheduler::init() (scheduler + PMM/VMM +
++/// memory budget live) and before reboot_from_table() (tables still
++/// quiescent: idle [+ monitor] only).  Single BSP.  Performs ZERO
++/// allocation and ZERO scheduler-table mutation — synthetic stack TCBs
++/// are probed through the read-only admission helpers and never added;
++/// the budget check is a failed-reserve probe that cannot mutate the
++/// counter.  Plain bool return (no test macros in the boot path): true
++/// logs one success line; false logs per-check errors and lets boot
++/// continue (fail-closed diagnostics — a diagnostic must never wedge
++/// the boot it guards).
++bool admission_boot_selftest() noexcept;
++
++} // namespace kernel
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index be10daa1..216ecf0d 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -99,6 +99,26 @@ constexpr bool name_eq(const char *a, const char *b) {
+     return *a == *b;
  }
  
- // ---------------------------------------------------------------------------
-@@ -799,6 +834,19 @@ void Scheduler::balancer_tick() noexcept {
-         }
-         if (candidate == nullptr)
++// Issue #24: single-entry server-params rule, shared by the compile-time
++// table check below and the runtime verify class (one rule, no duplication).
++constexpr bool server_params_valid(const TaskDef &d) {
++    if (d.type != TaskType::SPORADIC_SERVER)
++        return true;
++    if (name_empty(d.elf_path))
++        return false;
++    if (d.ss_budget > d.ss_period)
++        return false;
++    // Issue #22: BACKGROUND never runs above bg — a non-idle bg
++    // priority would silently promote best-effort work over RT tasks.
++    if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
++        return false;
++    if (name_empty(d.daemon_name))
++        return false;
++    if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
++        return false;
++    return true;
++}
++
+ template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
+     size_t enabled = 0;
+     size_t ss = 0;
+@@ -135,17 +155,7 @@ template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
              break;
-+        // Issue #23: partitioned-EDF destination probe BEFORE the move.
-+        // Today's candidates are always non-RT (is_rt_task filter above),
-+        // hence admission-exempt, so this passes — it is the enforcement
-+        // point that keeps migration schedulable if an RT class ever
-+        // becomes migratable, and the hook #167 CPU-pinning will reuse.
-+        // Denial stops balancing for this tick (break: depths are
-+        // unchanged, so re-scanning would reselect the same candidate;
-+        // next tick retries).  No move, no count bump, no logging.
-+        if (!admission_exempted(*candidate) &&
-+            admission_check_cpu_locked(*candidate, idle, nullptr, nullptr) !=
-+                errors::SCHED_ERR_OK) {
-+            break;
-+        }
-         // Move + re-pin (queue==target invariant, same as set_affinity;
-         // remove() clears the queue flags, enqueue() re-arms them).
-         rq_for(busy).remove(*candidate, candidate->rq_priority_);
-@@ -1502,6 +1550,17 @@ static uint64_t server_budget_for_admission(const TaskControlBlock &t) noexcept
- errors::SchedulerError Scheduler::admission_check_locked(
-     const TaskControlBlock &candidate, uint64_t *out_util,
-     uint32_t *out_bound) noexcept {
-+    // Issue #23: the global gate is the single-partition special case keyed
-+    // on the candidate's own target — one math path, no duplication, no
-+    // behavior change on single-CPU.
-+    return admission_check_cpu_locked(candidate, queue_target(candidate),
-+                                      out_util, out_bound);
+ 
+         case TaskType::SPORADIC_SERVER:
+-            if (name_empty(d.elf_path))
+-                return false;
+-            if (d.ss_budget > d.ss_period)
+-                return false;
+-            // Issue #22: BACKGROUND never runs above bg — a non-idle bg
+-            // priority would silently promote best-effort work over RT tasks.
+-            if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
+-                return false;
+-            if (name_empty(d.daemon_name))
+-                return false;
+-            if (!d.set_pid_fn || !d.get_pid_fn)
++            if (!server_params_valid(d))
+                 return false;
+             break;
+         }
+@@ -184,6 +194,27 @@ static_assert(
+ 
+ } // anonymous namespace
+ 
++// ── Read-only table accessors (issue #24) ────────────────────────────────
++// The verify class inspects table budgets without spawning anything.
++
++size_t taskdefs_count() noexcept {
++    return sizeof(g_task_defs) / sizeof(g_task_defs[0]);
 +}
 +
-+errors::SchedulerError Scheduler::admission_check_cpu_locked(
-+    const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
-+    uint32_t *out_bound) noexcept {
-+    cpu %= CONFIG_MAX_CPUS;
-     // Audit S3 (issue #20): exemption precedes WCET-validity, matching the
-     // I-8 scope text exactly ("periodic non-exempt tasks only").  An
-     // otherwise-exempt task (boot daemon, aperiodic) carrying a stale
-@@ -1529,6 +1588,11 @@ errors::SchedulerError Scheduler::admission_check_locked(
-             continue; // re-check safe: never double-count the candidate
-         if (admission_exempted(*t))
-             continue;
-+        // Issue #23: partitioned accounting — only tasks targeting this
-+        // CPU enter this partition's numerator (queue_target: lowest-set
-+        // affinity bit, empty mask reads as CPU0).
-+        if (queue_target(*t) != cpu)
-+            continue;
-         ++real_tasks;
-         uint64_t wcet = server_budget_for_admission(*t);
-         total_util += (wcet * 1000000) / t->period_ticks;
-@@ -4507,9 +4571,13 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
-     // tables, queues, and the ResourceTracker untouched (fail-closed); the
-     // caller retries later (defer) or frees the TCB.  Logging stays outside
-     // the helper (allocation-free path); one warn here is cold-path only.
-+    // Issue #23: partitioned gate — the candidate is checked against its
-+    // own target CPU's bound (queue_target), not the global sum.
-     uint64_t util = 0;
-     uint32_t bound = 0;
--    SchedulerError adm = admission_check_locked(task, &util, &bound);
-+    uint64_t target = queue_target(task);
-+    SchedulerError adm =
-+        admission_check_cpu_locked(task, target, &util, &bound);
-     if (adm != SCHED_ERR_OK) {
-         Logger::warn("Scheduler: admission denied task %u (err=%u, "
-                      "util=%u > bound=%u)",
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 08260570..248f76c0 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -148,6 +148,15 @@ class Scheduler {
-     static errors::SchedulerError
-     admission_check_locked(const TaskControlBlock &candidate,
-                            uint64_t *out_util, uint32_t *out_bound) noexcept;
-+    /// @brief Issue #23: partitioned-EDF LUB bound for one CPU.  Identical
-+    ///        to admission_check_locked except only tasks with
-+    ///        queue_target(t) == cpu (modulo MAX_CPUS) enter the numerator;
-+    ///        the candidate is always counted (on cpu).  Caller must hold
-+    ///        scheduler_lock_.  Allocation-free, no logging.  This is the
-+    ///        hook a future CPU-pinning mode (#167) will reuse.
-+    static errors::SchedulerError admission_check_cpu_locked(
-+        const TaskControlBlock &candidate, uint64_t cpu, uint64_t *out_util,
-+        uint32_t *out_bound) noexcept;
++const TaskDef *taskdefs_at(size_t i) noexcept {
++    if (i >= taskdefs_count())
++        return nullptr;
++    return &g_task_defs[i];
++}
++
++bool taskdefs_server_params_valid(const TaskDef &d) noexcept {
++    return server_params_valid(d);
++}
++
++bool taskdefs_valid() noexcept {
++    return validate_all(g_task_defs);
++}
++
+ // ── reboot_from_table ────────────────────────────────────────────────────
  
-     /// @brief Removes a task from the scheduler's run queue.
-     /// @param task Reference to the task to remove.
-@@ -210,9 +219,25 @@ class Scheduler {
-     ///        Empty mask clamps to CPU0 (+warn); user tasks force CPU0
-     ///        (shared-TSS limitation); bits beyond up-CPUs clamp (+warn);
-     ///        tasks running on another CPU are refused (warn).
-+    ///        Legacy warn-only wrapper around set_affinity_err (issue #23):
-+    ///        denial (destination-CPU bound) is logged and swallowed here;
-+    ///        fallible callers (syscall) must use set_affinity_err.
-     /// @param task Target TCB.
-     /// @param mask Affinity bitmask.
-     static void set_affinity(TaskControlBlock &task, uint64_t mask) noexcept;
-+    /// @brief Fallible affinity move with destination-CPU admission probe
-+    ///        (issue #23, partitioned EDF).  Same clamp/refuse/move
-+    ///        machinery as set_affinity, plus: when the effective target
-+    ///        differs and the task is non-exempt, the destination partition
-+    ///        bound is probed BEFORE any mutation — denial returns
-+    ///        SCHED_ERR_ADMISSION_DENIED (or WCET_INVALID) with mask,
-+    ///        queues, EDF lists and tracker untouched.  Exempt moves are
-+    ///        always allowed.  This is the hook a future CPU-pinning mode
-+    ///        (#167) will reuse.
-+    /// @return SCHED_ERR_OK (moved or no-op), SCHED_ERR_ADMISSION_DENIED,
-+    ///         SCHED_ERR_WCET_INVALID.
-+    static errors::SchedulerError
-+    set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept;
+ void reboot_from_table() {
+diff --git a/src/kernel/task/taskdefs.hpp b/src/kernel/task/taskdefs.hpp
+index d44ef94f..b3ca1f67 100644
+--- a/src/kernel/task/taskdefs.hpp
++++ b/src/kernel/task/taskdefs.hpp
+@@ -82,5 +82,16 @@ struct TaskDef {
+ ///        then enters the idle loop.  Never returns.
+ void reboot_from_table() __attribute__((noreturn));
  
-     /// @brief RT load balancer tick (issue #61): migrate queued
-     ///        aperiodic kernel tasks from the busiest up-CPU to the
++/// @brief Read-only task-table accessors (issue #24): the verify class
++///        inspects budgets/modes without spawning.  No mutation, no alloc.
++size_t taskdefs_count() noexcept;
++const TaskDef *taskdefs_at(size_t i) noexcept; // nullptr when out of range
++/// @brief Single-entry server-params rule (issue #24): the same predicate
++///        the compile-time table check enforces, callable at runtime for
++///        negative tests (e.g. BACKGROUND with non-idle bg priority).
++bool taskdefs_server_params_valid(const TaskDef &d) noexcept;
++/// @brief Whole-table validation at runtime (mirrors the static_assert).
++bool taskdefs_valid() noexcept;
++
+ } // namespace task
+ } // namespace kernel
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index bd642c44..61f09736 100644
+index 61f09736..4208d443 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -20,7 +20,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"safe",                133,    0,       0      },  // curated TF_RELEASE subset (85 executed, +48 TF_KERNEL)
      {"selftest",            133,    0,       0      },  // same as safe
      {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
--    {"all",                1415,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 134 cross-arch/filtered registrations (TCOUNT actual 1415, executed 1400)
-+    {"all",                1421,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 1 affinity-err test + 5 smp per-CPU tests (issue #23) + 134 cross-arch/filtered registrations (TCOUNT actual 1421, executed 1406)
+-    {"all",                1421,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 1 affinity-err test + 5 smp per-CPU tests (issue #23) + 134 cross-arch/filtered registrations (TCOUNT actual 1421, executed 1406)
++    {"all",                1428,   0,       0      },  // 1086 + 76 v0.4.3 test-coverage-completion tests (milestone: issues #108-#118) + 5 IrqThread tests (issue #144) + 4 user-task syscall tests (issue #143) + 1 safe-copy fault-recovery test + 2 VMM err/cap tests + 1 PMM + 1 MemPool err tests + 6 LAPIC tests (issue #85 module 2) + 5 I/O APIC tests (issue #85 module 3) + 5 core-isolation tests (issue #85 module 5) + 1 live TPR block-and-hold test (issue #85 module 6) + 1 SMP queue-fanout test (issue #85 module 7) + 4 load-balancer stubs (issue #85 module 8) + 4 cache-coloring stubs (issue #85 module 10) + 6 SMP-sync tests (issue #85 module 11) + 5 SMP-verify tests (issue #85 module 12) + 12 PCID/INVPCID/lazy stubs (issue #85 modules 13-15) + 4 IPI-batching tests (issue #85 module 16) + 4 TLB-latency stubs (issue #85 module 17) + 5 PML4-sync tests (issue #85 module 18) + 2 mb2-relocation tests (issue #153) + 1 per-CPU FPU-owner test + 1 FPU-owner reset test (issue #151) + 5 kernel-half merge tests (issue #96) + 4 affinity syscall tests (issue #61) + 1 balancer WCET test (issue #62) + 1 READY-no-charge test (issue #154) + 2 reaper wake tests (issue #155) + 7 metering tests (issue #21) + 7 edf tests (issue #19) + 7 admission tests (issue #20) + 7 aperiodic-server tests (issue #22) + 1 affinity-err test + 5 smp per-CPU tests (issue #23) + 7 admission-verify tests (issue #24) + 134 cross-arch/filtered registrations (TCOUNT actual 1428, executed 1413)
  
      // basic
      {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
-@@ -115,8 +115,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
-     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
-     {"smp_bringup",            5,   0,       0      },  // AP bring-up (issue #25 Phase B4 + #153): blob layout, staged block memcmp, parked count == MADT APs, mb2 intact + relocated
--    {"sched_affinity",         6,   0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle
--    {"smp_sched",              5,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass)
-+    {"sched_affinity",         7,    0,       0      },  // CPU affinity (issue #25 Phase C1): default mask, lowest-bit targeting, empty/user clamps, re-queue, is_idle + set_affinity_err OK (issue #23)
-+    {"smp_sched",              10,   0,       0      },  // AP scheduling (issue #25 Phase C1): pinned run + IPI wake + BSP unaffected + cross-CPU move + queue fanout (0-AP trivial pass) + 5 per-CPU admission/migration tests (issue #23)
-     {"lapic",                6,   0,       0      },  // Local APIC (issue #85 module 2): enabled contract, ID stability, one-shot/periodic zero boundaries, bounded one-shot, EOI safety
-     {"ioapic",               5,   0,       0      },  // I/O APIC (issue #85 module 3): boot routing liveness, mask/unmask cycle, invalid-IRQ reject, idempotence, lines sweep
-     {"core_isolation",       5,   0,       0      },  // Core isolation (issue #85 module 5): slot stride, BSP slot, write isolation, AP-slot envelope, PML4 valid
-diff --git a/src/kernel/test/test_sched_affinity.cpp b/src/kernel/test/test_sched_affinity.cpp
-index 2d7e00f2..c4ba6818 100644
---- a/src/kernel/test/test_sched_affinity.cpp
-+++ b/src/kernel/test/test_sched_affinity.cpp
-@@ -187,6 +187,31 @@ JARVIS_TEST(sched_affinity_is_idle, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
+@@ -266,6 +266,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"task_metering",         7,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21)
+     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
+     {"sched_admission",       7,    0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny (issue #20)
++    {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
+     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
+ };
  
-+// Runmode: kernel
-+// Testidea: set_affinity_err succeeds on the same-CPU path and preserves
-+//           placement; the void wrapper stays behavior-identical.
-+// Input: periodic BLOCKED task, registered; set_affinity_err(t, 0x1).
-+// Expect: SCHED_ERR_OK, mask 0x1, still queued on 0 (single-CPU;
-+// cross-CPU destination gating is covered in smp_sched under smp2).
-+// Depends: Scheduler::set_affinity_err (issue #23)
-+JARVIS_TEST(sched_affinity_err_cpu0_ok, "PRE: none | POST: none") {
-+    auto *t = TaskControlBlock::create([]() {}, 10, 10);
-+    JARVIS_ASSERT(t != nullptr);
-+    t->state = TaskState::BLOCKED;
-+    arch::IrqGuard irq_guard{};
-+    Scheduler::register_task(*t);
-+    Scheduler::enqueue_ready(*t);
-+    JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
-+    JARVIS_ASSERT(Scheduler::set_affinity_err(*t, 0x1) ==
-+                  errors::SCHED_ERR_OK);
-+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), t->cpu_affinity);
-+    JARVIS_ASSERT(Scheduler::is_queued_on(*t, 0));
-+    Scheduler::remove_task(*t);
-+    t->cleanup();
-+    MemPool::free(t);
-+    JARVIS_TEST_PASS();
-+}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 2a9f672c..1d572047 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -205,6 +205,7 @@ void register_timer_wheel_tests();
+ void register_task_metering_tests();
+ void register_sched_edf_tests();
+ void register_sched_admission_tests();
++void register_sched_admission_verify_tests();
+ void register_aperiodic_servers_tests();
+ void register_syscall_fastpath_tests();
+ void register_fpu_inv_tests();
+@@ -630,6 +631,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"task_metering", []() { register_task_metering_tests(); }},
+     {"sched_edf", []() { register_sched_edf_tests(); }},
+     {"sched_admission", []() { register_sched_admission_tests(); }},
++    {"sched_admission_verify", []() { register_sched_admission_verify_tests(); }},
+     {"aperiodic_servers", []() { register_aperiodic_servers_tests(); }},
+ 
+     // -- safe: curated subset with TF_RELEASE tests --
+@@ -859,6 +861,7 @@ static void register_all_tests() {
+     register_task_metering_tests();
+     register_sched_edf_tests();
+     register_sched_admission_tests();
++    register_sched_admission_verify_tests();
+     register_aperiodic_servers_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+@@ -1026,6 +1029,7 @@ static void register_all_tests_second_half() {
+     register_task_metering_tests();
+     register_sched_edf_tests();
+     register_sched_admission_tests();
++    register_sched_admission_verify_tests();
+     register_aperiodic_servers_tests();
+     register_syscall_fastpath_tests();
+     register_fpu_inv_tests();
+diff --git a/src/kernel/test/test_sched_admission_verify.cpp b/src/kernel/test/test_sched_admission_verify.cpp
+new file mode 100644
+index 00000000..1470389e
+--- /dev/null
++++ b/src/kernel/test/test_sched_admission_verify.cpp
+@@ -0,0 +1,343 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
 +
- void register_sched_affinity_tests() {
-     Logger::info("Registering sched affinity tests");
-     JARVIS_REGISTER_TEST(sched_affinity_default_mask);
-@@ -195,4 +220,5 @@ void register_sched_affinity_tests() {
-     JARVIS_REGISTER_TEST(sched_affinity_user_clamp);
-     JARVIS_REGISTER_TEST(sched_affinity_requeue_moves);
-     JARVIS_REGISTER_TEST(sched_affinity_is_idle);
-+    JARVIS_REGISTER_TEST(sched_affinity_err_cpu0_ok);
- }
-diff --git a/src/kernel/test/test_smp_sched.cpp b/src/kernel/test/test_smp_sched.cpp
-index ff3404cf..46416e82 100644
---- a/src/kernel/test/test_smp_sched.cpp
-+++ b/src/kernel/test/test_smp_sched.cpp
-@@ -36,8 +36,10 @@
- #include <kernel/arch/x86_64/hal/smp.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/io.hpp>
++/// @file test_sched_admission_verify.cpp
++/// @brief End-to-end admission verification journeys (issue #24, v0.4.8).
++///
++/// Covers ONLY what sched_admission / deadline_* / smp_sched do not:
++/// taskdefs-table budgets, deny→reap→retry lifecycle, cross-mode budget
++/// parity, the BACKGROUND table guard, per-CPU epsilon admission, exact
++/// budget round-trips, and runtime parity with the boot self-test.
++/// DRIVEN through REAL add_task_err() outcomes and helper outputs on
++/// gated-entry TCBs (issue #20 dispatch-race lesson applies throughout).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <string.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/taskdefs.hpp>
 +#include <kernel/arch/irq_guard.hpp>
- #include <kernel/sync/semaphore.hpp>
- #include <kernel/memory/mempool.hpp>
++#include <kernel/sync/semaphore.hpp>
++#include <kernel/nexios_config.h>
 +#include "test_sched_helpers.hpp"
- 
- using namespace kernel;
- 
-@@ -118,6 +120,15 @@ void placement_probe_entry() {
-     }
- }
- 
-+// Issue #23: semaphore-gated entry for partitioned-admission tests —
-+// admitted tasks block on first dispatch (never self-terminate mid-setup,
-+// never burn the CPU), keeping LUB scans and queue placement stable.
-+void smp_gate_entry() {
++
++using namespace kernel;
++using task::ServerMode;
++
++namespace {
++
++// Blocks on the gate carried via user_data if ever dispatched.
++void verify_gated_entry() {
 +    auto *self = Scheduler::current_task();
 +    auto *gate = reinterpret_cast<sync::Semaphore *>(self->user_data);
 +    gate->wait();
 +}
 +
- } // namespace
- 
- // Runmode: kernel
-@@ -300,6 +311,249 @@ JARVIS_TEST(smp_sched_queue_placement_fanout, "PRE: iocd | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Issue #23: partitioned-admission test helpers — gated entries keep
-+// admitted tasks alive across setup windows (never self-terminate on a
-+// tick the way empty lambdas do); placement asserts run under one
-+// IrqGuard (cookbook Rule 2).
-+static TaskControlBlock *smp_make_task(uint64_t wcet, uint64_t period,
-+                                       sync::Semaphore *gate) {
-+    auto *t = TaskControlBlock::create(smp_gate_entry, 11, period);
++TaskControlBlock *verify_make_task(uint64_t wcet, uint64_t period,
++                                   sync::Semaphore *gate) {
++    auto *t = TaskControlBlock::create(verify_gated_entry, 11, period);
 +    if (t == nullptr)
 +        return nullptr;
 +    t->wcet_ticks = wcet;
@@ -349,259 +501,310 @@ index ff3404cf..46416e82 100644
 +    return t;
 +}
 +
-+static void smp_destroy_denied(TaskControlBlock *t) {
++void verify_destroy_denied(TaskControlBlock *t) {
 +    if (t == nullptr)
 +        return;
 +    JARVIS_ASSERT(Scheduler::find_task(t->id) == nullptr);
 +    TaskControlBlock::destroy(t);
 +}
 +
++// Synthetic probe candidate (mirrors admission_selftest.cpp): stack-only,
++// never added to any table.
++void verify_make_probe(TaskControlBlock &cand, uint64_t wcet,
++                       uint64_t period, uint64_t deadline, bool exempt) {
++    // Same memset discipline as TaskControlBlock::create (task.cpp);
++    // the probe is never added to any table and makes no virtual calls.
++    memset(&cand, 0, sizeof(cand));
++    cand.magic = TaskControlBlock::TCB_MAGIC;
++    cand.id = ~0ULL;
++    cand.state = TaskState::READY;
++    cand.priority = 11;
++    cand.base_priority = 11;
++    cand.cpu_affinity = 1;
++    cand.period_ticks = period;
++    cand.deadline_ticks = deadline;
++    cand.wcet_ticks = wcet;
++    cand.remaining_ticks = period;
++    cand.sched_policy = SchedPolicy::AUTO;
++    cand.edf_exempt = exempt;
++}
++
++bool taskdefs_name_eq(const char *a, const char *b) {
++    if (a == nullptr || b == nullptr)
++        return a == b;
++    for (; *a != 0 && *b != 0; ++a, ++b) {
++        if (*a != *b)
++            return false;
++    }
++    return *a == *b;
++}
++
++} // namespace
++
 +// Runmode: kernel
-+// Testidea: per-CPU bound denies an overloaded destination partition.
-+// Input: A(60%) pinned to CPU1 (CPU0 when no AP), then B(60%) same target.
-+// Expect: A admitted; B → SCHED_ERR_ADMISSION_DENIED with tables and
-+// ResourceTracker unchanged (destroy_denied asserts absence).
-+// Depends: admission_check_cpu_locked via add_task_err (issue #23)
-+JARVIS_TEST(smp_sched_percpu_add_denies_overloaded_cpu,
++// Testidea: every enabled SPORADIC_SERVER table row satisfies the server
++// params rule (budget<=period, daemon wiring), with vfsd/iocd spot values.
++// Input: read-only taskdefs accessor walk.
++// Expect: all enabled SS rows valid; vfsd (2,10) + iocd (3,10) present;
++// whole-table taskdefs_valid() true.
++// Depends: task::taskdefs_at/taskdefs_server_params_valid (issue #24)
++JARVIS_TEST(admission_verify_taskdefs_server_budgets,
 +            "PRE: none | POST: none") {
-+    bool has_ap = smp::ap_count() > 0;
-+    uint64_t cpu1 = has_ap ? 0x2 : 0x1;
++    bool saw_vfsd = false;
++    bool saw_iocd = false;
++    for (size_t i = 0; i < task::taskdefs_count(); ++i) {
++        const task::TaskDef *d = task::taskdefs_at(i);
++        JARVIS_ASSERT(d != nullptr);
++        if (d->type != task::TaskType::SPORADIC_SERVER || !d->enabled)
++            continue;
++        JARVIS_ASSERT(task::taskdefs_server_params_valid(*d));
++        JARVIS_ASSERT(d->ss_budget <= d->ss_period);
++        if (taskdefs_name_eq(d->daemon_name, "vfsd")) {
++            saw_vfsd = true;
++            JARVIS_ASSERT_EQ(2ULL, d->ss_budget);
++            JARVIS_ASSERT_EQ(10ULL, d->ss_period);
++        }
++        if (taskdefs_name_eq(d->daemon_name, "iocd")) {
++            saw_iocd = true;
++            JARVIS_ASSERT_EQ(3ULL, d->ss_budget);
++            JARVIS_ASSERT_EQ(10ULL, d->ss_period);
++        }
++    }
++    JARVIS_ASSERT(saw_vfsd);
++    JARVIS_ASSERT(saw_iocd);
++    JARVIS_ASSERT(task::taskdefs_valid());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: denial holds no state — after the holder is reaped, the same
++// shape admits (defer-then-retry lifecycle).
++// Input: fill CPU0 to confirmed DENIED; terminate+drain holder; retry.
++// Expect: retry returns SCHED_ERR_OK; teardown restores baseline.
++// Depends: add_task_err fail-closed contract (issues #20/#23)
++JARVIS_TEST(admission_verify_defer_retry_after_reap,
++            "PRE: none | POST: none") {
 +    sync::Semaphore gate;
 +    gate.init(0, 1);
-+    // NOTE: B is positioned BEFORE A is added — the void set_affinity
-+    // wrapper runs the same destination probe, so positioning onto an
-+    // already-full CPU is (correctly) refused with the old mask kept.
-+    auto *b = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(b != nullptr);
-+    Scheduler::set_affinity(*b, cpu1);
-+    auto *a = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(a != nullptr);
-+    Scheduler::set_affinity(*a, cpu1);
++    auto *holder = verify_make_task(60, 100, &gate);
++    JARVIS_ASSERT(holder != nullptr);
++    auto *extra = verify_make_task(60, 100, &gate);
++    JARVIS_ASSERT(extra != nullptr);
 +    {
 +        arch::IrqGuard irq;
-+        JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
-+        JARVIS_ASSERT(Scheduler::add_task_err(*b) ==
++        JARVIS_ASSERT(Scheduler::add_task_err(*holder) ==
++                      errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(Scheduler::add_task_err(*extra) ==
 +                      errors::SCHED_ERR_ADMISSION_DENIED);
 +    }
-+    smp_destroy_denied(b);
++    verify_destroy_denied(extra);
 +    gate.post();
-+    kernel::test::terminate_and_drain(*a);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: affinity move into a saturated partition is denied and the
-+// source placement is fully retained (fail-closed migration gate).
-+// Input: M(implicit 100%) on CPU0 + F(60%) on CPU1; move M→CPU1.
-+// Expect (AP): DENIED, mask still 0x1, queued on 0 not 1. No AP:
-+// clamp no-op OK (masks collapse to CPU0 by design).
-+// Depends: Scheduler::set_affinity_err (issue #23)
-+JARVIS_TEST(smp_sched_set_affinity_denied_keeps_source,
-+            "PRE: none | POST: none") {
-+    bool has_ap = smp::ap_count() > 0;
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *m = smp_make_task(0, 100, &gate);
-+    JARVIS_ASSERT(m != nullptr);
-+    auto *f = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(f != nullptr);
-+    if (has_ap)
-+        Scheduler::set_affinity(*f, 0x2);
++    kernel::test::terminate_and_drain(*holder);
++    auto *retry = verify_make_task(60, 100, &gate);
++    JARVIS_ASSERT(retry != nullptr);
 +    {
 +        arch::IrqGuard irq;
-+        JARVIS_ASSERT(Scheduler::add_task_err(*m) == errors::SCHED_ERR_OK);
-+        errors::SchedulerError fr = Scheduler::add_task_err(*f);
-+        if (has_ap) {
-+            JARVIS_ASSERT(fr == errors::SCHED_ERR_OK);
-+        } else {
-+            // No AP: F collapses onto CPU0 (M implicit 100% + 60 > 82),
-+            // so the fill itself is denied here — the move leg below is
-+            // smp2-only (single-CPU clamp moves are covered in
-+            // sched_affinity_err_cpu0_ok).
-+            JARVIS_ASSERT(fr == errors::SCHED_ERR_ADMISSION_DENIED);
-+            smp_destroy_denied(f);
-+            f = nullptr;
-+        }
-+        if (has_ap) {
-+            errors::SchedulerError r =
-+                Scheduler::set_affinity_err(*m, 0x2);
-+            JARVIS_ASSERT(r == errors::SCHED_ERR_ADMISSION_DENIED);
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x1), m->cpu_affinity);
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-+                             Scheduler::queue_target(*m));
-+            JARVIS_ASSERT(Scheduler::is_queued_on(*m, 0));
-+            JARVIS_ASSERT(!Scheduler::is_queued_on(*m, 1));
-+        } else {
-+            JARVIS_ASSERT(Scheduler::set_affinity_err(*m, 0x1) ==
-+                          errors::SCHED_ERR_OK);
-+        }
-+    }
-+    gate.post();
-+    kernel::test::terminate_and_drain(*m);
-+    if (f != nullptr)
-+        kernel::test::terminate_and_drain(*f);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: exempt moves are always allowed, even into a saturated CPU.
-+// Input: saturate CPU1 (60%), add aperiodic task on CPU0, move it to CPU1.
-+// Expect: move returns OK, mask + queue follow the target on both
-+// variants (single-CPU collapses to a no-op OK).
-+// Depends: set_affinity_err exemption path (issue #23)
-+JARVIS_TEST(smp_sched_exempt_move_always_allowed,
-+            "PRE: none | POST: none") {
-+    bool has_ap = smp::ap_count() > 0;
-+    sync::Semaphore gate;
-+    gate.init(0, 1);
-+    auto *fill = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(fill != nullptr);
-+    if (has_ap)
-+        Scheduler::set_affinity(*fill, 0x2);
-+    auto *ap = smp_make_task(0, 0, &gate);
-+    JARVIS_ASSERT(ap != nullptr);
-+    {
-+        arch::IrqGuard irq;
-+        JARVIS_ASSERT(Scheduler::add_task_err(*fill) ==
++        JARVIS_ASSERT(Scheduler::add_task_err(*retry) ==
 +                      errors::SCHED_ERR_OK);
-+        JARVIS_ASSERT(Scheduler::add_task_err(*ap) == errors::SCHED_ERR_OK);
-+        JARVIS_ASSERT(Scheduler::set_affinity_err(
-+                          *ap, has_ap ? 0x2 : 0x1) == errors::SCHED_ERR_OK);
-+        if (has_ap) {
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x2), ap->cpu_affinity);
-+            JARVIS_ASSERT(Scheduler::is_queued_on(*ap, 1));
-+        }
 +    }
 +    gate.post();
-+    gate.post();
-+    kernel::test::terminate_and_drain(*fill);
-+    kernel::test::terminate_and_drain(*ap);
++    kernel::test::terminate_and_drain(*retry);
 +    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: balancer_tick moves only non-RT tasks (RT never selected —
-+// the structural migration-safety property) and honors the destination
-+// probe for whatever it moves.
-+// Input: 1 periodic RT task + 4 aperiodic mask-0x3 tasks on CPU0.
-+// Expect (AP): migration_count[0] >= 1, RT still targets CPU0, every
-+// moved task targets CPU1. No AP: early return, counts unchanged.
-+// Depends: balancer_tick candidate filter + probe (issues #61/#23)
-+JARVIS_TEST(smp_sched_balancer_moves_nonrt_keeps_rt,
++// Testidea: SPORADIC/DEFERRABLE/BACKGROUND with identical C contribute
++// identically to the admission numerator (mode-agnostic math).
++// Input: three unregistered server TCBs (C=60), probe helper per mode.
++// Expect: all OK with EQUAL util outputs (bg cancels out of the delta).
++// Depends: server_budget_for_admission (issues #20/#22)
++JARVIS_TEST(admission_verify_cross_mode_budget_parity,
 +            "PRE: none | POST: none") {
-+    bool has_ap = smp::ap_count() > 0;
 +    sync::Semaphore gate;
 +    gate.init(0, 1);
-+    auto *rt = smp_make_task(0, 10, &gate);
-+    JARVIS_ASSERT(rt != nullptr);
-+    TaskControlBlock *workers[4] = {};
-+    for (uint64_t i = 0; i < 4; ++i) {
-+        workers[i] = smp_make_task(0, 0, &gate);
-+        JARVIS_ASSERT(workers[i] != nullptr);
-+        if (has_ap)
-+            Scheduler::set_affinity(*workers[i], 0x3);
-+    }
++    auto *ss = verify_make_task(0, 100, &gate);
++    auto *ds = verify_make_task(0, 100, &gate);
++    auto *bs = verify_make_task(0, 100, &gate);
++    JARVIS_ASSERT(ss != nullptr);
++    JARVIS_ASSERT(ds != nullptr);
++    JARVIS_ASSERT(bs != nullptr);
++    ss->init_sporadic_server(60, 100, 0);
++    ds->init_sporadic_server(60, 100, 0, 1, ServerMode::DEFERRABLE);
++    bs->init_sporadic_server(60, 100, 0, 1, ServerMode::BACKGROUND);
++    uint64_t u_ss = 0;
++    uint64_t u_ds = 0;
++    uint64_t u_bs = 0;
 +    {
 +        arch::IrqGuard irq;
-+        Scheduler::add_task(*rt);
-+        for (uint64_t i = 0; i < 4; ++i)
-+            Scheduler::add_task(*workers[i]);
-+        Scheduler::reset_migration_counts();
-+        Scheduler::balancer_tick();
-+        if (!has_ap) {
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-+                             Scheduler::migration_count(0));
-+        } else {
-+            JARVIS_ASSERT(Scheduler::migration_count(0) >= 1);
-+            JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
-+                             Scheduler::queue_target(*rt));
-+            uint64_t moved = 0;
-+            for (uint64_t i = 0; i < 4; ++i) {
-+                if (Scheduler::queue_target(*workers[i]) == 1)
-+                    ++moved;
-+            }
-+            JARVIS_ASSERT(moved >= 1);
-+        }
++        JARVIS_ASSERT(Scheduler::admission_check_cpu_locked(
++                          *ss, 0, &u_ss, nullptr) == errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(Scheduler::admission_check_cpu_locked(
++                          *ds, 0, &u_ds, nullptr) == errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(Scheduler::admission_check_cpu_locked(
++                          *bs, 0, &u_bs, nullptr) == errors::SCHED_ERR_OK);
 +    }
-+    gate.post();
-+    kernel::test::terminate_and_drain(*rt);
-+    for (uint64_t i = 0; i < 4; ++i)
-+        kernel::test::terminate_and_drain(*workers[i]);
++    JARVIS_ASSERT(u_ss == u_ds);
++    JARVIS_ASSERT(u_ds == u_bs);
++    TaskControlBlock::destroy(ss);
++    TaskControlBlock::destroy(ds);
++    TaskControlBlock::destroy(bs);
 +    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: partitioned admission diverges from the legacy global sum:
-+// system-wide 130% still admits when no single partition is overfull.
-+// Input: A(60%) CPU0 + B(60%) CPU1, then C(wcet 10) CPU0 (70<=82).
-+// Expect: all three admitted (single-CPU: B targets CPU0 and is denied
-+// instead — 120>82 — while A and C still admit; the partition key, not
-+// the global sum, decides in both cases).
++// Testidea: the BACKGROUND table guard rejects non-idle bg priorities.
++// Input: vfsd row copy mutated to BACKGROUND + bg 5; original row.
++// Expect: mutated copy invalid, original valid (rule from issue #22,
++// callable at runtime).
++// Depends: taskdefs_server_params_valid (issues #22/#24)
++JARVIS_TEST(admission_verify_background_table_guard,
++            "PRE: none | POST: none") {
++    const task::TaskDef *vfsd = nullptr;
++    for (size_t i = 0; i < task::taskdefs_count(); ++i) {
++        const task::TaskDef *d = task::taskdefs_at(i);
++        if (d != nullptr && d->type == task::TaskType::SPORADIC_SERVER &&
++            d->enabled && taskdefs_name_eq(d->daemon_name, "vfsd")) {
++            vfsd = d;
++            break;
++        }
++    }
++    JARVIS_ASSERT(vfsd != nullptr);
++    JARVIS_ASSERT(task::taskdefs_server_params_valid(*vfsd));
++    task::TaskDef bad = *vfsd;
++    bad.ss_mode = ServerMode::BACKGROUND;
++    bad.ss_bg_prio = 5;
++    JARVIS_ASSERT(!task::taskdefs_server_params_valid(bad));
++    task::TaskDef good_bg = *vfsd;
++    good_bg.ss_mode = ServerMode::BACKGROUND;
++    good_bg.ss_bg_prio = 0;
++    JARVIS_ASSERT(task::taskdefs_server_params_valid(good_bg));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: every populated partition admits an epsilon task (per-CPU
++// boot invariant, live at runtime).
++// Input: epsilon (wcet 1, period 100) targeted per up-CPU.
++// Expect: SCHED_ERR_OK on each CPU (single-CPU: CPU0 only).
 +// Depends: admission_check_cpu_locked partition key (issue #23)
-+JARVIS_TEST(smp_sched_percpu_partition_divergence,
-+            "PRE: none | POST: none") {
-+    bool has_ap = smp::ap_count() > 0;
++JARVIS_TEST(admission_verify_percpu_epsilon, "PRE: none | POST: none") {
 +    sync::Semaphore gate;
 +    gate.init(0, 1);
-+    auto *a = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(a != nullptr);
-+    auto *b = smp_make_task(60, 100, &gate);
-+    JARVIS_ASSERT(b != nullptr);
-+    auto *c = smp_make_task(10, 100, &gate);
-+    JARVIS_ASSERT(c != nullptr);
-+    if (has_ap) {
-+        Scheduler::set_affinity(*b, 0x2);
-+    }
-+    {
-+        arch::IrqGuard irq;
-+        JARVIS_ASSERT(Scheduler::add_task_err(*a) == errors::SCHED_ERR_OK);
-+        errors::SchedulerError rb = Scheduler::add_task_err(*b);
-+        if (has_ap) {
-+            JARVIS_ASSERT(rb == errors::SCHED_ERR_OK);
-+        } else {
-+            JARVIS_ASSERT(rb == errors::SCHED_ERR_ADMISSION_DENIED);
-+            smp_destroy_denied(b);
-+            b = nullptr;
++    uint64_t up = Scheduler::up_cpu_count();
++    if (up > CONFIG_MAX_CPUS)
++        up = CONFIG_MAX_CPUS;
++    if (up < 1)
++        up = 1;
++    for (uint64_t cpu = 0; cpu < up; ++cpu) {
++        auto *e = verify_make_task(1, 100, &gate);
++        JARVIS_ASSERT(e != nullptr);
++        Scheduler::set_affinity(*e, static_cast<uint64_t>(1ULL) << cpu);
++        errors::SchedulerError r;
++        {
++            arch::IrqGuard irq;
++            r = Scheduler::add_task_err(*e);
 +        }
-+        JARVIS_ASSERT(Scheduler::add_task_err(*c) == errors::SCHED_ERR_OK);
++        JARVIS_ASSERT(r == errors::SCHED_ERR_OK);
++        gate.post();
++        kernel::test::terminate_and_drain(*e);
 +    }
-+    gate.post();
-+    kernel::test::terminate_and_drain(*a);
-+    if (b != nullptr)
-+        kernel::test::terminate_and_drain(*b);
-+    kernel::test::terminate_and_drain(*c);
 +    Scheduler::drain_zombie_list();
 +    JARVIS_TEST_PASS();
 +}
 +
- void register_smp_sched_tests() {
-     Logger::info("Registering smp sched tests");
-     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
-@@ -307,5 +561,10 @@ void register_smp_sched_tests() {
-     JARVIS_REGISTER_TEST(smp_sched_bsp_unaffected);
-     JARVIS_REGISTER_TEST(smp_sched_cross_move);
-     JARVIS_REGISTER_TEST(smp_sched_queue_placement_fanout);
-+    JARVIS_REGISTER_TEST(smp_sched_percpu_add_denies_overloaded_cpu);
-+    JARVIS_REGISTER_TEST(smp_sched_set_affinity_denied_keeps_source);
-+    JARVIS_REGISTER_TEST(smp_sched_exempt_move_always_allowed);
-+    JARVIS_REGISTER_TEST(smp_sched_balancer_moves_nonrt_keeps_rt);
-+    JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
- }
- #endif // CONFIG_ARCH_X86_64
++// Runmode: kernel
++// Testidea: budget exhaustion is exact — failed reserves never mutate,
++// reserve/release round-trips restore exactly.
++// Input: reserve(remaining+1) → false + unchanged; reserve(avail) →
++// release(avail) → identical counter.
++// Expect: all three hold (opt-out builds trivially pass).
++// Depends: global budget accounting (issue #20)
++JARVIS_TEST(admission_verify_budget_exhaustion_roundtrip,
++            "PRE: none | POST: none") {
++#if CONFIG_MEMORY_BUDGET
++    uint64_t avail = Scheduler::remaining_memory_budget();
++    JARVIS_ASSERT(avail > 0);
++    JARVIS_ASSERT(!Scheduler::reserve_memory_pages(avail + 1));
++    JARVIS_ASSERT_EQ(avail, Scheduler::remaining_memory_budget());
++    JARVIS_ASSERT(Scheduler::reserve_memory_pages(avail));
++    Scheduler::release_memory_pages(avail);
++    JARVIS_ASSERT_EQ(avail, Scheduler::remaining_memory_budget());
++#else
++    // Opt-out builds compile the gate out (sched_admission precedent).
++#endif
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: runtime parity with the boot self-test — the same four
++// synthetic probes give the same outcomes live.
++// Audit note: the probed outcomes below (WCET_INVALID from candidate
++// fields only; exempt-OK from candidate flags only) are independent of
++// live table state by construction, so the caller-holds-lock contract
++// of admission_check_cpu_locked is safely waived here (same waiver as
++// the boot self-test; the budget fail-proof reads a counter no ISR
++// path mutates).
++// Input: stack-TCB probes (wcet-invalid, exempt-stale) + budget
++// fail-proof + CONFIG range (admit-math exact part is boot-only:
++// live background load makes exact utils non-pinned).
++// Expect: WCET_INVALID / OK / fail-proof / in-range, matching boot.
++// Depends: admission helpers + boot self-test contract (issue #24)
++JARVIS_TEST(admission_verify_boot_parity, "PRE: none | POST: none") {
++    TaskControlBlock bad{};
++    verify_make_probe(bad, 200, 100, 1000, false);
++    JARVIS_ASSERT(Scheduler::admission_check_cpu_locked(bad, 0, nullptr,
++                                                        nullptr) ==
++                  errors::SCHED_ERR_WCET_INVALID);
++    TaskControlBlock stale{};
++    verify_make_probe(stale, 50, 0, 0, true);
++    JARVIS_ASSERT(Scheduler::admission_check_cpu_locked(stale, 0, nullptr,
++                                                        nullptr) ==
++                  errors::SCHED_ERR_OK);
++#if CONFIG_MEMORY_BUDGET
++    uint64_t avail = Scheduler::remaining_memory_budget();
++    JARVIS_ASSERT(avail > 0);
++    JARVIS_ASSERT(!Scheduler::reserve_memory_pages(avail + 1));
++    JARVIS_ASSERT_EQ(avail, Scheduler::remaining_memory_budget());
++#endif
++    JARVIS_ASSERT(CONFIG_DEADLINE_ACTION <= 4);
++    JARVIS_TEST_PASS();
++}
++
++void register_sched_admission_verify_tests() {
++    Logger::info("Registering sched_admission_verify tests");
++    JARVIS_REGISTER_TEST(admission_verify_taskdefs_server_budgets);
++    JARVIS_REGISTER_TEST(admission_verify_defer_retry_after_reap);
++    JARVIS_REGISTER_TEST(admission_verify_cross_mode_budget_parity);
++    JARVIS_REGISTER_TEST(admission_verify_background_table_guard);
++    JARVIS_REGISTER_TEST(admission_verify_percpu_epsilon);
++    JARVIS_REGISTER_TEST(admission_verify_budget_exhaustion_roundtrip);
++    JARVIS_REGISTER_TEST(admission_verify_boot_parity);
++}
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 18df198b..1f7ab9a5 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -111,6 +111,7 @@ __attribute__((weak)) void register_timer_wheel_tests() {}
+ __attribute__((weak)) void register_task_metering_tests() {}
+ __attribute__((weak)) void register_sched_edf_tests() {}
+ __attribute__((weak)) void register_sched_admission_tests() {}
++__attribute__((weak)) void register_sched_admission_verify_tests() {}
+ __attribute__((weak)) void register_aperiodic_servers_tests() {}
+ __attribute__((weak)) void register_cross_arch_tests() {}
+ #if defined(CONFIG_ARCH_AARCH64)
 diff --git a/src/lib/test.hpp b/src/lib/test.hpp
-index b7f3a3c3..93d6a690 100644
+index 93d6a690..c721b2c3 100644
 --- a/src/lib/test.hpp
 +++ b/src/lib/test.hpp
 @@ -92,7 +92,7 @@ public:
      static const char* current_test_name();
  
  private:
--    static constexpr size_t MAX_TESTS = 1415;
-+    static constexpr size_t MAX_TESTS = 1421;
+-    static constexpr size_t MAX_TESTS = 1421;
++    static constexpr size_t MAX_TESTS = 1428;
      static constexpr size_t MAX_CLASSES = 64;
      // NOLINTBEGIN(bugprone-dynamic-static-initializers)
      static TestCase tests_[MAX_TESTS];

@@ -111,6 +111,7 @@ __attribute__((weak)) void register_timer_wheel_tests() {}
 __attribute__((weak)) void register_task_metering_tests() {}
 __attribute__((weak)) void register_sched_edf_tests() {}
 __attribute__((weak)) void register_sched_admission_tests() {}
+__attribute__((weak)) void register_sched_admission_verify_tests() {}
 __attribute__((weak)) void register_aperiodic_servers_tests() {}
 __attribute__((weak)) void register_cross_arch_tests() {}
 #if defined(CONFIG_ARCH_AARCH64)

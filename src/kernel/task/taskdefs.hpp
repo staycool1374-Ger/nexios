@@ -82,5 +82,16 @@ struct TaskDef {
 ///        then enters the idle loop.  Never returns.
 void reboot_from_table() __attribute__((noreturn));
 
+/// @brief Read-only task-table accessors (issue #24): the verify class
+///        inspects budgets/modes without spawning.  No mutation, no alloc.
+size_t taskdefs_count() noexcept;
+const TaskDef *taskdefs_at(size_t i) noexcept; // nullptr when out of range
+/// @brief Single-entry server-params rule (issue #24): the same predicate
+///        the compile-time table check enforces, callable at runtime for
+///        negative tests (e.g. BACKGROUND with non-idle bg priority).
+bool taskdefs_server_params_valid(const TaskDef &d) noexcept;
+/// @brief Whole-table validation at runtime (mirrors the static_assert).
+bool taskdefs_valid() noexcept;
+
 } // namespace task
 } // namespace kernel

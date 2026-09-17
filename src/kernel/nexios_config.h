@@ -1014,6 +1014,14 @@
 #define CONFIG_DEADLINE_ACTION 0
 #endif
 
+/// Boot-time admission self-test (issue #24): read-only probes of the
+/// frozen LUB/WCET/budget gate math + miss-action range check, run once
+/// after Scheduler::init (zero alloc, zero table mutation, one success
+/// line).  Default: 1 (on).
+#ifndef CONFIG_ADMISSION_SELFTEST
+#define CONFIG_ADMISSION_SELFTEST 1
+#endif
+
 /// PID of the monitor task to notify when CONFIG_DEADLINE_ACTION == 4.
 /// Set to 0 to disable notification delivery at compile time.
 #ifndef CONFIG_DEADLINE_MONITOR_PID

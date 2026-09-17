@@ -149,7 +149,13 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
   destination partition before mutation (`set_affinity_err`,
   fail-closed); the balancer probes before each move (its candidates
   are non-RT/exempt today, so the probe is an invariant point for
-  future RT migration and #167 pinning). |
+  future RT migration and #167 pinning).
+  Issue #24 addendum: boot-time + test-class verification closes the
+  §5 WCET-overrun / oom-rt §5 verification gap without changing gate
+  semantics — `admission_boot_selftest()` (CONFIG_ADMISSION_SELFTEST,
+  after Scheduler::init) pins admit-math/WCET/budget/miss-action-range
+  through read-only probes (zero alloc, zero table mutation), and the
+  `sched_admission_verify` class covers the end-to-end journeys. |
 | I-9 | Monitor `dequeue+BLOCKED` and on_tick `READY+enqueue_ready` are mutually exclusive under `scheduler_lock_` (no INV-5 violation) |
 | I-10 | No dangling monitor pointer (cleanup clear + magic check + direct-scan test hook) |
 

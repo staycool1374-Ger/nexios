@@ -37,6 +37,7 @@
 #include <kernel/memory/mempool.hpp>
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/admission_selftest.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
@@ -847,6 +848,15 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // PfA-A: scheduler boot configuration flows down from kernel_init instead
     // of being hardcoded defaults reachable as globals.
     kernel::Scheduler::init(kernel::SchedulerConfig{});
+#if CONFIG_ADMISSION_SELFTEST
+    // Issue #24: boot-time admission self-test — read-only probes of the
+    // frozen gate math (no alloc, no table mutation, single BSP).  Logs
+    // one line on success; errors are fail-closed diagnostics, boot
+    // continues (a diagnostic must never wedge the boot it guards).
+    if (!kernel::admission_boot_selftest()) {
+        debug_write("[BOOT] admission self-test FAILED (see log above)\n");
+    }
+#endif
 
     // Init task (PID 1) — mounts fstab, runs /etc/rc, then blocks as reaper.
     // Priority 0 as background reaper; init_task_main raises itself to 10

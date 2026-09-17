@@ -99,6 +99,26 @@ constexpr bool name_eq(const char *a, const char *b) {
     return *a == *b;
 }
 
+// Issue #24: single-entry server-params rule, shared by the compile-time
+// table check below and the runtime verify class (one rule, no duplication).
+constexpr bool server_params_valid(const TaskDef &d) {
+    if (d.type != TaskType::SPORADIC_SERVER)
+        return true;
+    if (name_empty(d.elf_path))
+        return false;
+    if (d.ss_budget > d.ss_period)
+        return false;
+    // Issue #22: BACKGROUND never runs above bg — a non-idle bg
+    // priority would silently promote best-effort work over RT tasks.
+    if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
+        return false;
+    if (name_empty(d.daemon_name))
+        return false;
+    if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
+        return false;
+    return true;
+}
+
 template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
     size_t enabled = 0;
     size_t ss = 0;
@@ -135,17 +155,7 @@ template <size_t N> constexpr bool validate_all(const TaskDef (&t)[N]) {
             break;
 
         case TaskType::SPORADIC_SERVER:
-            if (name_empty(d.elf_path))
-                return false;
-            if (d.ss_budget > d.ss_period)
-                return false;
-            // Issue #22: BACKGROUND never runs above bg — a non-idle bg
-            // priority would silently promote best-effort work over RT tasks.
-            if (d.ss_mode == ServerMode::BACKGROUND && d.ss_bg_prio > 1)
-                return false;
-            if (name_empty(d.daemon_name))
-                return false;
-            if (!d.set_pid_fn || !d.get_pid_fn)
+            if (!server_params_valid(d))
                 return false;
             break;
         }
@@ -183,6 +193,27 @@ static_assert(
     "(see nexios_config.h)");
 
 } // anonymous namespace
+
+// ── Read-only table accessors (issue #24) ────────────────────────────────
+// The verify class inspects table budgets without spawning anything.
+
+size_t taskdefs_count() noexcept {
+    return sizeof(g_task_defs) / sizeof(g_task_defs[0]);
+}
+
+const TaskDef *taskdefs_at(size_t i) noexcept {
+    if (i >= taskdefs_count())
+        return nullptr;
+    return &g_task_defs[i];
+}
+
+bool taskdefs_server_params_valid(const TaskDef &d) noexcept {
+    return server_params_valid(d);
+}
+
+bool taskdefs_valid() noexcept {
+    return validate_all(g_task_defs);
+}
 
 // ── reboot_from_table ────────────────────────────────────────────────────
 
