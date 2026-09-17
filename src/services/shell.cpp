@@ -1387,12 +1387,18 @@ void top_render_frame(uint64_t delay_secs) {
                            : (cpu_busy_ns[c] >= window_ns)
                                  ? 100
                                  : (cpu_busy_ns[c] * 100) / window_ns;
+        // Clamp sys/user like CPU% (tick-vs-wall skew can otherwise
+        // push shares past 100 — issue #172 follow-up).
         uint64_t sys = (window_ns == 0)
                            ? 0
-                           : (cpu_sys_ns[c] * 100) / window_ns;
+                           : (cpu_sys_ns[c] >= window_ns)
+                                 ? 100
+                                 : (cpu_sys_ns[c] * 100) / window_ns;
         uint64_t user = (window_ns == 0)
                             ? 0
-                            : (cpu_user_ns[c] * 100) / window_ns;
+                            : (cpu_user_ns[c] >= window_ns)
+                                  ? 100
+                                  : (cpu_user_ns[c] * 100) / window_ns;
         tot_pct += pct;
         tot_sys += sys;
         tot_user += user;
@@ -1486,7 +1492,13 @@ void top_render_frame(uint64_t delay_secs) {
                 ++p;
             }
             pdbuf[p++] = '%';
-            if (rows[i].pd_use_pct > 90 && p < 9)
+            // Overrun warning only for tasks with an explicit real-time
+            // budget (issue #172 follow-up): daemons with WCET 0 hit
+            // 100% on every busy window — that is correct server
+            // behavior, not an overrun.  The WCET detector (#154)
+            // remains the binding enforcement.
+            if (rows[i].pd_use_pct > 90 && rows[i].task->wcet_ticks > 0 &&
+                p < 9)
                 pdbuf[p++] = '!';
             pdbuf[p] = '\0';
             top_field(pdbuf, 7, true);

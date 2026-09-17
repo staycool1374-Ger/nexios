@@ -900,9 +900,11 @@ JARVIS_TEST(shell_top_sort_order, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: PD_USE% math + 90% flag + non-periodic dash (issue #172).
 // A periodic fixture (period 10000 ticks) shows seeded percentages;
-// the idle task (NO_PERIOD) shows a dash in PD_USE%.
+// the idle task (NO_PERIOD) shows a dash in PD_USE%.  The flag needs
+// an explicit WCET: with WCET 0 the same 91% renders flagless.
 // Input: exec_period_ns seeded to 88% then 91% of the period.
-// Expect: "88%" without "88%!", then "91%!"; idle row ends with "-".
+// Expect: "88%" without "88%!", then "91%!"; idle row ends with "-";
+//         WCET 0 + 91% renders "91%" without "!".
 // Depends: service::Shell
 JARVIS_TEST(shell_top_pd_use_math_and_flag, "PRE: none | POST: none") {
     top_gate.init(0, 1);
@@ -913,13 +915,19 @@ JARVIS_TEST(shell_top_pd_use_math_and_flag, "PRE: none | POST: none") {
         arch::IrqGuard guard;
         Scheduler::add_task(*task);
     }
-    // 1 tick = 1e6 ns; period_ns = 10000 * 1e6.
+    // 1 tick = 1e6 ns; period_ns = 10000 * 1e6.  Explicit WCET so the
+    // 90% flag applies (daemons with WCET 0 never flag by design).
+    task->wcet_ticks = 9500;
     task->exec_period_ns = 8800000000ULL; // 88%
     run_shell("top -d 0", top_out, sizeof(top_out));
     bool seen88 = has(top_out, "88%") && !has(top_out, "88%!");
     task->exec_period_ns = 9100000000ULL; // 91% -> flag
     run_shell("top -d 0", top_out, sizeof(top_out));
     bool seen91 = has(top_out, "91%!");
+    // Daemon shape (WCET 0): same load renders without the flag.
+    task->wcet_ticks = 0;
+    run_shell("top -d 0", top_out, sizeof(top_out));
+    bool seen91_plain = has(top_out, "91%") && !has(top_out, "91%!");
     // Idle row (NO_PERIOD): last field of its task-table line is "-".
     // The NAME field renders padded (" idle        "); per-CPU "(idle)"
     // current-task markers must not match instead.
@@ -937,6 +945,7 @@ JARVIS_TEST(shell_top_pd_use_math_and_flag, "PRE: none | POST: none") {
     kernel::test::terminate_and_drain(*task);
     JARVIS_ASSERT(seen88);
     JARVIS_ASSERT(seen91);
+    JARVIS_ASSERT(seen91_plain);
     JARVIS_ASSERT(shell_dash);
     JARVIS_TEST_PASS();
 }
