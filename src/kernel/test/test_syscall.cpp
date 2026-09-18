@@ -34,6 +34,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/ipc/ipc.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/vfs/vfs.hpp>
@@ -845,6 +846,137 @@ JARVIS_TEST(syscall_user_open_rejected, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: KLOG read path through dispatch — push a marker entry, then the
+//           dmesg walk must format it back into the caller buffer (this also
+//           covers the entry-format lambda). Self-seeding: no dependence on
+//           ambient log state (dmesg can be legitimately empty).
+// Input: Dispatched task pushes "KLOGPROBE" via dmesg_push_base, then calls
+//        KLOG(stack buf, 512, flags 0).
+// Expect: Bytes written (> 0) and the marker substring present in the
+//         buffer.
+// Depends: Syscall::sys_klog, DmesgService
+JARVIS_TEST(syscall_klog_read, "PRE: none | POST: none") {
+    static char g_buf[512];
+    static uint64_t g_ret = 0;
+    static uint64_t g_found = 0;
+
+    auto *t = run_syscall_task([]() {
+        for (size_t i = 0; i < sizeof(g_buf); ++i)
+            g_buf[i] = 0;
+        log::dmesg_push_base(0xD0D0, "KLOGPROBE");
+        g_ret = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::KLOG),
+            reinterpret_cast<uint64_t>(g_buf), sizeof(g_buf), 0, 0, nullptr);
+        g_found = 0;
+        const char *needle = "KLOGPROBE";
+        for (size_t i = 0; i + 9 < sizeof(g_buf); ++i) {
+            size_t j = 0;
+            while (needle[j] && g_buf[i + j] == needle[j])
+                ++j;
+            if (!needle[j]) {
+                g_found = 1;
+                break;
+            }
+        }
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(g_ret > 0);
+    JARVIS_ASSERT(g_ret < sizeof(g_buf));
+    JARVIS_ASSERT_EQ(1ULL, g_found);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: REAL Ring-3 EXEC with a valid argv — validation must accept a
+//           well-formed array, then the /dev/null size gate fails the exec
+//           before any allocation. Covers the validate scan loop + total.
+// Input: User probe EXEC(20) on payload path + argv [path, null], envp
+//        empty (rdx reads the zeroed data base).
+// Expect: Probe reaches EXIT; returns -1 (size gate, post-validation).
+// Depends: validate_argv_envp accept path, sys_exec dispatch
+JARVIS_TEST(syscall_user_exec_valid_argv, "PRE: vfsd, iocd | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint8_t payload[512] = {};
+    constexpr uint64_t k_path_off = 32;
+    constexpr uint64_t k_argv_off = 64;
+    const char *path = "/dev/null";
+    for (size_t i = 0; path[i]; ++i)
+        payload[k_path_off + i] = static_cast<uint8_t>(path[i]);
+    const uint64_t path_va = kUserProbeDataVa + k_path_off;
+    const uint64_t argv_va = kUserProbeDataVa + k_argv_off;
+    for (size_t i = 0; i < 8; ++i) {
+        payload[k_argv_off + i] =
+            static_cast<uint8_t>((path_va >> (i * 8)) & 0xFF);
+    }
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    // 20 = EXEC. Second call repeats with a null path (resolve fails fast).
+    bool ran = run_user_probe(20, static_cast<uint32_t>(path_va), argv_va,
+                              20, 0, 0, &ret_a, &ret_b, data, payload,
+                              sizeof(payload), 0);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: REAL Ring-3 EXEC hostile argv — a kernel-half pointer argument
+//           and an overlong (NUL-free inside the 256-byte window) argument
+//           must both be rejected by validation before any allocation.
+// Input: User probe EXEC(20) twice on /dev/null: call A with
+//        argv = [kernel-half VA, null]; call B with argv = [bigstr, null]
+//        where bigstr is 300 NUL-free bytes at a valid user VA.
+// Expect: Probe reaches EXIT; both return -1 (validation rejects).
+// Depends: validate_argv_envp reject exits
+JARVIS_TEST(syscall_user_exec_hostile_argv, "PRE: vfsd, iocd | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint8_t payload[512] = {};
+    constexpr uint64_t k_path_off = 32;
+    constexpr uint64_t k_argv_off = 64;
+    constexpr uint64_t k_big_off = 128;
+    constexpr uint64_t k_argv2_off = 440;
+    const char *path = "/dev/null";
+    for (size_t i = 0; path[i]; ++i)
+        payload[k_path_off + i] = static_cast<uint8_t>(path[i]);
+    const uint64_t path_va = kUserProbeDataVa + k_path_off;
+    // Array A: [kernel-half VA, null].
+    const uint64_t evil = 0xFFFF800000000000ULL;
+    for (size_t i = 0; i < 8; ++i)
+        payload[k_argv_off + i] =
+            static_cast<uint8_t>((evil >> (i * 8)) & 0xFF);
+    // 300 NUL-free bytes (window is 256) + array B: [bigstr, null].
+    for (size_t i = 0; i < 300; ++i)
+        payload[k_big_off + i] = static_cast<uint8_t>('A' + (i % 26));
+    const uint64_t big_va = kUserProbeDataVa + k_big_off;
+    for (size_t i = 0; i < 8; ++i)
+        payload[k_argv2_off + i] =
+            static_cast<uint8_t>((big_va >> (i * 8)) & 0xFF);
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    // 20 = EXEC.
+    bool ran = run_user_probe(20, static_cast<uint32_t>(path_va),
+                              kUserProbeDataVa + k_argv_off, 20,
+                              static_cast<uint32_t>(path_va),
+                              kUserProbeDataVa + k_argv2_off, &ret_a, &ret_b,
+                              data, payload, sizeof(payload), 0);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
 void register_syscall_tests() {
     Logger::info("Registering syscall tests");
 
@@ -875,6 +1007,9 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
     JARVIS_REGISTER_TEST(syscall_user_open_devnull);
     JARVIS_REGISTER_TEST(syscall_user_open_rejected);
+    JARVIS_REGISTER_TEST(syscall_klog_read);
+    JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
+    JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
 
     register_syscall_affinity_tests();
 }

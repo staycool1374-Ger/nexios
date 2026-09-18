@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         25,    0,       0      },  // syscall interface (exit test disabled in source) + 6 user-task probe tests (issue #143, #127) + 4 affinity tests (issue #61)
+    {"syscall_core",         28,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
@@ -95,9 +95,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
-    {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
+    {"cap_shm",               6,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134)
     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
-    {"cap_pager",             13,   0,       0      },  // external pager protocol (issue #107): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary
+    {"cap_pager",             15,   0,       0      },  // external pager protocol (issue #107 + dispatch rejects #134): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary + recv-empty/abort-unregister dispatch
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics (issue #111): reader wake, full-pipe partial write, write-close EOF, read-close EPIPE, two-reader order, closed-end errors
     {"vfs_procfs",             9,   0,       0      },  // procfs nodes (issue #109): root dir, readdir static/pid, meminfo format, pci, self stat, pid dir close, unknown reject, dir read
@@ -270,9 +270,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                427,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (issue #173)
+    {"core",                436,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift
     {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
-    {"capability",          144,  0,       0      },  // all cap_* excl. iommu_live (issue #173)
+    {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)

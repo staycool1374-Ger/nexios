@@ -670,6 +670,54 @@ JARVIS_TEST(pager_smap_canary_coexist, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+
+
+// Runmode: kernel
+// Testidea: SYS_PAGER_RECV with nothing pending returns 0 through dispatch
+//           (never blocks), and a null out-pointer is rejected before the
+//           registry is touched.
+// Input: Harness context dispatches PAGER_RECV into a stack msg, then with
+//        out = 0.
+// Expect: 0 on empty; -1 on null out.
+// Depends: Syscall::sys_pager_recv
+JARVIS_TEST(pager_recv_dispatch_empty, "PRE: none | POST: none") {
+    ipc::PagerFaultMsg msg{};
+    uint64_t empty = pager_syscall(
+        static_cast<uint64_t>(SyscallNumber::PAGER_RECV),
+        reinterpret_cast<uint64_t>(&msg), 0, 0, 0);
+    uint64_t null_out = pager_syscall(
+        static_cast<uint64_t>(SyscallNumber::PAGER_RECV), 0, 0, 0, 0);
+    JARVIS_ASSERT_EQ(0ULL, empty);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), null_out);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: SYS_PAGER_ABORT for an unknown fault id and SYS_PAGER_UNREGISTER
+//           without a registration both fail closed through dispatch.
+// Input: Harness context dispatches ABORT(0xdead) and UNREGISTER (own pid
+//        with no registration, then pid 9999).
+// Expect: All return -1; registry live count unchanged.
+// Depends: Syscall::sys_pager_abort/sys_pager_unregister
+JARVIS_TEST(pager_abort_unregister_rejected, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    const size_t base = ipc::PagerRegistry::live_count();
+    uint64_t abort_ret = pager_syscall(
+        static_cast<uint64_t>(SyscallNumber::PAGER_ABORT), 0xdead, 0, 0, 0);
+    uint64_t unreg_self = pager_syscall(
+        static_cast<uint64_t>(SyscallNumber::PAGER_UNREGISTER), cur->id, 0,
+        0, 0);
+    uint64_t unreg_ghost = pager_syscall(
+        static_cast<uint64_t>(SyscallNumber::PAGER_UNREGISTER), 9999, 0, 0,
+        0);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), abort_ret);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), unreg_self);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), unreg_ghost);
+    JARVIS_ASSERT_EQ(base, ipc::PagerRegistry::live_count());
+    JARVIS_TEST_PASS();
+}
+
 void register_cap_pager_tests() {
     Logger::info("Registering cap_pager tests");
     JARVIS_REGISTER_TEST(pager_register_authority);
@@ -685,4 +733,6 @@ void register_cap_pager_tests() {
     JARVIS_REGISTER_TEST(pager_cap_revoke_unmaps);
     JARVIS_REGISTER_TEST(pager_deadlock_designed_out);
     JARVIS_REGISTER_TEST(pager_smap_canary_coexist);
+    JARVIS_REGISTER_TEST(pager_recv_dispatch_empty);
+    JARVIS_REGISTER_TEST(pager_abort_unregister_rejected);
 }
