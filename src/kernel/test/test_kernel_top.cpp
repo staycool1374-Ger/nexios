@@ -53,6 +53,10 @@
 using namespace kernel;
 using kernel::IrqLatencyHistogram;
 
+// Forward declaration (definition: src/kernel/kernel.cpp, global scope —
+// kernel.hpp:55 declares ::format_datetime, which has no definition).
+void format_datetime(char *buf, size_t size, uint64_t wall_ns);
+
 namespace {
 
 /// @brief Read-back buffer for the klog probe.
@@ -484,8 +488,94 @@ JARVIS_TEST(kernel_irq_thread_destroy_compacts,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Epoch-to-date conversion anchors — wall_ns 0 renders the epoch
+//           exactly, and the last millisecond of 1999 exercises the ms field
+//           maximum plus the year/month/day rollover.
+// Input: format_datetime(0), format_datetime(946684799999000000).
+// Expect: "1970-01-01 00:00:00:000" and "1999-12-31 23:59:59:999", exact.
+// Depends: ::format_datetime
+JARVIS_TEST(kernel_datetime_epoch_and_rollover,
+            "PRE: none | POST: none") {
+    char buf[32] = {};
+    ::format_datetime(buf, sizeof(buf), 0);
+    size_t i = 0;
+    const char *expect_epoch = "1970-01-01 00:00:00:000";
+    while (expect_epoch[i] && buf[i] == expect_epoch[i])
+        ++i;
+    JARVIS_ASSERT(expect_epoch[i] == '\0' && buf[i] == '\0');
+
+    char buf2[32] = {};
+    ::format_datetime(buf2, sizeof(buf2), 946684799999000000ULL);
+    const char *expect_roll = "1999-12-31 23:59:59:999";
+    i = 0;
+    while (expect_roll[i] && buf2[i] == expect_roll[i])
+        ++i;
+    JARVIS_ASSERT(expect_roll[i] == '\0' && buf2[i] == '\0');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Leap-year rules through the converter — 2024 (divisible by 4),
+//           2000 (divisible by 400, leap despite the century), 2100
+//           (divisible by 100 but not 400 — Feb has 28 days, so the day
+//           after 02-28 is 03-01), and a common-year February end. Together
+//           these hit every branch combination of is_leap().
+// Input: format_datetime on four integer-exact wall_ns vectors.
+// Expect: "2024-02-29 12:34:56:123", "2000-02-29 00:00:00:000",
+//         "2100-03-01 00:00:00:000", "2023-02-28 23:59:59:000", exact.
+// Depends: ::format_datetime, is_leap (via format_datetime)
+JARVIS_TEST(kernel_datetime_leap_rules, "PRE: none | POST: none") {
+    struct Case {
+        uint64_t wall_ns;
+        const char *expect;
+    };
+    static const Case cases[] = {
+        {1709210096123000000ULL, "2024-02-29 12:34:56:123"},
+        {951782400000000000ULL, "2000-02-29 00:00:00:000"},
+        {4107542400000000000ULL, "2100-03-01 00:00:00:000"},
+        {1677628799000000000ULL, "2023-02-28 23:59:59:000"},
+    };
+    for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); ++c) {
+        char buf[32] = {};
+        ::format_datetime(buf, sizeof(buf), cases[c].wall_ns);
+        size_t i = 0;
+        while (cases[c].expect[i] && buf[i] == cases[c].expect[i])
+            ++i;
+        JARVIS_ASSERT_FMT(cases[c].expect[i] == '\0' && buf[i] == '\0',
+                          "datetime case %u mismatch (got '%s')", (unsigned)c,
+                          buf);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Conversion guards — null buffer and undersized buffers (< 24)
+//           must return without writing anything (no crash, no partial
+//           output, sentinel intact).
+// Input: format_datetime(nullptr, 32, 0); format_datetime(sentinel, 10/23).
+// Expect: No crash; sentinel bytes after index 0 untouched.
+// Depends: ::format_datetime
+JARVIS_TEST(kernel_datetime_guards, "PRE: none | POST: none") {
+    ::format_datetime(nullptr, 32, 0);
+    char small[10];
+    __builtin_memset(small, 0xAA, sizeof(small));
+    ::format_datetime(small, sizeof(small), 0);
+    char edge[23];
+    __builtin_memset(edge, 0xAA, sizeof(edge));
+    ::format_datetime(edge, sizeof(edge), 0);
+    for (size_t i = 0; i < sizeof(small); ++i)
+        JARVIS_ASSERT(small[i] == static_cast<char>(0xAA));
+    for (size_t i = 0; i < sizeof(edge); ++i)
+        JARVIS_ASSERT(edge[i] == static_cast<char>(0xAA));
+    JARVIS_TEST_PASS();
+}
+
 void register_kernel_top_tests() {
     Logger::info("Registering top-level kernel tests");
+    JARVIS_REGISTER_TEST(kernel_datetime_epoch_and_rollover);
+    JARVIS_REGISTER_TEST(kernel_datetime_leap_rules);
+    JARVIS_REGISTER_TEST(kernel_datetime_guards);
     JARVIS_REGISTER_TEST(kernel_irq_latency_empty_dump);
     JARVIS_REGISTER_TEST(kernel_irq_latency_reports_sample_count);
     JARVIS_REGISTER_TEST(kernel_irq_latency_clamps_overflow);

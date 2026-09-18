@@ -220,7 +220,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
-    {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
+    {"kernel_top",            12, 0,       0      },  // Top-level kernel (issue #131): histogram + random + IrqThread (#144) + datetime epoch/leap/guards
     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
     {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
