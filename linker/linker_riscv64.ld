@@ -47,8 +47,10 @@ SECTIONS
     .text : AT(phys_lma) ALIGN(4K)
     {
         _text_start = .;
+        KEEP(*(.marker.text.start))
         *(.text*)
         *(.text.*)
+        KEEP(*(.marker.text.end))
         _text_end = .;
     } :text
     phys_lma = ALIGN(phys_lma + SIZEOF(.text), 4K);
@@ -56,6 +58,7 @@ SECTIONS
     .rodata : AT(phys_lma) ALIGN(4K)
     {
         _rodata_start = .;
+        KEEP(*(.marker.rodata.start))
         *(.srodata*)
         *(.srodata.*)
         *(.rodata*)
@@ -63,6 +66,7 @@ SECTIONS
         . = ALIGN(8);
         _expected_code_crc = .;
         QUAD(0x0000000000000000)
+        KEEP(*(.marker.rodata.end))
         _rodata_end = .;
     } :rodata
     phys_lma = ALIGN(phys_lma + SIZEOF(.rodata), 4K);
@@ -70,6 +74,7 @@ SECTIONS
     .data : AT(phys_lma) ALIGN(4K)
     {
         _data_start = .;
+        KEEP(*(.marker.data.start))
         *(.sdata*)
         *(.sdata.*)
         *(.data*)
@@ -77,6 +82,7 @@ SECTIONS
         *(.got)
         *(.got.plt)
         . = ALIGN(4096);
+        KEEP(*(.marker.data.end))
         _data_end = .;
     } :data
     phys_lma = ALIGN(phys_lma + SIZEOF(.data), 4K);
@@ -84,6 +90,7 @@ SECTIONS
     .bss : AT(phys_lma) ALIGN(4K)
     {
         _bss_start = .;
+        KEEP(*(.marker.bss.start))
         *(COMMON)
         *(.sbss*)
         *(.sbss.*)
@@ -96,6 +103,7 @@ SECTIONS
         _stack_end = .;
         *(.bss*)
         *(.bss.*)
+        KEEP(*(.marker.bss.end))
         _bss_end = .;
     } :data
 

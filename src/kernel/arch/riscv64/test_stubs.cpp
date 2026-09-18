@@ -138,4 +138,17 @@ void register_buffer_pool_tests() {
         "Skipped: register_buffer_pool_tests (not supported on this arch)");
 }
 
+/// @brief Stub — APIC TPR tests are x86_64-specific (local APIC task
+/// priority register).
+void register_apic_tpr_tests() {
+    kernel::Logger::info(
+        "Skipped: register_apic_tpr_tests (not supported on this arch)");
+}
+
+/// @brief Stub — PT-merge tests are x86_64-specific (PML4 merge semantics).
+void register_pt_merge_tests() {
+    kernel::Logger::info(
+        "Skipped: register_pt_merge_tests (not supported on this arch)");
+}
+
 #endif // !defined(CONFIG_ARCH_X86_64)

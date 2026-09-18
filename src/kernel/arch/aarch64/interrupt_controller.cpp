@@ -148,4 +148,34 @@ ack:
         gicc_reg(GICC_EOIR)[0] = static_cast<uint32_t>(intid);
 }
 
+namespace {
+// Post-mortem latch for EL0 faults (GDB-observable; zero-initialized
+// statics need no dynamic init).
+volatile uint64_t g_last_el0_esr = 0;
+volatile uint64_t g_last_el0_far = 0;
+volatile uint64_t g_last_el0_elr = 0;
+} // namespace
+
+/// @brief EL0 synchronous-fault handler called from vectors.S (issue #184).
+///        Non-SVC faults from EL0 land here.  EL0 tasks do not run yet
+///        (bring-up issue #28), so any arrival is deeply wrong: latch
+///        ESR/FAR/ELR for post-mortem GDB and park the CPU.  Runs with
+///        interrupts masked (vector entry); must not re-enable IRQs,
+///        touch the scheduler, or return (vectors.S erets on return,
+///        but there is no task to resume to).
+extern "C" void aarch64_el0_fault_handler() {
+    uint64_t esr = 0;
+    uint64_t far = 0;
+    uint64_t elr = 0;
+    asm volatile("mrs %0, esr_el1" : "=r"(esr));
+    asm volatile("mrs %0, far_el1" : "=r"(far));
+    asm volatile("mrs %0, elr_el1" : "=r"(elr));
+    g_last_el0_esr = esr;
+    g_last_el0_far = far;
+    g_last_el0_elr = elr;
+    for (;;) {
+        arch::pause();
+    }
+}
+
 } // namespace arch

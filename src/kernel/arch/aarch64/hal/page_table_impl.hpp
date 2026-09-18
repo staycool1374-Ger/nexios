@@ -58,6 +58,16 @@ inline void arch_page_table_tlb_flush_all() {
     isb();
 }
 
+/// @brief Purge one context's non-global TLB entries (issue #184).
+///        Fallback: this port allocates no ASIDs, so the required semantics
+///        are provided via a full EL1 invalidate — a safe superset of a
+///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+///        Local CPU only; cross-CPU invalidation is out of scope.
+/// @param pcid Owning context id, ignored (0 = untagged/kernel).
+inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+    arch_page_table_tlb_flush_all();
+}
+
 /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
 class ArchPageTable {
   public:

@@ -65,6 +65,16 @@ inline void arch_page_table_tlb_flush_all() {
     asm volatile("sfence.vma" : : : "memory");
 }
 
+/// @brief Purge one context's non-global TLB entries (issue #184).
+///        Fallback: this port allocates no ASIDs, so the required semantics
+///        are provided via a full fence — a safe superset of a
+///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+///        Local CPU only; cross-CPU invalidation is out of scope.
+/// @param pcid Owning address-space id, ignored (0 = untagged/kernel).
+inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+    arch_page_table_tlb_flush_all();
+}
+
 /// @brief Sv39 page table manager — wraps arch_page_table_* free functions
 ///        and provides map/unmap/lookup operations.
 class ArchPageTable {
