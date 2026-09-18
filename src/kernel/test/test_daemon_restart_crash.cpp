@@ -41,6 +41,8 @@
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/vfs/vfsd.hpp>
+#include <kernel/driver/iocd.hpp>
 
 using namespace kernel;
 
@@ -80,9 +82,43 @@ JARVIS_TEST(daemon_restart_after_cleanup_crash, "PRE: vfsd,iocd") {
 }
 #endif
 
+// Runmode: kernel
+// Testidea: The daemon lifecycle entry points fail closed on unknown names
+//           — a typo'd supervisor command must neither kill nor resurrect
+//           anything and must leave both daemon PIDs and their tasks intact.
+//           (Covers ensure_running/terminate/reset_restart_count, issue #135.
+//           A full kill-and-resurrect cycle is NOT attempted here: a
+//           resurrected daemon that dispatches hits the known teardown-state
+//           crash documented above, and killing a real daemon desynchronises
+//           the snapshot-restored entry PIDs from the live task set.)
+// Input: ensure_running/terminate/reset_restart_count on "no-such-daemon"
+//        and on "".
+// Expect: Both daemon PIDs unchanged, both tasks still live.
+// Depends: kernel::daemon lifecycle, vfsd/iocd pid getters
+JARVIS_TEST(daemon_unknown_name_rejected, "PRE: vfsd, iocd | POST: none") {
+    const uint64_t vfsd_before = vfsd::get_vfsd_pid();
+    const uint64_t iocd_before = iocd::get_iocd_pid();
+    JARVIS_ASSERT(vfsd_before != 0);
+    JARVIS_ASSERT(iocd_before != 0);
+
+    daemon::ensure_running("no-such-daemon");
+    daemon::terminate("no-such-daemon");
+    daemon::reset_restart_count("no-such-daemon");
+    daemon::ensure_running("");
+    daemon::terminate("");
+    daemon::reset_restart_count("");
+
+    JARVIS_ASSERT_EQ(vfsd_before, vfsd::get_vfsd_pid());
+    JARVIS_ASSERT_EQ(iocd_before, iocd::get_iocd_pid());
+    JARVIS_ASSERT(Scheduler::find_task(vfsd_before) != nullptr);
+    JARVIS_ASSERT(Scheduler::find_task(iocd_before) != nullptr);
+    JARVIS_TEST_PASS();
+}
+
 void register_daemon_restart_crash_tests() {
     Logger::info("Registering daemon restart crash tests");
 #if 0
     JARVIS_REGISTER_TEST(daemon_restart_after_cleanup_crash);
 #endif
+    JARVIS_REGISTER_TEST(daemon_unknown_name_rejected);
 }

@@ -485,6 +485,26 @@ JARVIS_TEST(shm_ring_revocation_cleanup, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+
+
+// Runmode: kernel
+// Testidea: SYS_FRAME_CREATE validates the count before allocating — zero
+//           and oversized counts fail closed with no PMM or cap side
+//           effects.
+// Input: Harness context dispatches FRAME_CREATE(0) and FRAME_CREATE(huge).
+// Expect: Both return -1.
+// Depends: Syscall::sys_frame_create validation
+JARVIS_TEST(frame_create_rejected, "PRE: none | POST: none") {
+    uint64_t zero = shm_syscall(
+        static_cast<uint64_t>(SyscallNumber::FRAME_CREATE), 0, 0, 0, 0);
+    uint64_t huge = shm_syscall(
+        static_cast<uint64_t>(SyscallNumber::FRAME_CREATE),
+        0x100000000ULL, 0, 0, 0);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), zero);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), huge);
+    JARVIS_TEST_PASS();
+}
+
 void register_cap_shm_tests() {
     Logger::info("Registering cap_shm tests");
     JARVIS_REGISTER_TEST(frame_user_map_unmap_roundtrip);
@@ -492,4 +512,5 @@ void register_cap_shm_tests() {
     JARVIS_REGISTER_TEST(shm_ring_producer_consumer);
     JARVIS_REGISTER_TEST(shm_ring_task_death_drain);
     JARVIS_REGISTER_TEST(shm_ring_revocation_cleanup);
+    JARVIS_REGISTER_TEST(frame_create_rejected);
 }

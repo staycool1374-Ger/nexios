@@ -41,6 +41,8 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/memory/checked_ptr.hpp>
+#include <kernel/ipc/death_notify.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <signal.hpp>
 #include <string.hpp>
@@ -351,8 +353,33 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The IPC record types that cross the user boundary on death
+//           notification drain (DeathRecord) and pager fault drain
+//           (PagerFaultMsg) get the same rejection treatment as the VFS
+//           structures — a kernel address must never be accepted as the
+//           user destination of a recv copy-out.  These instantiations are
+//           otherwise reachable only from a user task performing the recv.
+// Input: CheckedPtr<ipc::DeathRecord> and <ipc::PagerFaultMsg> over stack
+//        buffers, including the safe_copy_to_user templates.
+// Expect: Both rejected: valid() false, copy_to/write false, read default.
+// Depends: kernel::CheckedPtr, ipc::DeathRecord, ipc::PagerFaultMsg
+JARVIS_TEST(checked_ptr_api_ipc_records,
+            "PRE: vfsd, iocd | POST: none") {
+    ipc::DeathRecord deaths[2] = {};
+    ipc::PagerFaultMsg faults[2] = {};
+
+    const SweepResult death_result = sweep(deaths, 2);
+    const SweepResult fault_result = sweep(faults, 2);
+
+    expect_rejected(death_result);
+    expect_rejected(fault_result);
+    JARVIS_TEST_PASS();
+}
+
 void register_checked_ptr_api_tests() {
     Logger::info("Registering CheckedPtr API tests");
+    JARVIS_REGISTER_TEST(checked_ptr_api_ipc_records);
     JARVIS_REGISTER_TEST(checked_ptr_api_scalar_types);
     JARVIS_REGISTER_TEST(checked_ptr_api_const_element_types);
     JARVIS_REGISTER_TEST(checked_ptr_api_vfs_structures);

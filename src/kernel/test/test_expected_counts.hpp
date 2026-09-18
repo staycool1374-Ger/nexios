@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         23,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143) + 4 affinity tests (issue #61)
+    {"syscall_core",         28,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
@@ -95,9 +95,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
-    {"cap_shm",               5,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup
+    {"cap_shm",               6,    0,       0      },  // capability-gated shared-memory rings (issue #106 Part B): map roundtrip, revoke denied, producer-consumer, death drain, revoke cleanup + frame_create validation (#134)
     {"cap_death",             9,    0,       0      },  // async task-death notifications (issue #105 Part B): roundtrip, crash reason, fan-in, after-death, supervisor-drain, full, exactly-once, unwatch, nonblock
-    {"cap_pager",             13,   0,       0      },  // external pager protocol (issue #107): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary
+    {"cap_pager",             15,   0,       0      },  // external pager protocol (issue #107 + dispatch rejects #134): authority, recv, classification, recover-IP, roundtrip, map-after-timeout, abort-poison, timeout, dead-drain, client-death, revoke, deadlock-out, smap/canary + recv-empty/abort-unregister dispatch
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath (issue #11): mask membership, ABI layout, pop_clamped parity, oversize-reject, roundtrip, recv-oversized-stays, send_sync-oversized-reply, full-queue-block, empty-block, send_sync roundtrip, authority, no-user-deref canary, latency, hybrid queue
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics (issue #111): reader wake, full-pipe partial write, write-close EOF, read-close EPIPE, two-reader order, closed-end errors
     {"vfs_procfs",             9,   0,       0      },  // procfs nodes (issue #109): root dir, readdir static/pid, meminfo format, pci, self stat, pid dir close, unknown reject, dir read
@@ -152,9 +152,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // servers
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
-    {"servers_vfsd_auth",     5,    0,       0      },  // VFS daemon authorization
+    {"servers_vfsd_auth",     19,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir (#134)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-    {"servers_daemon_restart", 0,    0,       0      },  // daemon-restart crash test #if 0-disabled in source; reserved home
+    {"servers_daemon_restart", 1,    0,       0      },  // unknown-daemon lifecycle rejection (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
@@ -212,7 +212,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
-    {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
+    {"network_core",          12,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch (malformed-length probe reverted -> #178) (#138)
 
     // shell / ui
     {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
@@ -220,9 +220,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
-    {"kernel_top",            9,  0,       0      },  // IRQ latency histogram (issue #131): empty dump, sample count, overflow clamping + IrqThread create/ring/isr/task/destroy (issue #144)
+    {"kernel_top",            12, 0,       0      },  // Top-level kernel (issue #131): histogram + random + IrqThread (#144) + datetime epoch/leap/guards
     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
-    {"memory_checked_ptr_api", 7,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, zero-count, fail-closed copies + fault-recovery path (issue #143)
+    {"memory_checked_ptr_api", 8,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143)
     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
     {"shell_commands",       30,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source
@@ -270,12 +270,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                427,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (issue #173)
+    {"core",                436,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift
     {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
-    {"capability",          144,  0,       0      },  // all cap_* excl. iommu_live (issue #173)
+    {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
-    {"servers",             42,   0,       0      },  // servers_* + services_framework (issue #173)
+    {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
     {"hal",                 107,  0,       0      },  // hal_* + exc_table + acpi + arch_cross (issue #173)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
