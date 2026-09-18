@@ -30,6 +30,98 @@
 
 using namespace kernel;
 
+namespace {
+
+// Test NIC addresses.
+const net::MacAddr k_our_mac = {{0x52, 0x54, 0x00, 0xAA, 0xBB, 0xCC}};
+const net::MacAddr k_peer_mac = {{0x52, 0x54, 0x00, 0x11, 0x22, 0x33}};
+// 10.0.0.x in network order (as_u32 compares host-order words).
+constexpr uint32_t k_our_ip = 0x0A000001;
+constexpr uint32_t k_peer_ip = 0x0A000002;
+constexpr uint32_t k_other_ip = 0x0A000099;
+
+/// @brief Last frame handed to the mock send hook + send count.
+uint8_t g_sent[net::MAX_PACKET_SIZE] = {};
+size_t g_sent_len = 0;
+uint64_t g_sends = 0;
+
+bool mock_send_frame(const uint8_t *data, size_t len) {
+    g_sends += 1;
+    g_sent_len = len < sizeof(g_sent) ? len : sizeof(g_sent);
+    for (size_t i = 0; i < g_sent_len; ++i)
+        g_sent[i] = data[i];
+    return true;
+}
+
+bool mock_poll_empty(uint8_t * /*buf*/, size_t & /*len*/) {
+    return false;
+}
+
+/// @brief Mock NIC with no hardware behind it.  Constructed manually —
+///        net_init() is deliberately NOT used (it would overwrite the
+///        global NIC registration via gs::try_set_nic).
+net::Nic make_mock_nic() {
+    net::Nic nic{};
+    nic.name = "mock";
+    nic.mac = k_our_mac;
+    nic.ip = net::Ipv4Addr::from_u32(k_our_ip);
+    nic.subnet = net::Ipv4Addr::from_u32(0xFFFFFF00);
+    nic.gateway = net::Ipv4Addr::from_u32(0x0A000001);
+    nic.send_frame = mock_send_frame;
+    nic.poll_frame = mock_poll_empty;
+    nic.on_frame = nullptr;
+    nic.driver_data = nullptr;
+    return nic;
+}
+
+void mock_reset() {
+    g_sent_len = 0;
+    g_sends = 0;
+    for (size_t i = 0; i < sizeof(g_sent); ++i)
+        g_sent[i] = 0;
+    net::net_arp_cache().clear();
+    net::net_icmp_clear_reply();
+}
+
+void build_arp_request(uint8_t *frame, const net::MacAddr &sha,
+                       uint32_t spa, uint32_t tpa) {
+    auto *eth = reinterpret_cast<net::EtherHeader *>(frame);
+    eth->dst = net::MAC_BROADCAST;
+    eth->src = sha;
+    eth->type = __builtin_bswap16(net::ETH_TYPE_ARP);
+    auto *arp = reinterpret_cast<net::ArpHeader *>(frame +
+                                                  sizeof(net::EtherHeader));
+    arp->htype = __builtin_bswap16(net::ARP_HTYPE_ETHER);
+    arp->ptype = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    arp->hlen = net::ETH_ADDR_LEN;
+    arp->plen = net::IPV4_ADDR_LEN;
+    arp->oper = __builtin_bswap16(net::ARP_OPER_REQUEST);
+    arp->sha = sha;
+    arp->spa = spa;
+    arp->tha = net::MAC_NULL;
+    arp->tpa = tpa;
+}
+
+void build_arp_reply(uint8_t *frame, const net::MacAddr &sha, uint32_t spa) {
+    auto *eth = reinterpret_cast<net::EtherHeader *>(frame);
+    eth->dst = k_our_mac;
+    eth->src = sha;
+    eth->type = __builtin_bswap16(net::ETH_TYPE_ARP);
+    auto *arp = reinterpret_cast<net::ArpHeader *>(frame +
+                                                  sizeof(net::EtherHeader));
+    arp->htype = __builtin_bswap16(net::ARP_HTYPE_ETHER);
+    arp->ptype = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    arp->hlen = net::ETH_ADDR_LEN;
+    arp->plen = net::IPV4_ADDR_LEN;
+    arp->oper = __builtin_bswap16(net::ARP_OPER_REPLY);
+    arp->sha = sha;
+    arp->spa = spa;
+    arp->tha = k_our_mac;
+    arp->tpa = k_our_ip;
+}
+
+} // namespace
+
 // Runmode: kernel
 // Testidea: Verifies MacAddr equality and broadcast/null detection.
 // Input: Compare various MAC addresses
@@ -130,6 +222,205 @@ JARVIS_TEST(net_ether_type_swap, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+
+
+// Runmode: kernel
+// Testidea: An ARP request for our IP must be answered with a well-formed
+//           reply (oper=REPLY, our MAC as sha, requester as tha/dst).
+// Input: Mock NIC; handle_frame(ARP request, tpa = our IP).
+// Expect: Exactly one send; reply oper REPLY, tha/dst = requester,
+//         spa = our IP.
+// Depends: net_handle_frame ARP-request path
+JARVIS_TEST(net_arp_request_for_us_sends_reply, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_request(frame, k_peer_mac, k_peer_ip, k_our_ip);
+
+    net::net_handle_frame(frame, sizeof(frame), nic);
+
+    JARVIS_ASSERT_EQ(1ULL, g_sends);
+    JARVIS_ASSERT_EQ(sizeof(frame), g_sent_len);
+    auto *eth =
+        reinterpret_cast<const net::EtherHeader *>(g_sent);
+    auto *arp = reinterpret_cast<const net::ArpHeader *>(
+        g_sent + sizeof(net::EtherHeader));
+    JARVIS_ASSERT(eth->dst == k_peer_mac);
+    JARVIS_ASSERT(eth->src == k_our_mac);
+    JARVIS_ASSERT_EQ(__builtin_bswap16(net::ARP_OPER_REPLY), arp->oper);
+    JARVIS_ASSERT(arp->sha == k_our_mac);
+    JARVIS_ASSERT_EQ(k_our_ip, arp->spa);
+    JARVIS_ASSERT(arp->tha == k_peer_mac);
+    JARVIS_ASSERT_EQ(k_peer_ip, arp->tpa);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: An ARP request for somebody else's IP must not trigger a reply
+//           (no unsolicited traffic, no cache pollution).
+// Input: Mock NIC; handle_frame(ARP request, tpa = other IP).
+// Expect: No sends; cache has no entry for either IP.
+// Depends: net_handle_frame target-IP guard
+JARVIS_TEST(net_arp_request_not_for_us_ignored, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_request(frame, k_peer_mac, k_peer_ip, k_other_ip);
+
+    net::net_handle_frame(frame, sizeof(frame), nic);
+
+    net::MacAddr out{};
+    JARVIS_ASSERT_EQ(0ULL, g_sends);
+    JARVIS_ASSERT(!net::net_arp_cache().lookup(k_peer_ip, out));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: An ARP reply installs a cache entry (sender IP -> sender MAC),
+//           which net_arp_resolve then hits without transmitting.
+// Input: Mock NIC; handle_frame(ARP reply from peer); resolve peer IP.
+// Expect: Cache lookup succeeds with peer MAC; resolve true, no sends.
+// Depends: net_handle_frame ARP-reply path, ArpCache::update, resolve hit
+JARVIS_TEST(net_arp_reply_updates_cache, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_reply(frame, k_peer_mac, k_peer_ip);
+
+    net::net_handle_frame(frame, sizeof(frame), nic);
+
+    net::MacAddr out{};
+    JARVIS_ASSERT(net::net_arp_cache().lookup(k_peer_ip, out));
+    JARVIS_ASSERT(out == k_peer_mac);
+    JARVIS_ASSERT(net::net_arp_resolve(nic, k_peer_ip, out));
+    JARVIS_ASSERT(out == k_peer_mac);
+    JARVIS_ASSERT_EQ(0ULL, g_sends);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Malformed ARP input fails closed — runt frames, truncated ARP
+//           bodies, and wrong htype/ptype produce no reply and no cache
+//           entry (no crash on short reads).
+// Input: Mock NIC; handle_frame with len 10, len 14+10, bad htype, bad ptype.
+// Expect: Zero sends every time; no cache entry for the peer IP.
+// Depends: net_handle_frame length/type guards
+JARVIS_TEST(net_arp_malformed_rejected, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_request(frame, k_peer_mac, k_peer_ip, k_our_ip);
+    net::MacAddr out{};
+
+    net::net_handle_frame(frame, 10, nic);
+    net::net_handle_frame(frame, sizeof(net::EtherHeader) + 10, nic);
+    auto *arp = reinterpret_cast<net::ArpHeader *>(frame +
+                                                  sizeof(net::EtherHeader));
+    const uint16_t saved_htype = arp->htype;
+    arp->htype = __builtin_bswap16(6);
+    net::net_handle_frame(frame, sizeof(frame), nic);
+    arp->htype = saved_htype;
+    const uint16_t saved_ptype = arp->ptype;
+    arp->ptype = __builtin_bswap16(net::ETH_TYPE_IPV6);
+    net::net_handle_frame(frame, sizeof(frame), nic);
+    arp->ptype = saved_ptype;
+
+    JARVIS_ASSERT_EQ(0ULL, g_sends);
+    JARVIS_ASSERT(!net::net_arp_cache().lookup(k_peer_ip, out));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: An ICMP echo reply for a ping records ident/seq/source in the
+//           reply record, observable via net_icmp_last_reply.
+// Input: Mock NIC; clear_reply; handle_frame(IPv4+ICMP ECHO_REPLY,
+//        ident 0x1234, seq 7, src = peer IP).
+// Expect: last_reply non-null with matching ident/seq/src.
+// Depends: net_handle_frame IPv4/ICMP path, icmp record helpers
+JARVIS_TEST(net_icmp_echo_reply_recorded, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + 20 + 8] = {};
+    auto *eth = reinterpret_cast<net::EtherHeader *>(frame);
+    eth->dst = k_our_mac;
+    eth->src = k_peer_mac;
+    eth->type = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    frame[14] = 0x45;
+    frame[16] = 0;
+    frame[17] = 28;
+    frame[20] = 0x40;
+    frame[22] = 64;
+    frame[23] = 1;
+    frame[26] = 10;
+    frame[27] = 0;
+    frame[28] = 0;
+    frame[29] = 2;
+    frame[34] = net::ICMP_TYPE_ECHO_REPLY;
+    frame[35] = 0;
+    frame[38] = 0x12;
+    frame[39] = 0x34;
+    frame[40] = 0;
+    frame[41] = 7;
+
+    net::net_handle_frame(frame, sizeof(frame), nic);
+
+    // NOTE (filed S3): ident/seq are stored in raw wire order with no
+    // bswap16, so RFC-order bytes [0x12,0x34] record as 0x3412 on
+    // little-endian. The stack's own echo requests are built the same way
+    // (host order straight onto the wire), which is why real pings still
+    // match — but the wire format is not RFC-correct. Asserts document the
+    // current wire-order behavior, not the RFC ideal.
+    const net::IcmpEchoReply *reply = net::net_icmp_last_reply();
+    JARVIS_ASSERT(reply != nullptr);
+    JARVIS_ASSERT_EQ(0x3412, reply->ident);
+    JARVIS_ASSERT_EQ(0x0700, reply->seq);
+    JARVIS_ASSERT(reply->src == net::Ipv4Addr::from_u32(k_peer_ip));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: net_arp_resolve serves a cached entry without transmitting —
+//           the fast path used by every UDP send.
+// Input: Mock NIC; seed cache via handle_frame(ARP reply); resolve.
+// Expect: Resolve true with peer MAC; zero sends (no request broadcast).
+// Depends: net_arp_resolve cache-hit path
+JARVIS_TEST(net_arp_resolve_cache_hit, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t frame[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_reply(frame, k_peer_mac, k_peer_ip);
+    net::net_handle_frame(frame, sizeof(frame), nic);
+
+    net::MacAddr out{};
+    JARVIS_ASSERT(net::net_arp_resolve(nic, k_peer_ip, out));
+    JARVIS_ASSERT(out == k_peer_mac);
+    JARVIS_ASSERT_EQ(0ULL, g_sends);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Self-ping loopback reflects instantly without ARP or
+//           transmission, exercising the echo build + icmp_checksum +
+//           reply record in one shot.
+// Input: Mock NIC; net_send_icmp_echo to our own IP and to 127.0.0.1.
+// Expect: Both true; reply recorded with the second call's id/seq.
+// Depends: net_send_icmp_echo loopback, icmp_checksum
+JARVIS_TEST(net_icmp_self_ping_loopback, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+
+    JARVIS_ASSERT(net::net_send_icmp_echo(
+        nic, net::Ipv4Addr::from_u32(k_our_ip), 0x1111, 1, nullptr, 0));
+    JARVIS_ASSERT(net::net_send_icmp_echo(
+        nic, net::Ipv4Addr::from_u32(0x7F000001), 0x2222, 2, nullptr, 0));
+
+    const net::IcmpEchoReply *reply = net::net_icmp_last_reply();
+    JARVIS_ASSERT(reply != nullptr);
+    JARVIS_ASSERT_EQ(0x2222, reply->ident);
+    JARVIS_ASSERT_EQ(2, reply->seq);
+    JARVIS_TEST_PASS();
+}
+
 // Runmode: kernel
 // Testidea: Registers all network stack tests.
 // Input: None
@@ -142,4 +433,11 @@ void register_net_tests() {
     JARVIS_REGISTER_TEST(net_arp_cache_ops);
     JARVIS_REGISTER_TEST(net_ipv4_checksum);
     JARVIS_REGISTER_TEST(net_ether_type_swap);
+    JARVIS_REGISTER_TEST(net_arp_request_for_us_sends_reply);
+    JARVIS_REGISTER_TEST(net_arp_request_not_for_us_ignored);
+    JARVIS_REGISTER_TEST(net_arp_reply_updates_cache);
+    JARVIS_REGISTER_TEST(net_arp_malformed_rejected);
+    JARVIS_REGISTER_TEST(net_icmp_echo_reply_recorded);
+    JARVIS_REGISTER_TEST(net_arp_resolve_cache_hit);
+    JARVIS_REGISTER_TEST(net_icmp_self_ping_loopback);
 }

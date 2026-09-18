@@ -212,7 +212,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
-    {"network_core",          5,    0,       0      },  // MAC/IPv4/ARP/checksum
+    {"network_core",          12,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch (malformed-length probe reverted -> #178) (#138)
 
     // shell / ui
     {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
