@@ -36,6 +36,7 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/vfs/vfs.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include "test_sched_helpers.hpp"
 
@@ -493,6 +494,316 @@ JARVIS_TEST(vfsd_dup2_occupied_target, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: mkdir+unlink roundtrip through dispatched syscalls on tmpfs:
+// create, resolve-visible, remove, resolve-gone. Closes sys_mkdir/unlink.
+// Input: Dispatched task mkdirs /tmp/AUDIT_D1, resolves, unlinks, resolves.
+// Expect: mkdir 0, visible, unlink 0, gone.
+// Depends: kernel::Syscall, tmpfs /tmp
+JARVIS_TEST(vfsd_mkdir_unlink_roundtrip, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_mkdir = 0;
+    static uint64_t g_seen = 0;
+    static uint64_t g_unlink = 0;
+    static uint64_t g_gone = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *dir = "/tmp/AUDIT_D1";
+            g_mkdir = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(dir), 0, 0, 0, nullptr);
+            g_seen = (vfs::resolve(dir) != nullptr) ? 1ULL : 0ULL;
+            g_unlink = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::UNLINK),
+                reinterpret_cast<uint64_t>(dir), 0, 0, 0, nullptr);
+            g_gone = (vfs::resolve(dir) == nullptr) ? 1ULL : 0ULL;
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(0ULL, g_mkdir);
+    JARVIS_ASSERT_EQ(1ULL, g_seen);
+    JARVIS_ASSERT_EQ(0ULL, g_unlink);
+    JARVIS_ASSERT_EQ(1ULL, g_gone);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: mkdir/unlink rejection matrix — existing dir, empty leaf
+// (trailing slash), and missing target all fail closed without side effects.
+// Input: Dispatched task mkdirs /tmp + /tmp/, unlinks a missing path.
+// Expect: all three return -1.
+// Depends: kernel::Syscall, resolve_parent_then_authorize
+JARVIS_TEST(vfsd_mkdir_rejected, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_ret1 = 0;
+    static uint64_t g_ret2 = 0;
+    static uint64_t g_ret3 = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *existing = "/tmp";
+            const char *empty_leaf = "/tmp/";
+            const char *missing = "/tmp/AUDIT_NOSUCH";
+            g_ret1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(existing), 0, 0, 0, nullptr);
+            g_ret2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(empty_leaf), 0, 0, 0, nullptr);
+            g_ret3 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::UNLINK),
+                reinterpret_cast<uint64_t>(missing), 0, 0, 0, nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret1);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret2);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret3);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: rmdir enforces directory semantics via dispatch — non-empty
+// rmdir fails, and empty rmdir succeeds after draining the child.
+// Input: Dispatched task mkdirs P + P/C, rmdirs P (fail), unlinks C,
+// rmdirs P (ok).
+// Expect: rmdir-nonempty != 0; unlink 0; rmdir-empty 0.
+// Depends: kernel::Syscall, tmpfs unlink
+JARVIS_TEST(vfsd_rmdir_nonempty, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_rmdir_full = 0;
+    static uint64_t g_unlink = 0;
+    static uint64_t g_rmdir_empty = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *parent = "/tmp/AUDIT_RM";
+            const char *child = "/tmp/AUDIT_RM/CHILD";
+            uint64_t mk1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(parent), 0, 0, 0, nullptr);
+            uint64_t mk2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(child), 0, 0, 0, nullptr);
+            if (mk1 != 0 || mk2 != 0)
+                return;
+            g_rmdir_full = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::RMDIR),
+                reinterpret_cast<uint64_t>(parent), 0, 0, 0, nullptr);
+            if (g_rmdir_full == 0)
+                return;
+            g_unlink = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::UNLINK),
+                reinterpret_cast<uint64_t>(child), 0, 0, 0, nullptr);
+            g_rmdir_empty = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::RMDIR),
+                reinterpret_cast<uint64_t>(parent), 0, 0, 0, nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT(g_rmdir_full != 0);
+    JARVIS_ASSERT_EQ(0ULL, g_unlink);
+    JARVIS_ASSERT_EQ(0ULL, g_rmdir_empty);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: lseek valid-whence paths on /dev/null through dispatch —
+// SEEK_SET/CUR/END update the fd offset; closes sys_lseek happy paths.
+// Input: Dispatched task opens /dev/null, seeks SET 42, CUR +8, END 7.
+// Expect: positions 42, 50, 7.
+// Depends: kernel::Syscall, null_lseek
+JARVIS_TEST(vfsd_lseek_nulldev, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_set = 0;
+    static uint64_t g_cur = 0;
+    static uint64_t g_end = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *path = "/dev/null";
+            uint64_t fd = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::OPEN),
+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
+            if (static_cast<int64_t>(fd) < 0)
+                return;
+            g_set = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::LSEEK), fd, 42,
+                static_cast<uint64_t>(vfs::SEEK_SET), 0, nullptr);
+            g_cur = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::LSEEK), fd, 8,
+                static_cast<uint64_t>(vfs::SEEK_CUR), 0, nullptr);
+            g_end = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::LSEEK), fd, 7,
+                static_cast<uint64_t>(vfs::SEEK_END), 0, nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CLOSE), fd,
+                            0, 0, 0, nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(42ULL, g_set);
+    JARVIS_ASSERT_EQ(50ULL, g_cur);
+    JARVIS_ASSERT_EQ(7ULL, g_end);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: lseek rejection — pipe fds are not seekable and dead fds fail
+// before reaching the vnode op.
+// Input: Dispatched task lseeks a pipe end and fd 9999.
+// Expect: both return -1.
+// Depends: kernel::Syscall, pipe_lseek
+JARVIS_TEST(vfsd_lseek_rejected, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_ret1 = 0;
+    static uint64_t g_ret2 = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            int fds[2] = {-1, -1};
+            uint64_t pr = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::PIPE),
+                reinterpret_cast<uint64_t>(fds), 0, 0, 0, nullptr);
+            if (pr != 0)
+                return;
+            g_ret1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::LSEEK),
+                static_cast<uint64_t>(fds[0]), 0,
+                static_cast<uint64_t>(vfs::SEEK_SET), 0, nullptr);
+            g_ret2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::LSEEK), 9999, 0,
+                static_cast<uint64_t>(vfs::SEEK_SET), 0, nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CLOSE),
+                            static_cast<uint64_t>(fds[0]), 0, 0, 0, nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CLOSE),
+                            static_cast<uint64_t>(fds[1]), 0, 0, 0, nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret1);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret2);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: ioctl dispatch — /dev/null reports unsupported (VFS_INVALID)
+// and dead fds fail before the op. Closes sys_ioctl.
+// Input: Dispatched task ioctls /dev/null and fd 9999.
+// Expect: null ret seasons to -4; bad fd -1.
+// Depends: kernel::Syscall, null_ioctl
+JARVIS_TEST(vfsd_ioctl_nulldev, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_ret1 = 0;
+    static uint64_t g_ret2 = 0;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *path = "/dev/null";
+            uint64_t fd = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::OPEN),
+                reinterpret_cast<uint64_t>(path), 0, 0, 0, nullptr);
+            if (static_cast<int64_t>(fd) < 0)
+                return;
+            g_ret1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOCTL), fd, 0, 0, 0,
+                nullptr);
+            g_ret2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IOCTL), 9999, 0, 0, 0,
+                nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CLOSE), fd,
+                            0, 0, 0, nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(-4LL, static_cast<int64_t>(g_ret1));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_ret2);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: readdir dispatch reachability — open /tmp, create an entry,
+// invoke READDIR, verify ret 0, clean up. NOTE: pos/dent write-back uses
+// CheckedPtr, which refuses kernel addresses, so a kernel-task caller can
+// only observe the return code (delivery to kernel callers is the H7 bug,
+// filed separately); position advance is only observable from user tasks.
+// Input: Dispatched task mkdirs /tmp/AUDIT_RD, readdirs /tmp from pos 0.
+// Expect: ret 0.
+// Depends: kernel::Syscall, tmpfs_readdir
+JARVIS_TEST(vfsd_readdir_tmp, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_mk = 0;
+    static uint64_t g_openok = 0;
+    static uint64_t g_ret = 0;
+    static uint64_t g_pos = 0;
+    static vfs::Dirent g_dent{};
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            const char *dir = "/tmp";
+            const char *sub = "/tmp/AUDIT_RD";
+            g_mk = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::MKDIR),
+                reinterpret_cast<uint64_t>(sub), 0, 0, 0, nullptr);
+            if (g_mk != 0)
+                return;
+            uint64_t fd = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::OPEN),
+                reinterpret_cast<uint64_t>(dir), 0, 0, 0, nullptr);
+            if (static_cast<int64_t>(fd) < 0) {
+                Syscall::handle(
+                    static_cast<uint64_t>(SyscallNumber::UNLINK),
+                    reinterpret_cast<uint64_t>(sub), 0, 0, 0, nullptr);
+                return;
+            }
+            g_openok = 1;
+            g_pos = 0;
+            g_ret = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::READDIR), fd,
+                reinterpret_cast<uint64_t>(&g_pos),
+                reinterpret_cast<uint64_t>(&g_dent), 0, nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::CLOSE), fd,
+                            0, 0, 0, nullptr);
+            Syscall::handle(static_cast<uint64_t>(SyscallNumber::UNLINK),
+                            reinterpret_cast<uint64_t>(sub), 0, 0, 0,
+                            nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(0ULL, g_mk);
+    JARVIS_ASSERT_EQ(1ULL, g_openok);
+    JARVIS_ASSERT_EQ(0ULL, g_ret);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all VFS authorization tests with the test framework.
 // Input: None
 // Expect: All vfsd_* authorization tests registered via JARVIS_REGISTER_TEST
@@ -511,6 +822,13 @@ void register_vfsd_authorization_tests() {
     JARVIS_REGISTER_TEST(vfsd_pipe_roundtrip);
     JARVIS_REGISTER_TEST(vfsd_dup2_free_slot);
     JARVIS_REGISTER_TEST(vfsd_dup2_occupied_target);
+    JARVIS_REGISTER_TEST(vfsd_mkdir_unlink_roundtrip);
+    JARVIS_REGISTER_TEST(vfsd_mkdir_rejected);
+    JARVIS_REGISTER_TEST(vfsd_rmdir_nonempty);
+    JARVIS_REGISTER_TEST(vfsd_lseek_nulldev);
+    JARVIS_REGISTER_TEST(vfsd_lseek_rejected);
+    JARVIS_REGISTER_TEST(vfsd_ioctl_nulldev);
+    JARVIS_REGISTER_TEST(vfsd_readdir_tmp);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop
