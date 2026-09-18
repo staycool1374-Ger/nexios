@@ -566,7 +566,8 @@ uint8_t *emit_user_syscall(uint8_t *code, uint32_t num, uint32_t arg0,
 bool run_user_probe(uint32_t num_a, uint32_t arg0_a, uint64_t arg1_a,
                     uint32_t num_b, uint32_t arg0_b, uint64_t arg1_b,
                     uint64_t *out_ret_a, uint64_t *out_ret_b,
-                    uint8_t *out_data) {
+                    uint8_t *out_data, const uint8_t *payload = nullptr,
+                    size_t payload_len = 0, uint64_t payload_off = 64) {
     auto *fixture = TaskControlBlock::create_user(kernel::test::forever_entry,
                                                   kUserProbePrio, 10, 32768);
     if (!fixture) {
@@ -591,6 +592,10 @@ bool run_user_probe(uint32_t num_a, uint32_t arg0_a, uint64_t arg1_a,
     auto *data = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + data_phys);
     for (uint64_t i = 0; i < 512; ++i)
         data[i] = 0;
+    if (payload && payload_len > 0 && payload_off + payload_len <= 512) {
+        for (size_t i = 0; i < payload_len; ++i)
+            data[payload_off + i] = payload[i];
+    }
     code = emit_user_syscall(code, num_a, arg0_a, arg1_a, 0);
     code = emit_user_syscall(code, num_b, arg0_b, arg1_b, 8);
     *code++ = 0xB8;
@@ -785,6 +790,61 @@ JARVIS_TEST(syscall_user_unmapped_fault, "PRE: none | POST: none") {
 // Expect: All JARVIS_REGISTER_TEST calls succeed and tests are available for
 // execution.
 // Depends: kernel::Logger, kernel::test framework
+// Runmode: kernel
+// Testidea: REAL Ring-3 OPEN through the user-task copy path — the path
+//           string is injected into the user data page (payload), so
+//           strncpy_from_user runs its copy loop, then resolve + vfsd IPC
+//           + fd install happen for a genuine user caller.
+// Input: payload "/dev/null" at data+64; probe OPEN(9) twice on its VA.
+// Expect: Probe reaches EXIT; both fds >= 0 and distinct (fixture death
+//         closes them via fd-table drain).
+// Depends: strncpy_from_user, sys_open user path, vfsd OPEN auth
+JARVIS_TEST(syscall_user_open_devnull, "PRE: vfsd, iocd | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    static const uint8_t path[] = "/dev/null";
+    constexpr uint64_t k_path_off = 64;
+    const uint32_t path_lo =
+        static_cast<uint32_t>(kUserProbeDataVa + k_path_off);
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    // 9 = OPEN.
+    bool ran = run_user_probe(9, path_lo, 0, 9, path_lo, 0, &ret_a, &ret_b,
+                              data, path, sizeof(path), k_path_off);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT(static_cast<int64_t>(ret_a) >= 0);
+    JARVIS_ASSERT(static_cast<int64_t>(ret_b) >= 0);
+    JARVIS_ASSERT(ret_a != ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: REAL Ring-3 OPEN rejection modes — null path and unmapped user
+//           page must both fail closed (-1) without hanging (the unmapped
+//           case exercises strncpy_from_user fault recovery, not a panic).
+// Input: probe OPEN(9) on VA 0 and on unmapped 0x60000000.
+// Expect: Probe reaches EXIT; both return -1.
+// Depends: strncpy_from_user fail-closed + fault recovery
+JARVIS_TEST(syscall_user_open_rejected, "PRE: vfsd, iocd | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t ret_a = 0;
+    uint64_t ret_b = 0;
+    uint8_t data[512] = {};
+    // 9 = OPEN.
+    bool ran = run_user_probe(9, 0, 0, 9, 0x60000000U, 0, &ret_a, &ret_b,
+                              data);
+    JARVIS_ASSERT(ran);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_a);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), ret_b);
+#else
+    JARVIS_TEST_PASS();
+#endif
+    JARVIS_TEST_PASS();
+}
+
 void register_syscall_tests() {
     Logger::info("Registering syscall tests");
 
@@ -813,6 +873,8 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_user_gettod_uname);
     JARVIS_REGISTER_TEST(syscall_user_copy_reject);
     JARVIS_REGISTER_TEST(syscall_user_unmapped_fault);
+    JARVIS_REGISTER_TEST(syscall_user_open_devnull);
+    JARVIS_REGISTER_TEST(syscall_user_open_rejected);
 
     register_syscall_affinity_tests();
 }

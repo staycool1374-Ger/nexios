@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         23,    0,       0      },  // syscall interface (exit test disabled in source) + 4 user-task probe tests (issue #143) + 4 affinity tests (issue #61)
+    {"syscall_core",         25,    0,       0      },  // syscall interface (exit test disabled in source) + 6 user-task probe tests (issue #143, #127) + 4 affinity tests (issue #61)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
