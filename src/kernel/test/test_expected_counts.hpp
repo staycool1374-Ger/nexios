@@ -154,7 +154,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
     {"servers_vfsd_auth",     19,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir (#134)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-    {"servers_daemon_restart", 0,    0,       0      },  // daemon-restart crash test #if 0-disabled in source; reserved home
+    {"servers_daemon_restart", 1,    0,       0      },  // unknown-daemon lifecycle rejection (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
@@ -275,7 +275,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"capability",          144,  0,       0      },  // all cap_* excl. iommu_live (issue #173)
     {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
-    {"servers",             42,   0,       0      },  // servers_* + services_framework (issue #173)
+    {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
     {"hal",                 107,  0,       0      },  // hal_* + exc_table + acpi + arch_cross (issue #173)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
