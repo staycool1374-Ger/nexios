@@ -48,6 +48,9 @@
 #include <kernel/log/ring_buffer.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/irq_thread.hpp>
+#include <kernel/core/global_state.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <scope_guard.hpp>
 #include <string.hpp>
 
 using namespace kernel;
@@ -56,6 +59,12 @@ using kernel::IrqLatencyHistogram;
 // Forward declaration (definition: src/kernel/kernel.cpp, global scope —
 // kernel.hpp:55 declares ::format_datetime, which has no definition).
 void format_datetime(char *buf, size_t size, uint64_t wall_ns);
+
+// Local declaration: scheduler_diag_rsp_abort is defined extern "C" in
+// src/kernel/core/global_state.cpp but has no header declaration (the
+// header carries only its doc comment).  Declared here so the #136
+// diagnostic-hook test can enter it.
+extern "C" void scheduler_diag_rsp_abort() noexcept;
 
 namespace {
 
@@ -264,6 +273,7 @@ JARVIS_TEST(kernel_random_fill_and_u64_stream,
 constexpr uint8_t k_irq_thread_vector = 200;
 constexpr uint8_t k_irq_thread_vector_b = 201;
 constexpr uint8_t k_irq_thread_vector_c = 202;
+constexpr uint8_t k_irq_thread_vector_d = 203;
 /// @brief Handler-task priority, deliberately BELOW the test task: handler
 ///        tasks never dispatch (the test never blocks), so create/ring/
 ///        destroy tests are fully deterministic with no timer-tick
@@ -284,6 +294,15 @@ void test_irq_handler_probe(uint64_t vector, uint64_t error_code,
     (void)vector;
     (void)error_code;
     (void)rip;
+}
+
+/// @brief Synchronous-ack probe: runs in isr_entry on the calling task, so
+///        no atomics are needed (the prio-5 handler never dispatches while
+///        the test task runs).
+uint64_t g_sync_ack_count = 0;
+void test_irq_sync_ack(uint8_t vector) {
+    (void)vector;
+    g_sync_ack_count += 1;
 }
 
 /// @brief Live-dispatch e2e probes (issue #148): cross-task flags, hence
@@ -489,6 +508,90 @@ JARVIS_TEST(kernel_irq_thread_destroy_compacts,
 }
 
 // Runmode: kernel
+// Testidea: Unknown vectors are total no-ops — lookup misses, isr_entry
+//           returns before any ack/EOI or wake, destroy reports false, and
+//           the task-guard rejects null and non-handler tasks.
+// Input: for_vector/isr_entry/destroy on never-created vector 203;
+//        is_irq_thread_task(nullptr) and on the running test task.
+// Expect: nullptr lookups, destroy false, guard false everywhere.
+// Depends: kernel::IrqThread::for_vector/isr_entry/destroy,
+//          is_irq_thread_task
+JARVIS_TEST(kernel_irq_thread_unknown_vector_noop,
+            "PRE: vfsd, iocd | POST: none") {
+    JARVIS_ASSERT(IrqThread::for_vector(k_irq_thread_vector_d) == nullptr);
+    IrqThread::isr_entry(k_irq_thread_vector_d, 0, 0);
+    JARVIS_ASSERT(IrqThread::for_vector(k_irq_thread_vector_d) == nullptr);
+    JARVIS_ASSERT(!IrqThread::destroy(k_irq_thread_vector_d));
+    JARVIS_ASSERT(!IrqThread::is_irq_thread_task(nullptr));
+    JARVIS_ASSERT(
+        !IrqThread::is_irq_thread_task(Scheduler::current_task()));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: With a custom ack, isr_entry runs the ack synchronously on the
+//           calling task — no dispatch needed.  Fully deterministic: the
+//           prio-5 handler never preempts the running test task.
+// Input: create(203, prio 5, probe handler, counting ack); isr_entry(203).
+// Expect: Ack ran exactly once before destroy; instance removed after.
+// Depends: kernel::IrqThread::create/isr_entry/destroy/for_vector
+JARVIS_TEST(kernel_irq_thread_isr_ack_synchronous,
+            "PRE: vfsd, iocd | POST: none") {
+    IrqThread::destroy(k_irq_thread_vector_d);
+    g_sync_ack_count = 0;
+    bool created = IrqThread::create(k_irq_thread_vector_d,
+                                     k_irq_thread_prio,
+                                     test_irq_handler_probe,
+                                     test_irq_sync_ack);
+    auto *inst = IrqThread::for_vector(k_irq_thread_vector_d);
+    JARVIS_ASSERT(created);
+    JARVIS_ASSERT(inst != nullptr);
+    IrqThread::isr_entry(k_irq_thread_vector_d, 0, 0);
+    bool destroyed = IrqThread::destroy(k_irq_thread_vector_d);
+    auto *gone = IrqThread::for_vector(k_irq_thread_vector_d);
+    JARVIS_ASSERT_EQ(1ULL, g_sync_ack_count);
+    JARVIS_ASSERT(destroyed);
+    JARVIS_ASSERT(gone == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The task guard recognises the live handler task (found by its
+//           "irq203" name via the registry iterator), and destroy() is
+//           one-shot — the second call reports false instead of touching
+//           the compacted table.
+// Input: create(203); scan TaskIter for irq203; guard check; destroy twice.
+// Expect: Guard true on the handler; first destroy true, second false,
+//         lookup null afterwards.  The freed TCB is never dereferenced.
+// Depends: kernel::IrqThread::create/destroy/for_vector,
+//          is_irq_thread_task, Scheduler::TaskIter
+JARVIS_TEST(kernel_irq_thread_task_guard_and_double_destroy,
+            "PRE: vfsd, iocd | POST: none") {
+    IrqThread::destroy(k_irq_thread_vector_d);
+    bool created = IrqThread::create(k_irq_thread_vector_d,
+                                     k_irq_thread_prio,
+                                     test_irq_handler_probe,
+                                     test_irq_ack_probe);
+    JARVIS_ASSERT(created);
+    TaskControlBlock *handler = nullptr;
+    Scheduler::TaskIter task_iter{};
+    while (auto *candidate = task_iter.next()) {
+        if (has(candidate->name, "irq203")) {
+            handler = candidate;
+            break;
+        }
+    }
+    JARVIS_ASSERT(handler != nullptr);
+    JARVIS_ASSERT(IrqThread::is_irq_thread_task(handler));
+    bool first_destroy = IrqThread::destroy(k_irq_thread_vector_d);
+    bool second_destroy = IrqThread::destroy(k_irq_thread_vector_d);
+    JARVIS_ASSERT(first_destroy);
+    JARVIS_ASSERT(!second_destroy);
+    JARVIS_ASSERT(IrqThread::for_vector(k_irq_thread_vector_d) == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Epoch-to-date conversion anchors — wall_ns 0 renders the epoch
 //           exactly, and the last millisecond of 1999 exercises the ms field
 //           maximum plus the year/month/day rollover.
@@ -571,6 +674,188 @@ JARVIS_TEST(kernel_datetime_guards, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: verify_and_write enforces its WriteClass on a scratch slot —
+//           IDEMPOTENT rejects same-value, BOOT_ONLY rejects outside BOOT,
+//           NEVER_WRITE always rejects, PLAIN/RANGE_CHECKED accept (range
+//           enforcement lives in the setters, not the primitive).
+// Input: Local uint64_t slot driven through every WriteClass.
+// Expect: Accept/reject matrix above; rejected writes leave slot intact.
+// Depends: kernel::gs::verify_and_write (issue #136)
+JARVIS_TEST(global_verify_write_rules, "PRE: none | POST: none") {
+    uint64_t slot = 10;
+    const gs::WriteContext running{gs::StatePhase::RUNNING, 0};
+    const gs::WriteContext boot{gs::StatePhase::BOOT, 0};
+    JARVIS_ASSERT(!gs::verify_and_write(slot, uint64_t{10},
+                                        gs::WriteClass::IDEMPOTENT, running,
+                                        "probe"));
+    JARVIS_ASSERT_EQ(10ULL, slot);
+    JARVIS_ASSERT(gs::verify_and_write(slot, uint64_t{11},
+                                       gs::WriteClass::IDEMPOTENT, running,
+                                       "probe"));
+    JARVIS_ASSERT_EQ(11ULL, slot);
+    JARVIS_ASSERT(!gs::verify_and_write(slot, uint64_t{12},
+                                        gs::WriteClass::BOOT_ONLY, running,
+                                        "probe"));
+    JARVIS_ASSERT_EQ(11ULL, slot);
+    JARVIS_ASSERT(gs::verify_and_write(slot, uint64_t{12},
+                                       gs::WriteClass::BOOT_ONLY, boot,
+                                       "probe"));
+    JARVIS_ASSERT_EQ(12ULL, slot);
+    JARVIS_ASSERT(!gs::verify_and_write(slot, uint64_t{13},
+                                        gs::WriteClass::NEVER_WRITE, boot,
+                                        "probe"));
+    JARVIS_ASSERT_EQ(12ULL, slot);
+    JARVIS_ASSERT(gs::verify_and_write(slot, uint64_t{14},
+                                       gs::WriteClass::PLAIN, running,
+                                       "probe"));
+    JARVIS_ASSERT_EQ(14ULL, slot);
+    JARVIS_ASSERT(gs::verify_and_write(slot, uint64_t{15},
+                                       gs::WriteClass::RANGE_CHECKED, running,
+                                       "probe"));
+    JARVIS_ASSERT_EQ(15ULL, slot);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Boot-only setters reject post-boot writes — the boot epoch and
+//           multiboot record are immutable once RUNNING.
+// Input: try_set_boot_epoch / try_set_multiboot with a RUNNING context.
+// Expect: Both return false; getters and boot_info() unaffected.
+// Depends: kernel::gs BootState accessors (issue #136)
+JARVIS_TEST(global_boot_epoch_boot_only, "PRE: none | POST: none") {
+    const uint64_t epoch_before = gs::get_boot_epoch();
+    const uint64_t magic_before = gs::get_multiboot_magic();
+    const uint64_t info_before = gs::get_multiboot_info_ptr();
+    const gs::WriteContext running{gs::StatePhase::RUNNING, 0};
+    JARVIS_ASSERT(!gs::try_set_boot_epoch(epoch_before + 1, running));
+    JARVIS_ASSERT_EQ(epoch_before, gs::get_boot_epoch());
+    JARVIS_ASSERT(!gs::try_set_multiboot(0x36D76289ULL, 0x1000ULL, running));
+    JARVIS_ASSERT_EQ(magic_before, gs::get_multiboot_magic());
+    JARVIS_ASSERT_EQ(info_before, gs::get_multiboot_info_ptr());
+    BootInfo &first = gs::boot_info();
+    BootInfo &second = gs::boot_info();
+    JARVIS_ASSERT(&first == &second);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The NIC pointer is RANGE_CHECKED — user-half addresses are
+//           rejected, null is always accepted (clears the registration).
+// Input: try_set_nic with a low-canonical pointer, then nullptr.
+// Expect: Rejection leaves get_nic() unchanged; null stores; old value
+//         restored via ScopeGuard so later classes see the boot NIC.
+// Depends: kernel::gs NetState accessors (issue #136)
+JARVIS_TEST(global_nic_range_checked, "PRE: none | POST: none") {
+    ::net::Nic *before = gs::get_nic();
+    ScopeGuard restore_nic([before]() { gs::try_set_nic(before); });
+    auto *low_nic = reinterpret_cast<::net::Nic *>(0x1000ULL);
+    JARVIS_ASSERT(!gs::try_set_nic(low_nic));
+    JARVIS_ASSERT(gs::get_nic() == before);
+    JARVIS_ASSERT(gs::try_set_nic(nullptr));
+    JARVIS_ASSERT(gs::get_nic() == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Same RANGE_CHECKED contract for the FAT32 partition pointer.
+// Input: try_set_fat32_partition with a low-canonical pointer, then null.
+// Expect: Rejection leaves the getter unchanged; null stores; boot value
+//         restored via ScopeGuard.
+// Depends: kernel::gs VfsState accessors (issue #136)
+JARVIS_TEST(global_fat32_range_checked, "PRE: none | POST: none") {
+    kernel::fat32::Fat32Partition *before = gs::get_fat32_partition();
+    ScopeGuard restore_part(
+        [before]() { gs::try_set_fat32_partition(before); });
+    auto *low_part =
+        reinterpret_cast<kernel::fat32::Fat32Partition *>(0x2000ULL);
+    JARVIS_ASSERT(!gs::try_set_fat32_partition(low_part));
+    JARVIS_ASSERT(gs::get_fat32_partition() == before);
+    JARVIS_ASSERT(gs::try_set_fat32_partition(nullptr));
+    JARVIS_ASSERT(gs::get_fat32_partition() == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The canary-trip latch (MP-3) sets atomically field-by-field and
+//           resets to zero; the SMAP recovery IP is readable by tests.
+// Input: reset, set(0xA11CE, 3, 0x1234), read, reset.
+// Expect: Fields match after set; all zero after reset; latch left clean.
+// Depends: kernel::gs FaultState accessors (issue #136)
+JARVIS_TEST(global_canary_latch_set_reset, "PRE: none | POST: none") {
+    gs::reset_canary_trip();
+    gs::set_canary_trip(0xA11CEULL, 3, 0x1234ULL);
+    const kernel::CanaryTrip &trip = gs::canary_trip();
+    JARVIS_ASSERT_EQ(0xA11CEULL, trip.task_id);
+    JARVIS_ASSERT(trip.segment == 3);
+    JARVIS_ASSERT_EQ(0x1234ULL, trip.rip);
+    JARVIS_ASSERT(trip.count >= 1);
+    gs::reset_canary_trip();
+    const kernel::CanaryTrip &clean = gs::canary_trip();
+    JARVIS_ASSERT_EQ(0ULL, clean.task_id);
+    JARVIS_ASSERT_EQ(0ULL, clean.count);
+    JARVIS_ASSERT_EQ(0ULL, clean.rip);
+    (void)gs::user_access_recover_ip();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: TestState getters/setters round-trip; every mutation is restored
+//           via ScopeGuard so the harness (class name, bench filter,
+//           shutdown flag, VFS marker) is unaffected.
+// Input: Toggle filter_bench / auto_shutdown / vfs_touched, set a probe
+//        class name, snapshot the kernel-entry timestamp.
+// Expect: Getters reflect each write; entry timestamp non-zero.
+// Depends: kernel::gs TestState accessors (issue #136)
+JARVIS_TEST(global_teststate_save_restore, "PRE: none | POST: none") {
+    const bool bench_before = gs::get_filter_bench();
+    const bool shutdown_before = gs::get_class_auto_shutdown();
+    const bool touched_before = gs::get_vfs_touched();
+    const char *class_before = gs::get_current_class();
+    ScopeGuard restore_state([=]() {
+        gs::set_filter_bench(bench_before);
+        gs::set_class_auto_shutdown(shutdown_before);
+        gs::mark_vfs_touched(touched_before);
+        gs::set_current_class(class_before);
+    });
+    gs::set_filter_bench(!bench_before);
+    JARVIS_ASSERT(gs::get_filter_bench() == !bench_before);
+    gs::set_class_auto_shutdown(!shutdown_before);
+    JARVIS_ASSERT(gs::get_class_auto_shutdown() == !shutdown_before);
+    gs::mark_vfs_touched(true);
+    JARVIS_ASSERT(gs::get_vfs_touched());
+    gs::set_current_class("gs_probe");
+    JARVIS_ASSERT(has(gs::get_current_class(), "gs_probe"));
+    gs::set_kernel_entry_ns();
+    JARVIS_ASSERT(gs::get_kernel_entry_ns() != 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The ISR-epilogue diagnostic hooks and the apply-side re-check
+//           are directly callable and side-effect-free when no deferred
+//           switch is armed (CONFIG_DEBUG_IPC_SCHED is off, so the diag
+//           hooks are no-ops; validate takes the id==UINT64_MAX early-out).
+//           Runs under IrqGuard to match the hooks' IF=0 contract.
+// Input: Call each hook; capture the validate verdict.
+// Expect: No crash; verdict is 0 (no arm) or 1 (valid arm), never else.
+//         scheduler_on_context_switch is NOT called: with a pending arm it
+//         would retarget current_task without switching registers.
+// Depends: kernel::gs AsmSwitchState hooks (issue #136)
+JARVIS_TEST(global_diag_hooks_safe, "PRE: none | POST: none") {
+    {
+        arch::IrqGuard irq_guard{};
+        gs::scheduler_diag_pre_save();
+        gs::scheduler_diag_depth_skip();
+        scheduler_diag_rsp_abort();
+        gs::scheduler_record_skip(0, 0);
+        gs::scheduler_abort_switch_fixup();
+        const int verdict = gs::scheduler_validate_pending_switch();
+        JARVIS_ASSERT(verdict == 0 || verdict == 1);
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_kernel_top_tests() {
     Logger::info("Registering top-level kernel tests");
     JARVIS_REGISTER_TEST(kernel_datetime_epoch_and_rollover);
@@ -585,4 +870,14 @@ void register_kernel_top_tests() {
     JARVIS_REGISTER_TEST(kernel_irq_thread_ring_full_reject);
     JARVIS_REGISTER_TEST(kernel_irq_thread_isr_ack_and_task_entry);
     JARVIS_REGISTER_TEST(kernel_irq_thread_destroy_compacts);
+    JARVIS_REGISTER_TEST(kernel_irq_thread_unknown_vector_noop);
+    JARVIS_REGISTER_TEST(kernel_irq_thread_isr_ack_synchronous);
+    JARVIS_REGISTER_TEST(kernel_irq_thread_task_guard_and_double_destroy);
+    JARVIS_REGISTER_TEST(global_verify_write_rules);
+    JARVIS_REGISTER_TEST(global_boot_epoch_boot_only);
+    JARVIS_REGISTER_TEST(global_nic_range_checked);
+    JARVIS_REGISTER_TEST(global_fat32_range_checked);
+    JARVIS_REGISTER_TEST(global_canary_latch_set_reset);
+    JARVIS_REGISTER_TEST(global_teststate_save_restore);
+    JARVIS_REGISTER_TEST(global_diag_hooks_safe);
 }

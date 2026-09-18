@@ -45,6 +45,9 @@ uint8_t g_sent[net::MAX_PACKET_SIZE] = {};
 size_t g_sent_len = 0;
 uint64_t g_sends = 0;
 
+/// @brief One-shot poll hook: delivers a single ARP reply, then goes dry.
+bool g_poll_armed = false;
+
 bool mock_send_frame(const uint8_t *data, size_t len) {
     g_sends += 1;
     g_sent_len = len < sizeof(g_sent) ? len : sizeof(g_sent);
@@ -77,6 +80,7 @@ net::Nic make_mock_nic() {
 void mock_reset() {
     g_sent_len = 0;
     g_sends = 0;
+    g_poll_armed = false;
     for (size_t i = 0; i < sizeof(g_sent); ++i)
         g_sent[i] = 0;
     net::net_arp_cache().clear();
@@ -118,6 +122,16 @@ void build_arp_reply(uint8_t *frame, const net::MacAddr &sha, uint32_t spa) {
     arp->spa = spa;
     arp->tha = k_our_mac;
     arp->tpa = k_our_ip;
+}
+
+/// @brief One-shot poll hook: delivers a single ARP reply, then goes dry.
+bool mock_poll_once(uint8_t *buf, size_t &len) {
+    if (!g_poll_armed)
+        return false;
+    g_poll_armed = false;
+    build_arp_reply(buf, k_peer_mac, k_peer_ip);
+    len = sizeof(net::EtherHeader) + sizeof(net::ArpHeader);
+    return true;
 }
 
 } // namespace
@@ -488,6 +502,98 @@ JARVIS_TEST(net_icmp_malformed_length_rejected, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: A frame whose IP total_length leaves fewer than 8 bytes for
+//           ICMP must be dropped before any IcmpHeader read (net.cpp:170)
+//           — the last of the three #178 length guards without a probe.
+// Input: Mock NIC; version-4/IHL-5 frame, total_length 24 (icmp_len 4).
+// Expect: last_reply() == nullptr (no short-header record).
+// Depends: net_handle_frame ICMP truncation guard
+JARVIS_TEST(net_icmp_truncated_rejected, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t short_frame[sizeof(net::EtherHeader) + 24] = {};
+    auto *seth = reinterpret_cast<net::EtherHeader *>(short_frame);
+    seth->dst = k_our_mac;
+    seth->src = k_peer_mac;
+    seth->type = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    short_frame[14] = 0x45;
+    short_frame[16] = 0;
+    short_frame[17] = 24;
+    short_frame[23] = 1;
+    short_frame[34] = net::ICMP_TYPE_ECHO_REPLY;
+    net::net_handle_frame(short_frame, sizeof(short_frame), nic);
+    JARVIS_ASSERT(net::net_icmp_last_reply() == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: UDP send builds a well-formed Ether/IPv4/UDP frame (issue
+//           #138): with a seeded ARP cache, sending 2 payload bytes to the
+//           peer must emit one frame with IP proto 17, big-endian ports
+//           and the payload inline after the 8-byte UDP header.
+// Input: Mock NIC; seed cache via handle_frame(ARP reply); send_udp.
+// Expect: true; 1 frame of 14+20+8+2 bytes; proto/ports/payload exact.
+// Depends: net_send_udp frame build, ARP cache-hit path
+JARVIS_TEST(net_udp_send_builds_frame, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t arp[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_reply(arp, k_peer_mac, k_peer_ip);
+    net::net_handle_frame(arp, sizeof(arp), nic);
+
+    const uint8_t payload[] = {'h', 'i'};
+    JARVIS_ASSERT(net::net_send_udp(nic,
+                                    net::Ipv4Addr::from_u32(k_peer_ip), 8080,
+                                    1234, payload, sizeof(payload)));
+    JARVIS_ASSERT_EQ(1ULL, g_sends);
+    JARVIS_ASSERT_EQ(14ULL + 20ULL + 8ULL + 2ULL, g_sent_len);
+    JARVIS_ASSERT(g_sent[23] == 17);
+    JARVIS_ASSERT(g_sent[34] == 0x04 && g_sent[35] == 0xD2);
+    JARVIS_ASSERT(g_sent[36] == 0x1F && g_sent[37] == 0x90);
+    JARVIS_ASSERT(g_sent[42] == 'h' && g_sent[43] == 'i');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: net_poll pulls one frame through the NIC hook into the
+//           dispatcher (issue #138): an armed one-shot poll delivering an
+//           ARP reply must populate the cache; disarmed polls return false.
+// Input: Mock NIC with the one-shot poll hook armed once.
+// Expect: First poll true + cache hit with zero sends; second poll false.
+// Depends: net_poll dispatch, net_arp_resolve cache-hit path
+JARVIS_TEST(net_poll_dispatches_frame, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    nic.poll_frame = mock_poll_once;
+    g_poll_armed = true;
+    JARVIS_ASSERT(net::net_poll(nic));
+    net::MacAddr out{};
+    JARVIS_ASSERT(net::net_arp_resolve(nic, k_peer_ip, out));
+    JARVIS_ASSERT(out == k_peer_mac);
+    JARVIS_ASSERT_EQ(0ULL, g_sends);
+    JARVIS_ASSERT(!net::net_poll(nic));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The direct reply injector records exactly what it is given
+//           (issue #138): set_reply stores ident/seq/src for last_reply.
+// Input: Clear, then set_reply(0xAAAA, 5, peer).
+// Expect: last_reply non-null with the injected ident/seq/src.
+// Depends: net_icmp_set_reply / net_icmp_last_reply
+JARVIS_TEST(net_icmp_set_reply_records, "PRE: none | POST: none") {
+    mock_reset();
+    JARVIS_ASSERT(net::net_icmp_last_reply() == nullptr);
+    net::net_icmp_set_reply(0xAAAA, 5, net::Ipv4Addr::from_u32(k_peer_ip));
+    const net::IcmpEchoReply *reply = net::net_icmp_last_reply();
+    JARVIS_ASSERT(reply != nullptr);
+    JARVIS_ASSERT_EQ(0xAAAA, reply->ident);
+    JARVIS_ASSERT_EQ(5, reply->seq);
+    JARVIS_ASSERT(reply->src == net::Ipv4Addr::from_u32(k_peer_ip));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all network stack tests.
 // Input: None
 // Expect: All net tests registered
@@ -506,6 +612,10 @@ void register_net_tests() {
     JARVIS_REGISTER_TEST(net_icmp_echo_reply_recorded);
     JARVIS_REGISTER_TEST(net_icmp_echo_request_wire_order);
     JARVIS_REGISTER_TEST(net_icmp_malformed_length_rejected);
+    JARVIS_REGISTER_TEST(net_icmp_truncated_rejected);
+    JARVIS_REGISTER_TEST(net_udp_send_builds_frame);
+    JARVIS_REGISTER_TEST(net_poll_dispatches_frame);
+    JARVIS_REGISTER_TEST(net_icmp_set_reply_records);
     JARVIS_REGISTER_TEST(net_arp_resolve_cache_hit);
     JARVIS_REGISTER_TEST(net_icmp_self_ping_loopback);
 }

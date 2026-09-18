@@ -225,11 +225,43 @@ JARVIS_TEST(reserved_vec_panics, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The static vector-name lookup (issue #131) is exercised through
+//           the reserved-vector fail-stop path: handle_interrupt_c resolves
+//           the name for the fatal log line before the latched test hook
+//           runs.  exception_name() itself has no external linkage, so it
+//           cannot be called directly — driving the dispatcher is the only
+//           probe.  The name string sinks into the serial log (unassertable);
+//           the hook latch per vector is the observable.
+// Input: handle_interrupt_c on 15 ("Reserved" default), 29 ("VMM
+//        Communication") and 31 ("Reserved") with the latch armed.
+// Expect: Latch records each vector; no panic while armed.
+// Depends: handle_interrupt_c reserved branch, exception_name lookup,
+//          reserved_exception_hook override
+JARVIS_TEST(exception_name_reserved_lookup, "PRE: none | POST: none") {
+    const uint64_t named_set[] = {15, 29, 31};
+    uint64_t regs[22] = {};
+    regs[17] = 0x1234ULL; // RIP
+    regs[18] = 0x8;       // CS (kernel)
+    for (uint64_t i = 0; i < sizeof(named_set) / sizeof(named_set[0]);
+         ++i) {
+        arch::IrqGuard guard;
+        g_reserved_armed = true;
+        g_reserved_vec = 0;
+        regs[15] = named_set[i];
+        handle_interrupt_c(named_set[i], 0xBBULL, regs[17], regs, 0);
+        JARVIS_ASSERT(g_reserved_vec == named_set[i]);
+        g_reserved_armed = false;
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_exc_table_tests() {
     Logger::info("Registering exception-table tests");
 
     JARVIS_REGISTER_TEST(err_macro_consistency);
     JARVIS_REGISTER_TEST(ve_cp_frame_layout);
     JARVIS_REGISTER_TEST(reserved_vec_panics);
+    JARVIS_REGISTER_TEST(exception_name_reserved_lookup);
 }
 #endif // CONFIG_ARCH_X86_64

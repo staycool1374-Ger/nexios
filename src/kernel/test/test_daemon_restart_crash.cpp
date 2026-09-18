@@ -43,6 +43,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/vfs/vfsd.hpp>
 #include <kernel/driver/iocd.hpp>
+#include "test_sched_helpers.hpp"
 
 using namespace kernel;
 
@@ -115,10 +116,93 @@ JARVIS_TEST(daemon_unknown_name_rejected, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Full kill-and-resurrect cycle on a scratch-registered daemon
+//           (issue #135): terminate() marks the task TERMINATED and clears
+//           the entry PID, then ensure_running() reloads the ELF from initrd
+//           with a fresh PID.  A scratch entry ("qe_probe" on vfsd's initrd
+//           path) keeps the real vfsd/iocd tasks untouched and keeps the
+//           snapshot-restored entry PIDs consistent — the isolator drops the
+//           registration at test end, so no entry desync survives.
+// Input: register qe_probe; ensure; terminate; ensure again.
+// Expect: First ensure yields a live task; terminate clears the entry and
+//         marks TERMINATED; second ensure yields a different live PID;
+//         both tasks drained before return (no task delta).
+// Depends: kernel::daemon lifecycle, elf::load, test isolation
+JARVIS_TEST(daemon_terminate_ensure_resurrects,
+            "PRE: vfsd, iocd | POST: none") {
+    const char *vfsd_path = nullptr;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "vfsd") == 0) {
+            vfsd_path = entry.initrd_path;
+            break;
+        }
+    }
+    JARVIS_ASSERT(vfsd_path != nullptr);
+    JARVIS_ASSERT(
+        daemon::register_daemon("qe_probe", vfsd_path, nullptr, nullptr));
+
+    daemon::ensure_running("qe_probe");
+    uint64_t first_pid = 0;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe") == 0) {
+            first_pid = entry.pid;
+            break;
+        }
+    }
+    JARVIS_ASSERT(first_pid != 0);
+    auto *first_task = Scheduler::find_task(first_pid);
+    JARVIS_ASSERT(first_task != nullptr);
+    JARVIS_ASSERT(first_task->state != TaskState::TERMINATED);
+
+    daemon::terminate("qe_probe");
+    uint64_t cleared_pid = 1;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe") == 0) {
+            cleared_pid = entry.pid;
+            break;
+        }
+    }
+    JARVIS_ASSERT_EQ(0ULL, cleared_pid);
+    JARVIS_ASSERT(first_task->state == TaskState::TERMINATED);
+
+    daemon::ensure_running("qe_probe");
+    uint64_t second_pid = 0;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe") == 0) {
+            second_pid = entry.pid;
+            break;
+        }
+    }
+    JARVIS_ASSERT(second_pid != 0);
+    JARVIS_ASSERT(second_pid != first_pid);
+    auto *second_task = Scheduler::find_task(second_pid);
+    JARVIS_ASSERT(second_task != nullptr);
+    JARVIS_ASSERT(second_task->state != TaskState::TERMINATED);
+
+    // Teardown: daemon::terminate() marks TERMINATED directly without
+    // queueing on the scheduler zombie list, so drain alone would leak the
+    // first task — route it through Scheduler::terminate (queues exactly
+    // once; it was never queued) and drain both together.
+    Scheduler::terminate(*first_task, 0);
+    kernel::test::terminate_if_live(second_task);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 void register_daemon_restart_crash_tests() {
     Logger::info("Registering daemon restart crash tests");
 #if 0
     JARVIS_REGISTER_TEST(daemon_restart_after_cleanup_crash);
 #endif
     JARVIS_REGISTER_TEST(daemon_unknown_name_rejected);
+    JARVIS_REGISTER_TEST(daemon_terminate_ensure_resurrects);
 }

@@ -43,6 +43,7 @@
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/ipc/pager_registry.hpp>
+#include <kernel/task/task.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <signal.hpp>
 #include <string.hpp>
@@ -377,6 +378,40 @@ JARVIS_TEST(checked_ptr_api_ipc_records,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: The three instantiations the coverage report still lists as
+//           never-entered (issue #127): TaskTimes (SYS_TIMES copy-out),
+//           const SignalFrame and const uint64_t (read-only views).  Same
+//           kernel-address rejection contract as every other swept type.
+// Input: CheckedPtr<TaskTimes>, <const SignalFrame>, <const uint64_t>
+//        over stack buffers, including the safe_copy templates.
+// Expect: All rejected; const types report const_type with uninstantiable
+//         writers; read() yields T{}.
+// Depends: kernel::CheckedPtr, kernel::TaskTimes, SignalFrame
+JARVIS_TEST(checked_ptr_api_task_times_and_const_views,
+            "PRE: vfsd, iocd | POST: none") {
+    TaskTimes times[2] = {};
+    const SignalFrame const_frames[2] = {};
+    const uint64_t const_quads[4] = {};
+
+    const SweepResult times_result = sweep(times, 2);
+    const SweepResult const_frame_result = sweep(const_frames, 2);
+    const SweepResult const_quad_result = sweep(const_quads, 4);
+
+    expect_rejected(times_result);
+    JARVIS_ASSERT(const_frame_result.const_type);
+    JARVIS_ASSERT(const_quad_result.const_type);
+    JARVIS_ASSERT(const_frame_result.default_ctor_noop);
+    JARVIS_ASSERT(const_quad_result.default_ctor_noop);
+    JARVIS_ASSERT(!const_frame_result.valid);
+    JARVIS_ASSERT(!const_quad_result.valid);
+    JARVIS_ASSERT(const_frame_result.read_is_default);
+    JARVIS_ASSERT(const_quad_result.read_is_default);
+    JARVIS_ASSERT(!const_frame_result.copy_to);
+    JARVIS_ASSERT(!const_quad_result.copy_to);
+    JARVIS_TEST_PASS();
+}
+
 void register_checked_ptr_api_tests() {
     Logger::info("Registering CheckedPtr API tests");
     JARVIS_REGISTER_TEST(checked_ptr_api_ipc_records);
@@ -387,4 +422,5 @@ void register_checked_ptr_api_tests() {
     JARVIS_REGISTER_TEST(checked_ptr_api_zero_count_is_noop);
     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_templates_fail_closed);
     JARVIS_REGISTER_TEST(checked_ptr_api_safe_copy_fault_recovery);
+    JARVIS_REGISTER_TEST(checked_ptr_api_task_times_and_const_views);
 }

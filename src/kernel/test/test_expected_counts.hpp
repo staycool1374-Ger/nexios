@@ -17,12 +17,12 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                134,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66)
-    {"selftest",            134,    0,       0      },  // same as safe
+    {"safe",                136,    0,       0      },  // curated TF_RELEASE subset (85 executed, +49 TF_KERNEL incl. ata_pio_absent_drive_init_false, issue #66) + 2 CRC32 lib tests (#126)
+    {"selftest",            136,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
 
     // basic
-    {"basic_lib",            15,    0,       0      },  // string/utils/type-traits/ErrorOr/version
+    {"basic_lib",            17,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126)
     {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
 
     // configuration
@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         28,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61)
+    {"syscall_core",         29,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
@@ -154,7 +154,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
     {"servers_vfsd_auth",     23,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
-    {"servers_daemon_restart", 1,    0,       0      },  // unknown-daemon lifecycle rejection (issue #135); crash test stays #if 0-disabled
+    {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
 
     // memory
@@ -198,7 +198,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
-    {"exc_table",             3,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing
+    {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
     {"apic_tpr",              6,    0,       0      },  // TPR classes/shadow/guard/vector reservation + live IPI block-and-hold (#26, issue #85 module 6)
@@ -212,7 +212,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
-    {"network_core",          14,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version rejection (#178)
+    {"network_core",          18,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version/truncation rejection (#178) + UDP build/poll/set_reply
 
     // shell / ui
     {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)
@@ -220,9 +220,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
-    {"kernel_top",            12, 0,       0      },  // Top-level kernel (issue #131): histogram + random + IrqThread (#144) + datetime epoch/leap/guards
+    {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
-    {"memory_checked_ptr_api", 8,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143)
+    {"memory_checked_ptr_api", 9,  0,       0      },  // CheckedPtr/safe-copy template instantiations (issue #127): scalars, const types, VFS structs, SignalFrame, IPC records, zero-count, fail-closed copies + fault-recovery path (issue #143) + TaskTimes/const views
     {"memory_integrity",      2,  0,       0      },  // section markers + incremental kernel-text CRC (issue #127)
     {"profiler_sampler",     6,    0,       0      },  // sampling profiler API (issue #129): rate gate, ring wrap, non-destructive dump, symbol lookup bounds, symbol-table parsing, init reset
     {"shell_commands",       30,    0,       0      },  // shell command surface (issue #125): capture, listprog/run/registry, jobs/ulimit/wait, alias, history, type, set/shift, printf, test, trap, umask/times, dirs, cd/pwd, fs cycle, drivers/loader, dmesg, lspci, ifconfig, usage, source
@@ -277,7 +277,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-    {"hal",                 107,  0,       0      },  // hal_* + exc_table + acpi + arch_cross (issue #173)
+    {"hal",                 110,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross (issue #173)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        15,   0,       0      },  // smp_bringup + smp_sched, needs -smp 2 (issue #173)
     {"deadline",            115,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173)

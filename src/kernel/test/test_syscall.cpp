@@ -29,6 +29,7 @@
 #include <logger.hpp>
 #include <string.hpp>
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/arch/timer.hpp>
@@ -977,6 +978,27 @@ JARVIS_TEST(syscall_user_exec_hostile_argv, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Every SyscallError maps to its X-macro message and out-of-range
+//           codes fall back to the default string (issue #134: the
+//           error_string<SyscallError> instantiation was never entered).
+// Input: error_string over OK / INVALID_ARGS / PMM_OOM + code 9999.
+// Expect: Exact messages for known codes, "Unknown syscall error" fallback.
+// Depends: kernel::errors::error_string
+JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
+    using kernel::errors::error_string;
+    using kernel::errors::SyscallError;
+    JARVIS_ASSERT_EQ(
+        0, strcmp(error_string(kernel::errors::SYS_ERR_OK), "OK"));
+    JARVIS_ASSERT_EQ(0, strcmp(error_string(kernel::errors::SYS_ERR_INVALID_ARGS),
+                               "Invalid syscall arguments"));
+    JARVIS_ASSERT_EQ(0, strcmp(error_string(kernel::errors::SYS_ERR_PMM_OOM),
+                               "Physical memory exhausted"));
+    JARVIS_ASSERT_EQ(0, strcmp(error_string(static_cast<SyscallError>(9999)),
+                               "Unknown syscall error"));
+    JARVIS_TEST_PASS();
+}
+
 void register_syscall_tests() {
     Logger::info("Registering syscall tests");
 
@@ -1010,6 +1032,7 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_klog_read);
     JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
     JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
+    JARVIS_REGISTER_TEST(syscall_error_string_maps);
 
     register_syscall_affinity_tests();
 }

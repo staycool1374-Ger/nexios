@@ -24,6 +24,7 @@
 #include <utils.hpp>
 #include <error.hpp>
 #include <version.hpp>
+#include <crc32.hpp>
 
 using namespace kernel;
 
@@ -274,6 +275,47 @@ JARVIS_TEST(version_build_date_not_empty, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: CRC32 matches the standard check vector — init builds the
+//           table, update over "123456789" then finalize yields 0xCBF43926.
+//           Re-init is idempotent (guarded) and reproduces the vector.
+// Input: crc32("123456789"); init() twice.
+// Expect: 0xCBF43926 both times (issue #126).
+// Depends: kernel::CRC32
+JARVIS_TEST(lib_crc32_known_vector, "PRE: none | POST: none") {
+    CRC32::init();
+    const uint8_t msg[] = {'1', '2', '3', '4', '5',
+                           '6', '7', '8', '9'};
+    const uint32_t first =
+        CRC32::finalize(CRC32::update(CRC32::INITIAL, msg, sizeof(msg)));
+    CRC32::init();
+    const uint32_t second =
+        CRC32::finalize(CRC32::update(CRC32::INITIAL, msg, sizeof(msg)));
+    JARVIS_ASSERT_EQ(0xCBF43926UL, first);
+    JARVIS_ASSERT_EQ(0xCBF43926UL, second);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Empty input finalizes to zero and split updates equal one-shot
+//           updates (table-driven chaining is order-faithful).
+// Input: finalize(INITIAL); update("12")+update("3456789") vs full update.
+// Expect: Empty gives 0; incremental equals one-shot (issue #126).
+// Depends: kernel::CRC32
+JARVIS_TEST(lib_crc32_empty_and_incremental, "PRE: none | POST: none") {
+    CRC32::init();
+    JARVIS_ASSERT_EQ(0UL, CRC32::finalize(CRC32::INITIAL));
+    const uint8_t msg[] = {'1', '2', '3', '4', '5',
+                           '6', '7', '8', '9'};
+    const uint32_t oneshot =
+        CRC32::update(CRC32::INITIAL, msg, sizeof(msg));
+    uint32_t chained = CRC32::update(CRC32::INITIAL, msg, 2);
+    chained = CRC32::update(chained, msg + 2, sizeof(msg) - 2);
+    JARVIS_ASSERT_EQ(oneshot, chained);
+    JARVIS_ASSERT_EQ(0xCBF43926UL, CRC32::finalize(chained));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Register all lib subsystem tests (string, utils, ErrorOr,
 // version) with the test framework.
 // Depends: string, utils, error, version
@@ -298,4 +340,7 @@ void register_lib_tests() {
     JARVIS_REGISTER_RELEASE_TEST(version_string_not_empty);
     JARVIS_REGISTER_RELEASE_TEST(version_full_string_not_empty);
     JARVIS_REGISTER_RELEASE_TEST(version_build_date_not_empty);
+
+    JARVIS_REGISTER_TEST(lib_crc32_known_vector);
+    JARVIS_REGISTER_TEST(lib_crc32_empty_and_incremental);
 }
