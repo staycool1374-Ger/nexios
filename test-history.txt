@@ -1385,3 +1385,4 @@ SUMMARY: total=20 ok=18 fail=2
 
 SUMMARY: total=18 ok=18 fail=0
 2026-09-18 01:10:42 selftest PASSED: 134 FAILED: 0 TIME: 7848ms
+2026-09-18 08:28:42 servers_vfsd_auth PASSED: 12 FAILED: 0 TIME: 1777ms

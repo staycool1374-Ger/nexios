@@ -152,7 +152,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // servers
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
-    {"servers_vfsd_auth",     5,    0,       0      },  // VFS daemon authorization
+    {"servers_vfsd_auth",     12,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe fd-table (#134)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
     {"servers_daemon_restart", 0,    0,       0      },  // daemon-restart crash test #if 0-disabled in source; reserved home
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
