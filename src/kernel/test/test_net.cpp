@@ -332,7 +332,10 @@ JARVIS_TEST(net_arp_malformed_rejected, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: An ICMP echo reply for a ping records ident/seq/source in the
-//           reply record, observable via net_icmp_last_reply.
+//           reply record, observable via net_icmp_last_reply. Since issue
+//           #179 the record holds host order: RFC-order wire bytes
+//           [0x12,0x34] record as 0x1234 (previously stored raw as 0x3412,
+//           self-consistent only because sends were equally unswapped).
 // Input: Mock NIC; clear_reply; handle_frame(IPv4+ICMP ECHO_REPLY,
 //        ident 0x1234, seq 7, src = peer IP).
 // Expect: last_reply non-null with matching ident/seq/src.
@@ -364,16 +367,10 @@ JARVIS_TEST(net_icmp_echo_reply_recorded, "PRE: none | POST: none") {
 
     net::net_handle_frame(frame, sizeof(frame), nic);
 
-    // NOTE (filed S3): ident/seq are stored in raw wire order with no
-    // bswap16, so RFC-order bytes [0x12,0x34] record as 0x3412 on
-    // little-endian. The stack's own echo requests are built the same way
-    // (host order straight onto the wire), which is why real pings still
-    // match — but the wire format is not RFC-correct. Asserts document the
-    // current wire-order behavior, not the RFC ideal.
     const net::IcmpEchoReply *reply = net::net_icmp_last_reply();
     JARVIS_ASSERT(reply != nullptr);
-    JARVIS_ASSERT_EQ(0x3412, reply->ident);
-    JARVIS_ASSERT_EQ(0x0700, reply->seq);
+    JARVIS_ASSERT_EQ(0x1234, reply->ident);
+    JARVIS_ASSERT_EQ(7, reply->seq);
     JARVIS_ASSERT(reply->src == net::Ipv4Addr::from_u32(k_peer_ip));
     JARVIS_TEST_PASS();
 }
@@ -422,6 +419,75 @@ JARVIS_TEST(net_icmp_self_ping_loopback, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Echo requests go onto the wire in RFC 792 big-endian order
+//           (issue #179): with a seeded ARP cache, sending id 0x1234 seq 7
+//           to the peer must place [0x12,0x34,0x00,0x07] at the ICMP
+//           ident/seq offsets of the captured frame.
+// Input: Mock NIC; seed ARP cache via handle_frame(ARP reply); send echo.
+// Expect: send true; one captured frame; ident/seq bytes big-endian.
+// Depends: net_send_icmp_echo wire build, ARP cache-hit path
+JARVIS_TEST(net_icmp_echo_request_wire_order, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t arp[sizeof(net::EtherHeader) + sizeof(net::ArpHeader)] = {};
+    build_arp_reply(arp, k_peer_mac, k_peer_ip);
+    net::net_handle_frame(arp, sizeof(arp), nic);
+
+    JARVIS_ASSERT(net::net_send_icmp_echo(
+        nic, net::Ipv4Addr::from_u32(k_peer_ip), 0x1234, 7, nullptr, 0));
+    JARVIS_ASSERT_EQ(1ULL, g_sends);
+    // Ether(14) + IPv4(20) + ICMP type/code/checksum(4): ident at 38.
+    JARVIS_ASSERT(g_sent_len >= 42);
+    JARVIS_ASSERT(g_sent[38] == 0x12);
+    JARVIS_ASSERT(g_sent[39] == 0x34);
+    JARVIS_ASSERT(g_sent[40] == 0x00);
+    JARVIS_ASSERT(g_sent[41] == 0x07);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Malformed IPv4/ICMP frames are rejected without recording a
+//           reply (issue #178): total_length < header length underflows
+//           icmp_len (size_t wraps) so an IcmpHeader would be read past the
+//           frame; a non-IPv4 version nibble is rejected as well.
+// Input: Mock NIC; (a) IHL 6 / total_length 20 frame, (b) version-6 frame
+//        with otherwise valid echo-reply bytes.
+// Expect: last_reply() == nullptr in both cases.
+// Depends: net_handle_frame IPv4 length/version guards
+JARVIS_TEST(net_icmp_malformed_length_rejected, "PRE: none | POST: none") {
+    mock_reset();
+    net::Nic nic = make_mock_nic();
+    uint8_t bad[40] = {};
+    auto *beth = reinterpret_cast<net::EtherHeader *>(bad);
+    beth->dst = k_our_mac;
+    beth->src = k_peer_mac;
+    beth->type = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    bad[14] = 0x46;
+    bad[16] = 0;
+    bad[17] = 20;
+    bad[23] = 1;
+    net::net_handle_frame(bad, sizeof(bad), nic);
+    JARVIS_ASSERT(net::net_icmp_last_reply() == nullptr);
+
+    mock_reset();
+    uint8_t v6[sizeof(net::EtherHeader) + 20 + 8] = {};
+    auto *veth = reinterpret_cast<net::EtherHeader *>(v6);
+    veth->dst = k_our_mac;
+    veth->src = k_peer_mac;
+    veth->type = __builtin_bswap16(net::ETH_TYPE_IPV4);
+    v6[14] = 0x65;
+    v6[16] = 0;
+    v6[17] = 28;
+    v6[23] = 1;
+    v6[34] = net::ICMP_TYPE_ECHO_REPLY;
+    v6[38] = 0x12;
+    v6[39] = 0x34;
+    net::net_handle_frame(v6, sizeof(v6), nic);
+    JARVIS_ASSERT(net::net_icmp_last_reply() == nullptr);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all network stack tests.
 // Input: None
 // Expect: All net tests registered
@@ -438,6 +504,8 @@ void register_net_tests() {
     JARVIS_REGISTER_TEST(net_arp_reply_updates_cache);
     JARVIS_REGISTER_TEST(net_arp_malformed_rejected);
     JARVIS_REGISTER_TEST(net_icmp_echo_reply_recorded);
+    JARVIS_REGISTER_TEST(net_icmp_echo_request_wire_order);
+    JARVIS_REGISTER_TEST(net_icmp_malformed_length_rejected);
     JARVIS_REGISTER_TEST(net_arp_resolve_cache_hit);
     JARVIS_REGISTER_TEST(net_icmp_self_ping_loopback);
 }

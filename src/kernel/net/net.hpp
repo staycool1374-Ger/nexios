@@ -84,8 +84,8 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
 /// @brief ICMP echo reply record for ping.
 struct IcmpEchoReply {
     bool received;    ///< Whether a reply has been received.
-    uint16_t ident;   ///< Echo identifier (big-endian).
-    uint16_t seq;     ///< Sequence number (big-endian).
+    uint16_t ident;   ///< Echo identifier (host order, issue #179).
+    uint16_t seq;     ///< Sequence number (host order, issue #179).
     uint64_t rx_tick; ///< Tick count at receipt.
     Ipv4Addr src;     ///< Source IPv4 address.
 };

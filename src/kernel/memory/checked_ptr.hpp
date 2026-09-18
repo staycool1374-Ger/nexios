@@ -115,13 +115,21 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     /// @brief Copy count elements from user space to kernel buffer.
     /// @return true on success.
+    /// @note Issue #177: fault recovery redirects RIP only, so every
+    ///       faulting access must execute in this frame. The copy is a
+    ///       plain loop (no memcpy call): coverage flags (-fno-inline,
+    ///       -finstrument-functions) forbid inlining, so a fault inside a
+    ///       callee frame could not resume cleanly (observed as a #PF in
+    ///       print_test_header for the next test).
     bool copy_from(T *kernel_dst) const {
         if (!valid())
             return false;
+        T *src = unsafe_ptr();
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_cf);
         NEXIOS_FAULT_RECOVERY_KEEP(recover_cf);
         arch::stac();
-        memcpy(kernel_dst, unsafe_ptr(), count_ * sizeof(T));
+        for (uint64_t idx = 0; idx < count_; ++idx)
+            kernel_dst[idx] = src[idx];
         arch::clac();
         g_user_access_recover_ip = 0;
         return true;
@@ -134,13 +142,16 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     /// @brief Copy count elements from kernel buffer to user space.
     /// @return true on success.
+    /// @note Issue #177: same-frame requirement, see copy_from.
     bool copy_to(const T *kernel_src) const {
         if (!valid())
             return false;
+        T *dst = unsafe_ptr();
         g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_ct);
         NEXIOS_FAULT_RECOVERY_KEEP(recover_ct);
         arch::stac();
-        memcpy(unsafe_ptr(), kernel_src, count_ * sizeof(T));
+        for (uint64_t idx = 0; idx < count_; ++idx)
+            dst[idx] = kernel_src[idx];
         arch::clac();
         g_user_access_recover_ip = 0;
         return true;
@@ -281,14 +292,17 @@ recover_str:
 /// @brief Safely copies memory from user-space to kernel buffer.
 ///        Uses fault recovery to handle invalid pointers gracefully.
 /// @return true on success, false if a fault or range check failed.
+/// @note Issue #177: same-frame requirement, see CheckedPtr::copy_from.
 template <kernel::TriviallyCopiable T>
-static inline bool safe_copy_from_user(T *dst, const T *src, uint64_t count) {
+static inline bool safe_copy_from_user(T *dst, const T *src,
+                                       uint64_t count) {
     if (!is_user_range(src, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_from);
     NEXIOS_FAULT_RECOVERY_KEEP(recover_from);
     arch::stac();
-    memcpy(dst, src, count * sizeof(T));
+    for (uint64_t idx = 0; idx < count; ++idx)
+        dst[idx] = src[idx];
     arch::clac();
     g_user_access_recover_ip = 0;
     return true;
@@ -302,14 +316,17 @@ recover_from:
 /// @brief Safely copies memory from kernel buffer to user-space.
 ///        Uses fault recovery to handle invalid pointers gracefully.
 /// @return true on success, false if a fault or range check failed.
+/// @note Issue #177: same-frame requirement, see CheckedPtr::copy_from.
 template <kernel::TriviallyCopiable T>
-static inline bool safe_copy_to_user(T *dst, const T *src, uint64_t count) {
+static inline bool safe_copy_to_user(T *dst, const T *src,
+                                     uint64_t count) {
     if (!is_user_range(dst, count * sizeof(T)))
         return false;
     g_user_access_recover_ip = reinterpret_cast<uint64_t>(&&recover_to);
     NEXIOS_FAULT_RECOVERY_KEEP(recover_to);
     arch::stac();
-    memcpy(dst, src, count * sizeof(T));
+    for (uint64_t idx = 0; idx < count; ++idx)
+        dst[idx] = src[idx];
     arch::clac();
     g_user_access_recover_ip = 0;
     return true;

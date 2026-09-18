@@ -152,7 +152,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // servers
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
-    {"servers_vfsd_auth",     19,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir (#134)
+    {"servers_vfsd_auth",     23,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
     {"servers_daemon_restart", 1,    0,       0      },  // unknown-daemon lifecycle rejection (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
@@ -212,7 +212,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
     // network
-    {"network_core",          12,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch (malformed-length probe reverted -> #178) (#138)
+    {"network_core",          14,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version rejection (#178)
 
     // shell / ui
     {"shell_interaction",    19,    0,       0      },  // shell commands (+ tasks memory columns)

@@ -300,9 +300,14 @@ uint64_t Syscall::sys_fstat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     int rstat = f->vnode->ops->fstat(*f->vnode, kst);
     if (rstat != 0)
         return static_cast<uint64_t>(rstat);
-    if (syscall_is_user_task() &&
-        !safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
-        return static_cast<uint64_t>(-1);
+    // Issue #175: kernel-task callers need the result too — safe_copy
+    // rejects kernel addresses, so copy directly on the kernel path.
+    if (syscall_is_user_task()) {
+        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
+            return static_cast<uint64_t>(-1);
+    } else {
+        *st.unsafe_ptr() = kst;
+    }
     return 0;
 }
 
@@ -382,8 +387,15 @@ uint64_t Syscall::sys_lseek(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto *f = cur->fd_table.get(static_cast<int>(arg0));
     if (!f || !f->vnode || !f->vnode->ops->lseek)
         return static_cast<uint64_t>(-1);
+    // Issue #176: validate whence at dispatch — backends historically
+    // accepted bogus values silently (null_lseek fell through with a stale
+    // offset, tmpfs ignores whence entirely).
+    int whence = static_cast<int>(arg2);
+    if (whence != vfs::SEEK_SET && whence != vfs::SEEK_CUR &&
+        whence != vfs::SEEK_END)
+        return static_cast<uint64_t>(-1);
     int64_t r = f->vnode->ops->lseek(*f->vnode, static_cast<int64_t>(arg1),
-                                     static_cast<int>(arg2), &f->offset);
+                                     whence, &f->offset);
     return static_cast<uint64_t>(r >= 0 ? r : -1);
 }
 
@@ -419,16 +431,26 @@ uint64_t Syscall::sys_readdir(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto dent_chk = checked(reinterpret_cast<vfs::Dirent *>(arg2));
     if (syscall_is_user_task() && (!pos_chk.valid() || !dent_chk.valid()))
         return static_cast<uint64_t>(-1);
-    uint64_t position = pos_chk.read();
+    // Kernel-task callers pass kernel addresses: CheckedPtr::read/write
+    // fail closed on those, so dereference directly (issue #175).
+    uint64_t position = 0;
+    if (syscall_is_user_task())
+        position = pos_chk.read();
+    else
+        position = *pos_chk.unsafe_ptr();
     // MP-4 (SMAP): readdir writes the Dirent through a generic vnode op; build
     // into a kernel local, then safe_copy to user (stac-wrapped).
     vfs::Dirent kdent{};
     int r = f->vnode->ops->readdir(*f->vnode, position, kdent);
     if (r == 0) {
-        if (syscall_is_user_task() &&
-            !safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))
-            return static_cast<uint64_t>(-1);
-        pos_chk.write(position);
+        if (syscall_is_user_task()) {
+            if (!safe_copy_to_user(dent_chk.unsafe_ptr(), &kdent, 1))
+                return static_cast<uint64_t>(-1);
+            pos_chk.write(position);
+        } else {
+            *dent_chk.unsafe_ptr() = kdent;
+            *pos_chk.unsafe_ptr() = position;
+        }
     }
     return static_cast<uint64_t>(r == 0 ? 0 : -1);
 }
@@ -459,9 +481,13 @@ uint64_t Syscall::sys_stat(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     int rstat = vn->ops->fstat(*vn, kst);
     if (rstat != 0)
         return static_cast<uint64_t>(rstat);
-    if (syscall_is_user_task() &&
-        !safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
-        return static_cast<uint64_t>(-1);
+    // Issue #175: kernel-task callers need the result too (see sys_fstat).
+    if (syscall_is_user_task()) {
+        if (!safe_copy_to_user(st.unsafe_ptr(), &kst, 1))
+            return static_cast<uint64_t>(-1);
+    } else {
+        *st.unsafe_ptr() = kst;
+    }
     return 0;
 }
 

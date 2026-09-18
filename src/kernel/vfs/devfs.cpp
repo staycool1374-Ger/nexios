@@ -170,7 +170,9 @@ static int64_t null_lseek(Vnode &, int64_t offset, int whence,
         *out_pos = static_cast<uint64_t>(offset);
         break;
     default:
-        break;
+        // Issue #176: fail closed on invalid whence instead of succeeding
+        // with a stale offset (defense in depth; sys_lseek also validates).
+        return VFS_INVALID;
     }
     return static_cast<int64_t>(*out_pos);
 }

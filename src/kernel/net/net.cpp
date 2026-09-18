@@ -150,9 +150,19 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
         size_t ip_hdr_len = static_cast<size_t>(ip->ver_ihl & 0x0F) * 4;
         if (ip_hdr_len < IPV4_MIN_HEADER_LEN)
             return;
+        // Issue #178: reject non-IPv4 version nibbles before dispatching
+        // on the protocol field.
+        if ((ip->ver_ihl >> 4) != 4)
+            return;
 
         if (ip->protocol == IP_PROTO_ICMP) {
             size_t ip_total_len = __builtin_bswap16(ip->total_length);
+            // Issue #178: reject total_length < header length before the
+            // subtraction below — size_t underflow wraps to ~2^64 and the
+            // ICMP branch would read an IcmpHeader past the frame,
+            // recording garbage as a genuine reply.
+            if (ip_total_len < ip_hdr_len)
+                return;
             if (len < sizeof(EtherHeader) + ip_total_len)
                 return;
             size_t icmp_offset = sizeof(EtherHeader) + ip_hdr_len;
@@ -166,8 +176,11 @@ void net_handle_frame(const uint8_t *data, size_t len, Nic &nic) {
             if (icmp->type == ICMP_TYPE_ECHO_REPLY) {
                 SpinLockGuard<sync::SpinLock> guard(g_net_lock);
                 g_icmp_reply.received = true;
-                g_icmp_reply.ident = icmp->ident;
-                g_icmp_reply.seq = icmp->seq;
+                // Issue #179: wire order is big-endian — swap into host
+                // order for the record (matches net_icmp_set_reply and
+                // the shell matcher, which both use host order).
+                g_icmp_reply.ident = __builtin_bswap16(icmp->ident);
+                g_icmp_reply.seq = __builtin_bswap16(icmp->seq);
                 g_icmp_reply.rx_tick = arch::Timer::ticks();
                 g_icmp_reply.src = ip->src;
             }
@@ -354,8 +367,10 @@ bool net_send_icmp_echo(Nic &nic, Ipv4Addr dst_ip, uint16_t id, uint16_t seq,
     icmp->type = ICMP_TYPE_ECHO_REQUEST;
     icmp->code = 0;
     icmp->checksum = 0;
-    icmp->ident = id;
-    icmp->seq = seq;
+    // Issue #179: RFC 792 wire order is big-endian (matches the
+    // IcmpHeader contract); a remote echoes these bytes back verbatim.
+    icmp->ident = __builtin_bswap16(id);
+    icmp->seq = __builtin_bswap16(seq);
 
     // Payload
     if (data_len > 0) {
