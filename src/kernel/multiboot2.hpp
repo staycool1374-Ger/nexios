@@ -76,7 +76,15 @@ extern constinit uint64_t multiboot_info_ptr;
 /// @brief Finds a Multiboot2 tag by type.
 /// @param type The tag type to search for.
 /// @return Physical address of the tag, or 0 if not found.
+/// @note Issue #180: the walk is bounded — a corrupt tag stream (zero-size
+///       non-terminal tag: `addr += (0+7)&~7` advances 0) must fail closed
+///       instead of hanging the caller with no panic text. Firmware tag
+///       counts are < 20 and info structures < 32 KiB, so the caps below
+///       never trigger on valid firmware.
 inline uint64_t mb2_find_tag(uint32_t type) {
+    // Maximum tags walked and info bytes accepted (issue #180).
+    constexpr uint64_t kMaxTags = 64;
+    constexpr uint64_t kMaxInfoBytes = 256ULL * 1024ULL;
     if (multiboot_magic != 0x36D76289)
         return 0;
 
@@ -84,15 +92,28 @@ inline uint64_t mb2_find_tag(uint32_t type) {
     auto *info = reinterpret_cast<Multiboot2Info *>(
         static_cast<uint64_t>(multiboot_info_ptr));
 
+    uint64_t total = info->total_size;
+    if (total == 0 || total > kMaxInfoBytes)
+        return 0;
+    uint64_t end = multiboot_info_ptr + total;
+    if (end < multiboot_info_ptr)
+        return 0;
     uint64_t addr = multiboot_info_ptr + 8;
-    while (addr < multiboot_info_ptr + info->total_size) {
+    for (uint64_t tags = 0; tags < kMaxTags; ++tags) {
+        if (addr + sizeof(Multiboot2Tag) > end)
+            return 0;
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *tag = reinterpret_cast<Multiboot2Tag *>(addr);
         if (tag->type == 0)
             break;
         if (tag->type == type)
             return addr;
-        addr += (tag->size + 7) & ~7;
+        if (tag->size < sizeof(Multiboot2Tag))
+            return 0;
+        uint64_t next = addr + ((tag->size + 7) & ~7ULL);
+        if (next <= addr || next > end)
+            return 0;
+        addr = next;
     }
     return 0;
 }

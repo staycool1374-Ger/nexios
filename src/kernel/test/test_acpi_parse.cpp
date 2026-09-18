@@ -37,6 +37,13 @@ namespace {
 /// true when the structure is readable again.  Pages are recorded so the
 /// caller can drop the mapping afterwards.
 constexpr uint64_t MB2_MAP_CAP = 256ULL * 1024ULL;
+// Maximum tag-structure pages recorded (issue #180: hard bound so the
+// table cannot overflow on corrupt total_size).
+constexpr size_t MB2_MAP_MAX_PAGES = 64;
+
+/// @brief Drops the identity mapping re-established by ensure_mb2_readable
+/// (same active-PML4 walk the mapping used).
+void drop_mb2_mapping(const uint64_t *mapped_pages, size_t count);
 
 bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
     *count_out = 0;
@@ -62,10 +69,20 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
     uint64_t end_page = (end_va + 0xFFFULL) & ~0xFFFULL;
     for (uint64_t page = base_page + 0x1000ULL; page < end_page;
          page += 0x1000ULL) {
+        // Issue #180: bound the table and unwind on failure — the old
+        // code leaked already-mapped pages on the check-failure path.
+        if (*count_out >= MB2_MAP_MAX_PAGES) {
+            drop_mb2_mapping(mapped_pages_out, *count_out);
+            *count_out = 0;
+            return false;
+        }
         VMM::map_page_in_pml4(page, page, false, active_pml4);
         uint64_t check = VMM::virt_to_phys_in_pml4(page, active_pml4);
-        if (check != page)
+        if (check != page) {
+            drop_mb2_mapping(mapped_pages_out, *count_out);
+            *count_out = 0;
             return false;
+        }
         mapped_pages_out[(*count_out)++] = page;
     }
     return true;
@@ -73,41 +90,17 @@ bool ensure_mb2_readable(uint64_t *mapped_pages_out, size_t *count_out) {
 
 /// @brief Drops the identity mapping re-established by ensure_mb2_readable
 /// (same active-PML4 walk the mapping used).
+/// @note Issue #180: uses the canonical VMM::unmap_page_in_pml4 (leaf
+///       clear + TLB flush). First-touch huge-page splits stay in place by
+///       design — the active table is shared across tests in the class, so
+///       freeing split tables explicitly could reuse a live page-table
+///       page; snapshot_restore rewinds PMM + PD state at the boundary.
 void drop_mb2_mapping(const uint64_t *mapped_pages, size_t count) {
     if (count == 0)
         return;
     uint64_t active_pml4 = VMM::current_pml4();
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *pml4 =
-        reinterpret_cast<volatile uint64_t *>(arch::HHDM_OFFSET +
-                                             (active_pml4 & ~0xFFFULL));
-    for (size_t i = 0; i < count; ++i) {
-        uint64_t page = mapped_pages[i];
-        size_t pml4_idx = (page >> 39) & 0x1FF;
-        size_t pdpt_idx = (page >> 30) & 0x1FF;
-        size_t pd_idx = (page >> 21) & 0x1FF;
-        size_t pt_idx = (page >> 12) & 0x1FF;
-        uint64_t pml4e = pml4[pml4_idx];
-        if (!(pml4e & 1))
-            continue;
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *pdpt = reinterpret_cast<volatile uint64_t *>(
-            arch::HHDM_OFFSET + (pml4e & ~0xFFFULL));
-        uint64_t pdpte = pdpt[pdpt_idx];
-        if (!(pdpte & 1))
-            continue;
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *pd = reinterpret_cast<volatile uint64_t *>(
-            arch::HHDM_OFFSET + (pdpte & ~0xFFFULL));
-        uint64_t pde = pd[pd_idx];
-        if (!(pde & 1) || (pde & (1ULL << 7)))
-            continue; // not present or 2 MiB leaf — nothing we mapped
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *pt = reinterpret_cast<volatile uint64_t *>(
-            arch::HHDM_OFFSET + (pde & ~0xFFFULL));
-        pt[pt_idx] = 0;
-        asm volatile("invlpg (%0)" : : "r"(page) : "memory");
-    }
+    for (size_t i = 0; i < count; ++i)
+        VMM::unmap_page_in_pml4(mapped_pages[i], active_pml4);
 }
 
 } // namespace
@@ -188,8 +181,66 @@ JARVIS_TEST(acpi_parse_scan_is_pure, "PRE: iocd | POST: none") {
         JARVIS_ASSERT_EQ(first.unit.present, second.unit.present);
         JARVIS_ASSERT_EQ(first.unit.base_phys, second.unit.base_phys);
         JARVIS_ASSERT_EQ(first.unit.segment, second.unit.segment);
-        JARVIS_ASSERT_EQ(first.unit.include_pci_all,
-                         second.unit.include_pci_all);
+            JARVIS_ASSERT_EQ(first.unit.include_pci_all,
+                             second.unit.include_pci_all);
+    }
+    drop_mb2_mapping(mapped, count);
+    JARVIS_ASSERT(readable);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: mb2_find_tag is bounded on corrupt tag streams (issue #180):
+//           a non-terminal tag reporting size 0 used to stall the walk
+//           forever (`addr += (0+7)&~7` advances 0) with no panic text.
+// Input: Crafted static tag stream [type=1,size=0][type=0,size=8] under
+//        saved/restored live multiboot globals.
+// Expect: Lookup of the absent type returns 0 promptly; lookup of the
+//         present type still finds it (no over-rejection).
+// Depends: kernel::mb2_find_tag
+JARVIS_TEST(mb2_tag_zero_size_bounded, "PRE: none | POST: none") {
+    uint64_t saved_magic = multiboot_magic;
+    uint64_t saved_ptr = multiboot_info_ptr;
+    alignas(8) static uint32_t fake_words[6] = {24, 0, 1, 0, 0, 8};
+    multiboot_magic = 0x36D76289;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    multiboot_info_ptr = reinterpret_cast<uint64_t>(&fake_words[0]);
+    // Zero-size lookup first: pre-fix this never returns (hangs the class).
+    uint64_t hit_zero = mb2_find_tag(15);
+    uint64_t hit_valid = mb2_find_tag(1);
+    multiboot_magic = saved_magic;
+    multiboot_info_ptr = saved_ptr;
+    JARVIS_ASSERT_EQ(0ULL, hit_zero);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    JARVIS_ASSERT_EQ(reinterpret_cast<uint64_t>(&fake_words[0]) + 8,
+                     hit_valid);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Repeated ensure/scan/drop cycles are stable (issue #180):
+//           exercises the exact failing shape (back-to-back scans under a
+//           re-established mapping) several times in one test.
+// Input: ensure_mb2_readable once, scan_dmar() 4x with field comparison,
+//        drop_mb2_mapping.
+// Expect: readable every time; all scans agree field-by-field.
+// Depends: kernel::iommu::acpi::scan_dmar
+JARVIS_TEST(acpi_scan_repeat_stable, "PRE: iocd | POST: none") {
+    uint64_t mapped[64] = {};
+    size_t count = 0;
+    bool readable = ensure_mb2_readable(mapped, &count);
+    if (readable) {
+        iommu::dmar::DmarInfo first = iommu::acpi::scan_dmar();
+        for (size_t idx = 0; idx < 3; ++idx) {
+            iommu::dmar::DmarInfo cur = iommu::acpi::scan_dmar();
+            JARVIS_ASSERT_EQ(first.found, cur.found);
+            JARVIS_ASSERT_EQ(first.malformed, cur.malformed);
+            JARVIS_ASSERT_EQ(first.unit.present, cur.unit.present);
+            JARVIS_ASSERT_EQ(first.unit.base_phys, cur.unit.base_phys);
+            JARVIS_ASSERT_EQ(first.unit.segment, cur.unit.segment);
+            JARVIS_ASSERT_EQ(first.unit.include_pci_all,
+                             cur.unit.include_pci_all);
+        }
     }
     drop_mb2_mapping(mapped, count);
     JARVIS_ASSERT(readable);
@@ -201,5 +252,7 @@ void register_acpi_parse_tests() {
     JARVIS_REGISTER_TEST(acpi_parse_info_default_contract);
     JARVIS_REGISTER_TEST(acpi_parse_scan_fail_closed);
     JARVIS_REGISTER_TEST(acpi_parse_scan_is_pure);
+    JARVIS_REGISTER_TEST(mb2_tag_zero_size_bounded);
+    JARVIS_REGISTER_TEST(acpi_scan_repeat_stable);
 }
 #endif // CONFIG_ARCH_X86_64
