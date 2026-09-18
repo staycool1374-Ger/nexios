@@ -3,17 +3,21 @@
 # Matches the kernel's TEST SUMMARY block, writes a machine-readable verdict
 # to <verdict_log>, and exits 0 on PASS / 1 on FAIL|TIMEOUT|QEMU_EXIT.
 #
-# Expected-panic handling:
-#   Known panic signatures are listed in EXPECTED_PANIC_PATTERNS.  When the
-#   serial output matches one of these, the harness records a PASS with an
-#   annotation instead of waiting for watchdog timeout.  This allows the test
-#   infrastructure to accept ASIL-D mandated safety panics that occur under
-#   legitimate contention scenarios.
+# Expected-panic handling (issue #181):
+#   The TEST SUMMARY block is authoritative — it decides the verdict whenever
+#   present, even if a KERNEL PANIC: line appeared earlier in the same run
+#   (passing tests may log benign FATAL lines). Panic text is therefore only
+#   RECORDED, never terminal: a flag is set and matching continues. Only when
+#   the run ends (eof) or the deadline passes (timeout) with NO summary does
+#   the recorded flag decide: the exact `exhausted PCP retry budget`
+#   signature (ASIL-D safety panic, kernel halts, no summary follows) yields
+#   PASS, any other recorded panic yields FAIL.
 #
 # Robust by design:
 #   - The verdict is written to a dedicated file (never lost to pipe buffering).
-#   - A single regex matches the summary; all paths (PASS/FAIL/TIMEOUT/EOF)
-#     write the verdict file before exiting.
+#   - The summary regex decides whenever matched; all paths (PASS/FAIL/TIMEOUT/
+#     EOF) write the verdict file before exiting; `verdict` is pre-initialized
+#     so no path can reference it unset.
 
 set timeout [lindex $argv 0]
 set verdict_log [lindex $argv 1]
@@ -21,46 +25,22 @@ set serial_log [lindex $argv 2]
 set qemu_args [lrange $argv 3 end]
 fconfigure stdout -buffering none
 spawn {*}$qemu_args
+# Verdict state (issue #181): pre-initialized so no path can reference
+# `verdict` unset; panic sightings only set flags and continue — the
+# TEST SUMMARY arm below stays reachable for the rest of the run.
+set verdict "RESULT: UNKNOWN (expect internal error)"
+set panic_seen 0
+set expected_panic_seen 0
+set orig_timeout $timeout
+set deadline [expr {[clock seconds] + $timeout}]
 # Tcl regex is POSIX-ish: no (?s), (?:), or non-greedy *?.  Match the summary
 # block line-by-line with explicit [\r\n] breaks.  Group indices:
 #   1=PLANNED 2=EXECUTED 3=TIME_ELAPSED 4=BOOT_TIME (ignored) 5=PASSED 6=FAILED
 #
-# Panic handling — patterns are tried in order; first match wins:
-#   1. Expected panics (specific messages caught first → PASS)
-#   2. Unexpected panics (any KERNEL PANIC not matched above → FAIL)
-#   3. Normal TEST SUMMARY (all tests completed)
-#   4. timeout / eof (no summary / QEMU exited)
+# Arm order is readability only, not correctness: panic arms never exit, so
+# a panic line earlier in the buffer cannot shadow a SUMMARY later in it.
 expect {
-    # ── Expected: PCP retry budget exhaustion (ASIL-D safety) ─────
-    # Full message arrives as one serial chunk after the prefix.
-    -re {KERNEL PANIC:.*exhausted PCP retry budget} {
-        set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
-        puts $verdict; flush stdout
-        set fh [open $verdict_log w]; puts $fh $verdict; close $fh
-        close $spawn_id
-        exit 0
-    }
-    # ── KERNEL PANIC: prefix seen but full message not yet arrived ─
-    # Block for up to 2 s waiting for the rest of the message; then
-    # check for expected pattern.  If not found, classify as unexpected.
-    -re {KERNEL PANIC:} {
-        set old_timeout $timeout
-        set timeout 2
-        expect {
-            -re {exhausted PCP retry budget} {
-                set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
-            }
-            timeout {
-                set verdict "RESULT: FAIL (unexpected kernel panic)"
-            }
-        }
-        set timeout $old_timeout
-        puts $verdict; flush stdout
-        set fh [open $verdict_log w]; puts $fh $verdict; close $fh
-        catch {close $spawn_id}
-        exit [expr {[string match "*FAIL*" $verdict] ? 1 : 0}]
-    }
-    # ── Normal TEST SUMMARY ────────────────────────────────────────
+    # ── Normal TEST SUMMARY (authoritative whenever present) ─────────
     -re {[\r\n]+==============================[\r\n]+ TEST SUMMARY[\r\n]+==============================[\r\n]+  PLANNED:\s+(\d+)[\r\n]+  EXECUTED:\s+(\d+)[\r\n]+  TIME_ELAPSED_MS:\s+(\d+)([\r\n]+  BOOT_TIME_MS:\s+\d+)?[\r\n]+  PASSED:\s+(\d+)[\r\n]+  FAILED:\s+(\d+)[\r\n]+==============================} {
         if {$expect_out(1,string) == $expect_out(2,string) && $expect_out(6,string) == 0} {
             set verdict "RESULT: PASS ($expect_out(1,string) tests, test=$expect_out(3,string) ms, failed=$expect_out(6,string))"
@@ -73,37 +53,69 @@ expect {
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
         exit $rc
     }
-    # ── Timeout ────────────────────────────────────────────────────
+    # ── Expected panic signature seen — record, keep waiting for summary.
+    #    Bare substring (not same-chunk anchored): robust to split writes.
+    #    Decides nothing by itself; only the eof/timeout arms below read it.
+    -re {exhausted PCP retry budget} {
+        set expected_panic_seen 1
+        set panic_seen 1
+        set remaining [expr {$deadline - [clock seconds]}]
+        if {$remaining <= 0} {
+            set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 0
+        }
+        set timeout $remaining
+        exp_continue
+    }
+    # ── Any other KERNEL PANIC: line — record, keep waiting for summary ─
+    -re {KERNEL PANIC:} {
+        set panic_seen 1
+        set remaining [expr {$deadline - [clock seconds]}]
+        if {$remaining <= 0} {
+            set verdict "RESULT: FAIL (unexpected kernel panic)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 1
+        }
+        set timeout $remaining
+        exp_continue
+    }
+    # ── Timeout (no summary and no QEMU exit within the deadline) ─────
     timeout {
-        set verdict "RESULT: TIMEOUT (no TEST SUMMARY within $timeout s)"
+        if {$expected_panic_seen} {
+            set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 0
+        } elseif {$panic_seen} {
+            set verdict "RESULT: FAIL (unexpected kernel panic)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 1
+        }
+        set verdict "RESULT: TIMEOUT (no TEST SUMMARY within $orig_timeout s)"
         puts $verdict; flush stdout
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
         exit 1
     }
-    # ── EOF (QEMU exited without summary) ──────────────────────────
+    # ── EOF (QEMU exited) — panic flags decide only without a summary ──
     eof {
+        if {$expected_panic_seen} {
+            set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 0
+        } elseif {$panic_seen} {
+            set verdict "RESULT: FAIL (unexpected kernel panic)"
+            puts $verdict; flush stdout
+            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+            exit 1
+        }
         set verdict "RESULT: QEMU_EXIT (no TEST SUMMARY -- kernel crashed/hung)"
         puts $verdict; flush stdout
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
-        exit 1
-    }
-}
-        set verdict "RESULT: TIMEOUT (no TEST SUMMARY within $timeout s)"
-        puts $verdict
-        flush stdout
-        set fh [open $verdict_log w]
-        puts $fh $verdict
-        close $fh
-        exit 1
-    }
-    eof {
-        # QEMU exited on its own (e.g. via qemu_debug_exit) but no TEST SUMMARY
-        set verdict "RESULT: QEMU_EXIT (no TEST SUMMARY -- kernel hanged or unexpected exit)"
-        puts $verdict
-        flush stdout
-        set fh [open $verdict_log w]
-        puts $fh $verdict
-        close $fh
         exit 1
     }
 }
