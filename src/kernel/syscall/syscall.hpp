@@ -109,7 +109,13 @@ enum class SyscallNumber : uint8_t {
     SET_AFFINITY = 77,   ///< set CPU affinity mask: arg0=pid (0=self), arg1=mask (issue #61)
     GET_AFFINITY = 78,   ///< get CPU affinity mask: arg0=pid (0=self), returns mask (issue #61)
     TIMES = 79,          ///< read a task's execution-time accounting: arg0=pid (0=self), arg1=user TaskTimes* out-param (issue #21)
-    MAX_SYSCALL = 80,
+    CLOCK_GETTIME = 80,  ///< POSIX clock_gettime (issue #76; handler lands there)
+    NANOSLEEP = 81,      ///< POSIX nanosleep via timer wheel (issue #76)
+    TIMER_CREATE = 82,   ///< POSIX timer_create (issue #76)
+    TIMERFD_CREATE = 83, ///< POSIX timerfd_create (issue #76)
+    ABI_VERSION = 84,    ///< query NEXIOS_ABI_MAJOR<<16|MINOR (issue #70)
+    TLS_SET = 85,        ///< set thread-local-storage base (issue #74)
+    MAX_SYSCALL = 86,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -369,7 +375,11 @@ class Syscall {
     static uint64_t sys_recv_fast(uint64_t, uint64_t, uint64_t, uint64_t,
                                   uint64_t *);
     static uint64_t sys_send_sync_fast(uint64_t, uint64_t, uint64_t, uint64_t,
-                                       uint64_t *);
+                                      uint64_t *);
+    static uint64_t sys_abi_version(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
 
     static constexpr SyscallHandler
         syscall_table_[static_cast<size_t>(SyscallNumber::MAX_SYSCALL)] = {
@@ -453,6 +463,12 @@ class Syscall {
             &Syscall::sys_set_affinity,
             &Syscall::sys_get_affinity,
             &Syscall::sys_times,
+            &Syscall::sys_unimplemented, // 80 CLOCK_GETTIME (issue #76)
+            &Syscall::sys_unimplemented, // 81 NANOSLEEP (issue #76)
+            &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
+            &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
+            &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
+            &Syscall::sys_unimplemented, // 85 TLS_SET (issue #74)
     };
 };
 

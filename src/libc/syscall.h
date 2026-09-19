@@ -231,12 +231,19 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_SET_AFFINITY    77
 #define SYS_GET_AFFINITY    78
 #define SYS_TIMES           79
+#define SYS_CLOCK_GETTIME   80
+#define SYS_NANOSLEEP       81
+#define SYS_TIMER_CREATE    82
+#define SYS_TIMERFD_CREATE  83
+#define SYS_ABI_VERSION     84
+#define SYS_TLS_SET         85
 
-// ABI v1.0 version macros (spec §3/§10, issue #69): SYS_MAX advances
-// to 86 only with #70 (80–85 must NOT appear in this header yet).
+// ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
+// kernel MAX_SYSCALL; 80–85 appended by #70 (handlers for 80–83 land
+// with #76, TLS_SET with #74 — table slots fail-closed until then).
 #define NEXIOS_ABI_MAJOR 1
 #define NEXIOS_ABI_MINOR 0
-#define SYS_MAX          80
+#define SYS_MAX          86
 
 #if defined(__x86_64__)
 static inline long sys_send_fast(unsigned long dest, unsigned long type,

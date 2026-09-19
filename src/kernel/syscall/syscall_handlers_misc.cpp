@@ -572,4 +572,24 @@ recover_klog:
     return written;
 }
 
+/// @brief Fail-closed placeholder for table slots whose handlers land
+/// later (80–83 with issue #76, 85 with issue #74). Linux ENOSYS = 38,
+/// inside the §2 errno window; never success (S2 wrong-stub-forges).
+uint64_t Syscall::sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *) {
+    return static_cast<uint64_t>(-38);
+}
+
+/// @brief ABI version query (issue #70, ABI v1.0): returns
+/// (NEXIOS_ABI_MAJOR << 16) | NEXIOS_ABI_MINOR, currently 0x10000.
+/// Lock-free, read-only, ignores all args/regs, always succeeds.
+/// NOTE: the value intentionally duplicates the NEXIOS_ABI_* macros in
+/// src/libc/syscall.h (kernel TUs lack -I src/libc so the header cannot
+/// be included here); the staged syscall_abi drift test asserts
+/// ABI_VERSION == macros, which is the binding anti-drift guard.
+uint64_t Syscall::sys_abi_version(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *) {
+    return (static_cast<uint64_t>(1) << 16) | static_cast<uint64_t>(0);
+}
+
 } // namespace kernel
