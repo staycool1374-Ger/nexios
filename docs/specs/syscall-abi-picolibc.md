@@ -1,15 +1,18 @@
 # Syscall ABI + picolibc Userspace (v0.5.0 design paper)
 
 **Doc ID:** NEX-SPEC-2026-09-19-001
-**Status:** DRAFT (planner review pending)
-**Milestone target:** v0.5.0 picolib + abi
+**Status:** APPROVED (v0.5.0 core iter-2; §13–§14 SDK extension iter-3, microkernel view)
+**Milestone target:** v0.5.0 picolib + abi (core); v1.0.x SDK (extension)
 **Issues:** #67 (trap/IRQ numbers), #68 (register conventions),
 #69 (syscall.h public header), #70 (versioned syscall table),
 #71 (POSIX stubs), #72 (build picolibc), #73 (Makefile integration),
-#74 (TLS on context switch), #75 (verify), #76 (POSIX time API)
+#74 (TLS on context switch), #75 (verify), #76 (POSIX time API),
+#171 (userspace SDK: auto-link stubs, Capability-API, crt0.o)
 **Related:** `docs/specs/syscall-fastpath.md`, `docs/specs/ipc-fastpath.md`,
 `src/kernel/syscall/syscall.hpp`, `src/libc/syscall.h`,
-`src/kernel/arch/hal/idt.hpp`, `src/kernel/arch/hal/timer.hpp`
+`src/kernel/arch/hal/idt.hpp`, `src/kernel/arch/hal/timer.hpp`,
+`src/kernel/cap/` (Capability-API contracts), `src/kernel/elf/elf.cpp`
+(`take_completed`, runelf path #77)
 
 ## 0. Corrections to the issue texts (binding)
 
@@ -175,6 +178,96 @@ ResourceTracker delta.
 | POSIX surface | ABI v1 + §5/#76 | additions only, same rule as §4 |
 | picolibc | `PICOLIBC_VERSION` pin | bump = deliberate commit + re-verify (#75) |
 | Docs | Doxyfile/README at release | same release procedure as v0.4.10 |
+| SDK layout / Cap-API / crt0 | 0.1 (§14) | internal versioning from 0.1; SDK minor tracks ABI minor |
+
+## 13. Userspace SDK — microkernel contract surface (#171, v1.0.x)
+
+#171 is the Phase 8 enabler: externalised drivers, VFS/block
+servers, and console/framebuffer (§8 tracks #47–#54) can only leave
+Ring 0 if driver authors get a stable, review-gated contract surface.
+Status of this section: **informative until #170 (Meson) lands** —
+v0.5.0 ships only the version macros + `ABI_VERSION` query (§14);
+the layout, generator, and API below bind at #171 implementation.
+Nothing here changes the v0.5.0 core (§1–§12, planner-approved).
+
+- **crt0.o entry contract (v0.1, informative):** fixed sequence —
+  (1) raw `ABI_VERSION` query (needs no TLS), (2) contract check vs
+  embedded SDK major (§14; mismatch ⇒ fail-closed `SYS_EXIT` +
+  serial diagnostic), (3) `TLS_SET` to the picolibc thread block
+  (picolibc owns the TLS-block layout; crt0 only points FS_BASE at
+  it — hence no chicken-and-egg: `TLS_SET` itself needs no live
+  TLS), (4) launch parse, (5) driver `main`, (6) clean `SYS_EXIT`
+  on return. `tls_base_ == 0` means unset (kernel loads nothing).
+  Per-arch, x86_64 first; aarch64 follows; riscv64 needs a new
+  crt0 stub (existing `crt0.S` covers x86_64 + aarch64 only).
+  `crt0.o` never maps kernel memory (audit gate).
+- **Auto-linked syscall stubs (informative):** generated from the
+  versioned table (§4) — the generator consumes `syscall.h`, so
+  stubs cannot drift from the kernel; fail-closed argument
+  validation at the boundary (§2 error convention). Generation
+  stays review-gated (SIL 3: a wrong stub forges syscalls).
+- **Capability-API (Ring-3 subset, v0.1, informative):** user headers
+  + linkable objects mirroring the in-kernel `cap/*` contracts.
+  Allow-list: grant / copy / revoke / mint-with-badge,
+  MMIO_MAP, IRQ_REGISTER/WAIT, IOMMU_MAP/UNMAP, endpoint
+  send/recv, FRAME_CREATE/MAP/UNMAP. Never exposed: raw
+  `create(phys/vector)` constructors, `CNode::install/remove`,
+  revoke cascades. `dst` in grant/copy/mint binds to the caller's
+  own CSpace or an endpoint-delegated CSpace only (no cross-task
+  writes by handle guessing — CODING_STYLE §12.5). Every op is
+  budget/table-full fail-closed (memory_budget_pages_ +
+  CONFIG_CAP_MAX_* bounds return codes, never ENSURE).
+- **Capability bootstrapping (binding rule for #171):** no loader
+  magic exists today (`finalize_loaded_task` takes no caps; tasks
+  start with null `cspace_`, `ensure_cspace()` on first use). The
+  rule: a new driver owns exactly what its creator granted/copied
+  into its CSpace before first dispatch (creator-driven seeding,
+  caller-relative handles). The loader passes args only
+  (argc/argv/envp); a versioned launch struct is reserved under
+  the crt0 contract (§14) but absent until #171. Exec drains
+  maps per `exec_into_current`; cspace-on-exec (drain vs inherit)
+  is decided at #171 design with an explicit rule.
+- **SDK layout (informative):** `/opt/nexios-sdk` is the install
+  staging populated from the `build/` sysroot at install time
+  (headers, `lds/user_task.ld`, `crt0.o`, stub archives) — produced
+  by the Meson build once #170 lands; v0.5.0 reserves names only.
+- **Acceptance (#171):** reference user-space driver end-to-end
+  (create → link → `runelf`; the `take_completed` handoff is #77's
+  deliverable) plus the "Writing a NexIOS driver" guide.
+
+## 14. Addendum — internal versioning from 0.1 (binding)
+
+Kernel ABI v1.0 (§4) versions the kernel↔user trap boundary. The
+SDK-internal surfaces version independently, starting at **0.1**:
+
+| Surface | Start | Header macro | Compat rule |
+|---|---|---|---|
+| SDK layout | 0.1 | `NEXIOS_SDK_MAJOR/MINOR` | SDK minor tracks kernel ABI minor; SDK 0.x = unstable (breaking change ⇒ minor bump, documented in the #171 guide) until 1.0 at the v1.0.x release |
+| Capability-API | 0.1 | `NEXIOS_CAP_API_MAJOR/MINOR` | same 0.x rule; subset-only growth (never remove a call) |
+| crt0 entry contract | 0.1 | `NEXIOS_CRT0_CONTRACT` (single uint) | launch-message layout change ⇒ contract bump; loader rejects mismatched contract fail-closed (clean EXIT + serial/dmesg, never silent; enforced by the crt0 self-check matrix below) |
+
+Enforcement (static link — no LD version scripts; drivers link
+static `crt0.o` + stub archives): the SDK major the driver was built
+against is embedded as a constant in `crt0.o`; the entry sequence
+(§13) compares it at run time. Mismatch matrix (checked by crt0
+self-check; the loader stays dumb):
+
+| ABI major | SDK major | Cap-API | crt0 contract | Verdict |
+|---|---|---|---|---|
+| match | match | ≤ driver | match | run |
+| match | match | newer minor (additive) | match | run |
+| match | newer major | any | any | fail-closed EXIT + serial |
+| differ | any | any | any | fail-closed EXIT + serial |
+| match | match | any | differ (layout) | fail-closed EXIT + serial |
+
+"0.x unstable" reconciled: 0.x allows *layout/contract* breaking
+bumps (minor); *API calls* are append-only from day one (never
+remove — nothing breaking to bump for). v0.5.0 ships the four macro
+families (`NEXIOS_ABI_*`, `NEXIOS_SDK_*`, `NEXIOS_CAP_API_*`,
+`NEXIOS_CRT0_CONTRACT`) + the `ABI_VERSION` handler (§4, same milestone); SDK
+artifacts land with #170/#171 in v1.0.x. The staged drift rule (§3)
+extends to the new macros: `syscall_abi` asserts their presence and
+values once §4 lands.
 
 ## 11. Test strategy (stub-first per PROMPT-dev.md)
 
