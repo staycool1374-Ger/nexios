@@ -538,24 +538,40 @@ void ElfLoader::run_load() {
         uint64_t num_pages = (vaddr_end - vaddr_base) / arch::PAGE_SIZE;
         while (page_in_seg_ < num_pages) {
             uint64_t vaddr = vaddr_base + page_in_seg_ * arch::PAGE_SIZE;
-            uint64_t file_off =
-                phdr->offset + page_in_seg_ * arch::PAGE_SIZE;
-            uint64_t in_file = 0;
-            uint64_t seg_file_end = phdr->offset + phdr->filesz;
-            if (file_off < seg_file_end) {
-                in_file = seg_file_end - file_off;
-                if (in_file > kChunkSize)
-                    in_file = kChunkSize;
+            // File offset of this page's first byte. Negative for the
+            // first page of a skewed segment (vaddr not page-aligned):
+            // ELF congruence guarantees offset%4K == vaddr%4K, but
+            // neither is 0 in general — copying file[offset..] to the
+            // page start (as before) misplaces every page by the skew
+            // (issue #75: .data/.fini_array landed 0xbd8 low, stdin FILE
+            // zeroed, exit() called address 0). Mirror the direct
+            // loader's offset_in_region (elf.cpp): file bytes go to
+            // page_start + (vaddr - vaddr_base).
+            int64_t rel = static_cast<int64_t>(vaddr) -
+                          static_cast<int64_t>(phdr->vaddr);
+            uint64_t dst_off = 0;
+            uint64_t src_off = 0;
+            if (rel < 0) {
+                dst_off = static_cast<uint64_t>(-rel);
+                src_off = 0;
+            } else {
+                src_off = static_cast<uint64_t>(rel);
             }
-            if (in_file > 0) {
-                int64_t r = vn->ops->read(*vn, chunk_buf_, in_file, file_off);
-                if (r != static_cast<int64_t>(in_file)) {
+            uint64_t copy_len = 0;
+            if (src_off < phdr->filesz) {
+                copy_len = phdr->filesz - src_off;
+                uint64_t room = kChunkSize - dst_off;
+                if (copy_len > room)
+                    copy_len = room;
+            }
+            if (copy_len > 0) {
+                int64_t r = vn->ops->read(*vn, chunk_buf_, copy_len,
+                                          phdr->offset + src_off);
+                if (r != static_cast<int64_t>(copy_len)) {
                     post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
                     cleanup_and_idle();
                     return;
                 }
-            } else {
-                __builtin_memset(chunk_buf_, 0, kChunkSize);
             }
             uint64_t phys = PMM::alloc_user_page();
             if (!phys) {
@@ -565,13 +581,11 @@ void ElfLoader::run_load() {
                 return;
             }
             VMM::map_page_in_pml4(vaddr, phys, true, pml4_);
-            __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
-                             chunk_buf_, in_file);
-            if (in_file < kChunkSize)
-                __builtin_memset(
-                    reinterpret_cast<void *>(arch::HHDM_OFFSET + phys +
-                                             in_file),
-                    0, kChunkSize - in_file);
+            uint8_t *page = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                        phys);
+            __builtin_memset(page, 0, kChunkSize);
+            if (copy_len > 0)
+                __builtin_memcpy(page + dst_off, chunk_buf_, copy_len);
 
             ++page_in_seg_;
             if (cancel_pending(gen)) {

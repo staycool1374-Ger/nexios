@@ -273,7 +273,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core",                436,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift
     {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
-    {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
+    {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)
+    {"libc_verify",          5,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only)
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)

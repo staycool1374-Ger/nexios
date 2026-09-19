@@ -263,6 +263,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
 	@printf '#!/bin/sh\n' > initrd_root/etc/rc
 	@printf '# Init script\n' >> initrd_root/etc/rc
 	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
+	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
 	@rm -rf initrd_root
@@ -304,18 +305,46 @@ $(FAT32_OBJ): $(FAT32_IMG)
 check-arch:
 	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
 
-$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+# Issue #75: the libc_verify ELF is embedded for the kernel test (the
+# initrd is not mounted in test boot, so the test cannot resolve it).
+# The image is stripped first: tmpfs caps files at 64 KiB and the
+# unstripped static binary is ~174 KiB (stripped ~32 KiB).
+# x86_64 only — other archs have no picolibc sysroot.
+ifeq ($(ARCH),x86_64)
+VERIFY_IMG_OBJ := build/initrd/libc_verify_img.o
+VERIFY_IMG_SRC := userspace/picolibc/libc_verify.c.elf
+VERIFY_IMG_STRIPPED := build/initrd/libc_verify_stripped.elf
+else
+VERIFY_IMG_OBJ :=
+VERIFY_IMG_SRC :=
+VERIFY_IMG_STRIPPED :=
+endif
+
+$(VERIFY_IMG_STRIPPED): $(VERIFY_IMG_SRC)
+	@mkdir -p $(dir $@)
+	cp $< $@
+	$(X86_64_TRIPLET)strip $@
+
+$(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
+	@mkdir -p $(dir $@)
+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_start=_binary_libc_verify_img_start \
+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_end=_binary_libc_verify_img_end \
+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
+	    $< $@
+
+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
 
-$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"

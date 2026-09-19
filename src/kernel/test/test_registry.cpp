@@ -49,6 +49,7 @@ void register_signals_tests();
 void register_process_tests();
 void register_elf_tests();
 void register_elf_loader_tests();
+void register_libc_verify_tests();
 void register_elf_shared_tests();
 void register_checked_ptr_tests();
 void register_fstab_tests();
@@ -368,6 +369,7 @@ static void run_tls_group() { register_tls_tests(); }
 static void run_process_lifecycle_group() { register_process_tests(); }
 static void run_process_elf_group() { register_elf_tests(); }
 static void run_elf_loader_group() { register_elf_loader_tests(); }
+static void run_libc_verify_group() { register_libc_verify_tests(); }
 static void run_elf_shared_group() { register_elf_shared_tests(); }
 static void run_process_signals_group() { register_signals_tests(); }
 static void run_process_rlimit_group() { register_rlimit_tests(); }
@@ -676,6 +678,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"process_lifecycle", []() { run_process_lifecycle_group(); }},
     {"process_elf", []() { run_process_elf_group(); }},
     {"elf_loader", []() { run_elf_loader_group(); }},
+    {"libc_verify", []() { run_libc_verify_group(); }},
     {"elf_shared", []() { run_elf_shared_group(); }},
     {"process_signals", []() { run_process_signals_group(); }},
     {"process_rlimit", []() { run_process_rlimit_group(); }},
@@ -1040,9 +1043,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_process_signals_group();
          run_process_rlimit_group();
          run_process_waitpid_group();
-         run_process_pml4_clone_group();
-         run_pt_merge_group();
-         run_process_secure_exec_group();
+          run_process_pml4_clone_group();
+          run_pt_merge_group();
+          run_process_secure_exec_group();
+          run_libc_verify_group();
      }},
     {"storage",
      []() {
