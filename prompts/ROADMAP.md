@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.4.10-dev | **Last Release:** v0.4.9 | **Completed milestones:** v0.2.x — v0.4.9 (see `ROADMAP_done.md`)
+**Build:** v0.4.10 | **Last Release:** v0.4.10 | **Completed milestones:** v0.2.x — v0.4.10 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -44,18 +44,8 @@
 - #66 [closed] Bounded-blocking audit.
 - #172 [closed] UX: cpuinfo/top commands.
 
-## v0.4.10 — Test-Coverage Closure, Areas < 80% (ACTIVE)
-- #126 [open] lib (57.0%).
-- #127 [open] kernel/memory (57.1%).
-- #130 [open] kernel/driver (63.6%).
-- #131 [open] top-level kernel/ (60.7%).
-- #133 [open] kernel/iommu (71.1%).
-- #134 [open] kernel/syscall (71.4%).
-- #135 [open] kernel/daemon (75.0%).
-- #136 [open] kernel/core (77.8%).
-- #137 [open] kernel/cap (78.0%).
-- #138 [open] kernel/net (53.6%).
-- #139 [open] kernel/boot (66.7%).
+## v0.4.10 — Test-Coverage Closure, Areas < 80% (RELEASED, see ROADMAP_done.md)
+- All 16 coverage issues #124–#139 closed, plus #182 (dead-code removal).
 
 ## v0.5.0 — picolib + abi (OPEN)
 - #67 [open] Document trap/IRQ numbers (syscall ABI).

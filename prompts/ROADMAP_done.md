@@ -1,5 +1,35 @@
 # Completed Roadmap Items
 
+## v0.4.10 — Test-Coverage Closure, Areas < 80% (RELEASED 2026-09-19)
+
+**Purpose:** Close every coverage area below 80% with real tests, fix the
+defects closure testing exposes, harden the harness and multi-arch link.
+Milestone v0.4.10 has 0 open issues.
+
+- **Coverage issues #124–#139 (all closed)** — vfs 45.6%, services/shell
+  40.3%, lib 57.0%, memory 57.1%, debug 8.3%, profiling 36.4%, driver
+  63.6%, top-level kernel 60.7%, sync 69.9%, iommu 71.1%, syscall 71.4%,
+  daemon 75.0%, core 77.8%, cap 78.0%, net 53.6%, boot 66.7%. Closure
+  sweep `71b441dc` (global_state, IrqThread gaps, net, daemon resurrect,
+  crc32, checked-ptr views, error_string, exception_name).
+- **Dead-code removal** (#182, `30510e43`) — unused `compiler_rt`
+  `__clzdi2`/`__ctzdi2` deleted (zero referrers, shrinks the denominator).
+- **Test-found defects fixed en route** — #175 (sys_fstat/stat/readdir
+  dropped results for kernel-task callers), #176 (sys_lseek silent
+  success on bogus whence), #177 (coverage-boot panic at the checked_ptr
+  fault-recovery boundary), #178 (net IP length-underflow OOB read),
+  #179 (ICMP ident/seq missing bswap16), #180 (hal page-table flake,
+  `cc8db703`), #181 (run-test.exp record-but-continue verdict,
+  `56d585b2`).
+- **Multi-arch link-green** (#184, `2a63176f`) — aarch64/riscv64:
+  `tlb_purge_context` fallbacks, EL0 fault handler, test stubs, riscv
+  markers, riscv-gated `compiler_rt` (SIL 3 approved).
+
+Gates at completion (2026-09-19): debug test-full **20/20, 1535/1535**,
+release test-full **18/18 + 2 skips (85/85)**, `selftest` **136/136**,
+`make build` Errors 0. SIL 3 APPROVED per issue (#184 after full audit;
+#182 dead-code audit).
+
 ## v0.4.9 — IRQ Blocking + Audit (RELEASED 2026-09-17)
 
 **Purpose:** Interrupt-driven storage I/O, verified bounded-blocking
