@@ -73,8 +73,12 @@ enum class InterruptVector : uint8_t {
     SIMD_ERROR = 19,      ///< SIMD floating-point error (#XM).
     VIRT_ERROR = 20,      ///< Virtualisation error (#VE).
     TIMER = 32,           ///< PIT/HPET timer interrupt.
+                             ///< §1 OWNER (ABI v1 frozen): scheduler tick;
+                             ///< never claimable (irq_delivery.cpp rejects).
     KEYBOARD = 33,        ///< PS/2 keyboard interrupt.
     SYSCALL = 0x80,       ///< System-call software interrupt.
+                             ///< §1 sole live gate (ABI v1 frozen);
+                             ///< claim rejects (irq_delivery.cpp).
 };
 
 /// @brief Interrupt Service Routine function signature.
@@ -130,6 +134,8 @@ extern "C" void isr_entry();
 #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
 
 /// @brief Named interrupt vectors for AArch64/RISC-V.
+/// §1 abstract enum frozen under ABI v1; any new assignment
+/// bumps the ABI minor (spec §10: versioning table).
 enum class InterruptVector : uint8_t {
     TIMER = 0,    ///< Timer interrupt.
     KEYBOARD = 1, ///< Keyboard interrupt.

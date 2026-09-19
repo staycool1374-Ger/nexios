@@ -130,6 +130,8 @@ constexpr __uint128_t syscall_fast_mask_from(const SyscallNumber *list,
 }
 
 /// @brief System call handler function signature.
+/// §2 binding: uint64_t return; success ≥ 0, failure (uint64_t)-errno;
+/// libc predicate in syscall.h. Reachable failures return codes only.
 using SyscallHandler = uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                     uint64_t arg3, uint64_t *regs);
 

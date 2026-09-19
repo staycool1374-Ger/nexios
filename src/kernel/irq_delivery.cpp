@@ -45,6 +45,8 @@
 namespace kernel {
 
 /// @brief Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47).
+///        §1 freeze (ABI v1): vector 32 = TIMER = IRQ0, 33–47 = IRQ1–15
+///        (`irq_line = vector - 32`); claim window starts at 33.
 ///        The timer vector (32) is reserved for the scheduler and must never
 ///        be handed to a user task — a user task claiming it would steal every
 ///        scheduler tick through the delivery hook.
@@ -104,22 +106,23 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
     // uniprocessor an IrqGuard is sufficient to make the find->claim window
     // un-interleavable (same discipline as drain_zombie_list).
     arch::IrqGuard irq_guard{};
-    // Vector window (fail closed): PIC lines (33–47) and MSI-X vectors
-    // (48–255), issue #10.
+    // Vector window (fail closed): PIC lines (33–47 = IRQ1–15) and MSI-X
+    // vectors (48–255 minus §1 reservations), issue #10.
     if (vector < IRQ_VECTOR_MIN)
         return -1;
     if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
-        return -1; // 0x80 — software syscall vector, never an IRQ source
+        return -1; // 0x80 — §1 sole live gate, never an IRQ source
     if (vector > MSIX_VECTOR_MAX)
         return -1;
-    // Timer vector must never be claimed.
+    // Timer vector must never be claimed (§1 scheduler tick, vector 32).
     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
         return -1;
 #if defined(CONFIG_ARCH_X86_64)
-    // Kernel-reserved vectors inside the MSI-X window (issue #10): the xAPIC
-    // timer (64) drives the scheduler tick and 0xFF is the APIC spurious
-    // vector — a user slot must never claim either (it would swallow the
-    // scheduler tick / mis-route a spurious delivery).
+    // Kernel-reserved vectors inside the MSI-X window (issue #10, §1
+    // freeze): the xAPIC timer (APIC_TIMER_VECTOR = 0xE0 since #26; 64 is
+    // ordinary/claimable) drives the scheduler tick and 0xFF is the APIC
+    // spurious vector — a user slot must never claim either (it would
+    // swallow the scheduler tick / mis-route a spurious delivery).
     if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
         vector == 0xFF) // arch::APIC::SPURIOUS_VECTOR (private member)
         return -1;

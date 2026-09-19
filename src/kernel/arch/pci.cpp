@@ -522,7 +522,10 @@ PciDeviceInfo pci_read_device_info(PciBdf bdf) {
 
 // --- MSI vector allocator ---
 // Vectors available for MSI/MSI-X: 48-127, 129-255.
-// (0-31 = CPU exceptions, 32-47 = PIC IRQs, 0x80 = syscall)
+// §1 freeze (ABI v1, issue #67): keep this table in sync —
+// (0-31 = CPU exceptions, 32-47 = PIC IRQs, 0x80 = syscall,
+//  0xE0 = APIC timer, 0xFF = spurious; 0xEC/0xEF/0x73/0x71/0x72
+//  comment-reserved only, allocator does not skip them).
 static bool g_vector_used[256] = {};
 static bool g_vector_init = false;
 
@@ -536,12 +539,15 @@ static void init_vector_alloc() {
     g_vector_used[0x80] = true;  // SYSCALL
     // xAPIC scheduler timer (APIC::APIC_TIMER_VECTOR; 0xE0 since #26 —
     // keep in sync, this TU stays arch-neutral so the value is literal).
+    // §1 frozen; 64 is ordinary/claimable since #26.
     g_vector_used[0xE0] = true;
     g_vector_used[0xFF] = true;  // APIC spurious interrupt vector
     g_vector_init = true;
 }
 
 uint8_t pci_alloc_vector() {
+    // §1 NOTE: 0xEC/0xEF/0x73/0x71/0x72 are comment-reserved only;
+    // the allocator skips 0x80 + g_vector_used[] (see init above).
     init_vector_alloc();
     for (uint16_t v = 48; v < 256; ++v) {
         if (v == 0x80)

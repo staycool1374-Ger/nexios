@@ -126,16 +126,19 @@ public:
 
     // Issue #26: moved 64 -> 0xE0 so the tick sits above every TPR class
     // (class 0xE > TPR_CLASS_MAX 0xD0 — unmaskable, INV-TPR5).
+    // §1 frozen (ABI v1, issue #67); allocator + claim reject.
     static constexpr uint8_t APIC_TIMER_VECTOR = 0xE0;
     /// @brief Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI
     ///        telling the target CPU to drain its wake mailbox and arm its
     ///        reschedule flag.  Free (timer 0xE0, syscall 0x80, self-test
-    ///        0xEF, spurious 0xFF).
+    ///        0xEF, spurious 0xFF).  §1 frozen (ABI v1, issue #67).
     static constexpr uint8_t SCHED_VECTOR = 0xEC;
     /// @brief Batched TLB-shootdown delivery vector (issue #159): a FIXED
     ///        IPI telling the target CPU to apply its shootdown batch
     ///        slot.  Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer,
     ///        0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious).
+    ///        §1 frozen (ABI v1, issue #67); 0x71 TPR probe / 0x72 batch
+    ///        probe are test-only (test_ipi_batching/test_apic_tpr).
     static constexpr uint8_t SHOOTDOWN_BATCH_VECTOR = 0x73;
 
 private:

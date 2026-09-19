@@ -77,11 +77,17 @@ struct rlimit {
 
 static inline long __syscall5(long num, long a0, long a1, long a2, long a3) {
     long ret;
-    // ABI contract (single source of truth):
+    // ABI contract (single source of truth, §2 binding):
     //   x86_64: number in rax, args in rbx/rcx/rdx/rsi (int $0x80)
-    //   aarch64: number in x8, args in x0-x3 (Linux AArch64 convention)
+    //   aarch64: number in x8, args in x0-x3 (NexIOS: x8=num, x0-x3=args)
     //   riscv64: number in a7, args in a0-a3 (ecall)
     // The arch syscall entry stubs must match these register choices.
+    // §2 ERROR (binding): uint64_t ret; (long)ret < 0 &&
+    // (unsigned long)ret > -4096UL ⇒ errno = -(long)ret, return -1;
+    // -4095 maps to errno, -4097 is valid success; no handler returns
+    // a kernel pointer; reachable errnos per CODING_STYLE §5 (never
+    // ENSURE). FAST rsi/rdi/r8-r11 layout (ipc-fastpath §3.2) is a
+    // separate path and out of scope here.
 #if defined(__x86_64__)
     asm volatile(
         "int $0x80"

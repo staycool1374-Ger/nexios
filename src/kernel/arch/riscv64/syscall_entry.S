@@ -153,6 +153,13 @@ syscall_entry:
     call handle_kernel_exception
 
 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
+    # §2 CONTRACT GAP (issues #67/#68 verification, ABI v1): this reads
+    # the number from OFF_A0 (user a0) and args from a1-a3, but
+    # src/libc/syscall.h specifies a7=num, a0-a3=args. riscv64 has no
+    # production boot path (issue #29), so this stub is unexecuted
+    # scaffolding — DO NOT "fix" the mapping without a runtime check;
+    # tracked separately. The TRACE ecalls above also clobber a0/a7
+    # before the GPR save for the same reason.
     ld a0, OFF_A0(sp)          # syscall number from a0
     ld a1, OFF_A1(sp)          # arg1
     ld a2, OFF_A2(sp)          # arg2

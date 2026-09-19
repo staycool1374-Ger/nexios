@@ -187,6 +187,8 @@ isr_common:
     ; its voluntary arm and only a depth-1 epilogue could otherwise apply
     ; it — the hlt-loop never reaches one, so without this the arm strands
     ; (RMS sees the pending arm and returns early every tick: total stall).
+    ; §1 freeze (issue #67): 0xE0 is THE scheduler tick (64 ordinary
+    ; since #26); nested-timer apply rule unchanged.
     cmp rax, 0xE0
     jne .restore
 .apply_allowed:

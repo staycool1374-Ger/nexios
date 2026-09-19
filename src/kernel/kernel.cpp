@@ -1754,6 +1754,8 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     }
 #endif
 
+    // §1 sole live gate → §2 bridge: regs[0]=rax number,
+    // regs[1..4]=rbx/rcx/rdx/rsi args (issues #67/#68, ABI v1 frozen).
     if (vector == 0x80) {
         regs[0] =
             syscall_handler(regs[0], regs[1], regs[2], regs[3], regs[4], regs);
@@ -1836,6 +1838,9 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 #endif
 }
 
+/// §2 C bridge (issues #67/#68, ABI v1 frozen): arch entry stubs map
+/// user regs to (number, arg0..arg3, regs); return axiom per syscall.h
+/// (§2 error convention: uint64_t two's-complement -errno on failure).
 extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
                                     uint64_t arg1, uint64_t arg2, uint64_t arg3,
                                     uint64_t *regs) {

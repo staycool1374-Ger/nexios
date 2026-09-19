@@ -7,6 +7,8 @@
 .extern debug_write_hex
 
 // AArch64 syscall entry via SVC #0 from EL0
+// §2 pinned (issues #67/#68, ABI v1 frozen): x8=num, x0-x3=args,
+// x0=ret; matches __syscall5. No instruction change under this plan.
 // On entry (user ABI, see src/libc/syscall.h __syscall5):
 //   x8 = syscall number
 //   x0-x3 = arguments
