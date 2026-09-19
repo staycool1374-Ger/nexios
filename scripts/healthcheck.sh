@@ -93,6 +93,15 @@ else
     echo -e "  [${YELLOW}INFO${REG}] Renode not found (install with: brew install renode/tap/renode)"
 fi
 
+# 5b. picolibc build tools (warn-only, issue #72 — never blocks the gate).
+for pbin in meson ninja; do
+    if command -v "$pbin" >/dev/null 2>&1; then
+        echo -e "  [${GREEN}OK${REG}] $pbin"
+    else
+        echo -e "  [${YELLOW}INFO${REG}] $pbin not found (picolibc only: python3 -m pip install --user meson ninja)"
+    fi
+done
+
 # 6. Workspace integrity
 echo -e "\nEvaluating workspace context..."
 if [ -d "$HOME/jarvis" ]; then

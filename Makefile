@@ -1243,6 +1243,21 @@ test: $(KERNEL)
 	@echo "Trigger interactive tests at terminal context via 'selftest'."
 
 # ------------------------------------------------------------------------------
+# picolibc userspace C library (issue #72; link rules arrive with #73)
+# ------------------------------------------------------------------------------
+# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
+PICOLIBC_VERSION ?= 1.8.12
+PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
+PICOLIBC_SYSROOT := $(CURDIR)/build/picolibc/sysroot
+
+picolibc:
+	@printf '  %-7s %s\n' 'PICOLIBC' 'v$(PICOLIBC_VERSION) x86_64-elf static'
+	PICOLIBC_VERSION=$(PICOLIBC_VERSION) sh tools/build-picolibc.sh
+
+picolibc-clean:
+	rm -rf build/picolibc
+
+# ------------------------------------------------------------------------------
 # Utility targets
 # ------------------------------------------------------------------------------
 symbols: $(KERNEL)
