@@ -53,6 +53,15 @@
       "environment": {
         "OBSIDIAN_VAULT_PATH": "/Users/arnold/vaults/jarvis"
       }
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }

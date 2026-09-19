@@ -95,12 +95,13 @@ If the branch does not match the intended role, do not proceed.
 - Current work state (objective, completed phases, next move): see `prompts/STATE.md`
 
 ## GitHub Issue Tracking (source of truth for bugs & features)
-- Repo: `staycool1374-Ger/nexios` (use `gh` CLI; `export PATH="/opt/homebrew/bin:$PATH"` if `gh` is not found).
+- Repo: `staycool1374-Ger/nexios` (use GitHub MCP first; `gh` CLI fallback; `export PATH="/opt/homebrew/bin:$PATH"` if `gh` is not found).
+- **GitHub MCP (`opencode.json` `mcp.github`, remote `https://api.githubcopilot.com/mcp/`):** prefer MCP tools over `gh` CLI when reachable. Always pass `owner=staycool1374-Ger, repo=nexios` explicitly (MCP has no default repo). Requires `GITHUB_PERSONAL_ACCESS_TOKEN`; on auth/unreachable, fall back to `gh` CLI — never block on MCP. Use `search_*` for targeted queries, `list_*` for broad pagination (5-10/page, minimal `fields`, omit `body`).
 - **Open bugs and feature work are tracked as GitHub Issues — NOT in prompts/BUGS.md.**
   prompts/BUGS.md is a historical archive of resolved bugs only; never add new open items to it.
 - **Information acquisition (developer, before planning/implementing):**
-  - List open work: `gh issue list -R staycool1374-Ger/nexios --state open`
-  - Read the full issue before working on it: `gh issue view <n> -R staycool1374-Ger/nexios --comments`
+  - List open work: MCP `github_list_issues` (`owner`, `repo`, `state: OPEN`) or fallback `gh issue list -R staycool1374-Ger/nexios --state open`
+  - Read the full issue before working on it: MCP `github_issue_read` (`get` + `get_comments`) or fallback `gh issue view <n> -R staycool1374-Ger/nexios --comments`
   - Check severity/subsystem labels to prioritize (`severity:S1` > `severity:S2` > `severity:S3`; critical S1/S2 bugs block feature work).
 - **Keeping state consistent (developer, during/after work):**
   - When starting an issue, assign yourself and comment that work has begun (with branch name).
@@ -304,9 +305,9 @@ Rules (mandatory retrieval — no self-exemption):
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
 ### MCP Protocol & Hierarchy (see `mcp.json`, `MCP-CONFIG.md`, `SETUP-GRAPHIFY.md`)
-- Servers: `graphify` (`query_graph`, `get_node`, `get_neighbors`, `shortest_path`, `get_community`, `god_nodes`, `graph_stats`) and `obsidian` (`obsidian_read_note`, `obsidian_create_note`, `obsidian_edit_note`, `obsidian_search_vault`).
+- Servers: `graphify` (`query_graph`, `get_node`, `get_neighbors`, `shortest_path`, `get_community`, `god_nodes`, `graph_stats`) and `obsidian` (`obsidian_read_note`, `obsidian_create_note`, `obsidian_edit_note`, `obsidian_search_vault`) and `github` (remote `https://api.githubcopilot.com/mcp/`, `github_issue_read/write`, `github_list/search_issues`, `github_pull_request_read`, `github_list/search_pull_requests`, `github_get_file_contents`, `repo://{owner}/{repo}/...` content templates).
 - Canonical names: `mcp__graphify__query` → `query_graph`, `mcp__graphify__path` → `shortest_path`, `mcp__graphify__explain` → `get_node`+`get_neighbors`, `mcp__obsidian__read_note` → `obsidian_read_note` (full map: `MCP-CONFIG.md` §4).
-- Hierarchy: MCP tools first when configured; raw CLI is the fallback when MCP is unreachable. `graphify update .` is CLI-only — no MCP update tool exists.
+- Hierarchy: MCP tools first when configured; raw CLI is the fallback when MCP is unreachable (`graphify` CLI; `gh` CLI for GitHub). `graphify update .` is CLI-only — no MCP update tool exists. PR reviews via pending-review flow (`pull_request_review_write` create → `add_comment_to_pending_review` → `submit_pending`).
 - Vault Integrity: Obsidian is authoritative for specs/roadmaps/test cases. MCP writes must preserve YAML frontmatter, `[[wikilinks]]`, and folder structure.
 - Vault Precaution Read: before implementing in a subsystem, search the vault for its specs and `audits/done/*` reports — that is where precautions live (trust-boundary contracts, prior findings, test traps). A subsystem with vault coverage implemented without a vault read is a process violation.
 - Context Minimization: call `mcp__graphify__query` or `mcp__graphify__explain` before touching high-level code or specs; never ingest raw spec files wholesale.

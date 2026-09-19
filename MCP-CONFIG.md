@@ -1,4 +1,4 @@
-# MCP-CONFIG.md — MCP Server Specification (graphify + Obsidian)
+# MCP-CONFIG.md — MCP Server Specification (graphify + Obsidian + GitHub)
 
 Companion to `mcp.json` (portable `mcpServers` config) and
 `SETUP-GRAPHIFY.md` (installation procedure).
@@ -11,10 +11,13 @@ verified against `graphify-out/graph.json` 2026-09-12.
 ```
 Agent ──MCP(stdio)──▶ graphify serve ──▶ graphify-out/graph.json
       ──MCP(stdio)──▶ obsidian-mcp ──▶ $OBSIDIAN_VAULT_PATH (*.md)
+      ──MCP(remote)─▶ github (https://api.githubcopilot.com/mcp/) ──▶ staycool1374-Ger/nexios
 ```
 
-Two local stdio servers, one per concern: graph queries (read-only
-index) and vault CRUD (authoritative notes). No network listeners.
+Three servers, one per concern: graph queries (read-only
+index), vault CRUD (authoritative notes), and GitHub (issues/PRs/repos).
+Local stdio servers use no network listeners; `github` is remote and
+requires `GITHUB_PERSONAL_ACCESS_TOKEN`.
 
 ## 2. Servers
 
@@ -22,6 +25,7 @@ index) and vault CRUD (authoritative notes). No network listeners.
 |---|---|---|---|
 | `graphify` | stdio | `python3 -m graphify.serve <graph.json>` | `graphify-out/graph.json` |
 | `obsidian` | stdio | `npx -y obsidian-mcp@2 serve --vault jarvis=<vault>` | `$OBSIDIAN_VAULT_PATH` |
+| `github` | remote | `https://api.githubcopilot.com/mcp/` (`opencode.json` `mcp.github`, `Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}`) | `staycool1374-Ger/nexios` |
 
 `graphify` prerequisites: `pip install "graphifyy[mcp]"` **then pin
 `mcp==1.8.0`** — graphifyy 0.9.6 `serve.py` imports `AnyUrl` from
@@ -70,12 +74,21 @@ Agent-facing names (used in `AGENTS.md` / `PROMPT-*.md`) → real tools:
 Other verified graphify tools: `get_community`, `god_nodes`,
 `graph_stats`, `list_prs`, `get_pr_impact`, `triage_prs`.
 
+| Canonical | Server tool | Notes |
+|---|---|---|
+| `mcp__github__issue_read` | `github_issue_read` (`get`/`get_comments`/`get_labels`) | pass `owner`+`repo` explicitly |
+| `mcp__github__issue_write` | `github_issue_write` (`create`/`update`) + `github_add_issue_comment` | `closes #<n>` handling via body/commit |
+| `mcp__github__issue_search` | `github_search_issues` / `github_list_issues` | `search_*` targeted, `list_*` broad pagination |
+| `mcp__github__pr` | `github_pull_request_read` (`get`/`get_diff`/`get_files`/`get_check_runs`/`get_review_comments`) + `github_list/search_pull_requests` | PR review via pending-review flow |
+| `mcp__github__repo_content` | `github_get_file_contents` / `repo://{owner}/{repo}/...` templates | branch/commit/PR/tag content without clone |
+
 ## 5. Hierarchy & Fallback
 
 1. MCP tools first when servers are configured and reachable.
-2. Raw CLI fallback (`graphify query/path/explain/update`) when MCP
+2. Raw CLI fallback (`graphify query/path/explain/update`; `gh` CLI for GitHub) when MCP
    is unreachable — never block on MCP.
 3. `graphify update .` is CLI-only; no MCP update tool exists.
+4. GitHub: `GITHUB_PERSONAL_ACCESS_TOKEN` required for MCP; on auth/unreachable use `gh` CLI (`export PATH="/opt/homebrew/bin:$PATH"` if needed).
 
 ## 6. Verification Protocol
 
@@ -105,3 +118,7 @@ Agent-level checks: `mcp__graphify__query("scheduler")` returns
   absolute `--vault` paths; max ten vaults per server.
 - Dirty `graphify-out/` files after updates are expected; never a
   reason to skip graph/MCP usage.
+- `github` MCP has no default repo — every call needs
+  `owner=staycool1374-Ger, repo=nexios` explicitly (unlike `gh -R`).
+- `github` `search_*` vs `list_*`: `search_*` for targeted keyword queries,
+  `list_*` for broad pagination (5-10/page, minimal `fields`, omit `body`).

@@ -1718,11 +1718,15 @@
   "1716": "register_checked_ptr_tests",
   "1717": "concepts.hpp",
   "1718": "register_config_checks_tests",
+  "1719": "AuditEntry",
+  "1720": "AUDIT REPORT 20260918-155728",
+  "1721": "AUDIT REPORT 2026-09-18T135236Z",
   "1722": "test_lib.cpp",
   "1723": "register_memory_integrity_tests",
   "1724": "register_pml4_sync_tests",
   "1725": "register_pmm_tests",
   "1726": "test_procfs_ops.cpp",
+  "1727": "atomic_exchange",
   "1728": "admission__selftest_8cpp.js",
   "1729": "admission__selftest_8hpp.js",
   "1730": "classkernel_1_1time_1_1_timer_wheel.js",
@@ -1745,5 +1749,11 @@
   "1747": "test__task__metering_8cpp.js",
   "1748": "test__timer__wheel_8cpp.js",
   "1749": "timer__wheel_8hpp.js",
-  "1750": "admission_selftest.hpp"
+  "1750": "admission_selftest.hpp",
+  "1751": "admission_boot_selftest",
+  "1752": "register_config_checks_tests",
+  "1753": "register_dmesg_tests",
+  "1754": "navtreeindex40.js",
+  "1755": "concepts.hpp",
+  "1756": "types.h"
 }
