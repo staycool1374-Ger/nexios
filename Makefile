@@ -412,6 +412,12 @@ $(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
 # ------------------------------------------------------------------------------
 # Shared build rules (pattern rules, libc, userspace, initrd)
 # ------------------------------------------------------------------------------
+# picolibc pin (issue #72): defined BEFORE the include — mk/rules.mk
+# static-pattern prerequisites expand at parse time.
+# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
+PICOLIBC_VERSION ?= 1.8.12
+PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
+PICOLIBC_SYSROOT := build/picolibc/sysroot
 include mk/rules.mk
 
 # ------------------------------------------------------------------------------
@@ -1243,12 +1249,13 @@ test: $(KERNEL)
 	@echo "Trigger interactive tests at terminal context via 'selftest'."
 
 # ------------------------------------------------------------------------------
-# picolibc userspace C library (issue #72; link rules arrive with #73)
+# picolibc userspace C library (issue #72 vars above; link rules arrive
+# with #73 in mk/rules.mk)
 # ------------------------------------------------------------------------------
-# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
-PICOLIBC_VERSION ?= 1.8.12
-PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
-PICOLIBC_SYSROOT := $(CURDIR)/build/picolibc/sysroot
+# File targets for the order-only sysroot edge (#73 consumes these;
+# phony `picolibc` below stays a manual alias, never a prerequisite).
+$(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a: $(PICOLIBC_TARBALL)
+	PICOLIBC_VERSION=$(PICOLIBC_VERSION) sh tools/build-picolibc.sh
 
 picolibc:
 	@printf '  %-7s %s\n' 'PICOLIBC' 'v$(PICOLIBC_VERSION) x86_64-elf static'

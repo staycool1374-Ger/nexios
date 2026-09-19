@@ -117,8 +117,18 @@ LIBC_OBJ       := $(patsubst src/%.c,build/%.o,$(filter %.c,$(LIBC_SRC))) \
                   $(patsubst src/%.S,build/%.o,$(filter %.S,$(LIBC_SRC)))
 LIBC_A         := build/libc/libc.a
 
-USERSPACE_SRC  := $(shell find userspace -name '*.S' -o -name '*.c' 2>/dev/null)
+USERSPACE_SRC  := $(filter-out userspace/picolibc/%,$(shell find userspace -name '*.S' -o -name '*.c' 2>/dev/null))
 USERSPACE_ELF  := $(USERSPACE_SRC:%=%.elf)
+
+# picolibc-based user programs (issue #73): separate directory-anchored
+# pattern so the generic userspace/%.c.elf rule above can never hijack
+# them (silent wrong-libc binary). Built on demand, not in USERSPACE_ELF.
+PICOLIBC_SRC   := $(filter-out %/nexios_glue.c,$(shell find userspace/picolibc -name '*.c' 2>/dev/null))
+PICOLIBC_ELF   := $(PICOLIBC_SRC:%=%.elf)
+# NexIOS libos glue (kernel-ABI _exit for picolibc's exit.c). Compiled
+# with src/libc headers (NexIOS-specific); hosted programs see the
+# sysroot headers only.
+PICOLIBC_GLUE  := userspace/picolibc/nexios_glue.o
 
 INITRD_CPIO    := build/initrd.cpio
 INITRD_OBJ     := build/initrd/initrd_cpio.o
@@ -222,6 +232,20 @@ userspace/%.S.elf: userspace/%.S
 userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
 	@printf '  %-7s %s\n' 'CC' '$@'
 	$(CC) $(CCFLAGS) -I src/libc -o $@ build/libc/crt0.o $< -L build/libc -lc
+
+# picolibc-based programs (issue #73): static pattern rule (beats the
+# generic implicit rule deterministically — first-match-wins applies).
+# In-tree crt0.o first object, single _start (picocrt never linked;
+# -nostartfiles via CCFLAGS -nostdlib, no specs, no toolchain crt
+# files). Order-only sysroot edge: readiness gates the link but
+# sysroot mtime never forces an ELF rebuild.
+$(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_GLUE) build/libc/picolib_stubs.o | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
+	@printf '  %-7s %s\n' 'CC' '$@'
+	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
+
+$(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c
+	@printf '  %-7s %s\n' 'CC' '$@'
+	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -I src/libc -c -o $@ $<
 
 # ------------------------------------------------------------------------------
 # Initrd
