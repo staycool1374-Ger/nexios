@@ -254,6 +254,13 @@ inline void write_ttbr0_el1(uint64_t v) {
     asm volatile("msr ttbr0_el1, %0" : : "r"(v) : "memory");
     isb();
 }
+/// @brief Write TPIDR_EL0 (user thread-local-storage base, issue #74).
+/// @param[in] v User VA of the thread block (0 clears). Trailing isb so the
+/// write is observed before ERET to EL0. Never touches EL1 state.
+inline void write_tpidr_el0(uint64_t v) {
+    asm volatile("msr tpidr_el0, %0" : : "r"(v) : "memory");
+    isb();
+}
 /// @brief Write TTBR1_EL1 (kernel page table base).
 /// @param[in] v Physical address of the kernel page table.
 inline void write_ttbr1_el1(uint64_t v) {

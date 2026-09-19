@@ -286,6 +286,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
+    {"tls",                 12,   12,      12     },  // TLS_SET + publish/apply (issue #74)
 };
 
 static constexpr size_t k_expected_count_size =

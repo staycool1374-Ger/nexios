@@ -27,6 +27,7 @@ extern scheduler_load_rsp_from
 ; (linker aliases in linker_x86_64.ld); isr_common below uses gs:0x20 /
 ; gs:0x28 for them, never [rel] (INV-PC2).
 extern scheduler_load_cr3_from
+extern scheduler_load_tls_from ; Issue #74: TLS base publish slot
 extern scheduler_load_kstack_base
 extern scheduler_load_kstack_top
 extern scheduler_switch_generation
@@ -423,6 +424,26 @@ isr_common:
     mov cr3, rax
     lea rax, [rel scheduler_load_cr3_from]
     mov qword [rax + r11*8], 0
+    ; Issue #74: apply the published TLS base (FS_BASE only — per-CPU GS
+    ; routing is untouched). Consume unconditionally; WRMSR only if nonzero.
+    ; rax/rcx/rdx are scratch-safe (.restore pops all GPRs below); r11 is
+    ; the read-only CPU index; no calls.
+    lea rax, [rel scheduler_load_tls_from]
+    mov rax, [rax + r11*8]
+    test rax, rax
+    jz .tls_done
+    mov rcx, rax
+    lea rax, [rel scheduler_load_tls_from]
+    mov qword [rax + r11*8], 0
+    mov rdx, rcx
+    shr rdx, 32
+    mov eax, ecx
+    mov ecx, 0xC0000100 ; MSR_FS_BASE
+    wrmsr
+    jmp .restore
+.tls_done:
+    lea rax, [rel scheduler_load_tls_from]
+    mov qword [rax + r11*8], 0
     jmp .restore
 
 .abort_switch:
@@ -433,6 +454,8 @@ isr_common:
     lea rax, [rel scheduler_save_rsp_to]
     mov qword [rax + r11*8], 0
     lea rax, [rel scheduler_load_cr3_from]
+    mov qword [rax + r11*8], 0
+    lea rax, [rel scheduler_load_tls_from]
     mov qword [rax + r11*8], 0
     lea rax, [rel scheduler_next_task_id]
     mov qword [rax + r11*8], -1

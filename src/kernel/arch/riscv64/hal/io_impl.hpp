@@ -192,6 +192,14 @@ inline void write_cr3(uint64_t v) {
 inline void write_cr3_notlbi(uint64_t v) {
     write_satp((8ULL << 60) | v);
 }
+/// @brief Write the tp register (user thread-local-storage base, issue #74).
+/// @param v User VA of the thread block (0 clears). tp is ABI-reserved so the
+/// compiler never allocates it; the write is exact. Trap-return consumes the
+/// OFF_TP save area instead (syscall_entry.S), this helper covers task-context
+/// live-apply (TLS_SET on the running task) and exec reset.
+inline void write_tp(uint64_t v) {
+    asm volatile("mv tp, %0" : : "r"(v) : "memory");
+}
 
 /// @brief Stub read_cr0 (no x86 CR0 on RISC-V).
 /// @return Always 0.

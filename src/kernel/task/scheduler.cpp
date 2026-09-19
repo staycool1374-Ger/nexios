@@ -27,6 +27,7 @@
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/msr.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -604,6 +605,8 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_load_cr3_from[cpu], (uint64_t)0,
                      __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_load_tls_from[cpu], (uint64_t)0,
+                     __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_next_task_id[cpu], UINT64_MAX,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
@@ -744,6 +747,33 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
     // Issue #23: legacy warn-only wrapper — denial is logged inside
     // set_affinity_err and swallowed here; fallible callers use _err.
     (void)set_affinity_err(task, mask);
+}
+
+errors::SchedulerError
+Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept {
+    // Issue #74: IrqGuard spans the gate + live write (re-audit S3) — a
+    // preemption between is_current and the register write would load a
+    // stale base. The spinlock covers the store only, never a reschedule.
+    arch::IrqGuard irq_guard{};
+    {
+        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        TaskControlBlock *cur = current_task();
+        if (!cur)
+            return errors::SCHED_ERR_NO_CURRENT;
+        (void)cur;
+        task.tls_base_ = base;
+    }
+    if (&task == Scheduler::current_task()) {
+        // Target is the running task: apply now (§13 crt0 sequence).
+#if defined(CONFIG_ARCH_X86_64)
+        arch::wrmsr(arch::MSR_FS_BASE, base);
+#elif defined(CONFIG_ARCH_AARCH64)
+        arch::write_tpidr_el0(base);
+#elif defined(CONFIG_ARCH_RISCV64)
+        arch::write_tp(base);
+#endif
+    }
+    return errors::SCHED_ERR_OK;
 }
 
 // ---------------------------------------------------------------------------
@@ -945,6 +975,8 @@ void Scheduler::cancel_pending_switch() noexcept {
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX,
                      __ATOMIC_RELEASE);
@@ -1800,6 +1832,7 @@ void Scheduler::remove_task(TaskControlBlock &task) {
     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // NOTE: ResourceTracker::track_task_remove() is intentionally NOT called
     // here.  Task teardown has two styles (operator delete, and the reaper's
@@ -1825,6 +1858,7 @@ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     return true;
 }
@@ -1982,6 +2016,7 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
         H2_REC(H2_EV_CLR_SET, armed, 0, 0);
         __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                          __ATOMIC_RELEASE);
         restore_preempted_current(old, armed);
@@ -2011,6 +2046,7 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
     H2_REC(H2_EV_CLR_SET, armed, 0, 0);
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
     restore_preempted_current(old, armed);
@@ -3605,6 +3641,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 #endif
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                          __ATOMIC_RELEASE);
+        // Issue #74: publish the TLS base alongside CR3 (0 for unset;
+        // kernel/harness tasks publish via the else branch below).
+        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
+                         next.is_user_ ? next.tls_base_ : 0, __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         {
             auto *c = Scheduler::current_task();
@@ -3620,6 +3660,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 #endif
     } else {
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+                         __ATOMIC_RELEASE);
+        // Issue #74: kernel/harness targets never carry TLS (apply loads
+        // nothing); publish 0 so no stale user base survives.
+        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
                          __ATOMIC_RELEASE);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         {
@@ -3809,6 +3853,8 @@ void Scheduler::rate_monotonic_schedule() noexcept {
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
                          __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
+                         __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
                          __ATOMIC_RELEASE);
         restore_preempted_current(current, armed);
@@ -3986,8 +4032,16 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
 #endif
             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                              __ATOMIC_RELEASE);
+            // Issue #74: publish the TLS base alongside CR3 (second publish
+            // site — switch_away_from_terminating tick path).
+            __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
+                             next->is_user_ ? next->tls_base_ : 0,
+                             __ATOMIC_RELEASE);
         } else {
             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+                             __ATOMIC_RELEASE);
+            // Issue #74: kernel/harness targets never carry TLS.
+            __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
                              __ATOMIC_RELEASE);
         }
 
@@ -4069,6 +4123,7 @@ void Scheduler::capture_percpu(SchedPerCpuPod &out) noexcept {
             reinterpret_cast<uint64_t>(scheduler_save_rsp_to[c]);
         out.load_rsp_from[c] = scheduler_load_rsp_from[c];
         out.load_cr3_from[c] = scheduler_load_cr3_from[c];
+        out.load_tls_from[c] = scheduler_load_tls_from[c];
         out.next_task_id[c] = scheduler_next_task_id[c];
         out.load_kstack_base[c] = scheduler_load_kstack_base[c];
         out.load_kstack_top[c] = scheduler_load_kstack_top[c];
@@ -4098,6 +4153,7 @@ void Scheduler::restore_percpu(const SchedPerCpuPod &src) noexcept {
         }
         scheduler_load_rsp_from[c] = src.load_rsp_from[c];
         scheduler_load_cr3_from[c] = src.load_cr3_from[c];
+        scheduler_load_tls_from[c] = src.load_tls_from[c];
         scheduler_next_task_id[c] = src.next_task_id[c];
         scheduler_load_kstack_base[c] = src.load_kstack_base[c];
         scheduler_load_kstack_top[c] = src.load_kstack_top[c];
@@ -4191,6 +4247,8 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_load_cr3_from[0], (uint64_t)0,
                      __ATOMIC_RELEASE);
+    __atomic_store_n(&scheduler_load_tls_from[0], (uint64_t)0,
+                     __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_next_task_id[0], UINT64_MAX,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_save_rsp_to[0], (uint64_t *)nullptr,
@@ -4207,6 +4265,8 @@ void Scheduler::clear_switch_globals() noexcept {
         __atomic_store_n(&scheduler_load_rsp_from[c], (uint64_t)0,
                          __ATOMIC_RELEASE);
         __atomic_store_n(&scheduler_load_cr3_from[c], (uint64_t)0,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&scheduler_load_tls_from[c], (uint64_t)0,
                          __ATOMIC_RELEASE);
         __atomic_store_n(&scheduler_save_rsp_to[c], (uint64_t *)nullptr,
                          __ATOMIC_RELEASE);
@@ -4263,6 +4323,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].edf_exempt = t->edf_exempt;
         out[idx].cpu_affinity = t->cpu_affinity;
         out[idx].iopb_slot = t->iopb_slot_;
+        out[idx].tls_base = t->tls_base_;
         ++idx;
     }
     while (idx < MAX_TASKS)
@@ -4351,6 +4412,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->edf_exempt = saved[j].edf_exempt;
             t->cpu_affinity = saved[j].cpu_affinity;
             t->iopb_slot_ = saved[j].iopb_slot;
+            t->tls_base_ = saved[j].tls_base;
             break;
         }
         ++t_idx;
@@ -4672,6 +4734,7 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // track_task_remove() lives in TaskControlBlock::cleanup() (shared teardown
     // point) — not here — to avoid double-counting.  See Scheduler::remove_task.

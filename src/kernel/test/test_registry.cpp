@@ -177,6 +177,7 @@ void register_mempool_tests();
 void register_slab_reclaim_tests();
 void register_sporadic_server_tests();
 void register_syscall_affinity_tests();
+void register_tls_tests();
 void register_atomic_tests();
 void register_cross_arch_tests();
 void register_o1_scheduler_tests();
@@ -363,6 +364,7 @@ static void run_syscall_fastpath_group() {
 static void run_syscall_affinity_group() {
     register_syscall_affinity_tests();
 }
+static void run_tls_group() { register_tls_tests(); }
 static void run_process_lifecycle_group() { register_process_tests(); }
 static void run_process_elf_group() { register_elf_tests(); }
 static void run_elf_loader_group() { register_elf_loader_tests(); }
@@ -666,6 +668,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // Previously registered but called by no class (not even `all`);
     // wired into the `core` aggregate (issue #173).
     {"syscall_affinity", []() { run_syscall_affinity_group(); }},
+
+    // -- tls: TLS_SET + TLS-on-switch publish/apply (issue #74) --
+    {"tls", []() { run_tls_group(); }},
 
     // -- process: lifecycle, exec, signals, limits --
     {"process_lifecycle", []() { run_process_lifecycle_group(); }},
@@ -987,8 +992,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_vmm_group();
          run_syscall_core_group();
          run_syscall_fuzz_group();
-         run_syscall_fastpath_group();
-         run_syscall_affinity_group();
+          run_syscall_fastpath_group();
+          run_syscall_affinity_group();
+          run_tls_group();
      }},
     {"ipc",
      []() {

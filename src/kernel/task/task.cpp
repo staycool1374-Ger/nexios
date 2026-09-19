@@ -913,6 +913,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
     {
         char buf[CONFIG_TASK_NAME_LEN];
         size_t pos = 0;
@@ -1157,6 +1158,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
@@ -1361,6 +1363,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->priority = parent->priority;
     tcb->base_priority = parent->base_priority;
     tcb->cpu_affinity = parent->cpu_affinity; // issue #25 C1: inherit mask
+    tcb->tls_base_ = parent->tls_base_; // issue #74: clone inherits TLS base
     tcb->period_ticks = parent->period_ticks;
     tcb->deadline_ticks = parent->deadline_ticks;
     tcb->executed_ticks = 0;

@@ -378,6 +378,8 @@ class Syscall {
                                       uint64_t *);
     static uint64_t sys_abi_version(uint64_t, uint64_t, uint64_t, uint64_t,
                                     uint64_t *);
+    static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
+                                uint64_t *);
     static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
 
@@ -468,7 +470,7 @@ class Syscall {
             &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
             &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
-            &Syscall::sys_unimplemented, // 85 TLS_SET (issue #74)
+            &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
     };
 };
 

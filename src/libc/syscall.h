@@ -245,6 +245,10 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define NEXIOS_ABI_MINOR 0
 #define SYS_MAX          86
 
+static inline long sys_tls_set(unsigned long base) {
+    return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
+}
+
 #if defined(__x86_64__)
 static inline long sys_send_fast(unsigned long dest, unsigned long type,
                                  unsigned long size,

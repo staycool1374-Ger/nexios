@@ -275,8 +275,9 @@ struct TaskControlBlock {
           recv_timed_out(false),
           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
           recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
-          iopb_slot_(IOPB_SLOT_NONE),
-          buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
+           iopb_slot_(IOPB_SLOT_NONE),
+           tls_base_(0),
+           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
@@ -540,6 +541,14 @@ struct TaskControlBlock {
     /// Freed by cleanup() -> arch::iopb_release().  IOPB_SLOT_NONE = none.
     static constexpr uint8_t IOPB_SLOT_NONE = 0xFF;
     uint8_t iopb_slot_;
+
+    /// @brief Thread-local-storage base, user VA (issue #74). 0 = unset
+    /// (kernel loads nothing). Set via TLS_SET(85); published in
+    /// switch_to_task alongside CR3 and applied in the ISR epilogue
+    /// (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) before user return.
+    /// Explicitly zeroed at all TCB memset sites (create/create_user/clone
+    /// + elf finalize); clone inherits the parent value.
+    uint64_t tls_base_;
 
     /// @brief Head of doubly-linked list of buffer handles owned by
     /// this task. -1 means the list is empty. Used by the BufferPool

@@ -42,6 +42,7 @@ namespace kernel::errors {
     X(TASK_NOT_FOUND, 106, "Task not found")                                   \
     X(TASK_INVALID_ARG, 107, "Task invalid argument")                          \
     X(TASK_INVALID_STATE, 108, "Task invalid state")                           \
+    X(TLS_INVALID_BASE, 109, "Invalid TLS base address")                       \
     /* PMM subsystem errors (200+) */                                          \
     X(PMM_OOM, 201, "Physical memory exhausted")                               \
     X(PMM_USER_OOM, 202, "User physical memory exhausted")                     \

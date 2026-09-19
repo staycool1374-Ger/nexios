@@ -32,6 +32,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/msr.hpp>
 #include <kernel/arch/page_table.hpp>
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
 #include <kernel/arch/x86_64/hal/pcid.hpp>
@@ -512,6 +513,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         return nullptr;
     memset(tcb, 0, sizeof(TaskControlBlock));
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = kernel::Scheduler::alloc_id();
     tcb->state = TaskState::READY;
@@ -772,6 +774,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     tcb->canary_installed = 0;
     tcb->page_table_ = new_pml4;
     tcb->is_user_ = true;
+    // Issue #74: exec reuses the live TCB — the old image's TLS base must not
+    // survive into the new image. Reset the field and clear the live register
+    // (the new image calls TLS_SET itself per the §13 crt0 contract).
+    tcb->tls_base_ = 0;
+#if defined(CONFIG_ARCH_X86_64)
+    arch::wrmsr(arch::MSR_FS_BASE, 0);
+#elif defined(CONFIG_ARCH_AARCH64)
+    arch::write_tpidr_el0(0);
+#elif defined(CONFIG_ARCH_RISCV64)
+    arch::write_tp(0);
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #157 H3: the TCB keeps its PCID across the table swap, but
     // the OLD image's entries cached under it must die with the old

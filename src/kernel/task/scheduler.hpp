@@ -43,6 +43,7 @@ extern "C" {
 extern uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
@@ -58,6 +59,7 @@ struct SchedPerCpuPod {
     uint64_t save_rsp_to[CONFIG_MAX_CPUS];      ///< as addresses
     uint64_t load_rsp_from[CONFIG_MAX_CPUS];
     uint64_t load_cr3_from[CONFIG_MAX_CPUS];
+    uint64_t load_tls_from[CONFIG_MAX_CPUS];
     uint64_t next_task_id[CONFIG_MAX_CPUS];
     uint64_t load_kstack_base[CONFIG_MAX_CPUS];
     uint64_t load_kstack_top[CONFIG_MAX_CPUS];
@@ -238,6 +240,18 @@ class Scheduler {
     ///         SCHED_ERR_WCET_INVALID.
     static errors::SchedulerError
     set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept;
+    /// @brief Fallible TLS-base store (issue #74). Takes IrqGuard +
+    ///        scheduler_lock_ (NOT ISR-safe); stores task.tls_base_ and, when
+    ///        the target IS the running task, live-loads the register after
+    ///        unlock (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) — the
+    ///        §13 crt0 TLS_SET-then-use sequence has no preemption between.
+    ///        IrqGuard stays alive across the gate + live write (no preemption
+    ///        window). Never touches scheduler_lock_ callers' state.
+    /// @param task Target TCB (already validated by the caller).
+    /// @param base User VA, 0 = unset.
+    /// @return SCHED_ERR_OK, SCHED_ERR_NO_CURRENT.
+    static errors::SchedulerError
+    set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept;
 
     /// @brief RT load balancer tick (issue #61): migrate queued
     ///        aperiodic kernel tasks from the busiest up-CPU to the
@@ -606,6 +620,7 @@ class Scheduler {
         /// @brief CPU affinity bitmask (issue #25 C1).
         uint64_t cpu_affinity;
         uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
+        uint64_t tls_base; ///< Thread-local-storage base, user VA (issue #74)
     };
     static uint64_t snapshot_task_fields_size() {
         return sizeof(TaskFields) * MAX_TASKS;
@@ -870,6 +885,9 @@ struct SwSlots {
     static uint64_t &load_cr3_from() {
         return scheduler_load_cr3_from[this_cpu()];
     }
+    static uint64_t &load_tls_from() {
+        return scheduler_load_tls_from[this_cpu()];
+    }
     static uint64_t &next_task_id() {
         return scheduler_next_task_id[this_cpu()];
     }
@@ -1053,6 +1071,8 @@ extern uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+extern uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS];
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
 /// @brief Kernel-stack range of the task being dispatched.  isr_stubs.asm

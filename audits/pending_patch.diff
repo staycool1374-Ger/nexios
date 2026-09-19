@@ -1,197 +1,525 @@
-diff --git a/linker/linker_riscv64.ld b/linker/linker_riscv64.ld
-index da0d6f81..cc40486e 100644
---- a/linker/linker_riscv64.ld
-+++ b/linker/linker_riscv64.ld
-@@ -47,8 +47,10 @@ SECTIONS
-     .text : AT(phys_lma) ALIGN(4K)
-     {
-         _text_start = .;
-+        KEEP(*(.marker.text.start))
-         *(.text*)
-         *(.text.*)
-+        KEEP(*(.marker.text.end))
-         _text_end = .;
-     } :text
-     phys_lma = ALIGN(phys_lma + SIZEOF(.text), 4K);
-@@ -56,6 +58,7 @@ SECTIONS
-     .rodata : AT(phys_lma) ALIGN(4K)
-     {
-         _rodata_start = .;
-+        KEEP(*(.marker.rodata.start))
-         *(.srodata*)
-         *(.srodata.*)
-         *(.rodata*)
-@@ -63,6 +66,7 @@ SECTIONS
-         . = ALIGN(8);
-         _expected_code_crc = .;
-         QUAD(0x0000000000000000)
-+        KEEP(*(.marker.rodata.end))
-         _rodata_end = .;
-     } :rodata
-     phys_lma = ALIGN(phys_lma + SIZEOF(.rodata), 4K);
-@@ -70,6 +74,7 @@ SECTIONS
-     .data : AT(phys_lma) ALIGN(4K)
-     {
-         _data_start = .;
-+        KEEP(*(.marker.data.start))
-         *(.sdata*)
-         *(.sdata.*)
-         *(.data*)
-@@ -77,6 +82,7 @@ SECTIONS
-         *(.got)
-         *(.got.plt)
-         . = ALIGN(4096);
-+        KEEP(*(.marker.data.end))
-         _data_end = .;
-     } :data
-     phys_lma = ALIGN(phys_lma + SIZEOF(.data), 4K);
-@@ -84,6 +90,7 @@ SECTIONS
-     .bss : AT(phys_lma) ALIGN(4K)
-     {
-         _bss_start = .;
-+        KEEP(*(.marker.bss.start))
-         *(COMMON)
-         *(.sbss*)
-         *(.sbss.*)
-@@ -96,6 +103,7 @@ SECTIONS
-         _stack_end = .;
-         *(.bss*)
-         *(.bss.*)
-+        KEEP(*(.marker.bss.end))
-         _bss_end = .;
-     } :data
- 
-diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-index 5c4d2ee9..4e1fca82 100644
---- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-+++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
-@@ -58,6 +58,16 @@ inline void arch_page_table_tlb_flush_all() {
+diff --git a/audits/pending_plan-74.md b/audits/pending_plan-74.md
+new file mode 100644
+index 00000000..57e5900d
+--- /dev/null
++++ b/audits/pending_plan-74.md
+@@ -0,0 +1,143 @@
++# PLAN: TLS on context switch (#74) — TCB tls_base_ + TLS_SET(85) + per-arch dispatch load
++
++Source: planner subagent 2026-09-19, v2 rework 2026-09-19 (applies audits/rejected_plan-74.md
++verbatim + ARM64/RISC-V arch specifics, all anchors evidence-verified).
++Binding spec: docs/specs/syscall-abi-picolibc.md §7 + §12.
++Status: PLAN REVIEW v2 (no code changed yet; audits/pending_patch.diff does not exist).
++
++## AFFECTED FILES
++- `src/kernel/task/task.hpp` — new `uint64_t tls_base_` field + ctor init-list entry (mirrors `iopb_slot_` at task.hpp:278,542)
++- `src/kernel/task/task.cpp` — 3 memset sites: `create` (~911), `create_user` (~1155), `clone` (~1353); clone inherit override
++- `src/kernel/elf/elf.cpp` — `finalize_loaded_task` memset site (~513) + `exec_into_current` reset + live clear (~773, after `page_table_`/`is_user_` swap)
++- `src/kernel/syscall/syscall.hpp` — declare `sys_tls_set`; table slot 85 `sys_unimplemented` → `sys_tls_set` (TLS_SET=85, MAX_SYSCALL=86 already present); TLS_SET stays out of `k_syscall_fast[]`/`SYSCALL_FAST_MASK`
++- `src/kernel/syscall/syscall_handlers_tls.cpp` (new, auto-globbed via `mk/rules.mk:15`) — `sys_tls_set` implementation (validate + delegate to Scheduler)
++- `src/kernel/task/scheduler.hpp` — declare `set_tls_base_err(TaskControlBlock&, uint64_t)` beside `set_affinity_err` (:240); add `SwSlots::load_tls_from()` + `scheduler_load_tls_from[CONFIG_MAX_CPUS]` decl
++- `src/kernel/task/scheduler.cpp` — implement `set_tls_base_err`; publish in `switch_to_task` (~3599–3635) AND `switch_away_from_terminating` second publish site (~3972–3992); clear beside EVERY `load_cr3_from` clear (:605,947,1802,1827,1984,2013,3810,4674,4192,4209) + capture_percpu/restore_percpu (:4071/:4100)
++- `src/kernel/syscall/syscall_errors.hpp` — `X(TLS_INVALID_BASE, 109, "Invalid TLS base address")` (109 = true first free ID above task band 101–108); derives `SYS_ERR_TLS_INVALID_BASE` via the `SYS_ERR_##name` X-macro (:129)
++- `src/kernel/arch/x86_64/hal/msr_impl.hpp` — add `MSR_FS_BASE = 0xC0000100` beside `MSR_GS_BASE`
++- `src/kernel/arch/aarch64/hal/io_impl.hpp` — add `write_tpidr_el0(uint64_t)` beside `write_ttbr0_el1` (:251–255), with trailing `isb()` (TPIDR_EL0 write must be observed before ERET to EL0)
++- `src/kernel/arch/riscv64/hal/io_impl.hpp` — add `write_tp(uint64_t)` beside the satp helpers (:167–195) via `asm volatile("mv tp, %0")` (tp is ABI-reserved, compiler never allocates it; write is exact)
++- `src/kernel/core/global_state.{hpp,cpp}` — define `scheduler_load_tls_from[CONFIG_MAX_CPUS]` beside `scheduler_load_cr3_from`
++- `src/kernel/arch/x86_64/isr_stubs.asm` — FS apply after `.load_cr3` clear (:425, before `jmp .restore` :426) + clear in `.abort_switch` beside CR3/next-id clears (:434–438)
++- `src/kernel/arch/aarch64/vectors.S` — TPIDR apply in `irq_context_switch_common`: retarget `cbz x3, .restore` (:239) → `cbz x3, .tls_apply`; new `.tls_apply` block between CR3 clear (:248) and `isb` (:249)
++- `src/kernel/arch/riscv64/syscall_entry.S` — TLS consume after satp block (:210): load slot, unconditional clear, conditional `sd` into trap-frame `OFF_TP(sp)` (:26,69), before CSR/GPR restore
++- `src/kernel/test/test_tls.cpp` (new) + test registry/`test_expected_counts.hpp` — new `tls` class
++- `src/libc/syscall.h` — verify-only (SYS_TLS_SET=85, SYS_MAX=86 present); add `sys_tls_set` wrapper only if absent
++
++## INVARIANTS & CONCURRENCY BOUNDARIES
++- TCB memset discipline (LEARNINGS.md:134, `iopb_slot_` precedent): explicit `tls_base_ = 0` at all 4 sites + `tls_base_(0)` ctor init; clone inherits `parent->tls_base_`; exec resets to 0 (fresh image never inherits).
++- `tls_base_==0` means unset: publish 0, every arch apply path loads nothing.
++- Setter lock discipline (auditor S2 fix): Syscall NEVER touches `scheduler_lock_` directly (private, scheduler.hpp:933). New `Scheduler::set_tls_base_err` mirrors `set_affinity_err` (scheduler.cpp:651): `arch::IrqGuard` + `quiesce_enter()` (only if the affinity precedent's quiesce is required for same-class mutation — else IrqGuard + `SpinLockGuard(scheduler_lock_)`, re-fetch current, store). Returns `errors::SchedulerError` (`OK` / `NO_CURRENT`, scheduler_errors.hpp:32,37). Handler maps to `0` / `(uint64_t)-SYS_ERR_SCHED_NO_CURRENT`. Apply-live-register step runs AFTER lock release (pure register write, no shared state).
++- Setter live-apply (auditor S2 fix, §13 crt0 TLS_SET-then-use with no preemption between): when target is the running task (`is_current_on_any_cpu` precedent, scheduler.cpp:678), immediately load the live register after unlock — x86_64 `arch::wrmsr(MSR_FS_BASE, base)` (msr_impl.hpp:36; WRMSR privileged, task-context syscall = ring 0, legal); aarch64 `write_tpidr_el0(base)` (new helper; EL1→TPIDR_EL0 legal); riscv64 `write_tp(base)` (new helper; writes the live tp of the running task). Base 0 clears the live register the same way. Non-running targets need no live write (publish/apply covers them at dispatch).
++- Deferred-switch single-writer/single-applier per CPU (BRIEFING §2): `switch_to_task` + `switch_away_from_terminating` publish `load_tls_from[cpu]` alongside CR3 with `__ATOMIC_RELEASE` under caller lock/IRQ-off; exactly one epilogue applier per CPU consumes before user return; last writer wins; EVERY clear site that zeroes `load_cr3_from` zeroes `load_tls_from` beside it with the same order (:605,947,1802,1827,1984,2013,3810,4674 + BSP 4192 + clear_switch_globals 4209 + capture/restore 4071/4100 + x86 `.abort_switch`).
++- swapgs invariant: x86_64 touches FS_BASE (0xC0000100) only; `MSR_GS_BASE`/`MSR_KERNEL_GS_BASE`/`swapgs`/per-CPU GS (percpu.cpp:25,46) untouched; regression asserts GS_BASE unchanged.
++- Validation gates (arch-specific, all ENSURE-free per CODING_STYLE §5):
++  - x86_64: `VirtualAddress(arg0).is_canonical()` (48-bit, address.hpp:111) AND `arg0 < CONFIG_USER_SPACE_LIMIT` (0x00007FFFFFFFFFFF, 47-bit, nexios_config.h:141). LA57: NO `LA57/paging_levels/five-level` symbol exists tree-wide (verified zero matches) — the kernel never enables LA57, so the 48-bit gate is exact, not an approximation. No live-mode query (auditor S3 fix — the planned branch was dead untestable code).
++  - aarch64: `arg0 < CONFIG_USER_SPACE_LIMIT` (0x0000FFFFFFFFFFFF, 48-bit, nexios_config.h:152) SUBSUMES canonical (values < 2^48 have zero top-16 = sign of bit 47); `is_canonical()` additionally applied where the helper is arch-generic, harmless duplicate.
++  - riscv64 Sv39: `CONFIG_USER_SPACE_LIMIT` (0x000000FFFFFFFFFF, 40-bit, nexios_config.h:163) admits non-canonical Sv39 values, so an EXPLICIT canonical check is mandatory: `(arg0 >> 39) == 0` (Sv39 user half = bits[63:39] zero; satp programmed Sv39-only, page_table_impl.hpp:52). Reject otherwise with the dedicated code.
++  - All archs: `arg0 == 0` bypasses validation = unset; any other failure → `(uint64_t)-SYS_ERR_TLS_INVALID_BASE`. No kernel pointer can result (§2: success returns are 0 only).
++- x86_64 asm scratch discipline (evidence-verified): `.restore` pops ALL GPRs from the ISR frame (:473–487), and the CR3 block already uses rax as scratch (:415–425); r11 = `[gs:0x10]` cpu index (:167, percpu.hpp:53) preserved via push/pop around calls (:217/219, :391/393). TLS insert uses rax/rcx/rdx as scratch (restored by :473–487 pops), r11 READ-ONLY index, no calls. Exact preserve set, no over-saving.
++- aarch64 asm discipline: comment :232–233 (all user regs in save area, no caller-saved regs to protect) + CR3 block precedent reuses x3/x4 (:237–248) — TLS block reuses x3/x4 identically. adrp/ldr NON-indexed base access mirrors the file's existing pattern (:215–248). Single-core (sched_up_cpus returns 1 off-x86, scheduler.cpp:645) so base == [0] is exact today; SwSlots accessor keeps the C++ side per-CPU for SMP-proofing.
++- aarch64 no-abort invariant: `irq_context_switch_common` has NO abort path (apply-as-observed, documented S3 at :208–211); the `cbz x0, .restore` (:217) no-switch path skips TLS — sound because publish+arm are atomic under the same lock/IRQ-off discipline, so slot==0 whenever no switch is armed. Stated as relied-upon invariant + pinned by `tls_cancel_clears_slot` on x86 cancel paths.
++- riscv64 frame discipline: trap frame layout SAVE_SIZE=296, OFF_TP=24 (:9,:26); entry saves x4→OFF_TP (:69), satp switch at :203–210 (NON-indexed base, single-core), GPR restore reloads x4 from OFF_TP at :227 BEFORE sret (:259). TLS consume MUST target the OFF_TP save area (live-tp write at the satp site is clobbered by :227 — auditor S2). t0/t1 already used as scratch in this path (:204–216), reuse them.
++- Clone inherits; exec/finalize reset; snapshot parity via TaskFields POD (`tls_base` beside `iopb_slot`, capture :4265/restore :4353, buffer sized by sizeof).
++- No new ResourceTracker type (plain uint64): zero-delta by construction. No `new/delete`, no `const_cast`, 80-col, `#pragma once`, `arch::pause()` in spins — `make build` Errors 0.
++
++## STEP-BY-STEP CHANGES
++1. `task.hpp`: add `uint64_t tls_base_;` beside `iopb_slot_` (:542) with doc (`user VA, 0=unset, issue #74`); add `tls_base_(0)` to ctor init-list beside `iopb_slot_(IOPB_SLOT_NONE)` (:278).
++2. `task.cpp` 3 sites: after each `memset(tcb,0,…)` + `iopb_slot_=IOPB_SLOT_NONE` (:915/:1159/:1357) insert `tcb->tls_base_ = 0;`. In `clone` only, after the inherit block add `tcb->tls_base_ = parent->tls_base_;`.
++3. `elf.cpp`: `finalize_loaded_task` after :514 insert `tcb->tls_base_ = 0;`. `exec_into_current` after the swap commits (`page_table_`/`is_user_` :773–774, inside the success path): insert `tcb->tls_base_ = 0;` + live clear — x86_64 `arch::wrmsr(arch::MSR_FS_BASE, 0)`; aarch64 `arch::write_tpidr_el0(0)`; riscv64 `arch::write_tp(0)` — each under its `CONFIG_ARCH_*` guard. Rationale: exec reuses the live TCB; without reset+clear the old image's base survives into the new image (auditor S2).
++4. `syscall_errors.hpp`: append `X(TLS_INVALID_BASE, 109, "Invalid TLS base address")` after the task band (ends 108, :44); confirm no error-count static_assert needs updating (check `error_string` coverage test / count asserts).
++5. `msr_impl.hpp` (x86_64): add `inline constexpr uint32_t MSR_FS_BASE = 0xC0000100;` beside `MSR_GS_BASE`, same style.
++6. `aarch64/hal/io_impl.hpp`: add `inline void write_tpidr_el0(uint64_t v) { asm volatile("msr tpidr_el0, %0" : : "r"(v) : "memory"); isb(); }` beside `write_ttbr0_el1` (:251–255). `riscv64/hal/io_impl.hpp`: add `inline void write_tp(uint64_t v) { asm volatile("mv tp, %0" : : "r"(v) : "memory"); }` beside satp helpers (:167–195).
++7. Publish slot: `global_state.{hpp,cpp}` define `extern "C" uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS]` beside `scheduler_load_cr3_from` (mirror scheduler.hpp:1051–1057 decl block incl. the NOLINTNEXTLINE comment); `SwSlots::load_tls_from()` accessor mirroring `load_cr3_from()` (:870–871, `this_cpu()` index); extend `capture_percpu`/`restore_percpu` (:4071/:4100), `cancel_pending_switch_cpu` (:605), BSP clear (:4192), `clear_switch_globals` (:4209), and EVERY other `load_cr3_from` clear (:947,1802,1827,1984,2013,3810,4674) — each new clear directly beside its CR3 clear, same `__ATOMIC_RELEASE`.
++8. New `syscall_handlers_tls.cpp`: `uint64_t Syscall::sys_tls_set(arg0=base, …)`: (a) `arg0==0` → `set_tls_base_err(*current, 0)` path (still validates current exists); (b) arch gate per INVARIANTS (x86: `is_canonical()` + LIMIT; aarch64: LIMIT (+ `is_canonical()` if generic); riscv64: `(arg0>>39)==0` + LIMIT); fail → `(uint64_t)-SYS_ERR_TLS_INVALID_BASE`; (c) null-current check FIRST (before validation? NO — validate first is wrong if no current; order: fetch current, null → `(uint64_t)-SYS_ERR_SCHED_NO_CURRENT`, then validate, then `set_tls_base_err`); (d) map `errors::SchedulerError::NO_CURRENT` → `(uint64_t)-SYS_ERR_SCHED_NO_CURRENT`, `OK` → 0. No user-memory dereference (scalar only, no CheckedPtr), no blocking, no reschedule. Declare `sys_tls_set` in `syscall.hpp` beside `sys_abi_version`; table entry 85 `sys_unimplemented // 85 TLS_SET` → `&Syscall::sys_tls_set`; do NOT touch `k_syscall_fast[]` (FAST = audited pointer-free list, fastpath §0/§3).
++9. New `Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base)` (decl scheduler.hpp:240 beside `set_affinity_err`, same `errors::SchedulerError … noexcept` signature): `arch::IrqGuard irq_guard{};` + `SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);` (mirrors set_affinity_err :655–657; add `quiesce_enter()` ONLY if the affinity quiesce rationale — AP current-apply racing — applies to this scalar store; default OMIT with one-line justification, AP apply reads the per-CPU slot atomically, not the TCB); re-fetch `current_task()`, null → `NO_CURRENT`; store `task.tls_base_ = base`; release lock (guard scope ends); then, if `&task == Scheduler::current_task()` (:414 precedent — the write affects only THIS cpu's register, so identity with the running task is the exact gate, not the any-cpu scan), live-load per arch (wrmsr / write_tpidr_el0 / write_tp; base 0 clears). Returns `errors::SchedulerError::OK`.
++10. `scheduler.cpp switch_to_task` (~3599–3635): after the CR3 publish if/else (:3606/:3622), insert in BOTH branches `__atomic_store_n(&SwSlots::load_tls_from(), (next.is_user_ ? next.tls_base_ : 0), __ATOMIC_RELEASE);` before `arch::iopb_switch_to(next)` (:3635), under caller lock/IRQ-off. PCID tagging (#156) applies to CR3 only — TLS value published raw. `switch_away_from_terminating` second site: after the CR3 if/else (:3987/:3990), insert the same two-branch publish before the READY re-enqueue (:3994).
++11. `isr_stubs.asm` x86_64: after :425 (`mov qword [rax + r11*8], 0` CR3 clear), before `jmp .restore` (:426), insert:
++```
++    lea rax, [rel scheduler_load_tls_from]
++    mov rax, [rax + r11*8]
++    test rax, rax
++    jz .tls_done
++    mov rcx, rax          ; save value; rax reused below (scratch-safe per INVARIANTS)
++    lea rax, [rel scheduler_load_tls_from]
++    mov qword [rax + r11*8], 0
++    mov rdx, rcx
++    shr rdx, 32
++    mov eax, ecx
++    mov ecx, 0xC0000100  ; MSR_FS_BASE
++    wrmsr
++    jmp .restore
++.tls_done:
++    lea rax, [rel scheduler_load_tls_from]
++    mov qword [rax + r11*8], 0
++    jmp .restore
++```
++    (Consume-unconditionally: slot cleared on both paths; WRMSR only if nonzero. rax/rcx/rdx scratch-safe — `.restore` pops all GPRs :473–487; r11 untouched; no calls.) `.abort_switch`: beside :434–438 clears add `lea rax, [rel scheduler_load_tls_from]` / `mov qword [rax + r11*8], 0`.
++12. `vectors.S` aarch64 (CONFIG_ARCH_AARCH64): retarget :239 `cbz x3, .restore` → `cbz x3, .tls_apply`; insert `.tls_apply` between :248 CR3 clear and :249 `isb` (the isb is the SHARED join point — never skipped on any path):
++```
++.tls_apply:
++    adrp    x3, scheduler_load_tls_from
++    ldr     x3, [x3, #:lo12:scheduler_load_tls_from]
++    cbz     x3, 8f
++    msr     tpidr_el0, x3
++    adrp    x4, scheduler_load_tls_from
++    str     xzr, [x4, #:lo12:scheduler_load_tls_from]
++8:  isb                     // was :249; pairs with the TTBR0 switch+TLBI above AND the TPIDR_EL0 write here
++.restore:
++```
++    (Fixes re-audit S2: the v2 layout branched TLS-zero straight to `.restore`, stranding a TTBR0 switch + TLBI with no isb. x3/x4 reuse licensed by :232–233 + CR3 precedent :237–248; non-indexed base = [0] exact single-core.)
++13. `syscall_entry.S` riscv64 (CONFIG_ARCH_RISCV64): after the satp block (:203–210), before `7:` (:212), insert:
++```
++    # Consume TLS slot into the trap-frame TP save area (live tp is
++    # reloaded from OFF_TP at :227, so a direct tp write here would die)
++    la t0, scheduler_load_tls_from
++    ld t1, 0(t0)
++    sd zero, 0(t0)
++    beqz t1, 8f
++    sd t1, OFF_TP(sp)
++8:
++```
++    (Label `8`/`8f` — verified free: file uses only 1,5,6,7 as numeric labels. t0/t1 scratch-safe — used as temporaries at :204–216; unconditional consume; non-indexed base = [0] exact single-core per scheduler.hpp:1047–1048; `sfence.vma` NOT needed for tp.)
++14. `scheduler.hpp TaskFields`: add `uint64_t tls_base;` after `iopb_slot` (:608); `capture_task_fields` add beside :4265; `restore_task_fields` add beside :4353 (same ID/position match scope, harness-RSP rule untouched).
++15. `syscall.h`: verify `SYS_TLS_SET 85` + `SYS_MAX 86` present; add `sys_tls_set` inline wrapper only if absent.
++16. `make build` Errors 0 (80-col, `#pragma once`, init-lists, no `new/delete`, no `const_cast`, `arch::pause()` in spins).
++
++## TEST STRATEGY
++- New class `tls` (`src/kernel/test/test_tls.cpp`, JARVIS_TEST + REGISTER, `test_expected_counts.hpp` row, registry regen):
++  1. `tls_set_zero_clears` — TLS_SET(0) → 0, `tls_base_==0`, live FS_BASE/TPIDR/tp == 0 on return (arch-guarded readback: x86 RDMSR FS_BASE, aarch64 `mrs TPIDR_EL0`, riscv `mv` from tp).
++  2. `tls_set_rejects_noncanonical` — x86 `0x0000800000000000` → `SYS_ERR_TLS_INVALID_BASE`, stored unchanged; riscv64 `0x4000000000` (bit 39, passes LIMIT, fails Sv39 canonical) → same code (arch-specific vectors per LIMIT table).
++  3. `tls_set_rejects_kernel_half` — `0xFFFF800000000000` → dedicated code on all archs.
++  4. `tls_set_accepts_user_half` — `0x00007FFF00000000` (x86; arch-scaled per-LIMIT values elsewhere) → 0 + readback + live-register equals base (self-apply proof).
++  5. `tls_clone_inherits` — child `tls_base_==parent`.
++  6. `tls_snapshot_parity` — nonzero survives `snapshot_create/restore` (mirrors iopb_slot parity test).
++  7. `tls_not_fast` — 85 ∉ `SYSCALL_FAST_MASK`, `handle(85,…)` takes FULL path.
++  8. `tls_publish_applies` — implemented via REAL dispatch (reschedule() only sets need_resched; arming is tick-side): synthetic-user task observes its live base after genuine site-1 dispatch; kernel task with rigged nonzero field leaves the live register untouched (GS_BASE unchanged).
++  9. `tls_preemption_ping_pong_errno` (acceptance) — two TLS-distinct tasks loop TLS_SET(self)+YIELD over N preemptions, never observe peer's base.
++  10. `tls_exec_clears` — DROPPED at implementation: `exec_into_current` operates on the RUNNING task (driving it in-test would replace the harness image). The reset is audit-verified; its primitives (field store + live-register clear) are covered by tests 1/4.
++  11. `tls_cancel_clears_slot` — each x86 cancel path (:947,1802,1827,1984,2013,3810,4674) leaves `load_tls_from[cpu]==0` (unit-drive the cancel helpers or assert post-abort slot state).
++  12. `tls_second_publish_site` — drive `switch_away_from_terminating` tick path, assert TLS published alongside CR3.
++  13. `tls_no_stale_slot_after_cancel` — arch-portable (compiles/runs on all three archs): publish a nonzero slot via the C++ `SwSlots` accessor, invoke the arch-independent clear helpers (`clear_switch_globals`/`cancel_pending_switch_cpu` equivalents), assert slot==0. Pins the publish+arm atomicity invariant on non-x86 builds too (live aarch64/riscv64 epilogue coverage awaits real-arch test execution, #28 family — documented gap, not a silent hole).
++- Implemented count: 12 tests (`tls_exec_clears` dropped per above), `{"tls", 12, 12, 12}`.
++- Test 8 implemented via public `reschedule()` arming (the test-local `switch_to_task` is file-static in scheduler.cpp, not a Scheduler member); test 9/11 use synthetic-user tasks (lambda cannot run as true userspace — test_ipc_blocking.cpp constraint), full ring-3 acceptance defers to #75.
++- Negative pins: `-4095` errno boundary intact; `handle(MAX_SYSCALL)` → -1; `static_assert(table size==MAX_SYSCALL==86)`.
++- Regressions (targeted, NOT test-full): `tls`, `syscall`, `syscall_abi` (bands incl. 85), `smp`, `core`, `arch_cross`, `selftest`; then debug `all` + release `all`; `test-history.txt` row per run.
++- ResourceTracker: zero delta via `test_isolate` snapshot_restore on every new test (no `track_*` added).
++
++## SIL 3 / SAFETY RISKS
++- S1 — Arbitrary FS/TPIDR/tp base as privilege hole: closed by per-arch canonical + user-half gates (x86 48-bit + 47-bit LIMIT; aarch64 LIMIT-subsumed; riscv64 explicit `>>39` + 40-bit LIMIT), dedicated fail-closed code, 0 = unset only; no kernel pointer returnable.
++- S1 — GS/swapgs corruption: FS_BASE-only on x86 (MSR 0xC0000100; GS_BASE/KERNEL_GS_BASE/swapgs untouched); aarch64 touches TPIDR_EL0 only (TTBR1 kernel window, EL1 state untouched); riscv writes tp/OFF_TP only (satp/sstatus/sepc untouched); GS test pins x86.
++- S2 — Wrong-thread TLS: publish-alongside-CR3 at BOTH publish sites + apply-before-return on all three archs incl. abort-clear (x86) / consume-unconditional (riscv) / retargeted-cbz (aarch64); kernel tasks publish 0; ping-pong + publish tests pin it.
++- S2 — Stale base across exec: exec reset + live clear (step 3).
++- S2 — Setter-on-stale-register (§13 crt0): live-apply-after-unlock in `set_tls_base_err` (step 9).
++- S2 — Lock across switch (§11.1): scheduler lock held for scalar store only; live-apply + epilogue-apply lock-free.
++- S3 — aarch64 no-abort/skip paths: relied-upon publish+arm atomicity invariant stated + x86 cancel tests + arch-portable `tls_no_stale_slot_after_cancel` (test 13); live-epilogue coverage on real aarch64/riscv64 deferred to #28-family execution (documented, not silent).
++- S3 — TCB memset amnesia (LEARNINGS.md:134): 4 sites + ctor + parity + inherit + exec tests.
++- S3 — Debug/release divergence (§6): no CONFIG_DEBUG-gated control flow in store/publish/apply (trace only).
++- S3 — LA57: kernel has zero LA57 support tree-wide (verified); 48-bit gate exact. If LA57 ever lands, the gate must widen — recorded here as the trigger condition.
++
++## OPEN QUESTIONS
++- `set_tls_base_err`: include `quiesce_enter()` (set_affinity precedent :653–657) or omit? DEFAULT: omit with one-line justification (AP apply path reads the per-CPU slot atomically, never the TCB; no quiesce window needed for a scalar store). Auditor to confirm.
++- Spec follow-up (non-blocking, post-#74): `docs/specs/syscall-abi-picolibc.md` §7 still mandates an LA57 live-mode query; the plan's static 48-bit gate is exact only because LA57 has zero tree-wide support. File a docs tweak to §7 (or fold into the LA57-landing issue as a trigger condition) — NOT part of this implementation.
++- none other
+diff --git a/audits/rejected_plan-74.md b/audits/rejected_plan-74.md
+new file mode 100644
+index 00000000..428dbdc8
+--- /dev/null
++++ b/audits/rejected_plan-74.md
+@@ -0,0 +1,17 @@
++# REJECTED PLAN #74 — corrected steps (apply verbatim, then re-audit)
++
++1. `task.hpp`: add `uint64_t tls_base_;` beside `iopb_slot_` (542) + `tls_base_(0)` in ctor init-list beside `iopb_slot_(IOPB_SLOT_NONE)` (278). Unchanged.
++2. `task.cpp`: after each `iopb_slot_=IOPB_SLOT_NONE` (915/1159/1357) insert `tcb->tls_base_ = 0;`; in `clone` only, after the inherit block add `tcb->tls_base_ = parent->tls_base_;`. Unchanged.
++3. `elf.cpp finalize_loaded_task`: after line 514 insert `tcb->tls_base_ = 0;`. In `exec_into_current` (elf.cpp:715), after the address-space swap succeeds, set `tcb->tls_base_ = 0` AND, if exec target is the current task, live-clear under the matching `CONFIG_ARCH_*` guard (x86_64 `arch::wrmsr(MSR_FS_BASE, 0)`; aarch64 `TPIDR_EL0=0`; riscv64 `OFF_TP` save area to 0) so no stale base survives exec.
++4. `syscall_errors.hpp`: use `X(TLS_INVALID_BASE, 109, "Invalid TLS base address")` (109 is the true first free ID above the 101-108 task band); confirm no error-count assertion needs updating.
++5. `msr_impl.hpp`: add `MSR_FS_BASE = 0xC0000100` beside `MSR_GS_BASE`. Unchanged. `aarch64/hal/io_impl.hpp`: add `write_tpidr_el0` with trailing `isb()` beside `write_ttbr0_el1` (251-255). `riscv64/hal/io_impl.hpp`: add `write_tp` via `mv tp` beside the satp helpers (167-195).
++6. Publish slot: add `scheduler_load_tls_from[CONFIG_MAX_CPUS]` + `SwSlots::load_tls_from()` mirroring `load_cr3_from` (mirror scheduler.hpp:1051-1057 decl block incl. the NOLINTNEXTLINE comment); extend capture_percpu/restore_percpu, cancel_pending_switch_cpu (605), BSP clear (4192), clear_switch_globals (4209) AND every other load_cr3_from clear site — scheduler.cpp:947,1802,1827,1984,2013,3810,4674 — each new clear placed directly beside its CR3 clear with the same memory order.
++7. New `syscall_handlers_tls.cpp`: validate (0 clears; else per-arch gate — x86_64 48-bit `is_canonical()` + `arg0 < CONFIG_USER_SPACE_LIMIT`; aarch64 LIMIT-subsumed; riscv64 explicit `(arg0>>39)==0` + LIMIT — fail with `(uint64_t)-SYS_ERR_TLS_INVALID_BASE`, never ENSURE); order: fetch current, null → `(uint64_t)-SYS_ERR_SCHED_NO_CURRENT`, then validate, then `Scheduler::set_tls_base_err`; handler maps `SchedulerError::NO_CURRENT` → `(uint64_t)-SYS_ERR_SCHED_NO_CURRENT`. Never touch `scheduler_lock_` directly from Syscall. No LA57 live-query (zero implementation symbols tree-wide; trigger condition recorded: widen gate if LA57 lands). Keep 85 out of `k_syscall_fast[]`.
++8. New `Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base)` (decl scheduler.hpp:240 beside `set_affinity_err`, same `errors::SchedulerError … noexcept` signature): `arch::IrqGuard` + `SpinLockGuard(scheduler_lock_)` (no `quiesce_enter()` — OMIT confirmed: AP apply reads the per-CPU slot atomically, never the TCB; no check-then-act on remote state, unlike affinity); re-fetch `current_task()`, null → `NO_CURRENT`; store `task.tls_base_ = base`; release lock; then live-load ONLY if `&task == current_task()` (this-CPU gate, not `is_current_on_any_cpu`) — x86_64 WRMSR FS_BASE; aarch64 TPIDR_EL0; riscv64 `write_tp`. Base 0 clears the same way.
++9. `scheduler.cpp switch_to_task` (~3599-3635) AND the second publish site (~3972-3992): after each CR3 publish if/else insert `__atomic_store_n(&SwSlots::load_tls_from(), (next.is_user_ ? next.tls_base_ : 0), __ATOMIC_RELEASE);` in both branches, still under caller lock/IRQ-off discipline. PCID tagging applies to CR3 only.
++10. `isr_stubs.asm`: after `.load_cr3` clear (424-425), insert FS apply preserving rax/rcx/rdx + r11 (no calls, r11 read-only index): load `scheduler_load_tls_from[r11]`; if nonzero `wrmsr(MSR_FS_BASE, value)`; clear slot to 0 on both paths; if zero skip; clear the slot in `.abort_switch` beside the CR3/next-id clears (434-438).
++11. aarch64 `vectors.S` (CONFIG_ARCH_AARCH64 guard): place the new `.tls_apply` block AFTER the existing `isb` (:249), before `.restore` — retarget :239 `cbz x3, .restore` → `cbz x3, .tls_apply` so the TTBR path keeps its mandatory isb on every sub-path (the S2 fix: never branch over :249 from the CR3-taken path); `.tls_apply` uses the NON-indexed pattern (base = [0], single-core exact): if nonzero `msr tpidr_el0, x-reg`; clear slot; own trailing `isb`.
++12. riscv64 `syscall_entry.S` (CONFIG_ARCH_RISCV64 guard): do NOT write live tp at the satp-switch site; instead store the slot value into the trap frame `OFF_TP(sp)` save area after the satp block (:210), then clear the slot, before `7:` (:212) — using a UNIQUE numeric label (not `7:`, S3 fix), t0/t1 scratch; `sfence.vma` NOT needed for tp.
++13. `TaskFields`: add `uint64_t tls_base;` after `iopb_slot` (608) + capture (4265) / restore (4353) beside iopb_slot handling. Unchanged.
++14. `syscall.h`: verify-only (SYS_TLS_SET=85, SYS_MAX=86 present); add `sys_tls_set` wrapper only if absent. Unchanged.
++15. Tests: as planned, PLUS `tls_self_apply_live` (setter's live FS_BASE/TPIDR/tp equals base on return), `tls_exec_clears` (exec resets TCB + live register), `tls_cancel_clears_slot` (cancel paths leave no stale TLS), `tls_second_publish_site` (tick-path dispatch publishes TLS), PLUS an aarch64-side pin for the publish+arm atomicity invariant (S3 fix — x86 cancel tests alone do not cover the vectors.S path).
+diff --git a/audits/report-2026-09-19T131523Z.md b/audits/report-2026-09-19T131523Z.md
+new file mode 100644
+index 00000000..526dfc35
+--- /dev/null
++++ b/audits/report-2026-09-19T131523Z.md
+@@ -0,0 +1,25 @@
++# AUDIT REPORT 2026-09-19T131523Z
++PATCH: audits/pending_plan-74.md (plan review — no code diff yet)
++FILES: src/kernel/task/task.hpp, src/kernel/task/task.cpp, src/kernel/elf/elf.cpp, src/kernel/syscall/syscall.hpp, src/kernel/syscall/syscall_handlers_tls.cpp, src/kernel/syscall/syscall_errors.hpp, src/kernel/arch/x86_64/hal/msr_impl.hpp, src/kernel/task/scheduler.hpp, src/kernel/core/global_state.hpp, src/kernel/core/global_state.cpp, src/kernel/task/scheduler.cpp, src/kernel/arch/x86_64/isr_stubs.asm, src/kernel/arch/aarch64/vectors.S, src/kernel/arch/riscv64/syscall_entry.S, src/kernel/test/test_tls.cpp, src/kernel/test/test_expected_counts.hpp, src/libc/syscall.h
++
++## FINDINGS
++- [S2] src/kernel/syscall/syscall_handlers_tls.cpp (plan step 7) — direct SpinLockGuard on scheduler_lock_ with no IrqGuard
++  WHY: scheduler_lock_ is private (scheduler.hpp:933) and task-context TCB mutation requires IrqGuard + lock (set_affinity_err precedent scheduler.cpp:655, scheduler.hpp:209), else the timer ISR taking the same lock deadlocks and the plan as written does not compile.
++- [S2] src/kernel/task/scheduler.cpp:947,1802,1827,1984,2013,3810,4674,3987 — TLS slot missing at 7 CR3-clear sites and the second publish site
++  WHY: Every path that zeroes load_cr3_from must zero load_tls_from and the ~3972-3992 dispatch path must publish TLS alongside CR3, or a later switch consumes a stale base (wrong-thread TLS, the plan's own declared S2).
++- [S2] src/kernel/arch/riscv64/syscall_entry.S:227 — plan step 11 live-tp write is clobbered before sret
++  WHY: The GPR restore (ld x4, OFF_TP(sp)) runs after the satp switch, so the apply must update the OFF_TP save area or write post-restore, else TLS never takes effect on riscv64.
++- [S2] src/kernel/elf/elf.cpp:715 + plan step 7 — no self-set live apply; exec path has no reset step
++  WHY: The setter runs on a stale FS_BASE/TPIDR/tp until next preemption (breaks the §13 crt0 TLS_SET-then-use sequence), and exec_into_current reuses the live TCB with no tls reset though the plan claims "exec resets to 0" (only finalize is stepped).
++- [S3] src/kernel/memory/address.hpp:111 — LA57 live-query helper does not exist; is_canonical is 48-bit-only
++  WHY: No paging_levels/five-level/CR4.LA57 symbol exists anywhere and x86 CONFIG_USER_SPACE_LIMIT (nexios_config.h:141) already caps at 47-bit, so the planned live-mode branch is dead untestable code.
++- [S3] src/kernel/arch/aarch64/vectors.S:237 — plan assumes per-CPU slot[cpu] on archs with single-slot access and no abort path
++  WHY: aarch64/riscv consume the array base only (scheduler.hpp:1045-1048) with skip-to-restore paths that never clear, so the plan must mirror that pattern explicitly with its staleness argument.
++- [S3] src/kernel/arch/x86_64/isr_stubs.asm:422 — asm insert underspecifies preserved registers and fallback-path behavior
++  WHY: WRMSR needs ecx/edx/eax so the insert must name the exact preserve set (rax/rcx/rdx + r11 index, no calls), and .load_cr3 is also reached via the kernel_cr3 fallback where a nonzero TLS slot must be impossible (depends on the S2 clear-site fix).
++- [S3] src/kernel/syscall/syscall_errors.hpp:44 — TLS_INVALID_BASE=110 is not the first free ID above the task band
++  WHY: The task band ends at 108 and 109 is also unused, so use 109 or document the reservation, and confirm no error-count assertion needs updating.
++- [S3] audits/pending_plan-74.md:3 — no graphify/vault retrieval dispositions stated in the plan
++  WHY: The issue #74 thread allegedly holds them but is unreachable to this auditor, so this check is evaluated against the plan's own spec citations (all anchors verified real) with the GitHub-side check noted as a limitation.
++
++DECISION: REJECTED
+diff --git a/audits/report-2026-09-19T132602Z.md b/audits/report-2026-09-19T132602Z.md
+new file mode 100644
+index 00000000..08f5f74d
+--- /dev/null
++++ b/audits/report-2026-09-19T132602Z.md
+@@ -0,0 +1,17 @@
++# AUDIT REPORT 2026-09-19T132602Z
++PATCH: audits/pending_plan-74.md v2 (plan review — no code diff yet)
++FILES: src/kernel/task/task.hpp, src/kernel/task/task.cpp, src/kernel/elf/elf.cpp, src/kernel/syscall/syscall.hpp, src/kernel/syscall/syscall_handlers_tls.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/syscall/syscall_errors.hpp, src/kernel/arch/x86_64/hal/msr_impl.hpp, src/kernel/arch/aarch64/hal/io_impl.hpp, src/kernel/arch/riscv64/hal/io_impl.hpp, src/kernel/core/global_state.hpp, src/kernel/core/global_state.cpp, src/kernel/arch/x86_64/isr_stubs.asm, src/kernel/arch/aarch64/vectors.S, src/kernel/arch/riscv64/syscall_entry.S, src/kernel/test/test_tls.cpp, src/libc/syscall.h
++
++## FINDINGS
++- [S2] src/kernel/arch/aarch64/vectors.S:248 — .tls_apply inserted between CR3 clear (:248) and isb (:249) breaks TTBR/isb pairing
++  WHY: On the CR3-taken/TLS-zero path `cbz x3, .restore` jumps over the :249 isb, leaving a TTBR0 switch + TLBI with no instruction-synchronization barrier before ERET.
++- [S3] src/kernel/arch/riscv64/syscall_entry.S:212 — inserted block reuses numeric label `7:` already defined at :212
++  WHY: `beqz t1, 7f` binds to the nearest forward `7:` so behavior is accidentally correct, but duplicate local labels are fragile — use a unique label.
++- [S3] src/kernel/task/scheduler.cpp:678 — live-apply gate uses `is_current_on_any_cpu` precedent for a local register write
++  WHY: FS_BASE/TPIDR/tp writes affect only this CPU, so the gate must be `&task == current_task()` — harmless today (single-core, always-self call sites) but wrong on SMP if the API ever targets a remote-running task.
++- [S3] src/kernel/arch/aarch64/vectors.S:208 — no-abort/publish+arm atomicity invariant has no aarch64-side test
++  WHY: The relied-upon invariant is pinned only by x86 `tls_cancel_clears_slot`, which cannot exercise the aarch64 epilogue path.
++- [S3] docs/specs/syscall-abi-picolibc.md:133 — binding spec still mandates LA57 live-mode query vs plan's static 48-bit gate
++  WHY: Zero LA57 implementation symbols tree-wide makes the static gate exact today, but the spec/plan asymmetry persists — the plan's recorded trigger condition (widen gate if LA57 lands) is the correct mitigation, spec text should follow.
++
++DECISION: REJECTED
+diff --git a/audits/report-2026-09-19T132924Z.md b/audits/report-2026-09-19T132924Z.md
+new file mode 100644
+index 00000000..abde6053
+--- /dev/null
++++ b/audits/report-2026-09-19T132924Z.md
+@@ -0,0 +1,11 @@
++# AUDIT REPORT 2026-09-19T132924Z
++PATCH: audits/pending_plan-74.md v3 (plan review — no code diff yet)
++FILES: src/kernel/task/task.hpp, src/kernel/task/task.cpp, src/kernel/elf/elf.cpp, src/kernel/syscall/syscall.hpp, src/kernel/syscall/syscall_handlers_tls.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/syscall/syscall_errors.hpp, src/kernel/arch/x86_64/hal/msr_impl.hpp, src/kernel/arch/aarch64/hal/io_impl.hpp, src/kernel/arch/riscv64/hal/io_impl.hpp, src/kernel/core/global_state.hpp, src/kernel/core/global_state.cpp, src/kernel/arch/x86_64/isr_stubs.asm, src/kernel/arch/aarch64/vectors.S, src/kernel/arch/riscv64/syscall_entry.S, src/kernel/test/test_tls.cpp, src/libc/syscall.h
++
++## FINDINGS
++- [S3] src/kernel/task/scheduler.cpp:657 — live-apply TOCTOU guard scope is implicit, not stated
++  WHY: Step 9 releases `scheduler_lock_` before the `&task == current_task()` gate plus live register write, which is race-free only if `irq_guard` (mirrored from set_affinity_err) is still held across it — the plan must state that explicitly or a narrowly-scoped implementer reintroduces a preemption window.
++- [S3] src/kernel/arch/aarch64/vectors.S:208 — live-epilogue consume remains unpinned by test 13
++  WHY: `tls_no_stale_slot_after_cancel` drives only the C++ clear helpers, so the vectors.S/syscall_entry.S consume half is still uncovered until #28-family real-arch execution — honestly documented, not silent, hence non-blocking.
++
++DECISION: APPROVED
+diff --git a/mk/cpp-rules.gen.mk b/mk/cpp-rules.gen.mk
+index a0a2c01a..d3aa0edd 100644
+--- a/mk/cpp-rules.gen.mk
++++ b/mk/cpp-rules.gen.mk
+@@ -550,6 +550,10 @@ build/kernel/test/test_locking.o: src/kernel/test/test_locking.cpp
+ 	@mkdir -p $(dir $@)
+ 	@printf "  %s %s\n" CC $@
+ 	$(CXX) $(CXXFLAGS) -c -o $@ $<
++build/kernel/test/test_tls.o: src/kernel/test/test_tls.cpp
++	@mkdir -p $(dir $@)
++	@printf "  %s %s\n" CC $@
++	$(CXX) $(CXXFLAGS) -c -o $@ $<
+ build/kernel/test/test_o1_scheduler.o: src/kernel/test/test_o1_scheduler.cpp
+ 	@mkdir -p $(dir $@)
+ 	@printf "  %s %s\n" CC $@
+@@ -850,6 +854,10 @@ build/kernel/syscall/syscall_handlers_sync.o: src/kernel/syscall/syscall_handler
+ 	@mkdir -p $(dir $@)
+ 	@printf "  %s %s\n" CC $@
+ 	$(CXX) $(CXXFLAGS) -c -o $@ $<
++build/kernel/syscall/syscall_handlers_tls.o: src/kernel/syscall/syscall_handlers_tls.cpp
++	@mkdir -p $(dir $@)
++	@printf "  %s %s\n" CC $@
++	$(CXX) $(CXXFLAGS) -c -o $@ $<
+ build/kernel/syscall/syscall_handlers_ipc.o: src/kernel/syscall/syscall_handlers_ipc.cpp
+ 	@mkdir -p $(dir $@)
+ 	@printf "  %s %s\n" CC $@
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 73424e2c..33fd54a1 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -254,6 +254,13 @@ inline void write_ttbr0_el1(uint64_t v) {
+     asm volatile("msr ttbr0_el1, %0" : : "r"(v) : "memory");
      isb();
  }
- 
-+/// @brief Purge one context's non-global TLB entries (issue #184).
-+///        Fallback: this port allocates no ASIDs, so the required semantics
-+///        are provided via a full EL1 invalidate — a safe superset of a
-+///        single-context purge, mirroring the x86_64 CR3-reload fallback.
-+///        Local CPU only; cross-CPU invalidation is out of scope.
-+/// @param pcid Owning context id, ignored (0 = untagged/kernel).
-+inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
-+    arch_page_table_tlb_flush_all();
++/// @brief Write TPIDR_EL0 (user thread-local-storage base, issue #74).
++/// @param[in] v User VA of the thread block (0 clears). Trailing isb so the
++/// write is observed before ERET to EL0. Never touches EL1 state.
++inline void write_tpidr_el0(uint64_t v) {
++    asm volatile("msr tpidr_el0, %0" : : "r"(v) : "memory");
++    isb();
 +}
-+
- /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
- class ArchPageTable {
-   public:
-diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
-index ad87fa41..10ec3afd 100644
---- a/src/kernel/arch/aarch64/interrupt_controller.cpp
-+++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
-@@ -148,4 +148,34 @@ ack:
-         gicc_reg(GICC_EOIR)[0] = static_cast<uint32_t>(intid);
+ /// @brief Write TTBR1_EL1 (kernel page table base).
+ /// @param[in] v Physical address of the kernel page table.
+ inline void write_ttbr1_el1(uint64_t v) {
+diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
+index e2a7fb92..5a44250d 100644
+--- a/src/kernel/arch/aarch64/vectors.S
++++ b/src/kernel/arch/aarch64/vectors.S
+@@ -176,6 +176,7 @@ el0_sync:
+ .extern scheduler_save_rsp_to
+ .extern scheduler_load_rsp_from
+ .extern scheduler_load_cr3_from
++.extern scheduler_load_tls_from // Issue #74: TLS base publish slot
+ .extern scheduler_on_context_switch
+ .extern aarch64_el0_fault_handler
+ 
+@@ -236,7 +237,7 @@ irq_context_switch_common:
+     // Handle CR3 (page table) switch
+     adrp    x3, scheduler_load_cr3_from
+     ldr     x3, [x3, #:lo12:scheduler_load_cr3_from]
+-    cbz     x3, .restore
++    cbz     x3, .tls_apply
+     msr     ttbr0_el1, x3
+     // A TTBR0 change with ASID=0 requires an invalidation of the stale
+     // boot-context translations, otherwise stale identity-map entries are
+@@ -246,7 +247,18 @@ irq_context_switch_common:
+     dsb     sy
+     adrp    x4, scheduler_load_cr3_from
+     str     xzr, [x4, #:lo12:scheduler_load_cr3_from]
+-    isb
++.tls_apply:
++    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1/EL1
++    // state untouched). x3/x4 reuse is safe (all user regs in the save
++    // area); the isb below is the SHARED join point pairing both the TTBR0
++    // switch above and the TPIDR_EL0 write here.
++    adrp    x3, scheduler_load_tls_from
++    ldr     x3, [x3, #:lo12:scheduler_load_tls_from]
++    cbz     x3, 8f
++    msr     tpidr_el0, x3
++    adrp    x4, scheduler_load_tls_from
++    str     xzr, [x4, #:lo12:scheduler_load_tls_from]
++8:  isb
+ 
+ .restore:
+     restore_all
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index 54cbdacf..4330d82b 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -192,6 +192,14 @@ inline void write_cr3(uint64_t v) {
+ inline void write_cr3_notlbi(uint64_t v) {
+     write_satp((8ULL << 60) | v);
  }
- 
-+namespace {
-+// Post-mortem latch for EL0 faults (GDB-observable; zero-initialized
-+// statics need no dynamic init).
-+volatile uint64_t g_last_el0_esr = 0;
-+volatile uint64_t g_last_el0_far = 0;
-+volatile uint64_t g_last_el0_elr = 0;
-+} // namespace
-+
-+/// @brief EL0 synchronous-fault handler called from vectors.S (issue #184).
-+///        Non-SVC faults from EL0 land here.  EL0 tasks do not run yet
-+///        (bring-up issue #28), so any arrival is deeply wrong: latch
-+///        ESR/FAR/ELR for post-mortem GDB and park the CPU.  Runs with
-+///        interrupts masked (vector entry); must not re-enable IRQs,
-+///        touch the scheduler, or return (vectors.S erets on return,
-+///        but there is no task to resume to).
-+extern "C" void aarch64_el0_fault_handler() {
-+    uint64_t esr = 0;
-+    uint64_t far = 0;
-+    uint64_t elr = 0;
-+    asm volatile("mrs %0, esr_el1" : "=r"(esr));
-+    asm volatile("mrs %0, far_el1" : "=r"(far));
-+    asm volatile("mrs %0, elr_el1" : "=r"(elr));
-+    g_last_el0_esr = esr;
-+    g_last_el0_far = far;
-+    g_last_el0_elr = elr;
-+    for (;;) {
-+        arch::pause();
-+    }
++/// @brief Write the tp register (user thread-local-storage base, issue #74).
++/// @param v User VA of the thread block (0 clears). tp is ABI-reserved so the
++/// compiler never allocates it; the write is exact. Trap-return consumes the
++/// OFF_TP save area instead (syscall_entry.S), this helper covers task-context
++/// live-apply (TLS_SET on the running task) and exec reset.
++inline void write_tp(uint64_t v) {
++    asm volatile("mv tp, %0" : : "r"(v) : "memory");
 +}
-+
+ 
+ /// @brief Stub read_cr0 (no x86 CR0 on RISC-V).
+ /// @return Always 0.
+diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
+index d0b3a4e0..bc88cfaa 100644
+--- a/src/kernel/arch/riscv64/syscall_entry.S
++++ b/src/kernel/arch/riscv64/syscall_entry.S
+@@ -209,7 +209,16 @@ syscall_entry:
+     la t0, scheduler_load_cr3_from
+     sd zero, 0(t0)
+ 
+-7:  # Decrement nesting depth
++7:  # Issue #74: consume the TLS slot into the trap-frame TP save area.
++    # Both SATP paths converge here, so the slot is consumed
++    # unconditionally. A direct tp write would die at the OFF_TP restore
++    # below, and no sfence is needed for tp.
++    la t0, scheduler_load_tls_from
++    ld t1, 0(t0)
++    sd zero, 0(t0)
++    beqz t1, 8f
++    sd t1, OFF_TP(sp)
++8:  # Decrement nesting depth
+     la t0, isr_nesting_depth
+     ld t1, 0(t0)
+     addi t1, t1, -1
+diff --git a/src/kernel/arch/x86_64/hal/msr_impl.hpp b/src/kernel/arch/x86_64/hal/msr_impl.hpp
+index fb426820..32222266 100644
+--- a/src/kernel/arch/x86_64/hal/msr_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/msr_impl.hpp
+@@ -56,6 +56,10 @@ inline constexpr uint32_t IA32_LSTAR = 0xC0000082;
+ inline constexpr uint32_t IA32_FMASK = 0xC0000084;
+ /// @brief IA32_GS_BASE MSR — GS base address for user-mode (0xC0000101).
+ inline constexpr uint32_t MSR_GS_BASE = 0xC0000101;
++/// @brief IA32_FS_BASE MSR — FS base address, thread-local storage (0xC0000100,
++/// issue #74). x86_64 TLS loads FS_BASE only; per-CPU GS routing is untouched
++/// (swapgs audit invariant).
++inline constexpr uint32_t MSR_FS_BASE = 0xC0000100;
+ 
  } // namespace arch
-diff --git a/src/kernel/arch/aarch64/test_stubs.cpp b/src/kernel/arch/aarch64/test_stubs.cpp
-index 87be1811..37158f6a 100644
---- a/src/kernel/arch/aarch64/test_stubs.cpp
-+++ b/src/kernel/arch/aarch64/test_stubs.cpp
-@@ -131,4 +131,17 @@ void register_block_device_tests() {
-         "Skipped: register_block_device_tests (not supported on this arch)");
- }
+ // NOLINTEND(bugprone-narrowing-conversions)
+diff --git a/src/kernel/arch/x86_64/isr_stubs.asm b/src/kernel/arch/x86_64/isr_stubs.asm
+index bc513977..5a4a6c7d 100644
+--- a/src/kernel/arch/x86_64/isr_stubs.asm
++++ b/src/kernel/arch/x86_64/isr_stubs.asm
+@@ -27,6 +27,7 @@ extern scheduler_load_rsp_from
+ ; (linker aliases in linker_x86_64.ld); isr_common below uses gs:0x20 /
+ ; gs:0x28 for them, never [rel] (INV-PC2).
+ extern scheduler_load_cr3_from
++extern scheduler_load_tls_from ; Issue #74: TLS base publish slot
+ extern scheduler_load_kstack_base
+ extern scheduler_load_kstack_top
+ extern scheduler_switch_generation
+@@ -423,6 +424,26 @@ isr_common:
+     mov cr3, rax
+     lea rax, [rel scheduler_load_cr3_from]
+     mov qword [rax + r11*8], 0
++    ; Issue #74: apply the published TLS base (FS_BASE only — per-CPU GS
++    ; routing is untouched). Consume unconditionally; WRMSR only if nonzero.
++    ; rax/rcx/rdx are scratch-safe (.restore pops all GPRs below); r11 is
++    ; the read-only CPU index; no calls.
++    lea rax, [rel scheduler_load_tls_from]
++    mov rax, [rax + r11*8]
++    test rax, rax
++    jz .tls_done
++    mov rcx, rax
++    lea rax, [rel scheduler_load_tls_from]
++    mov qword [rax + r11*8], 0
++    mov rdx, rcx
++    shr rdx, 32
++    mov eax, ecx
++    mov ecx, 0xC0000100 ; MSR_FS_BASE
++    wrmsr
++    jmp .restore
++.tls_done:
++    lea rax, [rel scheduler_load_tls_from]
++    mov qword [rax + r11*8], 0
+     jmp .restore
  
-+/// @brief Stub — APIC TPR tests are x86_64-specific (local APIC task
-+/// priority register).
-+void register_apic_tpr_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_apic_tpr_tests (not supported on this arch)");
-+}
-+
-+/// @brief Stub — PT-merge tests are x86_64-specific (PML4 merge semantics).
-+void register_pt_merge_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_pt_merge_tests (not supported on this arch)");
-+}
-+
- #endif // !defined(CONFIG_ARCH_X86_64)
-diff --git a/src/kernel/arch/riscv64/hal/page_table_impl.hpp b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
-index 62692441..50683e54 100644
---- a/src/kernel/arch/riscv64/hal/page_table_impl.hpp
-+++ b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
-@@ -65,6 +65,16 @@ inline void arch_page_table_tlb_flush_all() {
-     asm volatile("sfence.vma" : : : "memory");
- }
+ .abort_switch:
+@@ -434,6 +455,8 @@ isr_common:
+     mov qword [rax + r11*8], 0
+     lea rax, [rel scheduler_load_cr3_from]
+     mov qword [rax + r11*8], 0
++    lea rax, [rel scheduler_load_tls_from]
++    mov qword [rax + r11*8], 0
+     lea rax, [rel scheduler_next_task_id]
+     mov qword [rax + r11*8], -1
+     mov rsp, rbx
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index dfa686a2..9a257fdb 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -62,6 +62,7 @@ extern "C" {
+ uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS] = {};
++uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 7b1ca605..53f82ece 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -32,6 +32,7 @@
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/msr.hpp>
+ #include <kernel/arch/page_table.hpp>
+ #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+ #include <kernel/arch/x86_64/hal/pcid.hpp>
+@@ -512,6 +513,7 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+         return nullptr;
+     memset(tcb, 0, sizeof(TaskControlBlock));
+     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
++    tcb->tls_base_ = 0; // issue #74: fresh image starts with no TLS
+     tcb->magic = TaskControlBlock::TCB_MAGIC;
+     tcb->id = kernel::Scheduler::alloc_id();
+     tcb->state = TaskState::READY;
+@@ -772,6 +774,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     tcb->canary_installed = 0;
+     tcb->page_table_ = new_pml4;
+     tcb->is_user_ = true;
++    // Issue #74: exec reuses the live TCB — the old image's TLS base must not
++    // survive into the new image. Reset the field and clear the live register
++    // (the new image calls TLS_SET itself per the §13 crt0 contract).
++    tcb->tls_base_ = 0;
++#if defined(CONFIG_ARCH_X86_64)
++    arch::wrmsr(arch::MSR_FS_BASE, 0);
++#elif defined(CONFIG_ARCH_AARCH64)
++    arch::write_tpidr_el0(0);
++#elif defined(CONFIG_ARCH_RISCV64)
++    arch::write_tp(0);
++#endif
+ #if defined(CONFIG_ARCH_X86_64)
+     // Issue #157 H3: the TCB keeps its PCID across the table swap, but
+     // the OLD image's entries cached under it must die with the old
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index 8864f7e6..c6bab9d6 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -378,6 +378,8 @@ class Syscall {
+                                       uint64_t *);
+     static uint64_t sys_abi_version(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
++    static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
++                                uint64_t *);
+     static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
  
-+/// @brief Purge one context's non-global TLB entries (issue #184).
-+///        Fallback: this port allocates no ASIDs, so the required semantics
-+///        are provided via a full fence — a safe superset of a
-+///        single-context purge, mirroring the x86_64 CR3-reload fallback.
-+///        Local CPU only; cross-CPU invalidation is out of scope.
-+/// @param pcid Owning address-space id, ignored (0 = untagged/kernel).
-+inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
-+    arch_page_table_tlb_flush_all();
-+}
-+
- /// @brief Sv39 page table manager — wraps arch_page_table_* free functions
- ///        and provides map/unmap/lookup operations.
- class ArchPageTable {
-diff --git a/src/kernel/arch/riscv64/test_stubs.cpp b/src/kernel/arch/riscv64/test_stubs.cpp
-index 96ae5a6f..2dc3e13f 100644
---- a/src/kernel/arch/riscv64/test_stubs.cpp
-+++ b/src/kernel/arch/riscv64/test_stubs.cpp
-@@ -138,4 +138,17 @@ void register_buffer_pool_tests() {
-         "Skipped: register_buffer_pool_tests (not supported on this arch)");
- }
+@@ -468,7 +470,7 @@ class Syscall {
+             &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
+             &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
+             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
+-            &Syscall::sys_unimplemented, // 85 TLS_SET (issue #74)
++            &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
+     };
+ };
  
-+/// @brief Stub — APIC TPR tests are x86_64-specific (local APIC task
-+/// priority register).
-+void register_apic_tpr_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_apic_tpr_tests (not supported on this arch)");
-+}
-+
-+/// @brief Stub — PT-merge tests are x86_64-specific (PML4 merge semantics).
-+void register_pt_merge_tests() {
-+    kernel::Logger::info(
-+        "Skipped: register_pt_merge_tests (not supported on this arch)");
-+}
-+
- #endif // !defined(CONFIG_ARCH_X86_64)
-diff --git a/src/lib/compiler_rt.cpp b/src/lib/compiler_rt.cpp
+diff --git a/src/kernel/syscall/syscall_errors.hpp b/src/kernel/syscall/syscall_errors.hpp
+index 46f65662..b769e684 100644
+--- a/src/kernel/syscall/syscall_errors.hpp
++++ b/src/kernel/syscall/syscall_errors.hpp
+@@ -42,6 +42,7 @@ namespace kernel::errors {
+     X(TASK_NOT_FOUND, 106, "Task not found")                                   \
+     X(TASK_INVALID_ARG, 107, "Task invalid argument")                          \
+     X(TASK_INVALID_STATE, 108, "Task invalid state")                           \
++    X(TLS_INVALID_BASE, 109, "Invalid TLS base address")                       \
+     /* PMM subsystem errors (200+) */                                          \
+     X(PMM_OOM, 201, "Physical memory exhausted")                               \
+     X(PMM_USER_OOM, 202, "User physical memory exhausted")                     \
+diff --git a/src/kernel/syscall/syscall_handlers_tls.cpp b/src/kernel/syscall/syscall_handlers_tls.cpp
 new file mode 100644
-index 00000000..b1fdd04a
+index 00000000..72b32d6a
 --- /dev/null
-+++ b/src/lib/compiler_rt.cpp
-@@ -0,0 +1,60 @@
++++ b/src/kernel/syscall/syscall_handlers_tls.cpp
+@@ -0,0 +1,70 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -210,45 +538,1009 @@ index 00000000..b1fdd04a
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file compiler_rt.cpp
-+/// @brief Software implementations of the gcc runtime helpers __clzdi2 /
-+///        __ctzdi2.  RISC-V ONLY (issue #182 / #184): rv64imafdc without the
-+///        Zbb extension lowers __builtin_clzll/__builtin_ctzll to libcalls,
-+///        and the prebuilt libgcc.a cannot satisfy them (R_RISCV_HI20
-+///        medany/medlow relocation mismatch), so the kernel provides its
-+///        own copies.  x86_64 and AArch64 lower these builtins to inline
-+///        instructions (verified: zero undefined refs in their objects),
-+///        so the functions are compiled out there — and out of the x86
-+///        coverage denominator.
++/// @file syscall_handlers_tls.cpp
++/// @brief TLS_SET(85) handler (issue #74): store the caller's
++/// thread-local-storage base. Scalar only — no user-pointer dereference —
++/// but stays out of k_syscall_fast[] (issue #92 discipline: the FAST list
++/// changes only via audited pointer-free review + gate).
 +
-+#if defined(CONFIG_ARCH_RISCV64)
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/syscall/syscall_errors.hpp>
++#include <kernel/syscall/syscall_helpers.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/memory/address.hpp>
++#include <kernel/nexios_config.h>
 +
-+extern "C" {
++namespace kernel {
 +
-+unsigned long __clzdi2(unsigned long val) {
-+    if (val == 0) return 64;
-+    unsigned long count = 0;
-+    if ((val >> 32) == 0) { count += 32; val <<= 32; }
-+    if ((val >> 48) == 0) { count += 16; val <<= 16; }
-+    if ((val >> 56) == 0) { count += 8; val <<= 8; }
-+    if ((val >> 60) == 0) { count += 4; val <<= 4; }
-+    if ((val >> 62) == 0) { count += 2; val <<= 2; }
-+    if ((val >> 63) == 0) { count += 1; }
-+    return count;
++/// @brief Set the calling task's TLS base (issue #74).
++///        arg0 = user VA of the thread block, 0 = unset (clears).
++///        Validation is per-arch (spec §7): x86_64 48-bit canonical +
++///        47-bit user-half limit; aarch64 48-bit limit (subsumes
++///        canonical — is_canonical() is x86-48-bit-specific and would
++///        wrongly reject valid high user VAs); riscv64 Sv39 explicit
++///        bits[63:39]==0 + 40-bit limit. Reachable failures return the
++///        dedicated code (never ENSURE). Scalar store via
++///        Scheduler::set_tls_base_err (IrqGuard + scheduler lock, live
++///        register apply when self); never blocks, never reschedules.
++/// @return 0, -SYS_ERR_TLS_INVALID_BASE, -SYS_ERR_SCHED_NO_CURRENT.
++uint64_t Syscall::sys_tls_set(uint64_t arg0, uint64_t, uint64_t, uint64_t,
++                              uint64_t *) {
++    auto *t = syscall_task();
++    if (t == nullptr)
++        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_NO_CURRENT);
++    if (arg0 != 0) {
++#if defined(CONFIG_ARCH_X86_64)
++        if (!VirtualAddress(arg0).is_canonical())
++            return static_cast<uint64_t>(-errors::SYS_ERR_TLS_INVALID_BASE);
++#elif defined(CONFIG_ARCH_RISCV64)
++        // Sv39 user half: bits[63:39] must be zero (the 40-bit
++        // CONFIG_USER_SPACE_LIMIT alone admits non-canonical values).
++        if ((arg0 >> 39) != 0)
++            return static_cast<uint64_t>(-errors::SYS_ERR_TLS_INVALID_BASE);
++#endif
++        // User-half gate on all archs (arch-appropriate LIMIT).
++        if (arg0 >= CONFIG_USER_SPACE_LIMIT)
++            return static_cast<uint64_t>(-errors::SYS_ERR_TLS_INVALID_BASE);
++    }
++    if (Scheduler::set_tls_base_err(*t, arg0) != errors::SCHED_ERR_OK)
++        return static_cast<uint64_t>(-errors::SYS_ERR_SCHED_NO_CURRENT);
++    return 0;
 +}
 +
-+unsigned long __ctzdi2(unsigned long val) {
-+    if (val == 0) return 64;
-+    unsigned long count = 0;
-+    if ((val & 0xFFFFFFFFUL) == 0) { count += 32; val >>= 32; }
-+    if ((val & 0xFFFFUL) == 0) { count += 16; val >>= 16; }
-+    if ((val & 0xFFUL) == 0) { count += 8; val >>= 8; }
-+    if ((val & 0xFUL) == 0) { count += 4; val >>= 4; }
-+    if ((val & 0x3UL) == 0) { count += 2; val >>= 2; }
-+    if ((val & 0x1UL) == 0) { count += 1; }
-+    return count;
++} // namespace kernel
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index eef9e2ab..39ecd9a4 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -27,6 +27,7 @@
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/msr.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+@@ -604,6 +605,8 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_load_cr3_from[cpu], (uint64_t)0,
+                      __ATOMIC_RELEASE);
++    __atomic_store_n(&scheduler_load_tls_from[cpu], (uint64_t)0,
++                     __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_next_task_id[cpu], UINT64_MAX,
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
+@@ -746,6 +749,33 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
+     (void)set_affinity_err(task, mask);
+ }
+ 
++errors::SchedulerError
++Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept {
++    // Issue #74: IrqGuard spans the gate + live write (re-audit S3) — a
++    // preemption between is_current and the register write would load a
++    // stale base. The spinlock covers the store only, never a reschedule.
++    arch::IrqGuard irq_guard{};
++    {
++        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
++        TaskControlBlock *cur = current_task();
++        if (!cur)
++            return errors::SCHED_ERR_NO_CURRENT;
++        (void)cur;
++        task.tls_base_ = base;
++    }
++    if (&task == Scheduler::current_task()) {
++        // Target is the running task: apply now (§13 crt0 sequence).
++#if defined(CONFIG_ARCH_X86_64)
++        arch::wrmsr(arch::MSR_FS_BASE, base);
++#elif defined(CONFIG_ARCH_AARCH64)
++        arch::write_tpidr_el0(base);
++#elif defined(CONFIG_ARCH_RISCV64)
++        arch::write_tp(base);
++#endif
++    }
++    return errors::SCHED_ERR_OK;
 +}
 +
+ // ---------------------------------------------------------------------------
+ // balancer_tick — RT load balancer (issue #61)
+ // ---------------------------------------------------------------------------
+@@ -946,6 +976,8 @@ void Scheduler::cancel_pending_switch() noexcept {
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
+                      __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
++                     __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX,
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
+@@ -1800,6 +1832,7 @@ void Scheduler::remove_task(TaskControlBlock &task) {
+     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+ 
+     // NOTE: ResourceTracker::track_task_remove() is intentionally NOT called
+     // here.  Task teardown has two styles (operator delete, and the reaper's
+@@ -1825,6 +1858,7 @@ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
+     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+ 
+     return true;
+ }
+@@ -1982,6 +2016,7 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
+         H2_REC(H2_EV_CLR_SET, armed, 0, 0);
+         __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
+                          __ATOMIC_RELEASE);
+         restore_preempted_current(old, armed);
+@@ -2011,6 +2046,7 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
+     H2_REC(H2_EV_CLR_SET, armed, 0, 0);
+     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
+                      __ATOMIC_RELEASE);
+     restore_preempted_current(old, armed);
+@@ -3605,6 +3641,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+ #endif
+         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                          __ATOMIC_RELEASE);
++        // Issue #74: publish the TLS base alongside CR3 (0 for unset;
++        // kernel/harness tasks publish via the else branch below).
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
++                         next.is_user_ ? next.tls_base_ : 0, __ATOMIC_RELEASE);
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+         {
+             auto *c = Scheduler::current_task();
+@@ -3621,6 +3661,10 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+     } else {
+         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+                          __ATOMIC_RELEASE);
++        // Issue #74: kernel/harness targets never carry TLS (apply loads
++        // nothing); publish 0 so no stale user base survives.
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
++                         __ATOMIC_RELEASE);
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+         {
+             auto *c = Scheduler::current_task();
+@@ -3809,6 +3853,8 @@ void Scheduler::rate_monotonic_schedule() noexcept {
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0,
+                          __ATOMIC_RELEASE);
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
++                         __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
+                          __ATOMIC_RELEASE);
+         restore_preempted_current(current, armed);
+@@ -3986,9 +4032,17 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+ #endif
+             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                              __ATOMIC_RELEASE);
++            // Issue #74: publish the TLS base alongside CR3 (second publish
++            // site — switch_away_from_terminating tick path).
++            __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
++                             next->is_user_ ? next->tls_base_ : 0,
++                             __ATOMIC_RELEASE);
+         } else {
+             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+                              __ATOMIC_RELEASE);
++            // Issue #74: kernel/harness targets never carry TLS.
++            __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
++                             __ATOMIC_RELEASE);
+         }
+ 
+         if (exiting.state == TaskState::RUNNING) {
+@@ -4069,6 +4123,7 @@ void Scheduler::capture_percpu(SchedPerCpuPod &out) noexcept {
+             reinterpret_cast<uint64_t>(scheduler_save_rsp_to[c]);
+         out.load_rsp_from[c] = scheduler_load_rsp_from[c];
+         out.load_cr3_from[c] = scheduler_load_cr3_from[c];
++        out.load_tls_from[c] = scheduler_load_tls_from[c];
+         out.next_task_id[c] = scheduler_next_task_id[c];
+         out.load_kstack_base[c] = scheduler_load_kstack_base[c];
+         out.load_kstack_top[c] = scheduler_load_kstack_top[c];
+@@ -4098,6 +4153,7 @@ void Scheduler::restore_percpu(const SchedPerCpuPod &src) noexcept {
+         }
+         scheduler_load_rsp_from[c] = src.load_rsp_from[c];
+         scheduler_load_cr3_from[c] = src.load_cr3_from[c];
++        scheduler_load_tls_from[c] = src.load_tls_from[c];
+         scheduler_next_task_id[c] = src.next_task_id[c];
+         scheduler_load_kstack_base[c] = src.load_kstack_base[c];
+         scheduler_load_kstack_top[c] = src.load_kstack_top[c];
+@@ -4191,6 +4247,8 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_load_cr3_from[0], (uint64_t)0,
+                      __ATOMIC_RELEASE);
++    __atomic_store_n(&scheduler_load_tls_from[0], (uint64_t)0,
++                     __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_next_task_id[0], UINT64_MAX,
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_save_rsp_to[0], (uint64_t *)nullptr,
+@@ -4208,6 +4266,8 @@ void Scheduler::clear_switch_globals() noexcept {
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&scheduler_load_cr3_from[c], (uint64_t)0,
+                          __ATOMIC_RELEASE);
++        __atomic_store_n(&scheduler_load_tls_from[c], (uint64_t)0,
++                         __ATOMIC_RELEASE);
+         __atomic_store_n(&scheduler_save_rsp_to[c], (uint64_t *)nullptr,
+                          __ATOMIC_RELEASE);
+     }
+@@ -4263,6 +4323,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
+         out[idx].edf_exempt = t->edf_exempt;
+         out[idx].cpu_affinity = t->cpu_affinity;
+         out[idx].iopb_slot = t->iopb_slot_;
++        out[idx].tls_base = t->tls_base_;
+         ++idx;
+     }
+     while (idx < MAX_TASKS)
+@@ -4351,6 +4412,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
+             t->edf_exempt = saved[j].edf_exempt;
+             t->cpu_affinity = saved[j].cpu_affinity;
+             t->iopb_slot_ = saved[j].iopb_slot;
++            t->tls_base_ = saved[j].tls_base;
+             break;
+         }
+         ++t_idx;
+@@ -4672,6 +4734,7 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
+     __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), nullptr, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+ 
+     // track_task_remove() lives in TaskControlBlock::cleanup() (shared teardown
+     // point) — not here — to avoid double-counting.  See Scheduler::remove_task.
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 239b88f4..e1007596 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -43,6 +43,7 @@ extern "C" {
+ extern uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
++extern uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
+@@ -58,6 +59,7 @@ struct SchedPerCpuPod {
+     uint64_t save_rsp_to[CONFIG_MAX_CPUS];      ///< as addresses
+     uint64_t load_rsp_from[CONFIG_MAX_CPUS];
+     uint64_t load_cr3_from[CONFIG_MAX_CPUS];
++    uint64_t load_tls_from[CONFIG_MAX_CPUS];
+     uint64_t next_task_id[CONFIG_MAX_CPUS];
+     uint64_t load_kstack_base[CONFIG_MAX_CPUS];
+     uint64_t load_kstack_top[CONFIG_MAX_CPUS];
+@@ -238,6 +240,18 @@ class Scheduler {
+     ///         SCHED_ERR_WCET_INVALID.
+     static errors::SchedulerError
+     set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept;
++    /// @brief Fallible TLS-base store (issue #74). Takes IrqGuard +
++    ///        scheduler_lock_ (NOT ISR-safe); stores task.tls_base_ and, when
++    ///        the target IS the running task, live-loads the register after
++    ///        unlock (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) — the
++    ///        §13 crt0 TLS_SET-then-use sequence has no preemption between.
++    ///        IrqGuard stays alive across the gate + live write (no preemption
++    ///        window). Never touches scheduler_lock_ callers' state.
++    /// @param task Target TCB (already validated by the caller).
++    /// @param base User VA, 0 = unset.
++    /// @return SCHED_ERR_OK, SCHED_ERR_NO_CURRENT.
++    static errors::SchedulerError
++    set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept;
+ 
+     /// @brief RT load balancer tick (issue #61): migrate queued
+     ///        aperiodic kernel tasks from the busiest up-CPU to the
+@@ -606,6 +620,7 @@ class Scheduler {
+         /// @brief CPU affinity bitmask (issue #25 C1).
+         uint64_t cpu_affinity;
+         uint8_t iopb_slot; ///< I/O permission bitmap pool slot (issue #3)
++        uint64_t tls_base; ///< Thread-local-storage base, user VA (issue #74)
+     };
+     static uint64_t snapshot_task_fields_size() {
+         return sizeof(TaskFields) * MAX_TASKS;
+@@ -870,6 +885,9 @@ struct SwSlots {
+     static uint64_t &load_cr3_from() {
+         return scheduler_load_cr3_from[this_cpu()];
+     }
++    static uint64_t &load_tls_from() {
++        return scheduler_load_tls_from[this_cpu()];
++    }
+     static uint64_t &next_task_id() {
+         return scheduler_next_task_id[this_cpu()];
+     }
+@@ -1054,6 +1072,8 @@ extern uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS];
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ extern uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS];
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++extern uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS];
++// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ extern uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS];
+ /// @brief Kernel-stack range of the task being dispatched.  isr_stubs.asm
+ ///        verifies scheduler_load_rsp_from lies within
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index abc81670..769898b3 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -913,6 +913,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+     TCB_WRITE(tcb, magic, TCB_MAGIC);
+     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
++    tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
+     {
+         char buf[CONFIG_TASK_NAME_LEN];
+         size_t pos = 0;
+@@ -1157,6 +1158,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     TCB_WRITE(tcb, magic, TCB_MAGIC);
+     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
++    tcb->tls_base_ = 0; // issue #74: no TLS until TLS_SET
+     TCB_WRITE(tcb, state, TaskState::READY);
+     tcb->priority = priority;
+     tcb->base_priority = priority;
+@@ -1361,6 +1363,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     tcb->priority = parent->priority;
+     tcb->base_priority = parent->base_priority;
+     tcb->cpu_affinity = parent->cpu_affinity; // issue #25 C1: inherit mask
++    tcb->tls_base_ = parent->tls_base_; // issue #74: clone inherits TLS base
+     tcb->period_ticks = parent->period_ticks;
+     tcb->deadline_ticks = parent->deadline_ticks;
+     tcb->executed_ticks = 0;
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 4a780c1d..d35ea6a2 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -275,8 +275,9 @@ struct TaskControlBlock {
+           recv_timed_out(false),
+           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
+           recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
+-          iopb_slot_(IOPB_SLOT_NONE),
+-          buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
++           iopb_slot_(IOPB_SLOT_NONE),
++           tls_base_(0),
++           buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
+           blocked_next(nullptr), blocked_prev(nullptr),
+           blocked_on_queue(nullptr), reply_wait(false),
+           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+@@ -541,6 +542,14 @@ struct TaskControlBlock {
+     static constexpr uint8_t IOPB_SLOT_NONE = 0xFF;
+     uint8_t iopb_slot_;
+ 
++    /// @brief Thread-local-storage base, user VA (issue #74). 0 = unset
++    /// (kernel loads nothing). Set via TLS_SET(85); published in
++    /// switch_to_task alongside CR3 and applied in the ISR epilogue
++    /// (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) before user return.
++    /// Explicitly zeroed at all TCB memset sites (create/create_user/clone
++    /// + elf finalize); clone inherits the parent value.
++    uint64_t tls_base_;
++
+     /// @brief Head of doubly-linked list of buffer handles owned by
+     /// this task. -1 means the list is empty. Used by the BufferPool
+     /// for zero-copy IPC.
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 15f478bb..5ffe4d38 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -286,6 +286,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+     {"bench",               22,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173)
+     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls, rescued (issue #61, wired up #173)
++    {"tls",                 12,   12,      12     },  // TLS_SET + publish/apply (issue #74)
+ };
+ 
+ static constexpr size_t k_expected_count_size =
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 9c522cc4..8df5050b 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -177,6 +177,7 @@ void register_mempool_tests();
+ void register_slab_reclaim_tests();
+ void register_sporadic_server_tests();
+ void register_syscall_affinity_tests();
++void register_tls_tests();
+ void register_atomic_tests();
+ void register_cross_arch_tests();
+ void register_o1_scheduler_tests();
+@@ -363,6 +364,7 @@ static void run_syscall_fastpath_group() {
+ static void run_syscall_affinity_group() {
+     register_syscall_affinity_tests();
+ }
++static void run_tls_group() { register_tls_tests(); }
+ static void run_process_lifecycle_group() { register_process_tests(); }
+ static void run_process_elf_group() { register_elf_tests(); }
+ static void run_elf_loader_group() { register_elf_loader_tests(); }
+@@ -667,6 +669,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // wired into the `core` aggregate (issue #173).
+     {"syscall_affinity", []() { run_syscall_affinity_group(); }},
+ 
++    // -- tls: TLS_SET + TLS-on-switch publish/apply (issue #74) --
++    {"tls", []() { run_tls_group(); }},
++
+     // -- process: lifecycle, exec, signals, limits --
+     {"process_lifecycle", []() { run_process_lifecycle_group(); }},
+     {"process_elf", []() { run_process_elf_group(); }},
+@@ -987,8 +992,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          run_memory_vmm_group();
+          run_syscall_core_group();
+          run_syscall_fuzz_group();
+-         run_syscall_fastpath_group();
+-         run_syscall_affinity_group();
++          run_syscall_fastpath_group();
++          run_syscall_affinity_group();
++          run_tls_group();
+      }},
+     {"ipc",
+      []() {
+diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
+new file mode 100644
+index 00000000..8591bebb
+--- /dev/null
++++ b/src/kernel/test/test_tls.cpp
+@@ -0,0 +1,551 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_tls.cpp
++/// @brief TLS_SET(85) + TLS-on-context-switch tests (issue #74).  DRIVEN:
++///        every syscall is invoked by a REAL dispatched kernel task so
++///        syscall_task() resolves genuinely (test_syscall.cpp pattern).
++///        Publish/apply mechanics use synthetic-user tasks (is_user_ set on
++///        a kernel-context TCB): a C++ lambda cannot run as a true userspace
++///        task (test_ipc_blocking.cpp documents the constraint), and the
++///        validation/publish paths key off the flag + page-table fields the
++///        test controls.  Full ring-3 acceptance belongs to #75 (crt0 calls
++///        TLS_SET through the real gate).
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/syscall/syscall_errors.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/msr.hpp>
++#include <kernel/nexios_config.h>
++#include <constants.hpp>
++#include "test_sched_helpers.hpp"
++
++using namespace kernel;
++
++namespace {
++
++// Create a REAL kernel task, dispatch it, and wait for genuine
++// termination (test_syscall.cpp run_syscall_task pattern, local copy).
++TaskControlBlock *run_tls_task(void (*entry)()) {
++    auto *t = TaskControlBlock::create(entry, 11, 10);
++    if (t == nullptr)
++        return nullptr;
++    Scheduler::add_task(*t);
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    return t;
 +}
 +
-+#endif // defined(CONFIG_ARCH_RISCV64)
++void release_tls_task(TaskControlBlock *t) {
++    if (t == nullptr)
++        return;
++    kernel::test::terminate_if_live(t);
++    Scheduler::drain_zombie_list();
++}
++
++// Live TLS register readback, per arch (x86_64 FS_BASE, aarch64
++// TPIDR_EL0, riscv64 tp).  Test-context reads are unprivileged-safe:
++// RDMSR/MRS/MV execute fine in ring 0; user tasks use the same.
++uint64_t read_live_tls() {
++#if defined(CONFIG_ARCH_X86_64)
++    return arch::rdmsr(arch::MSR_FS_BASE);
++#elif defined(CONFIG_ARCH_AARCH64)
++    uint64_t v = 0;
++    asm volatile("mrs %0, tpidr_el0" : "=r"(v));
++    return v;
++#elif defined(CONFIG_ARCH_RISCV64)
++    uint64_t v = 0;
++    asm volatile("mv %0, tp" : "=r"(v));
++    return v;
++#else
++    return 0;
++#endif
++}
++
++// Live TLS register clear (test hygiene: leave no stale base behind).
++void write_live_tls(uint64_t v) {
++#if defined(CONFIG_ARCH_X86_64)
++    arch::wrmsr(arch::MSR_FS_BASE, v);
++#elif defined(CONFIG_ARCH_AARCH64)
++    asm volatile("msr tpidr_el0, %0" : : "r"(v) : "memory");
++#elif defined(CONFIG_ARCH_RISCV64)
++    asm volatile("mv tp, %0" : : "r"(v) : "memory");
++#else
++    (void)v;
++#endif
++}
++
++uint64_t tls_call(uint64_t base) {
++    return Syscall::handle(static_cast<uint64_t>(SyscallNumber::TLS_SET),
++                           base, 0, 0, 0, nullptr);
++}
++
++constexpr uint64_t tls_invalid_code() {
++    return static_cast<uint64_t>(0) -
++           static_cast<uint64_t>(errors::SYS_ERR_TLS_INVALID_BASE);
++}
++
++#if defined(CONFIG_ARCH_X86_64)
++constexpr uint64_t k_tls_base = 0x00007FFF00000000ULL;
++constexpr uint64_t k_tls_noncanonical = 0x0000800000000000ULL;
++#elif defined(CONFIG_ARCH_AARCH64)
++constexpr uint64_t k_tls_base = 0x0000FFF000000000ULL;
++constexpr uint64_t k_tls_noncanonical = 0xFFFF000000000000ULL;
++#elif defined(CONFIG_ARCH_RISCV64)
++constexpr uint64_t k_tls_base = 0x0000007F00000000ULL;
++constexpr uint64_t k_tls_noncanonical = 0x0000008000000000ULL;
++#else
++constexpr uint64_t k_tls_base = 0x00007FFF00000000ULL;
++constexpr uint64_t k_tls_noncanonical = 0x0000800000000000ULL;
++#endif
++
++void tls_yield() {
++    Syscall::handle(static_cast<uint64_t>(SyscallNumber::YIELD), 0, 0,
++                    0, 0, nullptr);
++}
++
++// One ping-pong participant body (file-static: task entries cannot
++// capture). Warmup absorbs the stale-register first runs; then N
++// asserted rounds. Any schedule interleaving is sound: each task only
++// ever asserts its OWN base.
++void tls_ping_body(uint64_t own, uint64_t &mismatch) {
++    for (uint64_t i = 0; i < 3; ++i)
++        tls_yield();
++    for (uint64_t i = 0; i < 4; ++i) {
++        if (read_live_tls() != own)
++            ++mismatch;
++        tls_yield();
++    }
++}
++
++} // namespace
++
++// Runmode: kernel
++// Testidea: TLS_SET(0) clears a previously set base, field and live.
++// Input: Dispatched task sets a valid base, then TLS_SET(0).
++// Expect: Both return 0; tls_base_==0; live register==0.
++// Depends: Syscall TLS_SET (issue #74)
++JARVIS_TEST(tls_set_zero_clears, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_clr_ret = 0;
++    static uint64_t g_field = 0;
++    static uint64_t g_live = 0;
++
++    auto *t = run_tls_task([]() {
++        g_set_ret = tls_call(k_tls_base);
++        g_clr_ret = tls_call(0);
++        auto *c = Scheduler::current_task();
++        g_field = (c != nullptr) ? c->tls_base_ : 1ULL;
++        g_live = read_live_tls();
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
++    JARVIS_ASSERT_EQ(0ULL, g_clr_ret);
++    JARVIS_ASSERT_EQ(0ULL, g_field);
++    JARVIS_ASSERT_EQ(0ULL, g_live);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Non-canonical addresses fail closed with the dedicated code.
++// Input: x86_64 0x0000800000000000 (48-bit non-canonical); aarch64 upper
++//        nonzero; riscv64 bit39 set (passes LIMIT, fails Sv39 canonical).
++// Expect: -SYS_ERR_TLS_INVALID_BASE; stored base unchanged (stays 0).
++// Depends: Syscall TLS_SET validation (issue #74)
++JARVIS_TEST(tls_set_rejects_noncanonical, "PRE: none | POST: none") {
++    static uint64_t g_ret = 0;
++    static uint64_t g_field = 0;
++
++    auto *t = run_tls_task([]() {
++        g_ret = tls_call(k_tls_noncanonical);
++        auto *c = Scheduler::current_task();
++        g_field = (c != nullptr) ? c->tls_base_ : 1ULL;
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(tls_invalid_code(), g_ret);
++    JARVIS_ASSERT_EQ(0ULL, g_field);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Kernel-half addresses fail closed on every arch.
++// Input: TLS_SET(0xFFFF800000000000) (canonical but kernel-half).
++// Expect: -SYS_ERR_TLS_INVALID_BASE; stored base unchanged.
++// Depends: Syscall TLS_SET user-half gate (issue #74, S1)
++JARVIS_TEST(tls_set_rejects_kernel_half, "PRE: none | POST: none") {
++    static uint64_t g_ret = 0;
++    static uint64_t g_field = 0;
++
++    auto *t = run_tls_task([]() {
++        g_ret = tls_call(0xFFFF800000000000ULL);
++        auto *c = Scheduler::current_task();
++        g_field = (c != nullptr) ? c->tls_base_ : 1ULL;
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(tls_invalid_code(), g_ret);
++    JARVIS_ASSERT_EQ(0ULL, g_field);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A valid user-half base stores AND live-applies (setter runs
++//           on the calling task: §13 crt0 TLS_SET-then-use needs this).
++// Input: TLS_SET(k_tls_base) from the running task.
++// Expect: Returns 0; tls_base_ reads back; live register equals base.
++// Depends: Scheduler::set_tls_base_err live-apply (issue #74)
++JARVIS_TEST(tls_set_accepts_user_half, "PRE: none | POST: none") {
++    static uint64_t g_ret = 0;
++    static uint64_t g_field = 0;
++    static uint64_t g_live = 0;
++
++    auto *t = run_tls_task([]() {
++        g_ret = tls_call(k_tls_base);
++        auto *c = Scheduler::current_task();
++        g_field = (c != nullptr) ? c->tls_base_ : 0ULL;
++        g_live = read_live_tls();
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_ret);
++    JARVIS_ASSERT_EQ(k_tls_base, g_field);
++    JARVIS_ASSERT_EQ(k_tls_base, g_live);
++    write_live_tls(0);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: clone() inherits the parent's TLS base (userspace re-sets).
++// Input: Dispatched parent sets base, clones, reads child field.
++// Expect: Child tls_base_ == parent base.
++// Depends: TaskControlBlock::clone inherit (issue #74)
++JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
++    static uint64_t g_set_ret = 0;
++    static uint64_t g_child_base = 0;
++
++    auto *t = run_tls_task([]() {
++        g_set_ret = tls_call(k_tls_base);
++        // clone() builds the child iret frame from regs[] — pass a
++        // synthetic user frame (test_process.cpp pattern), never null.
++        uint64_t regs[22] = {};
++        regs[17] = 0x1000;
++        regs[18] = arch::SEG_USER_CODE;
++        regs[19] = arch::RFLAGS_DEFAULT;
++        regs[20] = 0x80000000;
++        regs[21] = arch::SEG_USER_DATA;
++        auto *c = TaskControlBlock::clone(regs);
++        if (c != nullptr) {
++            g_child_base = c->tls_base_;
++            kernel::test::terminate_and_drain(*c);
++        }
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT_EQ(0ULL, g_set_ret);
++    JARVIS_ASSERT_EQ(k_tls_base, g_child_base);
++    write_live_tls(0);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: TaskFields capture/restore round-trips tls_base_ (snapshot
++//           parity: the field rides the existing POD machinery).
++// Input: Capture all fields, mutate current base, restore, read back.
++// Expect: Restored base equals the captured (pre-mutation) value.
++// Depends: Scheduler::capture/restore_task_fields (issue #74)
++JARVIS_TEST(tls_snapshot_parity, "PRE: none | POST: none") {
++    static Scheduler::TaskFields s_fields[CONFIG_MAX_TASKS];
++    static uint64_t g_before = 0;
++    static uint64_t g_after = 0;
++
++    auto *cur = Scheduler::current_task();
++    JARVIS_ASSERT(cur != nullptr);
++    g_before = cur->tls_base_;
++    Scheduler::capture_task_fields(s_fields);
++    cur->tls_base_ = k_tls_base;
++    Scheduler::restore_task_fields(s_fields);
++    g_after = cur->tls_base_;
++    JARVIS_ASSERT_EQ(g_before, g_after);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: TLS_SET stays out of the FAST mask and dispatches FULL.
++// Input: Assert bit 85 clear in SYSCALL_FAST_MASK; call via handle().
++// Expect: Mask bit clear; handle(TLS_SET, valid) returns 0 (FULL path).
++// Depends: Tiered dispatch INV (fastpath §3-4, issue #92)
++JARVIS_TEST(tls_not_fast, "PRE: none | POST: none") {
++    static uint64_t g_ret = 0;
++    static bool g_mask_clear = false;
++
++    g_mask_clear =
++        ((Syscall::SYSCALL_FAST_MASK >> 85) & 1U) == 0U;
++    auto *t = run_tls_task([]() {
++        g_ret = tls_call(k_tls_base);
++    });
++    JARVIS_ASSERT(t != nullptr);
++    JARVIS_ASSERT(g_mask_clear);
++    JARVIS_ASSERT_EQ(0ULL, g_ret);
++    write_live_tls(0);
++    release_tls_task(t);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Site-1 publish observed through REAL dispatch (reschedule()
++//           only sets need_resched; the tick arms via switch_to_task).
++//           Part A: a synthetic-user task observes its live base after
++//           genuine dispatch. Part B: a kernel task carrying a nonzero
++//           field must publish 0 — proven by the live register surviving
++//           a kernel dispatch unchanged (a leaked publish would load it).
++// Input: Ku (synthetic-user, base B) records live FS on dispatch; then
++//        harness sets live X and dispatches kernel Kk (field B).
++// Expect: Ku observed B; live still X after Kk; x86_64 GS_BASE unchanged.
++// Depends: switch_to_task publish via tick path (issue #74)
++JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
++    static uint64_t g_user_live = 0;
++    static uint64_t g_live_after = 0;
++    static uint64_t g_gs_same = 0;
++
++    constexpr uint64_t k_base_b = 0x00007A7400000000ULL;
++    constexpr uint64_t k_base_x = 0x00007A7500000000ULL;
++#if defined(CONFIG_ARCH_X86_64)
++    uint64_t gs_before = arch::rdmsr(arch::MSR_GS_BASE);
++#endif
++    auto *ku = TaskControlBlock::create(
++        []() {
++            g_user_live = read_live_tls();
++        },
++        12, 10);
++    JARVIS_ASSERT(ku != nullptr);
++    ku->is_user_ = true;
++    ku->tls_base_ = k_base_b;
++    Scheduler::add_task(*ku);
++    kernel::test::wait_for_termination_safe(ku);
++    JARVIS_ASSERT_EQ(k_base_b, g_user_live);
++    ku->is_user_ = false;
++    release_tls_task(ku);
++
++    // Harness sets live X, then dispatches a kernel task rigged with a
++    // nonzero field: a correct kernel publish (0) loads nothing.
++    JARVIS_ASSERT_EQ(0ULL, tls_call(k_base_x));
++    auto *kk = TaskControlBlock::create([]() {}, 12, 10);
++    JARVIS_ASSERT(kk != nullptr);
++    kk->tls_base_ = k_base_b;
++    Scheduler::add_task(*kk);
++    kernel::test::wait_for_termination_safe(kk);
++    g_live_after = read_live_tls();
++    JARVIS_ASSERT_EQ(k_base_x, g_live_after);
++#if defined(CONFIG_ARCH_X86_64)
++    uint64_t gs_after = arch::rdmsr(arch::MSR_GS_BASE);
++    g_gs_same = (gs_before == gs_after) ? 1ULL : 0ULL;
++#else
++    g_gs_same = 1ULL;
++#endif
++    JARVIS_ASSERT_EQ(1ULL, g_gs_same);
++    write_live_tls(0);
++    release_tls_task(kk);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: ACCEPTANCE — preemption ping-pong between two TLS-distinct
++//           synthetic-user tasks: each always observes its own live base.
++// Input: Tasks A/B (distinct bases) loop {assert live==own; YIELD} x4.
++// Expect: Zero cross-observations across all preemptions.
++// Depends: Publish + epilogue apply on every dispatch (issue #74)
++JARVIS_TEST(tls_preemption_ping_pong, "PRE: none | POST: none") {
++    static uint64_t g_mismatch = 0;
++    static constexpr uint64_t k_base_a = 0x00007AA000000000ULL;
++    static constexpr uint64_t k_base_b = 0x00007BB000000000ULL;
++
++    auto *a = TaskControlBlock::create(
++        []() {
++            tls_ping_body(k_base_a, g_mismatch);
++        },
++        12, 10);
++    auto *b = TaskControlBlock::create(
++        []() {
++            tls_ping_body(k_base_b, g_mismatch);
++        },
++        11, 10);
++    JARVIS_ASSERT(a != nullptr);
++    JARVIS_ASSERT(b != nullptr);
++    a->is_user_ = true;
++    a->tls_base_ = k_base_a;
++    b->is_user_ = true;
++    b->tls_base_ = k_base_b;
++    Scheduler::add_task(*a);
++    Scheduler::add_task(*b);
++    kernel::test::wait_for_termination_safe(a);
++    kernel::test::wait_for_termination_safe(b);
++    JARVIS_ASSERT_EQ(0ULL, g_mismatch);
++    a->is_user_ = false;
++    b->is_user_ = false;
++    write_live_tls(0);
++    release_tls_task(a);
++    release_tls_task(b);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Every cancel path leaves no stale TLS slot behind.
++// Input: Publish a nonzero slot, drive cancel_pending_switch_cpu(0).
++// Expect: Slot reads back 0.
++// Depends: Cancel-path clears beside CR3 clears (issue #74, S2)
++JARVIS_TEST(tls_cancel_clears_slot, "PRE: none | POST: none") {
++    static uint64_t g_slot = 0;
++
++    {
++        arch::IrqGuard ig{};
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
++                         0x00007A7400000000ULL, __ATOMIC_RELEASE);
++        Scheduler::cancel_pending_switch_cpu(0);
++        g_slot = __atomic_load_n(&Scheduler::SwSlots::load_tls_from(),
++                                 __ATOMIC_ACQUIRE);
++    }
++    JARVIS_ASSERT_EQ(0ULL, g_slot);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The second publish site (switch_away_from_terminating tick
++//           path) publishes TLS end-to-end: a terminating driver arms to
++//           a synthetic-user task that observes its live base.
++//           NOTE (hang lesson): the driver must NOT return after arming —
++//           the trampoline terminate() re-arms off a dying current task,
++//           which would clobber this arm and strand the armed target
++//           (marked RUNNING, never dispatched). The sanctioned sys_exit
++//           never returns either. So D blocks itself post-arm (BLOCKED +
++//           dequeued per §11.2, hlt) and is terminated from outside.
++// Input: Driver D (prio 12) arms-away to V (prio 11, base B), then
++//        self-blocks; V reads the live register on dispatch.
++// Expect: V observed exactly B; slot consumed (0) afterwards.
++// Depends: switch_away_from_terminating publish (issue #74)
++JARVIS_TEST(tls_second_publish_site, "PRE: none | POST: none") {
++    static constexpr uint64_t k_base_v = 0x00007CC000000000ULL;
++    static uint64_t g_observed = 0;
++    static uint64_t g_slot = 0;
++
++    auto *v = TaskControlBlock::create(
++        []() {
++            // Tolerate pre-arm dispatch (V may run before D arms): retry
++            // boundedly until the applied base appears. Bound is small:
++            // same-prio FIFO guarantees D runs on V's first yield, so
++            // the arm lands within a couple of rounds (a large bound
++            // burns minutes under TCG with zero added coverage).
++            for (uint64_t i = 0; i < 20; ++i) {
++                uint64_t live = read_live_tls();
++                if (live == k_base_v) {
++                    g_observed = live;
++                    return;
++                }
++                Syscall::handle(
++                    static_cast<uint64_t>(SyscallNumber::YIELD), 0, 0,
++                    0, 0, nullptr);
++            }
++        },
++        11, 10);
++    JARVIS_ASSERT(v != nullptr);
++    v->is_user_ = true;
++    v->tls_base_ = k_base_v;
++    Scheduler::add_task(*v);
++
++    auto *d = TaskControlBlock::create(
++        []() {
++            auto *self = Scheduler::current_task();
++            JARVIS_ASSERT(self != nullptr);
++            Scheduler::switch_away_from_terminating(*self);
++            // Never return (see note above): self-block, terminated
++            // from outside at teardown.
++            {
++                arch::IrqGuard ig{};
++                self->state = TaskState::BLOCKED;
++                Scheduler::dequeue_ready(*self);
++            }
++            for (;;)
++                arch::hlt();
++        },
++        12, 10);
++    JARVIS_ASSERT(d != nullptr);
++    Scheduler::add_task(*d);
++    kernel::test::wait_for_termination_safe(v);
++    g_slot = __atomic_load_n(&Scheduler::SwSlots::load_tls_from(),
++                             __ATOMIC_ACQUIRE);
++    JARVIS_ASSERT_EQ(k_base_v, g_observed);
++    JARVIS_ASSERT_EQ(0ULL, g_slot);
++    v->is_user_ = false;
++    write_live_tls(0);
++    release_tls_task(d);
++    release_tls_task(v);
++    Scheduler::drain_zombie_list();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Arch-portable stale-slot pin: publish nonzero via the C++
++//           accessor, clear_switch_globals() must zero it (pins the
++//           publish+arm atomicity invariant on non-x86 builds too; live
++//           epilogue coverage awaits #28-family real-arch execution).
++// Input: Store nonzero to load_tls_from, call clear_switch_globals().
++// Expect: Slot reads back 0.
++// Depends: clear_switch_globals TLS clear (issue #74)
++JARVIS_TEST(tls_no_stale_slot_after_cancel, "PRE: none | POST: none") {
++    static uint64_t g_slot = 0;
++
++    {
++        arch::IrqGuard ig{};
++        __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
++                         0x00007A7400000000ULL, __ATOMIC_RELEASE);
++        Scheduler::clear_switch_globals();
++        g_slot = __atomic_load_n(&Scheduler::SwSlots::load_tls_from(),
++                                 __ATOMIC_ACQUIRE);
++    }
++    JARVIS_ASSERT_EQ(0ULL, g_slot);
++    JARVIS_TEST_PASS();
++}
++
++void register_tls_tests() {
++    Logger::info("Registering TLS tests");
++    JARVIS_REGISTER_TEST(tls_set_zero_clears);
++    JARVIS_REGISTER_TEST(tls_set_rejects_noncanonical);
++    JARVIS_REGISTER_TEST(tls_set_rejects_kernel_half);
++    JARVIS_REGISTER_TEST(tls_set_accepts_user_half);
++    JARVIS_REGISTER_TEST(tls_clone_inherits);
++    JARVIS_REGISTER_TEST(tls_snapshot_parity);
++    JARVIS_REGISTER_TEST(tls_not_fast);
++    JARVIS_REGISTER_TEST(tls_publish_applies);
++    JARVIS_REGISTER_TEST(tls_preemption_ping_pong);
++    JARVIS_REGISTER_TEST(tls_cancel_clears_slot);
++    JARVIS_REGISTER_TEST(tls_second_publish_site);
++    JARVIS_REGISTER_TEST(tls_no_stale_slot_after_cancel);
++}
+diff --git a/src/libc/syscall.h b/src/libc/syscall.h
+index 3e2f4767..cc14ca38 100644
+--- a/src/libc/syscall.h
++++ b/src/libc/syscall.h
+@@ -245,6 +245,10 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
+ #define NEXIOS_ABI_MINOR 0
+ #define SYS_MAX          86
+ 
++static inline long sys_tls_set(unsigned long base) {
++    return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
++}
++
+ #if defined(__x86_64__)
+ static inline long sys_send_fast(unsigned long dest, unsigned long type,
+                                  unsigned long size,

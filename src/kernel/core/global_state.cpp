@@ -62,6 +62,7 @@ extern "C" {
 uint64_t *scheduler_save_rsp_to[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_load_rsp_from[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_load_cr3_from[CONFIG_MAX_CPUS] = {};
+uint64_t scheduler_load_tls_from[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_next_task_id[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_load_kstack_base[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};

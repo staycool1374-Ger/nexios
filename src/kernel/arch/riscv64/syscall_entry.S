@@ -209,7 +209,16 @@ syscall_entry:
     la t0, scheduler_load_cr3_from
     sd zero, 0(t0)
 
-7:  # Decrement nesting depth
+7:  # Issue #74: consume the TLS slot into the trap-frame TP save area.
+    # Both SATP paths converge here, so the slot is consumed
+    # unconditionally. A direct tp write would die at the OFF_TP restore
+    # below, and no sfence is needed for tp.
+    la t0, scheduler_load_tls_from
+    ld t1, 0(t0)
+    sd zero, 0(t0)
+    beqz t1, 8f
+    sd t1, OFF_TP(sp)
+8:  # Decrement nesting depth
     la t0, isr_nesting_depth
     ld t1, 0(t0)
     addi t1, t1, -1

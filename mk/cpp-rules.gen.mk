@@ -550,6 +550,10 @@ build/kernel/test/test_locking.o: src/kernel/test/test_locking.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/test/test_tls.o: src/kernel/test/test_tls.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/test/test_o1_scheduler.o: src/kernel/test/test_o1_scheduler.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
@@ -847,6 +851,10 @@ build/kernel/syscall/syscall.o: src/kernel/syscall/syscall.cpp
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 build/kernel/syscall/syscall_handlers_sync.o: src/kernel/syscall/syscall_handlers_sync.cpp
+	@mkdir -p $(dir $@)
+	@printf "  %s %s\n" CC $@
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+build/kernel/syscall/syscall_handlers_tls.o: src/kernel/syscall/syscall_handlers_tls.cpp
 	@mkdir -p $(dir $@)
 	@printf "  %s %s\n" CC $@
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

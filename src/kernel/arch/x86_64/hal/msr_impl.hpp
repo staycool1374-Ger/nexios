@@ -56,6 +56,10 @@ inline constexpr uint32_t IA32_LSTAR = 0xC0000082;
 inline constexpr uint32_t IA32_FMASK = 0xC0000084;
 /// @brief IA32_GS_BASE MSR — GS base address for user-mode (0xC0000101).
 inline constexpr uint32_t MSR_GS_BASE = 0xC0000101;
+/// @brief IA32_FS_BASE MSR — FS base address, thread-local storage (0xC0000100,
+/// issue #74). x86_64 TLS loads FS_BASE only; per-CPU GS routing is untouched
+/// (swapgs audit invariant).
+inline constexpr uint32_t MSR_FS_BASE = 0xC0000100;
 
 } // namespace arch
 // NOLINTEND(bugprone-narrowing-conversions)

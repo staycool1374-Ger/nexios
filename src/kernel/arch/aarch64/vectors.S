@@ -176,6 +176,7 @@ el0_sync:
 .extern scheduler_save_rsp_to
 .extern scheduler_load_rsp_from
 .extern scheduler_load_cr3_from
+.extern scheduler_load_tls_from // Issue #74: TLS base publish slot
 .extern scheduler_on_context_switch
 .extern aarch64_el0_fault_handler
 
@@ -236,7 +237,7 @@ irq_context_switch_common:
     // Handle CR3 (page table) switch
     adrp    x3, scheduler_load_cr3_from
     ldr     x3, [x3, #:lo12:scheduler_load_cr3_from]
-    cbz     x3, .restore
+    cbz     x3, .tls_apply
     msr     ttbr0_el1, x3
     // A TTBR0 change with ASID=0 requires an invalidation of the stale
     // boot-context translations, otherwise stale identity-map entries are
@@ -246,7 +247,18 @@ irq_context_switch_common:
     dsb     sy
     adrp    x4, scheduler_load_cr3_from
     str     xzr, [x4, #:lo12:scheduler_load_cr3_from]
-    isb
+.tls_apply:
+    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1/EL1
+    // state untouched). x3/x4 reuse is safe (all user regs in the save
+    // area); the isb below is the SHARED join point pairing both the TTBR0
+    // switch above and the TPIDR_EL0 write here.
+    adrp    x3, scheduler_load_tls_from
+    ldr     x3, [x3, #:lo12:scheduler_load_tls_from]
+    cbz     x3, 8f
+    msr     tpidr_el0, x3
+    adrp    x4, scheduler_load_tls_from
+    str     xzr, [x4, #:lo12:scheduler_load_tls_from]
+8:  isb
 
 .restore:
     restore_all
