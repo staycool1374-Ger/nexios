@@ -29,6 +29,8 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/page_table.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 
 using namespace kernel;
@@ -275,6 +277,100 @@ JARVIS_TEST(kernel_priv_teardown_frees_pml4_stack,
 }
 
 // Runmode: kernel
+// Testidea: Issue #199 — the private-window teardown clears the PML4 slot,
+// unmaps the VA, and reclaims every page (zero PMM delta).
+// Input: Create task A, map PRIV_BASE in A->page_table_, teardown under
+// IrqGuard, verify slot/translation/delta
+// Expect: pml4 slot == 0, virt_to_phys == 0, free_pages_ref unchanged
+// Depends: kernel::VMM, kernel::PMM, free_priv_window
+JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
+            "PRE: none | POST: none") {
+    uint64_t free_before = PMM::free_pages_ref();
+
+    auto *task_a = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(task_a != nullptr);
+    JARVIS_ASSERT(task_a->page_table_ != 0);
+    JARVIS_ASSERT(task_a->page_table_ != VMM::get_kernel_pml4());
+
+    uint64_t priv_phys = PMM::alloc_page();
+    JARVIS_ASSERT(priv_phys != 0);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, task_a->page_table_);
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == priv_phys,
+        "PRIV_BASE must resolve after map");
+
+    {
+        // Private-tree surgery is still IRQ-critical: a timer tick between
+        // the slot clear and the TLB flush could observe the torn window.
+        // NOTE: free_priv_window already reclaims the leaf data page.
+        arch::IrqGuard teardown_guard;
+        free_priv_window(task_a->page_table_);
+        arch::ArchPageTable::tlb_flush(PRIV_BASE);
+    }
+
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == 0,
+        "PRIV_BASE must not resolve after teardown");
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *pml4 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (task_a->page_table_ & ~0xFFFULL));
+    constexpr size_t PRIV_SLOT = (CONFIG_KERNEL_PRIV_DATA_BASE >> 39) & 0x1FF;
+    JARVIS_ASSERT_FMT(pml4[PRIV_SLOT] == 0, "PML4 priv slot must be clear");
+
+    task_a->cleanup();
+    delete task_a;
+
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after priv-window teardown",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Issue #199 — tearing down an already-torn private window is a
+// safe no-op (early-return on absent entries, no double free).
+// Input: Map PRIV_BASE in a fresh task, teardown twice
+// Expect: Second teardown changes nothing; PMM delta zero
+// Depends: free_priv_window early-return chain
+JARVIS_TEST(kernel_priv_teardown_double_free_safe,
+            "PRE: none | POST: none") {
+    uint64_t free_before = PMM::free_pages_ref();
+
+    auto *task_a = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(task_a != nullptr);
+
+    uint64_t priv_phys = PMM::alloc_page();
+    JARVIS_ASSERT(priv_phys != 0);
+    VMM::map_page_in_pml4(PRIV_BASE, priv_phys, false, task_a->page_table_);
+    {
+        // NOTE: free_priv_window already reclaims the leaf data page.
+        arch::IrqGuard teardown_guard;
+        free_priv_window(task_a->page_table_);
+        arch::ArchPageTable::tlb_flush(PRIV_BASE);
+    }
+
+    uint64_t free_after_first = PMM::free_pages_ref();
+    {
+        arch::IrqGuard second_guard;
+        free_priv_window(task_a->page_table_);
+        arch::ArchPageTable::tlb_flush(PRIV_BASE);
+    }
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(PRIV_BASE, task_a->page_table_) == 0,
+        "PRIV_BASE must stay unmapped after double teardown");
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_after_first,
+                      "second teardown must not free anything");
+
+    task_a->cleanup();
+    delete task_a;
+
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after double teardown",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all kernel-isolation (MP-1) tests.
 // Input: None
 // Expect: All tests registered
@@ -284,4 +380,6 @@ void register_kernel_isolation_tests() {
     JARVIS_REGISTER_TEST(kernel_priv_cross_task_data_isolation);
     JARVIS_REGISTER_TEST(kernel_priv_cr3_switch_on_dispatch);
     JARVIS_REGISTER_TEST(kernel_priv_teardown_frees_pml4_stack);
+    JARVIS_REGISTER_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims);
+    JARVIS_REGISTER_TEST(kernel_priv_teardown_double_free_safe);
 }

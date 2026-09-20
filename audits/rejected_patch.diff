@@ -1,25 +1,20 @@
-diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
---- a/src/kernel/arch/aarch64/timer.cpp
-+++ b/src/kernel/arch/aarch64/timer.cpp
-@@ -148,7 +148,9 @@ void Timer::set_ticks_for_test(uint64_t value) {
- /// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
- void Timer::oneshot(uint64_t ticks_from_now) {
-     if (ticks_from_now == 0) {
--        // Disarm: disable the physical timer (0 = disarm per Timer contract).
-+        // Disarm: clear the countdown and disable the physical timer so
-+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
-+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
-         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
-         isb();
-         return;
-@@ -165,7 +167,9 @@ void Timer::oneshot(uint64_t ticks_from_now) {
- /// @param[in] period_ticks Interval in scheduler ticks (ms).
- void Timer::periodic(uint64_t period_ticks) {
-     if (period_ticks == 0) {
--        // Disarm: disable the physical timer, leave the count for remaining().
-+        // Disarm: clear the countdown and disable the physical timer so
-+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
-+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
-         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
-         isb();
-         return;
+diff --git a/src/kernel/test/test_cross_arch.cpp b/src/kernel/test/test_cross_arch.cpp
+--- a/src/kernel/test/test_cross_arch.cpp
++++ b/src/kernel/test/test_cross_arch.cpp
+@@ -899,16 +899,8 @@
+         for (size_t k = 0; k < 64; ++k) {
+             if (cross_is_huge(pd[k]))
+                 continue;
+-            // TEMP-DBG #199: characterize non-huge PD[0..63].
+-            uint64_t const entry = pd[k];
+-            bool const tracked =
+-                (entry & PRESENT) &&
+-                PMM::is_allocated(entry & cross_frame_mask());
+-            Logger::error("TEARDOWN-PD64 half=%lu idx=%lu val=%lx "
+-                          "tracked=%u",
+-                          half, k, entry, (unsigned)tracked);
+             uint64_t const pt_page = pd[k] & cross_frame_mask();
+             JARVIS_ASSERT_FMT(
+                 (pd[k] & PRESENT) && PMM::is_allocated(pt_page),
+                 "PD[%lu] must be huge or a tracked PT (half %lu)", k, half);
+         }

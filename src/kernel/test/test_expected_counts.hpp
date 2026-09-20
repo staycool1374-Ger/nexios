@@ -174,7 +174,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 #endif
     {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
     {"memory_page_tables",    9,    0,       0      },  // page-table pool, budget, no sharing
-    {"memory_kernel_isolation", 4,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s
+    {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
     {"memory_vmm",           13,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60)
 
@@ -245,7 +245,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_gcov",            4,    0,       0      },  // GCOV coverage metadata
 
     // arch
-    {"arch_cross",           21,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated, x86_64 only)
+    {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
     {"arch_aarch64",          0,   23,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression
 #endif
@@ -280,7 +280,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-    {"hal",                 110,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross (issue #173)
+    {"hal",                 121,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        17,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse (issues #173, #197)
     {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
