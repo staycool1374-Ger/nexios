@@ -29,9 +29,21 @@ namespace arch {
 
 constinit uint64_t Timer::ticks_ = 0;
 uint64_t Timer::timer_freq_hz_ = 0;
+constinit uint64_t Timer::timer_interval_ = 0;
 constinit TickSource Timer::active_source_ = TickSource::MTIME;
 constinit uint64_t Timer::last_ns_ = 0;
 constinit bool Timer::calibrated_ = false;
+
+/// @brief QEMU virt mtime input frequency (issue #198: was a bare 10000000
+///        literal in two places). Real hardware fills this from the
+///        device tree / SBI environment (issue #29 follow-up).
+inline constexpr uint64_t RISCV_MTIME_FREQ_HZ = 10000000;
+/// @brief SBI legacy SET_TIMER extension id (ecall a7 = 0).
+inline constexpr uint64_t SBI_LEGACY_SET_TIMER = 0;
+/// @brief Fail-closed disarm deadline: mtimecmp parked at the maximum so no
+///        supervisor timer interrupt can fire (mtime is unreadable-free and
+///        mtimecmp unwritable-clear from S-mode).
+inline constexpr uint64_t MTIMECMP_DISARMED = ~0ULL;
 
 /// @brief Initialize the timer, set frequency, and register the IRQ handler.
 /// @param frequency_hz Desired tick frequency in Hz.
@@ -45,13 +57,17 @@ void Timer::init(uint32_t frequency_hz) {
 }
 
 void Timer::set_frequency(uint32_t frequency_hz) {
+    if (frequency_hz == 0) {
+        return;
+    }
     // Use SBI to get timer frequency (mtime typically 10MHz on QEMU)
-    timer_freq_hz_ = 10000000;
-    uint64_t interval = timer_freq_hz_ / frequency_hz;
+    timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
+    const uint64_t interval = timer_freq_hz_ / frequency_hz;
+    timer_interval_ = (interval == 0) ? 1 : interval;
     // SBI_SET_TIMER via ecall
-    asm volatile("mv a0, %0; li a7, 0; ecall"
+    asm volatile("mv a0, %0; mv a7, %1; ecall"
                  :
-                 : "r"(interval)
+                 : "r"(interval), "r"(SBI_LEGACY_SET_TIMER)
                  : "a0", "a7", "memory");
     // Enable STIP in sie
     uint64_t sie{};
@@ -83,11 +99,19 @@ uint64_t Timer::ns() {
 ///        no sampler hook; kept for the shared Timer interface).
 void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
     ticks_ = ticks_ + 1;
-    // Re-arm timer via SBI
-    uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);
-    asm volatile("mv a0, %0; li a7, 0; ecall"
+    // Re-arm relative (now + latched interval): self-correcting under handler
+    // delay, unlike the old absolute ticks_ * interval product which drifted
+    // and could arm a deadline already in the past.
+    uint64_t interval = timer_interval_;
+    if (interval == 0) {
+        interval = 1;
+    }
+    uint64_t now{};
+    asm volatile("csrr %0, time" : "=r"(now));
+    const uint64_t next = now + interval;
+    asm volatile("mv a0, %0; mv a7, %1; ecall"
                  :
-                 : "r"(next)
+                 : "r"(next), "r"(SBI_LEGACY_SET_TIMER)
                  : "a0", "a7", "memory");
 }
 
@@ -115,7 +139,7 @@ bool Timer::calibrate() {
     if (!calibrated_) {
         calibrated_ = true;
         if (timer_freq_hz_ == 0) {
-            timer_freq_hz_ = 10000000;
+            timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
         }
         active_source_ = TickSource::MTIME;
     }
@@ -133,30 +157,45 @@ uint64_t Timer::remaining_ns() {
 }
 
 /// @brief Arm a one-shot timer via SBI.
-/// @param ticks_from_now Number of milliseconds from now to fire.
+/// @param ticks_from_now Number of milliseconds from now to fire (0 = disarm:
+///        mtimecmp is parked at the maximum — S-mode cannot clear a pending
+///        STIP, only push its deadline out).
 void Timer::oneshot(uint64_t ticks_from_now) {
-    uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
-    if (interval == 0)
-        interval = 1;
     uint64_t now{};
     asm volatile("csrr %0, time" : "=r"(now));
-    asm volatile("mv a0, %0; li a7, 0; ecall"
+    uint64_t deadline = MTIMECMP_DISARMED;
+    if (ticks_from_now != 0) {
+        uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
+        if (interval == 0) {
+            interval = 1;
+        }
+        deadline = now + interval;
+    }
+    asm volatile("mv a0, %0; mv a7, %1; ecall"
                  :
-                 : "r"(now + interval)
+                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
                  : "a0", "a7", "memory");
 }
 
 /// @brief Arm a periodic timer via SBI.
-/// @param period_ticks Period in ticks (Hz).
+/// @param period_ticks Period in ticks (Hz). 0 = disarm (deadline parked at
+///        the maximum); otherwise the handle_irq re-arm interval is latched
+///        so the period persists across ticks.
 void Timer::periodic(uint64_t period_ticks) {
-    uint64_t interval = timer_freq_hz_ / period_ticks;
-    if (interval == 0)
-        interval = 1;
     uint64_t now{};
     asm volatile("csrr %0, time" : "=r"(now));
-    asm volatile("mv a0, %0; li a7, 0; ecall"
+    uint64_t deadline = MTIMECMP_DISARMED;
+    if (period_ticks != 0) {
+        uint64_t interval = timer_freq_hz_ / period_ticks;
+        if (interval == 0) {
+            interval = 1;
+        }
+        timer_interval_ = interval;
+        deadline = now + interval;
+    }
+    asm volatile("mv a0, %0; mv a7, %1; ecall"
                  :
-                 : "r"(now + interval)
+                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
                  : "a0", "a7", "memory");
 }
 

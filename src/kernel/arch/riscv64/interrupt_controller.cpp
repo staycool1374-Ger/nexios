@@ -8,6 +8,16 @@ namespace arch {
 void ArchInterruptController::init() {
     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
     *threshold = 0;
+    // Default priority 1 for the QEMU virt wired lines (priority 0 = never
+    // interrupt). Lines stay disabled here — drivers enable their own IRQ
+    // when their IDT handler is registered (no unsolicited delivery).
+    *plic_priority_reg(IRQ_UART) = 1;
+    *plic_priority_reg(IRQ_KEYBOARD) = 1;
+    *plic_priority_reg(IRQ_VIRTIO0) = 1;
+    *plic_priority_reg(IRQ_VIRTIO1) = 1;
+    *plic_priority_reg(IRQ_VIRTIO2) = 1;
+    *plic_priority_reg(IRQ_VIRTIO3) = 1;
+    *plic_priority_reg(IRQ_VIRTIO4) = 1;
     asm volatile("fence iorw, iorw" : : : "memory");
     asm volatile("csrs sie, %0" : : "r"((uint64_t)(1ULL << 9)) : "memory");
 }
@@ -16,13 +26,26 @@ void ArchInterruptController::eoi(uint8_t vector) {
     plic_complete(vector);
 }
 
+/// @brief Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes
+///        a single 32-line enable word; lines >= 32 have no defined register
+///        and must not touch MMIO.
+inline constexpr uint8_t PLIC_MAX_IRQ = 32;
+
 void ArchInterruptController::mask(uint8_t irq) {
+    if (irq >= PLIC_MAX_IRQ) {
+        return;
+    }
+    // Single-core early precondition (INV/CONC): no lock needed; the fence
+    // orders the MMIO write before any subsequent claim/complete.
     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
     enable[irq / 32] &= ~(1U << (irq % 32));
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 
 void ArchInterruptController::unmask(uint8_t irq) {
+    if (irq >= PLIC_MAX_IRQ) {
+        return;
+    }
     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
     enable[irq / 32] |= (1U << (irq % 32));
     asm volatile("fence iorw, iorw" : : : "memory");
@@ -32,12 +55,16 @@ IrqState ArchInterruptController::snapshot() {
     IrqState s{};
     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
     s.plic_threshold = *threshold;
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    s.plic_enable_first = enable[0];
     return s;
 }
 
 void ArchInterruptController::restore(const IrqState &state) {
     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
     *threshold = state.plic_threshold;
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+    enable[0] = state.plic_enable_first;
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 

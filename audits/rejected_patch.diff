@@ -1,62 +1,25 @@
-diff --git a/src/kernel/syscall/syscall_handlers_posix_time.cpp b/src/kernel/syscall/syscall_handlers_posix_time.cpp
---- a/src/kernel/syscall/syscall_handlers_posix_time.cpp
-+++ b/src/kernel/syscall/syscall_handlers_posix_time.cpp
-@@ -48,8 +48,9 @@ static_assert(sizeof(AbiTimespec) == 16, "timespec width");
- static_assert(sizeof(AbiTimespec) == 16, "timespec width");
-
--/// @brief User ABI itimerspec (value + interval).
-+/// @brief User ABI itimerspec (POSIX order: interval + value, matches
-+/// src/libc/time.h struct itimerspec).
- struct AbiItimerspec {
--    AbiTimespec it_value;
-     AbiTimespec it_interval;
-+    AbiTimespec it_value;
- };
- static_assert(sizeof(AbiItimerspec) == 32, "itimerspec width");
-diff --git a/src/kernel/test/test_posix_time.cpp b/src/kernel/test/test_posix_time.cpp
---- a/src/kernel/test/test_posix_time.cpp
-+++ b/src/kernel/test/test_posix_time.cpp
-@@ -48,4 +48,4 @@ static_assert(sizeof(AbiTs) == 16, "timespec width");
- struct AbiItimer {
--    AbiTs it_value;
-     AbiTs it_interval;
-+    AbiTs it_value;
- };
-@@ -112,2 +112,2 @@ JARVIS_TEST(posix_clock_realtime_anchored, "PRE: none | POST: none") {
--    JARVIS_ASSERT(real.tv_nsec >= 0 && real.tv_nsec < 999999999);
-+    JARVIS_ASSERT(real.tv_nsec >= 0 && real.tv_nsec < 1000000000);
-     const bool real_after_mono =
-diff --git a/src/kernel/time/posix_time.cpp b/src/kernel/time/posix_time.cpp
---- a/src/kernel/time/posix_time.cpp
-+++ b/src/kernel/time/posix_time.cpp
-@@ -54,4 +54,4 @@ bool PosixTime::timespec_to_ns(const TimespecU &spec,
-                                uint64_t &out_ns) noexcept {
--    if (spec.sec < 0 || spec.nsec < 0 || spec.nsec >= 999999999) {
-+    if (spec.sec < 0 || spec.nsec < 0 || spec.nsec >= 1000000000) {
-         return false;
-     }
-@@ -452,9 +452,15 @@ void PosixTime::timerfd_slot_free(uint32_t index, uint32_t slot_gen,
-     }
-     sync::IrqSpinLockGuard guard(lock_);
-     TimerFdSlot &slot = timerfds_[index];
--    if (!slot.used || slot.gen != slot_gen || slot.owner_id != owner_id ||
-+    if (!slot.used || slot.owner_id != owner_id ||
-         slot.owner_gen != owner_gen) {
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -148,7 +148,9 @@ void Timer::set_ticks_for_test(uint64_t value) {
+ /// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
+ void Timer::oneshot(uint64_t ticks_from_now) {
+     if (ticks_from_now == 0) {
+-        // Disarm: disable the physical timer (0 = disarm per Timer contract).
++        // Disarm: clear the countdown and disable the physical timer so
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+         isb();
          return;
-     }
-+    // Generation 0 is the invalid sentinel (bump_gen never yields it):
-+    // accept it as an owner-validated wildcard for the create-path
-+    // rollback, which otherwise leaks the just-allocated slot.
-+    if (slot_gen != 0 && slot.gen != slot_gen) {
-+        return;
-+    }
-     free_timerfd_slot_locked(index);
- }
-@@ -474,6 +474,7 @@ bool PosixTime::sleep_arm(TaskControlBlock &task,
-     uint64_t expiry_ns = sat_add(now_ns, budget_ns);
-     if (expiry_ns < now_ns) {
-         expiry_ns = kUint64Max;
-     }
-+    task.sleep_expiry_ns = expiry_ns;
-     if (!TimerWheel::arm(0, expiry_ns, sleep_fire, &task,
-                          &task.sleep_handle)) {
+@@ -165,7 +167,9 @@ void Timer::oneshot(uint64_t ticks_from_now) {
+ /// @param[in] period_ticks Interval in scheduler ticks (ms).
+ void Timer::periodic(uint64_t period_ticks) {
+     if (period_ticks == 0) {
+-        // Disarm: disable the physical timer, leave the count for remaining().
++        // Disarm: clear the countdown and disable the physical timer so
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+         asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+         isb();
+         return;

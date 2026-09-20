@@ -77,6 +77,7 @@ void register_vfsd_tests();
 void register_iocd_tests();
 void register_health_tests();
 void register_timer_tests();
+void register_irq_early_std_tests();
 void register_timing_tests();
 void register_spsc_tests();
 void register_preemption_under_syscall_tests();
@@ -488,6 +489,7 @@ static void run_hal_bits_group() { register_hal_bits_tests(); }
 static void run_hal_idt_group() { register_idt_tests(); }
 static void run_exc_table_group() { register_exc_table_tests(); }
 static void run_hal_timer_group() { register_timer_tests(); }
+static void run_irq_early_std_group() { register_irq_early_std_tests(); }
 static void run_hal_apic_group() { register_apic_timer_tests(); }
 static void run_apic_tpr_group() { register_apic_tpr_tests(); }
 static void run_hal_rtc_group() { register_rtc_tests(); }
@@ -816,6 +818,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_idt", []() { run_hal_idt_group(); }},
     {"exc_table", []() { run_exc_table_group(); }},
     {"hal_timer", []() { run_hal_timer_group(); }},
+    {"irq_early_std", []() { run_irq_early_std_group(); }},
     {"hal_apic", []() { run_hal_apic_group(); }},
     {"apic_tpr", []() { run_apic_tpr_group(); }},
     {"hal_rtc", []() { run_hal_rtc_group(); }},
@@ -1095,6 +1098,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_hal_idt_group();
          run_exc_table_group();
          run_hal_timer_group();
+         run_irq_early_std_group();
          run_hal_apic_group();
          run_apic_tpr_group();
          run_hal_rtc_group();

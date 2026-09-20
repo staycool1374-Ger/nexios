@@ -41,8 +41,8 @@ void ArchInterruptController::init() {
         waker &= ~(1U << 0);
         rr[GICR_WAKER / 4] = waker;
         dsb_sy();
-        for (int t = 1000000; t > 0; --t) {
-            if (!(rr[GICR_WAKER / 4] & (1U << 1))) break;
+        for (uint32_t poll = 0; poll < GICR_WAKER_MAX_POLLS; ++poll) {
+            if (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) break;
             dsb_sy();
         }
 
@@ -73,7 +73,6 @@ void ArchInterruptController::init() {
     }
     isb();
 }
-
 void ArchInterruptController::eoi(uint8_t vector) {
     if (gic_is_v3)
         gic_v3_write_eoir(vector);
@@ -82,7 +81,28 @@ void ArchInterruptController::eoi(uint8_t vector) {
     dsb_sy();
 }
 
+/// @brief Redistributor wake state (issue #198): true when the GICv3
+///        redistributor reports Children_Online, or when no redistributor
+///        exists (GICv2 path). Polarity follows the GICv3 spec (online = 1);
+///        the pre-#198 poll loop tested the inverted bit.
+/// @return true when interrupt delivery hardware is usable.
+bool gic_redist_ready() {
+    if (!gic_is_v3) {
+        return true;
+    }
+    volatile uint32_t *rr = gicr_rd_reg(0);
+    return (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0;
+}
+
+/// @brief Valid IRQ window for mask/unmask (issue #198): the snapshot covers
+///        distributor words 0..1 and the IDT has 64 slots, so lines >= 64
+///        have no defined state and must not touch MMIO.
+inline constexpr uint8_t GIC_MAX_IRQ = 64;
+
 void ArchInterruptController::mask(uint8_t irq) {
+    if (irq >= GIC_MAX_IRQ) {
+        return;
+    }
     if (gic_is_v3 && irq < 32) {
         gicr_sgi_reg(GICR_ICENABLER0)[0] = (1U << irq);
     } else {
@@ -92,6 +112,9 @@ void ArchInterruptController::mask(uint8_t irq) {
 }
 
 void ArchInterruptController::unmask(uint8_t irq) {
+    if (irq >= GIC_MAX_IRQ) {
+        return;
+    }
     if (gic_is_v3 && irq < 32) {
         gicr_sgi_reg(GICR_ISENABLER0)[0] = (1U << irq);
     } else {

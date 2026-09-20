@@ -27,10 +27,19 @@
 
 #include <kernel/nexios_config.h>
 #include <kernel/arch/hal/io.hpp>
+#include <kernel/arch/early_init.hpp>
+#include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/arch/idt.hpp>
+#include <kernel/arch/timer.hpp>
 
 namespace arch {
 
 bool g_pan_supported = false;
+
+// BOOT_ONLY latch for early_irq_init (issue #198, INV-2): namespace scope,
+// never function-local (no thread-safe statics on RT paths). Latched on
+// success only — a failed first call may be retried.
+bool g_early_irq_done = false;
 
 /// @brief Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4.
 /// Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and
@@ -68,8 +77,27 @@ bool pan_init() {
 
 } // namespace arch
 
-struct EarlyInitStub {
-    EarlyInitStub() {
+/// @brief aarch64 early IRQ bring-up (issue #198): VBAR/IDT → GIC
+///        (distributor + redistributor + CPU interface) → generic timer →
+///        counter-frequency calibration. Mirrors kernel.cpp boot order.
+arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
+    if (frequency_hz == 0) {
+        return arch::EarlyIrqResult::BAD_FREQ;
     }
-};
-static EarlyInitStub stub{};
+    if (arch::g_early_irq_done) {
+        return arch::EarlyIrqResult::OK;
+    }
+    arch::IDT::init();
+    arch::IDT::load();
+    arch::ArchInterruptController::init();
+    if (!arch::gic_redist_ready()) {
+        return arch::EarlyIrqResult::CTRL_TIMEOUT;
+    }
+    arch::Timer::init(frequency_hz);
+    (void)arch::Timer::calibrate();
+    if (arch::Timer::freq_hz() == 0) {
+        return arch::EarlyIrqResult::TIMER_FREQ_UNKNOWN;
+    }
+    arch::g_early_irq_done = true;
+    return arch::EarlyIrqResult::OK;
+}

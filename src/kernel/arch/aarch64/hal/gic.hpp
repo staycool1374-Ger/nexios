@@ -41,6 +41,12 @@ inline constexpr uint32_t GICD_SGIR      = 0x0F00;
 
 // ─── GICv3 Redistributor RD frame ────────────────────────────────────────
 inline constexpr uint32_t GICR_WAKER      = 0x0014;
+/// @brief GICR_WAKER.Children_Online bit: redistributor finished its wake-up.
+inline constexpr uint32_t GICR_WAKER_CHILDREN_ONLINE = 1U << 1;
+/// @brief Bounded poll budget for redistributor wake-up (issue #198, INV-1:
+///        boot hangs are forbidden — expiry surfaces via gic_redist_ready()
+///        as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init).
+inline constexpr uint32_t GICR_WAKER_MAX_POLLS = 1000000;
 
 // ─── GICv3 SGI/PPI frame ─────────────────────────────────────────────────
 inline constexpr uint32_t GICR_IGROUPR0   = 0x0080;

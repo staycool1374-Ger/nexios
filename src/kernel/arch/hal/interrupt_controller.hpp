@@ -121,13 +121,20 @@ class ArchInterruptController {
     static void restore(const IrqState &state);
 };
 
+/// @brief Redistributor wake state (issue #198): true when the GICv3
+///        redistributor reports Children_Online, or on the GICv2 path
+///        (no redistributor exists). Consumed by early_irq_init().
+/// @return true when interrupt delivery hardware is usable.
+bool gic_redist_ready();
+
 /// @cond
 #elif defined(CONFIG_ARCH_RISCV64)
 /// @endcond
 
-/// @brief Snapshot of the RISC-V PLIC threshold.
+/// @brief Snapshot of the RISC-V PLIC threshold + first enable word.
 struct IrqState {
-    uint32_t plic_threshold; ///< PLIC priority threshold.
+    uint32_t plic_threshold;  ///< PLIC priority threshold.
+    uint32_t plic_enable_first; ///< PLIC enable word for IRQ lines 0–31.
 };
 
 /// @brief RISC-V PLIC (Platform-Level Interrupt Controller) driver.

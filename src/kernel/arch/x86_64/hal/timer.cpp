@@ -160,6 +160,9 @@ void Timer::init(uint32_t frequency_hz) {
 /// @param frequency_hz Desired frequency; the PIT base frequency is divided by
 /// this value.
 void Timer::set_frequency(uint32_t frequency_hz) {
+    if (frequency_hz == 0) {
+        return;
+    }
     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
 
     outb(0x43, 0x36);

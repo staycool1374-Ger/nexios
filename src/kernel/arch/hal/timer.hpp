@@ -240,6 +240,11 @@ class Timer {
   private:
     static constinit uint64_t ticks_;
     static constinit uint64_t timer_freq_hz_;
+    /// @brief Latched re-arm interval in mtime ticks (issue #198): written by
+    ///        set_frequency()/periodic(), consumed by handle_irq() so the
+    ///        deadline stays relative (now + interval) instead of drifting
+    ///        on the absolute ticks_ * interval product.
+    static constinit uint64_t timer_interval_;
     static constinit TickSource active_source_;
     static constinit uint64_t last_ns_;
     static constinit bool calibrated_;

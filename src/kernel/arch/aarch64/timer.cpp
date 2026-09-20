@@ -50,6 +50,9 @@ void Timer::init(uint32_t frequency_hz) {
 /// Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.
 /// @param[in] frequency_hz Desired frequency in Hz.
 void Timer::set_frequency(uint32_t frequency_hz) {
+    if (frequency_hz == 0) {
+        return;
+    }
     uint64_t freq{};
     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
     counter_freq_hz_ = freq;
@@ -143,6 +146,14 @@ void Timer::set_ticks_for_test(uint64_t value) {
 /// @brief Arm the timer for a one-shot interrupt after a number of ticks.
 /// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
 void Timer::oneshot(uint64_t ticks_from_now) {
+    if (ticks_from_now == 0) {
+        // Disarm: clear the countdown and disable the physical timer so
+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+        isb();
+        return;
+    }
     uint64_t interval = ticks_from_now * (counter_freq_hz_ / 1000);
     if (interval == 0)
         interval = 1;
@@ -154,6 +165,14 @@ void Timer::oneshot(uint64_t ticks_from_now) {
 /// @brief Arm the timer for periodic interrupts.
 /// @param[in] period_ticks Interval in scheduler ticks (ms).
 void Timer::periodic(uint64_t period_ticks) {
+    if (period_ticks == 0) {
+        // Disarm: clear the countdown and disable the physical timer so
+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
+        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
+        isb();
+        return;
+    }
     uint64_t freq{};
     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
     uint64_t interval = freq / period_ticks;

@@ -201,6 +201,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
     {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
+    {"irq_early_std",         7,    0,       0      },  // early IRQ+timer init conformance (issue #198)
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
     {"apic_tpr",              6,    0,       0      },  // TPR classes/shadow/guard/vector reservation + live IPI block-and-hold (#26, issue #85 module 6)
     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD

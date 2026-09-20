@@ -1,487 +1,963 @@
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index b34a8e4f..a5db3e35 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -890,8 +890,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-         debug_write(" priority=");
-         debug_write_hex(victim->priority);
-         debug_write("\n");
--        kernel::Scheduler::terminate(*victim,
--            static_cast<uint64_t>(-static_cast<int64_t>(9)));
-+        // Issue #197: an AP-live victim cannot be freed — refuse and
-+        // retry on the next OOM tick instead of draining a live task.
-+        const kernel::errors::SchedulerError oom_err =
-+            kernel::Scheduler::terminate_err(*victim,
-+                static_cast<uint64_t>(-static_cast<int64_t>(9)));
-+        if (oom_err != kernel::errors::SCHED_ERR_OK) {
-+            return false;
-+        }
-         kernel::Scheduler::drain_zombie_list();
-         return true;
-     });
-@@ -1421,8 +1427,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-         // INV-5: terminate dequeues the task from the ready queue so it is
-         // never left inrq=1 outside the physical queue (which corrupts the
-         // ready-queue count_ and wedges the scheduler).
--        kernel::Scheduler::terminate(*task,
--                                     static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+        // Issue #197: an AP-live target cannot be freed — leave it alive
-+        // (delivery deferred to the owning CPU's own exit path); do NOT
-+        // re-deliver in a tight loop (caller backs off).
-+        const kernel::errors::SchedulerError fatal_err =
-+            kernel::Scheduler::terminate_err(*task,
-+                static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+        if (fatal_err != kernel::errors::SCHED_ERR_OK) {
-+            return false;
-+        }
-         return false;
-     }
+diff --git a/docs/specs/irq-early-init.md b/docs/specs/irq-early-init.md
+new file mode 100644
+index 00000000..09d79360
+--- /dev/null
++++ b/docs/specs/irq-early-init.md
+@@ -0,0 +1,69 @@
++# Early IRQ-Controller + Timer Init (issue #198)
++
++Single per-arch entry point run before the scheduler exists. Fail-closed:
++reachable failures are `EarlyIrqResult` codes, never panic.
++
++## 1. Ordering contract
++
++```
++IDT::init + IDT::load
++  → ArchInterruptController::init
++    → Timer::init(frequency_hz)
++      → Timer::calibrate
++```
++
++Global IRQs stay masked throughout. `early_irq_init()` is idempotent
++(BOOT_ONLY): a repeat call re-runs the sequence with no hardware
++side-effect delta and returns the same result.
++
++Success criterion is `Timer::freq_hz() != 0` after calibrate — not the
++calibrate boolean (x86 calibrate returns false on the nonzero fallback
++source, which is a success).
++
++## 2. Per-arch mapping
++
++| Stage | x86_64 | AArch64 | RISC-V |
++|---|---|---|---|
++| IDT | IDT init/load (256 entries) | VBAR_EL1 init/load (64 slots) | stvec init/load (64 slots) |
++| Controller | 8259A cascade (0x20/0x28), then APIC (fail-open to PIC) | GICv2/v3, Group 0, timer PPI INTID 30 | PLIC threshold 0, SEIE, prio-1 defaults |
++| Controller ready | `is_apic_supported` + MMIO map | `gic_redist_ready()` (Children_Online; GICv2 = true) | n/a (no probe register) |
++| Timer | PIT/APIC timer → TSC calibration | CNTP generic counter | SBI timer → mtime (10 MHz QEMU) |
++| AP path | `early_irq_init_ap()`: `APIC::init_ap` + `IDT::load` only | per-core GICR (issue #28) | per-hart PLIC threshold (issue #29) |
++
++## 3. Error codes
++
++`OK`, `BAD_FREQ` (freq 0), `MMIO_MAP_FAILED` (x86 APIC window),
++`CTRL_PROBE_FAILED` (reserved: unreadable version), `CTRL_TIMEOUT`
++(GIC redistributor WAKER bound expiry — GIC left disabled = safe state),
++`TIMER_FREQ_UNKNOWN` (backing frequency still 0).
++
++## 4. Hardening landed with this contract
++
++- GIC redistributor WAKER poll is bounded by `GICR_WAKER_MAX_POLLS` with
++  spec-correct Children_Online polarity (pre-#198 loop tested the
++  inverted bit and always spun the full budget on QEMU). On expiry
++  `gic_redist_ready()` is false and `early_irq_init` returns CTRL_TIMEOUT
++  without starting the timer (the distributor itself was already enabled
++  by `init()` — the error stops the bring-up sequence, it does not unwind
++  the controller).
++- `mask`/`unmask` range guards: GIC `< 64` (snapshot covers words 0..1,
++  IDT has 64 slots), PLIC `< 32` (single enable word on QEMU virt).
++  Out-of-window lines are no-ops, never OOB MMIO writes.
++- RISC-V `IrqState` additionally captures enable word 0; wired-line
++  priorities default to 1 (lines stay disabled — drivers enable their
++  own IRQ when registering handlers).
++- Zero-frequency calls are fail-closed on all arches (`set_frequency(0)`
++  and `early_irq_init(0)` program no hardware).
++- RISC-V `handle_irq` re-arms relative (`now + timer_interval_`, latched
++  at `set_frequency`/`periodic`) instead of the drifting absolute
++  `ticks_ * interval` product; `oneshot(0)`/`periodic(0)` disarm
++  (mtimecmp parked at maximum — S-mode cannot clear a pending STIP).
++- AArch64 `oneshot(0)`/`periodic(0)` disarm via CTL disable (was a
++  divide-by-zero on `period_ticks == 0`).
++
++## 5. Non-goals
++
++Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
++(#183), teardown validation (#199). `kernel.cpp` keeps its own staged
++calls; `early_irq_init()` codifies the same order for tests and
++bring-up reuse.
+diff --git a/src/kernel/arch/aarch64/early_init.cpp b/src/kernel/arch/aarch64/early_init.cpp
+index 552b2048..519b7d2e 100644
+--- a/src/kernel/arch/aarch64/early_init.cpp
++++ b/src/kernel/arch/aarch64/early_init.cpp
+@@ -27,11 +27,20 @@
  
-@@ -1448,12 +1461,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
-             arch::HHDM_OFFSET + frame_phys);
-         if (!frame) {
-             // If we cannot write the signal frame (bad stack),
--            // terminate
-+            // terminate. Issue #197: an AP-live target is left alive
-+            // instead (delivery deferred, no tight re-delivery loop).
-             kernel::Logger::error("Task %x: cannot write signal frame, "
-                                   "terminating",
-                                   task->id);
--            kernel::Scheduler::terminate(
--                *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+            const kernel::errors::SchedulerError frame_err =
-+                kernel::Scheduler::terminate_err(
-+                    *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+            (void)frame_err;
-             return false;
+ #include <kernel/nexios_config.h>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/arch/early_init.hpp>
++#include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/arch/idt.hpp>
++#include <kernel/arch/timer.hpp>
+ 
+ namespace arch {
+ 
+ bool g_pan_supported = false;
+ 
++// BOOT_ONLY latch for early_irq_init (issue #198, INV-2): namespace scope,
++// never function-local (no thread-safe statics on RT paths). Latched on
++// success only — a failed first call may be retried.
++bool g_early_irq_done = false;
++
+ /// @brief Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4.
+ /// Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and
+ /// CONFIG_PAN is on, then defaults PSTATE.PAN to deny (clac).  Every PAN
+@@ -68,8 +77,27 @@ bool pan_init() {
+ 
+ } // namespace arch
+ 
+-struct EarlyInitStub {
+-    EarlyInitStub() {
++/// @brief aarch64 early IRQ bring-up (issue #198): VBAR/IDT → GIC
++///        (distributor + redistributor + CPU interface) → generic timer →
++///        counter-frequency calibration. Mirrors kernel.cpp boot order.
++arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return arch::EarlyIrqResult::BAD_FREQ;
++    }
++    if (arch::g_early_irq_done) {
++        return arch::EarlyIrqResult::OK;
++    }
++    arch::IDT::init();
++    arch::IDT::load();
++    arch::ArchInterruptController::init();
++    if (!arch::gic_redist_ready()) {
++        return arch::EarlyIrqResult::CTRL_TIMEOUT;
+     }
+-};
+-static EarlyInitStub stub{};
++    arch::Timer::init(frequency_hz);
++    (void)arch::Timer::calibrate();
++    if (arch::Timer::freq_hz() == 0) {
++        return arch::EarlyIrqResult::TIMER_FREQ_UNKNOWN;
++    }
++    arch::g_early_irq_done = true;
++    return arch::EarlyIrqResult::OK;
++}
+diff --git a/src/kernel/arch/aarch64/hal/gic.hpp b/src/kernel/arch/aarch64/hal/gic.hpp
+index 54ab2f2a..cc3d3fc3 100644
+--- a/src/kernel/arch/aarch64/hal/gic.hpp
++++ b/src/kernel/arch/aarch64/hal/gic.hpp
+@@ -41,6 +41,12 @@ inline constexpr uint32_t GICD_SGIR      = 0x0F00;
+ 
+ // ─── GICv3 Redistributor RD frame ────────────────────────────────────────
+ inline constexpr uint32_t GICR_WAKER      = 0x0014;
++/// @brief GICR_WAKER.Children_Online bit: redistributor finished its wake-up.
++inline constexpr uint32_t GICR_WAKER_CHILDREN_ONLINE = 1U << 1;
++/// @brief Bounded poll budget for redistributor wake-up (issue #198, INV-1:
++///        boot hangs are forbidden — expiry surfaces via gic_redist_ready()
++///        as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init).
++inline constexpr uint32_t GICR_WAKER_MAX_POLLS = 1000000;
+ 
+ // ─── GICv3 SGI/PPI frame ─────────────────────────────────────────────────
+ inline constexpr uint32_t GICR_IGROUPR0   = 0x0080;
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index 10ec3afd..bfff8aa1 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -41,8 +41,8 @@ void ArchInterruptController::init() {
+         waker &= ~(1U << 0);
+         rr[GICR_WAKER / 4] = waker;
+         dsb_sy();
+-        for (int t = 1000000; t > 0; --t) {
+-            if (!(rr[GICR_WAKER / 4] & (1U << 1))) break;
++        for (uint32_t poll = 0; poll < GICR_WAKER_MAX_POLLS; ++poll) {
++            if (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) break;
+             dsb_sy();
          }
  
-@@ -1494,9 +1510,12 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+@@ -73,7 +73,6 @@ void ArchInterruptController::init() {
      }
-     dump_regs(regs);
-     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
--    // physical queue.
--    kernel::Scheduler::terminate(
--        *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+    // physical queue. Issue #197: an AP-live target is left alive instead
-+    // (the owning CPU's own exit path terminates it).
-+    const kernel::errors::SchedulerError default_err =
-+        kernel::Scheduler::terminate_err(
-+            *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
-+    (void)default_err;
-     return false;
- #elif defined(CONFIG_ARCH_AARCH64)
-     (void)vector;
-diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
-index a39b655c..00a58901 100644
---- a/src/kernel/syscall/syscall_handlers_misc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_misc.cpp
-@@ -105,7 +105,15 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-         if (Scheduler::current_task() == t) {
-             Scheduler::switch_away_from_terminating(*t);
-         } else {
--            Scheduler::terminate(*t, arg0);
-+            // Issue #197: a target running on another CPU cannot be
-+            // freed — map the refusal instead of falling through to
-+            // child-reparent/wait logic that assumes TERMINATED.
-+            const errors::SchedulerError exit_err =
-+                Scheduler::terminate_err(*t, arg0);
-+            if (exit_err != errors::SCHED_ERR_OK) {
-+                return static_cast<uint64_t>(
-+                    errors::from_sched_error(static_cast<uint64_t>(exit_err)));
-+            }
-         }
- 
-         if (t->first_child) {
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 54940e98..c882e8b7 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -1097,8 +1097,24 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
-             if (!zombie_head_)
-                 zombie_tail_ = nullptr;
-             task->zombie_next_ = nullptr;
-+            // Issue #197: spare an AP-live zombie (never free a live
-+            // stack) — re-queue at the tail so other zombies still flush
-+            // within the bounded max_flush budget (no live-wait).
-+            if (is_current_on_any_cpu(task)) {
-+                task->zombie_next_ = nullptr;
-+                if (zombie_tail_ != nullptr) {
-+                    zombie_tail_->zombie_next_ = task;
-+                } else {
-+                    zombie_head_ = task;
-+                }
-+                zombie_tail_ = task;
-+                continue;
-+            }
-             if (task->in_ready_queue_)
-                 rq_task(*task).remove(*task, effective_priority(task));
-+            // Issue #197 defense-in-depth: unlink a stale EDF entry.
-+            if (task->in_edf_queue_)
-+                edf_remove(*task, queue_target(*task));
-             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-         }
-         if (task->magic == TaskControlBlock::TCB_MAGIC) {
-@@ -1114,6 +1130,11 @@ void Scheduler::drain_zombie_list() noexcept {
-     // (callers hold none — OOM handler, snapshot, tests) so this never
-     // self-deadlocks; queue-removes inherit the baseline single-core
-     // exposure plus AP try-gating (spec §3.4.2).
-+    // Issue #197: spare AP-live zombies — a pass budget of one full list
-+    // length bounds rotations so a live head cannot wedge the drain.
-+    uint64_t spared = 0;
-+    const uint64_t pass_budget =
-+        __atomic_load_n(&zombie_count_, __ATOMIC_RELAXED) + 1;
-     for (;;) {
-         TaskControlBlock *task;
-         {
-@@ -1132,12 +1153,32 @@ void Scheduler::drain_zombie_list() noexcept {
-                 zombie_count_ = 0;
-                 continue;
-             }
-+            if (is_current_on_any_cpu(task)) {
-+                // Never free a live stack: rotate head→tail (unless
-+                // sole, then nothing else to do) and retry on a later
-+                // pass — never block (§11.3).
-+                if (task->zombie_next_ == nullptr || zombie_tail_ == task) {
-+                    return;
-+                }
-+                zombie_head_ = task->zombie_next_;
-+                task->zombie_next_ = nullptr;
-+                zombie_tail_->zombie_next_ = task;
-+                zombie_tail_ = task;
-+                if (++spared >= pass_budget) {
-+                    return;
-+                }
-+                continue;
-+            }
-             zombie_head_ = task->zombie_next_;
-             if (!zombie_head_)
-                 zombie_tail_ = nullptr;
-             task->zombie_next_ = nullptr;
-             if (task->in_ready_queue_)
-                 rq_task(*task).remove(*task, effective_priority(task));
-+            // Issue #197 defense-in-depth: unlink a stale EDF entry —
-+            // bitmap-only removal would free a still-linked node.
-+            if (task->in_edf_queue_)
-+                edf_remove(*task, queue_target(*task));
-             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-         }
-         // IRQs on — cleanup and free without holding any lock.
-@@ -1166,12 +1207,20 @@ void Scheduler::cleanup_step() noexcept {
-             zombie_count_ = 0;
-             return;
-         }
-+        // Issue #197: spare an AP-live head (never free a live stack) —
-+        // single-pop variant: leave it listed, retry on a later pass.
-+        if (is_current_on_any_cpu(task)) {
-+            return;
-+        }
-         zombie_head_ = task->zombie_next_;
-         if (!zombie_head_)
-             zombie_tail_ = nullptr;
-         task->zombie_next_ = nullptr;
-         if (task->in_ready_queue_)
-             rq_task(*task).remove(*task, effective_priority(task));
-+        // Issue #197 defense-in-depth: unlink a stale EDF entry.
-+        if (task->in_edf_queue_)
-+            edf_remove(*task, queue_target(*task));
-         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-     }
-     // IRQs on — cleanup and free without holding any lock.
-@@ -1201,12 +1250,19 @@ void Scheduler::cleanup_step_try() noexcept {
-             zombie_count_ = 0;
-             return;
-         }
-+        // Issue #197: spare an AP-live head (never free a live stack).
-+        if (is_current_on_any_cpu(task)) {
-+            return;
-+        }
-         zombie_head_ = task->zombie_next_;
-         if (!zombie_head_)
-             zombie_tail_ = nullptr;
-         task->zombie_next_ = nullptr;
-         if (task->in_ready_queue_)
-             rq_task(*task).remove(*task, effective_priority(task));
-+        // Issue #197 defense-in-depth: unlink a stale EDF entry.
-+        if (task->in_edf_queue_)
-+            edf_remove(*task, queue_target(*task));
-         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-     }
-     task->cleanup();
-@@ -1362,8 +1418,21 @@ static void stamp_exec(TaskControlBlock &t) noexcept {
-     t.exec_stamp_ns = arch::Timer::ns_monotonic();
+     isb();
+ }
+-
+ void ArchInterruptController::eoi(uint8_t vector) {
+     if (gic_is_v3)
+         gic_v3_write_eoir(vector);
+@@ -82,7 +81,28 @@ void ArchInterruptController::eoi(uint8_t vector) {
+     dsb_sy();
  }
  
--void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-+errors::SchedulerError
-+Scheduler::terminate_err(TaskControlBlock &task,
-+                         uint64_t exit_code) noexcept {
-     arch::IrqGuard irq_guard{};
-+    // Issue #197: refuse to terminate a task that is current on ANOTHER
-+    // CPU (evaluated before taking scheduler_lock_ — leaf-only reads, no
-+    // new lock takes). Freeing an AP-live stack poisons the running task
-+    // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
-+    // Self-termination always succeeds (exempted below). No mutation on
-+    // refusal: no dequeue, no state write, no release, no reaper poke.
-+    if (is_current_on_any_cpu(&task) && &task != current_task()) {
-+        kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
-+                             static_cast<unsigned>(task.id));
-+        return errors::SCHED_ERR_REMOTE_CURRENT;
++/// @brief Redistributor wake state (issue #198): true when the GICv3
++///        redistributor reports Children_Online, or when no redistributor
++///        exists (GICv2 path). Polarity follows the GICv3 spec (online = 1);
++///        the pre-#198 poll loop tested the inverted bit.
++/// @return true when interrupt delivery hardware is usable.
++bool gic_redist_ready() {
++    if (!gic_is_v3) {
++        return true;
 +    }
-     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-     charge_exec(task); // issue #21: bill the final partial quantum (no loss)
- #if defined(CONFIG_DEBUG_IPC_SCHED)
-@@ -1435,6 +1504,19 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-         switch_to_task(&task, *next, nullptr);
-     }
-     }
-+    return errors::SCHED_ERR_OK;
++    volatile uint32_t *rr = gicr_rd_reg(0);
++    return (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0;
 +}
 +
-+void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
-+    // Void legacy wrapper: refusal is fail-closed warn-only (all existing
-+    // callers are own-CPU paths where refusal is unreachable). Fallible
-+    // callers use terminate_err directly.
-+    const errors::SchedulerError err = terminate_err(task, exit_code);
-+    if (err != errors::SCHED_ERR_OK) {
-+        kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
-+                             static_cast<unsigned>(task.id),
-+                             static_cast<unsigned>(err));
++/// @brief Valid IRQ window for mask/unmask (issue #198): the snapshot covers
++///        distributor words 0..1 and the IDT has 64 slots, so lines >= 64
++///        have no defined state and must not touch MMIO.
++inline constexpr uint8_t GIC_MAX_IRQ = 64;
++
+ void ArchInterruptController::mask(uint8_t irq) {
++    if (irq >= GIC_MAX_IRQ) {
++        return;
 +    }
+     if (gic_is_v3 && irq < 32) {
+         gicr_sgi_reg(GICR_ICENABLER0)[0] = (1U << irq);
+     } else {
+@@ -92,6 +112,9 @@ void ArchInterruptController::mask(uint8_t irq) {
  }
  
- void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
-@@ -3092,9 +3174,14 @@ void Scheduler::cleanup_test_tasks() noexcept {
- 
-     // Terminate each collected task: dequeue, set TERMINATED, wake parent,
-     // release_zombie (removes from all_tasks_, deadline_list_, id_table_,
--    // appends to zombie list).
--    for (uint64_t i = 0; i < num_to_kill; ++i)
--        terminate(*to_kill[i], 0);
-+    // appends to zombie list). Issue #197: race-window second gate — a
-+    // task collected as non-current may have been dispatched on the AP
-+    // since; refusal skips it (the AP-parked teardown frees it later).
-+    for (uint64_t i = 0; i < num_to_kill; ++i) {
-+        const errors::SchedulerError cleanup_err =
-+            terminate_err(*to_kill[i], 0);
-+        (void)cleanup_err;
+ void ArchInterruptController::unmask(uint8_t irq) {
++    if (irq >= GIC_MAX_IRQ) {
++        return;
 +    }
+     if (gic_is_v3 && irq < 32) {
+         gicr_sgi_reg(GICR_ISENABLER0)[0] = (1U << irq);
+     } else {
+diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
+index 28e1d0fb..4aea3c58 100644
+--- a/src/kernel/arch/aarch64/timer.cpp
++++ b/src/kernel/arch/aarch64/timer.cpp
+@@ -50,6 +50,9 @@ void Timer::init(uint32_t frequency_hz) {
+ /// Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.
+ /// @param[in] frequency_hz Desired frequency in Hz.
+ void Timer::set_frequency(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return;
++    }
+     uint64_t freq{};
+     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+     counter_freq_hz_ = freq;
+@@ -143,6 +146,14 @@ void Timer::set_ticks_for_test(uint64_t value) {
+ /// @brief Arm the timer for a one-shot interrupt after a number of ticks.
+ /// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
+ void Timer::oneshot(uint64_t ticks_from_now) {
++    if (ticks_from_now == 0) {
++        // Disarm: clear the countdown and disable the physical timer so
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
++        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
++        isb();
++        return;
++    }
+     uint64_t interval = ticks_from_now * (counter_freq_hz_ / 1000);
+     if (interval == 0)
+         interval = 1;
+@@ -154,6 +165,14 @@ void Timer::oneshot(uint64_t ticks_from_now) {
+ /// @brief Arm the timer for periodic interrupts.
+ /// @param[in] period_ticks Interval in scheduler ticks (ms).
+ void Timer::periodic(uint64_t period_ticks) {
++    if (period_ticks == 0) {
++        // Disarm: clear the countdown and disable the physical timer so
++        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
++        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
++        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
++        isb();
++        return;
++    }
+     uint64_t freq{};
+     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+     uint64_t interval = freq / period_ticks;
+diff --git a/src/kernel/arch/early_init.hpp b/src/kernel/arch/early_init.hpp
+new file mode 100644
+index 00000000..4a58b08a
+--- /dev/null
++++ b/src/kernel/arch/early_init.hpp
+@@ -0,0 +1,2 @@
++#pragma once
++#include <kernel/arch/hal/early_init.hpp>
+diff --git a/src/kernel/arch/hal/early_init.hpp b/src/kernel/arch/hal/early_init.hpp
+new file mode 100644
+index 00000000..01094571
+--- /dev/null
++++ b/src/kernel/arch/hal/early_init.hpp
+@@ -0,0 +1,68 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file hal/early_init.hpp
++/// @brief Early IRQ-controller + architectural timer init contract (issue
++///        #198). Single per-arch entry point run before the scheduler exists:
++///        IDT init/load, controller init, timer init, timer calibrate — with
++///        global IRQs masked throughout. Fail-closed via EarlyIrqResult;
++///        reachable failures never panic.
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace arch {
++
++/// @brief Early IRQ-init outcome (issue #198). Reachable failures are error
++///        codes, never ENSURE/panic (CODING_STYLE §5).
++enum class EarlyIrqResult : uint8_t {
++    OK = 0,              ///< All four stages completed.
++    BAD_FREQ = 1,        ///< frequency_hz == 0 (caller error).
++    MMIO_MAP_FAILED = 2, ///< Controller MMIO window could not be mapped.
++    CTRL_PROBE_FAILED = 3, ///< Controller version/probe unreadable.
++    CTRL_TIMEOUT = 4,    ///< Controller ready-poll (GIC redistributor WAKER)
++                         ///< did not complete within its bound.
++    TIMER_FREQ_UNKNOWN = 5, ///< Timer backing frequency still 0 after init.
++};
++
++/// @brief Run the ordered early IRQ bring-up for this architecture.
++/// Stages: IDT::init + IDT::load → ArchInterruptController::init →
++/// Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY):
++/// a second call repeats the sequence with no hardware side-effect delta
++/// and returns the same result.
++/// @param frequency_hz Desired system-tick rate in Hz (must be nonzero).
++/// @return EarlyIrqResult outcome; OK on success.
++EarlyIrqResult early_irq_init(uint32_t frequency_hz);
++
++/// @cond
++#if defined(CONFIG_ARCH_X86_64)
++/// @endcond
++
++/// @brief Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load.
++/// Touches per-CPU state only; the shared distributor/PIC setup from
++/// early_irq_init() is never repeated here.
++/// Defined in src/kernel/arch/x86_64/early_init.cpp.
++void early_irq_init_ap();
++
++/// @cond
++#endif
++/// @endcond
++
++} // namespace arch
+diff --git a/src/kernel/arch/hal/interrupt_controller.hpp b/src/kernel/arch/hal/interrupt_controller.hpp
+index 23e70576..54f33d0c 100644
+--- a/src/kernel/arch/hal/interrupt_controller.hpp
++++ b/src/kernel/arch/hal/interrupt_controller.hpp
+@@ -121,13 +121,20 @@ class ArchInterruptController {
+     static void restore(const IrqState &state);
+ };
  
-     // Drain zombies: cleanup() + MemPool::free() for each.
-     drain_zombie_list();
-@@ -4488,6 +4575,12 @@ void Scheduler::process_deferred_kills() noexcept {
-         auto *task = s_deferred_kill_tasks[i];
-         if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
-             continue;
-+        // Issue #197: spare AP-live tasks (never free a live stack) —
-+        // skip this entry; a still-missed deadline re-fires defer_kill
-+        // on the next scan, so no kill intent is lost.
-+        if (is_current_on_any_cpu(task)) {
-+            continue;
++/// @brief Redistributor wake state (issue #198): true when the GICv3
++///        redistributor reports Children_Online, or on the GICv2 path
++///        (no redistributor exists). Consumed by early_irq_init().
++/// @return true when interrupt delivery hardware is usable.
++bool gic_redist_ready();
++
+ /// @cond
+ #elif defined(CONFIG_ARCH_RISCV64)
+ /// @endcond
+ 
+-/// @brief Snapshot of the RISC-V PLIC threshold.
++/// @brief Snapshot of the RISC-V PLIC threshold + first enable word.
+ struct IrqState {
+-    uint32_t plic_threshold; ///< PLIC priority threshold.
++    uint32_t plic_threshold;  ///< PLIC priority threshold.
++    uint32_t plic_enable_first; ///< PLIC enable word for IRQ lines 0–31.
+ };
+ 
+ /// @brief RISC-V PLIC (Platform-Level Interrupt Controller) driver.
+diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
+index 8ab8b158..e2fc4ea4 100644
+--- a/src/kernel/arch/hal/timer.hpp
++++ b/src/kernel/arch/hal/timer.hpp
+@@ -240,6 +240,11 @@ class Timer {
+   private:
+     static constinit uint64_t ticks_;
+     static constinit uint64_t timer_freq_hz_;
++    /// @brief Latched re-arm interval in mtime ticks (issue #198): written by
++    ///        set_frequency()/periodic(), consumed by handle_irq() so the
++    ///        deadline stays relative (now + interval) instead of drifting
++    ///        on the absolute ticks_ * interval product.
++    static constinit uint64_t timer_interval_;
+     static constinit TickSource active_source_;
+     static constinit uint64_t last_ns_;
+     static constinit bool calibrated_;
+diff --git a/src/kernel/arch/riscv64/early_init.cpp b/src/kernel/arch/riscv64/early_init.cpp
+index 0d4dc62e..00b0f2f7 100644
+--- a/src/kernel/arch/riscv64/early_init.cpp
++++ b/src/kernel/arch/riscv64/early_init.cpp
+@@ -17,12 +17,40 @@
+  */
+ 
+ /// @file early_init.cpp
+-/// @brief Stub file — early RISC-V64 init is performed in boot.S (assembly).
+-///        Exists only to satisfy the build system's expectation of a .cpp file.
++/// @brief riscv64 early IRQ bring-up (issue #198): stvec/IDT → PLIC
++///        (threshold 0 + supervisor external enable) → SBI timer →
++///        mtime-frequency calibration. Mirrors kernel.cpp boot order.
++///        Raw early init (trap vector, MMU) stays in boot.S (assembly).
+ 
+-/// @brief Dummy placeholder struct to prevent "no translation unit" warnings.
+-struct EarlyInitStub {
+-    EarlyInitStub() {
++#include <kernel/arch/early_init.hpp>
++#include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/arch/idt.hpp>
++#include <kernel/arch/timer.hpp>
++
++namespace arch {
++
++// BOOT_ONLY latch for early_irq_init (issue #198, INV-2): namespace scope,
++// never function-local (no thread-safe statics on RT paths). Latched on
++// success only — a failed first call may be retried.
++bool g_early_irq_done = false;
++
++EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return EarlyIrqResult::BAD_FREQ;
+     }
+-};
+-static EarlyInitStub stub{};
++    if (g_early_irq_done) {
++        return EarlyIrqResult::OK;
++    }
++    IDT::init();
++    IDT::load();
++    ArchInterruptController::init();
++    Timer::init(frequency_hz);
++    (void)Timer::calibrate();
++    if (Timer::freq_hz() == 0) {
++        return EarlyIrqResult::TIMER_FREQ_UNKNOWN;
++    }
++    g_early_irq_done = true;
++    return EarlyIrqResult::OK;
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
+index 23a78279..e48d1d10 100644
+--- a/src/kernel/arch/riscv64/interrupt_controller.cpp
++++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
+@@ -8,6 +8,16 @@ namespace arch {
+ void ArchInterruptController::init() {
+     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+     *threshold = 0;
++    // Default priority 1 for the QEMU virt wired lines (priority 0 = never
++    // interrupt). Lines stay disabled here — drivers enable their own IRQ
++    // when their IDT handler is registered (no unsolicited delivery).
++    *plic_priority_reg(IRQ_UART) = 1;
++    *plic_priority_reg(IRQ_KEYBOARD) = 1;
++    *plic_priority_reg(IRQ_VIRTIO0) = 1;
++    *plic_priority_reg(IRQ_VIRTIO1) = 1;
++    *plic_priority_reg(IRQ_VIRTIO2) = 1;
++    *plic_priority_reg(IRQ_VIRTIO3) = 1;
++    *plic_priority_reg(IRQ_VIRTIO4) = 1;
+     asm volatile("fence iorw, iorw" : : : "memory");
+     asm volatile("csrs sie, %0" : : "r"((uint64_t)(1ULL << 9)) : "memory");
+ }
+@@ -16,13 +26,26 @@ void ArchInterruptController::eoi(uint8_t vector) {
+     plic_complete(vector);
+ }
+ 
++/// @brief Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes
++///        a single 32-line enable word; lines >= 32 have no defined register
++///        and must not touch MMIO.
++inline constexpr uint8_t PLIC_MAX_IRQ = 32;
++
+ void ArchInterruptController::mask(uint8_t irq) {
++    if (irq >= PLIC_MAX_IRQ) {
++        return;
++    }
++    // Single-core early precondition (INV/CONC): no lock needed; the fence
++    // orders the MMIO write before any subsequent claim/complete.
+     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+     enable[irq / 32] &= ~(1U << (irq % 32));
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+ 
+ void ArchInterruptController::unmask(uint8_t irq) {
++    if (irq >= PLIC_MAX_IRQ) {
++        return;
++    }
+     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
+     enable[irq / 32] |= (1U << (irq % 32));
+     asm volatile("fence iorw, iorw" : : : "memory");
+@@ -32,12 +55,16 @@ IrqState ArchInterruptController::snapshot() {
+     IrqState s{};
+     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+     s.plic_threshold = *threshold;
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    s.plic_enable_first = enable[0];
+     return s;
+ }
+ 
+ void ArchInterruptController::restore(const IrqState &state) {
+     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
+     *threshold = state.plic_threshold;
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
++    enable[0] = state.plic_enable_first;
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+ 
+diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
+index 629571f7..769035b1 100644
+--- a/src/kernel/arch/riscv64/timer.cpp
++++ b/src/kernel/arch/riscv64/timer.cpp
+@@ -29,10 +29,22 @@ namespace arch {
+ 
+ constinit uint64_t Timer::ticks_ = 0;
+ uint64_t Timer::timer_freq_hz_ = 0;
++constinit uint64_t Timer::timer_interval_ = 0;
+ constinit TickSource Timer::active_source_ = TickSource::MTIME;
+ constinit uint64_t Timer::last_ns_ = 0;
+ constinit bool Timer::calibrated_ = false;
+ 
++/// @brief QEMU virt mtime input frequency (issue #198: was a bare 10000000
++///        literal in two places). Real hardware fills this from the
++///        device tree / SBI environment (issue #29 follow-up).
++inline constexpr uint64_t RISCV_MTIME_FREQ_HZ = 10000000;
++/// @brief SBI legacy SET_TIMER extension id (ecall a7 = 0).
++inline constexpr uint64_t SBI_LEGACY_SET_TIMER = 0;
++/// @brief Fail-closed disarm deadline: mtimecmp parked at the maximum so no
++///        supervisor timer interrupt can fire (mtime is unreadable-free and
++///        mtimecmp unwritable-clear from S-mode).
++inline constexpr uint64_t MTIMECMP_DISARMED = ~0ULL;
++
+ /// @brief Initialize the timer, set frequency, and register the IRQ handler.
+ /// @param frequency_hz Desired tick frequency in Hz.
+ void Timer::init(uint32_t frequency_hz) {
+@@ -45,13 +57,17 @@ void Timer::init(uint32_t frequency_hz) {
+ }
+ 
+ void Timer::set_frequency(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return;
++    }
+     // Use SBI to get timer frequency (mtime typically 10MHz on QEMU)
+-    timer_freq_hz_ = 10000000;
+-    uint64_t interval = timer_freq_hz_ / frequency_hz;
++    timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
++    const uint64_t interval = timer_freq_hz_ / frequency_hz;
++    timer_interval_ = (interval == 0) ? 1 : interval;
+     // SBI_SET_TIMER via ecall
+-    asm volatile("mv a0, %0; li a7, 0; ecall"
++    asm volatile("mv a0, %0; mv a7, %1; ecall"
+                  :
+-                 : "r"(interval)
++                 : "r"(interval), "r"(SBI_LEGACY_SET_TIMER)
+                  : "a0", "a7", "memory");
+     // Enable STIP in sie
+     uint64_t sie{};
+@@ -83,11 +99,19 @@ uint64_t Timer::ns() {
+ ///        no sampler hook; kept for the shared Timer interface).
+ void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
+     ticks_ = ticks_ + 1;
+-    // Re-arm timer via SBI
+-    uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);
+-    asm volatile("mv a0, %0; li a7, 0; ecall"
++    // Re-arm relative (now + latched interval): self-correcting under handler
++    // delay, unlike the old absolute ticks_ * interval product which drifted
++    // and could arm a deadline already in the past.
++    uint64_t interval = timer_interval_;
++    if (interval == 0) {
++        interval = 1;
++    }
++    uint64_t now{};
++    asm volatile("csrr %0, time" : "=r"(now));
++    const uint64_t next = now + interval;
++    asm volatile("mv a0, %0; mv a7, %1; ecall"
+                  :
+-                 : "r"(next)
++                 : "r"(next), "r"(SBI_LEGACY_SET_TIMER)
+                  : "a0", "a7", "memory");
+ }
+ 
+@@ -115,7 +139,7 @@ bool Timer::calibrate() {
+     if (!calibrated_) {
+         calibrated_ = true;
+         if (timer_freq_hz_ == 0) {
+-            timer_freq_hz_ = 10000000;
++            timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
+         }
+         active_source_ = TickSource::MTIME;
+     }
+@@ -133,30 +157,45 @@ uint64_t Timer::remaining_ns() {
+ }
+ 
+ /// @brief Arm a one-shot timer via SBI.
+-/// @param ticks_from_now Number of milliseconds from now to fire.
++/// @param ticks_from_now Number of milliseconds from now to fire (0 = disarm:
++///        mtimecmp is parked at the maximum — S-mode cannot clear a pending
++///        STIP, only push its deadline out).
+ void Timer::oneshot(uint64_t ticks_from_now) {
+-    uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
+-    if (interval == 0)
+-        interval = 1;
+     uint64_t now{};
+     asm volatile("csrr %0, time" : "=r"(now));
+-    asm volatile("mv a0, %0; li a7, 0; ecall"
++    uint64_t deadline = MTIMECMP_DISARMED;
++    if (ticks_from_now != 0) {
++        uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
++        if (interval == 0) {
++            interval = 1;
 +        }
++        deadline = now + interval;
++    }
++    asm volatile("mv a0, %0; mv a7, %1; ecall"
+                  :
+-                 : "r"(now + interval)
++                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
+                  : "a0", "a7", "memory");
+ }
  
-         if (task->get_sporadic_server()) {
-             // Contract: SporadicServer::on_completion() (and on_activation /
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 2ee67b9f..8a29079a 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -436,6 +436,13 @@ class Scheduler {
-     ///        ready queue.  Call this instead of directly setting
-     ///        `task.state = TERMINATED` to keep the ready queue consistent.
-     static void terminate(TaskControlBlock &task, uint64_t exit_code) noexcept;
-+    /// @brief Fallible terminate (issue #197): refuses with
-+    ///        SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is
-+    ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
-+    ///        running task. Self-termination always succeeds. The void
-+    ///        terminate() above delegates and warns on refusal.
-+    static errors::SchedulerError terminate_err(TaskControlBlock &task,
-+                                                uint64_t exit_code) noexcept;
-     /// @brief Entry point for the deadline-monitor task (priority 127).
-     ///        Waits on an atomic handoff flag, calls scan_deadlines() when
-     ///        woken by on_tick().  Only compiled when
-diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
-index 2bb1baf5..c75392f7 100644
---- a/src/kernel/task/scheduler_errors.hpp
-+++ b/src/kernel/task/scheduler_errors.hpp
-@@ -42,7 +42,8 @@ namespace kernel::errors {
-     X(NO_SHELL, 10, "Shell task not set")                                      \
-     X(INVALID_ARGS, 11, "Invalid arguments")                                   \
-     X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
--    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
-+    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked") \
-+    X(REMOTE_CURRENT, 14, "Task is current on another CPU")
+ /// @brief Arm a periodic timer via SBI.
+-/// @param period_ticks Period in ticks (Hz).
++/// @param period_ticks Period in ticks (Hz). 0 = disarm (deadline parked at
++///        the maximum); otherwise the handle_irq re-arm interval is latched
++///        so the period persists across ticks.
+ void Timer::periodic(uint64_t period_ticks) {
+-    uint64_t interval = timer_freq_hz_ / period_ticks;
+-    if (interval == 0)
+-        interval = 1;
+     uint64_t now{};
+     asm volatile("csrr %0, time" : "=r"(now));
+-    asm volatile("mv a0, %0; li a7, 0; ecall"
++    uint64_t deadline = MTIMECMP_DISARMED;
++    if (period_ticks != 0) {
++        uint64_t interval = timer_freq_hz_ / period_ticks;
++        if (interval == 0) {
++            interval = 1;
++        }
++        timer_interval_ = interval;
++        deadline = now + interval;
++    }
++    asm volatile("mv a0, %0; mv a7, %1; ecall"
+                  :
+-                 : "r"(now + interval)
++                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
+                  : "a0", "a7", "memory");
+ }
  
- /// @brief Error codes returned by scheduler operations.
- // NOLINTNEXTLINE(performance-enum-size)
+diff --git a/src/kernel/arch/x86_64/early_init.cpp b/src/kernel/arch/x86_64/early_init.cpp
+new file mode 100644
+index 00000000..df008f3e
+--- /dev/null
++++ b/src/kernel/arch/x86_64/early_init.cpp
+@@ -0,0 +1,78 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file x86_64/early_init.cpp
++/// @brief x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC →
++///        local/APIC (+ I/O APIC) → PIT/APIC timer → TSC calibration.
++///        Mirrors the production order in kernel.cpp so the boot path and
++///        the conformance tests exercise the same sequence.
++
++#include <kernel/arch/early_init.hpp>
++#include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/arch/idt.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/x86_64/hal/apic.hpp>
++
++namespace arch {
++
++// BOOT_ONLY latch (issue #198, INV-2): Timer::init re-measures the TSC on
++// every call, so a repeat entry must return the prior result instead of
++// re-running the sequence. Latched on success only — a failed first call
++// may be retried.
++bool g_early_irq_done = false;
++
++EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return EarlyIrqResult::BAD_FREQ;
++    }
++    if (g_early_irq_done) {
++        return EarlyIrqResult::OK;
++    }
++    IDT::init();
++    IDT::load();
++    // Legacy 8259A cascade first: a working controller exists even when the
++    // APIC is absent or its MMIO window fails to map (fail-open to PIC).
++    ArchInterruptController::init();
++    if (APIC::is_apic_supported()) {
++        if (!APIC::map_mmio()) {
++            return EarlyIrqResult::MMIO_MAP_FAILED;
++        }
++        // Fail-open: APIC::init() returning false leaves the PIC path live;
++        // the timer init below then drives the PIT, never a dead APIC timer.
++        (void)APIC::init();
++    }
++    Timer::init(frequency_hz);
++    (void)Timer::calibrate();
++    // calibrate() is fail-closed with a nonzero fallback frequency on x86
++    // (false only selects the fallback source), so the success criterion is
++    // the unified frequency, not the boolean.
++    if (Timer::freq_hz() == 0) {
++        return EarlyIrqResult::TIMER_FREQ_UNKNOWN;
++    }
++    g_early_irq_done = true;
++    return EarlyIrqResult::OK;
++}
++
++void early_irq_init_ap() {
++    // Per-AP state only (mirrors smp.cpp bring_up order): the shared
++    // PIC/APIC distributor setup from early_irq_init() is never repeated.
++    APIC::init_ap();
++    IDT::load();
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
+index e9fd69b4..b7dd4a3e 100644
+--- a/src/kernel/arch/x86_64/hal/timer.cpp
++++ b/src/kernel/arch/x86_64/hal/timer.cpp
+@@ -160,6 +160,9 @@ void Timer::init(uint32_t frequency_hz) {
+ /// @param frequency_hz Desired frequency; the PIT base frequency is divided by
+ /// this value.
+ void Timer::set_frequency(uint32_t frequency_hz) {
++    if (frequency_hz == 0) {
++        return;
++    }
+     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
+ 
+     outb(0x43, 0x36);
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 7ed147d7..6f768a82 100644
+index 6f768a82..218c2be7 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -281,8 +281,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-     {"hal",                 110,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross (issue #173)
-     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
--    {"smp_multicpu",        15,   0,       0      },  // smp_bringup + smp_sched, needs -smp 2 (issue #173)
--    {"deadline",            115,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173)
-+    {"smp_multicpu",        17,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse (issues #173, #197)
-+    {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
-     {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
-     {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
-     {"random",              17,   0,       0      },  // random_* (issue #173)
-diff --git a/src/kernel/test/test_sched_helpers.hpp b/src/kernel/test/test_sched_helpers.hpp
-index 8512f9b6..287e3e2c 100644
---- a/src/kernel/test/test_sched_helpers.hpp
-+++ b/src/kernel/test/test_sched_helpers.hpp
-@@ -31,6 +31,7 @@
- 
- #pragma once
- 
+@@ -201,6 +201,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
+     {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
+     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
++    {"irq_early_std",         7,    0,       0      },  // early IRQ+timer init conformance (issue #198)
+     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
+     {"apic_tpr",              6,    0,       0      },  // TPR classes/shadow/guard/vector reservation + live IPI block-and-hold (#26, issue #85 module 6)
+     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
+diff --git a/src/kernel/test/test_irq_early_std.cpp b/src/kernel/test/test_irq_early_std.cpp
+new file mode 100644
+index 00000000..02feb10c
+--- /dev/null
++++ b/src/kernel/test/test_irq_early_std.cpp
+@@ -0,0 +1,174 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_irq_early_std.cpp
++/// @brief Early IRQ-controller + timer init conformance (issue #198).
++///        Arch-neutral contract checks over arch::early_irq_init(),
++///        IrqState snapshot/restore, and the Timer disarm/monotonic rules.
++
 +#include <test.hpp>
- #include <kernel/arch/irq_guard.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
-@@ -158,8 +159,14 @@ inline TaskControlBlock *create_forever_task(uint64_t priority,
- ///        is skipped entirely.
- inline void terminate_and_drain(TaskControlBlock &task) {
-     if (TaskControlBlock::is_valid(&task) &&
--        task.state != TaskState::TERMINATED)
--        Scheduler::terminate(task, 0);
-+        task.state != TaskState::TERMINATED) {
-+        // Issue #197: refusal (AP-live target) is fail-closed — the task
-+        // stays alive and the drain below simply finds no new zombie.
-+        const errors::SchedulerError term_err =
-+            Scheduler::terminate_err(task, 0);
-+        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
-+                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
-+    }
-     Scheduler::drain_zombie_list();
- }
- 
-@@ -171,8 +178,14 @@ inline void terminate_and_drain(TaskControlBlock &task) {
- ///        touching freed memory.
- inline void terminate_if_live(TaskControlBlock *task) {
-     if (task && TaskControlBlock::is_valid(task) &&
--        task->state != TaskState::TERMINATED)
--        Scheduler::terminate(*task, 0);
-+        task->state != TaskState::TERMINATED) {
-+        // Issue #197: refusal (AP-live target) is fail-closed — never
-+        // ENSURE or loop on it; the owner CPU reaps via its own path.
-+        const errors::SchedulerError term_err =
-+            Scheduler::terminate_err(*task, 0);
-+        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
-+                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
-+    }
- }
- 
- /// @brief Teardown for a pair of tasks: terminate the still-live ones, then
-diff --git a/src/kernel/test/test_smp_sched.cpp b/src/kernel/test/test_smp_sched.cpp
-index 46416e82..03c76a80 100644
---- a/src/kernel/test/test_smp_sched.cpp
-+++ b/src/kernel/test/test_smp_sched.cpp
-@@ -34,6 +34,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/arch/x86_64/hal/smp.hpp>
-+#include <kernel/arch/cpu_context.hpp>
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/irq_guard.hpp>
-@@ -554,6 +555,89 @@ JARVIS_TEST(smp_sched_percpu_partition_divergence,
-     JARVIS_TEST_PASS();
- }
- 
-+/// @brief Never-returning entry for AP-current observation (issue #197).
-+/// Spins until terminated externally; the test, not the entry, owns the
-+/// lifecycle (contrast smp_gate_entry, which self-completes on post).
-+void smp_forever_entry() {
-+    for (;;) {
-+        arch::pause();
-+    }
-+}
++#include <logger.hpp>
++#include <kernel/arch/early_init.hpp>
++#include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/nexios_config.h>
++
++using namespace kernel;
 +
 +// Runmode: kernel
-+// Testidea: The zombie drain never frees a task that is current on the
-+// AP (never free a live stack, scheduler.hpp:846).
-+// Input: Forever-task pinned to CPU1, observed AP-current; force
-+// TERMINATED + release_zombie; drain + cleanup_step_try.
-+// Expect: zombie_count pinned, magic intact, still AP-current; after the
-+// AP leaves (affinity CPU0 + tick), a re-drain frees it. Single-CPU:
-+// drain frees immediately (spare never triggers).
-+// Depends: drain_zombie_list/cleanup_step_try spare, is_current_on_any_cpu
-+JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
-+    // Deterministic core: drive cpu_ctx(1).current directly (the exact
-+    // predicate input of is_current_on_any_cpu) instead of racing the AP
-+    // tick — a live-AP observation would flake on tick timing. The
-+    // fixture is never enqueued, so no dispatch can disturb the setup.
-+    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
-+    JARVIS_ASSERT(runner != nullptr);
-+    // Force the zombie state directly (bypasses terminate_err: this test
-+    // targets the DRAIN gate, not the terminate gate).
-+    runner->state = TaskState::TERMINATED;
-+    Scheduler::release_zombie(*runner);
-+    const uint64_t zombies_before = Scheduler::zombie_count();
-+    JARVIS_ASSERT(zombies_before >= 1);
-+    // Simulate AP-current: the drain must spare (never free a live stack).
-+    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
-+    kernel::cpu_ctx(1).current = runner;
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-+    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
-+    Scheduler::cleanup_step_try();
-+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-+    // AP leaves: restore the slot, then the re-drain must free exactly it.
-+    kernel::cpu_ctx(1).current = saved_current;
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(zombies_before - 1, Scheduler::zombie_count());
++// Testidea: Verifies early_irq_init() completes the ordered bring-up
++// (IDT -> controller -> timer -> calibrate) with a known backing frequency.
++// Input: early_irq_init(CONFIG_TICK_HZ)
++// Expect: returns OK and Timer::freq_hz() != 0
++// Depends: arch::early_irq_init, arch::Timer
++JARVIS_TEST(early_init_returns_ok_and_freq_known, "PRE: iocd | POST: none") {
++    const arch::EarlyIrqResult res =
++        arch::early_irq_init(CONFIG_TICK_HZ);
++    JARVIS_ASSERT_FMT(res == arch::EarlyIrqResult::OK,
++                      "early_irq_init should return OK, got %u",
++                      static_cast<unsigned>(res));
++    JARVIS_ASSERT_FMT(arch::Timer::freq_hz() != 0,
++                      "Timer backing frequency must be known after init");
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: terminate_err refuses an AP-current target with
-+// SCHED_ERR_REMOTE_CURRENT and zero mutation.
-+// Input: Forever-task pinned to CPU1, observed AP-current;
-+// terminate_err from the BSP.
-+// Expect: REMOTE_CURRENT, state/queues/zombie list unmutated, block
-+// live; self-terminate path still returns SCHED_ERR_OK. Single-CPU:
-+// terminate_err returns SCHED_ERR_OK.
-+// Depends: Scheduler::terminate_err refusal predicate
-+JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
-+    // Same deterministic cpu_ctx drive as the drain test: the fixture is
-+    // never enqueued, so no dispatch can disturb the setup.
-+    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
-+    JARVIS_ASSERT(runner != nullptr);
-+    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
-+    kernel::cpu_ctx(1).current = runner;
-+    // Refusal with zero mutation: still live, no zombie queued.
-+    const uint64_t zombies_before = Scheduler::zombie_count();
-+    const errors::SchedulerError refused =
-+        Scheduler::terminate_err(*runner, 0);
-+    JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
-+    JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
-+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-+    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
-+    // AP leaves: the same call must now succeed and the drain must free.
-+    kernel::cpu_ctx(1).current = saved_current;
-+    JARVIS_ASSERT_EQ(errors::SCHED_ERR_OK,
-+                     Scheduler::terminate_err(*runner, 0));
-+    JARVIS_ASSERT(runner->state == TaskState::TERMINATED);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++// Testidea: Verifies early_irq_init() is idempotent (BOOT_ONLY): a second
++// call returns OK with no frequency change.
++// Input: early_irq_init() twice
++// Expect: both return OK, freq_hz() identical
++// Depends: arch::early_irq_init
++JARVIS_TEST(early_init_idempotent, "PRE: iocd | POST: none") {
++    const arch::EarlyIrqResult first =
++        arch::early_irq_init(CONFIG_TICK_HZ);
++    const uint64_t freq_first = arch::Timer::freq_hz();
++    const arch::EarlyIrqResult second =
++        arch::early_irq_init(CONFIG_TICK_HZ);
++    JARVIS_ASSERT(first == arch::EarlyIrqResult::OK);
++    JARVIS_ASSERT(second == arch::EarlyIrqResult::OK);
++    JARVIS_ASSERT_FMT(arch::Timer::freq_hz() == freq_first,
++                      "second early_irq_init must not change frequency");
 +    JARVIS_TEST_PASS();
 +}
 +
- void register_smp_sched_tests() {
-     Logger::info("Registering smp sched tests");
-     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
-@@ -566,5 +650,7 @@ void register_smp_sched_tests() {
-     JARVIS_REGISTER_TEST(smp_sched_exempt_move_always_allowed);
-     JARVIS_REGISTER_TEST(smp_sched_balancer_moves_nonrt_keeps_rt);
-     JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
-+    JARVIS_REGISTER_TEST(smp_drain_spares_ap_current);
-+    JARVIS_REGISTER_TEST(smp_terminate_remote_current_refused);
- }
- #endif // CONFIG_ARCH_X86_64
++// Runmode: kernel
++// Testidea: Verifies early_irq_init(0) fails closed with BAD_FREQ.
++// Input: early_irq_init(0)
++// Expect: returns BAD_FREQ (never panic)
++// Depends: arch::early_irq_init
++JARVIS_TEST(early_init_rejects_zero_freq, "PRE: iocd | POST: none") {
++    const arch::EarlyIrqResult res = arch::early_irq_init(0);
++    JARVIS_ASSERT_FMT(res == arch::EarlyIrqResult::BAD_FREQ,
++                      "early_irq_init(0) should return BAD_FREQ, got %u",
++                      static_cast<unsigned>(res));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies IrqState snapshot/restore round-trips the controller
++// mask state: mask one line, restore, state equals the original.
++// Input: snapshot/mask/restore/snapshot
++// Expect: restored snapshot equals the pre-mask snapshot
++// Depends: arch::ArchInterruptController
++JARVIS_TEST(irq_snapshot_restore_roundtrip, "PRE: iocd | POST: none") {
++    arch::IrqGuard guard;
++    const arch::IrqState before = arch::ArchInterruptController::snapshot();
++    arch::ArchInterruptController::mask(1);
++    arch::ArchInterruptController::restore(before);
++    const arch::IrqState after = arch::ArchInterruptController::snapshot();
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_ASSERT_FMT(after.pic1_mask == before.pic1_mask,
++                      "PIC1 mask not restored");
++    JARVIS_ASSERT_FMT(after.pic2_mask == before.pic2_mask,
++                      "PIC2 mask not restored");
++#elif defined(CONFIG_ARCH_AARCH64)
++    JARVIS_ASSERT_FMT(after.gic_mask == before.gic_mask,
++                      "GIC mask not restored");
++#elif defined(CONFIG_ARCH_RISCV64)
++    JARVIS_ASSERT_FMT(after.plic_threshold == before.plic_threshold,
++                      "PLIC threshold not restored");
++    JARVIS_ASSERT_FMT(after.plic_enable_first == before.plic_enable_first,
++                      "PLIC enable word not restored");
++#endif
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies oneshot(0)/periodic(0) disarm the timer on every arch
++// (0 = disarm per Timer contract).
++// Input: oneshot(0), periodic(0)
++// Expect: remaining() == 0 and remaining_ns() == 0 after each
++// Depends: arch::Timer::oneshot/periodic/remaining/remaining_ns
++JARVIS_TEST(timer_oneshot_periodic_disarm, "PRE: iocd | POST: none") {
++    arch::Timer::oneshot(0);
++    JARVIS_ASSERT_FMT(arch::Timer::remaining() == 0,
++                      "oneshot(0) must disarm");
++    JARVIS_ASSERT_FMT(arch::Timer::remaining_ns() == 0,
++                      "oneshot(0) must clear sub-tick remainder");
++    arch::Timer::periodic(0);
++    JARVIS_ASSERT_FMT(arch::Timer::remaining() == 0,
++                      "periodic(0) must disarm");
++    JARVIS_ASSERT_FMT(arch::Timer::remaining_ns() == 0,
++                      "periodic(0) must clear sub-tick remainder");
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies ns_monotonic() never decreases across samples.
++// Input: two ns_monotonic() samples
++// Expect: second >= first
++// Depends: arch::Timer::ns_monotonic
++JARVIS_TEST(timer_monotonic_non_decreasing, "PRE: iocd | POST: none") {
++    const uint64_t first = arch::Timer::ns_monotonic();
++    const uint64_t second = arch::Timer::ns_monotonic();
++    JARVIS_ASSERT_FMT(second >= first, "ns_monotonic decreased");
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Verifies handle_irq() increments the tick count by exactly one
++// with no scheduler dependency (early bring-up rule INV-5).
++// Input: set_ticks_for_test(0), handle_irq(0)
++// Expect: ticks() == 1
++// Depends: arch::Timer::handle_irq
++JARVIS_TEST(timer_handle_irq_increments_ticks, "PRE: iocd | POST: none") {
++    arch::IrqGuard guard;
++    arch::Timer::set_ticks_for_test(0);
++    arch::Timer::handle_irq(0);
++    JARVIS_ASSERT_FMT(arch::Timer::ticks() == 1,
++                      "handle_irq must increment ticks by 1, got %lu",
++                      arch::Timer::ticks());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Registers all early-IRQ-standardization conformance tests.
++// Input: None
++// Expect: All irq_early_std tests registered via JARVIS_REGISTER_TEST
++// Depends: kernel test framework
++void register_irq_early_std_tests() {
++    Logger::info("Registering irq_early_std tests");
++    JARVIS_REGISTER_TEST(early_init_returns_ok_and_freq_known);
++    JARVIS_REGISTER_TEST(early_init_idempotent);
++    JARVIS_REGISTER_TEST(early_init_rejects_zero_freq);
++    JARVIS_REGISTER_TEST(irq_snapshot_restore_roundtrip);
++    JARVIS_REGISTER_TEST(timer_oneshot_periodic_disarm);
++    JARVIS_REGISTER_TEST(timer_monotonic_non_decreasing);
++    JARVIS_REGISTER_TEST(timer_handle_irq_increments_ticks);
++}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 890fee09..6b7fa8aa 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -77,6 +77,7 @@ void register_vfsd_tests();
+ void register_iocd_tests();
+ void register_health_tests();
+ void register_timer_tests();
++void register_irq_early_std_tests();
+ void register_timing_tests();
+ void register_spsc_tests();
+ void register_preemption_under_syscall_tests();
+@@ -488,6 +489,7 @@ static void run_hal_bits_group() { register_hal_bits_tests(); }
+ static void run_hal_idt_group() { register_idt_tests(); }
+ static void run_exc_table_group() { register_exc_table_tests(); }
+ static void run_hal_timer_group() { register_timer_tests(); }
++static void run_irq_early_std_group() { register_irq_early_std_tests(); }
+ static void run_hal_apic_group() { register_apic_timer_tests(); }
+ static void run_apic_tpr_group() { register_apic_tpr_tests(); }
+ static void run_hal_rtc_group() { register_rtc_tests(); }
+@@ -816,6 +818,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"hal_idt", []() { run_hal_idt_group(); }},
+     {"exc_table", []() { run_exc_table_group(); }},
+     {"hal_timer", []() { run_hal_timer_group(); }},
++    {"irq_early_std", []() { run_irq_early_std_group(); }},
+     {"hal_apic", []() { run_hal_apic_group(); }},
+     {"apic_tpr", []() { run_apic_tpr_group(); }},
+     {"hal_rtc", []() { run_hal_rtc_group(); }},
+@@ -1095,6 +1098,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          run_hal_idt_group();
+          run_exc_table_group();
+          run_hal_timer_group();
++         run_irq_early_std_group();
+          run_hal_apic_group();
+          run_apic_tpr_group();
+          run_hal_rtc_group();
