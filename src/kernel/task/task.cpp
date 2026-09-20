@@ -22,6 +22,7 @@
 
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/time/posix_time.hpp>
 #include <kernel/elf/elf_shared.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/task/sporadic_server.hpp>
@@ -1783,6 +1784,12 @@ void TaskControlBlock::cleanup() noexcept {
         __atomic_store_n(&recv_timeout_armed, false, __ATOMIC_RELEASE);
         time::TimerWheel::cancel(recv_timeout_handle);
     }
+
+    // Drain POSIX sleep/timer/timerfd ownership (issue #76): disarm a live
+    // nanosleep, free owned timer/timerfd slots, and clear waiter
+    // registrations held by this task. Same lock position as the recv
+    // cancel above (no scheduler lock held — death-drain §12.3).
+    time::PosixTime::drain_owner(*this);
 
     // Remove self from any message queue's blocked-senders list *before*
     // freeing any resources.  If we are blocked on another task's queue

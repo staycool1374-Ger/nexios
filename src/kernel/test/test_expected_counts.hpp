@@ -193,6 +193,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // timing
     {"timing_core",          19,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list + READY-no-charge regression (issue #154)
+    {"posix_time",           10,    0,       0      },  // clock_gettime/nanosleep/timer_create/timerfd over HRT wheel (issue #76)
 
     // hal
     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid

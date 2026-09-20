@@ -380,6 +380,14 @@ class Syscall {
                                     uint64_t *);
     static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
                                 uint64_t *);
+    static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
+    static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
+                                  uint64_t *);
+    static uint64_t sys_timer_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                     uint64_t *);
+    static uint64_t sys_timerfd_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
     static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
 
@@ -465,10 +473,10 @@ class Syscall {
             &Syscall::sys_set_affinity,
             &Syscall::sys_get_affinity,
             &Syscall::sys_times,
-            &Syscall::sys_unimplemented, // 80 CLOCK_GETTIME (issue #76)
-            &Syscall::sys_unimplemented, // 81 NANOSLEEP (issue #76)
-            &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
-            &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
+            &Syscall::sys_clock_gettime, // 80 CLOCK_GETTIME (issue #76)
+            &Syscall::sys_nanosleep,     // 81 NANOSLEEP (issue #76)
+            &Syscall::sys_timer_create,  // 82 TIMER_CREATE (issue #76)
+            &Syscall::sys_timerfd_create, // 83 TIMERFD_CREATE (issue #76)
             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
             &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
     };

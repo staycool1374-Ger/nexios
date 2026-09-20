@@ -112,6 +112,10 @@ static bool any_leak(const ResourceCounters &baseline,
         return true;
     if (current.pager_mappings > baseline.pager_mappings)
         return true;
+    if (current.posix_timers > baseline.posix_timers)
+        return true;
+    if (current.posix_timerfds > baseline.posix_timerfds)
+        return true;
     return false;
 }
 
@@ -236,6 +240,9 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
               counters_.pager_registrations);
     print_row("Pager faults", baseline.pager_faults, counters_.pager_faults);
     print_row("Pager maps", baseline.pager_mappings, counters_.pager_mappings);
+    print_row("Posix timers", baseline.posix_timers, counters_.posix_timers);
+    print_row("Posix timerfds", baseline.posix_timerfds,
+              counters_.posix_timerfds);
 
     print_backtrace();
     return false;

@@ -44,5 +44,13 @@ int syscall_task_open(vfs::Vnode *vn, uint64_t flags);
 /// @brief Resolve a path and open it as a file descriptor.
 /// @return The fd index, or VFS_INVALID on failure.
 int syscall_path_open(const char *path, uint64_t flags);
+/// @brief True when a vnode is a POSIX timerfd (issue #76; defined in
+/// syscall_handlers_posix_time.cpp; ops-pointer identity).
+bool is_timerfd_vnode(const vfs::Vnode *node);
+/// @brief Blocking timerfd read helper (issue #76; defined in
+/// syscall_handlers_posix_time.cpp). Returns 8 on success or -errno.
+/// @param nonblock True when O_NONBLOCK is set on the fd.
+uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
+                            bool nonblock);
 
 } // namespace kernel

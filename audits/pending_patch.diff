@@ -1,315 +1,61 @@
-diff --git a/audits/pending_plan-77.md b/audits/pending_plan-77.md
-new file mode 100644
-index 00000000..f017d46b
---- /dev/null
-+++ b/audits/pending_plan-77.md
-@@ -0,0 +1,51 @@
-+# PLAN: runelf end-to-end user ELF execution (#77) — wire take_completed into run/schedulable + admission + argv + acceptance
-+
-+Source: issue #77 + docs/specs/elf-loader.md + verified in-tree implementation (2026-09-19).
-+Status: PLAN REVIEW (no code changed; audits/pending_patch.diff does not exist for #77).
-+
-+## AFFECTED FILES (decided)
-+- `src/services/shell.cpp` (`cmd_runelf`) — migrate onto background `ElfLoader` (request + completion handoff); `add_task_err` admission + denial UX; argv deferred with loud error (currently dropped silently).
-+- `src/kernel/elf/elf.cpp` (`load`, `finalize_loaded_task`, `setup_user_stack`) — handoff assert `tls_base_==0`; `ET_EXEC`-only `e_type` gate; fix the #75 rip-0 death as acceptance gate. No argv plumbing (deferred).
-+- `src/kernel/elf/elf_loader.{hpp,cpp}` — `take_completed()` handoff contract (priority/period/deadline set by caller); `reset()` reconciled to `destroy_completed_tcb`; validate-before-free order on new requests; existing reset/wait discipline otherwise.
-+- `src/kernel/task/scheduler.{hpp,cpp}` — `add_task_err` invoked at activation on this path (exists, never called here). No memory-budget gate (struck).
-+- `src/kernel/kernel.cpp` (`/etc/rc` runner + boot order) — hoist `ensure_task()` before rc; per-line failure policy; `add_task_err` admission; path parity with shell resolution.
-+- `src/kernel/test/test_libc_verify.cpp` (issue #75, in flight) — acceptance vehicle (real dispatch through the wired path); plus denial/argv-deferral pins; owned by `proc_elf` aggregate.
-+- `docs/specs/syscall-abi-picolibc.md` §7/§13 — TLS-bootstrap interim rule (unset + thread-local-storage=false) vs #171 crt0; record, no code.
-+
-+## INVARIANTS & CONCURRENCY BOUNDARIES
-+- Loader single-owner cleanup (elf-loader.md §5): only the loader task mutates IDLE→DONE/FAILED/CANCELED; shell performs exactly request_load/request_cancel; cancel observed per chunk; `load_generation_` drops stale wakes.
-+- Handoff ownership: DONE TCB owned by singleton until `take_completed()`; caller sets settled priority/base_priority/period/deadline BEFORE `add_task`; never `add_task` then mutate.
-+- Admission BEFORE activation via lock-taking `add_task_err` at ALL activation sites (shell + rc), fail-closed with denial code; denial leaves tables/queues/tracker untouched per `add_task_err` contract.
-+- No lock across reschedule (§11.1): loader yields per chunk with spinlock released, no IrqGuard held (existing contract, unchanged).
-+- `tls_base_==0` on every handoff (assert, not assume); FS_BASE publish sends 0 (loads nothing); no TLB/PCID action beyond loader-mapped pages.
-+- Snapshot isolation: loader TCB is baseline-owned; tests call `reset()` first + `wait_loader_idle()` last, never leave a load in flight (elf-loader.md §9).
-+- BRK red zone MP-2.2: heap bounded by STACK_VADDR, `sys_brk` rejects at/over; program allocations small.
-+- TCB memset discipline (LEARNINGS #74): any new field set explicitly at all 4 zeroing sites + exec reset + snapshot parity.
-+
-+## STEP-BY-STEP CHANGES
-+1. CONVERGE (DECIDED 2026-09-19): shell `runelf` AND the `/etc/rc` runner both migrate onto the background `ElfLoader` + `take_completed` path. Direct `elf::load` gains no new callers and keeps no activation role. Boot order (hard requirement): hoist `ElfLoader::ensure_task()` BEFORE the rc runner in `init_task_main` (currently kernel.cpp:301, after rc :158-230 + daemon wait) — a background-loader rc cannot dispatch before its servicing task exists; rc performs request + sync-wait on completion per load (not fire-and-forget).
-+2. Activation entry (BOTH sites, converged path): after `take_completed()`, set settled priority/base_priority/period/deadline, then lock-taking `Scheduler::add_task_err` (scheduler.cpp:4683) — never `admission_check_locked` directly, never legacy void `add_task`. Denial returns a `scheduler_errors.hpp` code to shell UX + dmesg (+ boot log for rc), never ENSURE.
-+3. Denial policy (DECIDED 2026-09-19): RETAIN-FOR-RETRY — a denied image stays singleton-owned; a NEW request first validates its own path, THEN frees the retained image via `destroy_completed_tcb` (never free-before-validate: a bad new path must not destroy a good retained image). `reset()` is reconciled to `destroy_completed_tcb` like every other never-added path — never `cleanup()`+`delete` on never-added (its current :246 form). At most one retained image exists.
-+4. `elf.cpp`: handoff assert `tls_base_==0`; add `ET_EXEC`-only rejection (`e_type` gate at `validate_header`: DYNAMIC/INTERP fail with a clear shell/dmesg error, never silent rip-0 death). Argv: DEFERRED (DECIDED 2026-09-19) — `runelf` with args returns a loud "arguments not yet supported" error instead of silently dropping them; `setup_user_stack` keeps its null-arg form; full argv plumbing is a follow-up issue with stack-image fuzz tests.
-+5. Fix #75 rip-0 death as acceptance gate (fault-context dump at `deliver_signal_to_user` located; GDB proved syscalls fire pre-death).
-+6. `/etc/rc`: per-line failure policy (skip-and-continue with boot log) + `add_task_err` admission with shell-equivalent denial UX; lines carrying args are rejected loudly per the argv deferral. Path parity (hard requirement): the converged loader opens via `syscall_path_open`/vfs while shell `runelf` resolves via `initrd::find` — state ONE resolution domain (vfs, with initrd mounted before first use) or add an explicit mapping step; acceptance pins initrd-resident loads through the converged path (no post-converge FILE_NOT_FOUND regression).
-+7. Memory budget: STRUCK — no such scheduler gate exists (admission is Liu-Leyland + WCET only); a memory-budget gate is future work, not this issue.
-+8. Tests: `libc_verify` via wired path (or `runelf_*` class) in `proc_elf` + denial-path pin (TABLE_FULL and ADMISSION_DENIED fail closed, retained image freed by next load per step 3) + argv-deferral pin (args → loud error, never silent drop); full gates; test-history rows.
-+
-+## TEST STRATEGY
-+- Acceptance: hosted-C program (printf/malloc/scanf) runs to EXIT(0) with correct markers via the WIRED path (not test-only scaffolding), zero ResourceTracker delta.
-+- New/changed: `runelf_*` or extended `libc_verify`; `proc_elf` aggregate count bump; neighbours `elf_loader`, `syscall_core`, `shell_interaction`, `process_rlimit`.
-+- Negative pins: denial path (admission over bound fails closed, image state defined); corrupt/truncated ELF (existing loader taxonomy); cancel mid-load (existing).
-+- Non-goals as tests: shared-lib resolution, dynamic binaries (rejection pinned, not execution), argv round-trip (deferred per step 4).
-+
-+## SIL 3 / SAFETY RISKS
-+- S1 — Unadmitted RT task: activation without Liu-Leyland check breaks schedulability claims. Closed by mandatory `add_task_err` call (step 2) + denial test.
-+- S1 — Stale-arm strand (LEARNINGS #74: terminate re-arms off dying current): any new arm-then-terminate sequence on this path must self-block, never return-to-trampoline.
-+- S2 — Zombie/double-terminate on the exit path: apply the test_syscall.cpp:651-655 gate (clean EXIT unqueued vs signal-death queued) wherever the wired path tears down.
-+- S2 — Orphaned background load: reset-first/wait-idle-last discipline on every path including failure (spec §9).
-+- S2 — argv stack corruption: deferred (step 4) — no argv reaches `setup_user_stack` until the follow-up issue with stack-image fuzz tests; the deferral pin asserts loud rejection.
-+- S3 — Static-only silently loads broken dynamics: DYNAMIC/INTERP images must be REJECTED with a clear error (not silently ignored-then-die at rip 0); add validation + message.
-+- S3 — Serial-loopback/MCR leakage, initrd staging bloat, tmpfs 64 KiB test-staging cap (strip), x86_64-only execution (other archs warn-skip).
-+
-+## OPEN QUESTIONS
-+- none (all three decided 2026-09-19: converge / retain-for-retry with new-load-frees / argv deferred-loud). Plan implementable as written once the #75 gate (step 5) clears.
-diff --git a/audits/rejected_plan-77.md b/audits/rejected_plan-77.md
-new file mode 100644
-index 00000000..d27feb95
---- /dev/null
-+++ b/audits/rejected_plan-77.md
-@@ -0,0 +1,11 @@
-+# REJECTED PLAN #77 — corrected steps (audit 2026-09-19T18:35:35Z)
-+
-+The three v3 decisions (converge / retain-for-retry / argv-deferred-loud) are faithfully recorded and the v2 regression items hold (add_task_err both sites, ET_EXEC gate, tls assert, #75 gate, retention-semantics denial pin, dual-path pin gone). The REJECT is driven by one S2 plus four S3 gaps. Correct as follows, then re-submit:
-+
-+1. Boot order (corrects S2): hoist `ElfLoader::ensure_task()` before the `/etc/rc` runner in `init_task_main` (currently :301, after rc :158-230) and state rc's sync-wait on completion explicitly — a background-loader rc cannot dispatch before its servicing task exists.
-+2. `reset()` reconcile (corrects S3): `reset()` (elf_loader.cpp:246) must move to `destroy_completed_tcb` like every other never-added path; "never cleanup()+delete on never-added" must name `reset()` explicitly.
-+3. Retain-free order (corrects S3): specify validate-new-path FIRST, then free retained via `destroy_completed_tcb` — never free-before-validate.
-+4. Path parity (corrects S3): state how `initrd::find`-visible images resolve through loader `vfs::resolve`/`syscall_path_open`, or add the mapping step; else shell/rc loads fail FILE_NOT_FOUND post-converge.
-+5. Coherence (corrects S3): renumber the duplicated step 5; fix SIL "step 6"→step 2 and test-strategy "step 3"→step 4; strip decide-later/AFFECTED-FILES language ("EITHER…OR…decide §3.1", "+ memory budget").
-+
-+Full evidence: audits/report-2026-09-19T18:35:35Z.md (DECISION: REJECTED).
-diff --git a/audits/report-2026-09-19T18:26:04Z.md b/audits/report-2026-09-19T18:26:04Z.md
-new file mode 100644
-index 00000000..30cd6104
---- /dev/null
-+++ b/audits/report-2026-09-19T18:26:04Z.md
-@@ -0,0 +1,19 @@
-+# AUDIT REPORT 2026-09-19T18:26:04Z
-+PATCH: audits/pending_plan-77.md (plan review — no code diff yet)
-+FILES: src/services/shell.cpp, src/kernel/elf/elf.cpp, src/kernel/elf/elf_loader.hpp, src/kernel/elf/elf_loader.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/kernel.cpp, src/kernel/test/test_libc_verify.cpp, docs/specs/syscall-abi-picolibc.md
-+
-+## FINDINGS
-+- [S2] src/kernel/task/scheduler.hpp:151 — plan names `admission_check_locked` as the shell/rc activation call, but its contract requires the caller to already hold `scheduler_lock_`, which shell context does not.
-+  WHY: Invoking a lock-held helper without the lock races the task tables, and taking the lock in shell to satisfy it creates TOCTOU plus §11.1 lock-across-reschedule hazard — the sole legal entry is lock-taking `add_task_err` (scheduler.cpp:4683).
-+- [S2] src/kernel/kernel.cpp:218 — `/etc/rc` runner is a second direct `elf::load` + `add_task` activation site, but the plan scopes admission/denial work to shell UX and lists only failure-policy/arg-syntax for kernel.cpp.
-+  WHY: Fixing only `cmd_runelf` leaves a boot-time path that activates tasks through the warn-only legacy `add_task` (scheduler.hpp:128-130) with no admission, defeating the plan's own S1 closure.
-+- [S3] src/kernel/task/scheduler.cpp:4683 — plan's step 6 mandates a "memory budget" gate that does not exist in the scheduler (admission is Liu-Leyland + WCET only).
-+  WHY: A step referencing a nonexistent check is not implementable as written — the plan must either define the new gate or drop it.
-+- [S3] src/kernel/elf/elf_loader.cpp:183 — plan's denial policy (retain-for-retry vs release) omits the destructor choice for a denied `take_completed` TCB (`destroy_completed_tcb` vs `cleanup()`+`delete`, cf. `reset()` :246 using the latter on a never-added TCB its own comment calls unsafe).
-+  WHY: Per CODING_STYLE §12.4 single-ownership, a denied-but-never-added TCB freed by the wrong destructor leaks tracker counts or double-unregisters, so the blocking decision must name the destructor pair.
-+- [S3] src/kernel/elf/elf.cpp:107 — plan correctly pins DYNAMIC/INTERP rejection as S3, confirmed load-bearing since `validate_segment` returns true for non-PT_LOAD and `validate_header` checks no `e_type`.
-+  WHY: Without an explicit `ET_EXEC`-only gate, static-only loader silently accepts dynamic images that then die at rip 0, misattributed to the #75 fault.
-+- [S3] src/services/shell.cpp:2048 — plan does not pin concurrent direct-`load` vs background-`ElfLoader` (`ALREADY_LOADING`) interaction while converge-vs-dual remains open.
-+  WHY: Until §3.1 converges, a direct load racing an in-flight background load needs a defined serialization/test pin or the dual path reintroduces unowned-handoff risk.
-+
-+DECISION: REJECTED
-diff --git a/audits/report-2026-09-19T18:29:16Z.md b/audits/report-2026-09-19T18:29:16Z.md
-new file mode 100644
-index 00000000..a5d21fc2
---- /dev/null
-+++ b/audits/report-2026-09-19T18:29:16Z.md
-@@ -0,0 +1,8 @@
-+# AUDIT REPORT 2026-09-19T18:29:16Z
-+PATCH: audits/pending_plan-77.md v2 (plan review — no code diff yet)
-+FILES: src/services/shell.cpp, src/kernel/elf/elf.cpp, src/kernel/elf/elf_loader.hpp, src/kernel/elf/elf_loader.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/kernel.cpp, src/kernel/test/test_libc_verify.cpp, docs/specs/syscall-abi-picolibc.md
-+
-+## FINDINGS
-+(none — all prior 2×S2 + 4×S3 verified closed; no new S1/S2/S3 introduced)
-+
-+DECISION: APPROVED
-diff --git a/audits/report-2026-09-19T18:35:35Z.md b/audits/report-2026-09-19T18:35:35Z.md
-new file mode 100644
-index 00000000..8f887fa9
---- /dev/null
-+++ b/audits/report-2026-09-19T18:35:35Z.md
-@@ -0,0 +1,19 @@
-+# AUDIT REPORT 2026-09-19T18:35:35Z
-+PATCH: audits/pending_plan-77.md v3 (plan review — no code diff yet)
-+FILES: src/services/shell.cpp, src/kernel/elf/elf.cpp, src/kernel/elf/elf_loader.hpp, src/kernel/elf/elf_loader.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/kernel.cpp, src/kernel/test/test_libc_verify.cpp, docs/specs/syscall-abi-picolibc.md
-+
-+## FINDINGS
-+- [S2] src/kernel/kernel.cpp:218 — plan migrates `/etc/rc` onto the background ElfLoader but never moves `ElfLoader::ensure_task()` (:301, after rc :158-230 + daemon wait) before the rc runner, so rc `request_load` queues VALIDATING with no loader task to service it and the boot-time sync-wait strands init.
-+  WHY: An activation path whose servicing task does not exist at request time deadlocks the boot sequence it was migrated to serve.
-+- [S3] src/kernel/elf/elf_loader.cpp:246 — plan step 3 mandates `destroy_completed_tcb` for denied never-added TCBs yet never states that `reset()` (:246 `cleanup()`+`delete`) must be reconciled to the same destructor.
-+  WHY: Leaving `reset()` on the unsafe pair preserves the exact single-ownership violation the v1 audit blocked.
-+- [S3] src/kernel/elf/elf_loader.cpp:111 — plan step 3 orders "new load frees retained FIRST" without stating before-vs-after validation of the new request, so a bad new path could destroy a good retained image.
-+  WHY: Free-before-validate on a fallible request turns a rejected load into data loss of the retained image.
-+- [S3] src/services/shell.cpp:2048 — plan asserts shell/rc paths are loader-migratable but never addresses `initrd::find` vs loader `vfs::resolve`/`syscall_path_open` (elf_loader.cpp:115,313) path-resolution parity for initrd-resident images.
-+  WHY: A migration across different name-resolution domains needs an explicit parity statement or rc/shell loads fail FILE_NOT_FOUND post-converge.
-+- [S3] audits/pending_plan-77.md:30 — step numbering incoherent (two steps numbered "5"), SIL S1 cites "step 6" for the admission call (step 6 is the struck memory budget; admission is step 2), test strategy cites "step 3" for argv (argv is step 4).
-+  WHY: Stale step cross-references make the plan unimplementable as written and misdirect the S1 closure claim.
-+- [S3] audits/pending_plan-77.md:7 — AFFECTED FILES still carries undecided v2 language ("EITHER direct `elf::load` (stay) OR migrate … (decide §3.1)") and "+ memory budget" after converge was decided and the budget gate struck.
-+  WHY: A decided plan retaining decide-later scope language re-opens the closed questions at implementation time.
-+
-+DECISION: REJECTED
-diff --git a/audits/report-2026-09-19T18:38:03Z.md b/audits/report-2026-09-19T18:38:03Z.md
-new file mode 100644
-index 00000000..959fbeec
---- /dev/null
-+++ b/audits/report-2026-09-19T18:38:03Z.md
-@@ -0,0 +1,8 @@
-+# AUDIT REPORT 2026-09-19T18:38:03Z
-+PATCH: audits/pending_plan-77.md v4 (plan review — no code diff yet)
-+FILES: src/services/shell.cpp, src/kernel/elf/elf.cpp, src/kernel/elf/elf_loader.hpp, src/kernel/elf/elf_loader.cpp, src/kernel/task/scheduler.hpp, src/kernel/task/scheduler.cpp, src/kernel/kernel.cpp, src/kernel/test/test_libc_verify.cpp, docs/specs/syscall-abi-picolibc.md
-+
-+## FINDINGS
-+- none
-+
-+DECISION: APPROVED
-diff --git a/mk/rules.mk b/mk/rules.mk
-index d60b1c62..09ecc99f 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -263,6 +263,7 @@ $(INITRD_CPIO): $(USERSPACE_ELF) initrd/tests/test-config.txt
- 	@printf '#!/bin/sh\n' > initrd_root/etc/rc
- 	@printf '# Init script\n' >> initrd_root/etc/rc
- 	@if [ ! -z "$(USERSPACE_ELF)" ]; then cp $(USERSPACE_ELF) initrd_root/; fi
-+	@if [ -f userspace/picolibc/libc_verify.c.elf ]; then cp userspace/picolibc/libc_verify.c.elf initrd_root/; fi
- 	cp initrd/tests/test-config.txt initrd_root/tests/test-config.txt
- 	cd initrd_root && find . -print0 | cpio -o -H newc -0 --quiet > ../$@
- 	@rm -rf initrd_root
-@@ -304,18 +305,46 @@ $(FAT32_OBJ): $(FAT32_IMG)
- check-arch:
- 	@mkdir -p $$(dirname $(ARCH_STAMP)); echo $(ARCH) > $(ARCH_STAMP)
+diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
+index c6bab9d6..3f42df99 100644
+--- a/src/kernel/syscall/syscall.hpp
++++ b/src/kernel/syscall/syscall.hpp
+@@ -380,6 +380,14 @@ class Syscall {
+                                     uint64_t *);
+     static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
+                                 uint64_t *);
++    static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
++                                      uint64_t *);
++    static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
++                                  uint64_t *);
++    static uint64_t sys_timer_create(uint64_t, uint64_t, uint64_t, uint64_t,
++                                     uint64_t *);
++    static uint64_t sys_timerfd_create(uint64_t, uint64_t, uint64_t, uint64_t,
++                                       uint64_t *);
+     static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
+                                       uint64_t *);
  
--$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
-+# Issue #75: the libc_verify ELF is embedded for the kernel test (the
-+# initrd is not mounted in test boot, so the test cannot resolve it).
-+# The image is stripped first: tmpfs caps files at 64 KiB and the
-+# unstripped static binary is ~174 KiB (stripped ~32 KiB).
-+# x86_64 only — other archs have no picolibc sysroot.
-+ifeq ($(ARCH),x86_64)
-+VERIFY_IMG_OBJ := build/initrd/libc_verify_img.o
-+VERIFY_IMG_SRC := userspace/picolibc/libc_verify.c.elf
-+VERIFY_IMG_STRIPPED := build/initrd/libc_verify_stripped.elf
-+else
-+VERIFY_IMG_OBJ :=
-+VERIFY_IMG_SRC :=
-+VERIFY_IMG_STRIPPED :=
-+endif
-+
-+$(VERIFY_IMG_STRIPPED): $(VERIFY_IMG_SRC)
-+	@mkdir -p $(dir $@)
-+	cp $< $@
-+	$(X86_64_TRIPLET)strip $@
-+
-+$(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
-+	@mkdir -p $(dir $@)
-+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
-+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_start=_binary_libc_verify_img_start \
-+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_end=_binary_libc_verify_img_end \
-+	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
-+	    $< $@
-+
-+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
- 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
--	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
-+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
- 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
- 
--$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
-+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
- 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
--	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
-+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
- 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
-diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
-index d0024f56..9acf381a 100644
---- a/src/kernel/elf/elf_loader.cpp
-+++ b/src/kernel/elf/elf_loader.cpp
-@@ -538,24 +538,40 @@ void ElfLoader::run_load() {
-         uint64_t num_pages = (vaddr_end - vaddr_base) / arch::PAGE_SIZE;
-         while (page_in_seg_ < num_pages) {
-             uint64_t vaddr = vaddr_base + page_in_seg_ * arch::PAGE_SIZE;
--            uint64_t file_off =
--                phdr->offset + page_in_seg_ * arch::PAGE_SIZE;
--            uint64_t in_file = 0;
--            uint64_t seg_file_end = phdr->offset + phdr->filesz;
--            if (file_off < seg_file_end) {
--                in_file = seg_file_end - file_off;
--                if (in_file > kChunkSize)
--                    in_file = kChunkSize;
-+            // File offset of this page's first byte. Negative for the
-+            // first page of a skewed segment (vaddr not page-aligned):
-+            // ELF congruence guarantees offset%4K == vaddr%4K, but
-+            // neither is 0 in general — copying file[offset..] to the
-+            // page start (as before) misplaces every page by the skew
-+            // (issue #75: .data/.fini_array landed 0xbd8 low, stdin FILE
-+            // zeroed, exit() called address 0). Mirror the direct
-+            // loader's offset_in_region (elf.cpp): file bytes go to
-+            // page_start + (vaddr - vaddr_base).
-+            int64_t rel = static_cast<int64_t>(vaddr) -
-+                          static_cast<int64_t>(phdr->vaddr);
-+            uint64_t dst_off = 0;
-+            uint64_t src_off = 0;
-+            if (rel < 0) {
-+                dst_off = static_cast<uint64_t>(-rel);
-+                src_off = 0;
-+            } else {
-+                src_off = static_cast<uint64_t>(rel);
-+            }
-+            uint64_t copy_len = 0;
-+            if (src_off < phdr->filesz) {
-+                copy_len = phdr->filesz - src_off;
-+                uint64_t room = kChunkSize - dst_off;
-+                if (copy_len > room)
-+                    copy_len = room;
-             }
--            if (in_file > 0) {
--                int64_t r = vn->ops->read(*vn, chunk_buf_, in_file, file_off);
--                if (r != static_cast<int64_t>(in_file)) {
-+            if (copy_len > 0) {
-+                int64_t r = vn->ops->read(*vn, chunk_buf_, copy_len,
-+                                          phdr->offset + src_off);
-+                if (r != static_cast<int64_t>(copy_len)) {
-                     post_event(0xDB07, " failed: read error", 0, PostKind::OTHER);
-                     cleanup_and_idle();
-                     return;
-                 }
--            } else {
--                __builtin_memset(chunk_buf_, 0, kChunkSize);
-             }
-             uint64_t phys = PMM::alloc_user_page();
-             if (!phys) {
-@@ -565,13 +581,11 @@ void ElfLoader::run_load() {
-                 return;
-             }
-             VMM::map_page_in_pml4(vaddr, phys, true, pml4_);
--            __builtin_memcpy(reinterpret_cast<void *>(arch::HHDM_OFFSET + phys),
--                             chunk_buf_, in_file);
--            if (in_file < kChunkSize)
--                __builtin_memset(
--                    reinterpret_cast<void *>(arch::HHDM_OFFSET + phys +
--                                             in_file),
--                    0, kChunkSize - in_file);
-+            uint8_t *page = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
-+                                                        phys);
-+            __builtin_memset(page, 0, kChunkSize);
-+            if (copy_len > 0)
-+                __builtin_memcpy(page + dst_off, chunk_buf_, copy_len);
- 
-             ++page_in_seg_;
-             if (cancel_pending(gen)) {
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 5ffe4d38..9595c2bb 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -273,7 +273,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core",                436,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift
-     {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
-     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
--    {"proc_elf",            78,   0,       0      },  // process_* + elf_* + pt_merge (issue #173)
-+    {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)
-+    {"libc_verify",          5,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only)
-     {"storage",             143,  0,       0      },  // all vfs_* + initrd_parser (issue #173)
-     {"servers",             57,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135)
-     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
-diff --git a/src/kernel/test/test_libc_verify.cpp b/src/kernel/test/test_libc_verify.cpp
+@@ -465,10 +473,10 @@ class Syscall {
+             &Syscall::sys_set_affinity,
+             &Syscall::sys_get_affinity,
+             &Syscall::sys_times,
+-            &Syscall::sys_unimplemented, // 80 CLOCK_GETTIME (issue #76)
+-            &Syscall::sys_unimplemented, // 81 NANOSLEEP (issue #76)
+-            &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
+-            &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
++            &Syscall::sys_clock_gettime, // 80 CLOCK_GETTIME (issue #76)
++            &Syscall::sys_nanosleep,     // 81 NANOSLEEP (issue #76)
++            &Syscall::sys_timer_create,  // 82 TIMER_CREATE (issue #76)
++            &Syscall::sys_timerfd_create, // 83 TIMERFD_CREATE (issue #76)
+             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
+             &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
+     };
+diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
+index 71a87940..238f338c 100644
+--- a/src/kernel/syscall/syscall_handlers_fs.cpp
++++ b/src/kernel/syscall/syscall_handlers_fs.cpp
+@@ -240,6 +240,13 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), count);
+     if (syscall_is_user_task() && !buf.valid())
+         return static_cast<uint64_t>(-1);
++    // Issue #76: timerfd read bypasses the vnode ops table (the counter
++    // lives in the PosixTime registry, not in a filesystem backend).
++    if (is_timerfd_vnode(f->vnode)) {
++        const bool nonblock = (f->flags & vfs::O_NONBLOCK) != 0;
++        return timerfd_read_entry(*f->vnode, buf.unsafe_ptr(), count,
++                                  nonblock);
++    }
+     if (!f->vnode || !f->vnode->ops->read)
+         return static_cast<uint64_t>(-1);
+     // MP-4 (SMAP): ops->read writes user memory directly (generic vnode code
+diff --git a/src/kernel/syscall/syscall_handlers_posix_time.cpp b/src/kernel/syscall/syscall_handlers_posix_time.cpp
 new file mode 100644
-index 00000000..8ecbc5a4
+index 00000000..0e676f40
 --- /dev/null
-+++ b/src/kernel/test/test_libc_verify.cpp
-@@ -0,0 +1,394 @@
++++ b/src/kernel/syscall/syscall_handlers_posix_time.cpp
+@@ -0,0 +1,584 @@
 +/*
 + * NexIOS RTOS — Development Roadmap / Kernel Core
 + * Copyright (C) 2026 Arnold Hasshold
@@ -328,464 +74,2362 @@ index 00000000..8ecbc5a4
 + * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 + */
 +
-+/// @file test_libc_verify.cpp
-+/// @brief Hosted-C Ring 3 verification (issue #75): the picolibc-linked
-+///        `libc_verify` program runs printf/malloc/scanf via real dispatch;
-+///        this class asserts its serial markers, exit code and heap bounds.
-+///        The program image is embedded in the kernel (objcopy, x86_64 only
-+///        — the initrd is not mounted in test boot so it cannot be
-+///        resolved there) and staged to tmpfs per test. Stdin is a
-+///        tmpfs-backed fd 0 (deterministic, no serial/keyboard injection);
-+///        stdout is observed through UART loopback with LIBC_VERIFY:
-+///        -prefixed substring markers (harness logs interleave).
++/// @file syscall_handlers_posix_time.cpp
++/// @brief POSIX time/timer syscalls: clock_gettime, nanosleep,
++/// timer_create (multiplex), timerfd_create (issue #76, v0.5.0).
++
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/syscall/syscall_helpers.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/time/posix_time.hpp>
++#include <kernel/arch/io.hpp>
++#include <kernel/vfs/vfs.hpp>
++#include <kernel/memory/checked_ptr.hpp>
++#include <kernel/memory/mempool.hpp>
++#include <kernel/test/test_isolate.hpp>
++
++namespace kernel {
++
++namespace {
++
++// NOLINTNEXTLINE(performance-no-int-to-ptr)
++constexpr uint64_t kNeg(int64_t err) {
++    return static_cast<uint64_t>(-err);
++}
++
++/// @brief User ABI timespec (matches src/libc/time.h layout).
++struct AbiTimespec {
++    int64_t tv_sec;
++    int64_t tv_nsec;
++};
++static_assert(sizeof(AbiTimespec) == 16, "timespec width");
++
++/// @brief User ABI itimerspec (POSIX order: interval + value, matches
++/// src/libc/time.h struct itimerspec).
++struct AbiItimerspec {
++    AbiTimespec it_interval;
++    AbiTimespec it_value;
++};
++static_assert(sizeof(AbiItimerspec) == 32, "itimerspec width");
++
++/// @brief Timerfd vnode tag: packed (slot_gen << 32) | index in private_data.
++/// No allocation — the tag travels by value, never dereferenced.
++uint64_t timerfd_tag(const vfs::Vnode *node) {
++    return reinterpret_cast<uint64_t>(node->private_data);
++}
++
++uint32_t timerfd_tag_index(uint64_t tag) {
++    return static_cast<uint32_t>(tag & 0xFFFFFFFFULL);
++}
++
++uint32_t timerfd_tag_gen(uint64_t tag) {
++    return static_cast<uint32_t>((tag >> 32) & 0xFFFFFFFFULL);
++}
++
++uint64_t make_timerfd_tag(uint32_t index, uint32_t gen) {
++    return (static_cast<uint64_t>(gen) << 32) | static_cast<uint64_t>(index);
++}
++
++/// @brief timerfd vnode close: free the registry slot iff the closer owns
++/// it (fork-inherited closes from non-owners drop only the vnode ref),
++/// then release the vnode (pipe_read_close precedent).
++void timerfd_close(vfs::Vnode &self) {
++    const uint64_t tag = timerfd_tag(&self);
++    const uint32_t index = timerfd_tag_index(tag);
++    const uint32_t gen = timerfd_tag_gen(tag);
++    auto *cur = Scheduler::current_task();
++    if (cur != nullptr) {
++        time::PosixTime::timerfd_slot_free(index, gen, cur->id,
++                                           cur->generation);
++    }
++    self.private_data = nullptr;
++    test::ResourceTracker::instance().track_vnode_remove();
++    MemPool::free(&self);
++}
++
++int timerfd_fstat(vfs::Vnode &, vfs::VfsStat &vfs_stat) {
++    vfs_stat.st_size = 0;
++    vfs_stat.st_mode = vfs::S_IFCHR;
++    return 0;
++}
++
++const vfs::VnodeOps timerfd_ops = {
++    nullptr,       // read (served by the sys_read timerfd branch)
++    nullptr,       // write
++    nullptr,       // open
++    timerfd_close, // close
++    nullptr,       // lseek
++    timerfd_fstat, // fstat
++    nullptr,       // ioctl
++    nullptr,       // readdir
++    nullptr,       // lookup
++    nullptr,       // mkdir
++    nullptr,       // unlink
++    nullptr,       // create
++};
++
++bool copy_timespec_in(const AbiTimespec *user_ptr, bool is_user,
++                      time::TimespecU &out) {
++    if (user_ptr == nullptr) {
++        return false;
++    }
++    AbiTimespec local{};
++    if (is_user) {
++        auto checked_ptr = checked(user_ptr);
++        if (!checked_ptr.valid()) {
++            return false;
++        }
++        if (!safe_copy_from_user(&local, checked_ptr.unsafe_ptr(), 1)) {
++            return false;
++        }
++    } else {
++        local = *user_ptr;
++    }
++    out.sec = local.tv_sec;
++    out.nsec = local.tv_nsec;
++    return true;
++}
++
++bool copy_timespec_out(AbiTimespec *user_ptr, bool is_user,
++                       const time::TimespecU &value) {
++    if (user_ptr == nullptr) {
++        return false;
++    }
++    AbiTimespec local{};
++    local.tv_sec = value.sec;
++    local.tv_nsec = value.nsec;
++    if (is_user) {
++        auto checked_ptr = checked(user_ptr);
++        if (!checked_ptr.valid()) {
++            return false;
++        }
++        if (!safe_copy_to_user(checked_ptr.unsafe_ptr(), &local, 1)) {
++            return false;
++        }
++    } else {
++        *user_ptr = local;
++    }
++    return true;
++}
++
++} // namespace
++
++/// @brief True when a vnode is a timerfd (ops-pointer identity — never
++/// parses private_data of foreign vnodes). External linkage for the
++/// sys_read branch; timerfd_ops itself stays TU-local.
++bool is_timerfd_vnode(const vfs::Vnode *node) {
++    return node != nullptr && node->ops == &timerfd_ops;
++}
++
++uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
++                                    uint64_t, uint64_t *) {
++    const uint64_t clock_id = arg0;
++    if (clock_id != static_cast<uint64_t>(time::PosixClock::REALTIME) &&
++        clock_id != static_cast<uint64_t>(time::PosixClock::MONOTONIC)) {
++        return kNeg(time::kPosixErrInvalid);
++    }
++    if (arg1 == 0) {
++        return kNeg(time::kPosixErrFault);
++    }
++    uint64_t now_ns = 0;
++    if (clock_id == static_cast<uint64_t>(time::PosixClock::MONOTONIC)) {
++        now_ns = time::PosixTime::clock_monotonic_ns();
++    } else {
++        now_ns = time::PosixTime::clock_realtime_ns();
++    }
++    const time::TimespecU split = time::PosixTime::ns_to_timespec(now_ns);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto out_ptr = checked(reinterpret_cast<AbiTimespec *>(arg1));
++    const bool is_user = syscall_is_user_task();
++    if (is_user && !out_ptr.valid()) {
++        return kNeg(time::kPosixErrFault);
++    }
++    if (!copy_timespec_out(out_ptr.unsafe_ptr(), is_user, split)) {
++        return kNeg(time::kPosixErrFault);
++    }
++    return 0;
++}
++
++uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
++                                uint64_t, uint64_t *) {
++    auto *cur = syscall_task();
++    if (cur == nullptr) {
++        return static_cast<uint64_t>(-1);
++    }
++    const bool is_user = syscall_is_user_task();
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    const auto *req_ptr = reinterpret_cast<const AbiTimespec *>(arg0);
++    time::TimespecU req{};
++    if (!copy_timespec_in(req_ptr, is_user, req)) {
++        return kNeg(time::kPosixErrFault);
++    }
++    uint64_t total_ns = 0;
++    if (!time::PosixTime::timespec_to_ns(req, total_ns)) {
++        return kNeg(time::kPosixErrInvalid);
++    }
++    // Zero timeout returns immediately: no arm, no block (§11.3 — no
++    // infinite-wait encoding exists on this call).
++    if (total_ns == 0) {
++        return 0;
++    }
++    if (!time::PosixTime::sleep_arm(*cur, total_ns)) {
++        return kNeg(time::kPosixErrAgain);
++    }
++    // §11.1/11.2 block (sys_receive shape): no locks held across the
++    // reschedule; BLOCKED always leaves the ready queue.
++    cur->state = TaskState::BLOCKED;
++    Scheduler::dequeue_ready(*cur);
++    Scheduler::reschedule();
++    if (cur->is_user_) {
++        arch::sti();
++        arch::hlt();
++        arch::cli();
++    }
++    // Resume: expiry beats signals; signals beat re-block. The wheel
++    // guarantees the expiry fires, so this spin is bounded (§11.3).
++    while (cur->state == TaskState::BLOCKED &&
++           !__atomic_load_n(&cur->sleep_expired, __ATOMIC_ACQUIRE) &&
++           __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) == 0) {
++        arch::pause();
++    }
++    const bool expired =
++        __atomic_load_n(&cur->sleep_expired, __ATOMIC_ACQUIRE);
++    const bool signaled =
++        __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) != 0;
++    time::PosixTime::sleep_cancel(*cur);
++    if (signaled && !expired) {
++        // Report the remainder (saturating, never negative).
++        if (arg1 != 0) {
++            const uint64_t now_ns = time::PosixTime::clock_monotonic_ns();
++            uint64_t remaining_ns = 0;
++            if (cur->sleep_expiry_ns > now_ns) {
++                remaining_ns = cur->sleep_expiry_ns - now_ns;
++            }
++            const time::TimespecU rem =
++                time::PosixTime::ns_to_timespec(remaining_ns);
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *rem_ptr = reinterpret_cast<AbiTimespec *>(arg1);
++            if (!copy_timespec_out(rem_ptr, is_user, rem)) {
++                return kNeg(time::kPosixErrFault);
++            }
++        }
++        return kNeg(time::kPosixErrIntr);
++    }
++    return 0;
++}
++
++uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
++                                   uint64_t arg3, uint64_t *) {
++    auto *cur = syscall_task();
++    if (cur == nullptr) {
++        return static_cast<uint64_t>(-1);
++    }
++    const bool is_user = syscall_is_user_task();
++    const uint64_t op = arg0;
++    if (op == static_cast<uint64_t>(time::PosixTimerOp::CREATE)) {
++        uint64_t timer_id = 0;
++        const int64_t created = time::PosixTime::timer_create(
++            arg1, cur->id, cur->generation, timer_id);
++        if (created != 0) {
++            return kNeg(-created);
++        }
++        if (arg2 == 0) {
++            time::PosixTime::timer_delete(timer_id, cur->id, cur->generation);
++            return kNeg(time::kPosixErrFault);
++        }
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *out_ptr = reinterpret_cast<uint64_t *>(arg2);
++        if (is_user) {
++            auto checked_ptr = checked(out_ptr);
++            if (!checked_ptr.valid()) {
++                time::PosixTime::timer_delete(timer_id, cur->id,
++                                             cur->generation);
++                return kNeg(time::kPosixErrFault);
++            }
++            checked_ptr.write(timer_id, 0);
++        } else {
++            *out_ptr = timer_id;
++        }
++        return 0;
++    }
++    if (op == static_cast<uint64_t>(time::PosixTimerOp::SETTIME)) {
++        const bool is_timerfd = (arg3 & 0x1ULL) != 0;
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        const auto *spec_ptr = reinterpret_cast<const AbiItimerspec *>(arg2);
++        time::TimespecU value{};
++        time::TimespecU interval{};
++        if (spec_ptr == nullptr) {
++            return kNeg(time::kPosixErrFault);
++        }
++        AbiItimerspec local{};
++        if (is_user) {
++            auto checked_ptr = checked(spec_ptr);
++            if (!checked_ptr.valid()) {
++                return kNeg(time::kPosixErrFault);
++            }
++            if (!safe_copy_from_user(&local, checked_ptr.unsafe_ptr(), 1)) {
++                return kNeg(time::kPosixErrFault);
++            }
++        } else {
++            local = *spec_ptr;
++        }
++        value.sec = local.it_value.tv_sec;
++        value.nsec = local.it_value.tv_nsec;
++        interval.sec = local.it_interval.tv_sec;
++        interval.nsec = local.it_interval.tv_nsec;
++        const time::ItimerspecU spec{value, interval};
++        if (!is_timerfd) {
++            const int64_t armed = time::PosixTime::timer_settime(
++                arg1, spec, cur->id, cur->generation);
++            if (armed != 0) {
++                return kNeg(-armed);
++            }
++            return 0;
++        }
++        const int timerfd_fd = static_cast<int>(arg1);
++        auto *desc = cur->fd_table.get(timerfd_fd);
++        if (desc == nullptr || !is_timerfd_vnode(desc->vnode)) {
++            return kNeg(time::kPosixErrBadFd);
++        }
++        const uint64_t tag = timerfd_tag(desc->vnode);
++        const uint32_t resolved_index = timerfd_tag_index(tag);
++        const uint32_t resolved_gen = timerfd_tag_gen(tag);
++        const int64_t armed = time::PosixTime::timerfd_settime(
++            resolved_index, resolved_gen, spec, cur->id, cur->generation);
++        if (armed != 0) {
++            return kNeg(-armed);
++        }
++        return 0;
++    }
++    if (op == static_cast<uint64_t>(time::PosixTimerOp::GETTIME)) {
++        if (arg2 == 0) {
++            return kNeg(time::kPosixErrFault);
++        }
++        time::ItimerspecU spec{};
++        const int64_t read = time::PosixTime::timer_gettime(
++            arg1, spec, cur->id, cur->generation);
++        if (read != 0) {
++            return kNeg(-read);
++        }
++        AbiItimerspec local{};
++        local.it_value.tv_sec = spec.value.sec;
++        local.it_value.tv_nsec = spec.value.nsec;
++        local.it_interval.tv_sec = spec.interval.sec;
++        local.it_interval.tv_nsec = spec.interval.nsec;
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *out_ptr = reinterpret_cast<AbiItimerspec *>(arg2);
++        if (is_user) {
++            auto checked_ptr = checked(out_ptr);
++            if (!checked_ptr.valid()) {
++                return kNeg(time::kPosixErrFault);
++            }
++            if (!safe_copy_to_user(checked_ptr.unsafe_ptr(), &local, 1)) {
++                return kNeg(time::kPosixErrFault);
++            }
++        } else {
++            *out_ptr = local;
++        }
++        return 0;
++    }
++    if (op == static_cast<uint64_t>(time::PosixTimerOp::DELETE)) {
++        const int64_t deleted = time::PosixTime::timer_delete(
++            arg1, cur->id, cur->generation);
++        if (deleted != 0) {
++            return kNeg(-deleted);
++        }
++        return 0;
++    }
++    return kNeg(time::kPosixErrInvalid);
++}
++
++uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
++                                     uint64_t, uint64_t *) {
++    auto *cur = syscall_task();
++    if (cur == nullptr) {
++        return static_cast<uint64_t>(-1);
++    }
++    const uint64_t flags = arg1;
++    const uint64_t known_flags = static_cast<uint64_t>(vfs::O_NONBLOCK);
++    if ((flags & ~known_flags) != 0) {
++        return kNeg(time::kPosixErrInvalid);
++    }
++    const int64_t allocated = time::PosixTime::timerfd_slot_alloc(
++        arg0, cur->id, cur->generation);
++    if (allocated < 0) {
++        return kNeg(-allocated);
++    }
++    const uint32_t index = static_cast<uint32_t>(allocated);
++    // Resolve the slot generation for the vnode tag (owner-validated;
++    // the slot was just allocated to this task, so this cannot fail —
++    // the check below is defense-in-depth, fail-closed).
++    const uint32_t slot_gen = time::PosixTime::timerfd_slot_gen_for_owner(
++        index, cur->id, cur->generation);
++    if (slot_gen == 0) {
++        time::PosixTime::timerfd_slot_free(index, 0, cur->id, cur->generation);
++        return kNeg(time::kPosixErrInvalid);
++    }
++    auto *node =
++        static_cast<vfs::Vnode *>(MemPool::alloc(sizeof(vfs::Vnode)));
++    if (node == nullptr) {
++        time::PosixTime::timerfd_slot_free(index, slot_gen, cur->id,
++                                           cur->generation);
++        return static_cast<uint64_t>(-1);
++    }
++    node->ops = &timerfd_ops;
++    node->ino = static_cast<uint64_t>(index);
++    node->size = 0;
++    node->mode = vfs::S_IFCHR;
++    node->private_data =
++        reinterpret_cast<void *>(make_timerfd_tag(index, slot_gen));
++    node->refcount = 1;
++    node->parent = nullptr;
++    test::ResourceTracker::instance().track_vnode_add();
++    const int created_fd = syscall_task_open(node, flags);
++    if (created_fd < 0) {
++        node->private_data = nullptr;
++        test::ResourceTracker::instance().track_vnode_remove();
++        MemPool::free(node);
++        time::PosixTime::timerfd_slot_free(index, slot_gen, cur->id,
++                                           cur->generation);
++        return kNeg(time::kPosixErrAgain);
++    }
++    return static_cast<uint64_t>(created_fd);
++}
++
++/// @brief Blocking timerfd read helper (sys_read branch target).
++/// @return 0 + out count, -EAGAIN (empty/nonblock), -EBADF (stale),
++/// -EINTR (signals), -EFAULT (bad buffer).
++uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
++                            bool nonblock) {
++    auto *cur = syscall_task();
++    if (cur == nullptr) {
++        return static_cast<uint64_t>(-1);
++    }
++    if (count < 8) {
++        return kNeg(time::kPosixErrInvalid);
++    }
++    const uint64_t tag = timerfd_tag(&node);
++    const uint32_t index = timerfd_tag_index(tag);
++    const uint32_t slot_gen = timerfd_tag_gen(tag);
++    const bool is_user = syscall_is_user_task();
++    // Fast path: data already available — no wait, no waiter state.
++    uint64_t expiries = 0;
++    int64_t consumed = time::PosixTime::timerfd_consume(
++        index, slot_gen, cur->id, cur->generation, expiries);
++    if (consumed == 0) {
++        if (is_user) {
++            auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
++            if (!checked_ptr.valid()) {
++                return kNeg(time::kPosixErrFault);
++            }
++            checked_ptr.write(expiries, 0);
++        } else {
++            if (buffer == nullptr) {
++                return kNeg(time::kPosixErrFault);
++            }
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            *reinterpret_cast<uint64_t *>(buffer) = expiries;
++        }
++        return 8;
++    }
++    if (consumed != -time::kPosixErrAgain) {
++        // Stale/foreign slot: fail closed (EBADF), never block.
++        return kNeg(-consumed);
++    }
++    if (nonblock) {
++        return kNeg(time::kPosixErrAgain);
++    }
++    // Blocking wait (§11.1/11.2 shape): arm the waiter BEFORE the
++    // re-check (no lost wakeup), release everything, then block.
++    if (!time::PosixTime::timerfd_waiter_arm(index, slot_gen, *cur)) {
++        return kNeg(time::kPosixErrBadFd);
++    }
++    consumed = time::PosixTime::timerfd_consume(
++        index, slot_gen, cur->id, cur->generation, expiries);
++    if (consumed == 0) {
++        time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
++        if (is_user) {
++            auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
++            if (!checked_ptr.valid()) {
++                return kNeg(time::kPosixErrFault);
++            }
++            checked_ptr.write(expiries, 0);
++        } else {
++            if (buffer == nullptr) {
++                return kNeg(time::kPosixErrFault);
++            }
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            *reinterpret_cast<uint64_t *>(buffer) = expiries;
++        }
++        return 8;
++    }
++    if (consumed != -time::kPosixErrAgain) {
++        time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
++        return kNeg(-consumed);
++    }
++    cur->state = TaskState::BLOCKED;
++    Scheduler::dequeue_ready(*cur);
++    Scheduler::reschedule();
++    if (cur->is_user_) {
++        arch::sti();
++        arch::hlt();
++        arch::cli();
++    }
++    // Bounded by the armed expiry or owner death (§11.3): the waiter is
++    // always consumed by reapply_wakes or drain_owner.
++    while (cur->state == TaskState::BLOCKED &&
++           __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) == 0) {
++        // Peek without clearing: the scan consumes waiter state on wake.
++        uint64_t peek = 0;
++        const int64_t peeked = time::PosixTime::timerfd_consume(
++            index, slot_gen, cur->id, cur->generation, peek);
++        if (peeked == 0) {
++            // Data arrived but the wake has not been applied yet — unwind
++            // the waiter and serve immediately (no double-consume: the
++            // counter was already cleared by this consume).
++            time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
++            expiries = peek;
++            if (is_user) {
++                auto checked_ptr =
++                    checked(reinterpret_cast<uint64_t *>(buffer));
++                if (!checked_ptr.valid()) {
++                    return kNeg(time::kPosixErrFault);
++                }
++                checked_ptr.write(expiries, 0);
++            } else {
++                if (buffer == nullptr) {
++                    return kNeg(time::kPosixErrFault);
++                }
++                // NOLINTNEXTLINE(performance-no-int-to-ptr)
++                *reinterpret_cast<uint64_t *>(buffer) = expiries;
++            }
++            return 8;
++        }
++        if (peeked != -time::kPosixErrAgain) {
++            time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
++            return kNeg(-peeked);
++        }
++        arch::pause();
++    }
++    const bool signaled =
++        __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) != 0;
++    time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
++    if (signaled) {
++        return kNeg(time::kPosixErrIntr);
++    }
++    consumed = time::PosixTime::timerfd_consume(
++        index, slot_gen, cur->id, cur->generation, expiries);
++    if (consumed != 0) {
++        return kNeg(-consumed);
++    }
++    if (is_user) {
++        auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
++        if (!checked_ptr.valid()) {
++            return kNeg(time::kPosixErrFault);
++        }
++        checked_ptr.write(expiries, 0);
++    } else {
++        if (buffer == nullptr) {
++            return kNeg(time::kPosixErrFault);
++        }
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        *reinterpret_cast<uint64_t *>(buffer) = expiries;
++    }
++    return 8;
++}
++
++} // namespace kernel
+diff --git a/src/kernel/syscall/syscall_helpers.hpp b/src/kernel/syscall/syscall_helpers.hpp
+index 21f5fe38..7d124d4f 100644
+--- a/src/kernel/syscall/syscall_helpers.hpp
++++ b/src/kernel/syscall/syscall_helpers.hpp
+@@ -44,5 +44,13 @@ int syscall_task_open(vfs::Vnode *vn, uint64_t flags);
+ /// @brief Resolve a path and open it as a file descriptor.
+ /// @return The fd index, or VFS_INVALID on failure.
+ int syscall_path_open(const char *path, uint64_t flags);
++/// @brief True when a vnode is a POSIX timerfd (issue #76; defined in
++/// syscall_handlers_posix_time.cpp; ops-pointer identity).
++bool is_timerfd_vnode(const vfs::Vnode *node);
++/// @brief Blocking timerfd read helper (issue #76; defined in
++/// syscall_handlers_posix_time.cpp). Returns 8 on success or -errno.
++/// @param nonblock True when O_NONBLOCK is set on the fd.
++uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
++                            bool nonblock);
+ 
+ } // namespace kernel
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 39ecd9a4..54940e98 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -23,6 +23,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/memory/tlb_shootdown.hpp>
+ #include <kernel/time/timer_wheel.hpp>
++#include <kernel/time/posix_time.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/gdt.hpp>
+@@ -2581,6 +2582,35 @@ void Scheduler::on_tick() noexcept {
+                              __ATOMIC_RELEASE);
+         }
+ 
++        // Issue #76: bounded-nanosleep apply + timerfd waiter wakes. Wheel
++        // callbacks only set sleep_expired / waiter_done; the wakes are
++        // applied here under the already-held scheduler_lock_ (same
++        // contract as the #18 block above). Level-triggered: a missed wake
++        // re-applies next tick; enqueue_ready is idempotent. Never clobber
++        // a RUNNING state (H2 guard, copied from above).
++        for (auto *task = all_tasks_.first_ptr(); task;
++             task = all_tasks_.next_ptr(task)) {
++            if (task->magic != TaskControlBlock::TCB_MAGIC)
++                continue;
++            if (!__atomic_load_n(&task->sleep_armed, __ATOMIC_ACQUIRE) ||
++                !__atomic_load_n(&task->sleep_expired, __ATOMIC_ACQUIRE))
++                continue;
++            if (task->generation != task->sleep_gen)
++                continue;
++            if (queue_target(*task) != sched_cpu())
++                continue;
++            if (task->state == TaskState::BLOCKED)
++                task->state = TaskState::READY;
++            else if (task->state != TaskState::READY)
++                continue;
++            enqueue_ready(*task);
++            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
++                             __ATOMIC_RELEASE);
++        }
++        // Timerfd waiter wakes live in the PosixTime registry (slots are
++        // not TCB fields): same lock position, leaf posix lock only.
++        time::PosixTime::reapply_wakes(sched_cpu());
++
+         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
+         // only tasks affine to this CPU (AP-affine tasks are not serviced).
+         // Issue #154: executed_ticks is execution time — only the
+@@ -4312,6 +4342,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
+         out[idx].alarm_armed = t->alarm_armed;
+         out[idx].recv_timeout_armed = t->recv_timeout_armed;
+         out[idx].recv_timed_out = t->recv_timed_out;
++        out[idx].sleep_armed = t->sleep_armed;
++        out[idx].sleep_expired = t->sleep_expired;
+         out[idx].runq_next = t->runq_next_;
+         out[idx].runq_prev = t->runq_prev_;
+         out[idx].in_ready_queue = t->in_ready_queue_;
+@@ -4393,6 +4425,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
+             t->alarm_armed = saved[j].alarm_armed;
+             t->recv_timeout_armed = saved[j].recv_timeout_armed;
+             t->recv_timed_out = saved[j].recv_timed_out;
++            t->sleep_armed = saved[j].sleep_armed;
++            t->sleep_expired = saved[j].sleep_expired;
+             // Snapshot does not capture SporadicServer state nor PMM page-table
+             // pools — clear the pointer and the intrusive object list so stale
+             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index e1007596..2ee67b9f 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -602,6 +602,14 @@ class Scheduler {
+         /// outlive the wait it belonged to.
+         bool recv_timeout_armed;
+         bool recv_timed_out;
++        /// @brief Bounded-nanosleep slot (issue #76): flags rewind with
++        ///        the snapshot (always to false — captured pre-arm at
++        ///        suite setup). The wheel handle/generation are
++        ///        deliberately NOT captured: no arm survives rewind (wheel
++        ///        snapshot_reset disarms everything and flags read false),
++        ///        so no stale handle can outlive the wait it belonged to.
++        bool sleep_armed;
++        bool sleep_expired;
+         /// @brief Ready-queue intrusive list pointers (POD copy).
+         ///        These form doubly-linked lists; TCBs are in-place across
+         ///        snapshot cycles so pointer values remain valid.
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 769898b3..7c48704d 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/time/posix_time.hpp>
+ #include <kernel/elf/elf_shared.hpp>
+ #include <kernel/task/tcb_write_log.hpp>
+ #include <kernel/task/sporadic_server.hpp>
+@@ -1784,6 +1785,12 @@ void TaskControlBlock::cleanup() noexcept {
+         time::TimerWheel::cancel(recv_timeout_handle);
+     }
+ 
++    // Drain POSIX sleep/timer/timerfd ownership (issue #76): disarm a live
++    // nanosleep, free owned timer/timerfd slots, and clear waiter
++    // registrations held by this task. Same lock position as the recv
++    // cancel above (no scheduler lock held — death-drain §12.3).
++    time::PosixTime::drain_owner(*this);
++
+     // Remove self from any message queue's blocked-senders list *before*
+     // freeing any resources.  If we are blocked on another task's queue
+     // (blocked_on_queue != nullptr) we must detach now — otherwise the
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index d35ea6a2..5a4e994b 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -274,7 +274,9 @@ struct TaskControlBlock {
+           alarm_armed(false), recv_timeout_armed(false),
+           recv_timed_out(false),
+           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
+-          recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
++          recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
++          sleep_handle{0, 0, time::TimerWheel::kInvalidGeneration},
++          sleep_gen(0), sleep_expiry_ns(0), sporadic_server(nullptr), cspace_(nullptr),
+            iopb_slot_(IOPB_SLOT_NONE),
+            tls_base_(0),
+            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
+@@ -506,6 +508,22 @@ struct TaskControlBlock {
+     /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
+     uint32_t recv_timeout_gen;
+ 
++    /// @brief Bounded nanosleep armed on the wheel (issue #76).
++    bool sleep_armed;
++
++    /// @brief Set by the wheel callback when the sleep budget expires.
++    bool sleep_expired;
++
++    /// @brief Wheel receipt for the armed sleep (gen 0 = invalid).
++    time::TimerWheel::Handle sleep_handle;
++
++    /// @brief TCB generation snapshot at sleep-arm time (ABA guard).
++    uint32_t sleep_gen;
++
++    /// @brief Absolute monotonic-ns expiry of the armed sleep (for rem).
++    /// Not snapshot-captured: derived from the arm, no arm survives rewind.
++    uint64_t sleep_expiry_ns;
++
+     /// @brief Embedded message queue (no separate heap allocation).
+     MessageQueue msg_queue;
+ 
+diff --git a/src/kernel/test/resource_tracker.cpp b/src/kernel/test/resource_tracker.cpp
+index 03d893ba..04deae3a 100644
+--- a/src/kernel/test/resource_tracker.cpp
++++ b/src/kernel/test/resource_tracker.cpp
+@@ -112,6 +112,10 @@ static bool any_leak(const ResourceCounters &baseline,
+         return true;
+     if (current.pager_mappings > baseline.pager_mappings)
+         return true;
++    if (current.posix_timers > baseline.posix_timers)
++        return true;
++    if (current.posix_timerfds > baseline.posix_timerfds)
++        return true;
+     return false;
+ }
+ 
+@@ -236,6 +240,9 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
+               counters_.pager_registrations);
+     print_row("Pager faults", baseline.pager_faults, counters_.pager_faults);
+     print_row("Pager maps", baseline.pager_mappings, counters_.pager_mappings);
++    print_row("Posix timers", baseline.posix_timers, counters_.posix_timers);
++    print_row("Posix timerfds", baseline.posix_timerfds,
++              counters_.posix_timerfds);
+ 
+     print_backtrace();
+     return false;
+diff --git a/src/kernel/test/resource_tracker.hpp b/src/kernel/test/resource_tracker.hpp
+index 9dd9f233..53f4de3b 100644
+--- a/src/kernel/test/resource_tracker.hpp
++++ b/src/kernel/test/resource_tracker.hpp
+@@ -44,6 +44,8 @@ struct ResourceCounters {
+     size_t pager_registrations;
+     size_t pager_faults;
+     size_t pager_mappings;
++    size_t posix_timers;
++    size_t posix_timerfds;
+ };
+ 
+ #ifdef CONFIG_DEBUG
+@@ -189,6 +191,26 @@ class ResourceTracker {
+     void track_pager_mapping_reset() {
+         counters_.pager_mappings = 0;
+     }
++    void track_posix_timer_add() {
++        ++counters_.posix_timers;
++    }
++    void track_posix_timer_remove() {
++        if (counters_.posix_timers > 0)
++            --counters_.posix_timers;
++    }
++    void track_posix_timer_reset() {
++        counters_.posix_timers = 0;
++    }
++    void track_posix_timerfd_add() {
++        ++counters_.posix_timerfds;
++    }
++    void track_posix_timerfd_remove() {
++        if (counters_.posix_timerfds > 0)
++            --counters_.posix_timerfds;
++    }
++    void track_posix_timerfd_reset() {
++        counters_.posix_timerfds = 0;
++    }
+ 
+     void capture(ResourceCounters &out) const {
+         out = counters_;
+@@ -288,6 +310,18 @@ class ResourceTracker {
+     }
+     void track_pager_mapping_reset() {
+     }
++    void track_posix_timer_add() {
++    }
++    void track_posix_timer_remove() {
++    }
++    void track_posix_timer_reset() {
++    }
++    void track_posix_timerfd_add() {
++    }
++    void track_posix_timerfd_remove() {
++    }
++    void track_posix_timerfd_reset() {
++    }
+     void capture(ResourceCounters &) const {
+     }
+     void restore(const ResourceCounters &) {
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 9595c2bb..7ed147d7 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -193,6 +193,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+ 
+     // timing
+     {"timing_core",          19,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list + READY-no-charge regression (issue #154)
++    {"posix_time",           10,    0,       0      },  // clock_gettime/nanosleep/timer_create/timerfd over HRT wheel (issue #76)
+ 
+     // hal
+     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index b9aebddc..ce559e80 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -48,6 +48,7 @@
+ // PMM rewind owns any held pages, so no freeing here).
+ #include <kernel/memory/tlb_shootdown.hpp>
+ #include <kernel/time/timer_wheel.hpp>
++#include <kernel/time/posix_time.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <kernel/cap/mmio.hpp>
+@@ -796,6 +797,11 @@ void snapshot_restore(const char *test_name) {
+     // Reset the event-timer wheel (issue #17) so a test that armed timers
+     // can never leak a live entry or a reusable handle into the next cycle.
+     kernel::time::TimerWheel::snapshot_reset();
++    // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
++    // so timer slots, waiter registrations, and the REALTIME latch never
++    // leak across snapshot cycles (wheel reset above already disarmed all
++    // wheel entries; this rewinds the registry side fail-closed).
++    kernel::time::PosixTime::snapshot_reset();
+     if (corr > 0) {
+         Logger::raw_write("[SCHED] corruption_count=");
+         Logger::print_dec(corr);
+diff --git a/src/kernel/test/test_posix_time.cpp b/src/kernel/test/test_posix_time.cpp
+new file mode 100644
+index 00000000..a65576aa
+--- /dev/null
++++ b/src/kernel/test/test_posix_time.cpp
+@@ -0,0 +1,339 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_posix_time.cpp
++/// @brief POSIX time API tests: clock_gettime, nanosleep, timer_create,
++/// timerfd_create over the HRT clock + event-timer wheel (issue #76).
 +
 +#include <test.hpp>
 +#include <logger.hpp>
-+#include <kernel/elf/elf_loader.hpp>
-+#include <kernel/memory/vmm.hpp>
-+#include <kernel/task/scheduler.hpp>
 +#include <kernel/task/task.hpp>
-+#include <kernel/vfs/vfs.hpp>
-+#include <kernel/arch/io.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/syscall/syscall.hpp>
++#include <kernel/time/posix_time.hpp>
++#include <kernel/time/timer_wheel.hpp>
++#include <kernel/arch/timer.hpp>
 +#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/test/test_isolate.hpp>
 +#include "test_sched_helpers.hpp"
-+#include <constants.hpp>
 +
 +using namespace kernel;
 +
-+#if defined(CONFIG_ARCH_X86_64)
-+
-+extern "C" {
-+extern const uint8_t _binary_libc_verify_img_start[];
-+extern const uint8_t _binary_libc_verify_img_end[];
-+}
-+
 +namespace {
 +
-+constexpr uint64_t kJoinSpins = 10000000ULL;
-+constexpr const char *kImagePath = "/tmp/libc_verify.elf";
-+constexpr const char *kStdinPath = "/tmp/libc_stdin.txt";
-+constexpr const char *kStdinData = "1234\n";
-+
-+// Stage the embedded program image to tmpfs; returns byte size or 0.
-+// Writes in 4 KiB chunks (a single 174 KiB write exceeds tmpfs call
-+// limits and returns short).
-+void cleanup_image_file() {
-+    kernel::test::mark_vfs_touched();
-+    vfs::unlink(kImagePath);
++constexpr uint64_t kNegErrno(uint64_t err) {
++    return static_cast<uint64_t>(0) - err;
 +}
 +
-+uint64_t write_image_file() {
-+    kernel::test::mark_vfs_touched();
-+    size_t size = static_cast<size_t>(_binary_libc_verify_img_end -
-+                                      _binary_libc_verify_img_start);
-+    if (size == 0)
-+        return 0;
-+    if (vfs::create(kImagePath, 0) != 0)
-+        return 0;
-+    vfs::Vnode *file = vfs::resolve(kImagePath);
-+    if (file == nullptr || file->ops == nullptr ||
-+        file->ops->write == nullptr)
-+        return 0;
-+    size_t off = 0;
-+    while (off < size) {
-+        size_t chunk = size - off;
-+        if (chunk > 4096)
-+            chunk = 4096;
-+        int64_t written = file->ops->write(
-+            *file, _binary_libc_verify_img_start + off, chunk, off);
-+        if (written <= 0) {
-+            cleanup_image_file();
-+            return 0;
-+        }
-+        off += static_cast<size_t>(written);
-+    }
-+    return (off == size) ? size : 0ULL;
-+}
++struct AbiTs {
++    int64_t tv_sec;
++    int64_t tv_nsec;
++};
++static_assert(sizeof(AbiTs) == 16, "timespec width");
 +
-+uint64_t write_stdin_file() {
-+    kernel::test::mark_vfs_touched();
-+    if (vfs::create(kStdinPath, 0) != 0)
-+        return 0;
-+    vfs::Vnode *file = vfs::resolve(kStdinPath);
-+    if (file == nullptr || file->ops == nullptr ||
-+        file->ops->write == nullptr)
-+        return 0;
-+    int64_t written = file->ops->write(
-+        *file, reinterpret_cast<const uint8_t *>(kStdinData), 5, 0);
-+    return (written == 5) ? 5ULL : 0ULL;
-+}
-+
-+void cleanup_stdin_file() {
-+    kernel::test::mark_vfs_touched();
-+    vfs::unlink(kStdinPath);
-+}
-+
-+bool serial_contains(const char *buf, const char *needle) {
-+    for (size_t i = 0; buf[i] != '\0'; ++i) {
-+        size_t j = 0;
-+        for (; needle[j] != '\0'; ++j) {
-+            if (buf[i + j] != needle[j])
-+                break;
-+        }
-+        if (needle[j] == '\0')
-+            return true;
-+    }
-+    return false;
-+}
-+
-+// Parse `wanted` unsigned decimals after a tag into out; false on miss.
-+bool parse_brk_line(const char *buf, const char *tag, uint64_t *out,
-+                    int wanted) {
-+    size_t n = 0;
-+    while (buf[n] != '\0' && n < 2048) {
-+        size_t j = 0;
-+        while (tag[j] != '\0' && buf[n + j] == tag[j])
-+            ++j;
-+        if (tag[j] == '\0') {
-+            size_t p = n + j;
-+            for (int k = 0; k < wanted; ++k) {
-+                while (buf[p] == ' ')
-+                    ++p;
-+                if (buf[p] < '0' || buf[p] > '9')
-+                    return false;
-+                uint64_t v = 0;
-+                while (buf[p] >= '0' && buf[p] <= '9') {
-+                    v = v * 10 + static_cast<uint64_t>(buf[p] - '0');
-+                    ++p;
-+                }
-+                out[k] = v;
-+            }
-+            return true;
-+        }
-+        ++n;
-+    }
-+    return false;
-+}
-+
-+struct VerifyOutcome {
-+    bool joined = false;
-+    bool clean_exit = false;
-+    uint64_t program_break = 0;
-+    char capture[512]{};
++struct AbiItimer {
++    AbiTs it_interval;
++    AbiTs it_value;
 +};
 +
-+namespace {
-+// Stdout capture file (replaces UART loopback: bursts exceed the 16 B
-+// RX FIFO and overrun mid-burst at tick granularity — undrainable.
-+// A tmpfs file is byte-exact and deterministic).
-+constexpr const char *kStdoutPath = "/tmp/libc_stdout.txt";
++uint64_t sys_call(uint64_t number, uint64_t arg0, uint64_t arg1, uint64_t arg2,
++                  uint64_t arg3) {
++    return Syscall::handle(number, arg0, arg1, arg2, arg3, nullptr);
++}
++
++struct SleepCtx {
++    uint64_t budget_ns;
++    uint64_t result;
++    uint64_t elapsed_ns;
++};
++
++SleepCtx *g_sleep_ctx = nullptr;
++
++void sleep_entry() {
++    auto *ctx = g_sleep_ctx;
++    AbiTs req{};
++    req.tv_sec = static_cast<int64_t>(ctx->budget_ns / 1000000000ULL);
++    req.tv_nsec = static_cast<int64_t>(ctx->budget_ns % 1000000000ULL);
++    AbiTs rem{};
++    const uint64_t start_ns = arch::Timer::ns_monotonic();
++    ctx->result = Syscall::handle(81, reinterpret_cast<uint64_t>(&req),
++                                  reinterpret_cast<uint64_t>(&rem), 0, 0,
++                                  nullptr);
++    ctx->elapsed_ns = arch::Timer::ns_monotonic() - start_ns;
++}
++
 +} // namespace
 +
-+// Stage image + stdin, load, repoint fd 0, dispatch to EXIT with a
-+// bounded join, capture serial markers, tear down. Returns observable
-+// state; asserts happen after teardown (allocation-free).
-+VerifyOutcome run_verify_program() {
-+    VerifyOutcome out{};
-+    elf::ElfLoader::reset();
-+    if (write_image_file() == 0)
-+        return out;
-+    if (write_stdin_file() != 5) {
-+        cleanup_image_file();
-+        return out;
-+    }
-+    if (elf::ElfLoader::request_load(kImagePath) != elf::LoadResult::OK) {
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    elf::ElfLoader::wait_loader_idle();
-+    TaskControlBlock *t = elf::ElfLoader::take_completed();
-+    // Mapping sanity: entry and first-stack pages must translate in
-+    // the task PML4 (catches loader mapping failures early; the data
-+    // page address is link-layout-specific and intentionally not
-+    // pinned here).
-+    if (t != nullptr && t->page_table_ != 0) {
-+        uint64_t p_text =
-+            VMM::virt_to_phys_in_pml4(0x400000, t->page_table_);
-+        uint64_t p_stack = VMM::virt_to_phys_in_pml4(
-+            mem::STACK_VADDR + 4096, t->page_table_);
-+        if (p_text == 0 || p_stack == 0) {
-+            elf::ElfLoader::destroy_completed_tcb(t);
-+            cleanup_image_file();
-+            cleanup_stdin_file();
-+            return out;
-+        }
-+    }
-+    if (t == nullptr || t->page_table_ == 0 || !t->is_user_) {
-+        if (t != nullptr)
-+            elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    // Repoint fd 0 at the tmpfs stdin file (elf finalize opened tty).
-+    // Direct slot overwrite (no free/alloc: FdTable::free decs a vnode
-+    // ref never inc'd — destroy_completed_tcb no-dec discipline).
-+    if (!t->fd_table.fds[0].used) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    vfs::Vnode *stdin_vnode = vfs::resolve(kStdinPath);
-+    if (stdin_vnode == nullptr) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    t->fd_table.fds[0].vnode = stdin_vnode;
-+    t->fd_table.fds[0].offset = 0;
-+    t->fd_table.fds[0].flags = 0;
++// Runmode: kernel
++// Testidea: MONOTONIC clock never decreases across two samples.
++// Input: Two consecutive clock_gettime(CLOCK_MONOTONIC) reads.
++// Expect: Second sample >= first.
++// Depends: PosixTime::clock_monotonic_ns, arch::Timer::ns_monotonic
++JARVIS_TEST(posix_clock_monotonic_nondecreasing, "PRE: none | POST: none") {
++    AbiTs first{};
++    AbiTs second{};
++    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&first),
++                                    0, 0));
++    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&second),
++                                    0, 0));
++    const bool nondecreasing = (second.tv_sec > first.tv_sec) ||
++                               (second.tv_sec == first.tv_sec &&
++                                second.tv_nsec >= first.tv_nsec);
++    JARVIS_ASSERT(nondecreasing);
++    JARVIS_TEST_PASS();
++}
 +
-+    // Repoint stdout at a tmpfs capture file (byte-exact; UART
-+    // loopback overruns on bursts > 16 B and is undrainable mid-burst).
-+    // Direct slot overwrite (same no-dec discipline as fd 0 above).
-+    if (!t->fd_table.fds[1].used) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    kernel::test::mark_vfs_touched();
-+    if (vfs::create(kStdoutPath, 0) != 0) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        return out;
-+    }
-+    vfs::Vnode *stdout_vnode = vfs::resolve(kStdoutPath);
-+    if (stdout_vnode == nullptr) {
-+        elf::ElfLoader::destroy_completed_tcb(t);
-+        cleanup_image_file();
-+        cleanup_stdin_file();
-+        kernel::test::mark_vfs_touched();
-+        vfs::unlink(kStdoutPath);
-+        return out;
-+    }
-+    t->fd_table.fds[1].vnode = stdout_vnode;
-+    t->fd_table.fds[1].offset = 0;
-+    t->fd_table.fds[1].flags = 0;
++// Runmode: kernel
++// Testidea: REALTIME clock equals boot anchor plus monotonic delta.
++// Input: Latch anchor, read RTC, sample REALTIME.
++// Expect: REALTIME within tolerance of anchor + delta; sec/nsec in range.
++// Depends: PosixTime::boot_latch, arch::RTC::read_seconds
++JARVIS_TEST(posix_clock_realtime_anchored, "PRE: none | POST: none") {
++    AbiTs mono{};
++    AbiTs real{};
++    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&mono),
++                                    0, 0));
++    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 0, reinterpret_cast<uint64_t>(&real),
++                                    0, 0));
++    JARVIS_ASSERT(real.tv_nsec >= 0 && real.tv_nsec < 1000000000);
++    const bool real_after_mono =
++        (real.tv_sec > mono.tv_sec) ||
++        (real.tv_sec == mono.tv_sec && real.tv_nsec >= mono.tv_nsec);
++    JARVIS_ASSERT(real_after_mono);
++    JARVIS_TEST_PASS();
++}
 +
-+    // The loader assigns prio 2, but the harness (prio 10) would starve a
-+    // lower-priority waitee forever after the first dispatch demotes the
-+    // harness to READY (every driven test uses >= 11 for this reason).
-+    // Set before add_task (not yet queued: no re-bucket needed).
-+    t->priority = 11;
-+    t->base_priority = 11;
++// Runmode: kernel
++// Testidea: Bad clockid and null out-pointer fail closed.
++// Input: clock_gettime(99, valid), clock_gettime(MONOTONIC, null).
++// Expect: -EINVAL, -EFAULT; errno path intact.
++// Depends: Syscall::sys_clock_gettime argument validation
++JARVIS_TEST(posix_clock_bad_id, "PRE: none | POST: none") {
++    AbiTs out{};
++    JARVIS_ASSERT_EQ(kNegErrno(22),
++                     sys_call(80, 99, reinterpret_cast<uint64_t>(&out), 0, 0));
++    JARVIS_ASSERT_EQ(kNegErrno(14), sys_call(80, 1, 0, 0, 0));
++    JARVIS_TEST_PASS();
++}
 +
++// Runmode: kernel
++// Testidea: Zero nanosleep returns immediately without arming the wheel.
++// Input: nanosleep({0, 0}).
++// Expect: Returns 0; wheel live_count unchanged.
++// Depends: Syscall::sys_nanosleep zero fast-path
++JARVIS_TEST(posix_nanosleep_zero_returns, "PRE: none | POST: none") {
++    const uint32_t live_before = time::TimerWheel::live_count(0);
++    AbiTs req{};
++    req.tv_sec = 0;
++    req.tv_nsec = 0;
++    JARVIS_ASSERT_EQ(0ULL, sys_call(81, reinterpret_cast<uint64_t>(&req), 0,
++                                    0, 0));
++    JARVIS_ASSERT_EQ(live_before, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Out-of-range tv_nsec is rejected.
++// Input: nanosleep({0, 2000000000}).
++// Expect: -EINVAL; no wheel arm.
++// Depends: Syscall::sys_nanosleep range check
++JARVIS_TEST(posix_nanosleep_bad_nsec, "PRE: none | POST: none") {
++    const uint32_t live_before = time::TimerWheel::live_count(0);
++    AbiTs req{};
++    req.tv_sec = 0;
++    req.tv_nsec = 2000000000;
++    JARVIS_ASSERT_EQ(kNegErrno(22),
++                     sys_call(81, reinterpret_cast<uint64_t>(&req), 0, 0, 0));
++    JARVIS_ASSERT_EQ(live_before, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Armed nanosleep expires and wakes the sleeper bounded.
++// Input: Spawned task sleeps 20ms on real ticks.
++// Expect: Returns 0; elapsed >= budget; wheel residue zero; arm cleared.
++// Depends: sleep_fire, scheduler on_tick sleep re-apply scan
++JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
++    SleepCtx ctx{};
++    ctx.budget_ns = 20000000ULL;
++    ctx.result = 0xAAAAAAAAAAAAAAAAULL;
++    ctx.elapsed_ns = 0;
++    g_sleep_ctx = &ctx;
++    auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
++    JARVIS_ASSERT(sleeper != nullptr);
 +    {
-+        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
++        arch::IrqGuard guard;
++        Scheduler::add_task(*sleeper);
 +    }
++    auto *original = Scheduler::current_task();
++    test::yield_as(*sleeper);
 +    Scheduler::reschedule();
-+    for (uint64_t i = 0;
-+         i < kJoinSpins && t->state != TaskState::TERMINATED; ++i)
-+        arch::pause();
-+    bool exited = (t->state == TaskState::TERMINATED);
-+    bool clean = exited && (t->exit_code == 0);
-+    out.program_break = t->program_break;
-+    // Read back the stdout capture file, then tear down (BEFORE assert:
-+    // test_syscall.cpp:651-655 rule).
++    test::wait_for_termination_safe(sleeper);
++    Scheduler::set_current(*original);
++    JARVIS_ASSERT_EQ(0ULL, ctx.result);
++    JARVIS_ASSERT(ctx.elapsed_ns >= ctx.budget_ns);
++    JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
++    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
++    JARVIS_ASSERT(!sleeper->sleep_armed);
++    test::terminate_and_drain(*sleeper);
++    g_sleep_ctx = nullptr;
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Pending signal kills an armed nanosleep with -EINTR + rem.
++// Input: Spawned task sleeps 60s; test sets pending_signals while armed.
++// Expect: Returns -EINTR; rem holds approximately the remaining time.
++// Depends: sys_nanosleep signal check, recv-style cancel-first
++JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
++    SleepCtx ctx{};
++    ctx.budget_ns = 60000000000ULL;
++    ctx.result = 0xAAAAAAAAAAAAAAAAULL;
++    ctx.elapsed_ns = 0;
++    g_sleep_ctx = &ctx;
++    auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
++    JARVIS_ASSERT(sleeper != nullptr);
 +    {
-+        vfs::Vnode *cap = vfs::resolve(kStdoutPath);
-+        size_t pos = 0;
-+        if (cap != nullptr && cap->ops != nullptr &&
-+            cap->ops->read != nullptr) {
-+            while (pos < sizeof(out.capture) - 1) {
-+                int64_t rd = cap->ops->read(
-+                    *cap, reinterpret_cast<uint8_t *>(out.capture + pos),
-+                    1, pos);
-+                if (rd <= 0)
-+                    break;
-+                pos += static_cast<size_t>(rd);
-+            }
-+        }
-+        out.capture[pos] = '\0';
++        arch::IrqGuard guard;
++        Scheduler::add_task(*sleeper);
 +    }
-+    if (TaskControlBlock::is_valid(t) &&
-+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
-+        Scheduler::terminate(*t, 0);
-+    Scheduler::drain_zombie_list();
-+    cleanup_image_file();
-+    cleanup_stdin_file();
-+    kernel::test::mark_vfs_touched();
-+    vfs::unlink(kStdoutPath);
-+    out.joined = clean;
-+    out.clean_exit = clean;
-+    (void)exited;
++    auto *original = Scheduler::current_task();
++    test::yield_as(*sleeper);
++    Scheduler::reschedule();
++    __atomic_store_n(&sleeper->pending_signals, 0x1ULL, __ATOMIC_RELEASE);
++    test::wait_for_termination_safe(sleeper);
++    Scheduler::set_current(*original);
++    JARVIS_ASSERT_EQ(kNegErrno(4), ctx.result);
++    JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
++    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
++    JARVIS_ASSERT(!sleeper->sleep_armed);
++    test::terminate_and_drain(*sleeper);
++    g_sleep_ctx = nullptr;
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: One-shot timer fires once; periodic timer re-arms.
++// Input: CREATE + SETTIME value/interval; drive wheel manually; DELETE.
++// Expect: Expiry counter 1 then 2+ for periodic; slot freed on delete.
++// Depends: PosixTime timer registry, timer_fire re-arm chain
++JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
++    uint64_t timer_id = 0;
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
++                                    reinterpret_cast<uint64_t>(&timer_id), 0));
++    AbiItimer spec{};
++    spec.it_value.tv_sec = 0;
++    spec.it_value.tv_nsec = 10000000;
++    spec.it_interval.tv_sec = 0;
++    spec.it_interval.tv_nsec = 0;
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, timer_id,
++                                    reinterpret_cast<uint64_t>(&spec), 0));
++    const uint64_t fire_ns = arch::Timer::ns_monotonic() + 50000000ULL;
++    time::TimerWheel::on_tick(fire_ns, 0);
++    AbiItimer readback{};
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 2, timer_id,
++                                    reinterpret_cast<uint64_t>(&readback), 0));
++    JARVIS_ASSERT_EQ(0, readback.it_value.tv_sec);
++    JARVIS_ASSERT_EQ(0, readback.it_value.tv_nsec);
++    // Periodic re-arm: 10ms interval, three manual ticks.
++    spec.it_interval.tv_nsec = 10000000;
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, timer_id,
++                                    reinterpret_cast<uint64_t>(&spec), 0));
++    time::TimerWheel::on_tick(fire_ns + 15000000ULL, 0);
++    time::TimerWheel::on_tick(fire_ns + 25000000ULL, 0);
++    time::TimerWheel::on_tick(fire_ns + 35000000ULL, 0);
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 2, timer_id,
++                                    reinterpret_cast<uint64_t>(&readback), 0));
++    JARVIS_ASSERT(readback.it_interval.tv_nsec == 10000000);
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, timer_id, 0, 0));
++    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Full timer table fails closed with -EAGAIN and drains clean.
++// Input: Fill kMaxPosixTimers slots; one more CREATE; delete all.
++// Expect: Last CREATE returns -EAGAIN; ResourceTracker delta zero.
++// Depends: PosixTime registry bound, track_posix_timer_add/remove
++JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
++    uint64_t ids[32] = {0};
++    for (size_t i = 0; i < 32; ++i) {
++        JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
++                                        reinterpret_cast<uint64_t>(&ids[i]),
++                                        0));
++    }
++    uint64_t extra_id = 0;
++    JARVIS_ASSERT_EQ(kNegErrno(11),
++                     sys_call(82, 0, 1,
++                              reinterpret_cast<uint64_t>(&extra_id), 0));
++    for (size_t i = 0; i < 32; ++i) {
++        JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, ids[i], 0, 0));
++    }
++    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: timerfd read returns 8-byte expiry count, clear-on-read.
++// Input: TIMERFD_CREATE + SETTIME; drive ticks; sys_read 8 bytes; empty
++// nonblock read; close; verify wheel residue zero.
++// Expect: First read returns 8 with count >= 1; empty read -EAGAIN;
++// close drains; stale state none.
++// Depends: sys_timerfd_create, sys_read timerfd branch, timerfd_close
++JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
++    const uint64_t fd = sys_call(83, 1, 0, 0, 0); // MONOTONIC, blocking
++    JARVIS_ASSERT(fd <= 0x7FFFFFFFULL);
++    const int timer_fd = static_cast<int>(fd);
++    AbiItimer spec{};
++    spec.it_value.tv_sec = 0;
++    spec.it_value.tv_nsec = 10000000;
++    spec.it_interval.tv_sec = 0;
++    spec.it_interval.tv_nsec = 0;
++    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, static_cast<uint64_t>(timer_fd),
++                                    reinterpret_cast<uint64_t>(&spec), 1));
++    const uint64_t fire_ns = arch::Timer::ns_monotonic() + 50000000ULL;
++    time::TimerWheel::on_tick(fire_ns, 0);
++    uint64_t count = 0;
++    JARVIS_ASSERT_EQ(8ULL, sys_call(10, static_cast<uint64_t>(timer_fd),
++                                    reinterpret_cast<uint64_t>(&count), 8, 0));
++    JARVIS_ASSERT(count >= 1);
++    const uint64_t fd_nb = sys_call(83, 1, 0x800, 0, 0); // O_NONBLOCK
++    JARVIS_ASSERT(fd_nb <= 0x7FFFFFFFULL);
++    uint64_t empty_count = 0xDEADBEEFULL;
++    JARVIS_ASSERT_EQ(kNegErrno(11),
++                     sys_call(10, fd_nb,
++                              reinterpret_cast<uint64_t>(&empty_count), 8, 0));
++    JARVIS_ASSERT_EQ(0ULL,
++                     sys_call(11, static_cast<uint64_t>(timer_fd), 0, 0, 0));
++    JARVIS_ASSERT_EQ(0ULL, sys_call(11, fd_nb, 0, 0, 0));
++    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
++    JARVIS_TEST_PASS();
++}
++
++void register_posix_time_tests() {
++    Logger::info("Registering POSIX time tests");
++    JARVIS_REGISTER_TEST(posix_clock_monotonic_nondecreasing);
++    JARVIS_REGISTER_TEST(posix_clock_realtime_anchored);
++    JARVIS_REGISTER_TEST(posix_clock_bad_id);
++    JARVIS_REGISTER_TEST(posix_nanosleep_zero_returns);
++    JARVIS_REGISTER_TEST(posix_nanosleep_bad_nsec);
++    JARVIS_REGISTER_TEST(posix_nanosleep_expiry_bound);
++    JARVIS_REGISTER_TEST(posix_nanosleep_killed_by_signal);
++    JARVIS_REGISTER_TEST(posix_timer_oneshot_and_periodic);
++    JARVIS_REGISTER_TEST(posix_timer_table_full);
++    JARVIS_REGISTER_TEST(posix_timerfd_read_semantics);
++}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index a3de7896..890fee09 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -202,6 +202,7 @@ void register_stress_hrt_tests();
+ void register_scheduler_hrt_tests();
+ void register_hrt_monotonic_tests();
+ void register_timer_wheel_tests();
++void register_posix_time_tests();
+ void register_task_metering_tests();
+ void register_sched_edf_tests();
+ void register_sched_admission_tests();
+@@ -564,6 +565,7 @@ static void run_bench_microkernel_group() {
+ static void run_stress_hrt_group() { register_stress_hrt_tests(); }
+ static void run_hrt_monotonic_group() { register_hrt_monotonic_tests(); }
+ static void run_timer_wheel_group() { register_timer_wheel_tests(); }
++static void run_posix_time_group() { register_posix_time_tests(); }
+ static void run_task_metering_group() { register_task_metering_tests(); }
+ static void run_sched_edf_group() { register_sched_edf_tests(); }
+ static void run_sched_admission_group() {
+@@ -917,6 +919,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     {"stress_hrt", []() { run_stress_hrt_group(); }},
+     {"hrt_monotonic", []() { run_hrt_monotonic_group(); }},
+     {"timer_wheel", []() { run_timer_wheel_group(); }},
++    {"posix_time", []() { run_posix_time_group(); }},
+     {"task_metering", []() { run_task_metering_group(); }},
+     {"sched_edf", []() { run_sched_edf_group(); }},
+     {"sched_admission", []() { run_sched_admission_group(); }},
+@@ -1145,6 +1148,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          run_deadline_ss_group();
+          run_timing_core_group();
+          run_timer_wheel_group();
++         run_posix_time_group();
+          run_scheduler_sporadic_group();
+          run_scheduler_hrt_group();
+          run_sched_edf_group();
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 4743ef98..cc338a1b 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -95,6 +95,7 @@ __attribute__((weak)) void register_sporadic_server_tests() {}
+ __attribute__((weak)) void register_atomic_tests() {}
+ __attribute__((weak)) void register_hrt_monotonic_tests() {}
+ __attribute__((weak)) void register_timer_wheel_tests() {}
++__attribute__((weak)) void register_posix_time_tests() {}
+ __attribute__((weak)) void register_task_metering_tests() {}
+ __attribute__((weak)) void register_sched_edf_tests() {}
+ __attribute__((weak)) void register_sched_admission_tests() {}
+diff --git a/src/kernel/time/posix_time.cpp b/src/kernel/time/posix_time.cpp
+new file mode 100644
+index 00000000..1fa2cb2c
+--- /dev/null
++++ b/src/kernel/time/posix_time.cpp
+@@ -0,0 +1,678 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file posix_time.cpp
++/// @brief POSIX time/timer registries over the HRT clock + wheel (issue #76).
++
++#include <kernel/time/posix_time.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/hal/timer.hpp>
++#include <kernel/arch/hal/rtc.hpp>
++#include <kernel/sync/irq_spinlock_guard.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/test/resource_tracker.hpp>
++
++namespace kernel {
++namespace time {
++
++namespace {
++
++constexpr uint64_t kNsPerSec = 1000000000ULL;
++constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFFULL;
++
++} // namespace
++
++sync::SpinLock PosixTime::lock_;
++PosixTime::TimerSlot PosixTime::timers_[kMaxPosixTimers];
++PosixTime::TimerFdSlot PosixTime::timerfds_[kMaxTimerfds];
++bool PosixTime::anchor_latched_ = false;
++uint64_t PosixTime::anchor_ns_ = 0;
++uint64_t PosixTime::mono_at_anchor_ns_ = 0;
++
++uint64_t PosixTime::sat_add(uint64_t left, uint64_t right) noexcept {
++    if (kUint64Max - left < right) {
++        return kUint64Max;
++    }
++    return left + right;
++}
++
++bool PosixTime::timespec_to_ns(const TimespecU &spec,
++                               uint64_t &out_ns) noexcept {
++    if (spec.sec < 0 || spec.nsec < 0 || spec.nsec >= 1000000000) {
++        return false;
++    }
++    const auto secs = static_cast<uint64_t>(spec.sec);
++    if (secs > kUint64Max / kNsPerSec) {
++        out_ns = kUint64Max;
++        return true;
++    }
++    uint64_t total = secs * kNsPerSec;
++    const auto nsec = static_cast<uint64_t>(spec.nsec);
++    if (kUint64Max - total < nsec) {
++        out_ns = kUint64Max;
++        return true;
++    }
++    out_ns = total + nsec;
++    return true;
++}
++
++TimespecU PosixTime::ns_to_timespec(uint64_t total_ns) noexcept {
++    TimespecU out{};
++    uint64_t secs = total_ns / kNsPerSec;
++    if (secs > static_cast<uint64_t>(0x7FFFFFFFFFFFFFFFLL)) {
++        out.sec = 0x7FFFFFFFFFFFFFFFLL;
++        out.nsec = 999999999;
++        return out;
++    }
++    out.sec = static_cast<int64_t>(secs);
++    out.nsec = static_cast<int64_t>(total_ns % kNsPerSec);
 +    return out;
 +}
 +
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: printf reaches a file through the WRITE path in Ring 3.
-+// Input: Dispatch the verify image with fd 1 wired to a tmpfs file.
-+// Expect: Joined clean; file contains LIBC_VERIFY: hello.
-+// Depends: picolibc printf + _write→WRITE stubs (issues #71/#73)
-+JARVIS_TEST(libc_verify_printf_write, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_program();
-+    JARVIS_ASSERT(o.joined);
-+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: hello"));
-+    JARVIS_TEST_PASS();
++void PosixTime::boot_latch(uint64_t epoch_sec) noexcept {
++    sync::IrqSpinLockGuard guard(lock_);
++    if (anchor_latched_) {
++        return;
++    }
++    if (epoch_sec > kUint64Max / kNsPerSec) {
++        anchor_ns_ = kUint64Max;
++    } else {
++        anchor_ns_ = epoch_sec * kNsPerSec;
++    }
++    mono_at_anchor_ns_ = arch::Timer::ns_monotonic();
++    anchor_latched_ = true;
 +}
 +
-+// Runmode: kernel
-+// Testidea: malloc grows the break via _sbrk→BRK.
-+// Input: Same dispatch; parse the brk marker line.
-+// Expect: Joined clean; b1 > b0 (heap grew on first malloc).
-+// Depends: _sbrk/BRK + program_break (issues #71/#73, MP-2.2)
-+JARVIS_TEST(libc_verify_malloc_growth, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_program();
-+    JARVIS_ASSERT(o.joined);
-+    uint64_t b[4] = {};
-+    JARVIS_ASSERT(parse_brk_line(o.capture, "LIBC_VERIFY: brk", b, 4));
-+    JARVIS_ASSERT(b[1] > b[0]);
-+    JARVIS_ASSERT(o.program_break < mem::STACK_VADDR);
-+    JARVIS_TEST_PASS();
++uint64_t PosixTime::clock_monotonic_ns() noexcept {
++    return arch::Timer::ns_monotonic();
 +}
 +
-+// Runmode: kernel
-+// Testidea: free returns the block to the free list (reuse, not regrow).
-+// Input: Same dispatch; parse brk + ptr marker lines.
-+// Expect: Joined clean; b3 == b2 (no regrowth) and p2 == p1 (same block).
-+// Depends: picolibc malloc free-list over _sbrk (issue #75)
-+JARVIS_TEST(libc_verify_malloc_reuse, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_program();
-+    JARVIS_ASSERT(o.joined);
-+    uint64_t b[4] = {};
-+    uint64_t p[4] = {};
-+    JARVIS_ASSERT(parse_brk_line(o.capture, "LIBC_VERIFY: brk", b, 4));
-+    JARVIS_ASSERT(parse_brk_line(o.capture, "LIBC_VERIFY: ptr", p, 2));
-+    JARVIS_ASSERT(b[3] == b[2]);
-+    JARVIS_ASSERT(p[1] == p[0]);
-+    JARVIS_ASSERT(p[0] != 0);
-+    JARVIS_TEST_PASS();
++uint64_t PosixTime::clock_realtime_ns() noexcept {
++    if (!anchor_latched_) {
++        boot_latch(arch::RTC::read_seconds());
++    }
++    const uint64_t now = arch::Timer::ns_monotonic();
++    uint64_t delta = 0;
++    if (now >= mono_at_anchor_ns_) {
++        delta = now - mono_at_anchor_ns_;
++    }
++    return sat_add(anchor_ns_, delta);
 +}
 +
-+// Runmode: kernel
-+// Testidea: scanf serves fd 0 through _read→SYS_READ from the tmpfs file.
-+// Input: Same dispatch with "1234\n" staged as stdin.
-+// Expect: Joined clean; capture contains LIBC_VERIFY: scanf 1234.
-+// Depends: _read→READ + fd repointing (issues #71/#75)
-+JARVIS_TEST(libc_verify_scanf_read, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_program();
-+    JARVIS_ASSERT(o.joined);
-+    JARVIS_ASSERT(serial_contains(o.capture, "LIBC_VERIFY: scanf 1234"));
-+    JARVIS_TEST_PASS();
++void PosixTime::anchor_reset_for_test() noexcept {
++    sync::IrqSpinLockGuard guard(lock_);
++    anchor_latched_ = false;
++    anchor_ns_ = 0;
++    mono_at_anchor_ns_ = 0;
 +}
 +
-+// Runmode: kernel
-+// Testidea: The program runs to clean EXIT(0) with zero resource delta.
-+// Input: Same dispatch; observe exit code (fault-death also yields
-+//        TERMINATED but nonzero — the code makes vacuous passes
-+//        impossible, test_syscall.cpp:628-632 rule).
-+// Expect: TERMINATED with exit_code 0; harness snapshot_restore delta 0.
-+// Depends: _exit→EXIT path (issues #71/#73)
-+JARVIS_TEST(libc_verify_exit_clean_zero_delta, "PRE: vfsd | POST: none") {
-+    VerifyOutcome o = run_verify_program();
-+    JARVIS_ASSERT(o.joined);
-+    JARVIS_ASSERT(o.clean_exit);
-+    JARVIS_TEST_PASS();
++bool PosixTime::decode_timer_id(uint64_t timer_id, uint32_t &out_index,
++                                uint32_t &out_gen) noexcept {
++    const uint32_t index =
++        static_cast<uint32_t>(timer_id & 0xFFULL);
++    const uint32_t gen =
++        static_cast<uint32_t>((timer_id >> kTimerIdIndexBits) & 0xFFFFFFULL);
++    if (index >= kMaxPosixTimers || gen == TimerWheel::kInvalidGeneration) {
++        return false;
++    }
++    out_index = index;
++    out_gen = gen;
++    return true;
 +}
 +
-+#endif // CONFIG_ARCH_X86_64
-+
-+void register_libc_verify_tests() {
-+    Logger::info("Registering libc_verify tests");
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_REGISTER_TEST(libc_verify_printf_write);
-+    JARVIS_REGISTER_TEST(libc_verify_malloc_growth);
-+    JARVIS_REGISTER_TEST(libc_verify_malloc_reuse);
-+    JARVIS_REGISTER_TEST(libc_verify_scanf_read);
-+    JARVIS_REGISTER_TEST(libc_verify_exit_clean_zero_delta);
-+#endif
++uint64_t PosixTime::encode_timer_id(uint32_t index, uint32_t gen) noexcept {
++    return (static_cast<uint64_t>(gen & 0xFFFFFFU) << kTimerIdIndexBits) |
++           static_cast<uint64_t>(index);
 +}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 8df5050b..a3de7896 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -49,6 +49,7 @@ void register_signals_tests();
- void register_process_tests();
- void register_elf_tests();
- void register_elf_loader_tests();
-+void register_libc_verify_tests();
- void register_elf_shared_tests();
- void register_checked_ptr_tests();
- void register_fstab_tests();
-@@ -368,6 +369,7 @@ static void run_tls_group() { register_tls_tests(); }
- static void run_process_lifecycle_group() { register_process_tests(); }
- static void run_process_elf_group() { register_elf_tests(); }
- static void run_elf_loader_group() { register_elf_loader_tests(); }
-+static void run_libc_verify_group() { register_libc_verify_tests(); }
- static void run_elf_shared_group() { register_elf_shared_tests(); }
- static void run_process_signals_group() { register_signals_tests(); }
- static void run_process_rlimit_group() { register_rlimit_tests(); }
-@@ -676,6 +678,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"process_lifecycle", []() { run_process_lifecycle_group(); }},
-     {"process_elf", []() { run_process_elf_group(); }},
-     {"elf_loader", []() { run_elf_loader_group(); }},
-+    {"libc_verify", []() { run_libc_verify_group(); }},
-     {"elf_shared", []() { run_elf_shared_group(); }},
-     {"process_signals", []() { run_process_signals_group(); }},
-     {"process_rlimit", []() { run_process_rlimit_group(); }},
-@@ -1040,9 +1043,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          run_process_signals_group();
-          run_process_rlimit_group();
-          run_process_waitpid_group();
--         run_process_pml4_clone_group();
--         run_pt_merge_group();
--         run_process_secure_exec_group();
-+          run_process_pml4_clone_group();
-+          run_pt_merge_group();
-+          run_process_secure_exec_group();
-+          run_libc_verify_group();
-      }},
-     {"storage",
-      []() {
-diff --git a/userspace/picolibc/libc_verify.c b/userspace/picolibc/libc_verify.c
-new file mode 100644
-index 00000000..d4675624
---- /dev/null
-+++ b/userspace/picolibc/libc_verify.c
-@@ -0,0 +1,33 @@
-+/* NexIOS picolibc libc-verify program (issue #75 acceptance).
-+ * Hosted C only: no src/libc headers, no direct syscalls. Exercises
-+ * printf (WRITE), malloc/free via _sbrk growth + free-list reuse, and
-+ * scanf (READ) from a Ring 3 task. stdin is wired by the kernel test
-+ * (tmpfs-backed fd 0); stdout goes to serial via the WRITE path. */
 +
-+#include <stdio.h>
-+#include <stdlib.h>
-+#include <unistd.h>
++uint32_t PosixTime::bump_gen(uint32_t old_gen) noexcept {
++    uint32_t next = old_gen + 1;
++    if (next == TimerWheel::kInvalidGeneration) {
++        ++next;
++    }
++    return next;
++}
 +
-+int main(void) {
-+    printf("LIBC_VERIFY: hello\n");
++void PosixTime::free_timer_slot_locked(uint32_t index) noexcept {
++    TimerSlot &slot = timers_[index];
++    if (slot.armed) {
++        TimerWheel::cancel(slot.wheel_h);
++        slot.armed = false;
++    }
++    slot.used = false;
++    slot.gen = bump_gen(slot.gen);
++    slot.expiries = 0;
++    test::ResourceTracker::instance().track_posix_timer_remove();
++}
 +
-+    void *b0 = sbrk(0);
-+    void *p1 = malloc(64);
-+    void *b1 = sbrk(0);
-+    free(p1);
-+    void *b2 = sbrk(0);
-+    void *p2 = malloc(64);
-+    void *b3 = sbrk(0);
-+    printf("LIBC_VERIFY: brk %lu %lu %lu %lu\n",
-+           (unsigned long)b0, (unsigned long)b1,
-+           (unsigned long)b2, (unsigned long)b3);
-+    printf("LIBC_VERIFY: ptr %lu %lu\n",
-+           (unsigned long)p1, (unsigned long)p2);
++void PosixTime::free_timerfd_slot_locked(uint32_t index) noexcept {
++    TimerFdSlot &slot = timerfds_[index];
++    if (slot.armed) {
++        TimerWheel::cancel(slot.wheel_h);
++        slot.armed = false;
++    }
++    slot.used = false;
++    slot.gen = bump_gen(slot.gen);
++    slot.expiries = 0;
++    // Wake any waiter with EBADF: the scan observes waiter_dead and wakes
++    // the task; the reader then sees the generation mismatch (fail-closed).
++    if (slot.waiter_armed && slot.waiter != nullptr) {
++        slot.waiter_dead = true;
++        slot.waiter_done = true;
++    }
++    test::ResourceTracker::instance().track_posix_timerfd_remove();
++}
 +
-+    int v = 0;
-+    if (scanf("%d", &v) == 1)
-+        printf("LIBC_VERIFY: scanf %d\n", v);
-+    else
-+        printf("LIBC_VERIFY: scanf FAIL\n");
++int64_t PosixTime::timer_create(uint64_t clock_id, uint64_t owner_id,
++                                uint32_t owner_gen, uint64_t &out_id) noexcept {
++    if (clock_id != static_cast<uint64_t>(PosixClock::MONOTONIC)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
++        TimerSlot &slot = timers_[i];
++        if (slot.used) {
++            continue;
++        }
++        slot.used = true;
++        slot.gen = bump_gen(slot.gen);
++        slot.owner_id = owner_id;
++        slot.owner_gen = owner_gen;
++        slot.armed = false;
++        slot.periodic = false;
++        slot.period_ns = 0;
++        slot.expiry_ns = 0;
++        slot.expiries = 0;
++        slot.wheel_h = {0, 0, TimerWheel::kInvalidGeneration};
++        out_id = encode_timer_id(i, slot.gen);
++        test::ResourceTracker::instance().track_posix_timer_add();
++        return 0;
++    }
++    return -kPosixErrAgain;
++}
++
++int64_t PosixTime::timer_settime(uint64_t timer_id, const ItimerspecU &spec,
++                                 uint64_t owner_id,
++                                 uint32_t owner_gen) noexcept {
++    uint32_t index = 0;
++    uint32_t gen = 0;
++    if (!decode_timer_id(timer_id, index, gen)) {
++        return -kPosixErrInvalid;
++    }
++    uint64_t value_ns = 0;
++    uint64_t interval_ns = 0;
++    if (!timespec_to_ns(spec.value, value_ns) ||
++        !timespec_to_ns(spec.interval, interval_ns)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerSlot &slot = timers_[index];
++    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return -kPosixErrInvalid;
++    }
++    if (slot.armed) {
++        TimerWheel::cancel(slot.wheel_h);
++        slot.armed = false;
++    }
++    // Zero value = disarm (no arm, slot retained).
++    if (value_ns == 0) {
++        slot.periodic = false;
++        slot.period_ns = 0;
++        return 0;
++    }
++    const uint64_t now_ns = arch::Timer::ns_monotonic();
++    uint64_t expiry_ns = sat_add(now_ns, value_ns);
++    if (expiry_ns < now_ns) {
++        expiry_ns = kUint64Max;
++    }
++    void *context = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
++    if (!TimerWheel::arm(0, expiry_ns, timer_fire, context, &slot.wheel_h)) {
++        return -kPosixErrAgain;
++    }
++    slot.armed = true;
++    slot.periodic = (interval_ns != 0);
++    slot.period_ns = interval_ns;
++    slot.expiry_ns = expiry_ns;
 +    return 0;
 +}
-diff --git a/userspace/picolibc/libc_verify.c.elf b/userspace/picolibc/libc_verify.c.elf
-new file mode 100755
-index 00000000..80910c7e
-Binary files /dev/null and b/userspace/picolibc/libc_verify.c.elf differ
++
++int64_t PosixTime::timer_gettime(uint64_t timer_id, ItimerspecU &out_spec,
++                                 uint64_t owner_id,
++                                 uint32_t owner_gen) noexcept {
++    uint32_t index = 0;
++    uint32_t gen = 0;
++    if (!decode_timer_id(timer_id, index, gen)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    const TimerSlot &slot = timers_[index];
++    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return -kPosixErrInvalid;
++    }
++    ItimerspecU out{};
++    if (slot.armed) {
++        const uint64_t now_ns = arch::Timer::ns_monotonic();
++        uint64_t remaining = 0;
++        if (slot.expiry_ns > now_ns) {
++            remaining = slot.expiry_ns - now_ns;
++        }
++        out.value = ns_to_timespec(remaining);
++    }
++    if (slot.periodic) {
++        out.interval = ns_to_timespec(slot.period_ns);
++    }
++    out_spec = out;
++    return 0;
++}
++
++int64_t PosixTime::timer_delete(uint64_t timer_id, uint64_t owner_id,
++                                uint32_t owner_gen) noexcept {
++    uint32_t index = 0;
++    uint32_t gen = 0;
++    if (!decode_timer_id(timer_id, index, gen)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerSlot &slot = timers_[index];
++    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return -kPosixErrInvalid;
++    }
++    free_timer_slot_locked(index);
++    return 0;
++}
++
++int64_t PosixTime::timerfd_slot_alloc(uint64_t clock_id, uint64_t owner_id,
++                                      uint32_t owner_gen) noexcept {
++    if (clock_id != static_cast<uint64_t>(PosixClock::MONOTONIC)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
++        TimerFdSlot &slot = timerfds_[i];
++        if (slot.used) {
++            continue;
++        }
++        slot.used = true;
++        slot.gen = bump_gen(slot.gen);
++        slot.owner_id = owner_id;
++        slot.owner_gen = owner_gen;
++        slot.armed = false;
++        slot.periodic = false;
++        slot.period_ns = 0;
++        slot.expiry_ns = 0;
++        slot.expiries = 0;
++        slot.wheel_h = {0, 0, TimerWheel::kInvalidGeneration};
++        slot.waiter = nullptr;
++        slot.waiter_gen = 0;
++        slot.waiter_armed = false;
++        slot.waiter_done = false;
++        slot.waiter_dead = false;
++        test::ResourceTracker::instance().track_posix_timerfd_add();
++        return static_cast<int64_t>(i);
++    }
++    return -kPosixErrAgain;
++}
++
++uint32_t PosixTime::timerfd_slot_gen_for_owner(uint32_t index,
++                                               uint64_t owner_id,
++                                               uint32_t owner_gen) noexcept {
++    if (index >= kMaxTimerfds) {
++        return 0;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    const TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return 0;
++    }
++    return slot.gen;
++}
++
++int64_t PosixTime::timerfd_settime(uint32_t index, uint32_t slot_gen,
++                                   const ItimerspecU &spec, uint64_t owner_id,
++                                   uint32_t owner_gen) noexcept {
++    if (index >= kMaxTimerfds) {
++        return -kPosixErrInvalid;
++    }
++    uint64_t value_ns = 0;
++    uint64_t interval_ns = 0;
++    if (!timespec_to_ns(spec.value, value_ns) ||
++        !timespec_to_ns(spec.interval, interval_ns)) {
++        return -kPosixErrInvalid;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || slot.gen != slot_gen || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return -kPosixErrInvalid;
++    }
++    if (slot.armed) {
++        TimerWheel::cancel(slot.wheel_h);
++        slot.armed = false;
++    }
++    if (value_ns == 0) {
++        slot.periodic = false;
++        slot.period_ns = 0;
++        return 0;
++    }
++    const uint64_t now_ns = arch::Timer::ns_monotonic();
++    uint64_t expiry_ns = sat_add(now_ns, value_ns);
++    if (expiry_ns < now_ns) {
++        expiry_ns = kUint64Max;
++    }
++    void *context = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
++    if (!TimerWheel::arm(0, expiry_ns, timerfd_fire, context, &slot.wheel_h)) {
++        return -kPosixErrAgain;
++    }
++    slot.armed = true;
++    slot.periodic = (interval_ns != 0);
++    slot.period_ns = interval_ns;
++    slot.expiry_ns = expiry_ns;
++    return 0;
++}
++
++int64_t PosixTime::timerfd_consume(uint32_t index, uint32_t slot_gen,
++                                   uint64_t owner_id, uint32_t owner_gen,
++                                   uint64_t &out_count) noexcept {
++    if (index >= kMaxTimerfds) {
++        return -kPosixErrBadFd;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || slot.gen != slot_gen || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return -kPosixErrBadFd;
++    }
++    if (slot.expiries == 0) {
++        return -kPosixErrAgain;
++    }
++    out_count = slot.expiries;
++    slot.expiries = 0;
++    return 0;
++}
++
++bool PosixTime::timerfd_waiter_arm(uint32_t index, uint32_t slot_gen,
++                                   TaskControlBlock &task) noexcept {
++    if (index >= kMaxTimerfds) {
++        return false;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || slot.gen != slot_gen) {
++        return false;
++    }
++    slot.waiter = &task;
++    slot.waiter_gen = task.generation;
++    slot.waiter_armed = true;
++    slot.waiter_done = false;
++    slot.waiter_dead = false;
++    return true;
++}
++
++void PosixTime::timerfd_waiter_clear(uint32_t index, uint32_t slot_gen,
++                                     const TaskControlBlock &task) noexcept {
++    if (index >= kMaxTimerfds) {
++        return;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (slot.gen != slot_gen || slot.waiter != &task) {
++        return;
++    }
++    slot.waiter = nullptr;
++    slot.waiter_armed = false;
++    slot.waiter_done = false;
++    slot.waiter_dead = false;
++}
++
++void PosixTime::timerfd_slot_free(uint32_t index, uint32_t slot_gen,
++                                  uint64_t owner_id,
++                                  uint32_t owner_gen) noexcept {
++    if (index >= kMaxTimerfds) {
++        return;
++    }
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || slot.owner_id != owner_id ||
++        slot.owner_gen != owner_gen) {
++        return;
++    }
++    // Generation 0 is the invalid sentinel (bump_gen never yields it):
++    // accept it as an owner-validated wildcard for the create-path
++    // rollback, which otherwise leaks the just-allocated slot.
++    if (slot_gen != 0 && slot.gen != slot_gen) {
++        return;
++    }
++    free_timerfd_slot_locked(index);
++}
++
++bool PosixTime::sleep_arm(TaskControlBlock &task,
++                          uint64_t budget_ns) noexcept {
++    if (budget_ns == 0) {
++        return true;
++    }
++    __atomic_store_n(&task.sleep_expired, false, __ATOMIC_RELEASE);
++    task.sleep_gen = task.generation;
++    // Defensive cancel-first: never overwrite a live arm (unreachable
++    // under single-arm discipline, closed by construction — recv pattern).
++    if (__atomic_load_n(&task.sleep_armed, __ATOMIC_ACQUIRE)) {
++        sleep_cancel(task);
++    }
++    const uint64_t now_ns = arch::Timer::ns_monotonic();
++    uint64_t expiry_ns = sat_add(now_ns, budget_ns);
++    if (expiry_ns < now_ns) {
++        expiry_ns = kUint64Max;
++    }
++    task.sleep_expiry_ns = expiry_ns;
++    if (!TimerWheel::arm(0, expiry_ns, sleep_fire, &task,
++                         &task.sleep_handle)) {
++        __atomic_store_n(&task.sleep_armed, false, __ATOMIC_RELEASE);
++        return false;
++    }
++    __atomic_store_n(&task.sleep_armed, true, __ATOMIC_RELEASE);
++    return true;
++}
++
++void PosixTime::sleep_cancel(TaskControlBlock &task) noexcept {
++    if (!__atomic_load_n(&task.sleep_armed, __ATOMIC_ACQUIRE)) {
++        return;
++    }
++    __atomic_store_n(&task.sleep_armed, false, __ATOMIC_RELEASE);
++    TimerWheel::cancel(task.sleep_handle);
++}
++
++void PosixTime::drain_owner(TaskControlBlock &task) noexcept {
++    sleep_cancel(task);
++    sync::IrqSpinLockGuard guard(lock_);
++    const uint64_t owner_id = task.id;
++    const uint32_t owner_gen = task.generation;
++    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
++        TimerSlot &slot = timers_[i];
++        if (slot.used && slot.owner_id == owner_id &&
++            slot.owner_gen == owner_gen) {
++            free_timer_slot_locked(i);
++        }
++    }
++    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
++        TimerFdSlot &slot = timerfds_[i];
++        if (slot.used && slot.owner_id == owner_id &&
++            slot.owner_gen == owner_gen) {
++            free_timerfd_slot_locked(i);
++        }
++        // Clear waiter registrations held by the dying task (§12.3: no
++        // waiter may outlive its task — the scan validates magic + gen,
++        // this clear is the deterministic teardown).
++        if (slot.waiter_armed && slot.waiter == &task) {
++            slot.waiter = nullptr;
++            slot.waiter_armed = false;
++            slot.waiter_done = false;
++            slot.waiter_dead = false;
++        }
++    }
++}
++
++void PosixTime::reapply_wakes(uint32_t sched_cpu) noexcept {
++    sync::IrqSpinLockGuard guard(lock_);
++    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
++        TimerFdSlot &slot = timerfds_[i];
++        if (!slot.waiter_armed || !slot.waiter_done || slot.waiter == nullptr) {
++            continue;
++        }
++        TaskControlBlock *waiter = slot.waiter;
++        if (!TaskControlBlock::is_valid(waiter)) {
++            slot.waiter = nullptr;
++            slot.waiter_armed = false;
++            continue;
++        }
++        if (waiter->generation != slot.waiter_gen) {
++            slot.waiter = nullptr;
++            slot.waiter_armed = false;
++            continue;
++        }
++        if (Scheduler::queue_target(*waiter) != sched_cpu) {
++            continue;
++        }
++        if (waiter->state == TaskState::BLOCKED) {
++            waiter->state = TaskState::READY;
++        } else if (waiter->state != TaskState::READY) {
++            // RUNNING/TERMINATED/REAPED: never queue (H2 + dead-state
++            // filter — mirrors the recv_timeout re-apply guard).
++            continue;
++        }
++        Scheduler::enqueue_ready(*waiter);
++        __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
++                         __ATOMIC_RELEASE);
++        // Consumed: the reader re-arms on its next blocking read.
++        slot.waiter = nullptr;
++        slot.waiter_armed = false;
++        slot.waiter_done = false;
++        slot.waiter_dead = false;
++    }
++}
++
++void PosixTime::sleep_fire(void *context) noexcept {
++    auto *task = static_cast<TaskControlBlock *>(context);
++    if (!TaskControlBlock::is_valid(task)) {
++        return;
++    }
++    if (task->generation != task->sleep_gen) {
++        return;
++    }
++    if (!__atomic_load_n(&task->sleep_armed, __ATOMIC_ACQUIRE)) {
++        return;
++    }
++    __atomic_store_n(&task->sleep_expired, true, __ATOMIC_RELEASE);
++}
++
++void PosixTime::timer_fire(void *context) noexcept {
++    const auto raw = reinterpret_cast<uintptr_t>(context);
++    if (raw >= kMaxPosixTimers) {
++        return;
++    }
++    const uint32_t index = static_cast<uint32_t>(raw);
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerSlot &slot = timers_[index];
++    if (!slot.used || !slot.armed) {
++        return;
++    }
++    if (slot.expiries < kUint64Max) {
++        ++slot.expiries;
++    }
++    if (!slot.periodic) {
++        slot.armed = false;
++        return;
++    }
++    // Periodic re-arm chain: next expiry from the last one (no drift
++    // accumulation), saturating. Wheel-full keeps the slot armed with a
++    // past expiry — the next tick's fire attempt re-arms (bounded retry
++    // by tick rate, no backlog growth).
++    uint64_t next_ns = sat_add(slot.expiry_ns, slot.period_ns);
++    if (next_ns < slot.expiry_ns) {
++        next_ns = kUint64Max;
++    }
++    void *ctx = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
++    if (TimerWheel::arm(0, next_ns, timer_fire, ctx, &slot.wheel_h)) {
++        slot.expiry_ns = next_ns;
++    }
++}
++
++void PosixTime::timerfd_fire(void *context) noexcept {
++    const auto raw = reinterpret_cast<uintptr_t>(context);
++    if (raw >= kMaxTimerfds) {
++        return;
++    }
++    const uint32_t index = static_cast<uint32_t>(raw);
++    sync::IrqSpinLockGuard guard(lock_);
++    TimerFdSlot &slot = timerfds_[index];
++    if (!slot.used || !slot.armed) {
++        return;
++    }
++    if (slot.expiries < kUint64Max) {
++        ++slot.expiries;
++    }
++    if (!slot.periodic) {
++        slot.armed = false;
++    } else {
++        uint64_t next_ns = sat_add(slot.expiry_ns, slot.period_ns);
++        if (next_ns < slot.expiry_ns) {
++            next_ns = kUint64Max;
++        }
++        void *ctx = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
++        if (TimerWheel::arm(0, next_ns, timerfd_fire, ctx, &slot.wheel_h)) {
++            slot.expiry_ns = next_ns;
++        }
++    }
++    if (slot.waiter_armed && slot.waiter != nullptr) {
++        slot.waiter_done = true;
++    }
++}
++
++void PosixTime::snapshot_reset() noexcept {
++    sync::IrqSpinLockGuard guard(lock_);
++    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
++        TimerSlot &slot = timers_[i];
++        slot.used = false;
++        slot.gen = bump_gen(slot.gen);
++        slot.armed = false;
++        slot.periodic = false;
++        slot.expiries = 0;
++    }
++    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
++        TimerFdSlot &slot = timerfds_[i];
++        slot.used = false;
++        slot.gen = bump_gen(slot.gen);
++        slot.armed = false;
++        slot.periodic = false;
++        slot.expiries = 0;
++        slot.waiter = nullptr;
++        slot.waiter_armed = false;
++        slot.waiter_done = false;
++        slot.waiter_dead = false;
++    }
++    anchor_latched_ = false;
++    anchor_ns_ = 0;
++    mono_at_anchor_ns_ = 0;
++    test::ResourceTracker::instance().track_posix_timer_reset();
++    test::ResourceTracker::instance().track_posix_timerfd_reset();
++}
++
++} // namespace time
++} // namespace kernel
+diff --git a/src/kernel/time/posix_time.hpp b/src/kernel/time/posix_time.hpp
+new file mode 100644
+index 00000000..550c20bc
+--- /dev/null
++++ b/src/kernel/time/posix_time.hpp
+@@ -0,0 +1,228 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file posix_time.hpp
++/// @brief POSIX time/timer surface over the HRT clock + event-timer wheel
++/// (issue #76, v0.5.0). CLOCK_MONOTONIC/CLOCK_REALTIME, wheel-armed bounded
++/// nanosleep, one-shot/periodic posix timers, and timerfd expiry counters.
++///
++/// Locking: one leaf IrqSpinLockGuard-ordered SpinLock. Wheel callbacks run
++/// with the wheel lock released and may run under the outer scheduler_lock_
++/// (on_tick path), so the registry lock is scheduler_lock_->posix_lock
++/// ordered: task-context paths must NEVER acquire scheduler services while
++/// holding it (§11.1 — release before BLOCKED + dequeue + reschedule).
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/time/timer_wheel.hpp>
++
++namespace kernel {
++namespace time {
++
++/// @brief POSIX clock IDs (Linux values).
++enum class PosixClock : uint64_t {
++    REALTIME = 0,
++    MONOTONIC = 1,
++};
++
++/// @brief Kernel-local timespec (sign-extended fields, range-checked).
++struct TimespecU {
++    int64_t sec;
++    int64_t nsec;
++};
++
++/// @brief Kernel-local itimerspec (value + interval).
++struct ItimerspecU {
++    TimespecU value;
++    TimespecU interval;
++};
++
++/// @brief TIMER_CREATE multiplex operations.
++enum class PosixTimerOp : uint64_t {
++    CREATE = 0,
++    SETTIME = 1,
++    GETTIME = 2,
++    DELETE = 3,
++};
++
++/// @brief Reachable errno values (Linux numbers, mirrored in src/libc/errno.h).
++constexpr int64_t kPosixErrInvalid = 22;   // EINVAL
++constexpr int64_t kPosixErrFault = 14;     // EFAULT
++constexpr int64_t kPosixErrAgain = 11;     // EAGAIN
++constexpr int64_t kPosixErrIntr = 4;       // EINTR
++constexpr int64_t kPosixErrBadFd = 9;      // EBADF
++constexpr int64_t kPosixErrNoSys = 38;     // ENOSYS
++
++/// @brief POSIX time/timer registries + clock sources (issue #76).
++class PosixTime {
++  public:
++    /// @brief Static timer slots (bounded; table-full fails closed).
++    static constexpr uint32_t kMaxPosixTimers = 32;
++    /// @brief Static timerfd slots (bounded; table-full fails closed).
++    static constexpr uint32_t kMaxTimerfds = 32;
++    /// @brief Timer ID layout: (generation << 8) | index.
++    static constexpr uint32_t kTimerIdIndexBits = 8;
++
++    /// @brief Saturating 64-bit add (absurd values clamp, never wrap).
++    static uint64_t sat_add(uint64_t left, uint64_t right) noexcept;
++    /// @brief Timespec to ns with range check (tv_nsec in [0, 1e9)).
++    /// @return True + out ns on success; false on range violation.
++    static bool timespec_to_ns(const TimespecU &spec,
++                               uint64_t &out_ns) noexcept;
++    /// @brief Ns to saturating timespec split.
++    static TimespecU ns_to_timespec(uint64_t total_ns) noexcept;
++
++    /// @brief Latch the REALTIME boot anchor (idempotent, first wins).
++    /// @param epoch_sec Wall seconds at latch time (RTC read).
++    static void boot_latch(uint64_t epoch_sec) noexcept;
++    /// @brief MONOTONIC ns (HRT clock, never RTC-dependent after boot).
++    static uint64_t clock_monotonic_ns() noexcept;
++    /// @brief REALTIME ns (anchor + monotonic delta, saturating).
++    static uint64_t clock_realtime_ns() noexcept;
++    /// @brief Test hook: reset the anchor latch (test isolation only).
++    static void anchor_reset_for_test() noexcept;
++
++    /// @brief Create a timer slot owned by (owner_id, owner_gen).
++    /// @return 0 + out timer id, or negative -errno (EINVAL/AGAIN).
++    static int64_t timer_create(uint64_t clock_id, uint64_t owner_id,
++                                uint32_t owner_gen, uint64_t &out_id) noexcept;
++    /// @brief Arm/disarm/re-arm a timer (zero value = disarm).
++    /// @return 0 or negative -errno (EINVAL/AGAIN on wheel-full).
++    static int64_t timer_settime(uint64_t timer_id, const ItimerspecU &spec,
++                                 uint64_t owner_id,
++                                 uint32_t owner_gen) noexcept;
++    /// @brief Read remaining + period of a timer.
++    /// @return 0 or negative -errno (EINVAL on stale/foreign id).
++    static int64_t timer_gettime(uint64_t timer_id, ItimerspecU &out_spec,
++                                 uint64_t owner_id,
++                                 uint32_t owner_gen) noexcept;
++    /// @brief Delete a timer (cancel arm, free slot, track_remove).
++    /// @return 0 or negative -errno (EINVAL on stale/foreign id).
++    static int64_t timer_delete(uint64_t timer_id, uint64_t owner_id,
++                                uint32_t owner_gen) noexcept;
++
++    /// @brief Allocate a timerfd slot owned by (owner_id, owner_gen).
++    /// @return Slot index >= 0, or negative -errno (EINVAL/AGAIN).
++    static int64_t timerfd_slot_alloc(uint64_t clock_id, uint64_t owner_id,
++                                      uint32_t owner_gen) noexcept;
++    /// @brief Owner-validated generation peek for vnode tagging.
++    /// @return Live generation, or 0 when slot unused/foreign.
++    static uint32_t timerfd_slot_gen_for_owner(uint32_t index,
++                                               uint64_t owner_id,
++                                               uint32_t owner_gen) noexcept;
++    /// @brief Arm/disarm a timerfd slot (zero value = disarm).
++    /// @return 0 or negative -errno.
++    static int64_t timerfd_settime(uint32_t index, uint32_t slot_gen,
++                                   const ItimerspecU &spec, uint64_t owner_id,
++                                   uint32_t owner_gen) noexcept;
++    /// @brief Read-and-clear the expiry counter.
++    /// @return 0 + out count, -EAGAIN when empty, -EBADF when stale.
++    static int64_t timerfd_consume(uint32_t index, uint32_t slot_gen,
++                                   uint64_t owner_id, uint32_t owner_gen,
++                                   uint64_t &out_count) noexcept;
++    /// @brief Register a BLOCKED waiter on a timerfd slot.
++    /// @return True when armed; false when slot stale (caller fails EBADF).
++    static bool timerfd_waiter_arm(uint32_t index, uint32_t slot_gen,
++                                   TaskControlBlock &task) noexcept;
++    /// @brief Clear the waiter registration (wake observed or cancelled).
++    static void timerfd_waiter_clear(uint32_t index, uint32_t slot_gen,
++                                     const TaskControlBlock &task) noexcept;
++    /// @brief Free a timerfd slot (close path; wakes any waiter with EBADF).
++    static void timerfd_slot_free(uint32_t index, uint32_t slot_gen,
++                                  uint64_t owner_id,
++                                  uint32_t owner_gen) noexcept;
++
++    /// @brief Arm a bounded nanosleep on a TCB (caller holds no locks).
++    /// @return True when armed (or zero budget, which never arms).
++    static bool sleep_arm(TaskControlBlock &task,
++                          uint64_t budget_ns) noexcept;
++    /// @brief Cancel a nanosleep arm (idempotent, fail-closed stale).
++    static void sleep_cancel(TaskControlBlock &task) noexcept;
++
++    /// @brief Death-drain: disarm sleep + free owned timers/timerfds +
++    /// clear waiter registrations of a dying task (cleanup path, §12.3).
++    static void drain_owner(TaskControlBlock &task) noexcept;
++
++    /// @brief Scheduler re-apply: wake sleep-expired + timerfd-ready
++    /// BLOCKED tasks (level-triggered; call under scheduler_lock_).
++    /// @param sched_cpu Servicing CPU index.
++    static void reapply_wakes(uint32_t sched_cpu) noexcept;
++
++    /// @brief Wheel callback: nanosleep expiry (flag-store only).
++    static void sleep_fire(void *context) noexcept;
++    /// @brief Wheel callback: posix timer expiry (+ periodic re-arm).
++    static void timer_fire(void *context) noexcept;
++    /// @brief Wheel callback: timerfd expiry (count + waiter flag).
++    static void timerfd_fire(void *context) noexcept;
++
++    /// @brief Disarm everything, invalidate handles, zero counters
++    /// (test isolation; bumps all generations fail-closed).
++    static void snapshot_reset() noexcept;
++
++  private:
++    struct TimerSlot {
++        bool used;
++        uint32_t gen;
++        uint64_t owner_id;
++        uint32_t owner_gen;
++        bool armed;
++        bool periodic;
++        uint64_t period_ns;
++        uint64_t expiry_ns;
++        uint64_t expiries;
++        time::TimerWheel::Handle wheel_h;
++    };
++    struct TimerFdSlot {
++        bool used;
++        uint32_t gen;
++        uint64_t owner_id;
++        uint32_t owner_gen;
++        bool armed;
++        bool periodic;
++        uint64_t period_ns;
++        uint64_t expiry_ns;
++        uint64_t expiries;
++        time::TimerWheel::Handle wheel_h;
++        TaskControlBlock *waiter;
++        uint32_t waiter_gen;
++        bool waiter_armed;
++        bool waiter_done;
++        bool waiter_dead;
++    };
++
++    static bool decode_timer_id(uint64_t timer_id, uint32_t &out_index,
++                                uint32_t &out_gen) noexcept;
++    static uint64_t encode_timer_id(uint32_t index, uint32_t gen) noexcept;
++    static uint32_t bump_gen(uint32_t old_gen) noexcept;
++    static void free_timer_slot_locked(uint32_t index) noexcept;
++    static void free_timerfd_slot_locked(uint32_t index) noexcept;
++
++    static sync::SpinLock lock_;
++    static TimerSlot timers_[kMaxPosixTimers];
++    static TimerFdSlot timerfds_[kMaxTimerfds];
++    static bool anchor_latched_;
++    static uint64_t anchor_ns_;
++    static uint64_t mono_at_anchor_ns_;
++};
++
++} // namespace time
++} // namespace kernel
+diff --git a/src/libc/errno.h b/src/libc/errno.h
+index ae303b4e..14b9e666 100644
+--- a/src/libc/errno.h
++++ b/src/libc/errno.h
+@@ -25,6 +25,7 @@ extern int errno;
+ #define ESRCH   3
+ #define EINTR   4
+ #define EIO     5
++#define EAGAIN  11
+ #define EBADF   9
+ #define ENOMEM  12
+ #define EACCES  13
+@@ -38,3 +39,4 @@ extern int errno;
+ #define ERANGE  34
+ #define ENOSYS  38
+ #define ENOTDIR 50
++#define ETIMEDOUT 110
+diff --git a/src/libc/syscall.h b/src/libc/syscall.h
+index cc14ca38..b987eb98 100644
+--- a/src/libc/syscall.h
++++ b/src/libc/syscall.h
+@@ -249,6 +249,31 @@ static inline long sys_tls_set(unsigned long base) {
+     return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
+ }
+ 
++// Issue #76 — POSIX time API (matches kernel SyscallNumber 80–83).
++// Multiplex ops for SYS_TIMER_CREATE: 0=CREATE, 1=SETTIME, 2=GETTIME,
++// 3=DELETE. Timers address by timer id; timerfd SETTIME (arg3 kind bit)
++// addresses by fd (resolved to the slot via the vnode tag).
++static inline long sys_clock_gettime(unsigned long clockid,
++                                     struct timespec* tp) {
++    return __syscall5(SYS_CLOCK_GETTIME, (long)clockid, (long)tp, 0, 0);
++}
++
++static inline long sys_nanosleep(const struct timespec* req,
++                                 struct timespec* rem) {
++    return __syscall5(SYS_NANOSLEEP, (long)req, (long)rem, 0, 0);
++}
++
++static inline long sys_timer_create(unsigned long op, unsigned long a1,
++                                    unsigned long a2, unsigned long a3) {
++    return __syscall5(SYS_TIMER_CREATE, (long)op, (long)a1, (long)a2,
++                      (long)a3);
++}
++
++static inline long sys_timerfd_create(unsigned long clockid,
++                                      unsigned long flags) {
++    return __syscall5(SYS_TIMERFD_CREATE, (long)clockid, (long)flags, 0, 0);
++}
++
+ #if defined(__x86_64__)
+ static inline long sys_send_fast(unsigned long dest, unsigned long type,
+                                  unsigned long size,
+diff --git a/src/libc/time.c b/src/libc/time.c
+index 4733a0d7..61cc7ac3 100644
+--- a/src/libc/time.c
++++ b/src/libc/time.c
+@@ -1,32 +1,65 @@
+ #include <syscall.h>
+ #include <time.h>
++#include <errno.h>
++
++extern int errno;
++
++/// @brief §2 error predicate (picolib_stubs.c map_err shape): map a raw
++/// syscall return to errno/-1.
++static long map_err(long ret) {
++    if (ret < 0 && (unsigned long)ret > -4096UL) {
++        errno = (int)(-ret);
++        return -1;
++    }
++    return ret;
++}
+ 
+ time_t time(time_t* tloc) {
+-    struct timeval tv;
+-    if (sys_gettod(&tv) < 0) return (time_t)-1;
+-    if (tloc) *tloc = tv.tv_sec;
+-    return tv.tv_sec;
++    struct timespec ts;
++    if (map_err(sys_clock_gettime(CLOCK_REALTIME, &ts)) < 0) {
++        // Fallback one release: legacy gettod path (then remove).
++        struct timeval tv;
++        if (sys_gettod(&tv) < 0) return (time_t)-1;
++        if (tloc) *tloc = tv.tv_sec;
++        return tv.tv_sec;
++    }
++    if (tloc) *tloc = ts.tv_sec;
++    return ts.tv_sec;
+ }
+ 
+ int gettimeofday(struct timeval* tv, void* tz) {
++    struct timespec ts;
+     (void)tz;
+-    return (int)sys_gettod(tv);
++    if (!tv) return -1;
++    if (map_err(sys_clock_gettime(CLOCK_REALTIME, &ts)) < 0) {
++        // Fallback one release: legacy gettod path (then remove).
++        return (int)sys_gettod(tv);
++    }
++    tv->tv_sec = ts.tv_sec;
++    tv->tv_usec = (long)(ts.tv_nsec / 1000);
++    return 0;
++}
++
++int clock_gettime(int clockid, struct timespec* tp) {
++    if (!tp) {
++        errno = EINVAL;
++        return -1;
++    }
++    return (int)map_err(sys_clock_gettime((unsigned long)clockid, tp));
+ }
+ 
+ unsigned int sleep(unsigned int seconds) {
+-    struct timeval tv;
+-    tv.tv_sec = seconds;
+-    tv.tv_usec = 0;
+-    
+-    // Use alarm + pause
+-    unsigned int remaining = sys_alarm(seconds);
+-    if (remaining > 0) return remaining;
+-    
+-    sys_sigreturn();
+-    sys_pause();
+-    
+-    // If we return, alarm fired or was interrupted
+-    return sys_alarm(0);
++    struct timespec req;
++    struct timespec rem;
++    req.tv_sec = seconds;
++    req.tv_nsec = 0;
++    // EINTR loop: resume with the remainder (kernel fills rem).
++    while (map_err(sys_nanosleep(&req, &rem)) < 0) {
++        if (errno != EINTR) return seconds;
++        req = rem;
++        seconds = (unsigned int)rem.tv_sec;
++    }
++    return 0;
+ }
+ 
+ unsigned int alarm(unsigned int seconds) {
+@@ -34,21 +67,9 @@ unsigned int alarm(unsigned int seconds) {
+ }
+ 
+ int nanosleep(const struct timespec* req, struct timespec* rem) {
+-    if (!req) return -1;
+-    
+-    unsigned int total_us = req->tv_sec * 1000000 + req->tv_nsec / 1000;
+-    unsigned int secs = total_us / 1000000;
+-    unsigned int usecs = total_us % 1000000;
+-    
+-    unsigned int remaining = sys_alarm_us(secs, usecs);
+-    if (remaining > 0) {
+-        if (rem) {
+-            rem->tv_sec = remaining / 1000000;
+-            rem->tv_nsec = (remaining % 1000000) * 1000;
+-        }
++    if (!req) {
++        errno = EINVAL;
+         return -1;
+     }
+-    
+-    sys_pause();
+-    return 0;
++    return (int)map_err(sys_nanosleep(req, rem));
+ }
+\ No newline at end of file
+diff --git a/src/libc/time.h b/src/libc/time.h
+index ddc67762..ac1d145d 100644
+--- a/src/libc/time.h
++++ b/src/libc/time.h
+@@ -25,6 +25,10 @@
+ 
+ #define CLOCKS_PER_SEC 1000000
+ 
++// Issue #76 — POSIX clock IDs (match kernel PosixClock).
++#define CLOCK_REALTIME  0
++#define CLOCK_MONOTONIC 1
++
+ struct tm {
+     int tm_sec;     // seconds [0,60]
+     int tm_min;     // minutes [0,59]
+@@ -47,6 +51,13 @@ struct timespec {
+     long tv_nsec;    // nanoseconds
+ };
+ 
++struct itimerspec {
++    struct timespec it_interval; // period (0 = one-shot)
++    struct timespec it_value;    // initial expiry (0 = disarm)
++};
++
++int clock_gettime(int clockid, struct timespec* tp);
++
+ time_t time(time_t* tloc);
+ int gettimeofday(struct timeval* tv, void* tz);
+ int nanosleep(const struct timespec* req, struct timespec* rem);

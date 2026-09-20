@@ -23,6 +23,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/time/timer_wheel.hpp>
+#include <kernel/time/posix_time.hpp>
 #include <kernel/task/tcb_write_log.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/gdt.hpp>
@@ -2581,6 +2582,35 @@ void Scheduler::on_tick() noexcept {
                              __ATOMIC_RELEASE);
         }
 
+        // Issue #76: bounded-nanosleep apply + timerfd waiter wakes. Wheel
+        // callbacks only set sleep_expired / waiter_done; the wakes are
+        // applied here under the already-held scheduler_lock_ (same
+        // contract as the #18 block above). Level-triggered: a missed wake
+        // re-applies next tick; enqueue_ready is idempotent. Never clobber
+        // a RUNNING state (H2 guard, copied from above).
+        for (auto *task = all_tasks_.first_ptr(); task;
+             task = all_tasks_.next_ptr(task)) {
+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (!__atomic_load_n(&task->sleep_armed, __ATOMIC_ACQUIRE) ||
+                !__atomic_load_n(&task->sleep_expired, __ATOMIC_ACQUIRE))
+                continue;
+            if (task->generation != task->sleep_gen)
+                continue;
+            if (queue_target(*task) != sched_cpu())
+                continue;
+            if (task->state == TaskState::BLOCKED)
+                task->state = TaskState::READY;
+            else if (task->state != TaskState::READY)
+                continue;
+            enqueue_ready(*task);
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+        }
+        // Timerfd waiter wakes live in the PosixTime registry (slots are
+        // not TCB fields): same lock position, leaf posix lock only.
+        time::PosixTime::reapply_wakes(sched_cpu());
+
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).
         // Issue #154: executed_ticks is execution time — only the
@@ -4312,6 +4342,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].alarm_armed = t->alarm_armed;
         out[idx].recv_timeout_armed = t->recv_timeout_armed;
         out[idx].recv_timed_out = t->recv_timed_out;
+        out[idx].sleep_armed = t->sleep_armed;
+        out[idx].sleep_expired = t->sleep_expired;
         out[idx].runq_next = t->runq_next_;
         out[idx].runq_prev = t->runq_prev_;
         out[idx].in_ready_queue = t->in_ready_queue_;
@@ -4393,6 +4425,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->alarm_armed = saved[j].alarm_armed;
             t->recv_timeout_armed = saved[j].recv_timeout_armed;
             t->recv_timed_out = saved[j].recv_timed_out;
+            t->sleep_armed = saved[j].sleep_armed;
+            t->sleep_expired = saved[j].sleep_expired;
             // Snapshot does not capture SporadicServer state nor PMM page-table
             // pools — clear the pointer and the intrusive object list so stale
             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot

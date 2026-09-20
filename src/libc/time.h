@@ -25,6 +25,10 @@
 
 #define CLOCKS_PER_SEC 1000000
 
+// Issue #76 — POSIX clock IDs (match kernel PosixClock).
+#define CLOCK_REALTIME  0
+#define CLOCK_MONOTONIC 1
+
 struct tm {
     int tm_sec;     // seconds [0,60]
     int tm_min;     // minutes [0,59]
@@ -46,6 +50,13 @@ struct timespec {
     time_t tv_sec;   // seconds
     long tv_nsec;    // nanoseconds
 };
+
+struct itimerspec {
+    struct timespec it_interval; // period (0 = one-shot)
+    struct timespec it_value;    // initial expiry (0 = disarm)
+};
+
+int clock_gettime(int clockid, struct timespec* tp);
 
 time_t time(time_t* tloc);
 int gettimeofday(struct timeval* tv, void* tz);

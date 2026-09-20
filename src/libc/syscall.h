@@ -249,6 +249,31 @@ static inline long sys_tls_set(unsigned long base) {
     return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
 }
 
+// Issue #76 — POSIX time API (matches kernel SyscallNumber 80–83).
+// Multiplex ops for SYS_TIMER_CREATE: 0=CREATE, 1=SETTIME, 2=GETTIME,
+// 3=DELETE. Timers address by timer id; timerfd SETTIME (arg3 kind bit)
+// addresses by fd (resolved to the slot via the vnode tag).
+static inline long sys_clock_gettime(unsigned long clockid,
+                                     struct timespec* tp) {
+    return __syscall5(SYS_CLOCK_GETTIME, (long)clockid, (long)tp, 0, 0);
+}
+
+static inline long sys_nanosleep(const struct timespec* req,
+                                 struct timespec* rem) {
+    return __syscall5(SYS_NANOSLEEP, (long)req, (long)rem, 0, 0);
+}
+
+static inline long sys_timer_create(unsigned long op, unsigned long a1,
+                                    unsigned long a2, unsigned long a3) {
+    return __syscall5(SYS_TIMER_CREATE, (long)op, (long)a1, (long)a2,
+                      (long)a3);
+}
+
+static inline long sys_timerfd_create(unsigned long clockid,
+                                      unsigned long flags) {
+    return __syscall5(SYS_TIMERFD_CREATE, (long)clockid, (long)flags, 0, 0);
+}
+
 #if defined(__x86_64__)
 static inline long sys_send_fast(unsigned long dest, unsigned long type,
                                  unsigned long size,

@@ -202,6 +202,7 @@ void register_stress_hrt_tests();
 void register_scheduler_hrt_tests();
 void register_hrt_monotonic_tests();
 void register_timer_wheel_tests();
+void register_posix_time_tests();
 void register_task_metering_tests();
 void register_sched_edf_tests();
 void register_sched_admission_tests();
@@ -564,6 +565,7 @@ static void run_bench_microkernel_group() {
 static void run_stress_hrt_group() { register_stress_hrt_tests(); }
 static void run_hrt_monotonic_group() { register_hrt_monotonic_tests(); }
 static void run_timer_wheel_group() { register_timer_wheel_tests(); }
+static void run_posix_time_group() { register_posix_time_tests(); }
 static void run_task_metering_group() { register_task_metering_tests(); }
 static void run_sched_edf_group() { register_sched_edf_tests(); }
 static void run_sched_admission_group() {
@@ -917,6 +919,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"stress_hrt", []() { run_stress_hrt_group(); }},
     {"hrt_monotonic", []() { run_hrt_monotonic_group(); }},
     {"timer_wheel", []() { run_timer_wheel_group(); }},
+    {"posix_time", []() { run_posix_time_group(); }},
     {"task_metering", []() { run_task_metering_group(); }},
     {"sched_edf", []() { run_sched_edf_group(); }},
     {"sched_admission", []() { run_sched_admission_group(); }},
@@ -1145,6 +1148,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_deadline_ss_group();
          run_timing_core_group();
          run_timer_wheel_group();
+         run_posix_time_group();
          run_scheduler_sporadic_group();
          run_scheduler_hrt_group();
          run_sched_edf_group();

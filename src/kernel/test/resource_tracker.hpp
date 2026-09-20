@@ -44,6 +44,8 @@ struct ResourceCounters {
     size_t pager_registrations;
     size_t pager_faults;
     size_t pager_mappings;
+    size_t posix_timers;
+    size_t posix_timerfds;
 };
 
 #ifdef CONFIG_DEBUG
@@ -189,6 +191,26 @@ class ResourceTracker {
     void track_pager_mapping_reset() {
         counters_.pager_mappings = 0;
     }
+    void track_posix_timer_add() {
+        ++counters_.posix_timers;
+    }
+    void track_posix_timer_remove() {
+        if (counters_.posix_timers > 0)
+            --counters_.posix_timers;
+    }
+    void track_posix_timer_reset() {
+        counters_.posix_timers = 0;
+    }
+    void track_posix_timerfd_add() {
+        ++counters_.posix_timerfds;
+    }
+    void track_posix_timerfd_remove() {
+        if (counters_.posix_timerfds > 0)
+            --counters_.posix_timerfds;
+    }
+    void track_posix_timerfd_reset() {
+        counters_.posix_timerfds = 0;
+    }
 
     void capture(ResourceCounters &out) const {
         out = counters_;
@@ -287,6 +309,18 @@ class ResourceTracker {
     void track_pager_fault_reset() {
     }
     void track_pager_mapping_reset() {
+    }
+    void track_posix_timer_add() {
+    }
+    void track_posix_timer_remove() {
+    }
+    void track_posix_timer_reset() {
+    }
+    void track_posix_timerfd_add() {
+    }
+    void track_posix_timerfd_remove() {
+    }
+    void track_posix_timerfd_reset() {
     }
     void capture(ResourceCounters &) const {
     }

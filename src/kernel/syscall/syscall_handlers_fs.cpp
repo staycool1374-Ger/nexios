@@ -240,6 +240,13 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), count);
     if (syscall_is_user_task() && !buf.valid())
         return static_cast<uint64_t>(-1);
+    // Issue #76: timerfd read bypasses the vnode ops table (the counter
+    // lives in the PosixTime registry, not in a filesystem backend).
+    if (is_timerfd_vnode(f->vnode)) {
+        const bool nonblock = (f->flags & vfs::O_NONBLOCK) != 0;
+        return timerfd_read_entry(*f->vnode, buf.unsafe_ptr(), count,
+                                  nonblock);
+    }
     if (!f->vnode || !f->vnode->ops->read)
         return static_cast<uint64_t>(-1);
     // MP-4 (SMAP): ops->read writes user memory directly (generic vnode code

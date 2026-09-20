@@ -274,7 +274,9 @@ struct TaskControlBlock {
           alarm_armed(false), recv_timeout_armed(false),
           recv_timed_out(false),
           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
-          recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
+          recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
+          sleep_handle{0, 0, time::TimerWheel::kInvalidGeneration},
+          sleep_gen(0), sleep_expiry_ns(0), sporadic_server(nullptr), cspace_(nullptr),
            iopb_slot_(IOPB_SLOT_NONE),
            tls_base_(0),
            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
@@ -505,6 +507,22 @@ struct TaskControlBlock {
 
     /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
     uint32_t recv_timeout_gen;
+
+    /// @brief Bounded nanosleep armed on the wheel (issue #76).
+    bool sleep_armed;
+
+    /// @brief Set by the wheel callback when the sleep budget expires.
+    bool sleep_expired;
+
+    /// @brief Wheel receipt for the armed sleep (gen 0 = invalid).
+    time::TimerWheel::Handle sleep_handle;
+
+    /// @brief TCB generation snapshot at sleep-arm time (ABA guard).
+    uint32_t sleep_gen;
+
+    /// @brief Absolute monotonic-ns expiry of the armed sleep (for rem).
+    /// Not snapshot-captured: derived from the arm, no arm survives rewind.
+    uint64_t sleep_expiry_ns;
 
     /// @brief Embedded message queue (no separate heap allocation).
     MessageQueue msg_queue;

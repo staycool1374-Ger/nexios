@@ -25,6 +25,7 @@ extern int errno;
 #define ESRCH   3
 #define EINTR   4
 #define EIO     5
+#define EAGAIN  11
 #define EBADF   9
 #define ENOMEM  12
 #define EACCES  13
@@ -38,3 +39,4 @@ extern int errno;
 #define ERANGE  34
 #define ENOSYS  38
 #define ENOTDIR 50
+#define ETIMEDOUT 110
