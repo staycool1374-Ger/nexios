@@ -94,6 +94,18 @@ Test code (`src/kernel/test/**`) is reported separately and excluded from
 the headline kernel figure.  `src/kernel/gcov/**` is deliberately excluded
 from instrumentation, so it always shows 0 %.
 
+`src/lib/fdt/*` is scoped out of the denominator on x86 (issue #183): the
+FDT library is reachable only through the AARCH64/RISCV64 boot-DTB
+consumer (`kernel.cpp`), so its functions are permanently uncoverable on
+x86 test boots, which never carry a DTB.  The exclusion is report-side
+only (`tools/coverage_report.py` `COVERAGE_SCOPED_OUT`,
+`tools/gcov_line_report.py` source filter + lcov `--exclude`) —
+instrumentation is kept, so raw dumps still record entries.  The library
+is measured instead by the boot-independent static-blob `lib_fdt_*` unit
+tests (`basic_lib` class).  The live boot-DTB handoff on non-x86 arches is
+gated separately: `aarch64_boot_dtb_pointer` takes its DTB-present branch
+once ARM bring-up (#28) provides a real DTB at boot.
+
 ## 5. Known limitations (Phase B)
 
 - Function granularity only — no line, branch or call-count data.

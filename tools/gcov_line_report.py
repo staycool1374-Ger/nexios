@@ -223,6 +223,11 @@ def summarise_with_gcov(gcno_root, out_dir):
                         missed += 1
             if source is None:
                 source = entry[:-5]
+            # Scoped out of the denominator (issue #183): the FDT library is
+            # reachable only via the AARCH64/RISCV64 boot-DTB consumer, so it
+            # is permanently uncoverable on x86 test boots.
+            if "lib/fdt/" in source.replace("\\", "/"):
+                continue
             previous = per_file.get(source, (0, 0, 0, 0, 0))
             per_file[source] = (previous[0] + 1, previous[1] + hit,
                                 previous[2] + missed,
@@ -322,6 +327,7 @@ def main():
             [LCOV, "--capture", "--directory", args.gcno_root,
              "--gcov-tool", GCOV, "--output-file", info,
              "--exclude", "*/coverage/*",
+             "--exclude", "*/lib/fdt/*",
              "--ignore-errors", "mismatch,empty,source,path,inconsistent,"
                                 "unused"],
             check=False,

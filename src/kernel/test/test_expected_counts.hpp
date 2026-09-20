@@ -22,7 +22,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
 
     // basic
-    {"basic_lib",            17,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126)
+    {"basic_lib",            20,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126) + static-DTB fdt_* tests (#183)
     {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
 
     // configuration

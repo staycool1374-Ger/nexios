@@ -117,29 +117,37 @@ int fdt_first_child(const void *fdt, int parentoffset) {
 }
 
 int fdt_next_sibling(const void *fdt, int offset) {
-    int depth = 0;
+    int depth = 1;
     uint32_t tag;
 
     if (fdt_check_header(fdt) != 0)
         return -FDT_ERR_BADOFFSET;
 
-    for (;;) {
+    // The offset must aim at the node's BEGIN_NODE tag; anything else is a
+    // caller error (issue #183: first_child/subnode_offset produce BEGIN
+    // offsets, so the pair stays coherent).
+    tag = fdt_next_tag_(fdt, offset, &offset);
+    if (tag != FDT_BEGIN_NODE)
+        return -FDT_ERR_BADOFFSET;
+
+    // Consume the current node's whole subtree (props, children, END_NODE).
+    while (depth > 0) {
         tag = fdt_next_tag_(fdt, offset, &offset);
-        switch (tag) {
-        case FDT_BEGIN_NODE:
+        if (tag == FDT_BEGIN_NODE) {
             depth++;
-            break;
-        case FDT_END_NODE:
-            if (depth == 0)
-                return offset;
+        } else if (tag == FDT_END_NODE) {
             depth--;
-            break;
-        case FDT_END:
+        } else if (tag == FDT_END) {
             return -FDT_ERR_NOTFOUND;
-        default:
-            break;
         }
     }
+    // Offset now aims at the tag following the node: a sibling's BEGIN_NODE,
+    // the parent's END_NODE, or FDT_END.
+    int sibling = offset;
+    tag = fdt_next_tag_(fdt, offset, &offset);
+    if (tag == FDT_BEGIN_NODE)
+        return sibling;
+    return -FDT_ERR_NOTFOUND;
 }
 
 int fdt_next_subnode(const void *fdt, int offset) {

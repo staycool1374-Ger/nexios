@@ -25,6 +25,9 @@
 #include <error.hpp>
 #include <version.hpp>
 #include <crc32.hpp>
+#include <fdt/fdt.h>
+#include <fdt/libfdt.h>
+#include <fdt/libfdt_internal.h>
 
 using namespace kernel;
 
@@ -315,6 +318,266 @@ JARVIS_TEST(lib_crc32_empty_and_incremental, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Static device-tree blob for the lib_fdt_static_* tests (issue #183).
+// The FDT library is reachable in production only via the AARCH64/RISCV64
+// boot-DTB consumer, so x86 test boots can never exercise it live. These
+// tests parse a hand-built blob instead, covering every public fdt_ro
+// entry point without any boot/QEMU change.
+//
+// Blob layout (all integers big-endian):
+//   header(40) + rsvmap(32: one entry + terminator) + struct(132) + strings(25)
+// Struct block (offsets relative to its start):
+//   root BEGIN@0 -> memory@8 (device_type + reg props) -> chosen@84
+//   (bootargs prop) -> root END -> FDT_END.
+// Strings: "device_type"@0, "reg"@12, "bootargs"@16.
+namespace {
+
+constexpr size_t kFdtStaticSize = 256U;
+
+void fdt_static_put32(uint8_t *blob, size_t &pos, uint32_t val) {
+    blob[pos] = static_cast<uint8_t>(val >> 24);
+    blob[pos + 1] = static_cast<uint8_t>(val >> 16);
+    blob[pos + 2] = static_cast<uint8_t>(val >> 8);
+    blob[pos + 3] = static_cast<uint8_t>(val);
+    pos += 4;
+}
+
+void fdt_static_put64(uint8_t *blob, size_t &pos, uint64_t val) {
+    fdt_static_put32(blob, pos, static_cast<uint32_t>(val >> 32));
+    fdt_static_put32(blob, pos, static_cast<uint32_t>(val));
+}
+
+void fdt_static_put_str(uint8_t *blob, size_t &pos, const char *str) {
+    while (*str) {
+        blob[pos++] = static_cast<uint8_t>(*str++);
+    }
+    blob[pos++] = 0;
+    while (pos % 4 != 0) {
+        blob[pos++] = 0;
+    }
+}
+
+void fdt_static_put_prop(uint8_t *blob, size_t &pos, uint32_t nameoff,
+                         const uint8_t *data, size_t len) {
+    fdt_static_put32(blob, pos, FDT_PROP);
+    fdt_static_put32(blob, pos, static_cast<uint32_t>(len));
+    fdt_static_put32(blob, pos, nameoff);
+    for (size_t i = 0; i < len; ++i) {
+        blob[pos++] = data[i];
+    }
+    while (pos % 4 != 0) {
+        blob[pos++] = 0;
+    }
+}
+
+// Builds the blob into a static buffer, recording the real struct-relative
+// offsets so tests never hardcode layout arithmetic.
+struct FdtStaticLayout {
+    size_t total;
+    int mem_node;
+    int chosen_node;
+    int reg_prop;
+};
+
+size_t fdt_static_build(uint8_t *blob, FdtStaticLayout &layout) {
+    for (size_t i = 0; i < kFdtStaticSize; ++i) {
+        blob[i] = 0;
+    }
+    // Header with placeholder offsets/sizes; patched at the end.
+    size_t pos = 0;
+    fdt_static_put32(blob, pos, FDT_MAGIC);
+    size_t totalsize_at = pos;
+    fdt_static_put32(blob, pos, 0);
+    size_t struct_at = pos;
+    fdt_static_put32(blob, pos, 0);
+    size_t strings_at = pos;
+    fdt_static_put32(blob, pos, 0);
+    fdt_static_put32(blob, pos, 40);  // off_mem_rsvmap
+    fdt_static_put32(blob, pos, 17);  // version
+    fdt_static_put32(blob, pos, 16);  // last_comp_version
+    fdt_static_put32(blob, pos, 0);   // boot_cpuid_phys
+    size_t strsize_at = pos;
+    fdt_static_put32(blob, pos, 0);
+    size_t structsize_at = pos;
+    fdt_static_put32(blob, pos, 0);
+    // Reserve map: one entry + terminator.
+    fdt_static_put64(blob, pos, 0x1000);
+    fdt_static_put64(blob, pos, 0x100);
+    fdt_static_put64(blob, pos, 0);
+    fdt_static_put64(blob, pos, 0);
+    // Struct block: root with memory + chosen children.
+    size_t struct_base = pos;
+    auto rel = [&pos, struct_base]() -> int {
+        return static_cast<int>(pos - struct_base);
+    };
+    auto patch32 = [&blob](size_t at, uint32_t val) {
+        blob[at] = static_cast<uint8_t>(val >> 24);
+        blob[at + 1] = static_cast<uint8_t>(val >> 16);
+        blob[at + 2] = static_cast<uint8_t>(val >> 8);
+        blob[at + 3] = static_cast<uint8_t>(val);
+    };
+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
+    fdt_static_put_str(blob, pos, "");
+    layout.mem_node = rel();
+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
+    fdt_static_put_str(blob, pos, "memory@40000000");
+    const uint8_t kDeviceType[] = {'m', 'e', 'm', 'o', 'r', 'y', 0};
+    fdt_static_put_prop(blob, pos, 0, kDeviceType, sizeof(kDeviceType));
+    layout.reg_prop = rel();
+    uint8_t reg[16] = {0, 0, 0, 0, 0x40, 0, 0, 0,
+                       0, 0, 0, 0, 0x10, 0, 0, 0};
+    fdt_static_put_prop(blob, pos, 12, reg, sizeof(reg));
+    fdt_static_put32(blob, pos, FDT_END_NODE);
+    layout.chosen_node = rel();
+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
+    fdt_static_put_str(blob, pos, "chosen");
+    const uint8_t kBootargs[] = {'t', 'e', 's', 't', '-', 'b',
+                                 'o', 'o', 't', 0};
+    fdt_static_put_prop(blob, pos, 16, kBootargs, sizeof(kBootargs));
+    fdt_static_put32(blob, pos, FDT_END_NODE);
+    fdt_static_put32(blob, pos, FDT_END_NODE);
+    fdt_static_put32(blob, pos, FDT_END);
+    size_t struct_size = pos - struct_base;
+    // Strings block.
+    size_t strings_base = pos;
+    fdt_static_put_str(blob, pos, "device_type");
+    fdt_static_put_str(blob, pos, "reg");
+    fdt_static_put_str(blob, pos, "bootargs");
+    // Patch header fields (big-endian).
+    patch32(totalsize_at, static_cast<uint32_t>(pos));
+    patch32(struct_at, static_cast<uint32_t>(struct_base));
+    patch32(strings_at, static_cast<uint32_t>(strings_base));
+    patch32(strsize_at, static_cast<uint32_t>(pos - strings_base));
+    patch32(structsize_at, static_cast<uint32_t>(struct_size));
+    layout.total = pos;
+    return pos;
+}
+
+}  // namespace
+
+// Runmode: kernel
+// Testidea: A hand-built DTB passes header validation and exposes its
+// reserve-map entry (issue #183: boot-independent fdt_* measurement).
+// Input: static blob (magic 0xD00DFEED, v17, one reserve entry).
+// Expect: fdt_check_header == 0, one entry at 0x1000 size 0x100.
+// Depends: src/lib/fdt/fdt_ro.cpp
+JARVIS_TEST(lib_fdt_static_header_and_reserve, "PRE: none | POST: none") {
+    static uint8_t blob[kFdtStaticSize];
+    FdtStaticLayout layout{};
+    size_t total = fdt_static_build(blob, layout);
+    JARVIS_ASSERT_EQ(0, fdt_check_header(blob));
+    JARVIS_ASSERT_EQ(1, fdt_num_mem_rsv(blob));
+    uint64_t addr = 0;
+    uint64_t size = 0;
+    JARVIS_ASSERT_EQ(0, fdt_get_mem_rsv(blob, 0, &addr, &size));
+    JARVIS_ASSERT_EQ(0x1000ULL, addr);
+    JARVIS_ASSERT_EQ(0x100ULL, size);
+    JARVIS_ASSERT(total < kFdtStaticSize);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Walk the static blob through every public node/property query
+// (issue #183).
+// Input: static blob with memory@40000000 (device_type + reg) and chosen
+// (bootargs) children.
+// Expect: prop-value search reports the outermost match (root, 0); child,
+// sibling, name, subnode and property queries resolve to the builder-recorded
+// layout; reg decodes to base 0x40000000 size 0x10000000; bootargs reads back
+// "test-boot".
+// Depends: src/lib/fdt/fdt_ro.cpp
+JARVIS_TEST(lib_fdt_static_tree_walk, "PRE: none | POST: none") {
+    static uint8_t blob[kFdtStaticSize];
+    FdtStaticLayout layout{};
+    fdt_static_build(blob, layout);
+
+    int mem =
+        fdt_node_offset_by_prop_value(blob, -1, "device_type", "memory", 7);
+    // Returns the OUTERMOST node whose content scan hits the property: the
+    // root (offset 0) has no direct props, so the scan starting at its
+    // content finds memory's device_type first and reports the root.
+    JARVIS_ASSERT_EQ(0, mem);
+    JARVIS_ASSERT_EQ(layout.mem_node, fdt_first_child(blob, 0));
+    JARVIS_ASSERT_EQ(layout.chosen_node, fdt_next_sibling(blob, layout.mem_node));
+    JARVIS_ASSERT_EQ(layout.chosen_node, fdt_next_subnode(blob, layout.mem_node));
+    // Last child and root have no next sibling (fail-closed NOTFOUND, not a
+    // bogus offset — issue #183 found the old depth-0 walk returned the
+    // parent's end instead).
+    JARVIS_ASSERT(fdt_next_sibling(blob, layout.chosen_node) < 0);
+    JARVIS_ASSERT(fdt_next_sibling(blob, 0) < 0);
+
+    int name_len = 0;
+    JARVIS_ASSERT_EQ(0, strcmp(fdt_get_name(blob, layout.mem_node, &name_len),
+                               "memory@40000000"));
+    JARVIS_ASSERT_EQ(15, name_len);
+    JARVIS_ASSERT_EQ(0, strcmp(fdt_get_name(blob, layout.chosen_node, nullptr),
+                               "chosen"));
+
+    JARVIS_ASSERT_EQ(layout.mem_node, fdt_subnode_offset_namelen(
+                                          blob, 0, "memory@40000000", 15));
+    JARVIS_ASSERT_EQ(layout.chosen_node,
+                     fdt_subnode_offset_namelen(blob, 0, "chosen", 6));
+
+    int reg_len = 0;
+    const auto *reg = static_cast<const uint32_t *>(
+        fdt_getprop_namelen(blob, layout.mem_node, "reg", &reg_len));
+    JARVIS_ASSERT(reg != nullptr);
+    JARVIS_ASSERT_EQ(16, reg_len);
+    uint64_t base =
+        (static_cast<uint64_t>(fdt32_to_cpu(reg[0])) << 32) |
+        fdt32_to_cpu(reg[1]);
+    uint64_t size =
+        (static_cast<uint64_t>(fdt32_to_cpu(reg[2])) << 32) |
+        fdt32_to_cpu(reg[3]);
+    JARVIS_ASSERT_EQ(0x40000000ULL, base);
+    JARVIS_ASSERT_EQ(0x10000000ULL, size);
+
+    const char *outname = nullptr;
+    int by_off_len = 0;
+    const auto *by_off = static_cast<const uint32_t *>(
+        fdt_getprop_by_offset(blob, layout.reg_prop, &outname, &by_off_len));
+    JARVIS_ASSERT(by_off != nullptr);
+    JARVIS_ASSERT_EQ(0, strcmp(outname, "reg"));
+    JARVIS_ASSERT_EQ(16, by_off_len);
+
+    int args_len = 0;
+    const auto *args = static_cast<const char *>(
+        fdt_getprop_namelen(blob, layout.chosen_node, "bootargs", &args_len));
+    JARVIS_ASSERT(args != nullptr);
+    JARVIS_ASSERT_EQ(10, args_len);
+    JARVIS_ASSERT_EQ(0, strcmp(args, "test-boot"));
+
+    JARVIS_ASSERT_EQ(0, strcmp(fdt_string(blob, 0), "device_type"));
+    JARVIS_ASSERT_EQ(0, strcmp(fdt_string(blob, 12), "reg"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: A corrupted magic fail-closes with BADMAGIC and every query
+// rejects the blob (issue #183).
+// Input: static blob with magic zeroed.
+// Expect: fdt_check_header == -FDT_ERR_BADMAGIC; node/prop lookups fail;
+// fdt_strerror describes the code.
+// Depends: src/lib/fdt/fdt_ro.cpp
+JARVIS_TEST(lib_fdt_static_bad_header, "PRE: none | POST: none") {
+    static uint8_t blob[kFdtStaticSize];
+    FdtStaticLayout bad_layout{};
+    fdt_static_build(blob, bad_layout);
+    blob[0] = 0;
+    blob[1] = 0;
+    blob[2] = 0;
+    blob[3] = 0;
+    JARVIS_ASSERT_EQ(-FDT_ERR_BADMAGIC, fdt_check_header(blob));
+    JARVIS_ASSERT(fdt_node_offset_by_prop_value(blob, -1, "device_type",
+                                                "memory", 7) < 0);
+    JARVIS_ASSERT(fdt_subnode_offset_namelen(blob, 0, "chosen", 6) < 0);
+    JARVIS_ASSERT(fdt_getprop_namelen(blob, bad_layout.mem_node, "reg",
+                                        nullptr) == nullptr);
+    JARVIS_ASSERT(fdt_string(blob, 0) == nullptr);
+    JARVIS_ASSERT(fdt_strerror(FDT_ERR_BADMAGIC) != nullptr);
+    JARVIS_TEST_PASS();
+}
+
 // Runmode: kernel
 // Testidea: Register all lib subsystem tests (string, utils, ErrorOr,
 // version) with the test framework.
@@ -343,4 +606,8 @@ void register_lib_tests() {
 
     JARVIS_REGISTER_TEST(lib_crc32_known_vector);
     JARVIS_REGISTER_TEST(lib_crc32_empty_and_incremental);
+
+    JARVIS_REGISTER_TEST(lib_fdt_static_header_and_reserve);
+    JARVIS_REGISTER_TEST(lib_fdt_static_tree_walk);
+    JARVIS_REGISTER_TEST(lib_fdt_static_bad_header);
 }

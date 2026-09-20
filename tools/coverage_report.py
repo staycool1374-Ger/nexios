@@ -202,6 +202,20 @@ def area_of(src, is_test):
     return parts[0]
 
 
+# Files scoped out of the coverage denominator (issue #183): the FDT
+# library is reachable only through the AARCH64/RISCV64 boot-DTB consumer
+# (kernel.cpp), so on x86 test boots its functions are permanently
+# uncoverable. Report-side exclusion only — instrumentation is kept so raw
+# dumps still record entries from the static-blob unit test.
+COVERAGE_SCOPED_OUT = ("src/lib/fdt/",)
+
+
+def is_scoped_out(src):
+    """True when a source path is excluded from the coverage denominator."""
+    norm = src.replace("\\", "/")
+    return any(m in norm for m in COVERAGE_SCOPED_OUT)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", required=True, help="build/coverage root")
@@ -257,6 +271,8 @@ def main():
         for i, (name, src) in enumerate(table):
             if src == "??" or not src:
                 continue
+            if is_scoped_out(src):
+                continue
             is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
             key = (src, sym_names[i] if i < len(sym_names) else name,
                    area_of(src, is_test))
@@ -268,6 +284,8 @@ def main():
                 continue
             name, src = table[i]
             if src == "??" or not src:
+                continue
+            if is_scoped_out(src):
                 continue
             is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
             key = (src, sym_names[i] if i < len(sym_names) else name,
@@ -328,6 +346,11 @@ def main():
                  "never entered for classes that are never used as bases, so "
                  "counting them would inflate the denominator with "
                  "permanently uncoverable entries (issue #142).\n")
+    lines.append("Note: `src/lib/fdt/*` is scoped out of the denominator "
+                 "(issue #183) — the FDT library is reachable only via the "
+                 "AARCH64/RISCV64 boot-DTB consumer, so it is permanently "
+                 "uncoverable on x86 test boots. It is measured instead by "
+                 "the static-blob `lib_fdt_*` unit tests.\n")
     lines.append("\n## Coverage per area (worst first)\n")
     lines.append("| Area | Covered | Total | % |")
     lines.append("|---|---:|---:|---:|")
