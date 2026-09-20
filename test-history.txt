@@ -1601,3 +1601,5 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-20 11:12:00 smp_multicpu PASSED: 0 FAILED: 0 TIME: 30000ms STATUS: AP-bringup-PF-CR3-0x1000
 2026-09-20 11:48:00 smp PASSED: 81 FAILED: 0 TIME: 2946ms
 2026-09-20 11:52:00 core PASSED: 462 FAILED: 0 TIME: 111205ms
+2026-09-20 13:31:00 smp_multicpu PASSED: 16 FAILED: 1 TIME: 0ms STATUS: retrospective cross_move-LEAK-PMM17-Tasks1 (see #197)
+2026-09-20 13:31:00 smp_multicpu PASSED: 16 FAILED: 1 TIME: 0ms STATUS: retrospective drain-test-LEAK-PMM17-no-Tasks (see #197)
