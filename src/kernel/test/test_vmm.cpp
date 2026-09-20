@@ -25,6 +25,7 @@
 #include <kernel/memory/vmm_errors.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/arch/page_table.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/mmio.hpp>
 #include <constants.hpp>
@@ -309,6 +310,11 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     uint64_t test_phys = PMM::alloc_page();
     JARVIS_ASSERT(test_phys != 0);
     JARVIS_ASSERT(test_phys != 0x802000);
+    // Issue #200: HHDM PD surgery is IRQ-critical (spec
+    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
+    // and task preemption across map..manual-restore (see
+    // vmm_hhdm_access_consistency for the full rationale).
+    arch::IrqGuard irq_guard;
     VMM::map_page(test_vaddr, test_phys, false);
     // After the split, pd[pd_idx] points to a PT page instead of a 2MB page
     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
@@ -333,7 +339,7 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
     PMM::free_page(pt_phys);
     pd[pd_idx] = saved_pd_entry;
-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0x800000);
+    arch::ArchPageTable::tlb_flush(test_vaddr);
     PMM::free_page(test_phys);
     JARVIS_TEST_PASS();
 }
@@ -355,6 +361,11 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     uint64_t const saved_pd_entry = pd[pd_i];
     uint64_t p = PMM::alloc_page();
     JARVIS_ASSERT(p != 0);
+    // Issue #200: HHDM PD surgery is IRQ-critical (spec
+    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
+    // and task preemption across map..manual-restore so no concurrent
+    // path can observe or modify the split PD entry mid-surgery.
+    arch::IrqGuard irq_guard;
     VMM::map_page(v, p, false);
     // After split: the huge page is replaced by a PT page at pd[pd_i].
     // Resolve via the new non-huge PD entry:
@@ -369,7 +380,7 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
     pt_phys = pd[pd_i] & ~0xFFFULL;
     PMM::free_page(pt_phys);
     pd[pd_i] = saved_pd_entry;
-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0x800000);
+    arch::ArchPageTable::tlb_flush(v);
     PMM::free_page(p);
     JARVIS_TEST_PASS();
 }
@@ -414,6 +425,10 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
     uint64_t const saved_pd_entry = pd[pd_i];
     uint64_t data_phys = PMM::alloc_page();
     JARVIS_ASSERT(data_phys != 0);
+    // Issue #200: HHDM PD surgery is IRQ-critical (spec
+    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
+    // and task preemption across map..manual-restore.
+    arch::IrqGuard irq_guard;
     VMM::map_page(scratch_va, data_phys, false);
     // Round-trip through the real setter: set→take true→was false.
     JARVIS_ASSERT(VMM::hhdm_was_modified());
@@ -433,7 +448,7 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
     PMM::free_page(pt_phys);
     pd[pd_i] = saved_pd_entry;
-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0xA00000);
+    arch::ArchPageTable::tlb_flush(scratch_va);
     PMM::free_page(data_phys);
     // Leave the flags clean for the rest of the suite.
     VMM::clear_hhdm_modified();

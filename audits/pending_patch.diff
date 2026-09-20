@@ -1,963 +1,163 @@
-diff --git a/docs/specs/irq-early-init.md b/docs/specs/irq-early-init.md
-new file mode 100644
-index 00000000..09d79360
---- /dev/null
-+++ b/docs/specs/irq-early-init.md
-@@ -0,0 +1,69 @@
-+# Early IRQ-Controller + Timer Init (issue #198)
-+
-+Single per-arch entry point run before the scheduler exists. Fail-closed:
-+reachable failures are `EarlyIrqResult` codes, never panic.
-+
-+## 1. Ordering contract
-+
-+```
-+IDT::init + IDT::load
-+  → ArchInterruptController::init
-+    → Timer::init(frequency_hz)
-+      → Timer::calibrate
-+```
-+
-+Global IRQs stay masked throughout. `early_irq_init()` is idempotent
-+(BOOT_ONLY): a repeat call re-runs the sequence with no hardware
-+side-effect delta and returns the same result.
-+
-+Success criterion is `Timer::freq_hz() != 0` after calibrate — not the
-+calibrate boolean (x86 calibrate returns false on the nonzero fallback
-+source, which is a success).
-+
-+## 2. Per-arch mapping
-+
-+| Stage | x86_64 | AArch64 | RISC-V |
-+|---|---|---|---|
-+| IDT | IDT init/load (256 entries) | VBAR_EL1 init/load (64 slots) | stvec init/load (64 slots) |
-+| Controller | 8259A cascade (0x20/0x28), then APIC (fail-open to PIC) | GICv2/v3, Group 0, timer PPI INTID 30 | PLIC threshold 0, SEIE, prio-1 defaults |
-+| Controller ready | `is_apic_supported` + MMIO map | `gic_redist_ready()` (Children_Online; GICv2 = true) | n/a (no probe register) |
-+| Timer | PIT/APIC timer → TSC calibration | CNTP generic counter | SBI timer → mtime (10 MHz QEMU) |
-+| AP path | `early_irq_init_ap()`: `APIC::init_ap` + `IDT::load` only | per-core GICR (issue #28) | per-hart PLIC threshold (issue #29) |
-+
-+## 3. Error codes
-+
-+`OK`, `BAD_FREQ` (freq 0), `MMIO_MAP_FAILED` (x86 APIC window),
-+`CTRL_PROBE_FAILED` (reserved: unreadable version), `CTRL_TIMEOUT`
-+(GIC redistributor WAKER bound expiry — GIC left disabled = safe state),
-+`TIMER_FREQ_UNKNOWN` (backing frequency still 0).
-+
-+## 4. Hardening landed with this contract
-+
-+- GIC redistributor WAKER poll is bounded by `GICR_WAKER_MAX_POLLS` with
-+  spec-correct Children_Online polarity (pre-#198 loop tested the
-+  inverted bit and always spun the full budget on QEMU). On expiry
-+  `gic_redist_ready()` is false and `early_irq_init` returns CTRL_TIMEOUT
-+  without starting the timer (the distributor itself was already enabled
-+  by `init()` — the error stops the bring-up sequence, it does not unwind
-+  the controller).
-+- `mask`/`unmask` range guards: GIC `< 64` (snapshot covers words 0..1,
-+  IDT has 64 slots), PLIC `< 32` (single enable word on QEMU virt).
-+  Out-of-window lines are no-ops, never OOB MMIO writes.
-+- RISC-V `IrqState` additionally captures enable word 0; wired-line
-+  priorities default to 1 (lines stay disabled — drivers enable their
-+  own IRQ when registering handlers).
-+- Zero-frequency calls are fail-closed on all arches (`set_frequency(0)`
-+  and `early_irq_init(0)` program no hardware).
-+- RISC-V `handle_irq` re-arms relative (`now + timer_interval_`, latched
-+  at `set_frequency`/`periodic`) instead of the drifting absolute
-+  `ticks_ * interval` product; `oneshot(0)`/`periodic(0)` disarm
-+  (mtimecmp parked at maximum — S-mode cannot clear a pending STIP).
-+- AArch64 `oneshot(0)`/`periodic(0)` disarm via CTL disable (was a
-+  divide-by-zero on `period_ticks == 0`).
-+
-+## 5. Non-goals
-+
-+Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
-+(#183), teardown validation (#199). `kernel.cpp` keeps its own staged
-+calls; `early_irq_init()` codifies the same order for tests and
-+bring-up reuse.
-diff --git a/src/kernel/arch/aarch64/early_init.cpp b/src/kernel/arch/aarch64/early_init.cpp
-index 552b2048..519b7d2e 100644
---- a/src/kernel/arch/aarch64/early_init.cpp
-+++ b/src/kernel/arch/aarch64/early_init.cpp
-@@ -27,11 +27,20 @@
- 
- #include <kernel/nexios_config.h>
- #include <kernel/arch/hal/io.hpp>
-+#include <kernel/arch/early_init.hpp>
-+#include <kernel/arch/interrupt_controller.hpp>
-+#include <kernel/arch/idt.hpp>
-+#include <kernel/arch/timer.hpp>
- 
- namespace arch {
- 
- bool g_pan_supported = false;
- 
-+// BOOT_ONLY latch for early_irq_init (issue #198, INV-2): namespace scope,
-+// never function-local (no thread-safe statics on RT paths). Latched on
-+// success only — a failed first call may be retried.
-+bool g_early_irq_done = false;
-+
- /// @brief Detect + enable aarch64 PAN (FEAT_PAN), MP-4.4.
- /// Sets SCTLR_EL1.PAN (bit 23) when ID_AA64MMFR1_EL1.PAN[23:20] != 0 and
- /// CONFIG_PAN is on, then defaults PSTATE.PAN to deny (clac).  Every PAN
-@@ -68,8 +77,27 @@ bool pan_init() {
- 
- } // namespace arch
- 
--struct EarlyInitStub {
--    EarlyInitStub() {
-+/// @brief aarch64 early IRQ bring-up (issue #198): VBAR/IDT → GIC
-+///        (distributor + redistributor + CPU interface) → generic timer →
-+///        counter-frequency calibration. Mirrors kernel.cpp boot order.
-+arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return arch::EarlyIrqResult::BAD_FREQ;
-+    }
-+    if (arch::g_early_irq_done) {
-+        return arch::EarlyIrqResult::OK;
-+    }
-+    arch::IDT::init();
-+    arch::IDT::load();
-+    arch::ArchInterruptController::init();
-+    if (!arch::gic_redist_ready()) {
-+        return arch::EarlyIrqResult::CTRL_TIMEOUT;
-     }
--};
--static EarlyInitStub stub{};
-+    arch::Timer::init(frequency_hz);
-+    (void)arch::Timer::calibrate();
-+    if (arch::Timer::freq_hz() == 0) {
-+        return arch::EarlyIrqResult::TIMER_FREQ_UNKNOWN;
-+    }
-+    arch::g_early_irq_done = true;
-+    return arch::EarlyIrqResult::OK;
-+}
-diff --git a/src/kernel/arch/aarch64/hal/gic.hpp b/src/kernel/arch/aarch64/hal/gic.hpp
-index 54ab2f2a..cc3d3fc3 100644
---- a/src/kernel/arch/aarch64/hal/gic.hpp
-+++ b/src/kernel/arch/aarch64/hal/gic.hpp
-@@ -41,6 +41,12 @@ inline constexpr uint32_t GICD_SGIR      = 0x0F00;
- 
- // ─── GICv3 Redistributor RD frame ────────────────────────────────────────
- inline constexpr uint32_t GICR_WAKER      = 0x0014;
-+/// @brief GICR_WAKER.Children_Online bit: redistributor finished its wake-up.
-+inline constexpr uint32_t GICR_WAKER_CHILDREN_ONLINE = 1U << 1;
-+/// @brief Bounded poll budget for redistributor wake-up (issue #198, INV-1:
-+///        boot hangs are forbidden — expiry surfaces via gic_redist_ready()
-+///        as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init).
-+inline constexpr uint32_t GICR_WAKER_MAX_POLLS = 1000000;
- 
- // ─── GICv3 SGI/PPI frame ─────────────────────────────────────────────────
- inline constexpr uint32_t GICR_IGROUPR0   = 0x0080;
-diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
-index 10ec3afd..bfff8aa1 100644
---- a/src/kernel/arch/aarch64/interrupt_controller.cpp
-+++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
-@@ -41,8 +41,8 @@ void ArchInterruptController::init() {
-         waker &= ~(1U << 0);
-         rr[GICR_WAKER / 4] = waker;
-         dsb_sy();
--        for (int t = 1000000; t > 0; --t) {
--            if (!(rr[GICR_WAKER / 4] & (1U << 1))) break;
-+        for (uint32_t poll = 0; poll < GICR_WAKER_MAX_POLLS; ++poll) {
-+            if (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) break;
-             dsb_sy();
-         }
- 
-@@ -73,7 +73,6 @@ void ArchInterruptController::init() {
-     }
-     isb();
- }
--
- void ArchInterruptController::eoi(uint8_t vector) {
-     if (gic_is_v3)
-         gic_v3_write_eoir(vector);
-@@ -82,7 +81,28 @@ void ArchInterruptController::eoi(uint8_t vector) {
-     dsb_sy();
- }
- 
-+/// @brief Redistributor wake state (issue #198): true when the GICv3
-+///        redistributor reports Children_Online, or when no redistributor
-+///        exists (GICv2 path). Polarity follows the GICv3 spec (online = 1);
-+///        the pre-#198 poll loop tested the inverted bit.
-+/// @return true when interrupt delivery hardware is usable.
-+bool gic_redist_ready() {
-+    if (!gic_is_v3) {
-+        return true;
-+    }
-+    volatile uint32_t *rr = gicr_rd_reg(0);
-+    return (rr[GICR_WAKER / 4] & GICR_WAKER_CHILDREN_ONLINE) != 0;
-+}
-+
-+/// @brief Valid IRQ window for mask/unmask (issue #198): the snapshot covers
-+///        distributor words 0..1 and the IDT has 64 slots, so lines >= 64
-+///        have no defined state and must not touch MMIO.
-+inline constexpr uint8_t GIC_MAX_IRQ = 64;
-+
- void ArchInterruptController::mask(uint8_t irq) {
-+    if (irq >= GIC_MAX_IRQ) {
-+        return;
-+    }
-     if (gic_is_v3 && irq < 32) {
-         gicr_sgi_reg(GICR_ICENABLER0)[0] = (1U << irq);
-     } else {
-@@ -92,6 +112,9 @@ void ArchInterruptController::mask(uint8_t irq) {
- }
- 
- void ArchInterruptController::unmask(uint8_t irq) {
-+    if (irq >= GIC_MAX_IRQ) {
-+        return;
-+    }
-     if (gic_is_v3 && irq < 32) {
-         gicr_sgi_reg(GICR_ISENABLER0)[0] = (1U << irq);
-     } else {
-diff --git a/src/kernel/arch/aarch64/timer.cpp b/src/kernel/arch/aarch64/timer.cpp
-index 28e1d0fb..4aea3c58 100644
---- a/src/kernel/arch/aarch64/timer.cpp
-+++ b/src/kernel/arch/aarch64/timer.cpp
-@@ -50,6 +50,9 @@ void Timer::init(uint32_t frequency_hz) {
- /// Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.
- /// @param[in] frequency_hz Desired frequency in Hz.
- void Timer::set_frequency(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return;
-+    }
-     uint64_t freq{};
-     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-     counter_freq_hz_ = freq;
-@@ -143,6 +146,14 @@ void Timer::set_ticks_for_test(uint64_t value) {
- /// @brief Arm the timer for a one-shot interrupt after a number of ticks.
- /// @param[in] ticks_from_now Number of scheduler ticks (ms) from now.
- void Timer::oneshot(uint64_t ticks_from_now) {
-+    if (ticks_from_now == 0) {
-+        // Disarm: clear the countdown and disable the physical timer so
-+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
-+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
-+        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
-+        isb();
-+        return;
-+    }
-     uint64_t interval = ticks_from_now * (counter_freq_hz_ / 1000);
-     if (interval == 0)
-         interval = 1;
-@@ -154,6 +165,14 @@ void Timer::oneshot(uint64_t ticks_from_now) {
- /// @brief Arm the timer for periodic interrupts.
- /// @param[in] period_ticks Interval in scheduler ticks (ms).
- void Timer::periodic(uint64_t period_ticks) {
-+    if (period_ticks == 0) {
-+        // Disarm: clear the countdown and disable the physical timer so
-+        // remaining()/remaining_ns() observe 0 (0 = disarm per Timer contract).
-+        asm volatile("msr cntp_tval_el0, %0" : : "r"(0UL));
-+        asm volatile("msr cntp_ctl_el0, %0" : : "r"(0UL));
-+        isb();
-+        return;
-+    }
-     uint64_t freq{};
-     asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
-     uint64_t interval = freq / period_ticks;
-diff --git a/src/kernel/arch/early_init.hpp b/src/kernel/arch/early_init.hpp
-new file mode 100644
-index 00000000..4a58b08a
---- /dev/null
-+++ b/src/kernel/arch/early_init.hpp
-@@ -0,0 +1,2 @@
-+#pragma once
-+#include <kernel/arch/hal/early_init.hpp>
-diff --git a/src/kernel/arch/hal/early_init.hpp b/src/kernel/arch/hal/early_init.hpp
-new file mode 100644
-index 00000000..01094571
---- /dev/null
-+++ b/src/kernel/arch/hal/early_init.hpp
-@@ -0,0 +1,68 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file hal/early_init.hpp
-+/// @brief Early IRQ-controller + architectural timer init contract (issue
-+///        #198). Single per-arch entry point run before the scheduler exists:
-+///        IDT init/load, controller init, timer init, timer calibrate — with
-+///        global IRQs masked throughout. Fail-closed via EarlyIrqResult;
-+///        reachable failures never panic.
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace arch {
-+
-+/// @brief Early IRQ-init outcome (issue #198). Reachable failures are error
-+///        codes, never ENSURE/panic (CODING_STYLE §5).
-+enum class EarlyIrqResult : uint8_t {
-+    OK = 0,              ///< All four stages completed.
-+    BAD_FREQ = 1,        ///< frequency_hz == 0 (caller error).
-+    MMIO_MAP_FAILED = 2, ///< Controller MMIO window could not be mapped.
-+    CTRL_PROBE_FAILED = 3, ///< Controller version/probe unreadable.
-+    CTRL_TIMEOUT = 4,    ///< Controller ready-poll (GIC redistributor WAKER)
-+                         ///< did not complete within its bound.
-+    TIMER_FREQ_UNKNOWN = 5, ///< Timer backing frequency still 0 after init.
-+};
-+
-+/// @brief Run the ordered early IRQ bring-up for this architecture.
-+/// Stages: IDT::init + IDT::load → ArchInterruptController::init →
-+/// Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY):
-+/// a second call repeats the sequence with no hardware side-effect delta
-+/// and returns the same result.
-+/// @param frequency_hz Desired system-tick rate in Hz (must be nonzero).
-+/// @return EarlyIrqResult outcome; OK on success.
-+EarlyIrqResult early_irq_init(uint32_t frequency_hz);
-+
-+/// @cond
-+#if defined(CONFIG_ARCH_X86_64)
-+/// @endcond
-+
-+/// @brief Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load.
-+/// Touches per-CPU state only; the shared distributor/PIC setup from
-+/// early_irq_init() is never repeated here.
-+/// Defined in src/kernel/arch/x86_64/early_init.cpp.
-+void early_irq_init_ap();
-+
-+/// @cond
-+#endif
-+/// @endcond
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/hal/interrupt_controller.hpp b/src/kernel/arch/hal/interrupt_controller.hpp
-index 23e70576..54f33d0c 100644
---- a/src/kernel/arch/hal/interrupt_controller.hpp
-+++ b/src/kernel/arch/hal/interrupt_controller.hpp
-@@ -121,13 +121,20 @@ class ArchInterruptController {
-     static void restore(const IrqState &state);
- };
- 
-+/// @brief Redistributor wake state (issue #198): true when the GICv3
-+///        redistributor reports Children_Online, or on the GICv2 path
-+///        (no redistributor exists). Consumed by early_irq_init().
-+/// @return true when interrupt delivery hardware is usable.
-+bool gic_redist_ready();
-+
- /// @cond
- #elif defined(CONFIG_ARCH_RISCV64)
- /// @endcond
- 
--/// @brief Snapshot of the RISC-V PLIC threshold.
-+/// @brief Snapshot of the RISC-V PLIC threshold + first enable word.
- struct IrqState {
--    uint32_t plic_threshold; ///< PLIC priority threshold.
-+    uint32_t plic_threshold;  ///< PLIC priority threshold.
-+    uint32_t plic_enable_first; ///< PLIC enable word for IRQ lines 0–31.
- };
- 
- /// @brief RISC-V PLIC (Platform-Level Interrupt Controller) driver.
-diff --git a/src/kernel/arch/hal/timer.hpp b/src/kernel/arch/hal/timer.hpp
-index 8ab8b158..e2fc4ea4 100644
---- a/src/kernel/arch/hal/timer.hpp
-+++ b/src/kernel/arch/hal/timer.hpp
-@@ -240,6 +240,11 @@ class Timer {
-   private:
-     static constinit uint64_t ticks_;
-     static constinit uint64_t timer_freq_hz_;
-+    /// @brief Latched re-arm interval in mtime ticks (issue #198): written by
-+    ///        set_frequency()/periodic(), consumed by handle_irq() so the
-+    ///        deadline stays relative (now + interval) instead of drifting
-+    ///        on the absolute ticks_ * interval product.
-+    static constinit uint64_t timer_interval_;
-     static constinit TickSource active_source_;
-     static constinit uint64_t last_ns_;
-     static constinit bool calibrated_;
-diff --git a/src/kernel/arch/riscv64/early_init.cpp b/src/kernel/arch/riscv64/early_init.cpp
-index 0d4dc62e..00b0f2f7 100644
---- a/src/kernel/arch/riscv64/early_init.cpp
-+++ b/src/kernel/arch/riscv64/early_init.cpp
-@@ -17,12 +17,40 @@
-  */
- 
- /// @file early_init.cpp
--/// @brief Stub file — early RISC-V64 init is performed in boot.S (assembly).
--///        Exists only to satisfy the build system's expectation of a .cpp file.
-+/// @brief riscv64 early IRQ bring-up (issue #198): stvec/IDT → PLIC
-+///        (threshold 0 + supervisor external enable) → SBI timer →
-+///        mtime-frequency calibration. Mirrors kernel.cpp boot order.
-+///        Raw early init (trap vector, MMU) stays in boot.S (assembly).
- 
--/// @brief Dummy placeholder struct to prevent "no translation unit" warnings.
--struct EarlyInitStub {
--    EarlyInitStub() {
-+#include <kernel/arch/early_init.hpp>
-+#include <kernel/arch/interrupt_controller.hpp>
-+#include <kernel/arch/idt.hpp>
-+#include <kernel/arch/timer.hpp>
-+
-+namespace arch {
-+
-+// BOOT_ONLY latch for early_irq_init (issue #198, INV-2): namespace scope,
-+// never function-local (no thread-safe statics on RT paths). Latched on
-+// success only — a failed first call may be retried.
-+bool g_early_irq_done = false;
-+
-+EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return EarlyIrqResult::BAD_FREQ;
-     }
--};
--static EarlyInitStub stub{};
-+    if (g_early_irq_done) {
-+        return EarlyIrqResult::OK;
-+    }
-+    IDT::init();
-+    IDT::load();
-+    ArchInterruptController::init();
-+    Timer::init(frequency_hz);
-+    (void)Timer::calibrate();
-+    if (Timer::freq_hz() == 0) {
-+        return EarlyIrqResult::TIMER_FREQ_UNKNOWN;
-+    }
-+    g_early_irq_done = true;
-+    return EarlyIrqResult::OK;
-+}
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
-index 23a78279..e48d1d10 100644
---- a/src/kernel/arch/riscv64/interrupt_controller.cpp
-+++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
-@@ -8,6 +8,16 @@ namespace arch {
- void ArchInterruptController::init() {
-     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-     *threshold = 0;
-+    // Default priority 1 for the QEMU virt wired lines (priority 0 = never
-+    // interrupt). Lines stay disabled here — drivers enable their own IRQ
-+    // when their IDT handler is registered (no unsolicited delivery).
-+    *plic_priority_reg(IRQ_UART) = 1;
-+    *plic_priority_reg(IRQ_KEYBOARD) = 1;
-+    *plic_priority_reg(IRQ_VIRTIO0) = 1;
-+    *plic_priority_reg(IRQ_VIRTIO1) = 1;
-+    *plic_priority_reg(IRQ_VIRTIO2) = 1;
-+    *plic_priority_reg(IRQ_VIRTIO3) = 1;
-+    *plic_priority_reg(IRQ_VIRTIO4) = 1;
-     asm volatile("fence iorw, iorw" : : : "memory");
-     asm volatile("csrs sie, %0" : : "r"((uint64_t)(1ULL << 9)) : "memory");
- }
-@@ -16,13 +26,26 @@ void ArchInterruptController::eoi(uint8_t vector) {
-     plic_complete(vector);
- }
- 
-+/// @brief Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes
-+///        a single 32-line enable word; lines >= 32 have no defined register
-+///        and must not touch MMIO.
-+inline constexpr uint8_t PLIC_MAX_IRQ = 32;
-+
- void ArchInterruptController::mask(uint8_t irq) {
-+    if (irq >= PLIC_MAX_IRQ) {
-+        return;
-+    }
-+    // Single-core early precondition (INV/CONC): no lock needed; the fence
-+    // orders the MMIO write before any subsequent claim/complete.
-     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
-     enable[irq / 32] &= ~(1U << (irq % 32));
-     asm volatile("fence iorw, iorw" : : : "memory");
- }
- 
- void ArchInterruptController::unmask(uint8_t irq) {
-+    if (irq >= PLIC_MAX_IRQ) {
-+        return;
-+    }
-     auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
-     enable[irq / 32] |= (1U << (irq % 32));
-     asm volatile("fence iorw, iorw" : : : "memory");
-@@ -32,12 +55,16 @@ IrqState ArchInterruptController::snapshot() {
-     IrqState s{};
-     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-     s.plic_threshold = *threshold;
-+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
-+    s.plic_enable_first = enable[0];
-     return s;
- }
- 
- void ArchInterruptController::restore(const IrqState &state) {
-     auto *threshold = reinterpret_cast<volatile uint32_t *>(PLIC_THRESHOLD);
-     *threshold = state.plic_threshold;
-+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE);
-+    enable[0] = state.plic_enable_first;
-     asm volatile("fence iorw, iorw" : : : "memory");
- }
- 
-diff --git a/src/kernel/arch/riscv64/timer.cpp b/src/kernel/arch/riscv64/timer.cpp
-index 629571f7..769035b1 100644
---- a/src/kernel/arch/riscv64/timer.cpp
-+++ b/src/kernel/arch/riscv64/timer.cpp
-@@ -29,10 +29,22 @@ namespace arch {
- 
- constinit uint64_t Timer::ticks_ = 0;
- uint64_t Timer::timer_freq_hz_ = 0;
-+constinit uint64_t Timer::timer_interval_ = 0;
- constinit TickSource Timer::active_source_ = TickSource::MTIME;
- constinit uint64_t Timer::last_ns_ = 0;
- constinit bool Timer::calibrated_ = false;
- 
-+/// @brief QEMU virt mtime input frequency (issue #198: was a bare 10000000
-+///        literal in two places). Real hardware fills this from the
-+///        device tree / SBI environment (issue #29 follow-up).
-+inline constexpr uint64_t RISCV_MTIME_FREQ_HZ = 10000000;
-+/// @brief SBI legacy SET_TIMER extension id (ecall a7 = 0).
-+inline constexpr uint64_t SBI_LEGACY_SET_TIMER = 0;
-+/// @brief Fail-closed disarm deadline: mtimecmp parked at the maximum so no
-+///        supervisor timer interrupt can fire (mtime is unreadable-free and
-+///        mtimecmp unwritable-clear from S-mode).
-+inline constexpr uint64_t MTIMECMP_DISARMED = ~0ULL;
-+
- /// @brief Initialize the timer, set frequency, and register the IRQ handler.
- /// @param frequency_hz Desired tick frequency in Hz.
- void Timer::init(uint32_t frequency_hz) {
-@@ -45,13 +57,17 @@ void Timer::init(uint32_t frequency_hz) {
- }
- 
- void Timer::set_frequency(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return;
-+    }
-     // Use SBI to get timer frequency (mtime typically 10MHz on QEMU)
--    timer_freq_hz_ = 10000000;
--    uint64_t interval = timer_freq_hz_ / frequency_hz;
-+    timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
-+    const uint64_t interval = timer_freq_hz_ / frequency_hz;
-+    timer_interval_ = (interval == 0) ? 1 : interval;
-     // SBI_SET_TIMER via ecall
--    asm volatile("mv a0, %0; li a7, 0; ecall"
-+    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                  :
--                 : "r"(interval)
-+                 : "r"(interval), "r"(SBI_LEGACY_SET_TIMER)
-                  : "a0", "a7", "memory");
-     // Enable STIP in sie
-     uint64_t sie{};
-@@ -83,11 +99,19 @@ uint64_t Timer::ns() {
- ///        no sampler hook; kept for the shared Timer interface).
- void Timer::handle_irq([[maybe_unused]] uint64_t ip) {
-     ticks_ = ticks_ + 1;
--    // Re-arm timer via SBI
--    uint64_t next = ticks_ * (timer_freq_hz_ / CONFIG_TICK_HZ);
--    asm volatile("mv a0, %0; li a7, 0; ecall"
-+    // Re-arm relative (now + latched interval): self-correcting under handler
-+    // delay, unlike the old absolute ticks_ * interval product which drifted
-+    // and could arm a deadline already in the past.
-+    uint64_t interval = timer_interval_;
-+    if (interval == 0) {
-+        interval = 1;
-+    }
-+    uint64_t now{};
-+    asm volatile("csrr %0, time" : "=r"(now));
-+    const uint64_t next = now + interval;
-+    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                  :
--                 : "r"(next)
-+                 : "r"(next), "r"(SBI_LEGACY_SET_TIMER)
-                  : "a0", "a7", "memory");
- }
- 
-@@ -115,7 +139,7 @@ bool Timer::calibrate() {
-     if (!calibrated_) {
-         calibrated_ = true;
-         if (timer_freq_hz_ == 0) {
--            timer_freq_hz_ = 10000000;
-+            timer_freq_hz_ = RISCV_MTIME_FREQ_HZ;
-         }
-         active_source_ = TickSource::MTIME;
-     }
-@@ -133,30 +157,45 @@ uint64_t Timer::remaining_ns() {
- }
- 
- /// @brief Arm a one-shot timer via SBI.
--/// @param ticks_from_now Number of milliseconds from now to fire.
-+/// @param ticks_from_now Number of milliseconds from now to fire (0 = disarm:
-+///        mtimecmp is parked at the maximum — S-mode cannot clear a pending
-+///        STIP, only push its deadline out).
- void Timer::oneshot(uint64_t ticks_from_now) {
--    uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
--    if (interval == 0)
--        interval = 1;
-     uint64_t now{};
-     asm volatile("csrr %0, time" : "=r"(now));
--    asm volatile("mv a0, %0; li a7, 0; ecall"
-+    uint64_t deadline = MTIMECMP_DISARMED;
-+    if (ticks_from_now != 0) {
-+        uint64_t interval = ticks_from_now * (timer_freq_hz_ / 1000);
-+        if (interval == 0) {
-+            interval = 1;
-+        }
-+        deadline = now + interval;
-+    }
-+    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                  :
--                 : "r"(now + interval)
-+                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
-                  : "a0", "a7", "memory");
- }
- 
- /// @brief Arm a periodic timer via SBI.
--/// @param period_ticks Period in ticks (Hz).
-+/// @param period_ticks Period in ticks (Hz). 0 = disarm (deadline parked at
-+///        the maximum); otherwise the handle_irq re-arm interval is latched
-+///        so the period persists across ticks.
- void Timer::periodic(uint64_t period_ticks) {
--    uint64_t interval = timer_freq_hz_ / period_ticks;
--    if (interval == 0)
--        interval = 1;
-     uint64_t now{};
-     asm volatile("csrr %0, time" : "=r"(now));
--    asm volatile("mv a0, %0; li a7, 0; ecall"
-+    uint64_t deadline = MTIMECMP_DISARMED;
-+    if (period_ticks != 0) {
-+        uint64_t interval = timer_freq_hz_ / period_ticks;
-+        if (interval == 0) {
-+            interval = 1;
-+        }
-+        timer_interval_ = interval;
-+        deadline = now + interval;
-+    }
-+    asm volatile("mv a0, %0; mv a7, %1; ecall"
-                  :
--                 : "r"(now + interval)
-+                 : "r"(deadline), "r"(SBI_LEGACY_SET_TIMER)
-                  : "a0", "a7", "memory");
- }
- 
-diff --git a/src/kernel/arch/x86_64/early_init.cpp b/src/kernel/arch/x86_64/early_init.cpp
-new file mode 100644
-index 00000000..df008f3e
---- /dev/null
-+++ b/src/kernel/arch/x86_64/early_init.cpp
-@@ -0,0 +1,78 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file x86_64/early_init.cpp
-+/// @brief x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC →
-+///        local/APIC (+ I/O APIC) → PIT/APIC timer → TSC calibration.
-+///        Mirrors the production order in kernel.cpp so the boot path and
-+///        the conformance tests exercise the same sequence.
-+
-+#include <kernel/arch/early_init.hpp>
-+#include <kernel/arch/interrupt_controller.hpp>
-+#include <kernel/arch/idt.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/x86_64/hal/apic.hpp>
-+
-+namespace arch {
-+
-+// BOOT_ONLY latch (issue #198, INV-2): Timer::init re-measures the TSC on
-+// every call, so a repeat entry must return the prior result instead of
-+// re-running the sequence. Latched on success only — a failed first call
-+// may be retried.
-+bool g_early_irq_done = false;
-+
-+EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return EarlyIrqResult::BAD_FREQ;
-+    }
-+    if (g_early_irq_done) {
-+        return EarlyIrqResult::OK;
-+    }
-+    IDT::init();
-+    IDT::load();
-+    // Legacy 8259A cascade first: a working controller exists even when the
-+    // APIC is absent or its MMIO window fails to map (fail-open to PIC).
-+    ArchInterruptController::init();
-+    if (APIC::is_apic_supported()) {
-+        if (!APIC::map_mmio()) {
-+            return EarlyIrqResult::MMIO_MAP_FAILED;
-+        }
-+        // Fail-open: APIC::init() returning false leaves the PIC path live;
-+        // the timer init below then drives the PIT, never a dead APIC timer.
-+        (void)APIC::init();
-+    }
-+    Timer::init(frequency_hz);
-+    (void)Timer::calibrate();
-+    // calibrate() is fail-closed with a nonzero fallback frequency on x86
-+    // (false only selects the fallback source), so the success criterion is
-+    // the unified frequency, not the boolean.
-+    if (Timer::freq_hz() == 0) {
-+        return EarlyIrqResult::TIMER_FREQ_UNKNOWN;
-+    }
-+    g_early_irq_done = true;
-+    return EarlyIrqResult::OK;
-+}
-+
-+void early_irq_init_ap() {
-+    // Per-AP state only (mirrors smp.cpp bring_up order): the shared
-+    // PIC/APIC distributor setup from early_irq_init() is never repeated.
-+    APIC::init_ap();
-+    IDT::load();
-+}
-+
-+} // namespace arch
-diff --git a/src/kernel/arch/x86_64/hal/timer.cpp b/src/kernel/arch/x86_64/hal/timer.cpp
-index e9fd69b4..b7dd4a3e 100644
---- a/src/kernel/arch/x86_64/hal/timer.cpp
-+++ b/src/kernel/arch/x86_64/hal/timer.cpp
-@@ -160,6 +160,9 @@ void Timer::init(uint32_t frequency_hz) {
- /// @param frequency_hz Desired frequency; the PIT base frequency is divided by
- /// this value.
- void Timer::set_frequency(uint32_t frequency_hz) {
-+    if (frequency_hz == 0) {
-+        return;
-+    }
-     uint32_t divisor = PIT_BASE_FREQ / frequency_hz;
- 
-     outb(0x43, 0x36);
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 6f768a82..218c2be7 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -201,6 +201,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
-     {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
-     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
-+    {"irq_early_std",         7,    0,       0      },  // early IRQ+timer init conformance (issue #198)
-     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
-     {"apic_tpr",              6,    0,       0      },  // TPR classes/shadow/guard/vector reservation + live IPI block-and-hold (#26, issue #85 module 6)
-     {"hal_rtc",               2,    0,       0      },  // RTC read/BCD
-diff --git a/src/kernel/test/test_irq_early_std.cpp b/src/kernel/test/test_irq_early_std.cpp
-new file mode 100644
-index 00000000..02feb10c
---- /dev/null
-+++ b/src/kernel/test/test_irq_early_std.cpp
-@@ -0,0 +1,174 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_irq_early_std.cpp
-+/// @brief Early IRQ-controller + timer init conformance (issue #198).
-+///        Arch-neutral contract checks over arch::early_irq_init(),
-+///        IrqState snapshot/restore, and the Timer disarm/monotonic rules.
-+
-+#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/arch/early_init.hpp>
-+#include <kernel/arch/interrupt_controller.hpp>
-+#include <kernel/arch/timer.hpp>
+diff --git a/src/kernel/test/test_no_dynamic_alloc_after_init.cpp b/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
+index 085ac9b9..a3df32a5 100644
+--- a/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
++++ b/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
+@@ -28,6 +28,8 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/memory/vmm.hpp>
++#include <kernel/arch/page_table.hpp>
 +#include <kernel/arch/irq_guard.hpp>
-+#include <kernel/nexios_config.h>
-+
-+using namespace kernel;
-+
-+// Runmode: kernel
-+// Testidea: Verifies early_irq_init() completes the ordered bring-up
-+// (IDT -> controller -> timer -> calibrate) with a known backing frequency.
-+// Input: early_irq_init(CONFIG_TICK_HZ)
-+// Expect: returns OK and Timer::freq_hz() != 0
-+// Depends: arch::early_irq_init, arch::Timer
-+JARVIS_TEST(early_init_returns_ok_and_freq_known, "PRE: iocd | POST: none") {
-+    const arch::EarlyIrqResult res =
-+        arch::early_irq_init(CONFIG_TICK_HZ);
-+    JARVIS_ASSERT_FMT(res == arch::EarlyIrqResult::OK,
-+                      "early_irq_init should return OK, got %u",
-+                      static_cast<unsigned>(res));
-+    JARVIS_ASSERT_FMT(arch::Timer::freq_hz() != 0,
-+                      "Timer backing frequency must be known after init");
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies early_irq_init() is idempotent (BOOT_ONLY): a second
-+// call returns OK with no frequency change.
-+// Input: early_irq_init() twice
-+// Expect: both return OK, freq_hz() identical
-+// Depends: arch::early_irq_init
-+JARVIS_TEST(early_init_idempotent, "PRE: iocd | POST: none") {
-+    const arch::EarlyIrqResult first =
-+        arch::early_irq_init(CONFIG_TICK_HZ);
-+    const uint64_t freq_first = arch::Timer::freq_hz();
-+    const arch::EarlyIrqResult second =
-+        arch::early_irq_init(CONFIG_TICK_HZ);
-+    JARVIS_ASSERT(first == arch::EarlyIrqResult::OK);
-+    JARVIS_ASSERT(second == arch::EarlyIrqResult::OK);
-+    JARVIS_ASSERT_FMT(arch::Timer::freq_hz() == freq_first,
-+                      "second early_irq_init must not change frequency");
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies early_irq_init(0) fails closed with BAD_FREQ.
-+// Input: early_irq_init(0)
-+// Expect: returns BAD_FREQ (never panic)
-+// Depends: arch::early_irq_init
-+JARVIS_TEST(early_init_rejects_zero_freq, "PRE: iocd | POST: none") {
-+    const arch::EarlyIrqResult res = arch::early_irq_init(0);
-+    JARVIS_ASSERT_FMT(res == arch::EarlyIrqResult::BAD_FREQ,
-+                      "early_irq_init(0) should return BAD_FREQ, got %u",
-+                      static_cast<unsigned>(res));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies IrqState snapshot/restore round-trips the controller
-+// mask state: mask one line, restore, state equals the original.
-+// Input: snapshot/mask/restore/snapshot
-+// Expect: restored snapshot equals the pre-mask snapshot
-+// Depends: arch::ArchInterruptController
-+JARVIS_TEST(irq_snapshot_restore_roundtrip, "PRE: iocd | POST: none") {
-+    arch::IrqGuard guard;
-+    const arch::IrqState before = arch::ArchInterruptController::snapshot();
-+    arch::ArchInterruptController::mask(1);
-+    arch::ArchInterruptController::restore(before);
-+    const arch::IrqState after = arch::ArchInterruptController::snapshot();
-+#if defined(CONFIG_ARCH_X86_64)
-+    JARVIS_ASSERT_FMT(after.pic1_mask == before.pic1_mask,
-+                      "PIC1 mask not restored");
-+    JARVIS_ASSERT_FMT(after.pic2_mask == before.pic2_mask,
-+                      "PIC2 mask not restored");
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    JARVIS_ASSERT_FMT(after.gic_mask == before.gic_mask,
-+                      "GIC mask not restored");
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    JARVIS_ASSERT_FMT(after.plic_threshold == before.plic_threshold,
-+                      "PLIC threshold not restored");
-+    JARVIS_ASSERT_FMT(after.plic_enable_first == before.plic_enable_first,
-+                      "PLIC enable word not restored");
-+#endif
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies oneshot(0)/periodic(0) disarm the timer on every arch
-+// (0 = disarm per Timer contract).
-+// Input: oneshot(0), periodic(0)
-+// Expect: remaining() == 0 and remaining_ns() == 0 after each
-+// Depends: arch::Timer::oneshot/periodic/remaining/remaining_ns
-+JARVIS_TEST(timer_oneshot_periodic_disarm, "PRE: iocd | POST: none") {
-+    arch::Timer::oneshot(0);
-+    JARVIS_ASSERT_FMT(arch::Timer::remaining() == 0,
-+                      "oneshot(0) must disarm");
-+    JARVIS_ASSERT_FMT(arch::Timer::remaining_ns() == 0,
-+                      "oneshot(0) must clear sub-tick remainder");
-+    arch::Timer::periodic(0);
-+    JARVIS_ASSERT_FMT(arch::Timer::remaining() == 0,
-+                      "periodic(0) must disarm");
-+    JARVIS_ASSERT_FMT(arch::Timer::remaining_ns() == 0,
-+                      "periodic(0) must clear sub-tick remainder");
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies ns_monotonic() never decreases across samples.
-+// Input: two ns_monotonic() samples
-+// Expect: second >= first
-+// Depends: arch::Timer::ns_monotonic
-+JARVIS_TEST(timer_monotonic_non_decreasing, "PRE: iocd | POST: none") {
-+    const uint64_t first = arch::Timer::ns_monotonic();
-+    const uint64_t second = arch::Timer::ns_monotonic();
-+    JARVIS_ASSERT_FMT(second >= first, "ns_monotonic decreased");
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Verifies handle_irq() increments the tick count by exactly one
-+// with no scheduler dependency (early bring-up rule INV-5).
-+// Input: set_ticks_for_test(0), handle_irq(0)
-+// Expect: ticks() == 1
-+// Depends: arch::Timer::handle_irq
-+JARVIS_TEST(timer_handle_irq_increments_ticks, "PRE: iocd | POST: none") {
-+    arch::IrqGuard guard;
-+    arch::Timer::set_ticks_for_test(0);
-+    arch::Timer::handle_irq(0);
-+    JARVIS_ASSERT_FMT(arch::Timer::ticks() == 1,
-+                      "handle_irq must increment ticks by 1, got %lu",
-+                      arch::Timer::ticks());
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Registers all early-IRQ-standardization conformance tests.
-+// Input: None
-+// Expect: All irq_early_std tests registered via JARVIS_REGISTER_TEST
-+// Depends: kernel test framework
-+void register_irq_early_std_tests() {
-+    Logger::info("Registering irq_early_std tests");
-+    JARVIS_REGISTER_TEST(early_init_returns_ok_and_freq_known);
-+    JARVIS_REGISTER_TEST(early_init_idempotent);
-+    JARVIS_REGISTER_TEST(early_init_rejects_zero_freq);
-+    JARVIS_REGISTER_TEST(irq_snapshot_restore_roundtrip);
-+    JARVIS_REGISTER_TEST(timer_oneshot_periodic_disarm);
-+    JARVIS_REGISTER_TEST(timer_monotonic_non_decreasing);
-+    JARVIS_REGISTER_TEST(timer_handle_irq_increments_ticks);
-+}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index 890fee09..6b7fa8aa 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -77,6 +77,7 @@ void register_vfsd_tests();
- void register_iocd_tests();
- void register_health_tests();
- void register_timer_tests();
-+void register_irq_early_std_tests();
- void register_timing_tests();
- void register_spsc_tests();
- void register_preemption_under_syscall_tests();
-@@ -488,6 +489,7 @@ static void run_hal_bits_group() { register_hal_bits_tests(); }
- static void run_hal_idt_group() { register_idt_tests(); }
- static void run_exc_table_group() { register_exc_table_tests(); }
- static void run_hal_timer_group() { register_timer_tests(); }
-+static void run_irq_early_std_group() { register_irq_early_std_tests(); }
- static void run_hal_apic_group() { register_apic_timer_tests(); }
- static void run_apic_tpr_group() { register_apic_tpr_tests(); }
- static void run_hal_rtc_group() { register_rtc_tests(); }
-@@ -816,6 +818,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"hal_idt", []() { run_hal_idt_group(); }},
-     {"exc_table", []() { run_exc_table_group(); }},
-     {"hal_timer", []() { run_hal_timer_group(); }},
-+    {"irq_early_std", []() { run_irq_early_std_group(); }},
-     {"hal_apic", []() { run_hal_apic_group(); }},
-     {"apic_tpr", []() { run_apic_tpr_group(); }},
-     {"hal_rtc", []() { run_hal_rtc_group(); }},
-@@ -1095,6 +1098,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          run_hal_idt_group();
-          run_exc_table_group();
-          run_hal_timer_group();
-+         run_irq_early_std_group();
-          run_hal_apic_group();
-          run_apic_tpr_group();
-          run_hal_rtc_group();
+ #include <kernel/nexios_config.h>
+ 
+ using namespace kernel;
+@@ -73,6 +75,7 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
+     auto *pd = reinterpret_cast<uint64_t *>(
+         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
+     pd[pd_idx] = entry;
++    arch::ArchPageTable::tlb_flush(va);
+ }
+ 
+ // Runmode: kernel
+@@ -99,9 +102,12 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
+ 
+     // Split the huge page once (warm-up) so the loop never allocates a PT
+     // page; remember the huge entry to re-huge at the end.
++    // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
++    // and task preemption across the warm-up split only.
+     uint64_t saved_huge = kernel_pd_entry(va);
+     bool split_now = (saved_huge & (1ULL << 7)) != 0;
+     if (split_now) {
++        arch::IrqGuard split_guard;
+         VMM::map_page(va, phys, false);
+         VMM::unmap_page(va);
+     }
+@@ -116,7 +122,9 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
+     }
+ 
+     // Re-huge + free the split PT page (only if we created it).
++    // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
+     if (split_now) {
++        arch::IrqGuard rehuge_guard;
+         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
+         kernel_pd_entry_restore(va, saved_huge);
+         if (pt_phys)
+diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
+index 4daddf17..f7baa14a 100644
+--- a/src/kernel/test/test_vmm.cpp
++++ b/src/kernel/test/test_vmm.cpp
+@@ -25,6 +25,7 @@
+ #include <kernel/memory/vmm_errors.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/arch/page_table.hpp>
++#include <kernel/arch/irq_guard.hpp>
+ #include <kernel/cap/frame.hpp>
+ #include <kernel/cap/mmio.hpp>
+ #include <constants.hpp>
+@@ -309,6 +310,11 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+     uint64_t test_phys = PMM::alloc_page();
+     JARVIS_ASSERT(test_phys != 0);
+     JARVIS_ASSERT(test_phys != 0x802000);
++    // Issue #200: HHDM PD surgery is IRQ-critical (spec
++    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
++    // and task preemption across map..manual-restore (see
++    // vmm_hhdm_access_consistency for the full rationale).
++    arch::IrqGuard irq_guard;
+     VMM::map_page(test_vaddr, test_phys, false);
+     // After the split, pd[pd_idx] points to a PT page instead of a 2MB page
+     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
+@@ -333,7 +339,7 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
+     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
+     PMM::free_page(pt_phys);
+     pd[pd_idx] = saved_pd_entry;
+-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0x800000);
++    arch::ArchPageTable::tlb_flush(test_vaddr);
+     PMM::free_page(test_phys);
+     JARVIS_TEST_PASS();
+ }
+@@ -355,6 +361,11 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
+     uint64_t const saved_pd_entry = pd[pd_i];
+     uint64_t p = PMM::alloc_page();
+     JARVIS_ASSERT(p != 0);
++    // Issue #200: HHDM PD surgery is IRQ-critical (spec
++    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
++    // and task preemption across map..manual-restore so no concurrent
++    // path can observe or modify the split PD entry mid-surgery.
++    arch::IrqGuard irq_guard;
+     VMM::map_page(v, p, false);
+     // After split: the huge page is replaced by a PT page at pd[pd_i].
+     // Resolve via the new non-huge PD entry:
+@@ -369,7 +380,7 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
+     pt_phys = pd[pd_i] & ~0xFFFULL;
+     PMM::free_page(pt_phys);
+     pd[pd_i] = saved_pd_entry;
+-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0x800000);
++    arch::ArchPageTable::tlb_flush(v);
+     PMM::free_page(p);
+     JARVIS_TEST_PASS();
+ }
+@@ -414,6 +425,10 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
+     uint64_t const saved_pd_entry = pd[pd_i];
+     uint64_t data_phys = PMM::alloc_page();
+     JARVIS_ASSERT(data_phys != 0);
++    // Issue #200: HHDM PD surgery is IRQ-critical (spec
++    // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
++    // and task preemption across map..manual-restore.
++    arch::IrqGuard irq_guard;
+     VMM::map_page(scratch_va, data_phys, false);
+     // Round-trip through the real setter: set→take true→was false.
+     JARVIS_ASSERT(VMM::hhdm_was_modified());
+@@ -433,7 +448,7 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
+     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
+     PMM::free_page(pt_phys);
+     pd[pd_i] = saved_pd_entry;
+-    arch::ArchPageTable::tlb_flush(arch::HHDM_OFFSET + 0xA00000);
++    arch::ArchPageTable::tlb_flush(scratch_va);
+     PMM::free_page(data_phys);
+     // Leave the flags clean for the rest of the suite.
+     VMM::clear_hhdm_modified();
+diff --git a/src/kernel/test/test_wcet_memory.cpp b/src/kernel/test/test_wcet_memory.cpp
+index 2ccd2cd2..4fd2e943 100644
+--- a/src/kernel/test/test_wcet_memory.cpp
++++ b/src/kernel/test/test_wcet_memory.cpp
+@@ -28,6 +28,8 @@
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
++#include <kernel/arch/page_table.hpp>
++#include <kernel/arch/irq_guard.hpp>
+ 
+ using namespace kernel;
+ 
+@@ -100,6 +102,7 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
+     auto *pd = reinterpret_cast<uint64_t *>(
+         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
+     pd[pd_idx] = entry;
++    arch::ArchPageTable::tlb_flush(va);
+ }
+ 
+ } // anonymous namespace
+@@ -149,9 +152,13 @@ JARVIS_TEST(wcet_vmm_map_unmap, "PRE: none | POST: none") {
+     // If the alias' 2 MB region is still huge, split it once (warm-up) so
+     // the measured loop never allocates a PT page; remember the huge entry
+     // to re-huge at the end.
++    // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
++    // and task preemption across the warm-up split only. The timed loop
++    // below stays unguarded (no allocation there; WCET timing unperturbed).
+     uint64_t saved_huge = kernel_pd_entry(va);
+     bool split_now = (saved_huge & (1ULL << 7)) != 0;
+     if (split_now) {
++        arch::IrqGuard split_guard;
+         VMM::map_page(va, phys, false);
+         VMM::unmap_page(va);
+     }
+@@ -162,7 +169,9 @@ JARVIS_TEST(wcet_vmm_map_unmap, "PRE: none | POST: none") {
+     });
+ 
+     // Re-huge + free the split PT page (only if we created it).
++    // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
+     if (split_now) {
++        arch::IrqGuard rehuge_guard;
+         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
+         kernel_pd_entry_restore(va, saved_huge);
+         if (pt_phys)

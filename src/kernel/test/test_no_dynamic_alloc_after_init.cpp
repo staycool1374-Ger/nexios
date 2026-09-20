@@ -28,6 +28,8 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/arch/page_table.hpp>
+#include <kernel/arch/irq_guard.hpp>
 #include <kernel/nexios_config.h>
 
 using namespace kernel;
@@ -73,6 +75,7 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
     auto *pd = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
     pd[pd_idx] = entry;
+    arch::ArchPageTable::tlb_flush(va);
 }
 
 // Runmode: kernel
@@ -99,9 +102,12 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
 
     // Split the huge page once (warm-up) so the loop never allocates a PT
     // page; remember the huge entry to re-huge at the end.
+    // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
+    // and task preemption across the warm-up split only.
     uint64_t saved_huge = kernel_pd_entry(va);
     bool split_now = (saved_huge & (1ULL << 7)) != 0;
     if (split_now) {
+        arch::IrqGuard split_guard;
         VMM::map_page(va, phys, false);
         VMM::unmap_page(va);
     }
@@ -116,7 +122,9 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
     }
 
     // Re-huge + free the split PT page (only if we created it).
+    // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
     if (split_now) {
+        arch::IrqGuard rehuge_guard;
         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
         kernel_pd_entry_restore(va, saved_huge);
         if (pt_phys)
