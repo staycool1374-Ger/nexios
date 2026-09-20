@@ -650,6 +650,9 @@ bool snapshot_create() {
                                                   off_rsrc_counts()));
         auto *pool = reinterpret_cast<PtPoolSnapshot *>(
             g_snapshot + off_pt_pool(user_page_count, task_count));
+        // Issue #197: zero the post-snapshot pool overlay BEFORE
+        // capturing (no pool alloc may intervene on this path).
+        PMM::post_snapshot_overlay_clear();
         PMM::capture_pool_snapshot(*pool);
     }
 
@@ -1010,6 +1013,11 @@ void snapshot_restore(const char *test_name) {
             auto *pool = reinterpret_cast<const PtPoolSnapshot *>(
                 g_snapshot + off_pt_pool(nu, nk));
             PMM::restore_pool_snapshot(*pool);
+            // Issue #197: re-apply post-snapshot pool allocations (pages
+            // allocated mid-class would otherwise rewind-untracked while
+            // live page tables still reference them).  Runs BEFORE the
+            // freelist rebuild below so freelists stay consistent.
+            PMM::post_snapshot_overlay_apply();
         }
     }
 
@@ -1201,7 +1209,11 @@ void snapshot_restore(const char *test_name) {
             Scheduler::set_current_index(0);
         }
     }
-    Scheduler::quiesce_exit();
+    // NOTE: the quiesce window stays open past the daemon/queue section
+    // below (issue #197): rebuild_ready_queue() resets + relinks every
+    // CPU's runq, and the AP tick reads those queues lock-free — exiting
+    // here reopens the torn-read race that wild-jumps the AP (~1/8).
+    // The AP simply idles parked; nothing below waits on AP progress.
 
     // ---- BufferPool ----
     BufferPool::restore_state(g_snapshot + off_bufpool(),
@@ -1444,6 +1456,9 @@ void snapshot_restore(const char *test_name) {
         Scheduler::rebuild_ready_queue();
     }
     kernel::gs::mark_vfs_touched(false);
+    // Issue #197: close the quiesce window opened above (covers the queue
+    // rebuild + TSS/iopb/mmio/death-notify resets — all BSP-local).
+    Scheduler::quiesce_exit();
 
     // ---- Daemon ----
     {

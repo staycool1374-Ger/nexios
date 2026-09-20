@@ -50,6 +50,14 @@ constinit uint64_t PMM::free_head_ = UINT64_MAX;
 constinit uint64_t PMM::pool_free_head_ = UINT64_MAX;
 constinit uint64_t PMM::window_base_page_ = 0;
 constinit uint64_t PMM::window_end_page_ = 0;
+// Issue #197: post-snapshot pool overlay — one bit per pool page, set on
+// pool alloc, cleared on pool free, zeroed at snapshot_create.  The PMM
+// bitmap rewind restores once-per-class snapshot bits, which would untrack
+// pool pages allocated mid-class while live page tables still reference
+// them (present-but-untracked PDEs → get_table prunes live mappings).
+// Re-applied onto the main bitmap after every pool restore.
+static uint8_t s_post_snap_overlay_[(CONFIG_PAGE_TABLE_POOL_SIZE + 7) / 8] = {
+    0};
 constinit uint64_t PMM::color_cursor_[cache::NUM_COLORS] = {};
 
 #if CONFIG_STATIC_POOLS_ONLY
@@ -690,6 +698,14 @@ uint64_t PMM::alloc_page_table() {
             bitmap_set(idx);
             owner_set_kernel(idx);
             --free_pages_;
+            // Issue #197: record post-snapshot pool allocations so the
+            // bitmap rewind cannot untrack a live page-table page.
+            if (page_table_pool_end_ > page_table_pool_start_) {
+                uint64_t bit =
+                    idx - page_table_pool_start_ / PAGE_SIZE;
+                s_post_snap_overlay_[bit / 8] |=
+                    static_cast<uint8_t>(1U << (bit % 8));
+            }
             kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
             return idx * PAGE_SIZE;
         }
@@ -726,6 +742,12 @@ void PMM::free_page(uint64_t phys_addr) {
             if (index >= ps && index < pe) {
                 fl[index] = pool_free_head_;
                 pool_free_head_ = index;
+                // Issue #197: a freed page must rewind-clear — drop it
+                // from the post-snapshot overlay (else the overlay would
+                // resurrect a stale bit for a reusable page).
+                uint64_t bit = index - ps;
+                s_post_snap_overlay_[bit / 8] &=
+                    static_cast<uint8_t>(~(1U << (bit % 8)));
                 return;
             }
         }
@@ -1138,6 +1160,35 @@ void PMM::restore_pool_snapshot(
                      src.bitmap, bytes);
     __builtin_memcpy(reinterpret_cast<uint8_t *>(owner_bitmap_) + start_bit / 8,
                      src.owner, bytes);
+}
+
+void PMM::post_snapshot_overlay_clear() noexcept {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    __builtin_memset(s_post_snap_overlay_, 0,
+                     sizeof(s_post_snap_overlay_));
+}
+
+void PMM::post_snapshot_overlay_apply() noexcept {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
+        return;
+    auto *bits = reinterpret_cast<uint8_t *>(bitmap_);
+    uint64_t start_bit = page_table_pool_start_ / PAGE_SIZE;
+    uint64_t pages =
+        (page_table_pool_end_ - page_table_pool_start_) / PAGE_SIZE;
+    uint64_t tracked = sizeof(s_post_snap_overlay_) * 8;
+    if (pages > tracked)
+        pages = tracked;
+    // Page-wise (not byte-block OR): the pool start is not guaranteed
+    // byte-aligned in the main bitmap, so overlay bit p maps to absolute
+    // bit start_bit + p.
+    for (uint64_t p = 0; p < pages; ++p) {
+        if (s_post_snap_overlay_[p / 8] &
+            static_cast<uint8_t>(1U << (p % 8))) {
+            uint64_t b = start_bit + p;
+            bits[b / 8] |= static_cast<uint8_t>(1U << (b % 8));
+        }
+    }
 }
 
 uint64_t PMM::pool_used_pages() noexcept {

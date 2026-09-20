@@ -621,6 +621,11 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
 }
 
 void Scheduler::quiesce_enter() noexcept {
+    // Issue #197: windows nest (an outer test/harness window brackets paths
+    // like set_affinity_err that quiesce internally), so count the depth
+    // and clear the flag only at the outermost exit — a bool would unpark
+    // the AP mid-window.
+    __atomic_fetch_add(&sched_quiesce_depth_, 1, __ATOMIC_RELAXED);
     __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         cancel_pending_switch_cpu(c);
@@ -633,7 +638,11 @@ void Scheduler::quiesce_enter() noexcept {
 }
 
 void Scheduler::quiesce_exit() noexcept {
-    __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
+    uint64_t depth =
+        __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
+    ENSURE(depth > 0 && "quiesce_exit without matching enter");
+    if (__atomic_sub_fetch(&sched_quiesce_depth_, 1, __ATOMIC_RELEASE) == 0)
+        __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
 #if defined(CONFIG_ARCH_X86_64)
     // Same re-assert on the way out: teardown paths must not leak a
     // raised class into the resumed world.
@@ -1614,6 +1623,7 @@ Scheduler::MailboxEntry
 constinit uint64_t Scheduler::wake_mailbox_count_[CONFIG_MAX_CPUS] = {};
 sync::SpinLock Scheduler::wake_mailbox_lock_[CONFIG_MAX_CPUS];
 constinit bool Scheduler::sched_quiesced_ = false;
+constinit uint64_t Scheduler::sched_quiesce_depth_ = 0;
 sync::SpinLock Scheduler::zombie_lock_;
     constinit TaskControlBlock *Scheduler::shell_task_ptr_ = nullptr;
     constinit TaskControlBlock *Scheduler::harness_task_ptr_ = nullptr;

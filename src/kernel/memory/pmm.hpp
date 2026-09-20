@@ -268,6 +268,15 @@ class PMM {
     /// @brief Restore page-table pool state from a snapshot struct.
     static void restore_pool_snapshot(
         const kernel::test::PtPoolSnapshot &src);
+    /// @brief Clear the post-snapshot pool overlay (issue #197: call once
+    ///        in snapshot_create; a mid-restore pool recapture must NOT
+    ///        clear it — allocations it records are still live).
+    static void post_snapshot_overlay_clear() noexcept;
+    /// @brief Re-apply post-snapshot pool allocations onto the main bitmap
+    ///        (issue #197: call after restore_pool_snapshot, before the
+    ///        freelist rebuild — pages allocated mid-class would otherwise
+    ///        read untracked while still referenced by live page tables).
+    static void post_snapshot_overlay_apply() noexcept;
     /// @brief Page-table pool base physical address (0 if pool not active).
     static uint64_t pool_start() noexcept {
         return page_table_pool_start_;

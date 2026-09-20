@@ -561,6 +561,19 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
 
+    // Issue #197: mirror map_page's modified-flags (no warn here — this is
+    // the designated private-table API, but the target may be the shared
+    // kernel table or share PD pages with it, so flag unconditionally).
+    // Without this, splits (e.g. test mb2 identity re-mapping) never
+    // trigger the snapshot PD rewind and persist across boundaries.
+    if (Scheduler::is_test_active() &&
+        pml4_idx >= arch::PML4_USER_COUNT) {
+        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+    }
+    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+    }
+
     auto *pdpt = get_table(pml4, pml4_idx, true, true);
     if (!pdpt)
         return;
@@ -664,6 +677,11 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
+    // Issue #197: mirror unmap_page — flag low-VA surgery for the
+    // PD_IDENTITY restore (see map_page_in_pml4 note above).
+    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
+        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
+    }
     auto *pdpt = get_table(top, pml4_idx, false);
     if (!pdpt) {
         return;

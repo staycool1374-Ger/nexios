@@ -1,459 +1,496 @@
-diff --git a/docs/specs/coverage.md b/docs/specs/coverage.md
-index 3ef666f7..a6b9649d 100644
---- a/docs/specs/coverage.md
-+++ b/docs/specs/coverage.md
-@@ -94,6 +94,18 @@ Test code (`src/kernel/test/**`) is reported separately and excluded from
- the headline kernel figure.  `src/kernel/gcov/**` is deliberately excluded
- from instrumentation, so it always shows 0 %.
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+index d61639a4..14e570db 100644
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -50,6 +50,14 @@ constinit uint64_t PMM::free_head_ = UINT64_MAX;
+ constinit uint64_t PMM::pool_free_head_ = UINT64_MAX;
+ constinit uint64_t PMM::window_base_page_ = 0;
+ constinit uint64_t PMM::window_end_page_ = 0;
++// Issue #197: post-snapshot pool overlay — one bit per pool page, set on
++// pool alloc, cleared on pool free, zeroed at snapshot_create.  The PMM
++// bitmap rewind restores once-per-class snapshot bits, which would untrack
++// pool pages allocated mid-class while live page tables still reference
++// them (present-but-untracked PDEs → get_table prunes live mappings).
++// Re-applied onto the main bitmap after every pool restore.
++static uint8_t s_post_snap_overlay_[(CONFIG_PAGE_TABLE_POOL_SIZE + 7) / 8] = {
++    0};
+ constinit uint64_t PMM::color_cursor_[cache::NUM_COLORS] = {};
  
-+`src/lib/fdt/*` is scoped out of the denominator on x86 (issue #183): the
-+FDT library is reachable only through the AARCH64/RISCV64 boot-DTB
-+consumer (`kernel.cpp`), so its functions are permanently uncoverable on
-+x86 test boots, which never carry a DTB.  The exclusion is report-side
-+only (`tools/coverage_report.py` `COVERAGE_SCOPED_OUT`,
-+`tools/gcov_line_report.py` source filter + lcov `--exclude`) —
-+instrumentation is kept, so raw dumps still record entries.  The library
-+is measured instead by the boot-independent static-blob `lib_fdt_*` unit
-+tests (`basic_lib` class).  The live boot-DTB handoff on non-x86 arches is
-+gated separately: `aarch64_boot_dtb_pointer` takes its DTB-present branch
-+once ARM bring-up (#28) provides a real DTB at boot.
+ #if CONFIG_STATIC_POOLS_ONLY
+@@ -690,6 +698,14 @@ uint64_t PMM::alloc_page_table() {
+             bitmap_set(idx);
+             owner_set_kernel(idx);
+             --free_pages_;
++            // Issue #197: record post-snapshot pool allocations so the
++            // bitmap rewind cannot untrack a live page-table page.
++            if (page_table_pool_end_ > page_table_pool_start_) {
++                uint64_t bit =
++                    idx - page_table_pool_start_ / PAGE_SIZE;
++                s_post_snap_overlay_[bit / 8] |=
++                    static_cast<uint8_t>(1U << (bit % 8));
++            }
+             kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+             return idx * PAGE_SIZE;
+         }
+@@ -726,6 +742,12 @@ void PMM::free_page(uint64_t phys_addr) {
+             if (index >= ps && index < pe) {
+                 fl[index] = pool_free_head_;
+                 pool_free_head_ = index;
++                // Issue #197: a freed page must rewind-clear — drop it
++                // from the post-snapshot overlay (else the overlay would
++                // resurrect a stale bit for a reusable page).
++                uint64_t bit = index - ps;
++                s_post_snap_overlay_[bit / 8] &=
++                    static_cast<uint8_t>(~(1U << (bit % 8)));
+                 return;
+             }
+         }
+@@ -1140,6 +1162,35 @@ void PMM::restore_pool_snapshot(
+                      src.owner, bytes);
+ }
+ 
++void PMM::post_snapshot_overlay_clear() noexcept {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    __builtin_memset(s_post_snap_overlay_, 0,
++                     sizeof(s_post_snap_overlay_));
++}
 +
- ## 5. Known limitations (Phase B)
++void PMM::post_snapshot_overlay_apply() noexcept {
++    sync::IrqSpinLockGuard lock(pmm_lock_);
++    if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
++        return;
++    auto *bits = reinterpret_cast<uint8_t *>(bitmap_);
++    uint64_t start_bit = page_table_pool_start_ / PAGE_SIZE;
++    uint64_t pages =
++        (page_table_pool_end_ - page_table_pool_start_) / PAGE_SIZE;
++    uint64_t tracked = sizeof(s_post_snap_overlay_) * 8;
++    if (pages > tracked)
++        pages = tracked;
++    // Page-wise (not byte-block OR): the pool start is not guaranteed
++    // byte-aligned in the main bitmap, so overlay bit p maps to absolute
++    // bit start_bit + p.
++    for (uint64_t p = 0; p < pages; ++p) {
++        if (s_post_snap_overlay_[p / 8] &
++            static_cast<uint8_t>(1U << (p % 8))) {
++            uint64_t b = start_bit + p;
++            bits[b / 8] |= static_cast<uint8_t>(1U << (b % 8));
++        }
++    }
++}
++
+ uint64_t PMM::pool_used_pages() noexcept {
+     if (page_table_pool_start_ == 0 || page_table_pool_end_ == 0)
+         return 0;
+diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
+index 5b28164a..a475bdff 100644
+--- a/src/kernel/memory/pmm.hpp
++++ b/src/kernel/memory/pmm.hpp
+@@ -268,6 +268,15 @@ class PMM {
+     /// @brief Restore page-table pool state from a snapshot struct.
+     static void restore_pool_snapshot(
+         const kernel::test::PtPoolSnapshot &src);
++    /// @brief Clear the post-snapshot pool overlay (issue #197: call once
++    ///        in snapshot_create; a mid-restore pool recapture must NOT
++    ///        clear it — allocations it records are still live).
++    static void post_snapshot_overlay_clear() noexcept;
++    /// @brief Re-apply post-snapshot pool allocations onto the main bitmap
++    ///        (issue #197: call after restore_pool_snapshot, before the
++    ///        freelist rebuild — pages allocated mid-class would otherwise
++    ///        read untracked while still referenced by live page tables).
++    static void post_snapshot_overlay_apply() noexcept;
+     /// @brief Page-table pool base physical address (0 if pool not active).
+     static uint64_t pool_start() noexcept {
+         return page_table_pool_start_;
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 12406d59..9c99b0ea 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -561,6 +561,19 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
  
- - Function granularity only — no line, branch or call-count data.
++    // Issue #197: mirror map_page's modified-flags (no warn here — this is
++    // the designated private-table API, but the target may be the shared
++    // kernel table or share PD pages with it, so flag unconditionally).
++    // Without this, splits (e.g. test mb2 identity re-mapping) never
++    // trigger the snapshot PD rewind and persist across boundaries.
++    if (Scheduler::is_test_active() &&
++        pml4_idx >= arch::PML4_USER_COUNT) {
++        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
++    }
++    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
++        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
++    }
++
+     auto *pdpt = get_table(pml4, pml4_idx, true, true);
+     if (!pdpt)
+         return;
+@@ -664,6 +677,11 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     size_t pdpt_idx = arch::ArchPageTable::pdpt_index(virt_addr);
+     size_t pd_idx = arch::ArchPageTable::pd_index(virt_addr);
+     size_t pt_idx = arch::ArchPageTable::pt_index(virt_addr);
++    // Issue #197: mirror unmap_page — flag low-VA surgery for the
++    // PD_IDENTITY restore (see map_page_in_pml4 note above).
++    if (Scheduler::is_test_active() && pml4_idx < arch::PML4_USER_COUNT) {
++        __atomic_store_n(&identity_modified_, true, __ATOMIC_RELEASE);
++    }
+     auto *pdpt = get_table(top, pml4_idx, false);
+     if (!pdpt) {
+         return;
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index c882e8b7..cb152ed4 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -621,6 +621,11 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
+ }
+ 
+ void Scheduler::quiesce_enter() noexcept {
++    // Issue #197: windows nest (an outer test/harness window brackets paths
++    // like set_affinity_err that quiesce internally), so count the depth
++    // and clear the flag only at the outermost exit — a bool would unpark
++    // the AP mid-window.
++    __atomic_fetch_add(&sched_quiesce_depth_, 1, __ATOMIC_RELAXED);
+     __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
+     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
+         cancel_pending_switch_cpu(c);
+@@ -633,7 +638,11 @@ void Scheduler::quiesce_enter() noexcept {
+ }
+ 
+ void Scheduler::quiesce_exit() noexcept {
+-    __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
++    uint64_t depth =
++        __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
++    ENSURE(depth > 0 && "quiesce_exit without matching enter");
++    if (__atomic_sub_fetch(&sched_quiesce_depth_, 1, __ATOMIC_RELEASE) == 0)
++        __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
+ #if defined(CONFIG_ARCH_X86_64)
+     // Same re-assert on the way out: teardown paths must not leak a
+     // raised class into the resumed world.
+@@ -1614,6 +1623,7 @@ Scheduler::MailboxEntry
+ constinit uint64_t Scheduler::wake_mailbox_count_[CONFIG_MAX_CPUS] = {};
+ sync::SpinLock Scheduler::wake_mailbox_lock_[CONFIG_MAX_CPUS];
+ constinit bool Scheduler::sched_quiesced_ = false;
++constinit uint64_t Scheduler::sched_quiesce_depth_ = 0;
+ sync::SpinLock Scheduler::zombie_lock_;
+     constinit TaskControlBlock *Scheduler::shell_task_ptr_ = nullptr;
+     constinit TaskControlBlock *Scheduler::harness_task_ptr_ = nullptr;
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 8a29079a..9ff4bcdd 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -887,6 +887,10 @@ class Scheduler {
+     static void quiesce_enter() noexcept;
+     /// @brief Leave the AP-quiesce window (clear flag; AP resumes).
+     static void quiesce_exit() noexcept;
++    /// @brief Current quiesce nesting depth (issue #197 test accessor).
++    static uint64_t quiesce_depth() noexcept {
++        return __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
++    }
+ struct SwSlots {
+     static uint64_t this_cpu() {
+         return arch::cpu_index();
+@@ -1030,6 +1034,10 @@ struct SwSlots {
+     ///        (no dispatch/queue touch).  Set across teardown + snapshot
+     ///        windows (with arm-cancel + global lock per the spec order).
+     static constinit bool sched_quiesced_;
++    /// @brief Quiesce nesting depth (issue #197): windows nest (tests
++    ///        bracket set_affinity_err/balancer paths that quiesce
++    ///        internally), so the flag clears only at the outermost exit.
++    static constinit uint64_t sched_quiesce_depth_;
+ #if CONFIG_DEADLINE_MONITOR_TASK
+     /// @brief Pointer to the deadline-monitor task (nullptr if not spawned).
+     static constinit TaskControlBlock *s_monitor_task_;
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 4fbabf9a..a6623ced 100644
+index a6623ced..b8d6460a 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -22,7 +22,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"testrunner",           16,    0,       0      },  // harness + freelist + infra + expected-panic (v0.3.8)
+@@ -282,7 +282,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+     {"hal",                 121,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199)
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+-    {"smp_multicpu",        17,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse (issues #173, #197)
++    {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
+     {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
+     {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
+     {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index ce559e80..72109165 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -650,6 +650,9 @@ bool snapshot_create() {
+                                                   off_rsrc_counts()));
+         auto *pool = reinterpret_cast<PtPoolSnapshot *>(
+             g_snapshot + off_pt_pool(user_page_count, task_count));
++        // Issue #197: zero the post-snapshot pool overlay BEFORE
++        // capturing (no pool alloc may intervene on this path).
++        PMM::post_snapshot_overlay_clear();
+         PMM::capture_pool_snapshot(*pool);
+     }
  
-     // basic
--    {"basic_lib",            17,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126)
-+    {"basic_lib",            20,    0,       0      },  // string/utils/type-traits/ErrorOr/version + CRC32 vectors (#126) + static-DTB fdt_* tests (#183)
-     {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
+@@ -1010,6 +1013,11 @@ void snapshot_restore(const char *test_name) {
+             auto *pool = reinterpret_cast<const PtPoolSnapshot *>(
+                 g_snapshot + off_pt_pool(nu, nk));
+             PMM::restore_pool_snapshot(*pool);
++            // Issue #197: re-apply post-snapshot pool allocations (pages
++            // allocated mid-class would otherwise rewind-untracked while
++            // live page tables still reference them).  Runs BEFORE the
++            // freelist rebuild below so freelists stay consistent.
++            PMM::post_snapshot_overlay_apply();
+         }
+     }
  
-     // configuration
-diff --git a/src/kernel/test/test_lib.cpp b/src/kernel/test/test_lib.cpp
-index 03a782c2..22dd4763 100644
---- a/src/kernel/test/test_lib.cpp
-+++ b/src/kernel/test/test_lib.cpp
-@@ -25,6 +25,9 @@
- #include <error.hpp>
- #include <version.hpp>
- #include <crc32.hpp>
-+#include <fdt/fdt.h>
-+#include <fdt/libfdt.h>
-+#include <fdt/libfdt_internal.h>
+@@ -1201,7 +1209,11 @@ void snapshot_restore(const char *test_name) {
+             Scheduler::set_current_index(0);
+         }
+     }
+-    Scheduler::quiesce_exit();
++    // NOTE: the quiesce window stays open past the daemon/queue section
++    // below (issue #197): rebuild_ready_queue() resets + relinks every
++    // CPU's runq, and the AP tick reads those queues lock-free — exiting
++    // here reopens the torn-read race that wild-jumps the AP (~1/8).
++    // The AP simply idles parked; nothing below waits on AP progress.
  
- using namespace kernel;
+     // ---- BufferPool ----
+     BufferPool::restore_state(g_snapshot + off_bufpool(),
+@@ -1444,6 +1456,9 @@ void snapshot_restore(const char *test_name) {
+         Scheduler::rebuild_ready_queue();
+     }
+     kernel::gs::mark_vfs_touched(false);
++    // Issue #197: close the quiesce window opened above (covers the queue
++    // rebuild + TSS/iopb/mmio/death-notify resets — all BSP-local).
++    Scheduler::quiesce_exit();
  
-@@ -315,6 +318,266 @@ JARVIS_TEST(lib_crc32_empty_and_incremental, "PRE: none | POST: none") {
+     // ---- Daemon ----
+     {
+diff --git a/src/kernel/test/test_smp_sched.cpp b/src/kernel/test/test_smp_sched.cpp
+index 03c76a80..9611cfd8 100644
+--- a/src/kernel/test/test_smp_sched.cpp
++++ b/src/kernel/test/test_smp_sched.cpp
+@@ -72,6 +72,36 @@ bool poll_until(volatile uint64_t &flag, uint64_t value, uint64_t ms) {
+     return true;
+ }
+ 
++/// @brief RAII AP-quiesce window (issue #197): parks AP dispatch/drain
++///        across a synchronous queue-surgery window. JARVIS_ASSERT is
++///        record+return, so the destructor always runs (no wedged AP).
++///        No sleeps/polls may span the window (the AP cannot rendezvous
++///        while parked).
++struct SmpQuiesceGuard {
++    SmpQuiesceGuard() noexcept { Scheduler::quiesce_enter(); }
++    ~SmpQuiesceGuard() noexcept { Scheduler::quiesce_exit(); }
++    SmpQuiesceGuard(const SmpQuiesceGuard &) = delete;
++    SmpQuiesceGuard &operator=(const SmpQuiesceGuard &) = delete;
++};
++
++/// @brief RAII AP-slot drive (issue #197): saves cpu_ctx(cpu).current and
++///        installs a fixture, restoring on scope exit. JARVIS_ASSERT is
++///        record+return — without this, an early return leaves the fake
++///        slot behind: restore spares the orphan (AP-current), the next
++///        snapshot pins its block as baseline, and the pin-skip feedback
++///        loop makes it permanent.
++struct SmpSlotGuard {
++    uint64_t cpu;
++    TaskControlBlock *saved;
++    SmpSlotGuard(uint64_t c, TaskControlBlock *fixture) noexcept
++        : cpu(c), saved(kernel::cpu_ctx(c).current) {
++        kernel::cpu_ctx(c).current = fixture;
++    }
++    ~SmpSlotGuard() noexcept { kernel::cpu_ctx(cpu).current = saved; }
++    SmpSlotGuard(const SmpSlotGuard &) = delete;
++    SmpSlotGuard &operator=(const SmpSlotGuard &) = delete;
++};
++
+ /// @brief True when the AP is parked back on an idle task.
+ bool ap_parked_on_idle(uint64_t ms) {
+     uint64_t freq = arch::Timer::tsc_freq_hz();
+@@ -237,8 +267,10 @@ JARVIS_TEST(smp_sched_bsp_unaffected, "PRE: iocd | POST: none") {
+ 
+ // Runmode: kernel
+ // Testidea: Changing a queued BLOCKED task's mask moves it between CPU
+-//           queues deterministically (nothing can dispatch a BLOCKED
+-//           task, so placement is stable across ticks on both CPUs).
++//           queues deterministically. The setup→assert→teardown window is
++//           fully frozen (IrqGuard for the BSP tick/balancer, SmpQuiesceGuard
++//           for the AP tick, issue #197): an AP tick's next_task() otherwise
++//           dequeue-drops the BLOCKED probe mid-window, desyncing teardown.
+ // Input: register + BLOCKED + set_affinity(0x2) + enqueue (lands [1]);
+ //        set_affinity(0x3) (lowest bit 0 → moves to [0]).
+ // Expect: 0 APs: clamp path (stays [0]). 1 AP: [1] then [0], never both.
+@@ -247,6 +279,8 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
+     auto *t = TaskControlBlock::create([]() {}, 10,
+                                        TaskControlBlock::NO_PERIOD);
+     JARVIS_ASSERT(t != nullptr);
++    arch::IrqGuard frozen_world;
++    SmpQuiesceGuard parked_ap;
+     t->state = TaskState::BLOCKED;
+     Scheduler::register_task(*t);
+     Scheduler::set_affinity(*t, 0x2);
+@@ -273,13 +307,12 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
+ // Testidea: Queue placement routes deterministically per mask: tasks
+ //           pinned 0x1 land on [0] exclusively, tasks pinned 0x2 land
+ //           on [1] exclusively (clamped to [0] with 0 APs).  Setup,
+-//           assert and teardown run PER TASK, never batched: next_task()
+-//           dequeue-drops queued-but-BLOCKED occupants on every tick, so
+-//           a batched window spanning several PMM allocations lets a
+-//           tick scavenge earlier probes before they are asserted (the
+-//           per-task window matches smp_sched_cross_move's).  Masks are
+-//           asserted too (cpu_affinity is tick-stable, unlike queue
+-//           membership).
++//           assert and teardown run PER TASK, never batched, inside one
++//           frozen window (IrqGuard + SmpQuiesceGuard, issue #197):
++//           next_task() dequeue-drops queued-but-BLOCKED occupants on
++//           every tick, so any live tick scavenges probes before they
++//           are asserted. Masks are asserted too (cpu_affinity is
++//           tick-stable, unlike queue membership).
+ // Input: 4x (create + BLOCKED + register + pin [0x1,0x1,0x2,0x2] +
+ //        enqueue + assert + remove + cleanup + free), one task live.
+ // Expect: Per task: affinity == pinned-or-clamped mask;
+@@ -288,6 +321,8 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
+ JARVIS_TEST(smp_sched_queue_placement_fanout, "PRE: iocd | POST: none") {
+     constexpr uint64_t kMasks[4] = {0x1, 0x1, 0x2, 0x2};
+     bool has_ap = smp::ap_count() > 0;
++    arch::IrqGuard frozen_world;
++    SmpQuiesceGuard parked_ap;
+     for (uint64_t i = 0; i < 4; ++i) {
+         TaskControlBlock *probe = TaskControlBlock::create(
+             placement_probe_entry, 10, TaskControlBlock::NO_PERIOD);
+@@ -577,27 +612,41 @@ JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
+     // Deterministic core: drive cpu_ctx(1).current directly (the exact
+     // predicate input of is_current_on_any_cpu) instead of racing the AP
+     // tick — a live-AP observation would flake on tick timing. The
+-    // fixture is never enqueued, so no dispatch can disturb the setup.
++    // fixture is never enqueued, but the LIVE AP still reads/writes its
++    // own cpu_ctx slot on every tick, so the fake-current window runs
++    // fully frozen (IrqGuard + SmpQuiesceGuard, issue #197); otherwise a
++    // tick overwrites the slot mid-window and corrupts both the
++    // experiment and the AP's real current task.
+     auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
+     JARVIS_ASSERT(runner != nullptr);
++    arch::IrqGuard frozen_world;
++    SmpQuiesceGuard parked_ap;
++    // Establish zombie-list solitude first: a stale zombie from an earlier
++    // test would be drained instead of the runner, breaking the count
++    // asserts below (each test's own boundary check owns attributing its
++    // leak; this test only needs a known starting state).
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
+     // Force the zombie state directly (bypasses terminate_err: this test
+     // targets the DRAIN gate, not the terminate gate).
+     runner->state = TaskState::TERMINATED;
+     Scheduler::release_zombie(*runner);
+     const uint64_t zombies_before = Scheduler::zombie_count();
+-    JARVIS_ASSERT(zombies_before >= 1);
++    JARVIS_ASSERT_EQ(1ULL, zombies_before);
+     // Simulate AP-current: the drain must spare (never free a live stack).
+-    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
+-    kernel::cpu_ctx(1).current = runner;
+-    Scheduler::drain_zombie_list();
+-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+-    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+-    Scheduler::cleanup_step_try();
+-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+-    // AP leaves: restore the slot, then the re-drain must free exactly it.
+-    kernel::cpu_ctx(1).current = saved_current;
++    // Slot restores via RAII even on early return (see SmpSlotGuard).
++    {
++        SmpSlotGuard ap_is_runner(1, runner);
++        Scheduler::drain_zombie_list();
++        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++        JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
++        Scheduler::cleanup_step_try();
++        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++    }
++    // AP leaves (slot restored by the guard): the re-drain must free
++    // exactly the runner.
+     Scheduler::drain_zombie_list();
+     JARVIS_ASSERT_EQ(zombies_before - 1, Scheduler::zombie_count());
+     JARVIS_TEST_PASS();
+@@ -613,23 +662,27 @@ JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
+ // terminate_err returns SCHED_ERR_OK.
+ // Depends: Scheduler::terminate_err refusal predicate
+ JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
+-    // Same deterministic cpu_ctx drive as the drain test: the fixture is
+-    // never enqueued, so no dispatch can disturb the setup.
++    // Same frozen window as the drain test: driving the live AP slot
++    // while the AP ticks corrupts both sides (issue #197).
+     auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
+     JARVIS_ASSERT(runner != nullptr);
+-    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
+-    kernel::cpu_ctx(1).current = runner;
+-    // Refusal with zero mutation: still live, no zombie queued.
+-    const uint64_t zombies_before = Scheduler::zombie_count();
+-    const errors::SchedulerError refused =
+-        Scheduler::terminate_err(*runner, 0);
+-    JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
+-    JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
+-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+-    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+-    // AP leaves: the same call must now succeed and the drain must free.
+-    kernel::cpu_ctx(1).current = saved_current;
++    arch::IrqGuard frozen_world;
++    SmpQuiesceGuard parked_ap;
++    uint64_t zombies_before = Scheduler::zombie_count();
++    {
++        SmpSlotGuard ap_is_runner(1, runner);
++        // Refusal with zero mutation: still live, no zombie queued.
++        zombies_before = Scheduler::zombie_count();
++        const errors::SchedulerError refused =
++            Scheduler::terminate_err(*runner, 0);
++        JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
++        JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
++        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++        JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
++    }
++    // AP leaves (slot restored by the guard): the same call must now
++    // succeed and the drain must free.
+     JARVIS_ASSERT_EQ(errors::SCHED_ERR_OK,
+                      Scheduler::terminate_err(*runner, 0));
+     JARVIS_ASSERT(runner->state == TaskState::TERMINATED);
+@@ -638,6 +691,34 @@ JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
-+// Static device-tree blob for the lib_fdt_static_* tests (issue #183).
-+// The FDT library is reachable in production only via the AARCH64/RISCV64
-+// boot-DTB consumer, so x86 test boots can never exercise it live. These
-+// tests parse a hand-built blob instead, covering every public fdt_ro
-+// entry point without any boot/QEMU change.
-+//
-+// Blob layout (all integers big-endian):
-+//   header(40) + rsvmap(32: one entry + terminator) + struct(132) + strings(25)
-+// Struct block (offsets relative to its start):
-+//   root BEGIN@0 -> memory@8 (device_type + reg props) -> chosen@84
-+//   (bootargs prop) -> root END -> FDT_END.
-+// Strings: "device_type"@0, "reg"@12, "bootargs"@16.
-+namespace {
-+
-+constexpr size_t kFdtStaticSize = 256U;
-+
-+void fdt_static_put32(uint8_t *blob, size_t &pos, uint32_t val) {
-+    blob[pos] = static_cast<uint8_t>(val >> 24);
-+    blob[pos + 1] = static_cast<uint8_t>(val >> 16);
-+    blob[pos + 2] = static_cast<uint8_t>(val >> 8);
-+    blob[pos + 3] = static_cast<uint8_t>(val);
-+    pos += 4;
-+}
-+
-+void fdt_static_put64(uint8_t *blob, size_t &pos, uint64_t val) {
-+    fdt_static_put32(blob, pos, static_cast<uint32_t>(val >> 32));
-+    fdt_static_put32(blob, pos, static_cast<uint32_t>(val));
-+}
-+
-+void fdt_static_put_str(uint8_t *blob, size_t &pos, const char *str) {
-+    while (*str) {
-+        blob[pos++] = static_cast<uint8_t>(*str++);
-+    }
-+    blob[pos++] = 0;
-+    while (pos % 4 != 0) {
-+        blob[pos++] = 0;
-+    }
-+}
-+
-+void fdt_static_put_prop(uint8_t *blob, size_t &pos, uint32_t nameoff,
-+                         const uint8_t *data, size_t len) {
-+    fdt_static_put32(blob, pos, FDT_PROP);
-+    fdt_static_put32(blob, pos, static_cast<uint32_t>(len));
-+    fdt_static_put32(blob, pos, nameoff);
-+    for (size_t i = 0; i < len; ++i) {
-+        blob[pos++] = data[i];
-+    }
-+    while (pos % 4 != 0) {
-+        blob[pos++] = 0;
-+    }
-+}
-+
-+// Builds the blob into a static buffer, recording the real struct-relative
-+// offsets so tests never hardcode layout arithmetic.
-+struct FdtStaticLayout {
-+    size_t total;
-+    int mem_node;
-+    int chosen_node;
-+    int reg_prop;
-+};
-+
-+size_t fdt_static_build(uint8_t *blob, FdtStaticLayout &layout) {
-+    for (size_t i = 0; i < kFdtStaticSize; ++i) {
-+        blob[i] = 0;
-+    }
-+    // Header with placeholder offsets/sizes; patched at the end.
-+    size_t pos = 0;
-+    fdt_static_put32(blob, pos, FDT_MAGIC);
-+    size_t totalsize_at = pos;
-+    fdt_static_put32(blob, pos, 0);
-+    size_t struct_at = pos;
-+    fdt_static_put32(blob, pos, 0);
-+    size_t strings_at = pos;
-+    fdt_static_put32(blob, pos, 0);
-+    fdt_static_put32(blob, pos, 40);  // off_mem_rsvmap
-+    fdt_static_put32(blob, pos, 17);  // version
-+    fdt_static_put32(blob, pos, 16);  // last_comp_version
-+    fdt_static_put32(blob, pos, 0);   // boot_cpuid_phys
-+    size_t strsize_at = pos;
-+    fdt_static_put32(blob, pos, 0);
-+    size_t structsize_at = pos;
-+    fdt_static_put32(blob, pos, 0);
-+    // Reserve map: one entry + terminator.
-+    fdt_static_put64(blob, pos, 0x1000);
-+    fdt_static_put64(blob, pos, 0x100);
-+    fdt_static_put64(blob, pos, 0);
-+    fdt_static_put64(blob, pos, 0);
-+    // Struct block: root with memory + chosen children.
-+    size_t struct_base = pos;
-+    auto rel = [&pos, struct_base]() -> int {
-+        return static_cast<int>(pos - struct_base);
-+    };
-+    auto patch32 = [&blob](size_t at, uint32_t val) {
-+        blob[at] = static_cast<uint8_t>(val >> 24);
-+        blob[at + 1] = static_cast<uint8_t>(val >> 16);
-+        blob[at + 2] = static_cast<uint8_t>(val >> 8);
-+        blob[at + 3] = static_cast<uint8_t>(val);
-+    };
-+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
-+    fdt_static_put_str(blob, pos, "");
-+    layout.mem_node = rel();
-+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
-+    fdt_static_put_str(blob, pos, "memory@40000000");
-+    const uint8_t kDeviceType[] = {'m', 'e', 'm', 'o', 'r', 'y', 0};
-+    fdt_static_put_prop(blob, pos, 0, kDeviceType, sizeof(kDeviceType));
-+    layout.reg_prop = rel();
-+    uint8_t reg[16] = {0, 0, 0, 0, 0x40, 0, 0, 0,
-+                       0, 0, 0, 0, 0x10, 0, 0, 0};
-+    fdt_static_put_prop(blob, pos, 12, reg, sizeof(reg));
-+    fdt_static_put32(blob, pos, FDT_END_NODE);
-+    layout.chosen_node = rel();
-+    fdt_static_put32(blob, pos, FDT_BEGIN_NODE);
-+    fdt_static_put_str(blob, pos, "chosen");
-+    const uint8_t kBootargs[] = {'t', 'e', 's', 't', '-', 'b',
-+                                 'o', 'o', 't', 0};
-+    fdt_static_put_prop(blob, pos, 16, kBootargs, sizeof(kBootargs));
-+    fdt_static_put32(blob, pos, FDT_END_NODE);
-+    fdt_static_put32(blob, pos, FDT_END_NODE);
-+    fdt_static_put32(blob, pos, FDT_END);
-+    size_t struct_size = pos - struct_base;
-+    // Strings block.
-+    size_t strings_base = pos;
-+    fdt_static_put_str(blob, pos, "device_type");
-+    fdt_static_put_str(blob, pos, "reg");
-+    fdt_static_put_str(blob, pos, "bootargs");
-+    // Patch header fields (big-endian).
-+    patch32(totalsize_at, static_cast<uint32_t>(pos));
-+    patch32(struct_at, static_cast<uint32_t>(struct_base));
-+    patch32(strings_at, static_cast<uint32_t>(strings_base));
-+    patch32(strsize_at, static_cast<uint32_t>(pos - strings_base));
-+    patch32(structsize_at, static_cast<uint32_t>(struct_size));
-+    layout.total = pos;
-+    return pos;
-+}
-+
-+}  // namespace
-+
 +// Runmode: kernel
-+// Testidea: A hand-built DTB passes header validation and exposes its
-+// reserve-map entry (issue #183: boot-independent fdt_* measurement).
-+// Input: static blob (magic 0xD00DFEED, v17, one reserve entry).
-+// Expect: fdt_check_header == 0, one entry at 0x1000 size 0x100.
-+// Depends: src/lib/fdt/fdt_ro.cpp
-+JARVIS_TEST(lib_fdt_static_header_and_reserve, "PRE: none | POST: none") {
-+    static uint8_t blob[kFdtStaticSize];
-+    FdtStaticLayout layout{};
-+    size_t total = fdt_static_build(blob, layout);
-+    JARVIS_ASSERT_EQ(0, fdt_check_header(blob));
-+    JARVIS_ASSERT_EQ(1, fdt_num_mem_rsv(blob));
-+    uint64_t addr = 0;
-+    uint64_t size = 0;
-+    JARVIS_ASSERT_EQ(0, fdt_get_mem_rsv(blob, 0, &addr, &size));
-+    JARVIS_ASSERT_EQ(0x1000ULL, addr);
-+    JARVIS_ASSERT_EQ(0x100ULL, size);
-+    JARVIS_ASSERT(total < kFdtStaticSize);
++// Testidea: Quiesce windows nest (issue #197): an outer test/harness
++//           window brackets paths like set_affinity_err that quiesce
++//           internally — the AP must stay parked until the OUTERMOST
++//           exit (a bool flag unparks mid-window and reopens the
++//           cross_move race).
++// Input: enter, enter, exit, exit with depth asserts between.
++// Expect: depth 2 → 1 (still parked) → 0. No asserts inside a live
++//         window (an early return would wedge the AP parked).
++// Depends: Scheduler::quiesce_enter/exit depth counter
++JARVIS_TEST(smp_quiesce_nesting_composes, "PRE: none | POST: none") {
++    uint64_t d_pre = Scheduler::quiesce_depth();
++    Scheduler::quiesce_enter();
++    Scheduler::quiesce_enter();
++    uint64_t d_two = Scheduler::quiesce_depth();
++    Scheduler::quiesce_exit();
++    uint64_t d_one = Scheduler::quiesce_depth();
++    Scheduler::quiesce_exit();
++    uint64_t d_zero = Scheduler::quiesce_depth();
++    // All asserts AFTER the window is fully closed: an early return
++    // inside would wedge the AP parked.
++    JARVIS_ASSERT_EQ(0ULL, d_pre);
++    JARVIS_ASSERT_EQ(2ULL, d_two);
++    JARVIS_ASSERT_EQ(1ULL, d_one);
++    JARVIS_ASSERT_EQ(0ULL, d_zero);
 +    JARVIS_TEST_PASS();
 +}
 +
-+// Runmode: kernel
-+// Testidea: Walk the static blob through every public node/property query
-+// (issue #183).
-+// Input: static blob with memory@40000000 (device_type + reg) and chosen
-+// (bootargs) children.
-+// Expect: prop-value search reports the outermost match (root, 0); child,
-+// sibling, name, subnode and property queries resolve to the builder-recorded
-+// layout; reg decodes to base 0x40000000 size 0x10000000; bootargs reads back
-+// "test-boot".
-+// Depends: src/lib/fdt/fdt_ro.cpp
-+JARVIS_TEST(lib_fdt_static_tree_walk, "PRE: none | POST: none") {
-+    static uint8_t blob[kFdtStaticSize];
-+    FdtStaticLayout layout{};
-+    fdt_static_build(blob, layout);
-+
-+    int mem =
-+        fdt_node_offset_by_prop_value(blob, -1, "device_type", "memory", 7);
-+    // Returns the OUTERMOST node whose content scan hits the property: the
-+    // root (offset 0) has no direct props, so the scan starting at its
-+    // content finds memory's device_type first and reports the root.
-+    JARVIS_ASSERT_EQ(0, mem);
-+    JARVIS_ASSERT_EQ(layout.mem_node, fdt_first_child(blob, 0));
-+    JARVIS_ASSERT_EQ(layout.chosen_node, fdt_next_sibling(blob, layout.mem_node));
-+    JARVIS_ASSERT_EQ(layout.chosen_node, fdt_next_subnode(blob, layout.mem_node));
-+    // Last child and root have no next sibling (fail-closed NOTFOUND, not a
-+    // bogus offset — issue #183 found the old depth-0 walk returned the
-+    // parent's end instead).
-+    JARVIS_ASSERT(fdt_next_sibling(blob, layout.chosen_node) < 0);
-+    JARVIS_ASSERT(fdt_next_sibling(blob, 0) < 0);
-+
-+    int name_len = 0;
-+    JARVIS_ASSERT_EQ(0, strcmp(fdt_get_name(blob, layout.mem_node, &name_len),
-+                               "memory@40000000"));
-+    JARVIS_ASSERT_EQ(15, name_len);
-+    JARVIS_ASSERT_EQ(0, strcmp(fdt_get_name(blob, layout.chosen_node, nullptr),
-+                               "chosen"));
-+
-+    JARVIS_ASSERT_EQ(layout.mem_node, fdt_subnode_offset_namelen(
-+                                          blob, 0, "memory@40000000", 15));
-+    JARVIS_ASSERT_EQ(layout.chosen_node,
-+                     fdt_subnode_offset_namelen(blob, 0, "chosen", 6));
-+
-+    int reg_len = 0;
-+    const auto *reg = static_cast<const uint32_t *>(
-+        fdt_getprop_namelen(blob, layout.mem_node, "reg", &reg_len));
-+    JARVIS_ASSERT(reg != nullptr);
-+    JARVIS_ASSERT_EQ(16, reg_len);
-+    uint64_t base =
-+        (static_cast<uint64_t>(fdt32_to_cpu(reg[0])) << 32) |
-+        fdt32_to_cpu(reg[1]);
-+    uint64_t size =
-+        (static_cast<uint64_t>(fdt32_to_cpu(reg[2])) << 32) |
-+        fdt32_to_cpu(reg[3]);
-+    JARVIS_ASSERT_EQ(0x40000000ULL, base);
-+    JARVIS_ASSERT_EQ(0x10000000ULL, size);
-+
-+    const char *outname = nullptr;
-+    int by_off_len = 0;
-+    const auto *by_off = static_cast<const uint32_t *>(
-+        fdt_getprop_by_offset(blob, layout.reg_prop, &outname, &by_off_len));
-+    JARVIS_ASSERT(by_off != nullptr);
-+    JARVIS_ASSERT_EQ(0, strcmp(outname, "reg"));
-+    JARVIS_ASSERT_EQ(16, by_off_len);
-+
-+    int args_len = 0;
-+    const auto *args = static_cast<const char *>(
-+        fdt_getprop_namelen(blob, layout.chosen_node, "bootargs", &args_len));
-+    JARVIS_ASSERT(args != nullptr);
-+    JARVIS_ASSERT_EQ(10, args_len);
-+    JARVIS_ASSERT_EQ(0, strcmp(args, "test-boot"));
-+
-+    JARVIS_ASSERT_EQ(0, strcmp(fdt_string(blob, 0), "device_type"));
-+    JARVIS_ASSERT_EQ(0, strcmp(fdt_string(blob, 12), "reg"));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: A corrupted magic fail-closes with BADMAGIC and every query
-+// rejects the blob (issue #183).
-+// Input: static blob with magic zeroed.
-+// Expect: fdt_check_header == -FDT_ERR_BADMAGIC; node/prop lookups fail;
-+// fdt_strerror describes the code.
-+// Depends: src/lib/fdt/fdt_ro.cpp
-+JARVIS_TEST(lib_fdt_static_bad_header, "PRE: none | POST: none") {
-+    static uint8_t blob[kFdtStaticSize];
-+    FdtStaticLayout bad_layout{};
-+    fdt_static_build(blob, bad_layout);
-+    blob[0] = 0;
-+    blob[1] = 0;
-+    blob[2] = 0;
-+    blob[3] = 0;
-+    JARVIS_ASSERT_EQ(-FDT_ERR_BADMAGIC, fdt_check_header(blob));
-+    JARVIS_ASSERT(fdt_node_offset_by_prop_value(blob, -1, "device_type",
-+                                                "memory", 7) < 0);
-+    JARVIS_ASSERT(fdt_subnode_offset_namelen(blob, 0, "chosen", 6) < 0);
-+    JARVIS_ASSERT(fdt_getprop_namelen(blob, bad_layout.mem_node, "reg",
-+                                        nullptr) == nullptr);
-+    JARVIS_ASSERT(fdt_string(blob, 0) == nullptr);
-+    JARVIS_ASSERT(fdt_strerror(FDT_ERR_BADMAGIC) != nullptr);
-+    JARVIS_TEST_PASS();
-+}
-+
- // Runmode: kernel
- // Testidea: Register all lib subsystem tests (string, utils, ErrorOr,
- // version) with the test framework.
-@@ -343,4 +606,8 @@ void register_lib_tests() {
- 
-     JARVIS_REGISTER_TEST(lib_crc32_known_vector);
-     JARVIS_REGISTER_TEST(lib_crc32_empty_and_incremental);
-+
-+    JARVIS_REGISTER_TEST(lib_fdt_static_header_and_reserve);
-+    JARVIS_REGISTER_TEST(lib_fdt_static_tree_walk);
-+    JARVIS_REGISTER_TEST(lib_fdt_static_bad_header);
+ void register_smp_sched_tests() {
+     Logger::info("Registering smp sched tests");
+     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
+@@ -652,5 +733,6 @@ void register_smp_sched_tests() {
+     JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
+     JARVIS_REGISTER_TEST(smp_drain_spares_ap_current);
+     JARVIS_REGISTER_TEST(smp_terminate_remote_current_refused);
++    JARVIS_REGISTER_TEST(smp_quiesce_nesting_composes);
  }
-diff --git a/src/lib/fdt/fdt_ro.cpp b/src/lib/fdt/fdt_ro.cpp
-index fdaf1baa..9324f668 100644
---- a/src/lib/fdt/fdt_ro.cpp
-+++ b/src/lib/fdt/fdt_ro.cpp
-@@ -117,29 +117,37 @@ int fdt_first_child(const void *fdt, int parentoffset) {
- }
- 
- int fdt_next_sibling(const void *fdt, int offset) {
--    int depth = 0;
-+    int depth = 1;
-     uint32_t tag;
- 
-     if (fdt_check_header(fdt) != 0)
-         return -FDT_ERR_BADOFFSET;
- 
--    for (;;) {
-+    // The offset must aim at the node's BEGIN_NODE tag; anything else is a
-+    // caller error (issue #183: first_child/subnode_offset produce BEGIN
-+    // offsets, so the pair stays coherent).
-+    tag = fdt_next_tag_(fdt, offset, &offset);
-+    if (tag != FDT_BEGIN_NODE)
-+        return -FDT_ERR_BADOFFSET;
-+
-+    // Consume the current node's whole subtree (props, children, END_NODE).
-+    while (depth > 0) {
-         tag = fdt_next_tag_(fdt, offset, &offset);
--        switch (tag) {
--        case FDT_BEGIN_NODE:
-+        if (tag == FDT_BEGIN_NODE) {
-             depth++;
--            break;
--        case FDT_END_NODE:
--            if (depth == 0)
--                return offset;
-+        } else if (tag == FDT_END_NODE) {
-             depth--;
--            break;
--        case FDT_END:
-+        } else if (tag == FDT_END) {
-             return -FDT_ERR_NOTFOUND;
--        default:
--            break;
-         }
-     }
-+    // Offset now aims at the tag following the node: a sibling's BEGIN_NODE,
-+    // the parent's END_NODE, or FDT_END.
-+    int sibling = offset;
-+    tag = fdt_next_tag_(fdt, offset, &offset);
-+    if (tag == FDT_BEGIN_NODE)
-+        return sibling;
-+    return -FDT_ERR_NOTFOUND;
- }
- 
- int fdt_next_subnode(const void *fdt, int offset) {
-diff --git a/tools/coverage_report.py b/tools/coverage_report.py
-index 7c5c5ae8..97c6e4e0 100644
---- a/tools/coverage_report.py
-+++ b/tools/coverage_report.py
-@@ -202,6 +202,20 @@ def area_of(src, is_test):
-     return parts[0]
- 
- 
-+# Files scoped out of the coverage denominator (issue #183): the FDT
-+# library is reachable only through the AARCH64/RISCV64 boot-DTB consumer
-+# (kernel.cpp), so on x86 test boots its functions are permanently
-+# uncoverable. Report-side exclusion only — instrumentation is kept so raw
-+# dumps still record entries from the static-blob unit test.
-+COVERAGE_SCOPED_OUT = ("src/lib/fdt/",)
-+
-+
-+def is_scoped_out(src):
-+    """True when a source path is excluded from the coverage denominator."""
-+    norm = src.replace("\\", "/")
-+    return any(m in norm for m in COVERAGE_SCOPED_OUT)
-+
-+
- def main():
-     parser = argparse.ArgumentParser()
-     parser.add_argument("--dir", required=True, help="build/coverage root")
-@@ -257,6 +271,8 @@ def main():
-         for i, (name, src) in enumerate(table):
-             if src == "??" or not src:
-                 continue
-+            if is_scoped_out(src):
-+                continue
-             is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
-             key = (src, sym_names[i] if i < len(sym_names) else name,
-                    area_of(src, is_test))
-@@ -269,6 +285,8 @@ def main():
-             name, src = table[i]
-             if src == "??" or not src:
-                 continue
-+            if is_scoped_out(src):
-+                continue
-             is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
-             key = (src, sym_names[i] if i < len(sym_names) else name,
-                    area_of(src, is_test))
-@@ -328,6 +346,11 @@ def main():
-                  "never entered for classes that are never used as bases, so "
-                  "counting them would inflate the denominator with "
-                  "permanently uncoverable entries (issue #142).\n")
-+    lines.append("Note: `src/lib/fdt/*` is scoped out of the denominator "
-+                 "(issue #183) — the FDT library is reachable only via the "
-+                 "AARCH64/RISCV64 boot-DTB consumer, so it is permanently "
-+                 "uncoverable on x86 test boots. It is measured instead by "
-+                 "the static-blob `lib_fdt_*` unit tests.\n")
-     lines.append("\n## Coverage per area (worst first)\n")
-     lines.append("| Area | Covered | Total | % |")
-     lines.append("|---|---:|---:|---:|")
-diff --git a/tools/gcov_line_report.py b/tools/gcov_line_report.py
-index 0bb690c5..3ad88a53 100644
---- a/tools/gcov_line_report.py
-+++ b/tools/gcov_line_report.py
-@@ -223,6 +223,11 @@ def summarise_with_gcov(gcno_root, out_dir):
-                         missed += 1
-             if source is None:
-                 source = entry[:-5]
-+            # Scoped out of the denominator (issue #183): the FDT library is
-+            # reachable only via the AARCH64/RISCV64 boot-DTB consumer, so it
-+            # is permanently uncoverable on x86 test boots.
-+            if "lib/fdt/" in source.replace("\\", "/"):
-+                continue
-             previous = per_file.get(source, (0, 0, 0, 0, 0))
-             per_file[source] = (previous[0] + 1, previous[1] + hit,
-                                 previous[2] + missed,
-@@ -322,6 +327,7 @@ def main():
-             [LCOV, "--capture", "--directory", args.gcno_root,
-              "--gcov-tool", GCOV, "--output-file", info,
-              "--exclude", "*/coverage/*",
-+             "--exclude", "*/lib/fdt/*",
-              "--ignore-errors", "mismatch,empty,source,path,inconsistent,"
-                                 "unused"],
-             check=False,
+ #endif // CONFIG_ARCH_X86_64

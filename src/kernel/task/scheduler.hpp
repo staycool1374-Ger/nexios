@@ -887,6 +887,10 @@ class Scheduler {
     static void quiesce_enter() noexcept;
     /// @brief Leave the AP-quiesce window (clear flag; AP resumes).
     static void quiesce_exit() noexcept;
+    /// @brief Current quiesce nesting depth (issue #197 test accessor).
+    static uint64_t quiesce_depth() noexcept {
+        return __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
+    }
 struct SwSlots {
     static uint64_t this_cpu() {
         return arch::cpu_index();
@@ -1030,6 +1034,10 @@ struct SwSlots {
     ///        (no dispatch/queue touch).  Set across teardown + snapshot
     ///        windows (with arm-cancel + global lock per the spec order).
     static constinit bool sched_quiesced_;
+    /// @brief Quiesce nesting depth (issue #197): windows nest (tests
+    ///        bracket set_affinity_err/balancer paths that quiesce
+    ///        internally), so the flag clears only at the outermost exit.
+    static constinit uint64_t sched_quiesce_depth_;
 #if CONFIG_DEADLINE_MONITOR_TASK
     /// @brief Pointer to the deadline-monitor task (nullptr if not spawned).
     static constinit TaskControlBlock *s_monitor_task_;

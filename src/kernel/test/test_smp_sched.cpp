@@ -72,6 +72,36 @@ bool poll_until(volatile uint64_t &flag, uint64_t value, uint64_t ms) {
     return true;
 }
 
+/// @brief RAII AP-quiesce window (issue #197): parks AP dispatch/drain
+///        across a synchronous queue-surgery window. JARVIS_ASSERT is
+///        record+return, so the destructor always runs (no wedged AP).
+///        No sleeps/polls may span the window (the AP cannot rendezvous
+///        while parked).
+struct SmpQuiesceGuard {
+    SmpQuiesceGuard() noexcept { Scheduler::quiesce_enter(); }
+    ~SmpQuiesceGuard() noexcept { Scheduler::quiesce_exit(); }
+    SmpQuiesceGuard(const SmpQuiesceGuard &) = delete;
+    SmpQuiesceGuard &operator=(const SmpQuiesceGuard &) = delete;
+};
+
+/// @brief RAII AP-slot drive (issue #197): saves cpu_ctx(cpu).current and
+///        installs a fixture, restoring on scope exit. JARVIS_ASSERT is
+///        record+return — without this, an early return leaves the fake
+///        slot behind: restore spares the orphan (AP-current), the next
+///        snapshot pins its block as baseline, and the pin-skip feedback
+///        loop makes it permanent.
+struct SmpSlotGuard {
+    uint64_t cpu;
+    TaskControlBlock *saved;
+    SmpSlotGuard(uint64_t c, TaskControlBlock *fixture) noexcept
+        : cpu(c), saved(kernel::cpu_ctx(c).current) {
+        kernel::cpu_ctx(c).current = fixture;
+    }
+    ~SmpSlotGuard() noexcept { kernel::cpu_ctx(cpu).current = saved; }
+    SmpSlotGuard(const SmpSlotGuard &) = delete;
+    SmpSlotGuard &operator=(const SmpSlotGuard &) = delete;
+};
+
 /// @brief True when the AP is parked back on an idle task.
 bool ap_parked_on_idle(uint64_t ms) {
     uint64_t freq = arch::Timer::tsc_freq_hz();
@@ -237,8 +267,10 @@ JARVIS_TEST(smp_sched_bsp_unaffected, "PRE: iocd | POST: none") {
 
 // Runmode: kernel
 // Testidea: Changing a queued BLOCKED task's mask moves it between CPU
-//           queues deterministically (nothing can dispatch a BLOCKED
-//           task, so placement is stable across ticks on both CPUs).
+//           queues deterministically. The setup→assert→teardown window is
+//           fully frozen (IrqGuard for the BSP tick/balancer, SmpQuiesceGuard
+//           for the AP tick, issue #197): an AP tick's next_task() otherwise
+//           dequeue-drops the BLOCKED probe mid-window, desyncing teardown.
 // Input: register + BLOCKED + set_affinity(0x2) + enqueue (lands [1]);
 //        set_affinity(0x3) (lowest bit 0 → moves to [0]).
 // Expect: 0 APs: clamp path (stays [0]). 1 AP: [1] then [0], never both.
@@ -247,6 +279,8 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 10,
                                        TaskControlBlock::NO_PERIOD);
     JARVIS_ASSERT(t != nullptr);
+    arch::IrqGuard frozen_world;
+    SmpQuiesceGuard parked_ap;
     t->state = TaskState::BLOCKED;
     Scheduler::register_task(*t);
     Scheduler::set_affinity(*t, 0x2);
@@ -273,13 +307,12 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
 // Testidea: Queue placement routes deterministically per mask: tasks
 //           pinned 0x1 land on [0] exclusively, tasks pinned 0x2 land
 //           on [1] exclusively (clamped to [0] with 0 APs).  Setup,
-//           assert and teardown run PER TASK, never batched: next_task()
-//           dequeue-drops queued-but-BLOCKED occupants on every tick, so
-//           a batched window spanning several PMM allocations lets a
-//           tick scavenge earlier probes before they are asserted (the
-//           per-task window matches smp_sched_cross_move's).  Masks are
-//           asserted too (cpu_affinity is tick-stable, unlike queue
-//           membership).
+//           assert and teardown run PER TASK, never batched, inside one
+//           frozen window (IrqGuard + SmpQuiesceGuard, issue #197):
+//           next_task() dequeue-drops queued-but-BLOCKED occupants on
+//           every tick, so any live tick scavenges probes before they
+//           are asserted. Masks are asserted too (cpu_affinity is
+//           tick-stable, unlike queue membership).
 // Input: 4x (create + BLOCKED + register + pin [0x1,0x1,0x2,0x2] +
 //        enqueue + assert + remove + cleanup + free), one task live.
 // Expect: Per task: affinity == pinned-or-clamped mask;
@@ -288,6 +321,8 @@ JARVIS_TEST(smp_sched_cross_move, "PRE: iocd | POST: none") {
 JARVIS_TEST(smp_sched_queue_placement_fanout, "PRE: iocd | POST: none") {
     constexpr uint64_t kMasks[4] = {0x1, 0x1, 0x2, 0x2};
     bool has_ap = smp::ap_count() > 0;
+    arch::IrqGuard frozen_world;
+    SmpQuiesceGuard parked_ap;
     for (uint64_t i = 0; i < 4; ++i) {
         TaskControlBlock *probe = TaskControlBlock::create(
             placement_probe_entry, 10, TaskControlBlock::NO_PERIOD);
@@ -577,27 +612,41 @@ JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
     // Deterministic core: drive cpu_ctx(1).current directly (the exact
     // predicate input of is_current_on_any_cpu) instead of racing the AP
     // tick — a live-AP observation would flake on tick timing. The
-    // fixture is never enqueued, so no dispatch can disturb the setup.
+    // fixture is never enqueued, but the LIVE AP still reads/writes its
+    // own cpu_ctx slot on every tick, so the fake-current window runs
+    // fully frozen (IrqGuard + SmpQuiesceGuard, issue #197); otherwise a
+    // tick overwrites the slot mid-window and corrupts both the
+    // experiment and the AP's real current task.
     auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
     JARVIS_ASSERT(runner != nullptr);
+    arch::IrqGuard frozen_world;
+    SmpQuiesceGuard parked_ap;
+    // Establish zombie-list solitude first: a stale zombie from an earlier
+    // test would be drained instead of the runner, breaking the count
+    // asserts below (each test's own boundary check owns attributing its
+    // leak; this test only needs a known starting state).
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
     // Force the zombie state directly (bypasses terminate_err: this test
     // targets the DRAIN gate, not the terminate gate).
     runner->state = TaskState::TERMINATED;
     Scheduler::release_zombie(*runner);
     const uint64_t zombies_before = Scheduler::zombie_count();
-    JARVIS_ASSERT(zombies_before >= 1);
+    JARVIS_ASSERT_EQ(1ULL, zombies_before);
     // Simulate AP-current: the drain must spare (never free a live stack).
-    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
-    kernel::cpu_ctx(1).current = runner;
-    Scheduler::drain_zombie_list();
-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
-    Scheduler::cleanup_step_try();
-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-    // AP leaves: restore the slot, then the re-drain must free exactly it.
-    kernel::cpu_ctx(1).current = saved_current;
+    // Slot restores via RAII even on early return (see SmpSlotGuard).
+    {
+        SmpSlotGuard ap_is_runner(1, runner);
+        Scheduler::drain_zombie_list();
+        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+        JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+        Scheduler::cleanup_step_try();
+        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+    }
+    // AP leaves (slot restored by the guard): the re-drain must free
+    // exactly the runner.
     Scheduler::drain_zombie_list();
     JARVIS_ASSERT_EQ(zombies_before - 1, Scheduler::zombie_count());
     JARVIS_TEST_PASS();
@@ -613,28 +662,60 @@ JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
 // terminate_err returns SCHED_ERR_OK.
 // Depends: Scheduler::terminate_err refusal predicate
 JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
-    // Same deterministic cpu_ctx drive as the drain test: the fixture is
-    // never enqueued, so no dispatch can disturb the setup.
+    // Same frozen window as the drain test: driving the live AP slot
+    // while the AP ticks corrupts both sides (issue #197).
     auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
     JARVIS_ASSERT(runner != nullptr);
-    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
-    kernel::cpu_ctx(1).current = runner;
-    // Refusal with zero mutation: still live, no zombie queued.
-    const uint64_t zombies_before = Scheduler::zombie_count();
-    const errors::SchedulerError refused =
-        Scheduler::terminate_err(*runner, 0);
-    JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
-    JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
-    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
-    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
-    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
-    // AP leaves: the same call must now succeed and the drain must free.
-    kernel::cpu_ctx(1).current = saved_current;
+    arch::IrqGuard frozen_world;
+    SmpQuiesceGuard parked_ap;
+    uint64_t zombies_before = Scheduler::zombie_count();
+    {
+        SmpSlotGuard ap_is_runner(1, runner);
+        // Refusal with zero mutation: still live, no zombie queued.
+        zombies_before = Scheduler::zombie_count();
+        const errors::SchedulerError refused =
+            Scheduler::terminate_err(*runner, 0);
+        JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
+        JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
+        JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+        JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+        JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+    }
+    // AP leaves (slot restored by the guard): the same call must now
+    // succeed and the drain must free.
     JARVIS_ASSERT_EQ(errors::SCHED_ERR_OK,
                      Scheduler::terminate_err(*runner, 0));
     JARVIS_ASSERT(runner->state == TaskState::TERMINATED);
     Scheduler::drain_zombie_list();
     JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Quiesce windows nest (issue #197): an outer test/harness
+//           window brackets paths like set_affinity_err that quiesce
+//           internally — the AP must stay parked until the OUTERMOST
+//           exit (a bool flag unparks mid-window and reopens the
+//           cross_move race).
+// Input: enter, enter, exit, exit with depth asserts between.
+// Expect: depth 2 → 1 (still parked) → 0. No asserts inside a live
+//         window (an early return would wedge the AP parked).
+// Depends: Scheduler::quiesce_enter/exit depth counter
+JARVIS_TEST(smp_quiesce_nesting_composes, "PRE: none | POST: none") {
+    uint64_t d_pre = Scheduler::quiesce_depth();
+    Scheduler::quiesce_enter();
+    Scheduler::quiesce_enter();
+    uint64_t d_two = Scheduler::quiesce_depth();
+    Scheduler::quiesce_exit();
+    uint64_t d_one = Scheduler::quiesce_depth();
+    Scheduler::quiesce_exit();
+    uint64_t d_zero = Scheduler::quiesce_depth();
+    // All asserts AFTER the window is fully closed: an early return
+    // inside would wedge the AP parked.
+    JARVIS_ASSERT_EQ(0ULL, d_pre);
+    JARVIS_ASSERT_EQ(2ULL, d_two);
+    JARVIS_ASSERT_EQ(1ULL, d_one);
+    JARVIS_ASSERT_EQ(0ULL, d_zero);
     JARVIS_TEST_PASS();
 }
 
@@ -652,5 +733,6 @@ void register_smp_sched_tests() {
     JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
     JARVIS_REGISTER_TEST(smp_drain_spares_ap_current);
     JARVIS_REGISTER_TEST(smp_terminate_remote_current_refused);
+    JARVIS_REGISTER_TEST(smp_quiesce_nesting_composes);
 }
 #endif // CONFIG_ARCH_X86_64
