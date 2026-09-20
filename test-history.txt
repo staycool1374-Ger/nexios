@@ -1603,3 +1603,8 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-20 11:52:00 core PASSED: 462 FAILED: 0 TIME: 111205ms
 2026-09-20 13:31:00 smp_multicpu PASSED: 16 FAILED: 1 TIME: 0ms STATUS: retrospective cross_move-LEAK-PMM17-Tasks1 (see #197)
 2026-09-20 13:31:00 smp_multicpu PASSED: 16 FAILED: 1 TIME: 0ms STATUS: retrospective drain-test-LEAK-PMM17-no-Tasks (see #197)
+2026-09-20 13:35:41 478 smp_multicpu PASSED: 17 FAILED: 0 TIME: ms
+2026-09-20 13:35:41 481 smp_multicpu PASSED: 17 FAILED: 0 TIME: ms
+2026-09-20 13:35:41 482 smp_multicpu PASSED: 17 FAILED: 0 TIME: ms
+2026-09-20 13:35:41 1820 smp_multicpu PASSED: 17 FAILED: 0 TIME: ms
+2026-09-20 13:35:41 517 smp_multicpu PASSED: 17 FAILED: 0 TIME: ms
