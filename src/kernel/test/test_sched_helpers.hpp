@@ -31,6 +31,7 @@
 
 #pragma once
 
+#include <test.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -158,8 +159,14 @@ inline TaskControlBlock *create_forever_task(uint64_t priority,
 ///        is skipped entirely.
 inline void terminate_and_drain(TaskControlBlock &task) {
     if (TaskControlBlock::is_valid(&task) &&
-        task.state != TaskState::TERMINATED)
-        Scheduler::terminate(task, 0);
+        task.state != TaskState::TERMINATED) {
+        // Issue #197: refusal (AP-live target) is fail-closed — the task
+        // stays alive and the drain below simply finds no new zombie.
+        const errors::SchedulerError term_err =
+            Scheduler::terminate_err(task, 0);
+        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
+                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
+    }
     Scheduler::drain_zombie_list();
 }
 
@@ -171,8 +178,14 @@ inline void terminate_and_drain(TaskControlBlock &task) {
 ///        touching freed memory.
 inline void terminate_if_live(TaskControlBlock *task) {
     if (task && TaskControlBlock::is_valid(task) &&
-        task->state != TaskState::TERMINATED)
-        Scheduler::terminate(*task, 0);
+        task->state != TaskState::TERMINATED) {
+        // Issue #197: refusal (AP-live target) is fail-closed — never
+        // ENSURE or loop on it; the owner CPU reaps via its own path.
+        const errors::SchedulerError term_err =
+            Scheduler::terminate_err(*task, 0);
+        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
+                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
+    }
 }
 
 /// @brief Teardown for a pair of tasks: terminate the still-live ones, then

@@ -436,6 +436,13 @@ class Scheduler {
     ///        ready queue.  Call this instead of directly setting
     ///        `task.state = TERMINATED` to keep the ready queue consistent.
     static void terminate(TaskControlBlock &task, uint64_t exit_code) noexcept;
+    /// @brief Fallible terminate (issue #197): refuses with
+    ///        SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is
+    ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
+    ///        running task. Self-termination always succeeds. The void
+    ///        terminate() above delegates and warns on refusal.
+    static errors::SchedulerError terminate_err(TaskControlBlock &task,
+                                                uint64_t exit_code) noexcept;
     /// @brief Entry point for the deadline-monitor task (priority 127).
     ///        Waits on an atomic handoff flag, calls scan_deadlines() when
     ///        woken by on_tick().  Only compiled when

@@ -105,7 +105,15 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         if (Scheduler::current_task() == t) {
             Scheduler::switch_away_from_terminating(*t);
         } else {
-            Scheduler::terminate(*t, arg0);
+            // Issue #197: a target running on another CPU cannot be
+            // freed — map the refusal instead of falling through to
+            // child-reparent/wait logic that assumes TERMINATED.
+            const errors::SchedulerError exit_err =
+                Scheduler::terminate_err(*t, arg0);
+            if (exit_err != errors::SCHED_ERR_OK) {
+                return static_cast<uint64_t>(
+                    errors::from_sched_error(static_cast<uint64_t>(exit_err)));
+            }
         }
 
         if (t->first_child) {

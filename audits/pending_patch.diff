@@ -1,2435 +1,487 @@
-diff --git a/src/kernel/syscall/syscall.hpp b/src/kernel/syscall/syscall.hpp
-index c6bab9d6..3f42df99 100644
---- a/src/kernel/syscall/syscall.hpp
-+++ b/src/kernel/syscall/syscall.hpp
-@@ -380,6 +380,14 @@ class Syscall {
-                                     uint64_t *);
-     static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
-                                 uint64_t *);
-+    static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                      uint64_t *);
-+    static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                  uint64_t *);
-+    static uint64_t sys_timer_create(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                     uint64_t *);
-+    static uint64_t sys_timerfd_create(uint64_t, uint64_t, uint64_t, uint64_t,
-+                                       uint64_t *);
-     static uint64_t sys_unimplemented(uint64_t, uint64_t, uint64_t, uint64_t,
-                                       uint64_t *);
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index b34a8e4f..a5db3e35 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -890,8 +890,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+         debug_write(" priority=");
+         debug_write_hex(victim->priority);
+         debug_write("\n");
+-        kernel::Scheduler::terminate(*victim,
+-            static_cast<uint64_t>(-static_cast<int64_t>(9)));
++        // Issue #197: an AP-live victim cannot be freed — refuse and
++        // retry on the next OOM tick instead of draining a live task.
++        const kernel::errors::SchedulerError oom_err =
++            kernel::Scheduler::terminate_err(*victim,
++                static_cast<uint64_t>(-static_cast<int64_t>(9)));
++        if (oom_err != kernel::errors::SCHED_ERR_OK) {
++            return false;
++        }
+         kernel::Scheduler::drain_zombie_list();
+         return true;
+     });
+@@ -1421,8 +1427,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+         // INV-5: terminate dequeues the task from the ready queue so it is
+         // never left inrq=1 outside the physical queue (which corrupts the
+         // ready-queue count_ and wedges the scheduler).
+-        kernel::Scheduler::terminate(*task,
+-                                     static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++        // Issue #197: an AP-live target cannot be freed — leave it alive
++        // (delivery deferred to the owning CPU's own exit path); do NOT
++        // re-deliver in a tight loop (caller backs off).
++        const kernel::errors::SchedulerError fatal_err =
++            kernel::Scheduler::terminate_err(*task,
++                static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++        if (fatal_err != kernel::errors::SCHED_ERR_OK) {
++            return false;
++        }
+         return false;
+     }
  
-@@ -465,10 +473,10 @@ class Syscall {
-             &Syscall::sys_set_affinity,
-             &Syscall::sys_get_affinity,
-             &Syscall::sys_times,
--            &Syscall::sys_unimplemented, // 80 CLOCK_GETTIME (issue #76)
--            &Syscall::sys_unimplemented, // 81 NANOSLEEP (issue #76)
--            &Syscall::sys_unimplemented, // 82 TIMER_CREATE (issue #76)
--            &Syscall::sys_unimplemented, // 83 TIMERFD_CREATE (issue #76)
-+            &Syscall::sys_clock_gettime, // 80 CLOCK_GETTIME (issue #76)
-+            &Syscall::sys_nanosleep,     // 81 NANOSLEEP (issue #76)
-+            &Syscall::sys_timer_create,  // 82 TIMER_CREATE (issue #76)
-+            &Syscall::sys_timerfd_create, // 83 TIMERFD_CREATE (issue #76)
-             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
-             &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
-     };
-diff --git a/src/kernel/syscall/syscall_handlers_fs.cpp b/src/kernel/syscall/syscall_handlers_fs.cpp
-index 71a87940..238f338c 100644
---- a/src/kernel/syscall/syscall_handlers_fs.cpp
-+++ b/src/kernel/syscall/syscall_handlers_fs.cpp
-@@ -240,6 +240,13 @@ uint64_t Syscall::sys_read(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-     auto buf = checked(reinterpret_cast<uint8_t *>(arg1), count);
-     if (syscall_is_user_task() && !buf.valid())
-         return static_cast<uint64_t>(-1);
-+    // Issue #76: timerfd read bypasses the vnode ops table (the counter
-+    // lives in the PosixTime registry, not in a filesystem backend).
-+    if (is_timerfd_vnode(f->vnode)) {
-+        const bool nonblock = (f->flags & vfs::O_NONBLOCK) != 0;
-+        return timerfd_read_entry(*f->vnode, buf.unsafe_ptr(), count,
-+                                  nonblock);
-+    }
-     if (!f->vnode || !f->vnode->ops->read)
-         return static_cast<uint64_t>(-1);
-     // MP-4 (SMAP): ops->read writes user memory directly (generic vnode code
-diff --git a/src/kernel/syscall/syscall_handlers_posix_time.cpp b/src/kernel/syscall/syscall_handlers_posix_time.cpp
-new file mode 100644
-index 00000000..0e676f40
---- /dev/null
-+++ b/src/kernel/syscall/syscall_handlers_posix_time.cpp
-@@ -0,0 +1,584 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file syscall_handlers_posix_time.cpp
-+/// @brief POSIX time/timer syscalls: clock_gettime, nanosleep,
-+/// timer_create (multiplex), timerfd_create (issue #76, v0.5.0).
-+
-+#include <kernel/syscall/syscall.hpp>
-+#include <kernel/syscall/syscall_helpers.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/time/posix_time.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/vfs/vfs.hpp>
-+#include <kernel/memory/checked_ptr.hpp>
-+#include <kernel/memory/mempool.hpp>
-+#include <kernel/test/test_isolate.hpp>
-+
-+namespace kernel {
-+
-+namespace {
-+
-+// NOLINTNEXTLINE(performance-no-int-to-ptr)
-+constexpr uint64_t kNeg(int64_t err) {
-+    return static_cast<uint64_t>(-err);
-+}
-+
-+/// @brief User ABI timespec (matches src/libc/time.h layout).
-+struct AbiTimespec {
-+    int64_t tv_sec;
-+    int64_t tv_nsec;
-+};
-+static_assert(sizeof(AbiTimespec) == 16, "timespec width");
-+
-+/// @brief User ABI itimerspec (POSIX order: interval + value, matches
-+/// src/libc/time.h struct itimerspec).
-+struct AbiItimerspec {
-+    AbiTimespec it_interval;
-+    AbiTimespec it_value;
-+};
-+static_assert(sizeof(AbiItimerspec) == 32, "itimerspec width");
-+
-+/// @brief Timerfd vnode tag: packed (slot_gen << 32) | index in private_data.
-+/// No allocation — the tag travels by value, never dereferenced.
-+uint64_t timerfd_tag(const vfs::Vnode *node) {
-+    return reinterpret_cast<uint64_t>(node->private_data);
-+}
-+
-+uint32_t timerfd_tag_index(uint64_t tag) {
-+    return static_cast<uint32_t>(tag & 0xFFFFFFFFULL);
-+}
-+
-+uint32_t timerfd_tag_gen(uint64_t tag) {
-+    return static_cast<uint32_t>((tag >> 32) & 0xFFFFFFFFULL);
-+}
-+
-+uint64_t make_timerfd_tag(uint32_t index, uint32_t gen) {
-+    return (static_cast<uint64_t>(gen) << 32) | static_cast<uint64_t>(index);
-+}
-+
-+/// @brief timerfd vnode close: free the registry slot iff the closer owns
-+/// it (fork-inherited closes from non-owners drop only the vnode ref),
-+/// then release the vnode (pipe_read_close precedent).
-+void timerfd_close(vfs::Vnode &self) {
-+    const uint64_t tag = timerfd_tag(&self);
-+    const uint32_t index = timerfd_tag_index(tag);
-+    const uint32_t gen = timerfd_tag_gen(tag);
-+    auto *cur = Scheduler::current_task();
-+    if (cur != nullptr) {
-+        time::PosixTime::timerfd_slot_free(index, gen, cur->id,
-+                                           cur->generation);
-+    }
-+    self.private_data = nullptr;
-+    test::ResourceTracker::instance().track_vnode_remove();
-+    MemPool::free(&self);
-+}
-+
-+int timerfd_fstat(vfs::Vnode &, vfs::VfsStat &vfs_stat) {
-+    vfs_stat.st_size = 0;
-+    vfs_stat.st_mode = vfs::S_IFCHR;
-+    return 0;
-+}
-+
-+const vfs::VnodeOps timerfd_ops = {
-+    nullptr,       // read (served by the sys_read timerfd branch)
-+    nullptr,       // write
-+    nullptr,       // open
-+    timerfd_close, // close
-+    nullptr,       // lseek
-+    timerfd_fstat, // fstat
-+    nullptr,       // ioctl
-+    nullptr,       // readdir
-+    nullptr,       // lookup
-+    nullptr,       // mkdir
-+    nullptr,       // unlink
-+    nullptr,       // create
-+};
-+
-+bool copy_timespec_in(const AbiTimespec *user_ptr, bool is_user,
-+                      time::TimespecU &out) {
-+    if (user_ptr == nullptr) {
-+        return false;
-+    }
-+    AbiTimespec local{};
-+    if (is_user) {
-+        auto checked_ptr = checked(user_ptr);
-+        if (!checked_ptr.valid()) {
-+            return false;
-+        }
-+        if (!safe_copy_from_user(&local, checked_ptr.unsafe_ptr(), 1)) {
-+            return false;
-+        }
-+    } else {
-+        local = *user_ptr;
-+    }
-+    out.sec = local.tv_sec;
-+    out.nsec = local.tv_nsec;
-+    return true;
-+}
-+
-+bool copy_timespec_out(AbiTimespec *user_ptr, bool is_user,
-+                       const time::TimespecU &value) {
-+    if (user_ptr == nullptr) {
-+        return false;
-+    }
-+    AbiTimespec local{};
-+    local.tv_sec = value.sec;
-+    local.tv_nsec = value.nsec;
-+    if (is_user) {
-+        auto checked_ptr = checked(user_ptr);
-+        if (!checked_ptr.valid()) {
-+            return false;
-+        }
-+        if (!safe_copy_to_user(checked_ptr.unsafe_ptr(), &local, 1)) {
-+            return false;
-+        }
-+    } else {
-+        *user_ptr = local;
-+    }
-+    return true;
-+}
-+
-+} // namespace
-+
-+/// @brief True when a vnode is a timerfd (ops-pointer identity — never
-+/// parses private_data of foreign vnodes). External linkage for the
-+/// sys_read branch; timerfd_ops itself stays TU-local.
-+bool is_timerfd_vnode(const vfs::Vnode *node) {
-+    return node != nullptr && node->ops == &timerfd_ops;
-+}
-+
-+uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                    uint64_t, uint64_t *) {
-+    const uint64_t clock_id = arg0;
-+    if (clock_id != static_cast<uint64_t>(time::PosixClock::REALTIME) &&
-+        clock_id != static_cast<uint64_t>(time::PosixClock::MONOTONIC)) {
-+        return kNeg(time::kPosixErrInvalid);
-+    }
-+    if (arg1 == 0) {
-+        return kNeg(time::kPosixErrFault);
-+    }
-+    uint64_t now_ns = 0;
-+    if (clock_id == static_cast<uint64_t>(time::PosixClock::MONOTONIC)) {
-+        now_ns = time::PosixTime::clock_monotonic_ns();
-+    } else {
-+        now_ns = time::PosixTime::clock_realtime_ns();
-+    }
-+    const time::TimespecU split = time::PosixTime::ns_to_timespec(now_ns);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    auto out_ptr = checked(reinterpret_cast<AbiTimespec *>(arg1));
-+    const bool is_user = syscall_is_user_task();
-+    if (is_user && !out_ptr.valid()) {
-+        return kNeg(time::kPosixErrFault);
-+    }
-+    if (!copy_timespec_out(out_ptr.unsafe_ptr(), is_user, split)) {
-+        return kNeg(time::kPosixErrFault);
-+    }
-+    return 0;
-+}
-+
-+uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                uint64_t, uint64_t *) {
-+    auto *cur = syscall_task();
-+    if (cur == nullptr) {
-+        return static_cast<uint64_t>(-1);
-+    }
-+    const bool is_user = syscall_is_user_task();
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const auto *req_ptr = reinterpret_cast<const AbiTimespec *>(arg0);
-+    time::TimespecU req{};
-+    if (!copy_timespec_in(req_ptr, is_user, req)) {
-+        return kNeg(time::kPosixErrFault);
-+    }
-+    uint64_t total_ns = 0;
-+    if (!time::PosixTime::timespec_to_ns(req, total_ns)) {
-+        return kNeg(time::kPosixErrInvalid);
-+    }
-+    // Zero timeout returns immediately: no arm, no block (§11.3 — no
-+    // infinite-wait encoding exists on this call).
-+    if (total_ns == 0) {
-+        return 0;
-+    }
-+    if (!time::PosixTime::sleep_arm(*cur, total_ns)) {
-+        return kNeg(time::kPosixErrAgain);
-+    }
-+    // §11.1/11.2 block (sys_receive shape): no locks held across the
-+    // reschedule; BLOCKED always leaves the ready queue.
-+    cur->state = TaskState::BLOCKED;
-+    Scheduler::dequeue_ready(*cur);
-+    Scheduler::reschedule();
-+    if (cur->is_user_) {
-+        arch::sti();
-+        arch::hlt();
-+        arch::cli();
-+    }
-+    // Resume: expiry beats signals; signals beat re-block. The wheel
-+    // guarantees the expiry fires, so this spin is bounded (§11.3).
-+    while (cur->state == TaskState::BLOCKED &&
-+           !__atomic_load_n(&cur->sleep_expired, __ATOMIC_ACQUIRE) &&
-+           __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) == 0) {
-+        arch::pause();
-+    }
-+    const bool expired =
-+        __atomic_load_n(&cur->sleep_expired, __ATOMIC_ACQUIRE);
-+    const bool signaled =
-+        __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) != 0;
-+    time::PosixTime::sleep_cancel(*cur);
-+    if (signaled && !expired) {
-+        // Report the remainder (saturating, never negative).
-+        if (arg1 != 0) {
-+            const uint64_t now_ns = time::PosixTime::clock_monotonic_ns();
-+            uint64_t remaining_ns = 0;
-+            if (cur->sleep_expiry_ns > now_ns) {
-+                remaining_ns = cur->sleep_expiry_ns - now_ns;
-+            }
-+            const time::TimespecU rem =
-+                time::PosixTime::ns_to_timespec(remaining_ns);
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *rem_ptr = reinterpret_cast<AbiTimespec *>(arg1);
-+            if (!copy_timespec_out(rem_ptr, is_user, rem)) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+        }
-+        return kNeg(time::kPosixErrIntr);
-+    }
-+    return 0;
-+}
-+
-+uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-+                                   uint64_t arg3, uint64_t *) {
-+    auto *cur = syscall_task();
-+    if (cur == nullptr) {
-+        return static_cast<uint64_t>(-1);
-+    }
-+    const bool is_user = syscall_is_user_task();
-+    const uint64_t op = arg0;
-+    if (op == static_cast<uint64_t>(time::PosixTimerOp::CREATE)) {
-+        uint64_t timer_id = 0;
-+        const int64_t created = time::PosixTime::timer_create(
-+            arg1, cur->id, cur->generation, timer_id);
-+        if (created != 0) {
-+            return kNeg(-created);
-+        }
-+        if (arg2 == 0) {
-+            time::PosixTime::timer_delete(timer_id, cur->id, cur->generation);
-+            return kNeg(time::kPosixErrFault);
-+        }
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        auto *out_ptr = reinterpret_cast<uint64_t *>(arg2);
-+        if (is_user) {
-+            auto checked_ptr = checked(out_ptr);
-+            if (!checked_ptr.valid()) {
-+                time::PosixTime::timer_delete(timer_id, cur->id,
-+                                             cur->generation);
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            checked_ptr.write(timer_id, 0);
-+        } else {
-+            *out_ptr = timer_id;
-+        }
-+        return 0;
-+    }
-+    if (op == static_cast<uint64_t>(time::PosixTimerOp::SETTIME)) {
-+        const bool is_timerfd = (arg3 & 0x1ULL) != 0;
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        const auto *spec_ptr = reinterpret_cast<const AbiItimerspec *>(arg2);
-+        time::TimespecU value{};
-+        time::TimespecU interval{};
-+        if (spec_ptr == nullptr) {
-+            return kNeg(time::kPosixErrFault);
-+        }
-+        AbiItimerspec local{};
-+        if (is_user) {
-+            auto checked_ptr = checked(spec_ptr);
-+            if (!checked_ptr.valid()) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            if (!safe_copy_from_user(&local, checked_ptr.unsafe_ptr(), 1)) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+        } else {
-+            local = *spec_ptr;
-+        }
-+        value.sec = local.it_value.tv_sec;
-+        value.nsec = local.it_value.tv_nsec;
-+        interval.sec = local.it_interval.tv_sec;
-+        interval.nsec = local.it_interval.tv_nsec;
-+        const time::ItimerspecU spec{value, interval};
-+        if (!is_timerfd) {
-+            const int64_t armed = time::PosixTime::timer_settime(
-+                arg1, spec, cur->id, cur->generation);
-+            if (armed != 0) {
-+                return kNeg(-armed);
-+            }
-+            return 0;
-+        }
-+        const int timerfd_fd = static_cast<int>(arg1);
-+        auto *desc = cur->fd_table.get(timerfd_fd);
-+        if (desc == nullptr || !is_timerfd_vnode(desc->vnode)) {
-+            return kNeg(time::kPosixErrBadFd);
-+        }
-+        const uint64_t tag = timerfd_tag(desc->vnode);
-+        const uint32_t resolved_index = timerfd_tag_index(tag);
-+        const uint32_t resolved_gen = timerfd_tag_gen(tag);
-+        const int64_t armed = time::PosixTime::timerfd_settime(
-+            resolved_index, resolved_gen, spec, cur->id, cur->generation);
-+        if (armed != 0) {
-+            return kNeg(-armed);
-+        }
-+        return 0;
-+    }
-+    if (op == static_cast<uint64_t>(time::PosixTimerOp::GETTIME)) {
-+        if (arg2 == 0) {
-+            return kNeg(time::kPosixErrFault);
-+        }
-+        time::ItimerspecU spec{};
-+        const int64_t read = time::PosixTime::timer_gettime(
-+            arg1, spec, cur->id, cur->generation);
-+        if (read != 0) {
-+            return kNeg(-read);
-+        }
-+        AbiItimerspec local{};
-+        local.it_value.tv_sec = spec.value.sec;
-+        local.it_value.tv_nsec = spec.value.nsec;
-+        local.it_interval.tv_sec = spec.interval.sec;
-+        local.it_interval.tv_nsec = spec.interval.nsec;
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        auto *out_ptr = reinterpret_cast<AbiItimerspec *>(arg2);
-+        if (is_user) {
-+            auto checked_ptr = checked(out_ptr);
-+            if (!checked_ptr.valid()) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            if (!safe_copy_to_user(checked_ptr.unsafe_ptr(), &local, 1)) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+        } else {
-+            *out_ptr = local;
-+        }
-+        return 0;
-+    }
-+    if (op == static_cast<uint64_t>(time::PosixTimerOp::DELETE)) {
-+        const int64_t deleted = time::PosixTime::timer_delete(
-+            arg1, cur->id, cur->generation);
-+        if (deleted != 0) {
-+            return kNeg(-deleted);
-+        }
-+        return 0;
-+    }
-+    return kNeg(time::kPosixErrInvalid);
-+}
-+
-+uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
-+                                     uint64_t, uint64_t *) {
-+    auto *cur = syscall_task();
-+    if (cur == nullptr) {
-+        return static_cast<uint64_t>(-1);
-+    }
-+    const uint64_t flags = arg1;
-+    const uint64_t known_flags = static_cast<uint64_t>(vfs::O_NONBLOCK);
-+    if ((flags & ~known_flags) != 0) {
-+        return kNeg(time::kPosixErrInvalid);
-+    }
-+    const int64_t allocated = time::PosixTime::timerfd_slot_alloc(
-+        arg0, cur->id, cur->generation);
-+    if (allocated < 0) {
-+        return kNeg(-allocated);
-+    }
-+    const uint32_t index = static_cast<uint32_t>(allocated);
-+    // Resolve the slot generation for the vnode tag (owner-validated;
-+    // the slot was just allocated to this task, so this cannot fail —
-+    // the check below is defense-in-depth, fail-closed).
-+    const uint32_t slot_gen = time::PosixTime::timerfd_slot_gen_for_owner(
-+        index, cur->id, cur->generation);
-+    if (slot_gen == 0) {
-+        time::PosixTime::timerfd_slot_free(index, 0, cur->id, cur->generation);
-+        return kNeg(time::kPosixErrInvalid);
-+    }
-+    auto *node =
-+        static_cast<vfs::Vnode *>(MemPool::alloc(sizeof(vfs::Vnode)));
-+    if (node == nullptr) {
-+        time::PosixTime::timerfd_slot_free(index, slot_gen, cur->id,
-+                                           cur->generation);
-+        return static_cast<uint64_t>(-1);
-+    }
-+    node->ops = &timerfd_ops;
-+    node->ino = static_cast<uint64_t>(index);
-+    node->size = 0;
-+    node->mode = vfs::S_IFCHR;
-+    node->private_data =
-+        reinterpret_cast<void *>(make_timerfd_tag(index, slot_gen));
-+    node->refcount = 1;
-+    node->parent = nullptr;
-+    test::ResourceTracker::instance().track_vnode_add();
-+    const int created_fd = syscall_task_open(node, flags);
-+    if (created_fd < 0) {
-+        node->private_data = nullptr;
-+        test::ResourceTracker::instance().track_vnode_remove();
-+        MemPool::free(node);
-+        time::PosixTime::timerfd_slot_free(index, slot_gen, cur->id,
-+                                           cur->generation);
-+        return kNeg(time::kPosixErrAgain);
-+    }
-+    return static_cast<uint64_t>(created_fd);
-+}
-+
-+/// @brief Blocking timerfd read helper (sys_read branch target).
-+/// @return 0 + out count, -EAGAIN (empty/nonblock), -EBADF (stale),
-+/// -EINTR (signals), -EFAULT (bad buffer).
-+uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
-+                            bool nonblock) {
-+    auto *cur = syscall_task();
-+    if (cur == nullptr) {
-+        return static_cast<uint64_t>(-1);
-+    }
-+    if (count < 8) {
-+        return kNeg(time::kPosixErrInvalid);
-+    }
-+    const uint64_t tag = timerfd_tag(&node);
-+    const uint32_t index = timerfd_tag_index(tag);
-+    const uint32_t slot_gen = timerfd_tag_gen(tag);
-+    const bool is_user = syscall_is_user_task();
-+    // Fast path: data already available — no wait, no waiter state.
-+    uint64_t expiries = 0;
-+    int64_t consumed = time::PosixTime::timerfd_consume(
-+        index, slot_gen, cur->id, cur->generation, expiries);
-+    if (consumed == 0) {
-+        if (is_user) {
-+            auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
-+            if (!checked_ptr.valid()) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            checked_ptr.write(expiries, 0);
-+        } else {
-+            if (buffer == nullptr) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            *reinterpret_cast<uint64_t *>(buffer) = expiries;
-+        }
-+        return 8;
-+    }
-+    if (consumed != -time::kPosixErrAgain) {
-+        // Stale/foreign slot: fail closed (EBADF), never block.
-+        return kNeg(-consumed);
-+    }
-+    if (nonblock) {
-+        return kNeg(time::kPosixErrAgain);
-+    }
-+    // Blocking wait (§11.1/11.2 shape): arm the waiter BEFORE the
-+    // re-check (no lost wakeup), release everything, then block.
-+    if (!time::PosixTime::timerfd_waiter_arm(index, slot_gen, *cur)) {
-+        return kNeg(time::kPosixErrBadFd);
-+    }
-+    consumed = time::PosixTime::timerfd_consume(
-+        index, slot_gen, cur->id, cur->generation, expiries);
-+    if (consumed == 0) {
-+        time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
-+        if (is_user) {
-+            auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
-+            if (!checked_ptr.valid()) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            checked_ptr.write(expiries, 0);
-+        } else {
-+            if (buffer == nullptr) {
-+                return kNeg(time::kPosixErrFault);
-+            }
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            *reinterpret_cast<uint64_t *>(buffer) = expiries;
-+        }
-+        return 8;
-+    }
-+    if (consumed != -time::kPosixErrAgain) {
-+        time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
-+        return kNeg(-consumed);
-+    }
-+    cur->state = TaskState::BLOCKED;
-+    Scheduler::dequeue_ready(*cur);
-+    Scheduler::reschedule();
-+    if (cur->is_user_) {
-+        arch::sti();
-+        arch::hlt();
-+        arch::cli();
-+    }
-+    // Bounded by the armed expiry or owner death (§11.3): the waiter is
-+    // always consumed by reapply_wakes or drain_owner.
-+    while (cur->state == TaskState::BLOCKED &&
-+           __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) == 0) {
-+        // Peek without clearing: the scan consumes waiter state on wake.
-+        uint64_t peek = 0;
-+        const int64_t peeked = time::PosixTime::timerfd_consume(
-+            index, slot_gen, cur->id, cur->generation, peek);
-+        if (peeked == 0) {
-+            // Data arrived but the wake has not been applied yet — unwind
-+            // the waiter and serve immediately (no double-consume: the
-+            // counter was already cleared by this consume).
-+            time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
-+            expiries = peek;
-+            if (is_user) {
-+                auto checked_ptr =
-+                    checked(reinterpret_cast<uint64_t *>(buffer));
-+                if (!checked_ptr.valid()) {
-+                    return kNeg(time::kPosixErrFault);
-+                }
-+                checked_ptr.write(expiries, 0);
-+            } else {
-+                if (buffer == nullptr) {
-+                    return kNeg(time::kPosixErrFault);
-+                }
-+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+                *reinterpret_cast<uint64_t *>(buffer) = expiries;
-+            }
-+            return 8;
-+        }
-+        if (peeked != -time::kPosixErrAgain) {
-+            time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
-+            return kNeg(-peeked);
-+        }
-+        arch::pause();
-+    }
-+    const bool signaled =
-+        __atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) != 0;
-+    time::PosixTime::timerfd_waiter_clear(index, slot_gen, *cur);
-+    if (signaled) {
-+        return kNeg(time::kPosixErrIntr);
-+    }
-+    consumed = time::PosixTime::timerfd_consume(
-+        index, slot_gen, cur->id, cur->generation, expiries);
-+    if (consumed != 0) {
-+        return kNeg(-consumed);
-+    }
-+    if (is_user) {
-+        auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
-+        if (!checked_ptr.valid()) {
-+            return kNeg(time::kPosixErrFault);
-+        }
-+        checked_ptr.write(expiries, 0);
-+    } else {
-+        if (buffer == nullptr) {
-+            return kNeg(time::kPosixErrFault);
-+        }
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        *reinterpret_cast<uint64_t *>(buffer) = expiries;
-+    }
-+    return 8;
-+}
-+
-+} // namespace kernel
-diff --git a/src/kernel/syscall/syscall_helpers.hpp b/src/kernel/syscall/syscall_helpers.hpp
-index 21f5fe38..7d124d4f 100644
---- a/src/kernel/syscall/syscall_helpers.hpp
-+++ b/src/kernel/syscall/syscall_helpers.hpp
-@@ -44,5 +44,13 @@ int syscall_task_open(vfs::Vnode *vn, uint64_t flags);
- /// @brief Resolve a path and open it as a file descriptor.
- /// @return The fd index, or VFS_INVALID on failure.
- int syscall_path_open(const char *path, uint64_t flags);
-+/// @brief True when a vnode is a POSIX timerfd (issue #76; defined in
-+/// syscall_handlers_posix_time.cpp; ops-pointer identity).
-+bool is_timerfd_vnode(const vfs::Vnode *node);
-+/// @brief Blocking timerfd read helper (issue #76; defined in
-+/// syscall_handlers_posix_time.cpp). Returns 8 on success or -errno.
-+/// @param nonblock True when O_NONBLOCK is set on the fd.
-+uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
-+                            bool nonblock);
- 
- } // namespace kernel
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 39ecd9a4..54940e98 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -23,6 +23,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/memory/tlb_shootdown.hpp>
- #include <kernel/time/timer_wheel.hpp>
-+#include <kernel/time/posix_time.hpp>
- #include <kernel/task/tcb_write_log.hpp>
- #include <kernel/ipc/pager_registry.hpp>
- #include <kernel/arch/gdt.hpp>
-@@ -2581,6 +2582,35 @@ void Scheduler::on_tick() noexcept {
-                              __ATOMIC_RELEASE);
+@@ -1448,12 +1461,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+             arch::HHDM_OFFSET + frame_phys);
+         if (!frame) {
+             // If we cannot write the signal frame (bad stack),
+-            // terminate
++            // terminate. Issue #197: an AP-live target is left alive
++            // instead (delivery deferred, no tight re-delivery loop).
+             kernel::Logger::error("Task %x: cannot write signal frame, "
+                                   "terminating",
+                                   task->id);
+-            kernel::Scheduler::terminate(
+-                *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++            const kernel::errors::SchedulerError frame_err =
++                kernel::Scheduler::terminate_err(
++                    *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++            (void)frame_err;
+             return false;
          }
  
-+        // Issue #76: bounded-nanosleep apply + timerfd waiter wakes. Wheel
-+        // callbacks only set sleep_expired / waiter_done; the wakes are
-+        // applied here under the already-held scheduler_lock_ (same
-+        // contract as the #18 block above). Level-triggered: a missed wake
-+        // re-applies next tick; enqueue_ready is idempotent. Never clobber
-+        // a RUNNING state (H2 guard, copied from above).
-+        for (auto *task = all_tasks_.first_ptr(); task;
-+             task = all_tasks_.next_ptr(task)) {
-+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+@@ -1494,9 +1510,12 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
+     }
+     dump_regs(regs);
+     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
+-    // physical queue.
+-    kernel::Scheduler::terminate(
+-        *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++    // physical queue. Issue #197: an AP-live target is left alive instead
++    // (the owning CPU's own exit path terminates it).
++    const kernel::errors::SchedulerError default_err =
++        kernel::Scheduler::terminate_err(
++            *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
++    (void)default_err;
+     return false;
+ #elif defined(CONFIG_ARCH_AARCH64)
+     (void)vector;
+diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
+index a39b655c..00a58901 100644
+--- a/src/kernel/syscall/syscall_handlers_misc.cpp
++++ b/src/kernel/syscall/syscall_handlers_misc.cpp
+@@ -105,7 +105,15 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+         if (Scheduler::current_task() == t) {
+             Scheduler::switch_away_from_terminating(*t);
+         } else {
+-            Scheduler::terminate(*t, arg0);
++            // Issue #197: a target running on another CPU cannot be
++            // freed — map the refusal instead of falling through to
++            // child-reparent/wait logic that assumes TERMINATED.
++            const errors::SchedulerError exit_err =
++                Scheduler::terminate_err(*t, arg0);
++            if (exit_err != errors::SCHED_ERR_OK) {
++                return static_cast<uint64_t>(
++                    errors::from_sched_error(static_cast<uint64_t>(exit_err)));
++            }
+         }
+ 
+         if (t->first_child) {
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 54940e98..c882e8b7 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -1097,8 +1097,24 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
+             if (!zombie_head_)
+                 zombie_tail_ = nullptr;
+             task->zombie_next_ = nullptr;
++            // Issue #197: spare an AP-live zombie (never free a live
++            // stack) — re-queue at the tail so other zombies still flush
++            // within the bounded max_flush budget (no live-wait).
++            if (is_current_on_any_cpu(task)) {
++                task->zombie_next_ = nullptr;
++                if (zombie_tail_ != nullptr) {
++                    zombie_tail_->zombie_next_ = task;
++                } else {
++                    zombie_head_ = task;
++                }
++                zombie_tail_ = task;
 +                continue;
-+            if (!__atomic_load_n(&task->sleep_armed, __ATOMIC_ACQUIRE) ||
-+                !__atomic_load_n(&task->sleep_expired, __ATOMIC_ACQUIRE))
++            }
+             if (task->in_ready_queue_)
+                 rq_task(*task).remove(*task, effective_priority(task));
++            // Issue #197 defense-in-depth: unlink a stale EDF entry.
++            if (task->in_edf_queue_)
++                edf_remove(*task, queue_target(*task));
+             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+         }
+         if (task->magic == TaskControlBlock::TCB_MAGIC) {
+@@ -1114,6 +1130,11 @@ void Scheduler::drain_zombie_list() noexcept {
+     // (callers hold none — OOM handler, snapshot, tests) so this never
+     // self-deadlocks; queue-removes inherit the baseline single-core
+     // exposure plus AP try-gating (spec §3.4.2).
++    // Issue #197: spare AP-live zombies — a pass budget of one full list
++    // length bounds rotations so a live head cannot wedge the drain.
++    uint64_t spared = 0;
++    const uint64_t pass_budget =
++        __atomic_load_n(&zombie_count_, __ATOMIC_RELAXED) + 1;
+     for (;;) {
+         TaskControlBlock *task;
+         {
+@@ -1132,12 +1153,32 @@ void Scheduler::drain_zombie_list() noexcept {
+                 zombie_count_ = 0;
+                 continue;
+             }
++            if (is_current_on_any_cpu(task)) {
++                // Never free a live stack: rotate head→tail (unless
++                // sole, then nothing else to do) and retry on a later
++                // pass — never block (§11.3).
++                if (task->zombie_next_ == nullptr || zombie_tail_ == task) {
++                    return;
++                }
++                zombie_head_ = task->zombie_next_;
++                task->zombie_next_ = nullptr;
++                zombie_tail_->zombie_next_ = task;
++                zombie_tail_ = task;
++                if (++spared >= pass_budget) {
++                    return;
++                }
 +                continue;
-+            if (task->generation != task->sleep_gen)
-+                continue;
-+            if (queue_target(*task) != sched_cpu())
-+                continue;
-+            if (task->state == TaskState::BLOCKED)
-+                task->state = TaskState::READY;
-+            else if (task->state != TaskState::READY)
-+                continue;
-+            enqueue_ready(*task);
-+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                             __ATOMIC_RELEASE);
++            }
+             zombie_head_ = task->zombie_next_;
+             if (!zombie_head_)
+                 zombie_tail_ = nullptr;
+             task->zombie_next_ = nullptr;
+             if (task->in_ready_queue_)
+                 rq_task(*task).remove(*task, effective_priority(task));
++            // Issue #197 defense-in-depth: unlink a stale EDF entry —
++            // bitmap-only removal would free a still-linked node.
++            if (task->in_edf_queue_)
++                edf_remove(*task, queue_target(*task));
+             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+         }
+         // IRQs on — cleanup and free without holding any lock.
+@@ -1166,12 +1207,20 @@ void Scheduler::cleanup_step() noexcept {
+             zombie_count_ = 0;
+             return;
+         }
++        // Issue #197: spare an AP-live head (never free a live stack) —
++        // single-pop variant: leave it listed, retry on a later pass.
++        if (is_current_on_any_cpu(task)) {
++            return;
 +        }
-+        // Timerfd waiter wakes live in the PosixTime registry (slots are
-+        // not TCB fields): same lock position, leaf posix lock only.
-+        time::PosixTime::reapply_wakes(sched_cpu());
+         zombie_head_ = task->zombie_next_;
+         if (!zombie_head_)
+             zombie_tail_ = nullptr;
+         task->zombie_next_ = nullptr;
+         if (task->in_ready_queue_)
+             rq_task(*task).remove(*task, effective_priority(task));
++        // Issue #197 defense-in-depth: unlink a stale EDF entry.
++        if (task->in_edf_queue_)
++            edf_remove(*task, queue_target(*task));
+         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+     }
+     // IRQs on — cleanup and free without holding any lock.
+@@ -1201,12 +1250,19 @@ void Scheduler::cleanup_step_try() noexcept {
+             zombie_count_ = 0;
+             return;
+         }
++        // Issue #197: spare an AP-live head (never free a live stack).
++        if (is_current_on_any_cpu(task)) {
++            return;
++        }
+         zombie_head_ = task->zombie_next_;
+         if (!zombie_head_)
+             zombie_tail_ = nullptr;
+         task->zombie_next_ = nullptr;
+         if (task->in_ready_queue_)
+             rq_task(*task).remove(*task, effective_priority(task));
++        // Issue #197 defense-in-depth: unlink a stale EDF entry.
++        if (task->in_edf_queue_)
++            edf_remove(*task, queue_target(*task));
+         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+     }
+     task->cleanup();
+@@ -1362,8 +1418,21 @@ static void stamp_exec(TaskControlBlock &t) noexcept {
+     t.exec_stamp_ns = arch::Timer::ns_monotonic();
+ }
+ 
+-void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
++errors::SchedulerError
++Scheduler::terminate_err(TaskControlBlock &task,
++                         uint64_t exit_code) noexcept {
+     arch::IrqGuard irq_guard{};
++    // Issue #197: refuse to terminate a task that is current on ANOTHER
++    // CPU (evaluated before taking scheduler_lock_ — leaf-only reads, no
++    // new lock takes). Freeing an AP-live stack poisons the running task
++    // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
++    // Self-termination always succeeds (exempted below). No mutation on
++    // refusal: no dequeue, no state write, no release, no reaper poke.
++    if (is_current_on_any_cpu(&task) && &task != current_task()) {
++        kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
++                             static_cast<unsigned>(task.id));
++        return errors::SCHED_ERR_REMOTE_CURRENT;
++    }
+     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+     charge_exec(task); // issue #21: bill the final partial quantum (no loss)
+ #if defined(CONFIG_DEBUG_IPC_SCHED)
+@@ -1435,6 +1504,19 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+         switch_to_task(&task, *next, nullptr);
+     }
+     }
++    return errors::SCHED_ERR_OK;
++}
 +
-         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
-         // only tasks affine to this CPU (AP-affine tasks are not serviced).
-         // Issue #154: executed_ticks is execution time — only the
-@@ -4312,6 +4342,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
-         out[idx].alarm_armed = t->alarm_armed;
-         out[idx].recv_timeout_armed = t->recv_timeout_armed;
-         out[idx].recv_timed_out = t->recv_timed_out;
-+        out[idx].sleep_armed = t->sleep_armed;
-+        out[idx].sleep_expired = t->sleep_expired;
-         out[idx].runq_next = t->runq_next_;
-         out[idx].runq_prev = t->runq_prev_;
-         out[idx].in_ready_queue = t->in_ready_queue_;
-@@ -4393,6 +4425,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
-             t->alarm_armed = saved[j].alarm_armed;
-             t->recv_timeout_armed = saved[j].recv_timeout_armed;
-             t->recv_timed_out = saved[j].recv_timed_out;
-+            t->sleep_armed = saved[j].sleep_armed;
-+            t->sleep_expired = saved[j].sleep_expired;
-             // Snapshot does not capture SporadicServer state nor PMM page-table
-             // pools — clear the pointer and the intrusive object list so stale
-             // UAF (0xDD-poisoned block) from a restored MemPool free-list cannot
++void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
++    // Void legacy wrapper: refusal is fail-closed warn-only (all existing
++    // callers are own-CPU paths where refusal is unreachable). Fallible
++    // callers use terminate_err directly.
++    const errors::SchedulerError err = terminate_err(task, exit_code);
++    if (err != errors::SCHED_ERR_OK) {
++        kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
++                             static_cast<unsigned>(task.id),
++                             static_cast<unsigned>(err));
++    }
+ }
+ 
+ void Scheduler::read_times(TaskControlBlock &task, TaskTimes &out) noexcept {
+@@ -3092,9 +3174,14 @@ void Scheduler::cleanup_test_tasks() noexcept {
+ 
+     // Terminate each collected task: dequeue, set TERMINATED, wake parent,
+     // release_zombie (removes from all_tasks_, deadline_list_, id_table_,
+-    // appends to zombie list).
+-    for (uint64_t i = 0; i < num_to_kill; ++i)
+-        terminate(*to_kill[i], 0);
++    // appends to zombie list). Issue #197: race-window second gate — a
++    // task collected as non-current may have been dispatched on the AP
++    // since; refusal skips it (the AP-parked teardown frees it later).
++    for (uint64_t i = 0; i < num_to_kill; ++i) {
++        const errors::SchedulerError cleanup_err =
++            terminate_err(*to_kill[i], 0);
++        (void)cleanup_err;
++    }
+ 
+     // Drain zombies: cleanup() + MemPool::free() for each.
+     drain_zombie_list();
+@@ -4488,6 +4575,12 @@ void Scheduler::process_deferred_kills() noexcept {
+         auto *task = s_deferred_kill_tasks[i];
+         if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
+             continue;
++        // Issue #197: spare AP-live tasks (never free a live stack) —
++        // skip this entry; a still-missed deadline re-fires defer_kill
++        // on the next scan, so no kill intent is lost.
++        if (is_current_on_any_cpu(task)) {
++            continue;
++        }
+ 
+         if (task->get_sporadic_server()) {
+             // Contract: SporadicServer::on_completion() (and on_activation /
 diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index e1007596..2ee67b9f 100644
+index 2ee67b9f..8a29079a 100644
 --- a/src/kernel/task/scheduler.hpp
 +++ b/src/kernel/task/scheduler.hpp
-@@ -602,6 +602,14 @@ class Scheduler {
-         /// outlive the wait it belonged to.
-         bool recv_timeout_armed;
-         bool recv_timed_out;
-+        /// @brief Bounded-nanosleep slot (issue #76): flags rewind with
-+        ///        the snapshot (always to false — captured pre-arm at
-+        ///        suite setup). The wheel handle/generation are
-+        ///        deliberately NOT captured: no arm survives rewind (wheel
-+        ///        snapshot_reset disarms everything and flags read false),
-+        ///        so no stale handle can outlive the wait it belonged to.
-+        bool sleep_armed;
-+        bool sleep_expired;
-         /// @brief Ready-queue intrusive list pointers (POD copy).
-         ///        These form doubly-linked lists; TCBs are in-place across
-         ///        snapshot cycles so pointer values remain valid.
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 769898b3..7c48704d 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -22,6 +22,7 @@
+@@ -436,6 +436,13 @@ class Scheduler {
+     ///        ready queue.  Call this instead of directly setting
+     ///        `task.state = TERMINATED` to keep the ready queue consistent.
+     static void terminate(TaskControlBlock &task, uint64_t exit_code) noexcept;
++    /// @brief Fallible terminate (issue #197): refuses with
++    ///        SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is
++    ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
++    ///        running task. Self-termination always succeeds. The void
++    ///        terminate() above delegates and warns on refusal.
++    static errors::SchedulerError terminate_err(TaskControlBlock &task,
++                                                uint64_t exit_code) noexcept;
+     /// @brief Entry point for the deadline-monitor task (priority 127).
+     ///        Waits on an atomic handoff flag, calls scan_deadlines() when
+     ///        woken by on_tick().  Only compiled when
+diff --git a/src/kernel/task/scheduler_errors.hpp b/src/kernel/task/scheduler_errors.hpp
+index 2bb1baf5..c75392f7 100644
+--- a/src/kernel/task/scheduler_errors.hpp
++++ b/src/kernel/task/scheduler_errors.hpp
+@@ -42,7 +42,8 @@ namespace kernel::errors {
+     X(NO_SHELL, 10, "Shell task not set")                                      \
+     X(INVALID_ARGS, 11, "Invalid arguments")                                   \
+     X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
+-    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
++    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked") \
++    X(REMOTE_CURRENT, 14, "Task is current on another CPU")
  
- #include <kernel/task/task.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/time/posix_time.hpp>
- #include <kernel/elf/elf_shared.hpp>
- #include <kernel/task/tcb_write_log.hpp>
- #include <kernel/task/sporadic_server.hpp>
-@@ -1784,6 +1785,12 @@ void TaskControlBlock::cleanup() noexcept {
-         time::TimerWheel::cancel(recv_timeout_handle);
-     }
- 
-+    // Drain POSIX sleep/timer/timerfd ownership (issue #76): disarm a live
-+    // nanosleep, free owned timer/timerfd slots, and clear waiter
-+    // registrations held by this task. Same lock position as the recv
-+    // cancel above (no scheduler lock held — death-drain §12.3).
-+    time::PosixTime::drain_owner(*this);
-+
-     // Remove self from any message queue's blocked-senders list *before*
-     // freeing any resources.  If we are blocked on another task's queue
-     // (blocked_on_queue != nullptr) we must detach now — otherwise the
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index d35ea6a2..5a4e994b 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -274,7 +274,9 @@ struct TaskControlBlock {
-           alarm_armed(false), recv_timeout_armed(false),
-           recv_timed_out(false),
-           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
--          recv_timeout_gen(0), sporadic_server(nullptr), cspace_(nullptr),
-+          recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
-+          sleep_handle{0, 0, time::TimerWheel::kInvalidGeneration},
-+          sleep_gen(0), sleep_expiry_ns(0), sporadic_server(nullptr), cspace_(nullptr),
-            iopb_slot_(IOPB_SLOT_NONE),
-            tls_base_(0),
-            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
-@@ -506,6 +508,22 @@ struct TaskControlBlock {
-     /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
-     uint32_t recv_timeout_gen;
- 
-+    /// @brief Bounded nanosleep armed on the wheel (issue #76).
-+    bool sleep_armed;
-+
-+    /// @brief Set by the wheel callback when the sleep budget expires.
-+    bool sleep_expired;
-+
-+    /// @brief Wheel receipt for the armed sleep (gen 0 = invalid).
-+    time::TimerWheel::Handle sleep_handle;
-+
-+    /// @brief TCB generation snapshot at sleep-arm time (ABA guard).
-+    uint32_t sleep_gen;
-+
-+    /// @brief Absolute monotonic-ns expiry of the armed sleep (for rem).
-+    /// Not snapshot-captured: derived from the arm, no arm survives rewind.
-+    uint64_t sleep_expiry_ns;
-+
-     /// @brief Embedded message queue (no separate heap allocation).
-     MessageQueue msg_queue;
- 
-diff --git a/src/kernel/test/resource_tracker.cpp b/src/kernel/test/resource_tracker.cpp
-index 03d893ba..04deae3a 100644
---- a/src/kernel/test/resource_tracker.cpp
-+++ b/src/kernel/test/resource_tracker.cpp
-@@ -112,6 +112,10 @@ static bool any_leak(const ResourceCounters &baseline,
-         return true;
-     if (current.pager_mappings > baseline.pager_mappings)
-         return true;
-+    if (current.posix_timers > baseline.posix_timers)
-+        return true;
-+    if (current.posix_timerfds > baseline.posix_timerfds)
-+        return true;
-     return false;
- }
- 
-@@ -236,6 +240,9 @@ bool ResourceTracker::check(const ResourceCounters &baseline,
-               counters_.pager_registrations);
-     print_row("Pager faults", baseline.pager_faults, counters_.pager_faults);
-     print_row("Pager maps", baseline.pager_mappings, counters_.pager_mappings);
-+    print_row("Posix timers", baseline.posix_timers, counters_.posix_timers);
-+    print_row("Posix timerfds", baseline.posix_timerfds,
-+              counters_.posix_timerfds);
- 
-     print_backtrace();
-     return false;
-diff --git a/src/kernel/test/resource_tracker.hpp b/src/kernel/test/resource_tracker.hpp
-index 9dd9f233..53f4de3b 100644
---- a/src/kernel/test/resource_tracker.hpp
-+++ b/src/kernel/test/resource_tracker.hpp
-@@ -44,6 +44,8 @@ struct ResourceCounters {
-     size_t pager_registrations;
-     size_t pager_faults;
-     size_t pager_mappings;
-+    size_t posix_timers;
-+    size_t posix_timerfds;
- };
- 
- #ifdef CONFIG_DEBUG
-@@ -189,6 +191,26 @@ class ResourceTracker {
-     void track_pager_mapping_reset() {
-         counters_.pager_mappings = 0;
-     }
-+    void track_posix_timer_add() {
-+        ++counters_.posix_timers;
-+    }
-+    void track_posix_timer_remove() {
-+        if (counters_.posix_timers > 0)
-+            --counters_.posix_timers;
-+    }
-+    void track_posix_timer_reset() {
-+        counters_.posix_timers = 0;
-+    }
-+    void track_posix_timerfd_add() {
-+        ++counters_.posix_timerfds;
-+    }
-+    void track_posix_timerfd_remove() {
-+        if (counters_.posix_timerfds > 0)
-+            --counters_.posix_timerfds;
-+    }
-+    void track_posix_timerfd_reset() {
-+        counters_.posix_timerfds = 0;
-+    }
- 
-     void capture(ResourceCounters &out) const {
-         out = counters_;
-@@ -288,6 +310,18 @@ class ResourceTracker {
-     }
-     void track_pager_mapping_reset() {
-     }
-+    void track_posix_timer_add() {
-+    }
-+    void track_posix_timer_remove() {
-+    }
-+    void track_posix_timer_reset() {
-+    }
-+    void track_posix_timerfd_add() {
-+    }
-+    void track_posix_timerfd_remove() {
-+    }
-+    void track_posix_timerfd_reset() {
-+    }
-     void capture(ResourceCounters &) const {
-     }
-     void restore(const ResourceCounters &) {
+ /// @brief Error codes returned by scheduler operations.
+ // NOLINTNEXTLINE(performance-enum-size)
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 9595c2bb..7ed147d7 100644
+index 7ed147d7..6f768a82 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
-@@ -193,6 +193,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+@@ -281,8 +281,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"drivers",             94,   0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173)
+     {"hal",                 110,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross (issue #173)
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+-    {"smp_multicpu",        15,   0,       0      },  // smp_bringup + smp_sched, needs -smp 2 (issue #173)
+-    {"deadline",            115,  0,       0      },  // wcet/deadline/timing/hrt/servers (issue #173)
++    {"smp_multicpu",        17,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse (issues #173, #197)
++    {"deadline",            125,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76)
+     {"ui",                  68,   0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173)
+     {"logging_debug",       29,   0,       0      },  // dmesg + klog + debug + gcov (issue #173)
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+diff --git a/src/kernel/test/test_sched_helpers.hpp b/src/kernel/test/test_sched_helpers.hpp
+index 8512f9b6..287e3e2c 100644
+--- a/src/kernel/test/test_sched_helpers.hpp
++++ b/src/kernel/test/test_sched_helpers.hpp
+@@ -31,6 +31,7 @@
  
-     // timing
-     {"timing_core",          19,    0,       0      },  // tick accounting, alarm, rate-monotonic, deadline list + READY-no-charge regression (issue #154)
-+    {"posix_time",           10,    0,       0      },  // clock_gettime/nanosleep/timer_create/timerfd over HRT wheel (issue #76)
+ #pragma once
  
-     // hal
-     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
-diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
-index b9aebddc..ce559e80 100644
---- a/src/kernel/test/test_isolate.cpp
-+++ b/src/kernel/test/test_isolate.cpp
-@@ -48,6 +48,7 @@
- // PMM rewind owns any held pages, so no freeing here).
- #include <kernel/memory/tlb_shootdown.hpp>
- #include <kernel/time/timer_wheel.hpp>
-+#include <kernel/time/posix_time.hpp>
- #include <kernel/arch/gdt.hpp>
- #include <kernel/arch/hal/iopb.hpp>
- #include <kernel/cap/mmio.hpp>
-@@ -796,6 +797,11 @@ void snapshot_restore(const char *test_name) {
-     // Reset the event-timer wheel (issue #17) so a test that armed timers
-     // can never leak a live entry or a reusable handle into the next cycle.
-     kernel::time::TimerWheel::snapshot_reset();
-+    // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
-+    // so timer slots, waiter registrations, and the REALTIME latch never
-+    // leak across snapshot cycles (wheel reset above already disarmed all
-+    // wheel entries; this rewinds the registry side fail-closed).
-+    kernel::time::PosixTime::snapshot_reset();
-     if (corr > 0) {
-         Logger::raw_write("[SCHED] corruption_count=");
-         Logger::print_dec(corr);
-diff --git a/src/kernel/test/test_posix_time.cpp b/src/kernel/test/test_posix_time.cpp
-new file mode 100644
-index 00000000..a65576aa
---- /dev/null
-+++ b/src/kernel/test/test_posix_time.cpp
-@@ -0,0 +1,339 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file test_posix_time.cpp
-+/// @brief POSIX time API tests: clock_gettime, nanosleep, timer_create,
-+/// timerfd_create over the HRT clock + event-timer wheel (issue #76).
-+
 +#include <test.hpp>
-+#include <logger.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/syscall/syscall.hpp>
-+#include <kernel/time/posix_time.hpp>
-+#include <kernel/time/timer_wheel.hpp>
-+#include <kernel/arch/timer.hpp>
-+#include <kernel/arch/hal/irq_guard.hpp>
-+#include "test_sched_helpers.hpp"
-+
-+using namespace kernel;
-+
-+namespace {
-+
-+constexpr uint64_t kNegErrno(uint64_t err) {
-+    return static_cast<uint64_t>(0) - err;
-+}
-+
-+struct AbiTs {
-+    int64_t tv_sec;
-+    int64_t tv_nsec;
-+};
-+static_assert(sizeof(AbiTs) == 16, "timespec width");
-+
-+struct AbiItimer {
-+    AbiTs it_interval;
-+    AbiTs it_value;
-+};
-+
-+uint64_t sys_call(uint64_t number, uint64_t arg0, uint64_t arg1, uint64_t arg2,
-+                  uint64_t arg3) {
-+    return Syscall::handle(number, arg0, arg1, arg2, arg3, nullptr);
-+}
-+
-+struct SleepCtx {
-+    uint64_t budget_ns;
-+    uint64_t result;
-+    uint64_t elapsed_ns;
-+};
-+
-+SleepCtx *g_sleep_ctx = nullptr;
-+
-+void sleep_entry() {
-+    auto *ctx = g_sleep_ctx;
-+    AbiTs req{};
-+    req.tv_sec = static_cast<int64_t>(ctx->budget_ns / 1000000000ULL);
-+    req.tv_nsec = static_cast<int64_t>(ctx->budget_ns % 1000000000ULL);
-+    AbiTs rem{};
-+    const uint64_t start_ns = arch::Timer::ns_monotonic();
-+    ctx->result = Syscall::handle(81, reinterpret_cast<uint64_t>(&req),
-+                                  reinterpret_cast<uint64_t>(&rem), 0, 0,
-+                                  nullptr);
-+    ctx->elapsed_ns = arch::Timer::ns_monotonic() - start_ns;
-+}
-+
-+} // namespace
-+
-+// Runmode: kernel
-+// Testidea: MONOTONIC clock never decreases across two samples.
-+// Input: Two consecutive clock_gettime(CLOCK_MONOTONIC) reads.
-+// Expect: Second sample >= first.
-+// Depends: PosixTime::clock_monotonic_ns, arch::Timer::ns_monotonic
-+JARVIS_TEST(posix_clock_monotonic_nondecreasing, "PRE: none | POST: none") {
-+    AbiTs first{};
-+    AbiTs second{};
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&first),
-+                                    0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&second),
-+                                    0, 0));
-+    const bool nondecreasing = (second.tv_sec > first.tv_sec) ||
-+                               (second.tv_sec == first.tv_sec &&
-+                                second.tv_nsec >= first.tv_nsec);
-+    JARVIS_ASSERT(nondecreasing);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: REALTIME clock equals boot anchor plus monotonic delta.
-+// Input: Latch anchor, read RTC, sample REALTIME.
-+// Expect: REALTIME within tolerance of anchor + delta; sec/nsec in range.
-+// Depends: PosixTime::boot_latch, arch::RTC::read_seconds
-+JARVIS_TEST(posix_clock_realtime_anchored, "PRE: none | POST: none") {
-+    AbiTs mono{};
-+    AbiTs real{};
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&mono),
-+                                    0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(80, 0, reinterpret_cast<uint64_t>(&real),
-+                                    0, 0));
-+    JARVIS_ASSERT(real.tv_nsec >= 0 && real.tv_nsec < 1000000000);
-+    const bool real_after_mono =
-+        (real.tv_sec > mono.tv_sec) ||
-+        (real.tv_sec == mono.tv_sec && real.tv_nsec >= mono.tv_nsec);
-+    JARVIS_ASSERT(real_after_mono);
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Bad clockid and null out-pointer fail closed.
-+// Input: clock_gettime(99, valid), clock_gettime(MONOTONIC, null).
-+// Expect: -EINVAL, -EFAULT; errno path intact.
-+// Depends: Syscall::sys_clock_gettime argument validation
-+JARVIS_TEST(posix_clock_bad_id, "PRE: none | POST: none") {
-+    AbiTs out{};
-+    JARVIS_ASSERT_EQ(kNegErrno(22),
-+                     sys_call(80, 99, reinterpret_cast<uint64_t>(&out), 0, 0));
-+    JARVIS_ASSERT_EQ(kNegErrno(14), sys_call(80, 1, 0, 0, 0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Zero nanosleep returns immediately without arming the wheel.
-+// Input: nanosleep({0, 0}).
-+// Expect: Returns 0; wheel live_count unchanged.
-+// Depends: Syscall::sys_nanosleep zero fast-path
-+JARVIS_TEST(posix_nanosleep_zero_returns, "PRE: none | POST: none") {
-+    const uint32_t live_before = time::TimerWheel::live_count(0);
-+    AbiTs req{};
-+    req.tv_sec = 0;
-+    req.tv_nsec = 0;
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(81, reinterpret_cast<uint64_t>(&req), 0,
-+                                    0, 0));
-+    JARVIS_ASSERT_EQ(live_before, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Out-of-range tv_nsec is rejected.
-+// Input: nanosleep({0, 2000000000}).
-+// Expect: -EINVAL; no wheel arm.
-+// Depends: Syscall::sys_nanosleep range check
-+JARVIS_TEST(posix_nanosleep_bad_nsec, "PRE: none | POST: none") {
-+    const uint32_t live_before = time::TimerWheel::live_count(0);
-+    AbiTs req{};
-+    req.tv_sec = 0;
-+    req.tv_nsec = 2000000000;
-+    JARVIS_ASSERT_EQ(kNegErrno(22),
-+                     sys_call(81, reinterpret_cast<uint64_t>(&req), 0, 0, 0));
-+    JARVIS_ASSERT_EQ(live_before, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Armed nanosleep expires and wakes the sleeper bounded.
-+// Input: Spawned task sleeps 20ms on real ticks.
-+// Expect: Returns 0; elapsed >= budget; wheel residue zero; arm cleared.
-+// Depends: sleep_fire, scheduler on_tick sleep re-apply scan
-+JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
-+    SleepCtx ctx{};
-+    ctx.budget_ns = 20000000ULL;
-+    ctx.result = 0xAAAAAAAAAAAAAAAAULL;
-+    ctx.elapsed_ns = 0;
-+    g_sleep_ctx = &ctx;
-+    auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
-+    JARVIS_ASSERT(sleeper != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*sleeper);
-+    }
-+    auto *original = Scheduler::current_task();
-+    test::yield_as(*sleeper);
-+    Scheduler::reschedule();
-+    test::wait_for_termination_safe(sleeper);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(0ULL, ctx.result);
-+    JARVIS_ASSERT(ctx.elapsed_ns >= ctx.budget_ns);
-+    JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
-+    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
-+    JARVIS_ASSERT(!sleeper->sleep_armed);
-+    test::terminate_and_drain(*sleeper);
-+    g_sleep_ctx = nullptr;
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Pending signal kills an armed nanosleep with -EINTR + rem.
-+// Input: Spawned task sleeps 60s; test sets pending_signals while armed.
-+// Expect: Returns -EINTR; rem holds approximately the remaining time.
-+// Depends: sys_nanosleep signal check, recv-style cancel-first
-+JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
-+    SleepCtx ctx{};
-+    ctx.budget_ns = 60000000000ULL;
-+    ctx.result = 0xAAAAAAAAAAAAAAAAULL;
-+    ctx.elapsed_ns = 0;
-+    g_sleep_ctx = &ctx;
-+    auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
-+    JARVIS_ASSERT(sleeper != nullptr);
-+    {
-+        arch::IrqGuard guard;
-+        Scheduler::add_task(*sleeper);
-+    }
-+    auto *original = Scheduler::current_task();
-+    test::yield_as(*sleeper);
-+    Scheduler::reschedule();
-+    __atomic_store_n(&sleeper->pending_signals, 0x1ULL, __ATOMIC_RELEASE);
-+    test::wait_for_termination_safe(sleeper);
-+    Scheduler::set_current(*original);
-+    JARVIS_ASSERT_EQ(kNegErrno(4), ctx.result);
-+    JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
-+    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
-+    JARVIS_ASSERT(!sleeper->sleep_armed);
-+    test::terminate_and_drain(*sleeper);
-+    g_sleep_ctx = nullptr;
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: One-shot timer fires once; periodic timer re-arms.
-+// Input: CREATE + SETTIME value/interval; drive wheel manually; DELETE.
-+// Expect: Expiry counter 1 then 2+ for periodic; slot freed on delete.
-+// Depends: PosixTime timer registry, timer_fire re-arm chain
-+JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
-+    uint64_t timer_id = 0;
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
-+                                    reinterpret_cast<uint64_t>(&timer_id), 0));
-+    AbiItimer spec{};
-+    spec.it_value.tv_sec = 0;
-+    spec.it_value.tv_nsec = 10000000;
-+    spec.it_interval.tv_sec = 0;
-+    spec.it_interval.tv_nsec = 0;
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, timer_id,
-+                                    reinterpret_cast<uint64_t>(&spec), 0));
-+    const uint64_t fire_ns = arch::Timer::ns_monotonic() + 50000000ULL;
-+    time::TimerWheel::on_tick(fire_ns, 0);
-+    AbiItimer readback{};
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 2, timer_id,
-+                                    reinterpret_cast<uint64_t>(&readback), 0));
-+    JARVIS_ASSERT_EQ(0, readback.it_value.tv_sec);
-+    JARVIS_ASSERT_EQ(0, readback.it_value.tv_nsec);
-+    // Periodic re-arm: 10ms interval, three manual ticks.
-+    spec.it_interval.tv_nsec = 10000000;
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, timer_id,
-+                                    reinterpret_cast<uint64_t>(&spec), 0));
-+    time::TimerWheel::on_tick(fire_ns + 15000000ULL, 0);
-+    time::TimerWheel::on_tick(fire_ns + 25000000ULL, 0);
-+    time::TimerWheel::on_tick(fire_ns + 35000000ULL, 0);
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 2, timer_id,
-+                                    reinterpret_cast<uint64_t>(&readback), 0));
-+    JARVIS_ASSERT(readback.it_interval.tv_nsec == 10000000);
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, timer_id, 0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: Full timer table fails closed with -EAGAIN and drains clean.
-+// Input: Fill kMaxPosixTimers slots; one more CREATE; delete all.
-+// Expect: Last CREATE returns -EAGAIN; ResourceTracker delta zero.
-+// Depends: PosixTime registry bound, track_posix_timer_add/remove
-+JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
-+    uint64_t ids[32] = {0};
-+    for (size_t i = 0; i < 32; ++i) {
-+        JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
-+                                        reinterpret_cast<uint64_t>(&ids[i]),
-+                                        0));
-+    }
-+    uint64_t extra_id = 0;
-+    JARVIS_ASSERT_EQ(kNegErrno(11),
-+                     sys_call(82, 0, 1,
-+                              reinterpret_cast<uint64_t>(&extra_id), 0));
-+    for (size_t i = 0; i < 32; ++i) {
-+        JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, ids[i], 0, 0));
-+    }
-+    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Runmode: kernel
-+// Testidea: timerfd read returns 8-byte expiry count, clear-on-read.
-+// Input: TIMERFD_CREATE + SETTIME; drive ticks; sys_read 8 bytes; empty
-+// nonblock read; close; verify wheel residue zero.
-+// Expect: First read returns 8 with count >= 1; empty read -EAGAIN;
-+// close drains; stale state none.
-+// Depends: sys_timerfd_create, sys_read timerfd branch, timerfd_close
-+JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
-+    const uint64_t fd = sys_call(83, 1, 0, 0, 0); // MONOTONIC, blocking
-+    JARVIS_ASSERT(fd <= 0x7FFFFFFFULL);
-+    const int timer_fd = static_cast<int>(fd);
-+    AbiItimer spec{};
-+    spec.it_value.tv_sec = 0;
-+    spec.it_value.tv_nsec = 10000000;
-+    spec.it_interval.tv_sec = 0;
-+    spec.it_interval.tv_nsec = 0;
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(82, 1, static_cast<uint64_t>(timer_fd),
-+                                    reinterpret_cast<uint64_t>(&spec), 1));
-+    const uint64_t fire_ns = arch::Timer::ns_monotonic() + 50000000ULL;
-+    time::TimerWheel::on_tick(fire_ns, 0);
-+    uint64_t count = 0;
-+    JARVIS_ASSERT_EQ(8ULL, sys_call(10, static_cast<uint64_t>(timer_fd),
-+                                    reinterpret_cast<uint64_t>(&count), 8, 0));
-+    JARVIS_ASSERT(count >= 1);
-+    const uint64_t fd_nb = sys_call(83, 1, 0x800, 0, 0); // O_NONBLOCK
-+    JARVIS_ASSERT(fd_nb <= 0x7FFFFFFFULL);
-+    uint64_t empty_count = 0xDEADBEEFULL;
-+    JARVIS_ASSERT_EQ(kNegErrno(11),
-+                     sys_call(10, fd_nb,
-+                              reinterpret_cast<uint64_t>(&empty_count), 8, 0));
-+    JARVIS_ASSERT_EQ(0ULL,
-+                     sys_call(11, static_cast<uint64_t>(timer_fd), 0, 0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, sys_call(11, fd_nb, 0, 0, 0));
-+    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
-+    JARVIS_TEST_PASS();
-+}
-+
-+void register_posix_time_tests() {
-+    Logger::info("Registering POSIX time tests");
-+    JARVIS_REGISTER_TEST(posix_clock_monotonic_nondecreasing);
-+    JARVIS_REGISTER_TEST(posix_clock_realtime_anchored);
-+    JARVIS_REGISTER_TEST(posix_clock_bad_id);
-+    JARVIS_REGISTER_TEST(posix_nanosleep_zero_returns);
-+    JARVIS_REGISTER_TEST(posix_nanosleep_bad_nsec);
-+    JARVIS_REGISTER_TEST(posix_nanosleep_expiry_bound);
-+    JARVIS_REGISTER_TEST(posix_nanosleep_killed_by_signal);
-+    JARVIS_REGISTER_TEST(posix_timer_oneshot_and_periodic);
-+    JARVIS_REGISTER_TEST(posix_timer_table_full);
-+    JARVIS_REGISTER_TEST(posix_timerfd_read_semantics);
-+}
-diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
-index a3de7896..890fee09 100644
---- a/src/kernel/test/test_registry.cpp
-+++ b/src/kernel/test/test_registry.cpp
-@@ -202,6 +202,7 @@ void register_stress_hrt_tests();
- void register_scheduler_hrt_tests();
- void register_hrt_monotonic_tests();
- void register_timer_wheel_tests();
-+void register_posix_time_tests();
- void register_task_metering_tests();
- void register_sched_edf_tests();
- void register_sched_admission_tests();
-@@ -564,6 +565,7 @@ static void run_bench_microkernel_group() {
- static void run_stress_hrt_group() { register_stress_hrt_tests(); }
- static void run_hrt_monotonic_group() { register_hrt_monotonic_tests(); }
- static void run_timer_wheel_group() { register_timer_wheel_tests(); }
-+static void run_posix_time_group() { register_posix_time_tests(); }
- static void run_task_metering_group() { register_task_metering_tests(); }
- static void run_sched_edf_group() { register_sched_edf_tests(); }
- static void run_sched_admission_group() {
-@@ -917,6 +919,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-     {"stress_hrt", []() { run_stress_hrt_group(); }},
-     {"hrt_monotonic", []() { run_hrt_monotonic_group(); }},
-     {"timer_wheel", []() { run_timer_wheel_group(); }},
-+    {"posix_time", []() { run_posix_time_group(); }},
-     {"task_metering", []() { run_task_metering_group(); }},
-     {"sched_edf", []() { run_sched_edf_group(); }},
-     {"sched_admission", []() { run_sched_admission_group(); }},
-@@ -1145,6 +1148,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
-          run_deadline_ss_group();
-          run_timing_core_group();
-          run_timer_wheel_group();
-+         run_posix_time_group();
-          run_scheduler_sporadic_group();
-          run_scheduler_hrt_group();
-          run_sched_edf_group();
-diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
-index 4743ef98..cc338a1b 100644
---- a/src/kernel/test/test_weak_stubs.cpp
-+++ b/src/kernel/test/test_weak_stubs.cpp
-@@ -95,6 +95,7 @@ __attribute__((weak)) void register_sporadic_server_tests() {}
- __attribute__((weak)) void register_atomic_tests() {}
- __attribute__((weak)) void register_hrt_monotonic_tests() {}
- __attribute__((weak)) void register_timer_wheel_tests() {}
-+__attribute__((weak)) void register_posix_time_tests() {}
- __attribute__((weak)) void register_task_metering_tests() {}
- __attribute__((weak)) void register_sched_edf_tests() {}
- __attribute__((weak)) void register_sched_admission_tests() {}
-diff --git a/src/kernel/time/posix_time.cpp b/src/kernel/time/posix_time.cpp
-new file mode 100644
-index 00000000..1fa2cb2c
---- /dev/null
-+++ b/src/kernel/time/posix_time.cpp
-@@ -0,0 +1,678 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file posix_time.cpp
-+/// @brief POSIX time/timer registries over the HRT clock + wheel (issue #76).
-+
-+#include <kernel/time/posix_time.hpp>
-+#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/hal/timer.hpp>
-+#include <kernel/arch/hal/rtc.hpp>
-+#include <kernel/sync/irq_spinlock_guard.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/test/resource_tracker.hpp>
-+
-+namespace kernel {
-+namespace time {
-+
-+namespace {
-+
-+constexpr uint64_t kNsPerSec = 1000000000ULL;
-+constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFFULL;
-+
-+} // namespace
-+
-+sync::SpinLock PosixTime::lock_;
-+PosixTime::TimerSlot PosixTime::timers_[kMaxPosixTimers];
-+PosixTime::TimerFdSlot PosixTime::timerfds_[kMaxTimerfds];
-+bool PosixTime::anchor_latched_ = false;
-+uint64_t PosixTime::anchor_ns_ = 0;
-+uint64_t PosixTime::mono_at_anchor_ns_ = 0;
-+
-+uint64_t PosixTime::sat_add(uint64_t left, uint64_t right) noexcept {
-+    if (kUint64Max - left < right) {
-+        return kUint64Max;
-+    }
-+    return left + right;
-+}
-+
-+bool PosixTime::timespec_to_ns(const TimespecU &spec,
-+                               uint64_t &out_ns) noexcept {
-+    if (spec.sec < 0 || spec.nsec < 0 || spec.nsec >= 1000000000) {
-+        return false;
-+    }
-+    const auto secs = static_cast<uint64_t>(spec.sec);
-+    if (secs > kUint64Max / kNsPerSec) {
-+        out_ns = kUint64Max;
-+        return true;
-+    }
-+    uint64_t total = secs * kNsPerSec;
-+    const auto nsec = static_cast<uint64_t>(spec.nsec);
-+    if (kUint64Max - total < nsec) {
-+        out_ns = kUint64Max;
-+        return true;
-+    }
-+    out_ns = total + nsec;
-+    return true;
-+}
-+
-+TimespecU PosixTime::ns_to_timespec(uint64_t total_ns) noexcept {
-+    TimespecU out{};
-+    uint64_t secs = total_ns / kNsPerSec;
-+    if (secs > static_cast<uint64_t>(0x7FFFFFFFFFFFFFFFLL)) {
-+        out.sec = 0x7FFFFFFFFFFFFFFFLL;
-+        out.nsec = 999999999;
-+        return out;
-+    }
-+    out.sec = static_cast<int64_t>(secs);
-+    out.nsec = static_cast<int64_t>(total_ns % kNsPerSec);
-+    return out;
-+}
-+
-+void PosixTime::boot_latch(uint64_t epoch_sec) noexcept {
-+    sync::IrqSpinLockGuard guard(lock_);
-+    if (anchor_latched_) {
-+        return;
-+    }
-+    if (epoch_sec > kUint64Max / kNsPerSec) {
-+        anchor_ns_ = kUint64Max;
-+    } else {
-+        anchor_ns_ = epoch_sec * kNsPerSec;
-+    }
-+    mono_at_anchor_ns_ = arch::Timer::ns_monotonic();
-+    anchor_latched_ = true;
-+}
-+
-+uint64_t PosixTime::clock_monotonic_ns() noexcept {
-+    return arch::Timer::ns_monotonic();
-+}
-+
-+uint64_t PosixTime::clock_realtime_ns() noexcept {
-+    if (!anchor_latched_) {
-+        boot_latch(arch::RTC::read_seconds());
-+    }
-+    const uint64_t now = arch::Timer::ns_monotonic();
-+    uint64_t delta = 0;
-+    if (now >= mono_at_anchor_ns_) {
-+        delta = now - mono_at_anchor_ns_;
-+    }
-+    return sat_add(anchor_ns_, delta);
-+}
-+
-+void PosixTime::anchor_reset_for_test() noexcept {
-+    sync::IrqSpinLockGuard guard(lock_);
-+    anchor_latched_ = false;
-+    anchor_ns_ = 0;
-+    mono_at_anchor_ns_ = 0;
-+}
-+
-+bool PosixTime::decode_timer_id(uint64_t timer_id, uint32_t &out_index,
-+                                uint32_t &out_gen) noexcept {
-+    const uint32_t index =
-+        static_cast<uint32_t>(timer_id & 0xFFULL);
-+    const uint32_t gen =
-+        static_cast<uint32_t>((timer_id >> kTimerIdIndexBits) & 0xFFFFFFULL);
-+    if (index >= kMaxPosixTimers || gen == TimerWheel::kInvalidGeneration) {
-+        return false;
-+    }
-+    out_index = index;
-+    out_gen = gen;
-+    return true;
-+}
-+
-+uint64_t PosixTime::encode_timer_id(uint32_t index, uint32_t gen) noexcept {
-+    return (static_cast<uint64_t>(gen & 0xFFFFFFU) << kTimerIdIndexBits) |
-+           static_cast<uint64_t>(index);
-+}
-+
-+uint32_t PosixTime::bump_gen(uint32_t old_gen) noexcept {
-+    uint32_t next = old_gen + 1;
-+    if (next == TimerWheel::kInvalidGeneration) {
-+        ++next;
-+    }
-+    return next;
-+}
-+
-+void PosixTime::free_timer_slot_locked(uint32_t index) noexcept {
-+    TimerSlot &slot = timers_[index];
-+    if (slot.armed) {
-+        TimerWheel::cancel(slot.wheel_h);
-+        slot.armed = false;
-+    }
-+    slot.used = false;
-+    slot.gen = bump_gen(slot.gen);
-+    slot.expiries = 0;
-+    test::ResourceTracker::instance().track_posix_timer_remove();
-+}
-+
-+void PosixTime::free_timerfd_slot_locked(uint32_t index) noexcept {
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (slot.armed) {
-+        TimerWheel::cancel(slot.wheel_h);
-+        slot.armed = false;
-+    }
-+    slot.used = false;
-+    slot.gen = bump_gen(slot.gen);
-+    slot.expiries = 0;
-+    // Wake any waiter with EBADF: the scan observes waiter_dead and wakes
-+    // the task; the reader then sees the generation mismatch (fail-closed).
-+    if (slot.waiter_armed && slot.waiter != nullptr) {
-+        slot.waiter_dead = true;
-+        slot.waiter_done = true;
-+    }
-+    test::ResourceTracker::instance().track_posix_timerfd_remove();
-+}
-+
-+int64_t PosixTime::timer_create(uint64_t clock_id, uint64_t owner_id,
-+                                uint32_t owner_gen, uint64_t &out_id) noexcept {
-+    if (clock_id != static_cast<uint64_t>(PosixClock::MONOTONIC)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
-+        TimerSlot &slot = timers_[i];
-+        if (slot.used) {
-+            continue;
-+        }
-+        slot.used = true;
-+        slot.gen = bump_gen(slot.gen);
-+        slot.owner_id = owner_id;
-+        slot.owner_gen = owner_gen;
-+        slot.armed = false;
-+        slot.periodic = false;
-+        slot.period_ns = 0;
-+        slot.expiry_ns = 0;
-+        slot.expiries = 0;
-+        slot.wheel_h = {0, 0, TimerWheel::kInvalidGeneration};
-+        out_id = encode_timer_id(i, slot.gen);
-+        test::ResourceTracker::instance().track_posix_timer_add();
-+        return 0;
-+    }
-+    return -kPosixErrAgain;
-+}
-+
-+int64_t PosixTime::timer_settime(uint64_t timer_id, const ItimerspecU &spec,
-+                                 uint64_t owner_id,
-+                                 uint32_t owner_gen) noexcept {
-+    uint32_t index = 0;
-+    uint32_t gen = 0;
-+    if (!decode_timer_id(timer_id, index, gen)) {
-+        return -kPosixErrInvalid;
-+    }
-+    uint64_t value_ns = 0;
-+    uint64_t interval_ns = 0;
-+    if (!timespec_to_ns(spec.value, value_ns) ||
-+        !timespec_to_ns(spec.interval, interval_ns)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerSlot &slot = timers_[index];
-+    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return -kPosixErrInvalid;
-+    }
-+    if (slot.armed) {
-+        TimerWheel::cancel(slot.wheel_h);
-+        slot.armed = false;
-+    }
-+    // Zero value = disarm (no arm, slot retained).
-+    if (value_ns == 0) {
-+        slot.periodic = false;
-+        slot.period_ns = 0;
-+        return 0;
-+    }
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    uint64_t expiry_ns = sat_add(now_ns, value_ns);
-+    if (expiry_ns < now_ns) {
-+        expiry_ns = kUint64Max;
-+    }
-+    void *context = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
-+    if (!TimerWheel::arm(0, expiry_ns, timer_fire, context, &slot.wheel_h)) {
-+        return -kPosixErrAgain;
-+    }
-+    slot.armed = true;
-+    slot.periodic = (interval_ns != 0);
-+    slot.period_ns = interval_ns;
-+    slot.expiry_ns = expiry_ns;
-+    return 0;
-+}
-+
-+int64_t PosixTime::timer_gettime(uint64_t timer_id, ItimerspecU &out_spec,
-+                                 uint64_t owner_id,
-+                                 uint32_t owner_gen) noexcept {
-+    uint32_t index = 0;
-+    uint32_t gen = 0;
-+    if (!decode_timer_id(timer_id, index, gen)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    const TimerSlot &slot = timers_[index];
-+    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return -kPosixErrInvalid;
-+    }
-+    ItimerspecU out{};
-+    if (slot.armed) {
-+        const uint64_t now_ns = arch::Timer::ns_monotonic();
-+        uint64_t remaining = 0;
-+        if (slot.expiry_ns > now_ns) {
-+            remaining = slot.expiry_ns - now_ns;
-+        }
-+        out.value = ns_to_timespec(remaining);
-+    }
-+    if (slot.periodic) {
-+        out.interval = ns_to_timespec(slot.period_ns);
-+    }
-+    out_spec = out;
-+    return 0;
-+}
-+
-+int64_t PosixTime::timer_delete(uint64_t timer_id, uint64_t owner_id,
-+                                uint32_t owner_gen) noexcept {
-+    uint32_t index = 0;
-+    uint32_t gen = 0;
-+    if (!decode_timer_id(timer_id, index, gen)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerSlot &slot = timers_[index];
-+    if (!slot.used || slot.gen != gen || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return -kPosixErrInvalid;
-+    }
-+    free_timer_slot_locked(index);
-+    return 0;
-+}
-+
-+int64_t PosixTime::timerfd_slot_alloc(uint64_t clock_id, uint64_t owner_id,
-+                                      uint32_t owner_gen) noexcept {
-+    if (clock_id != static_cast<uint64_t>(PosixClock::MONOTONIC)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
-+        TimerFdSlot &slot = timerfds_[i];
-+        if (slot.used) {
-+            continue;
-+        }
-+        slot.used = true;
-+        slot.gen = bump_gen(slot.gen);
-+        slot.owner_id = owner_id;
-+        slot.owner_gen = owner_gen;
-+        slot.armed = false;
-+        slot.periodic = false;
-+        slot.period_ns = 0;
-+        slot.expiry_ns = 0;
-+        slot.expiries = 0;
-+        slot.wheel_h = {0, 0, TimerWheel::kInvalidGeneration};
-+        slot.waiter = nullptr;
-+        slot.waiter_gen = 0;
-+        slot.waiter_armed = false;
-+        slot.waiter_done = false;
-+        slot.waiter_dead = false;
-+        test::ResourceTracker::instance().track_posix_timerfd_add();
-+        return static_cast<int64_t>(i);
-+    }
-+    return -kPosixErrAgain;
-+}
-+
-+uint32_t PosixTime::timerfd_slot_gen_for_owner(uint32_t index,
-+                                               uint64_t owner_id,
-+                                               uint32_t owner_gen) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return 0;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    const TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return 0;
-+    }
-+    return slot.gen;
-+}
-+
-+int64_t PosixTime::timerfd_settime(uint32_t index, uint32_t slot_gen,
-+                                   const ItimerspecU &spec, uint64_t owner_id,
-+                                   uint32_t owner_gen) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return -kPosixErrInvalid;
-+    }
-+    uint64_t value_ns = 0;
-+    uint64_t interval_ns = 0;
-+    if (!timespec_to_ns(spec.value, value_ns) ||
-+        !timespec_to_ns(spec.interval, interval_ns)) {
-+        return -kPosixErrInvalid;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || slot.gen != slot_gen || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return -kPosixErrInvalid;
-+    }
-+    if (slot.armed) {
-+        TimerWheel::cancel(slot.wheel_h);
-+        slot.armed = false;
-+    }
-+    if (value_ns == 0) {
-+        slot.periodic = false;
-+        slot.period_ns = 0;
-+        return 0;
-+    }
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    uint64_t expiry_ns = sat_add(now_ns, value_ns);
-+    if (expiry_ns < now_ns) {
-+        expiry_ns = kUint64Max;
-+    }
-+    void *context = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
-+    if (!TimerWheel::arm(0, expiry_ns, timerfd_fire, context, &slot.wheel_h)) {
-+        return -kPosixErrAgain;
-+    }
-+    slot.armed = true;
-+    slot.periodic = (interval_ns != 0);
-+    slot.period_ns = interval_ns;
-+    slot.expiry_ns = expiry_ns;
-+    return 0;
-+}
-+
-+int64_t PosixTime::timerfd_consume(uint32_t index, uint32_t slot_gen,
-+                                   uint64_t owner_id, uint32_t owner_gen,
-+                                   uint64_t &out_count) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return -kPosixErrBadFd;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || slot.gen != slot_gen || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return -kPosixErrBadFd;
-+    }
-+    if (slot.expiries == 0) {
-+        return -kPosixErrAgain;
-+    }
-+    out_count = slot.expiries;
-+    slot.expiries = 0;
-+    return 0;
-+}
-+
-+bool PosixTime::timerfd_waiter_arm(uint32_t index, uint32_t slot_gen,
-+                                   TaskControlBlock &task) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return false;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || slot.gen != slot_gen) {
-+        return false;
-+    }
-+    slot.waiter = &task;
-+    slot.waiter_gen = task.generation;
-+    slot.waiter_armed = true;
-+    slot.waiter_done = false;
-+    slot.waiter_dead = false;
-+    return true;
-+}
-+
-+void PosixTime::timerfd_waiter_clear(uint32_t index, uint32_t slot_gen,
-+                                     const TaskControlBlock &task) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (slot.gen != slot_gen || slot.waiter != &task) {
-+        return;
-+    }
-+    slot.waiter = nullptr;
-+    slot.waiter_armed = false;
-+    slot.waiter_done = false;
-+    slot.waiter_dead = false;
-+}
-+
-+void PosixTime::timerfd_slot_free(uint32_t index, uint32_t slot_gen,
-+                                  uint64_t owner_id,
-+                                  uint32_t owner_gen) noexcept {
-+    if (index >= kMaxTimerfds) {
-+        return;
-+    }
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || slot.owner_id != owner_id ||
-+        slot.owner_gen != owner_gen) {
-+        return;
-+    }
-+    // Generation 0 is the invalid sentinel (bump_gen never yields it):
-+    // accept it as an owner-validated wildcard for the create-path
-+    // rollback, which otherwise leaks the just-allocated slot.
-+    if (slot_gen != 0 && slot.gen != slot_gen) {
-+        return;
-+    }
-+    free_timerfd_slot_locked(index);
-+}
-+
-+bool PosixTime::sleep_arm(TaskControlBlock &task,
-+                          uint64_t budget_ns) noexcept {
-+    if (budget_ns == 0) {
-+        return true;
-+    }
-+    __atomic_store_n(&task.sleep_expired, false, __ATOMIC_RELEASE);
-+    task.sleep_gen = task.generation;
-+    // Defensive cancel-first: never overwrite a live arm (unreachable
-+    // under single-arm discipline, closed by construction — recv pattern).
-+    if (__atomic_load_n(&task.sleep_armed, __ATOMIC_ACQUIRE)) {
-+        sleep_cancel(task);
-+    }
-+    const uint64_t now_ns = arch::Timer::ns_monotonic();
-+    uint64_t expiry_ns = sat_add(now_ns, budget_ns);
-+    if (expiry_ns < now_ns) {
-+        expiry_ns = kUint64Max;
-+    }
-+    task.sleep_expiry_ns = expiry_ns;
-+    if (!TimerWheel::arm(0, expiry_ns, sleep_fire, &task,
-+                         &task.sleep_handle)) {
-+        __atomic_store_n(&task.sleep_armed, false, __ATOMIC_RELEASE);
-+        return false;
-+    }
-+    __atomic_store_n(&task.sleep_armed, true, __ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+void PosixTime::sleep_cancel(TaskControlBlock &task) noexcept {
-+    if (!__atomic_load_n(&task.sleep_armed, __ATOMIC_ACQUIRE)) {
-+        return;
-+    }
-+    __atomic_store_n(&task.sleep_armed, false, __ATOMIC_RELEASE);
-+    TimerWheel::cancel(task.sleep_handle);
-+}
-+
-+void PosixTime::drain_owner(TaskControlBlock &task) noexcept {
-+    sleep_cancel(task);
-+    sync::IrqSpinLockGuard guard(lock_);
-+    const uint64_t owner_id = task.id;
-+    const uint32_t owner_gen = task.generation;
-+    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
-+        TimerSlot &slot = timers_[i];
-+        if (slot.used && slot.owner_id == owner_id &&
-+            slot.owner_gen == owner_gen) {
-+            free_timer_slot_locked(i);
-+        }
-+    }
-+    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
-+        TimerFdSlot &slot = timerfds_[i];
-+        if (slot.used && slot.owner_id == owner_id &&
-+            slot.owner_gen == owner_gen) {
-+            free_timerfd_slot_locked(i);
-+        }
-+        // Clear waiter registrations held by the dying task (§12.3: no
-+        // waiter may outlive its task — the scan validates magic + gen,
-+        // this clear is the deterministic teardown).
-+        if (slot.waiter_armed && slot.waiter == &task) {
-+            slot.waiter = nullptr;
-+            slot.waiter_armed = false;
-+            slot.waiter_done = false;
-+            slot.waiter_dead = false;
-+        }
-+    }
-+}
-+
-+void PosixTime::reapply_wakes(uint32_t sched_cpu) noexcept {
-+    sync::IrqSpinLockGuard guard(lock_);
-+    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
-+        TimerFdSlot &slot = timerfds_[i];
-+        if (!slot.waiter_armed || !slot.waiter_done || slot.waiter == nullptr) {
-+            continue;
-+        }
-+        TaskControlBlock *waiter = slot.waiter;
-+        if (!TaskControlBlock::is_valid(waiter)) {
-+            slot.waiter = nullptr;
-+            slot.waiter_armed = false;
-+            continue;
-+        }
-+        if (waiter->generation != slot.waiter_gen) {
-+            slot.waiter = nullptr;
-+            slot.waiter_armed = false;
-+            continue;
-+        }
-+        if (Scheduler::queue_target(*waiter) != sched_cpu) {
-+            continue;
-+        }
-+        if (waiter->state == TaskState::BLOCKED) {
-+            waiter->state = TaskState::READY;
-+        } else if (waiter->state != TaskState::READY) {
-+            // RUNNING/TERMINATED/REAPED: never queue (H2 + dead-state
-+            // filter — mirrors the recv_timeout re-apply guard).
-+            continue;
-+        }
-+        Scheduler::enqueue_ready(*waiter);
-+        __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
-+                         __ATOMIC_RELEASE);
-+        // Consumed: the reader re-arms on its next blocking read.
-+        slot.waiter = nullptr;
-+        slot.waiter_armed = false;
-+        slot.waiter_done = false;
-+        slot.waiter_dead = false;
-+    }
-+}
-+
-+void PosixTime::sleep_fire(void *context) noexcept {
-+    auto *task = static_cast<TaskControlBlock *>(context);
-+    if (!TaskControlBlock::is_valid(task)) {
-+        return;
-+    }
-+    if (task->generation != task->sleep_gen) {
-+        return;
-+    }
-+    if (!__atomic_load_n(&task->sleep_armed, __ATOMIC_ACQUIRE)) {
-+        return;
-+    }
-+    __atomic_store_n(&task->sleep_expired, true, __ATOMIC_RELEASE);
-+}
-+
-+void PosixTime::timer_fire(void *context) noexcept {
-+    const auto raw = reinterpret_cast<uintptr_t>(context);
-+    if (raw >= kMaxPosixTimers) {
-+        return;
-+    }
-+    const uint32_t index = static_cast<uint32_t>(raw);
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerSlot &slot = timers_[index];
-+    if (!slot.used || !slot.armed) {
-+        return;
-+    }
-+    if (slot.expiries < kUint64Max) {
-+        ++slot.expiries;
-+    }
-+    if (!slot.periodic) {
-+        slot.armed = false;
-+        return;
-+    }
-+    // Periodic re-arm chain: next expiry from the last one (no drift
-+    // accumulation), saturating. Wheel-full keeps the slot armed with a
-+    // past expiry — the next tick's fire attempt re-arms (bounded retry
-+    // by tick rate, no backlog growth).
-+    uint64_t next_ns = sat_add(slot.expiry_ns, slot.period_ns);
-+    if (next_ns < slot.expiry_ns) {
-+        next_ns = kUint64Max;
-+    }
-+    void *ctx = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
-+    if (TimerWheel::arm(0, next_ns, timer_fire, ctx, &slot.wheel_h)) {
-+        slot.expiry_ns = next_ns;
-+    }
-+}
-+
-+void PosixTime::timerfd_fire(void *context) noexcept {
-+    const auto raw = reinterpret_cast<uintptr_t>(context);
-+    if (raw >= kMaxTimerfds) {
-+        return;
-+    }
-+    const uint32_t index = static_cast<uint32_t>(raw);
-+    sync::IrqSpinLockGuard guard(lock_);
-+    TimerFdSlot &slot = timerfds_[index];
-+    if (!slot.used || !slot.armed) {
-+        return;
-+    }
-+    if (slot.expiries < kUint64Max) {
-+        ++slot.expiries;
-+    }
-+    if (!slot.periodic) {
-+        slot.armed = false;
-+    } else {
-+        uint64_t next_ns = sat_add(slot.expiry_ns, slot.period_ns);
-+        if (next_ns < slot.expiry_ns) {
-+            next_ns = kUint64Max;
-+        }
-+        void *ctx = reinterpret_cast<void *>(static_cast<uintptr_t>(index));
-+        if (TimerWheel::arm(0, next_ns, timerfd_fire, ctx, &slot.wheel_h)) {
-+            slot.expiry_ns = next_ns;
-+        }
-+    }
-+    if (slot.waiter_armed && slot.waiter != nullptr) {
-+        slot.waiter_done = true;
-+    }
-+}
-+
-+void PosixTime::snapshot_reset() noexcept {
-+    sync::IrqSpinLockGuard guard(lock_);
-+    for (uint32_t i = 0; i < kMaxPosixTimers; ++i) {
-+        TimerSlot &slot = timers_[i];
-+        slot.used = false;
-+        slot.gen = bump_gen(slot.gen);
-+        slot.armed = false;
-+        slot.periodic = false;
-+        slot.expiries = 0;
-+    }
-+    for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
-+        TimerFdSlot &slot = timerfds_[i];
-+        slot.used = false;
-+        slot.gen = bump_gen(slot.gen);
-+        slot.armed = false;
-+        slot.periodic = false;
-+        slot.expiries = 0;
-+        slot.waiter = nullptr;
-+        slot.waiter_armed = false;
-+        slot.waiter_done = false;
-+        slot.waiter_dead = false;
-+    }
-+    anchor_latched_ = false;
-+    anchor_ns_ = 0;
-+    mono_at_anchor_ns_ = 0;
-+    test::ResourceTracker::instance().track_posix_timer_reset();
-+    test::ResourceTracker::instance().track_posix_timerfd_reset();
-+}
-+
-+} // namespace time
-+} // namespace kernel
-diff --git a/src/kernel/time/posix_time.hpp b/src/kernel/time/posix_time.hpp
-new file mode 100644
-index 00000000..550c20bc
---- /dev/null
-+++ b/src/kernel/time/posix_time.hpp
-@@ -0,0 +1,228 @@
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file posix_time.hpp
-+/// @brief POSIX time/timer surface over the HRT clock + event-timer wheel
-+/// (issue #76, v0.5.0). CLOCK_MONOTONIC/CLOCK_REALTIME, wheel-armed bounded
-+/// nanosleep, one-shot/periodic posix timers, and timerfd expiry counters.
-+///
-+/// Locking: one leaf IrqSpinLockGuard-ordered SpinLock. Wheel callbacks run
-+/// with the wheel lock released and may run under the outer scheduler_lock_
-+/// (on_tick path), so the registry lock is scheduler_lock_->posix_lock
-+/// ordered: task-context paths must NEVER acquire scheduler services while
-+/// holding it (§11.1 — release before BLOCKED + dequeue + reschedule).
-+
-+#pragma once
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+#include <kernel/sync/spinlock.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/time/timer_wheel.hpp>
-+
-+namespace kernel {
-+namespace time {
-+
-+/// @brief POSIX clock IDs (Linux values).
-+enum class PosixClock : uint64_t {
-+    REALTIME = 0,
-+    MONOTONIC = 1,
-+};
-+
-+/// @brief Kernel-local timespec (sign-extended fields, range-checked).
-+struct TimespecU {
-+    int64_t sec;
-+    int64_t nsec;
-+};
-+
-+/// @brief Kernel-local itimerspec (value + interval).
-+struct ItimerspecU {
-+    TimespecU value;
-+    TimespecU interval;
-+};
-+
-+/// @brief TIMER_CREATE multiplex operations.
-+enum class PosixTimerOp : uint64_t {
-+    CREATE = 0,
-+    SETTIME = 1,
-+    GETTIME = 2,
-+    DELETE = 3,
-+};
-+
-+/// @brief Reachable errno values (Linux numbers, mirrored in src/libc/errno.h).
-+constexpr int64_t kPosixErrInvalid = 22;   // EINVAL
-+constexpr int64_t kPosixErrFault = 14;     // EFAULT
-+constexpr int64_t kPosixErrAgain = 11;     // EAGAIN
-+constexpr int64_t kPosixErrIntr = 4;       // EINTR
-+constexpr int64_t kPosixErrBadFd = 9;      // EBADF
-+constexpr int64_t kPosixErrNoSys = 38;     // ENOSYS
-+
-+/// @brief POSIX time/timer registries + clock sources (issue #76).
-+class PosixTime {
-+  public:
-+    /// @brief Static timer slots (bounded; table-full fails closed).
-+    static constexpr uint32_t kMaxPosixTimers = 32;
-+    /// @brief Static timerfd slots (bounded; table-full fails closed).
-+    static constexpr uint32_t kMaxTimerfds = 32;
-+    /// @brief Timer ID layout: (generation << 8) | index.
-+    static constexpr uint32_t kTimerIdIndexBits = 8;
-+
-+    /// @brief Saturating 64-bit add (absurd values clamp, never wrap).
-+    static uint64_t sat_add(uint64_t left, uint64_t right) noexcept;
-+    /// @brief Timespec to ns with range check (tv_nsec in [0, 1e9)).
-+    /// @return True + out ns on success; false on range violation.
-+    static bool timespec_to_ns(const TimespecU &spec,
-+                               uint64_t &out_ns) noexcept;
-+    /// @brief Ns to saturating timespec split.
-+    static TimespecU ns_to_timespec(uint64_t total_ns) noexcept;
-+
-+    /// @brief Latch the REALTIME boot anchor (idempotent, first wins).
-+    /// @param epoch_sec Wall seconds at latch time (RTC read).
-+    static void boot_latch(uint64_t epoch_sec) noexcept;
-+    /// @brief MONOTONIC ns (HRT clock, never RTC-dependent after boot).
-+    static uint64_t clock_monotonic_ns() noexcept;
-+    /// @brief REALTIME ns (anchor + monotonic delta, saturating).
-+    static uint64_t clock_realtime_ns() noexcept;
-+    /// @brief Test hook: reset the anchor latch (test isolation only).
-+    static void anchor_reset_for_test() noexcept;
-+
-+    /// @brief Create a timer slot owned by (owner_id, owner_gen).
-+    /// @return 0 + out timer id, or negative -errno (EINVAL/AGAIN).
-+    static int64_t timer_create(uint64_t clock_id, uint64_t owner_id,
-+                                uint32_t owner_gen, uint64_t &out_id) noexcept;
-+    /// @brief Arm/disarm/re-arm a timer (zero value = disarm).
-+    /// @return 0 or negative -errno (EINVAL/AGAIN on wheel-full).
-+    static int64_t timer_settime(uint64_t timer_id, const ItimerspecU &spec,
-+                                 uint64_t owner_id,
-+                                 uint32_t owner_gen) noexcept;
-+    /// @brief Read remaining + period of a timer.
-+    /// @return 0 or negative -errno (EINVAL on stale/foreign id).
-+    static int64_t timer_gettime(uint64_t timer_id, ItimerspecU &out_spec,
-+                                 uint64_t owner_id,
-+                                 uint32_t owner_gen) noexcept;
-+    /// @brief Delete a timer (cancel arm, free slot, track_remove).
-+    /// @return 0 or negative -errno (EINVAL on stale/foreign id).
-+    static int64_t timer_delete(uint64_t timer_id, uint64_t owner_id,
-+                                uint32_t owner_gen) noexcept;
-+
-+    /// @brief Allocate a timerfd slot owned by (owner_id, owner_gen).
-+    /// @return Slot index >= 0, or negative -errno (EINVAL/AGAIN).
-+    static int64_t timerfd_slot_alloc(uint64_t clock_id, uint64_t owner_id,
-+                                      uint32_t owner_gen) noexcept;
-+    /// @brief Owner-validated generation peek for vnode tagging.
-+    /// @return Live generation, or 0 when slot unused/foreign.
-+    static uint32_t timerfd_slot_gen_for_owner(uint32_t index,
-+                                               uint64_t owner_id,
-+                                               uint32_t owner_gen) noexcept;
-+    /// @brief Arm/disarm a timerfd slot (zero value = disarm).
-+    /// @return 0 or negative -errno.
-+    static int64_t timerfd_settime(uint32_t index, uint32_t slot_gen,
-+                                   const ItimerspecU &spec, uint64_t owner_id,
-+                                   uint32_t owner_gen) noexcept;
-+    /// @brief Read-and-clear the expiry counter.
-+    /// @return 0 + out count, -EAGAIN when empty, -EBADF when stale.
-+    static int64_t timerfd_consume(uint32_t index, uint32_t slot_gen,
-+                                   uint64_t owner_id, uint32_t owner_gen,
-+                                   uint64_t &out_count) noexcept;
-+    /// @brief Register a BLOCKED waiter on a timerfd slot.
-+    /// @return True when armed; false when slot stale (caller fails EBADF).
-+    static bool timerfd_waiter_arm(uint32_t index, uint32_t slot_gen,
-+                                   TaskControlBlock &task) noexcept;
-+    /// @brief Clear the waiter registration (wake observed or cancelled).
-+    static void timerfd_waiter_clear(uint32_t index, uint32_t slot_gen,
-+                                     const TaskControlBlock &task) noexcept;
-+    /// @brief Free a timerfd slot (close path; wakes any waiter with EBADF).
-+    static void timerfd_slot_free(uint32_t index, uint32_t slot_gen,
-+                                  uint64_t owner_id,
-+                                  uint32_t owner_gen) noexcept;
-+
-+    /// @brief Arm a bounded nanosleep on a TCB (caller holds no locks).
-+    /// @return True when armed (or zero budget, which never arms).
-+    static bool sleep_arm(TaskControlBlock &task,
-+                          uint64_t budget_ns) noexcept;
-+    /// @brief Cancel a nanosleep arm (idempotent, fail-closed stale).
-+    static void sleep_cancel(TaskControlBlock &task) noexcept;
-+
-+    /// @brief Death-drain: disarm sleep + free owned timers/timerfds +
-+    /// clear waiter registrations of a dying task (cleanup path, §12.3).
-+    static void drain_owner(TaskControlBlock &task) noexcept;
-+
-+    /// @brief Scheduler re-apply: wake sleep-expired + timerfd-ready
-+    /// BLOCKED tasks (level-triggered; call under scheduler_lock_).
-+    /// @param sched_cpu Servicing CPU index.
-+    static void reapply_wakes(uint32_t sched_cpu) noexcept;
-+
-+    /// @brief Wheel callback: nanosleep expiry (flag-store only).
-+    static void sleep_fire(void *context) noexcept;
-+    /// @brief Wheel callback: posix timer expiry (+ periodic re-arm).
-+    static void timer_fire(void *context) noexcept;
-+    /// @brief Wheel callback: timerfd expiry (count + waiter flag).
-+    static void timerfd_fire(void *context) noexcept;
-+
-+    /// @brief Disarm everything, invalidate handles, zero counters
-+    /// (test isolation; bumps all generations fail-closed).
-+    static void snapshot_reset() noexcept;
-+
-+  private:
-+    struct TimerSlot {
-+        bool used;
-+        uint32_t gen;
-+        uint64_t owner_id;
-+        uint32_t owner_gen;
-+        bool armed;
-+        bool periodic;
-+        uint64_t period_ns;
-+        uint64_t expiry_ns;
-+        uint64_t expiries;
-+        time::TimerWheel::Handle wheel_h;
-+    };
-+    struct TimerFdSlot {
-+        bool used;
-+        uint32_t gen;
-+        uint64_t owner_id;
-+        uint32_t owner_gen;
-+        bool armed;
-+        bool periodic;
-+        uint64_t period_ns;
-+        uint64_t expiry_ns;
-+        uint64_t expiries;
-+        time::TimerWheel::Handle wheel_h;
-+        TaskControlBlock *waiter;
-+        uint32_t waiter_gen;
-+        bool waiter_armed;
-+        bool waiter_done;
-+        bool waiter_dead;
-+    };
-+
-+    static bool decode_timer_id(uint64_t timer_id, uint32_t &out_index,
-+                                uint32_t &out_gen) noexcept;
-+    static uint64_t encode_timer_id(uint32_t index, uint32_t gen) noexcept;
-+    static uint32_t bump_gen(uint32_t old_gen) noexcept;
-+    static void free_timer_slot_locked(uint32_t index) noexcept;
-+    static void free_timerfd_slot_locked(uint32_t index) noexcept;
-+
-+    static sync::SpinLock lock_;
-+    static TimerSlot timers_[kMaxPosixTimers];
-+    static TimerFdSlot timerfds_[kMaxTimerfds];
-+    static bool anchor_latched_;
-+    static uint64_t anchor_ns_;
-+    static uint64_t mono_at_anchor_ns_;
-+};
-+
-+} // namespace time
-+} // namespace kernel
-diff --git a/src/libc/errno.h b/src/libc/errno.h
-index ae303b4e..14b9e666 100644
---- a/src/libc/errno.h
-+++ b/src/libc/errno.h
-@@ -25,6 +25,7 @@ extern int errno;
- #define ESRCH   3
- #define EINTR   4
- #define EIO     5
-+#define EAGAIN  11
- #define EBADF   9
- #define ENOMEM  12
- #define EACCES  13
-@@ -38,3 +39,4 @@ extern int errno;
- #define ERANGE  34
- #define ENOSYS  38
- #define ENOTDIR 50
-+#define ETIMEDOUT 110
-diff --git a/src/libc/syscall.h b/src/libc/syscall.h
-index cc14ca38..b987eb98 100644
---- a/src/libc/syscall.h
-+++ b/src/libc/syscall.h
-@@ -249,6 +249,31 @@ static inline long sys_tls_set(unsigned long base) {
-     return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
+ #include <kernel/arch/irq_guard.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+@@ -158,8 +159,14 @@ inline TaskControlBlock *create_forever_task(uint64_t priority,
+ ///        is skipped entirely.
+ inline void terminate_and_drain(TaskControlBlock &task) {
+     if (TaskControlBlock::is_valid(&task) &&
+-        task.state != TaskState::TERMINATED)
+-        Scheduler::terminate(task, 0);
++        task.state != TaskState::TERMINATED) {
++        // Issue #197: refusal (AP-live target) is fail-closed — the task
++        // stays alive and the drain below simply finds no new zombie.
++        const errors::SchedulerError term_err =
++            Scheduler::terminate_err(task, 0);
++        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
++                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
++    }
+     Scheduler::drain_zombie_list();
  }
  
-+// Issue #76 — POSIX time API (matches kernel SyscallNumber 80–83).
-+// Multiplex ops for SYS_TIMER_CREATE: 0=CREATE, 1=SETTIME, 2=GETTIME,
-+// 3=DELETE. Timers address by timer id; timerfd SETTIME (arg3 kind bit)
-+// addresses by fd (resolved to the slot via the vnode tag).
-+static inline long sys_clock_gettime(unsigned long clockid,
-+                                     struct timespec* tp) {
-+    return __syscall5(SYS_CLOCK_GETTIME, (long)clockid, (long)tp, 0, 0);
-+}
-+
-+static inline long sys_nanosleep(const struct timespec* req,
-+                                 struct timespec* rem) {
-+    return __syscall5(SYS_NANOSLEEP, (long)req, (long)rem, 0, 0);
-+}
-+
-+static inline long sys_timer_create(unsigned long op, unsigned long a1,
-+                                    unsigned long a2, unsigned long a3) {
-+    return __syscall5(SYS_TIMER_CREATE, (long)op, (long)a1, (long)a2,
-+                      (long)a3);
-+}
-+
-+static inline long sys_timerfd_create(unsigned long clockid,
-+                                      unsigned long flags) {
-+    return __syscall5(SYS_TIMERFD_CREATE, (long)clockid, (long)flags, 0, 0);
-+}
-+
- #if defined(__x86_64__)
- static inline long sys_send_fast(unsigned long dest, unsigned long type,
-                                  unsigned long size,
-diff --git a/src/libc/time.c b/src/libc/time.c
-index 4733a0d7..61cc7ac3 100644
---- a/src/libc/time.c
-+++ b/src/libc/time.c
-@@ -1,32 +1,65 @@
- #include <syscall.h>
- #include <time.h>
-+#include <errno.h>
-+
-+extern int errno;
-+
-+/// @brief §2 error predicate (picolib_stubs.c map_err shape): map a raw
-+/// syscall return to errno/-1.
-+static long map_err(long ret) {
-+    if (ret < 0 && (unsigned long)ret > -4096UL) {
-+        errno = (int)(-ret);
-+        return -1;
+@@ -171,8 +178,14 @@ inline void terminate_and_drain(TaskControlBlock &task) {
+ ///        touching freed memory.
+ inline void terminate_if_live(TaskControlBlock *task) {
+     if (task && TaskControlBlock::is_valid(task) &&
+-        task->state != TaskState::TERMINATED)
+-        Scheduler::terminate(*task, 0);
++        task->state != TaskState::TERMINATED) {
++        // Issue #197: refusal (AP-live target) is fail-closed — never
++        // ENSURE or loop on it; the owner CPU reaps via its own path.
++        const errors::SchedulerError term_err =
++            Scheduler::terminate_err(*task, 0);
++        JARVIS_ASSERT(term_err == errors::SCHED_ERR_OK ||
++                      term_err == errors::SCHED_ERR_REMOTE_CURRENT);
 +    }
-+    return ret;
-+}
- 
- time_t time(time_t* tloc) {
--    struct timeval tv;
--    if (sys_gettod(&tv) < 0) return (time_t)-1;
--    if (tloc) *tloc = tv.tv_sec;
--    return tv.tv_sec;
-+    struct timespec ts;
-+    if (map_err(sys_clock_gettime(CLOCK_REALTIME, &ts)) < 0) {
-+        // Fallback one release: legacy gettod path (then remove).
-+        struct timeval tv;
-+        if (sys_gettod(&tv) < 0) return (time_t)-1;
-+        if (tloc) *tloc = tv.tv_sec;
-+        return tv.tv_sec;
-+    }
-+    if (tloc) *tloc = ts.tv_sec;
-+    return ts.tv_sec;
  }
  
- int gettimeofday(struct timeval* tv, void* tz) {
-+    struct timespec ts;
-     (void)tz;
--    return (int)sys_gettod(tv);
-+    if (!tv) return -1;
-+    if (map_err(sys_clock_gettime(CLOCK_REALTIME, &ts)) < 0) {
-+        // Fallback one release: legacy gettod path (then remove).
-+        return (int)sys_gettod(tv);
+ /// @brief Teardown for a pair of tasks: terminate the still-live ones, then
+diff --git a/src/kernel/test/test_smp_sched.cpp b/src/kernel/test/test_smp_sched.cpp
+index 46416e82..03c76a80 100644
+--- a/src/kernel/test/test_smp_sched.cpp
++++ b/src/kernel/test/test_smp_sched.cpp
+@@ -34,6 +34,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/arch/x86_64/hal/smp.hpp>
++#include <kernel/arch/cpu_context.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+@@ -554,6 +555,89 @@ JARVIS_TEST(smp_sched_percpu_partition_divergence,
+     JARVIS_TEST_PASS();
+ }
+ 
++/// @brief Never-returning entry for AP-current observation (issue #197).
++/// Spins until terminated externally; the test, not the entry, owns the
++/// lifecycle (contrast smp_gate_entry, which self-completes on post).
++void smp_forever_entry() {
++    for (;;) {
++        arch::pause();
 +    }
-+    tv->tv_sec = ts.tv_sec;
-+    tv->tv_usec = (long)(ts.tv_nsec / 1000);
-+    return 0;
 +}
 +
-+int clock_gettime(int clockid, struct timespec* tp) {
-+    if (!tp) {
-+        errno = EINVAL;
-+        return -1;
-+    }
-+    return (int)map_err(sys_clock_gettime((unsigned long)clockid, tp));
- }
- 
- unsigned int sleep(unsigned int seconds) {
--    struct timeval tv;
--    tv.tv_sec = seconds;
--    tv.tv_usec = 0;
--    
--    // Use alarm + pause
--    unsigned int remaining = sys_alarm(seconds);
--    if (remaining > 0) return remaining;
--    
--    sys_sigreturn();
--    sys_pause();
--    
--    // If we return, alarm fired or was interrupted
--    return sys_alarm(0);
-+    struct timespec req;
-+    struct timespec rem;
-+    req.tv_sec = seconds;
-+    req.tv_nsec = 0;
-+    // EINTR loop: resume with the remainder (kernel fills rem).
-+    while (map_err(sys_nanosleep(&req, &rem)) < 0) {
-+        if (errno != EINTR) return seconds;
-+        req = rem;
-+        seconds = (unsigned int)rem.tv_sec;
-+    }
-+    return 0;
- }
- 
- unsigned int alarm(unsigned int seconds) {
-@@ -34,21 +67,9 @@ unsigned int alarm(unsigned int seconds) {
- }
- 
- int nanosleep(const struct timespec* req, struct timespec* rem) {
--    if (!req) return -1;
--    
--    unsigned int total_us = req->tv_sec * 1000000 + req->tv_nsec / 1000;
--    unsigned int secs = total_us / 1000000;
--    unsigned int usecs = total_us % 1000000;
--    
--    unsigned int remaining = sys_alarm_us(secs, usecs);
--    if (remaining > 0) {
--        if (rem) {
--            rem->tv_sec = remaining / 1000000;
--            rem->tv_nsec = (remaining % 1000000) * 1000;
--        }
-+    if (!req) {
-+        errno = EINVAL;
-         return -1;
-     }
--    
--    sys_pause();
--    return 0;
-+    return (int)map_err(sys_nanosleep(req, rem));
- }
-\ No newline at end of file
-diff --git a/src/libc/time.h b/src/libc/time.h
-index ddc67762..ac1d145d 100644
---- a/src/libc/time.h
-+++ b/src/libc/time.h
-@@ -25,6 +25,10 @@
- 
- #define CLOCKS_PER_SEC 1000000
- 
-+// Issue #76 — POSIX clock IDs (match kernel PosixClock).
-+#define CLOCK_REALTIME  0
-+#define CLOCK_MONOTONIC 1
++// Runmode: kernel
++// Testidea: The zombie drain never frees a task that is current on the
++// AP (never free a live stack, scheduler.hpp:846).
++// Input: Forever-task pinned to CPU1, observed AP-current; force
++// TERMINATED + release_zombie; drain + cleanup_step_try.
++// Expect: zombie_count pinned, magic intact, still AP-current; after the
++// AP leaves (affinity CPU0 + tick), a re-drain frees it. Single-CPU:
++// drain frees immediately (spare never triggers).
++// Depends: drain_zombie_list/cleanup_step_try spare, is_current_on_any_cpu
++JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
++    // Deterministic core: drive cpu_ctx(1).current directly (the exact
++    // predicate input of is_current_on_any_cpu) instead of racing the AP
++    // tick — a live-AP observation would flake on tick timing. The
++    // fixture is never enqueued, so no dispatch can disturb the setup.
++    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
++    JARVIS_ASSERT(runner != nullptr);
++    // Force the zombie state directly (bypasses terminate_err: this test
++    // targets the DRAIN gate, not the terminate gate).
++    runner->state = TaskState::TERMINATED;
++    Scheduler::release_zombie(*runner);
++    const uint64_t zombies_before = Scheduler::zombie_count();
++    JARVIS_ASSERT(zombies_before >= 1);
++    // Simulate AP-current: the drain must spare (never free a live stack).
++    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
++    kernel::cpu_ctx(1).current = runner;
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
++    Scheduler::cleanup_step_try();
++    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++    // AP leaves: restore the slot, then the re-drain must free exactly it.
++    kernel::cpu_ctx(1).current = saved_current;
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(zombies_before - 1, Scheduler::zombie_count());
++    JARVIS_TEST_PASS();
++}
 +
- struct tm {
-     int tm_sec;     // seconds [0,60]
-     int tm_min;     // minutes [0,59]
-@@ -47,6 +51,13 @@ struct timespec {
-     long tv_nsec;    // nanoseconds
- };
- 
-+struct itimerspec {
-+    struct timespec it_interval; // period (0 = one-shot)
-+    struct timespec it_value;    // initial expiry (0 = disarm)
-+};
++// Runmode: kernel
++// Testidea: terminate_err refuses an AP-current target with
++// SCHED_ERR_REMOTE_CURRENT and zero mutation.
++// Input: Forever-task pinned to CPU1, observed AP-current;
++// terminate_err from the BSP.
++// Expect: REMOTE_CURRENT, state/queues/zombie list unmutated, block
++// live; self-terminate path still returns SCHED_ERR_OK. Single-CPU:
++// terminate_err returns SCHED_ERR_OK.
++// Depends: Scheduler::terminate_err refusal predicate
++JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
++    // Same deterministic cpu_ctx drive as the drain test: the fixture is
++    // never enqueued, so no dispatch can disturb the setup.
++    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
++    JARVIS_ASSERT(runner != nullptr);
++    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
++    kernel::cpu_ctx(1).current = runner;
++    // Refusal with zero mutation: still live, no zombie queued.
++    const uint64_t zombies_before = Scheduler::zombie_count();
++    const errors::SchedulerError refused =
++        Scheduler::terminate_err(*runner, 0);
++    JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
++    JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
++    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
++    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
++    // AP leaves: the same call must now succeed and the drain must free.
++    kernel::cpu_ctx(1).current = saved_current;
++    JARVIS_ASSERT_EQ(errors::SCHED_ERR_OK,
++                     Scheduler::terminate_err(*runner, 0));
++    JARVIS_ASSERT(runner->state == TaskState::TERMINATED);
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
++    JARVIS_TEST_PASS();
++}
 +
-+int clock_gettime(int clockid, struct timespec* tp);
-+
- time_t time(time_t* tloc);
- int gettimeofday(struct timeval* tv, void* tz);
- int nanosleep(const struct timespec* req, struct timespec* rem);
+ void register_smp_sched_tests() {
+     Logger::info("Registering smp sched tests");
+     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
+@@ -566,5 +650,7 @@ void register_smp_sched_tests() {
+     JARVIS_REGISTER_TEST(smp_sched_exempt_move_always_allowed);
+     JARVIS_REGISTER_TEST(smp_sched_balancer_moves_nonrt_keeps_rt);
+     JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
++    JARVIS_REGISTER_TEST(smp_drain_spares_ap_current);
++    JARVIS_REGISTER_TEST(smp_terminate_remote_current_refused);
+ }
+ #endif // CONFIG_ARCH_X86_64

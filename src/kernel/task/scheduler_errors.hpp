@@ -42,7 +42,8 @@ namespace kernel::errors {
     X(NO_SHELL, 10, "Shell task not set")                                      \
     X(INVALID_ARGS, 11, "Invalid arguments")                                   \
     X(ADMISSION_DENIED, 12, "Admission denied: Liu-Leyland bound exceeded")    \
-    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked")
+    X(WCET_INVALID, 13, "Invalid WCET: exceeds period or period untracked") \
+    X(REMOTE_CURRENT, 14, "Task is current on another CPU")
 
 /// @brief Error codes returned by scheduler operations.
 // NOLINTNEXTLINE(performance-enum-size)

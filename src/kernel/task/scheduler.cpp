@@ -1097,8 +1097,24 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             if (!zombie_head_)
                 zombie_tail_ = nullptr;
             task->zombie_next_ = nullptr;
+            // Issue #197: spare an AP-live zombie (never free a live
+            // stack) — re-queue at the tail so other zombies still flush
+            // within the bounded max_flush budget (no live-wait).
+            if (is_current_on_any_cpu(task)) {
+                task->zombie_next_ = nullptr;
+                if (zombie_tail_ != nullptr) {
+                    zombie_tail_->zombie_next_ = task;
+                } else {
+                    zombie_head_ = task;
+                }
+                zombie_tail_ = task;
+                continue;
+            }
             if (task->in_ready_queue_)
                 rq_task(*task).remove(*task, effective_priority(task));
+            // Issue #197 defense-in-depth: unlink a stale EDF entry.
+            if (task->in_edf_queue_)
+                edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
         }
         if (task->magic == TaskControlBlock::TCB_MAGIC) {
@@ -1114,6 +1130,11 @@ void Scheduler::drain_zombie_list() noexcept {
     // (callers hold none — OOM handler, snapshot, tests) so this never
     // self-deadlocks; queue-removes inherit the baseline single-core
     // exposure plus AP try-gating (spec §3.4.2).
+    // Issue #197: spare AP-live zombies — a pass budget of one full list
+    // length bounds rotations so a live head cannot wedge the drain.
+    uint64_t spared = 0;
+    const uint64_t pass_budget =
+        __atomic_load_n(&zombie_count_, __ATOMIC_RELAXED) + 1;
     for (;;) {
         TaskControlBlock *task;
         {
@@ -1132,12 +1153,32 @@ void Scheduler::drain_zombie_list() noexcept {
                 zombie_count_ = 0;
                 continue;
             }
+            if (is_current_on_any_cpu(task)) {
+                // Never free a live stack: rotate head→tail (unless
+                // sole, then nothing else to do) and retry on a later
+                // pass — never block (§11.3).
+                if (task->zombie_next_ == nullptr || zombie_tail_ == task) {
+                    return;
+                }
+                zombie_head_ = task->zombie_next_;
+                task->zombie_next_ = nullptr;
+                zombie_tail_->zombie_next_ = task;
+                zombie_tail_ = task;
+                if (++spared >= pass_budget) {
+                    return;
+                }
+                continue;
+            }
             zombie_head_ = task->zombie_next_;
             if (!zombie_head_)
                 zombie_tail_ = nullptr;
             task->zombie_next_ = nullptr;
             if (task->in_ready_queue_)
                 rq_task(*task).remove(*task, effective_priority(task));
+            // Issue #197 defense-in-depth: unlink a stale EDF entry —
+            // bitmap-only removal would free a still-linked node.
+            if (task->in_edf_queue_)
+                edf_remove(*task, queue_target(*task));
             __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
         }
         // IRQs on — cleanup and free without holding any lock.
@@ -1166,12 +1207,20 @@ void Scheduler::cleanup_step() noexcept {
             zombie_count_ = 0;
             return;
         }
+        // Issue #197: spare an AP-live head (never free a live stack) —
+        // single-pop variant: leave it listed, retry on a later pass.
+        if (is_current_on_any_cpu(task)) {
+            return;
+        }
         zombie_head_ = task->zombie_next_;
         if (!zombie_head_)
             zombie_tail_ = nullptr;
         task->zombie_next_ = nullptr;
         if (task->in_ready_queue_)
             rq_task(*task).remove(*task, effective_priority(task));
+        // Issue #197 defense-in-depth: unlink a stale EDF entry.
+        if (task->in_edf_queue_)
+            edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
     // IRQs on — cleanup and free without holding any lock.
@@ -1201,12 +1250,19 @@ void Scheduler::cleanup_step_try() noexcept {
             zombie_count_ = 0;
             return;
         }
+        // Issue #197: spare an AP-live head (never free a live stack).
+        if (is_current_on_any_cpu(task)) {
+            return;
+        }
         zombie_head_ = task->zombie_next_;
         if (!zombie_head_)
             zombie_tail_ = nullptr;
         task->zombie_next_ = nullptr;
         if (task->in_ready_queue_)
             rq_task(*task).remove(*task, effective_priority(task));
+        // Issue #197 defense-in-depth: unlink a stale EDF entry.
+        if (task->in_edf_queue_)
+            edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
     }
     task->cleanup();
@@ -1362,8 +1418,21 @@ static void stamp_exec(TaskControlBlock &t) noexcept {
     t.exec_stamp_ns = arch::Timer::ns_monotonic();
 }
 
-void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+errors::SchedulerError
+Scheduler::terminate_err(TaskControlBlock &task,
+                         uint64_t exit_code) noexcept {
     arch::IrqGuard irq_guard{};
+    // Issue #197: refuse to terminate a task that is current on ANOTHER
+    // CPU (evaluated before taking scheduler_lock_ — leaf-only reads, no
+    // new lock takes). Freeing an AP-live stack poisons the running task
+    // (GPF in edf_remove / switch-corruption ENSURE under -smp 2).
+    // Self-termination always succeeds (exempted below). No mutation on
+    // refusal: no dequeue, no state write, no release, no reaper poke.
+    if (is_current_on_any_cpu(&task) && &task != current_task()) {
+        kernel::Logger::warn("sched: terminate id=%u refused (remote-current)",
+                             static_cast<unsigned>(task.id));
+        return errors::SCHED_ERR_REMOTE_CURRENT;
+    }
     SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
     charge_exec(task); // issue #21: bill the final partial quantum (no loss)
 #if defined(CONFIG_DEBUG_IPC_SCHED)
@@ -1434,6 +1503,19 @@ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     if (next && next != &task) {
         switch_to_task(&task, *next, nullptr);
     }
+    }
+    return errors::SCHED_ERR_OK;
+}
+
+void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+    // Void legacy wrapper: refusal is fail-closed warn-only (all existing
+    // callers are own-CPU paths where refusal is unreachable). Fallible
+    // callers use terminate_err directly.
+    const errors::SchedulerError err = terminate_err(task, exit_code);
+    if (err != errors::SCHED_ERR_OK) {
+        kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",
+                             static_cast<unsigned>(task.id),
+                             static_cast<unsigned>(err));
     }
 }
 
@@ -3092,9 +3174,14 @@ void Scheduler::cleanup_test_tasks() noexcept {
 
     // Terminate each collected task: dequeue, set TERMINATED, wake parent,
     // release_zombie (removes from all_tasks_, deadline_list_, id_table_,
-    // appends to zombie list).
-    for (uint64_t i = 0; i < num_to_kill; ++i)
-        terminate(*to_kill[i], 0);
+    // appends to zombie list). Issue #197: race-window second gate — a
+    // task collected as non-current may have been dispatched on the AP
+    // since; refusal skips it (the AP-parked teardown frees it later).
+    for (uint64_t i = 0; i < num_to_kill; ++i) {
+        const errors::SchedulerError cleanup_err =
+            terminate_err(*to_kill[i], 0);
+        (void)cleanup_err;
+    }
 
     // Drain zombies: cleanup() + MemPool::free() for each.
     drain_zombie_list();
@@ -4488,6 +4575,12 @@ void Scheduler::process_deferred_kills() noexcept {
         auto *task = s_deferred_kill_tasks[i];
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC)
             continue;
+        // Issue #197: spare AP-live tasks (never free a live stack) —
+        // skip this entry; a still-missed deadline re-fires defer_kill
+        // on the next scan, so no kill intent is lost.
+        if (is_current_on_any_cpu(task)) {
+            continue;
+        }
 
         if (task->get_sporadic_server()) {
             // Contract: SporadicServer::on_completion() (and on_activation /

@@ -890,8 +890,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         debug_write(" priority=");
         debug_write_hex(victim->priority);
         debug_write("\n");
-        kernel::Scheduler::terminate(*victim,
-            static_cast<uint64_t>(-static_cast<int64_t>(9)));
+        // Issue #197: an AP-live victim cannot be freed — refuse and
+        // retry on the next OOM tick instead of draining a live task.
+        const kernel::errors::SchedulerError oom_err =
+            kernel::Scheduler::terminate_err(*victim,
+                static_cast<uint64_t>(-static_cast<int64_t>(9)));
+        if (oom_err != kernel::errors::SCHED_ERR_OK) {
+            return false;
+        }
         kernel::Scheduler::drain_zombie_list();
         return true;
     });
@@ -1421,8 +1427,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
         // INV-5: terminate dequeues the task from the ready queue so it is
         // never left inrq=1 outside the physical queue (which corrupts the
         // ready-queue count_ and wedges the scheduler).
-        kernel::Scheduler::terminate(*task,
-                                     static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+        // Issue #197: an AP-live target cannot be freed — leave it alive
+        // (delivery deferred to the owning CPU's own exit path); do NOT
+        // re-deliver in a tight loop (caller backs off).
+        const kernel::errors::SchedulerError fatal_err =
+            kernel::Scheduler::terminate_err(*task,
+                static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+        if (fatal_err != kernel::errors::SCHED_ERR_OK) {
+            return false;
+        }
         return false;
     }
 
@@ -1448,12 +1461,15 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
             arch::HHDM_OFFSET + frame_phys);
         if (!frame) {
             // If we cannot write the signal frame (bad stack),
-            // terminate
+            // terminate. Issue #197: an AP-live target is left alive
+            // instead (delivery deferred, no tight re-delivery loop).
             kernel::Logger::error("Task %x: cannot write signal frame, "
                                   "terminating",
                                   task->id);
-            kernel::Scheduler::terminate(
-                *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+            const kernel::errors::SchedulerError frame_err =
+                kernel::Scheduler::terminate_err(
+                    *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+            (void)frame_err;
             return false;
         }
 
@@ -1494,9 +1510,12 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     }
     dump_regs(regs);
     // INV-5: terminate dequeues so the task is never left inrq=1 outside the
-    // physical queue.
-    kernel::Scheduler::terminate(
-        *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+    // physical queue. Issue #197: an AP-live target is left alive instead
+    // (the owning CPU's own exit path terminates it).
+    const kernel::errors::SchedulerError default_err =
+        kernel::Scheduler::terminate_err(
+            *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+    (void)default_err;
     return false;
 #elif defined(CONFIG_ARCH_AARCH64)
     (void)vector;

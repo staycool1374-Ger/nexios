@@ -34,6 +34,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/arch/x86_64/hal/smp.hpp>
+#include <kernel/arch/cpu_context.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -554,6 +555,89 @@ JARVIS_TEST(smp_sched_percpu_partition_divergence,
     JARVIS_TEST_PASS();
 }
 
+/// @brief Never-returning entry for AP-current observation (issue #197).
+/// Spins until terminated externally; the test, not the entry, owns the
+/// lifecycle (contrast smp_gate_entry, which self-completes on post).
+void smp_forever_entry() {
+    for (;;) {
+        arch::pause();
+    }
+}
+
+// Runmode: kernel
+// Testidea: The zombie drain never frees a task that is current on the
+// AP (never free a live stack, scheduler.hpp:846).
+// Input: Forever-task pinned to CPU1, observed AP-current; force
+// TERMINATED + release_zombie; drain + cleanup_step_try.
+// Expect: zombie_count pinned, magic intact, still AP-current; after the
+// AP leaves (affinity CPU0 + tick), a re-drain frees it. Single-CPU:
+// drain frees immediately (spare never triggers).
+// Depends: drain_zombie_list/cleanup_step_try spare, is_current_on_any_cpu
+JARVIS_TEST(smp_drain_spares_ap_current, "PRE: none | POST: none") {
+    // Deterministic core: drive cpu_ctx(1).current directly (the exact
+    // predicate input of is_current_on_any_cpu) instead of racing the AP
+    // tick — a live-AP observation would flake on tick timing. The
+    // fixture is never enqueued, so no dispatch can disturb the setup.
+    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
+    JARVIS_ASSERT(runner != nullptr);
+    // Force the zombie state directly (bypasses terminate_err: this test
+    // targets the DRAIN gate, not the terminate gate).
+    runner->state = TaskState::TERMINATED;
+    Scheduler::release_zombie(*runner);
+    const uint64_t zombies_before = Scheduler::zombie_count();
+    JARVIS_ASSERT(zombies_before >= 1);
+    // Simulate AP-current: the drain must spare (never free a live stack).
+    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
+    kernel::cpu_ctx(1).current = runner;
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+    Scheduler::cleanup_step_try();
+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+    // AP leaves: restore the slot, then the re-drain must free exactly it.
+    kernel::cpu_ctx(1).current = saved_current;
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(zombies_before - 1, Scheduler::zombie_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: terminate_err refuses an AP-current target with
+// SCHED_ERR_REMOTE_CURRENT and zero mutation.
+// Input: Forever-task pinned to CPU1, observed AP-current;
+// terminate_err from the BSP.
+// Expect: REMOTE_CURRENT, state/queues/zombie list unmutated, block
+// live; self-terminate path still returns SCHED_ERR_OK. Single-CPU:
+// terminate_err returns SCHED_ERR_OK.
+// Depends: Scheduler::terminate_err refusal predicate
+JARVIS_TEST(smp_terminate_remote_current_refused, "PRE: none | POST: none") {
+    // Same deterministic cpu_ctx drive as the drain test: the fixture is
+    // never enqueued, so no dispatch can disturb the setup.
+    auto *runner = TaskControlBlock::create(smp_forever_entry, 11, 0);
+    JARVIS_ASSERT(runner != nullptr);
+    TaskControlBlock *const saved_current = kernel::cpu_ctx(1).current;
+    kernel::cpu_ctx(1).current = runner;
+    // Refusal with zero mutation: still live, no zombie queued.
+    const uint64_t zombies_before = Scheduler::zombie_count();
+    const errors::SchedulerError refused =
+        Scheduler::terminate_err(*runner, 0);
+    JARVIS_ASSERT_EQ(errors::SCHED_ERR_REMOTE_CURRENT, refused);
+    JARVIS_ASSERT(runner->state != TaskState::TERMINATED);
+    JARVIS_ASSERT(runner->magic == TaskControlBlock::TCB_MAGIC);
+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+    JARVIS_ASSERT(Scheduler::is_current_on_any_cpu(runner));
+    // AP leaves: the same call must now succeed and the drain must free.
+    kernel::cpu_ctx(1).current = saved_current;
+    JARVIS_ASSERT_EQ(errors::SCHED_ERR_OK,
+                     Scheduler::terminate_err(*runner, 0));
+    JARVIS_ASSERT(runner->state == TaskState::TERMINATED);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(zombies_before, Scheduler::zombie_count());
+    JARVIS_TEST_PASS();
+}
+
 void register_smp_sched_tests() {
     Logger::info("Registering smp sched tests");
     JARVIS_REGISTER_TEST(smp_sched_ap_runs_pinned);
@@ -566,5 +650,7 @@ void register_smp_sched_tests() {
     JARVIS_REGISTER_TEST(smp_sched_exempt_move_always_allowed);
     JARVIS_REGISTER_TEST(smp_sched_balancer_moves_nonrt_keeps_rt);
     JARVIS_REGISTER_TEST(smp_sched_percpu_partition_divergence);
+    JARVIS_REGISTER_TEST(smp_drain_spares_ap_current);
+    JARVIS_REGISTER_TEST(smp_terminate_remote_current_refused);
 }
 #endif // CONFIG_ARCH_X86_64
