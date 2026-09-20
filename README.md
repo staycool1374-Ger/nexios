@@ -162,6 +162,12 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ## Recent Release Highlights
 
+### **v0.5.0 — picolibc + ABI**
+* **Frozen System-Call Interface:** The kernel/userspace contract is pinned at v1.0 — trap numbers, register conventions and a versioned syscall table (86 calls) in a single public header, so applications built today keep working tomorrow.
+* **Real C Library for Applications:** picolibc is integrated as the userspace C library — POSIX stubs with proper error reporting, thread-local storage switched on every context switch, and a 5/5 verification program proving it end to end.
+* **POSIX Time Services:** Applications get wall-clock and timer APIs (`clock_gettime`, `nanosleep`, `timer_create`, `timerfd`) backed by the high-resolution clock and event-timer wheel, covered by 10 dedicated conformance tests.
+* **Release Gates Green:** Full test suites pass — 1564 debug tests across 20 classes, 85 release tests, 136 self-tests — with each user-facing feature reviewed under the SIL 3 process before merge.
+
 ### **v0.4.10 — Test-Coverage Closure (Areas < 80%)**
 * **Every Weak Spot Covered:** All 16 sub-80% coverage areas closed with real tests — vfs, services/shell, lib, memory, debug, profiling, driver, top-level kernel, sync, iommu, syscall, daemon, core, cap, net, boot — plus dead-code removal (`compiler_rt` clz/ctz) shrinking the denominator.
 * **Tests That Find Bugs:** Closure testing exposed and fixed real defects — dropped syscall results for kernel-task callers, silent `lseek` success on bogus `whence`, IP length-underflow OOB read, missing ICMP byte-swaps, a coverage-boot panic at the checked-ptr fault boundary.
