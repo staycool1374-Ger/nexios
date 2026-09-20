@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -120,6 +120,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 
 
 <h3 class="doxsection"><a id="index_s" name="index_s"></a>- s -</h3><ul>
+<li>sat_add()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a92252f1c299adc0264d49832cb813678">kernel::time::PosixTime</a></li>
 <li>save_rsp_to()&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#aec870842b02fa2e9d6978a93e32f0d39">kernel::Scheduler::SwSlots</a></li>
 <li>scan_deadlines()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aabd465f67eed45ec2c20877a6f7398b8">kernel::Scheduler</a></li>
 <li>sched_cpu()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a08909dbd61fc213d9a5a36cc7b6c072a">kernel::Scheduler</a></li>
@@ -161,16 +162,20 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_func
 <li>set_timeout_ticks_for_test()&#160;:&#160;<a class="el" href="classkernel_1_1_tlb_shootdown.html#a2cd6ce0b6b3a1aebd5299bc689b857b0">kernel::TlbShootdown</a></li>
 <li>set_timer_oneshot()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a2d4cf0340306c48c7fc0287e27d8f9c6">arch::APIC</a></li>
 <li>set_timer_periodic()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a436a27b56c64e696706ebf01971a738c">arch::APIC</a></li>
+<li>set_tls_base_err()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aaca22e0e3dd5b34954cd7b5a0a986036">kernel::Scheduler</a></li>
 <li>set_tpr_class()&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#ad903889e8587ca2fa1a27d87d06b375c">arch::APIC</a></li>
 <li>setUp()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_test_base.html#af76d8e4a5b1cacde0f101fa0b1e246b8">kernel::test::TestBase</a></li>
 <li>shell_task_main()&#160;:&#160;<a class="el" href="classservice_1_1_shell.html#ad4e5adf46f0f562f7b5a566fd53d37c0">service::Shell</a></li>
 <li>show_splash()&#160;:&#160;<a class="el" href="classservice_1_1_terminal.html#a50cec1566f383b8fba919b11eb9e50b3">service::Terminal</a></li>
 <li>size()&#160;:&#160;<a class="el" href="classkernel_1_1_all_tasks_registry.html#a7fbb9448f467f03dc58ab96aa96fe675">kernel::AllTasksRegistry</a>, <a class="el" href="classkernel_1_1_deadline_list.html#ae49552a3671708650d567756cfca60ca">kernel::DeadlineList</a>, <a class="el" href="classkernel_1_1log_1_1_dmesg_service.html#a27c7a2cdf9f1162d35e082bfa0be6c6c">kernel::log::DmesgService</a></li>
 <li>sl_root()&#160;:&#160;<a class="el" href="classkernel_1_1iommu_1_1_io_mmu_manager.html#a5a8be334015c0e43e47309e7b2cb3756">kernel::iommu::IoMmuManager</a></li>
+<li>sleep_arm()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#abc0a8f21b4ee01a37a68e76855f23d1d">kernel::time::PosixTime</a></li>
+<li>sleep_cancel()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a0d37ef2e16195ce75f11f83cfb97f5ba">kernel::time::PosixTime</a></li>
+<li>sleep_fire()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a63b2c2a95fb9fd51b08ff8f0632fbc1d">kernel::time::PosixTime</a></li>
 <li>slot_gen()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a50c1861513d5f6250caedd8a1cd72b2c">kernel::cap::CNode</a></li>
 <li>snapshot_id_size()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#aab329dc8044aa9af0f574cfeebf9863f">kernel::Scheduler</a></li>
 <li>snapshot_max_tasks()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a87db2c94d70b94cdc81de27fd519f71c">kernel::Scheduler</a></li>
-<li>snapshot_reset()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a31ec33541ce5d8f47f7d57bb038d1c97">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#af04b5a232d6d39a8c541f66b43f2bf84">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a4b215d06b8899453b205fca1e1ff9789">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1ipc_1_1_death_notify.html#a77e443ae91de3548d8c978c15fd6591e">kernel::ipc::DeathNotify</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a2b83bb73759ccfd610f3239a14e68085">kernel::ipc::PagerRegistry</a>, <a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel</a></li>
+<li>snapshot_reset()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_frame_user_map.html#a31ec33541ce5d8f47f7d57bb038d1c97">kernel::cap::FrameUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_mmio_user_map.html#af04b5a232d6d39a8c541f66b43f2bf84">kernel::cap::MmioUserMap</a>, <a class="el" href="classkernel_1_1cap_1_1_msix_cap.html#a4b215d06b8899453b205fca1e1ff9789">kernel::cap::MsixCap</a>, <a class="el" href="classkernel_1_1ipc_1_1_death_notify.html#a77e443ae91de3548d8c978c15fd6591e">kernel::ipc::DeathNotify</a>, <a class="el" href="classkernel_1_1ipc_1_1_pager_registry.html#a2b83bb73759ccfd610f3239a14e68085">kernel::ipc::PagerRegistry</a>, <a class="el" href="classkernel_1_1time_1_1_posix_time.html#ab273de2cfc0da14cae7a44a71d30cb57">kernel::time::PosixTime</a>, <a class="el" href="classkernel_1_1time_1_1_timer_wheel.html#a62a163f1c173368852db45fb5d94c0ec">kernel::time::TimerWheel</a></li>
 <li>snapshot_task_fields_size()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a4625d7361b1e39ef0b913b698d797ece">kernel::Scheduler</a></li>
 <li>snapshot_zombies()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#abba7c4e61baa2c7a2e835b3d6a443e7d">kernel::Scheduler</a></li>
 <li>SpinLockGuard()&#160;:&#160;<a class="el" href="class_spin_lock_guard.html#a64ccd78b7926e3b15d716f553886b490">SpinLockGuard&lt; Lock &gt;</a></li>

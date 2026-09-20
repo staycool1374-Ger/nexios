@@ -31,7 +31,10 @@ var structkernel_1_1_scheduler_1_1_task_fields =
     [ "runq_next", "structkernel_1_1_scheduler_1_1_task_fields.html#ac73ae1af5ef6915c916d0c3b1f1850ad", null ],
     [ "runq_prev", "structkernel_1_1_scheduler_1_1_task_fields.html#a79d3a773fa7cb12eb78681ed6fc4cdb6", null ],
     [ "sched_policy", "structkernel_1_1_scheduler_1_1_task_fields.html#a070de214a76cbaa040b511236225ce25", null ],
+    [ "sleep_armed", "structkernel_1_1_scheduler_1_1_task_fields.html#ab86c8406cae7dfe55589811c12d7fe48", null ],
+    [ "sleep_expired", "structkernel_1_1_scheduler_1_1_task_fields.html#a5dc27e36c6857669cab39a3b729b94be", null ],
     [ "state", "structkernel_1_1_scheduler_1_1_task_fields.html#a01bde2d9b3887ac260ba8d6e8b1cbd2c", null ],
+    [ "tls_base", "structkernel_1_1_scheduler_1_1_task_fields.html#a49103023bc79a7d3fbba4acc48fdd020", null ],
     [ "waiting_child_pid", "structkernel_1_1_scheduler_1_1_task_fields.html#a7f67f7194f39c7f8417c1839bf46c44c", null ],
     [ "waiting_child_status", "structkernel_1_1_scheduler_1_1_task_fields.html#abea76adbdcd55bcde7d4ef877d045a84", null ]
 ];

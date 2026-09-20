@@ -9,12 +9,13 @@ var searchData=
   ['load_5fkstack_5ftop_6',['load_kstack_top',['../structkernel_1_1_scheduler_1_1_sw_slots.html#a8e6789134bf2d305442491bc691f9685',1,'kernel::Scheduler::SwSlots']]],
   ['load_5frsp_5ffrom_7',['load_rsp_from',['../structkernel_1_1_scheduler_1_1_sw_slots.html#acd4e75f82af049887c9f718dc5976d43',1,'kernel::Scheduler::SwSlots']]],
   ['load_5fshared_5fobject_8',['load_shared_object',['../namespacekernel_1_1elf.html#a23a6e02374b5473f5115da5597e27e19',1,'kernel::elf']]],
-  ['loadavg_5f15min_9',['loadavg_15min',['../classkernel_1_1_scheduler.html#a0c06ba681fa842fc5f2f82699d09971c',1,'kernel::Scheduler']]],
-  ['loadavg_5f1min_10',['loadavg_1min',['../classkernel_1_1_scheduler.html#a57de2e75b31a04c67a30a0762d3705fd',1,'kernel::Scheduler']]],
-  ['loadavg_5f5min_11',['loadavg_5min',['../classkernel_1_1_scheduler.html#a7ae2f1c2c7c7773139993bb5256414de',1,'kernel::Scheduler']]],
-  ['loadavg_5fstep_12',['loadavg_step',['../classkernel_1_1_scheduler.html#aac7b9114e87c0554cc7907e3f05e6023',1,'kernel::Scheduler']]],
-  ['lock_13',['lock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6',1,'kernel::sync::IrqSpinLockGuard']]],
-  ['lookup_14',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
-  ['lookup_5fin_5fdir_15',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
-  ['lseek_16',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
+  ['load_5ftls_5ffrom_9',['load_tls_from',['../structkernel_1_1_scheduler_1_1_sw_slots.html#abb1b6fcbf40d6675147154772449e83d',1,'kernel::Scheduler::SwSlots']]],
+  ['loadavg_5f15min_10',['loadavg_15min',['../classkernel_1_1_scheduler.html#a0c06ba681fa842fc5f2f82699d09971c',1,'kernel::Scheduler']]],
+  ['loadavg_5f1min_11',['loadavg_1min',['../classkernel_1_1_scheduler.html#a57de2e75b31a04c67a30a0762d3705fd',1,'kernel::Scheduler']]],
+  ['loadavg_5f5min_12',['loadavg_5min',['../classkernel_1_1_scheduler.html#a7ae2f1c2c7c7773139993bb5256414de',1,'kernel::Scheduler']]],
+  ['loadavg_5fstep_13',['loadavg_step',['../classkernel_1_1_scheduler.html#aac7b9114e87c0554cc7907e3f05e6023',1,'kernel::Scheduler']]],
+  ['lock_14',['lock',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html#a9726a45b13b0b389752caf1a8756f2e6',1,'kernel::sync::IrqSpinLockGuard']]],
+  ['lookup_15',['lookup',['../namespacekernel_1_1cap.html#af858a03da6c7b9cd2bcce101005847c8',1,'kernel::cap']]],
+  ['lookup_5fin_5fdir_16',['lookup_in_dir',['../namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c',1,'kernel::fat32']]],
+  ['lseek_17',['lseek',['../unistd_8c.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c'],['../unistd_8h.html#a8bd74caed008a66808d92d57fa74d9f6',1,'lseek(int fd, off_t offset, int whence):&#160;unistd.c']]]
 ];

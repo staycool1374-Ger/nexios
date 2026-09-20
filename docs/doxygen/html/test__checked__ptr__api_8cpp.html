@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -124,6 +124,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__checked_
 <div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="checked__ptr_8hpp_source.html">kernel/memory/checked_ptr.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="death__notify_8hpp_source.html">kernel/ipc/death_notify.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="pager__registry_8hpp_source.html">kernel/ipc/pager_registry.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="signal_8hpp_source.html">signal.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
@@ -143,6 +146,8 @@ Functions</h2></td></tr>
 <tr class="memitem:acb4642f028eaf207ee20a8c0d47d83df" id="r_acb4642f028eaf207ee20a8c0d47d83df"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#acb4642f028eaf207ee20a8c0d47d83df">JARVIS_TEST</a> (checked_ptr_api_zero_count_is_noop, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a48e882db90a6f5e0fc17e0664d1cd707" id="r_a48e882db90a6f5e0fc17e0664d1cd707"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a48e882db90a6f5e0fc17e0664d1cd707">JARVIS_TEST</a> (checked_ptr_api_safe_copy_templates_fail_closed, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a9cfb8fc7d95e1b8bc502f83ad6270206" id="r_a9cfb8fc7d95e1b8bc502f83ad6270206"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9cfb8fc7d95e1b8bc502f83ad6270206">JARVIS_TEST</a> (checked_ptr_api_safe_copy_fault_recovery, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:aa745ce4e1d6036ceb3830935bb7edbe6" id="r_aa745ce4e1d6036ceb3830935bb7edbe6"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa745ce4e1d6036ceb3830935bb7edbe6">JARVIS_TEST</a> (checked_ptr_api_ipc_records, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:ab34daec5d20e696aeeb0324905fb8fb2" id="r_ab34daec5d20e696aeeb0324905fb8fb2"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ab34daec5d20e696aeeb0324905fb8fb2">JARVIS_TEST</a> (checked_ptr_api_task_times_and_const_views, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a35149511255b02c2b61fb1cb5aa4ae43" id="r_a35149511255b02c2b61fb1cb5aa4ae43"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a35149511255b02c2b61fb1cb5aa4ae43">register_checked_ptr_api_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -153,7 +158,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
        instantiable" rather than omitted. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a643fb82d37fd9afa61bc837d8fd0f6fb" name="a643fb82d37fd9afa61bc837d8fd0f6fb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a643fb82d37fd9afa61bc837d8fd0f6fb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a643fb82d37fd9afa61bc837d8fd0f6fb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -178,8 +183,34 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 
 </div>
 </div>
+<a id="aa745ce4e1d6036ceb3830935bb7edbe6" name="aa745ce4e1d6036ceb3830935bb7edbe6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa745ce4e1d6036ceb3830935bb7edbe6">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/9]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">checked_ptr_api_ipc_records</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a9cfb8fc7d95e1b8bc502f83ad6270206" name="a9cfb8fc7d95e1b8bc502f83ad6270206"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9cfb8fc7d95e1b8bc502f83ad6270206">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cfb8fc7d95e1b8bc502f83ad6270206">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -205,7 +236,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 </div>
 </div>
 <a id="a48e882db90a6f5e0fc17e0664d1cd707" name="a48e882db90a6f5e0fc17e0664d1cd707"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a48e882db90a6f5e0fc17e0664d1cd707">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a48e882db90a6f5e0fc17e0664d1cd707">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -231,7 +262,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 </div>
 </div>
 <a id="a94f4cdded6d81a892c3a75ccfad32590" name="a94f4cdded6d81a892c3a75ccfad32590"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a94f4cdded6d81a892c3a75ccfad32590">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a94f4cdded6d81a892c3a75ccfad32590">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -257,7 +288,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 </div>
 </div>
 <a id="a2f644bd3b245f24d37cce5584f837c29" name="a2f644bd3b245f24d37cce5584f837c29"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2f644bd3b245f24d37cce5584f837c29">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f644bd3b245f24d37cce5584f837c29">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -282,8 +313,34 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 
 </div>
 </div>
+<a id="ab34daec5d20e696aeeb0324905fb8fb2" name="ab34daec5d20e696aeeb0324905fb8fb2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab34daec5d20e696aeeb0324905fb8fb2">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/9]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">checked_ptr_api_task_times_and_const_views</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ab46847e53250a955a3d73ae53b5e4169" name="ab46847e53250a955a3d73ae53b5e4169"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab46847e53250a955a3d73ae53b5e4169">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab46847e53250a955a3d73ae53b5e4169">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -309,7 +366,7 @@ const element types cannot instantiate <span class="tt"><a class="el" href="unis
 </div>
 </div>
 <a id="acb4642f028eaf207ee20a8c0d47d83df" name="acb4642f028eaf207ee20a8c0d47d83df"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acb4642f028eaf207ee20a8c0d47d83df">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/7]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#acb4642f028eaf207ee20a8c0d47d83df">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/9]</span></h2>
 
 <div class="memitem">
 <div class="memproto">

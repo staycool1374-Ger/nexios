@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -145,7 +145,7 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ad6ca324811bf34cc24e412c7353d1c31">kernel::IRQ_VECTOR_MIN</a> = 33</td></tr>
-<tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
+<tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). §1 freeze (ABI v1): vector 32 = TIMER = IRQ0, 33–47 = IRQ1–15 (<span class="tt">irq_line = vector - 32</span>); claim window starts at 33. The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
 <tr class="memitem:af20030e5e873fe85b3929d0ffb1bbeca" id="r_af20030e5e873fe85b3929d0ffb1bbeca"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af20030e5e873fe85b3929d0ffb1bbeca">kernel::IRQ_VECTOR_MAX</a> = 47</td></tr>
 <tr class="memitem:a92ff3aab226103aecc5cee29134cd925" id="r_a92ff3aab226103aecc5cee29134cd925"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a92ff3aab226103aecc5cee29134cd925">kernel::MSIX_VECTOR_MAX</a> = 255</td></tr>
 <tr class="memdesc:a92ff3aab226103aecc5cee29134cd925"><td class="mdescLeft">&#160;</td><td class="mdescRight">MSI-X vector window upper bound (x86_64: 0xFF is the highest vector). MSI-X vectors live in 48–255, excluding the syscall vector 0x80.  <br /></td></tr>

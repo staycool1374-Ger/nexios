@@ -9,5 +9,6 @@ var searchData=
   ['completed_6',['COMPLETED',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa8f7afecbc8fbc4cd0f50a57d1172482e',1,'kernel::elf']]],
   ['cont_7',['CONT',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80',1,'kernel']]],
   ['copying_5fsegments_8',['COPYING_SEGMENTS',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9',1,'kernel::elf']]],
-  ['corrupted_9',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]]
+  ['corrupted_9',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]],
+  ['create_10',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]]
 ];

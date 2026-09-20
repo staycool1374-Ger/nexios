@@ -11,5 +11,6 @@ var searchData=
   ['nodename_8',['nodename',['../structkernel_1_1_utsname.html#aab115ec19cffb053233edd1a34d8a7c8',1,'kernel::Utsname::nodename'],['../struct_utsname.html#a4dff749dd54609cb71cb0ab73b3e809d',1,'Utsname::nodename'],['../structutsname.html#a0adf5436d5015d6408d0347684a4184e',1,'utsname::nodename']]],
   ['noexcept_9',['noexcept',['../namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf',1,'kernel']]],
   ['notifies_10',['notifies',['../structkernel_1_1test_1_1_resource_counters.html#ab9b9548a06c39c6a31bc16cdf75317c5',1,'kernel::test::ResourceCounters']]],
-  ['num_5fqueues_11',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]]
+  ['nsec_11',['nsec',['../structkernel_1_1time_1_1_timespec_u.html#a27ede550456d676bb2163a34316f660e',1,'kernel::time::TimespecU']]],
+  ['num_5fqueues_12',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]]
 ];

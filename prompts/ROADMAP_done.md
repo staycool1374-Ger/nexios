@@ -1,5 +1,36 @@
 # Completed Roadmap Items
 
+## v0.5.0 — picolibc + ABI (RELEASED 2026-09-20)
+
+**Purpose:** Freeze the syscall ABI at v1.0, integrate picolibc as the
+userspace C library, and land the POSIX time surface. Milestone v0.5.0
+(milestone 12) has 0 open issues (10/10 closed).
+
+- **Syscall ABI** (#67–#70, design paper `docs/specs/syscall-abi-picolibc.md`,
+  planner-APPROVED) — trap/IRQ number table frozen, register conventions
+  pinned (x86_64 `int $0x80`, aarch64 `svc`, riscv64 `ecall`), single-source
+  `src/libc/syscall.h`, versioned table + `ABI_VERSION` (86 syscalls).
+- **picolibc integration** (#71–#73, #75) — POSIX stubs over `__syscall5`
+  with errno mapping, picolibc build + Makefile integration, `libc_verify`
+  class (5/5).
+- **TLS on context switch** (#74) — `TLS_SET` (85), per-task `tls_base_`,
+  SIL 3 approved.
+- **POSIX time API** (#76) — `CLOCK_GETTIME` (80), `NANOSLEEP` (81),
+  `TIMER_CREATE` (82), `TIMERFD_CREATE` (83) over the HRT clock +
+  event-timer wheel; new `posix_time` class (10/10). SIL 3 iter-1 REJECTED
+  (expiry store, ABI swap, off-by-one, gen-0 rollback — patch applied
+  verbatim) → iter-2 APPROVED zero findings.
+- **SMP drain-spare hardening** (part of #197, landed pre-release) —
+  `terminate_err` refusal + zombie-drain skip-and-retry + EDF unlink
+  (GDB-proven free-while-AP-runs crash shape); SIL 3 APPROVED.
+
+Gates at completion (2026-09-20): debug test-full **20/20, 1564 executed**
+(core 462, ipc 79, capability 147, proc_elf 83, storage 143, servers 62,
+drivers 107, hal 110, smp 81, smp_multicpu 17, deadline 125, ui 68,
+logging_debug 29, random 17, bench 22, task_tcb_log 1, ahci_live 5,
+iommu_live 6), release test-full **18/18 + 2 skips (85/85)**, `selftest`
+**136/136**, `make build` Errors 0.
+
 ## v0.4.10 — Test-Coverage Closure, Areas < 80% (RELEASED 2026-09-19)
 
 **Purpose:** Close every coverage area below 80% with real tests, fix the

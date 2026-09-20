@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.5.0-dev | **Last Release:** v0.4.10 | **Completed milestones:** v0.2.x — v0.4.10 (see `ROADMAP_done.md`)
+**Build:** v0.5.0 | **Last Release:** v0.5.0 | **Completed milestones:** v0.2.x — v0.5.0 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -16,9 +16,9 @@
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
 ## Active Development
-- **v0.4.10 Test-Coverage Closure** ([milestone 10](https://github.com/staycool1374-Ger/nexios/milestone/10)): coverage issues open.
+- **v0.5.1 Bring-up Multi-Arch Boot** ([milestone 13](https://github.com/staycool1374-Ger/nexios/milestone/13)): aarch64/riscv64 production boot + ABI conformance.
 - **v0.5.2 Userspace Subsystems** ([milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
-- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.4.9).
+- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.5.0).
 
 ## Topic Coverage Map (subsystem review 2026-09-17)
 | Topic | Status | Issues |
@@ -46,18 +46,6 @@
 
 ## v0.4.10 — Test-Coverage Closure, Areas < 80% (RELEASED, see ROADMAP_done.md)
 - All 16 coverage issues #124–#139 closed, plus #182 (dead-code removal).
-
-## v0.5.0 — picolib + abi (OPEN)
-- #67 [open] Document trap/IRQ numbers (syscall ABI).
-- #68 [open] Register conventions (syscall ABI).
-- #69 [open] syscall.h public header (syscall ABI).
-- #70 [open] Versioned syscall table (syscall ABI).
-- #71 [open] POSIX syscall stubs (picolibc).
-- #72 [open] Build picolibc (picolibc integration).
-- #73 [open] Makefile integration (picolibc).
-- #74 [open] TLS on context switch (picolibc).
-- #75 [open] Verify (picolibc integration).
-- #76 [open] POSIX time API (clock_gettime/nanosleep/timer_create/timerfd).
 
 ## v0.5.1 — Bring-up Multi-Arch Boot (OPEN)
 - #28 [open] aarch64 production boot path.

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -122,31 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('dir_6198906391
 Directory dependency graph for test:</div>
 <div class="dyncontent">
 <div class="center"><img src="dir_6198906391a1b3439aea9d345bf1b4f0_dep.png" border="0" usemap="#adir__6198906391a1b3439aea9d345bf1b4f0__dep" loading="lazy" alt="src/kernel/test"/></div>
-<map name="adir__6198906391a1b3439aea9d345bf1b4f0__dep" id="adir__6198906391a1b3439aea9d345bf1b4f0__dep">
-<area shape="rect" href="dir_0bad16966a5a8d1438c9252d5a62da0f.html" title="sync" alt="" coords="27,128,77,155"/>
-<area shape="rect" href="dir_507c9ec95be9a201f49444d5da26e8a6.html" title="task" alt="" coords="101,128,147,155"/>
-<area shape="rect" href="dir_97ddee6994ce82fd2a76b10ba4d7572d.html" title="driver" alt="" coords="171,128,224,155"/>
-<area shape="rect" href="dir_a74448e09a2c209561f74c876dd35689.html" title="vfs" alt="" coords="248,128,288,155"/>
-<area shape="rect" href="dir_cfddc3e4738eb751c9ecb1dcd81b4d56.html" title="memory" alt="" coords="311,128,380,155"/>
-<area shape="rect" href="dir_e6831a010a70b45193b3a12653a74c5e.html" title="ipc" alt="" coords="403,128,442,155"/>
-<area shape="rect" href="dir_6198906391a1b3439aea9d345bf1b4f0.html" title="test" alt="" coords="246,53,290,80"/>
-<area shape="poly" href="dir_000018_000013.html" alt="" coords="246,78,92,129,90,124,245,73"/>
-<area shape="rect" href="dir_000018_000013.html" title="2" alt="" coords="94,126,101,142"/>
-<area shape="poly" href="dir_000018_000016.html" alt="" coords="249,78,162,124,160,119,244,80"/>
-<area shape="rect" href="dir_000018_000016.html" title="1" alt="" coords="164,120,171,136"/>
-<area shape="poly" href="dir_000018_000002.html" alt="" coords="258,79,222,119,218,115,253,82"/>
-<area shape="rect" href="dir_000018_000002.html" title="1" alt="" coords="225,113,232,129"/>
-<area shape="poly" href="dir_000018_000019.html" alt="" coords="270,79,270,114,266,111,266,83"/>
-<area shape="rect" href="dir_000018_000019.html" title="1" alt="" coords="273,101,280,117"/>
-<area shape="poly" href="dir_000018_000009.html" alt="" coords="282,78,324,118,318,117,281,83"/>
-<area shape="rect" href="dir_000018_000009.html" title="3" alt="" coords="321,101,328,117"/>
-<area shape="poly" href="dir_000018_000005.html" alt="" coords="291,76,392,124,387,125,290,81"/>
-<area shape="rect" href="dir_000018_000005.html" title="1" alt="" coords="387,108,394,124"/>
-<area shape="rect" href="dir_c85d3e3c5052e9ad9ce18c6863244a25.html" title="lib" alt="" coords="466,128,505,155"/>
-<area shape="poly" href="dir_000018_000007.html" alt="" coords="290,72,454,125,449,127,289,77"/>
-<area shape="rect" href="dir_000018_000007.html" title="7" alt="" coords="448,109,455,125"/>
-<area shape="rect" href="dir_cbd7f246bdf7dc0a50281a272327e6ed.html" title="kernel" alt="" coords="16,16,452,165"/>
-</map>
+<!-- MAP 0 -->
 </div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
@@ -358,6 +334,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__lazy__tlb_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lazy-TLB-shootdown tests (issue #158; stubs from issue #85, module 15). Single-CPU deterministic: cross-CPU TLB-hit observables do not exist in this harness (no AP boots), so tests pin queue/coalesce/quarantine/timeout mechanics via request counts, flush-counter deltas, and page-table walks — never cycle timing or remote observation. IPI delivery is #159's scope; this class covers policy only. <br /></td></tr>
 <tr class="memitem:test_5Flib_2Ecpp" id="r_test_5Flib_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__lib_8cpp.html">test_lib.cpp</a></td></tr>
 <tr class="memdesc:test__lib_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel library utility tests. <br /></td></tr>
+<tr class="memitem:test_5Flibc_5Fverify_2Ecpp" id="r_test_5Flibc_5Fverify_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__libc__verify_8cpp.html">test_libc_verify.cpp</a></td></tr>
+<tr class="memdesc:test__libc__verify_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hosted-C Ring 3 verification (issue #75): the picolibc-linked <span class="tt">libc_verify</span> program runs printf/malloc/scanf via real dispatch; this class asserts its serial markers, exit code and heap bounds. The program image is embedded in the kernel (objcopy, x86_64 only — the initrd is not mounted in test boot so it cannot be resolved there) and staged to tmpfs per test. Stdin is a tmpfs-backed fd 0 (deterministic, no serial/keyboard injection); stdout is observed through UART loopback with LIBC_VERIFY: -prefixed substring markers (harness logs interleave). <br /></td></tr>
 <tr class="memitem:test_5Fload_5Fbalancer_2Ecpp" id="r_test_5Fload_5Fbalancer_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__load__balancer_8cpp.html">test_load_balancer.cpp</a></td></tr>
 <tr class="memdesc:test__load__balancer_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RT load-balancer tests (issue #61; stubs from issue #85, module 8). Scheduler::balancer_tick() migrates queued aperiodic kernel tasks from the busiest up-CPU to the idlest past BALANCER_THRESHOLD, re-pinning toward balance. Tests branch on up_cpu_count(): with an AP up (standard -smp 2 harness) moves are observable; single-CPU runs prove the no-strand property (no moves off CPU0). <br /></td></tr>
 <tr class="memitem:test_5Flock_5Forder_2Ecpp" id="r_test_5Flock_5Forder_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__lock__order_8cpp.html">test_lock_order.cpp</a></td></tr>
@@ -408,6 +386,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__pml4__sync_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PML4-synchronization tests (issue #85, module 18): table-level update/removal visibility pins (real, single-CPU half); remote visibility, shootdown-before-visible and remove-on-all-CPUs are documented stubs (no shootdown path exists). Fork-path sync is covered by the pml4_clone class (10 tests). <br /></td></tr>
 <tr class="memitem:test_5Fpmm_2Ecpp" id="r_test_5Fpmm_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__pmm_8cpp.html">test_pmm.cpp</a></td></tr>
 <tr class="memdesc:test__pmm_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical memory manager tests. <br /></td></tr>
+<tr class="memitem:test_5Fposix_5Ftime_2Ecpp" id="r_test_5Fposix_5Ftime_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__posix__time_8cpp.html">test_posix_time.cpp</a></td></tr>
+<tr class="memdesc:test__posix__time_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">POSIX time API tests: clock_gettime, nanosleep, timer_create, timerfd_create over the HRT clock + event-timer wheel (issue #76). <br /></td></tr>
 <tr class="memitem:test_5Fpreemption_2Ecpp" id="r_test_5Fpreemption_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__preemption_8cpp.html">test_preemption.cpp</a></td></tr>
 <tr class="memdesc:test__preemption_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel preemption tests. <br /></td></tr>
 <tr class="memitem:test_5Fpreemption_5Funder_5Fsyscall_2Ecpp" id="r_test_5Fpreemption_5Funder_5Fsyscall_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__preemption__under__syscall_8cpp.html">test_preemption_under_syscall.cpp</a></td></tr>
@@ -539,6 +519,8 @@ Files</h2></td></tr>
 <tr class="memdesc:test__timing_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Timing measurement tests. <br /></td></tr>
 <tr class="memitem:test_5Ftlb_5Flatency_2Ecpp" id="r_test_5Ftlb_5Flatency_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tlb__latency_8cpp.html">test_tlb_latency.cpp</a></td></tr>
 <tr class="memdesc:test__tlb__latency_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">TLB-shootdown latency profiling (issue #160; stubs from issue #85, module 17). Test-side exact-sample recorder only — hot paths stay uninstrumented. No icount here (wall-clock TSC), so comparisons use min-of-N plus margins, never tight bounds. cpu_scaling is reframed as batch-size scaling (no AP boots in this harness, so 1-vs-2-CPU comparison is unimplementable). <br /></td></tr>
+<tr class="memitem:test_5Ftls_2Ecpp" id="r_test_5Ftls_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tls_8cpp.html">test_tls.cpp</a></td></tr>
+<tr class="memdesc:test__tls_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">TLS_SET(85) + TLS-on-context-switch tests (issue #74). DRIVEN: every syscall is invoked by a REAL dispatched kernel task so syscall_task() resolves genuinely (<a class="el" href="test__syscall_8cpp.html" title="System call interface tests.">test_syscall.cpp</a> pattern). Publish/apply mechanics use synthetic-user tasks (is_user_ set on a kernel-context TCB): a C++ lambda cannot run as a true userspace task (<a class="el" href="test__ipc__blocking_8cpp.html" title="IPC blocking send/receive tests.">test_ipc_blocking.cpp</a> documents the constraint), and the validation/publish paths key off the flag + page-table fields the test controls. Full ring-3 acceptance belongs to #75 (crt0 calls TLS_SET through the real gate). <br /></td></tr>
 <tr class="memitem:test_5Ftmpfs_2Ecpp" id="r_test_5Ftmpfs_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tmpfs_8cpp.html">test_tmpfs.cpp</a></td></tr>
 <tr class="memdesc:test__tmpfs_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">TMPFS (temporary in-memory filesystem) tests. <br /></td></tr>
 <tr class="memitem:test_5Ftmpfs_5Finvalid_5Fmount_2Ecpp" id="r_test_5Ftmpfs_5Finvalid_5Fmount_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__tmpfs__invalid__mount_8cpp.html">test_tmpfs_invalid_mount.cpp</a></td></tr>

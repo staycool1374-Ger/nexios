@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -150,13 +150,35 @@ Functions</h2></td></tr>
 <tr class="memitem:a682e02719611dfbdb30c811e620f2074" id="r_a682e02719611dfbdb30c811e620f2074"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a682e02719611dfbdb30c811e620f2074">JARVIS_TEST</a> (shm_ring_producer_consumer, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a224c9e518d7354d09c21917290a1adf4" id="r_a224c9e518d7354d09c21917290a1adf4"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a224c9e518d7354d09c21917290a1adf4">JARVIS_TEST</a> (shm_ring_task_death_drain, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:aea6c72c83eb2343366a6086a4fd06557" id="r_aea6c72c83eb2343366a6086a4fd06557"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aea6c72c83eb2343366a6086a4fd06557">JARVIS_TEST</a> (shm_ring_revocation_cleanup, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a94242e6e28b92b8bfe2e912c1633221a" id="r_a94242e6e28b92b8bfe2e912c1633221a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a94242e6e28b92b8bfe2e912c1633221a">JARVIS_TEST</a> (frame_create_rejected, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:afc99e58b27ebbb7b6da8e72ac9307a1a" id="r_afc99e58b27ebbb7b6da8e72ac9307a1a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afc99e58b27ebbb7b6da8e72ac9307a1a">register_cap_shm_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Capability-gated shared-memory ring tests (issue #106 Part B). Verifies the FrameUserMap registry + SYS_FRAME_CREATE/MAP/UNMAP + the shared-ring protocol: genuine zero-copy (both tasks map the same phys), revocation closure, task-death drain, and ResourceTracker neutrality. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a94242e6e28b92b8bfe2e912c1633221a" name="a94242e6e28b92b8bfe2e912c1633221a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a94242e6e28b92b8bfe2e912c1633221a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">frame_create_rejected</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a4735118e1c0d5005b8df765b6b91dd72" name="a4735118e1c0d5005b8df765b6b91dd72"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4735118e1c0d5005b8df765b6b91dd72">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a4735118e1c0d5005b8df765b6b91dd72">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -183,7 +205,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="adfc16616673fc6a8a93a1cdce60c0dcf" name="adfc16616673fc6a8a93a1cdce60c0dcf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adfc16616673fc6a8a93a1cdce60c0dcf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#adfc16616673fc6a8a93a1cdce60c0dcf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -210,7 +232,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a682e02719611dfbdb30c811e620f2074" name="a682e02719611dfbdb30c811e620f2074"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a682e02719611dfbdb30c811e620f2074">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a682e02719611dfbdb30c811e620f2074">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -237,7 +259,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="aea6c72c83eb2343366a6086a4fd06557" name="aea6c72c83eb2343366a6086a4fd06557"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aea6c72c83eb2343366a6086a4fd06557">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aea6c72c83eb2343366a6086a4fd06557">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -264,7 +286,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a224c9e518d7354d09c21917290a1adf4" name="a224c9e518d7354d09c21917290a1adf4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a224c9e518d7354d09c21917290a1adf4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a224c9e518d7354d09c21917290a1adf4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
 
 <div class="memitem">
 <div class="memproto">

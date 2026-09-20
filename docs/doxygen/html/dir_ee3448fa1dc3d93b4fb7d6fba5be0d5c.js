@@ -7,6 +7,7 @@ var dir_ee3448fa1dc3d93b4fb7d6fba5be0d5c =
     [ "errno.h", "errno_8h.html", "errno_8h" ],
     [ "ipc.c", "ipc_8c.html", "ipc_8c" ],
     [ "ipc.h", "ipc_8h.html", "ipc_8h" ],
+    [ "picolib_stubs.c", "picolib__stubs_8c.html", "picolib__stubs_8c" ],
     [ "signal.h", "signal_8h.html", "signal_8h" ],
     [ "stdarg.h", "stdarg_8h.html", "stdarg_8h" ],
     [ "stdio.c", "stdio_8c.html", "stdio_8c" ],

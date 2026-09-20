@@ -95,7 +95,7 @@ var searchData=
   ['force_5fpresent_92',['force_present',['../classkernel_1_1iommu_1_1_io_mmu_manager.html#ab9de50cae7cb91af1391c2a0429eeeac',1,'kernel::iommu::IoMmuManager']]],
   ['forever_5fentry_93',['forever_entry',['../namespacekernel_1_1test.html#a9a26c096fcccf73fa199e553d354ab15',1,'kernel::test']]],
   ['fork_94',['fork',['../unistd_8c.html#aa4e4714e6e8927c80b2553a40094b6d9',1,'fork(void):&#160;unistd.c'],['../unistd_8h.html#aa4e4714e6e8927c80b2553a40094b6d9',1,'fork(void):&#160;unistd.c']]],
-  ['format_5fdatetime_95',['format_datetime',['../kernel_8cpp.html#a6758dbad75005fb55338b477c2e5204a',1,'kernel.cpp']]],
+  ['format_5fdatetime_95',['format_datetime',['../kernel_8cpp.html#a6758dbad75005fb55338b477c2e5204a',1,'format_datetime(char *buf, size_t size, uint64_t wall_ns):&#160;kernel.cpp'],['../test__kernel__top_8cpp.html#a6758dbad75005fb55338b477c2e5204a',1,'format_datetime(char *buf, size_t size, uint64_t wall_ns):&#160;kernel.cpp']]],
   ['format_5fshort_5fname_96',['format_short_name',['../namespacekernel_1_1fat32.html#ad96c400fa4e603f70ae0ecd41241cbbf',1,'kernel::fat32']]],
   ['forward_97',['forward',['../utils_8hpp.html#a25df175eb2c708b8703706828dc59cf0',1,'forward(typename remove_reference&lt; T &gt;::type &amp;t) noexcept:&#160;utils.hpp'],['../utils_8hpp.html#a84de50f91f80486020e9048df873168a',1,'forward(typename remove_reference&lt; T &gt;::type &amp;&amp;t) noexcept:&#160;utils.hpp']]],
   ['found_98',['found',['../structkernel_1_1acpi_1_1_madt_info.html#a4478a71f43c8b5e2b109aa80c5f70f58',1,'kernel::acpi::MadtInfo::found'],['../structkernel_1_1iommu_1_1dmar_1_1_dmar_info.html#a96fc88560f38804ace5db2a911478d42',1,'kernel::iommu::dmar::DmarInfo::found']]],

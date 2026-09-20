@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -126,6 +126,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__vfsd__au
 <code>#include &lt;<a class="el" href="syscall_8hpp_source.html">kernel/syscall/syscall.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vfs_8hpp_source.html">kernel/vfs/vfs.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vfsd_8hpp_source.html">kernel/vfs/vfsd.hpp</a>&gt;</code><br />
 <code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
 </div><div class="textblock"><div class="dynheader">
@@ -142,6 +143,24 @@ Functions</h2></td></tr>
 <tr class="memitem:a25e5508c0633231b71d0492d7b8c06c4" id="r_a25e5508c0633231b71d0492d7b8c06c4"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a25e5508c0633231b71d0492d7b8c06c4">JARVIS_TEST</a> (vfsd_absent_authorize_fails, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:aead38b3debb4e71b899d7bf0b96a60a9" id="r_aead38b3debb4e71b899d7bf0b96a60a9"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aead38b3debb4e71b899d7bf0b96a60a9">JARVIS_TEST</a> (vfsd_absent_syscall_fails, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a98fa3730ce3dbbcb804c18d9687cd52b" id="r_a98fa3730ce3dbbcb804c18d9687cd52b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a98fa3730ce3dbbcb804c18d9687cd52b">JARVIS_TEST</a> (vfsd_authorize_null_path, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:aaef46b6020cfed06868ad95f258ce421" id="r_aaef46b6020cfed06868ad95f258ce421"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aaef46b6020cfed06868ad95f258ce421">JARVIS_TEST</a> (vfsd_dup_success_aliases, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a2a82fc7db4c82a2dde79ce7347da3be5" id="r_a2a82fc7db4c82a2dde79ce7347da3be5"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a2a82fc7db4c82a2dde79ce7347da3be5">JARVIS_TEST</a> (vfsd_dup_invalid_fd, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:af113985951e8120c840d11f85d7eedb3" id="r_af113985951e8120c840d11f85d7eedb3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af113985951e8120c840d11f85d7eedb3">JARVIS_TEST</a> (vfsd_dup2_self, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:af60bac31c349601c602c686a9225a231" id="r_af60bac31c349601c602c686a9225a231"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af60bac31c349601c602c686a9225a231">JARVIS_TEST</a> (vfsd_dup2_rejected, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a40a6ef139cc608d262bd522bd67efc6f" id="r_a40a6ef139cc608d262bd522bd67efc6f"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a40a6ef139cc608d262bd522bd67efc6f">JARVIS_TEST</a> (vfsd_pipe_roundtrip, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a196d7619076cdcdef3913c036745a916" id="r_a196d7619076cdcdef3913c036745a916"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a196d7619076cdcdef3913c036745a916">JARVIS_TEST</a> (vfsd_dup2_free_slot, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:aba39d0755065b341e314309c550cb5f3" id="r_aba39d0755065b341e314309c550cb5f3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aba39d0755065b341e314309c550cb5f3">JARVIS_TEST</a> (vfsd_dup2_occupied_target, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a5f6fcb0a781bfbca26108b4f5122c7da" id="r_a5f6fcb0a781bfbca26108b4f5122c7da"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5f6fcb0a781bfbca26108b4f5122c7da">JARVIS_TEST</a> (vfsd_mkdir_unlink_roundtrip, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:ab13d064361ffd956dde4d4b947a60699" id="r_ab13d064361ffd956dde4d4b947a60699"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ab13d064361ffd956dde4d4b947a60699">JARVIS_TEST</a> (vfsd_mkdir_rejected, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a5fe7ec7151741c86319ab305e33c67eb" id="r_a5fe7ec7151741c86319ab305e33c67eb"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5fe7ec7151741c86319ab305e33c67eb">JARVIS_TEST</a> (vfsd_rmdir_nonempty, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a274ffa703097c56c85590166dab37a39" id="r_a274ffa703097c56c85590166dab37a39"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a274ffa703097c56c85590166dab37a39">JARVIS_TEST</a> (vfsd_lseek_nulldev, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a637767b7ff5f7c423d39e204b438f563" id="r_a637767b7ff5f7c423d39e204b438f563"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a637767b7ff5f7c423d39e204b438f563">JARVIS_TEST</a> (vfsd_lseek_rejected, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a7ef83dcbaa6f79c57b935352e8b98672" id="r_a7ef83dcbaa6f79c57b935352e8b98672"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a7ef83dcbaa6f79c57b935352e8b98672">JARVIS_TEST</a> (vfsd_ioctl_nulldev, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a86b346c6ab8cec41080ada116e493a50" id="r_a86b346c6ab8cec41080ada116e493a50"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a86b346c6ab8cec41080ada116e493a50">JARVIS_TEST</a> (vfsd_readdir_tmp, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a22a5e3c4207dc3ffef6f629bf62d988c" id="r_a22a5e3c4207dc3ffef6f629bf62d988c"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a22a5e3c4207dc3ffef6f629bf62d988c">JARVIS_TEST</a> (vfsd_fstat_delivers, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:aaf26a97da4a5dbb2535bf6d8a1d4099a" id="r_aaf26a97da4a5dbb2535bf6d8a1d4099a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aaf26a97da4a5dbb2535bf6d8a1d4099a">JARVIS_TEST</a> (vfsd_stat_delivers, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a90460e9f4eb87020b401cc1d9d8c9271" id="r_a90460e9f4eb87020b401cc1d9d8c9271"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a90460e9f4eb87020b401cc1d9d8c9271">JARVIS_TEST</a> (vfsd_readdir_delivers, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:ad73e639eab6027bf2db33a01834599b3" id="r_ad73e639eab6027bf2db33a01834599b3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad73e639eab6027bf2db33a01834599b3">JARVIS_TEST</a> (vfsd_lseek_bogus_whence, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a6b203c2ce630993d8d83e48588e18b0b" id="r_a6b203c2ce630993d8d83e48588e18b0b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6b203c2ce630993d8d83e48588e18b0b">register_vfsd_authorization_tests</a> ()</td></tr>
 <tr class="memdesc:a6b203c2ce630993d8d83e48588e18b0b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub — not supported on non-x86 architectures.  <br /></td></tr>
 </table>
@@ -150,7 +169,7 @@ Functions</h2></td></tr>
 <p>v0.3.10 rework (SIMULATED → DRIVEN): every VFS syscall runs inside a REAL kernel task (prio ≥ 11) that is genuinely dispatched — the handler's <span class="tt"><a class="el" href="namespacekernel.html#aa7278439c20dc6234a77d3b08290701f" title="Get the currently running task from the scheduler.">syscall_task()</a></span> resolves to the running task and the kernel-bypass / daemon authorisation path is exercised through real execution. The harness never calls Syscall::handle() directly. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a25e5508c0633231b71d0492d7b8c06c4" name="a25e5508c0633231b71d0492d7b8c06c4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a25e5508c0633231b71d0492d7b8c06c4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a25e5508c0633231b71d0492d7b8c06c4">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/23]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -182,7 +201,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="aead38b3debb4e71b899d7bf0b96a60a9" name="aead38b3debb4e71b899d7bf0b96a60a9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aead38b3debb4e71b899d7bf0b96a60a9">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aead38b3debb4e71b899d7bf0b96a60a9">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/23]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -214,7 +233,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a98fa3730ce3dbbcb804c18d9687cd52b" name="a98fa3730ce3dbbcb804c18d9687cd52b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a98fa3730ce3dbbcb804c18d9687cd52b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a98fa3730ce3dbbcb804c18d9687cd52b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/23]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -245,8 +264,552 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a196d7619076cdcdef3913c036745a916" name="a196d7619076cdcdef3913c036745a916"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a196d7619076cdcdef3913c036745a916">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup2_free_slot</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a196d7619076cdcdef3913c036745a916_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a196d7619076cdcdef3913c036745a916_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="aba39d0755065b341e314309c550cb5f3" name="aba39d0755065b341e314309c550cb5f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aba39d0755065b341e314309c550cb5f3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup2_occupied_target</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_aba39d0755065b341e314309c550cb5f3_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_aba39d0755065b341e314309c550cb5f3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="af60bac31c349601c602c686a9225a231" name="af60bac31c349601c602c686a9225a231"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af60bac31c349601c602c686a9225a231">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup2_rejected</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_af60bac31c349601c602c686a9225a231_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_af60bac31c349601c602c686a9225a231_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="af113985951e8120c840d11f85d7eedb3" name="af113985951e8120c840d11f85d7eedb3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af113985951e8120c840d11f85d7eedb3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup2_self</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_af113985951e8120c840d11f85d7eedb3_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_af113985951e8120c840d11f85d7eedb3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a2a82fc7db4c82a2dde79ce7347da3be5" name="a2a82fc7db4c82a2dde79ce7347da3be5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a82fc7db4c82a2dde79ce7347da3be5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup_invalid_fd</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a2a82fc7db4c82a2dde79ce7347da3be5_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a2a82fc7db4c82a2dde79ce7347da3be5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="aaef46b6020cfed06868ad95f258ce421" name="aaef46b6020cfed06868ad95f258ce421"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaef46b6020cfed06868ad95f258ce421">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_dup_success_aliases</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_aaef46b6020cfed06868ad95f258ce421_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_aaef46b6020cfed06868ad95f258ce421_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a22a5e3c4207dc3ffef6f629bf62d988c" name="a22a5e3c4207dc3ffef6f629bf62d988c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22a5e3c4207dc3ffef6f629bf62d988c">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_fstat_delivers</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a22a5e3c4207dc3ffef6f629bf62d988c_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a22a5e3c4207dc3ffef6f629bf62d988c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="a7ef83dcbaa6f79c57b935352e8b98672" name="a7ef83dcbaa6f79c57b935352e8b98672"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ef83dcbaa6f79c57b935352e8b98672">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_ioctl_nulldev</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a7ef83dcbaa6f79c57b935352e8b98672_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a7ef83dcbaa6f79c57b935352e8b98672_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="ad73e639eab6027bf2db33a01834599b3" name="ad73e639eab6027bf2db33a01834599b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad73e639eab6027bf2db33a01834599b3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_lseek_bogus_whence</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_ad73e639eab6027bf2db33a01834599b3_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ad73e639eab6027bf2db33a01834599b3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a274ffa703097c56c85590166dab37a39" name="a274ffa703097c56c85590166dab37a39"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a274ffa703097c56c85590166dab37a39">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_lseek_nulldev</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a274ffa703097c56c85590166dab37a39_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a274ffa703097c56c85590166dab37a39_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
+
+</div>
+</div>
+<a id="a637767b7ff5f7c423d39e204b438f563" name="a637767b7ff5f7c423d39e204b438f563"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a637767b7ff5f7c423d39e204b438f563">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[14/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_lseek_rejected</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a637767b7ff5f7c423d39e204b438f563_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a637767b7ff5f7c423d39e204b438f563_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 14 -->
+</div>
+
+</div>
+</div>
+<a id="ab13d064361ffd956dde4d4b947a60699" name="ab13d064361ffd956dde4d4b947a60699"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab13d064361ffd956dde4d4b947a60699">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[15/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_mkdir_rejected</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_ab13d064361ffd956dde4d4b947a60699_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ab13d064361ffd956dde4d4b947a60699_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a id="a5f6fcb0a781bfbca26108b4f5122c7da" name="a5f6fcb0a781bfbca26108b4f5122c7da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f6fcb0a781bfbca26108b4f5122c7da">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[16/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_mkdir_unlink_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a5f6fcb0a781bfbca26108b4f5122c7da_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a5f6fcb0a781bfbca26108b4f5122c7da_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 16 -->
+</div>
+
+</div>
+</div>
+<a id="a40a6ef139cc608d262bd522bd67efc6f" name="a40a6ef139cc608d262bd522bd67efc6f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a40a6ef139cc608d262bd522bd67efc6f">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[17/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_pipe_roundtrip</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a40a6ef139cc608d262bd522bd67efc6f_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a40a6ef139cc608d262bd522bd67efc6f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
+</div>
+
+</div>
+</div>
+<a id="a90460e9f4eb87020b401cc1d9d8c9271" name="a90460e9f4eb87020b401cc1d9d8c9271"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90460e9f4eb87020b401cc1d9d8c9271">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[18/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_readdir_delivers</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a90460e9f4eb87020b401cc1d9d8c9271_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a90460e9f4eb87020b401cc1d9d8c9271_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
+</div>
+
+</div>
+</div>
+<a id="a86b346c6ab8cec41080ada116e493a50" name="a86b346c6ab8cec41080ada116e493a50"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86b346c6ab8cec41080ada116e493a50">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[19/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_readdir_tmp</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a86b346c6ab8cec41080ada116e493a50_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a86b346c6ab8cec41080ada116e493a50_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
+<a id="a5fe7ec7151741c86319ab305e33c67eb" name="a5fe7ec7151741c86319ab305e33c67eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5fe7ec7151741c86319ab305e33c67eb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[20/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_rmdir_nonempty</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_a5fe7ec7151741c86319ab305e33c67eb_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a5fe7ec7151741c86319ab305e33c67eb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
+</div>
+
+</div>
+</div>
 <a id="ae8d2dbc91211b91671fae6c1240cb4cf" name="ae8d2dbc91211b91671fae6c1240cb4cf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae8d2dbc91211b91671fae6c1240cb4cf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ae8d2dbc91211b91671fae6c1240cb4cf">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[21/23]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -272,13 +835,13 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_ae8d2dbc91211b91671fae6c1240cb4cf_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_ae8d2dbc91211b91671fae6c1240cb4cf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
 </div>
 <a id="a7f1105c16cb72c68ab85bded186432f5" name="a7f1105c16cb72c68ab85bded186432f5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7f1105c16cb72c68ab85bded186432f5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/5]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f1105c16cb72c68ab85bded186432f5">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[22/23]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -304,7 +867,39 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a7f1105c16cb72c68ab85bded186432f5_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a7f1105c16cb72c68ab85bded186432f5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 22 -->
+</div>
+
+</div>
+</div>
+<a id="aaf26a97da4a5dbb2535bf6d8a1d4099a" name="aaf26a97da4a5dbb2535bf6d8a1d4099a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf26a97da4a5dbb2535bf6d8a1d4099a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[23/23]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">vfsd_stat_delivers</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__vfsd__auth_8cpp_aaf26a97da4a5dbb2535bf6d8a1d4099a_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_aaf26a97da4a5dbb2535bf6d8a1d4099a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -329,7 +924,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__vfsd__auth_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph.png" border="0" usemap="#atest__vfsd__auth_8cpp_a6b203c2ce630993d8d83e48588e18b0b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 24 -->
 </div>
 
 </div>

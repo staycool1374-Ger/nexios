@@ -12,8 +12,10 @@ var dir_86f15235f1dbace123bd765dedac1e4b =
     [ "syscall_handlers_misc.cpp", "syscall__handlers__misc_8cpp.html", "syscall__handlers__misc_8cpp" ],
     [ "syscall_handlers_mmio.cpp", "syscall__handlers__mmio_8cpp.html", "syscall__handlers__mmio_8cpp" ],
     [ "syscall_handlers_pager.cpp", "syscall__handlers__pager_8cpp.html", null ],
+    [ "syscall_handlers_posix_time.cpp", "syscall__handlers__posix__time_8cpp.html", "syscall__handlers__posix__time_8cpp" ],
     [ "syscall_handlers_process.cpp", "syscall__handlers__process_8cpp.html", null ],
     [ "syscall_handlers_shm.cpp", "syscall__handlers__shm_8cpp.html", null ],
     [ "syscall_handlers_sync.cpp", "syscall__handlers__sync_8cpp.html", null ],
+    [ "syscall_handlers_tls.cpp", "syscall__handlers__tls_8cpp.html", null ],
     [ "syscall_helpers.hpp", "syscall__helpers_8hpp.html", null ]
 ];

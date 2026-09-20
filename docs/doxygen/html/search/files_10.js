@@ -51,8 +51,10 @@ var searchData=
   ['syscall_5fhandlers_5fmisc_2ecpp_48',['syscall_handlers_misc.cpp',['../syscall__handlers__misc_8cpp.html',1,'']]],
   ['syscall_5fhandlers_5fmmio_2ecpp_49',['syscall_handlers_mmio.cpp',['../syscall__handlers__mmio_8cpp.html',1,'']]],
   ['syscall_5fhandlers_5fpager_2ecpp_50',['syscall_handlers_pager.cpp',['../syscall__handlers__pager_8cpp.html',1,'']]],
-  ['syscall_5fhandlers_5fprocess_2ecpp_51',['syscall_handlers_process.cpp',['../syscall__handlers__process_8cpp.html',1,'']]],
-  ['syscall_5fhandlers_5fshm_2ecpp_52',['syscall_handlers_shm.cpp',['../syscall__handlers__shm_8cpp.html',1,'']]],
-  ['syscall_5fhandlers_5fsync_2ecpp_53',['syscall_handlers_sync.cpp',['../syscall__handlers__sync_8cpp.html',1,'']]],
-  ['syscall_5fhelpers_2ehpp_54',['syscall_helpers.hpp',['../syscall__helpers_8hpp.html',1,'']]]
+  ['syscall_5fhandlers_5fposix_5ftime_2ecpp_51',['syscall_handlers_posix_time.cpp',['../syscall__handlers__posix__time_8cpp.html',1,'']]],
+  ['syscall_5fhandlers_5fprocess_2ecpp_52',['syscall_handlers_process.cpp',['../syscall__handlers__process_8cpp.html',1,'']]],
+  ['syscall_5fhandlers_5fshm_2ecpp_53',['syscall_handlers_shm.cpp',['../syscall__handlers__shm_8cpp.html',1,'']]],
+  ['syscall_5fhandlers_5fsync_2ecpp_54',['syscall_handlers_sync.cpp',['../syscall__handlers__sync_8cpp.html',1,'']]],
+  ['syscall_5fhandlers_5ftls_2ecpp_55',['syscall_handlers_tls.cpp',['../syscall__handlers__tls_8cpp.html',1,'']]],
+  ['syscall_5fhelpers_2ehpp_56',['syscall_helpers.hpp',['../syscall__helpers_8hpp.html',1,'']]]
 ];

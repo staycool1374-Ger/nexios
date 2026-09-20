@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -139,6 +139,8 @@ Namespaces</h2></td></tr>
 Functions</h2></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#af44c28e0176ac64b504464bbd30f31b2">arch::handle_gic_irq</a> (void)</td></tr>
 <tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
+<tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a02f1e46be9bd915e24696367061cebf5">arch::aarch64_el0_fault_handler</a> ()</td></tr>
+<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issue #184). Non-SVC faults from EL0 land here. EL0 tasks do not run yet (bring-up issue #28), so any arrival is deeply wrong: latch ESR/FAR/ELR for post-mortem GDB and park the CPU. Runs with interrupts masked (vector entry); must not re-enable IRQs, touch the scheduler, or return (vectors.S erets on return, but there is no task to resume to).  <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

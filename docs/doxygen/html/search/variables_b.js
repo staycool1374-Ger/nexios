@@ -10,7 +10,8 @@ var searchData=
   ['load_5fkstack_5fbase_7',['load_kstack_base',['../structkernel_1_1_sched_per_cpu_pod.html#a1b3d85ad92e6a9c5bbfc88cd6b3b88b7',1,'kernel::SchedPerCpuPod']]],
   ['load_5fkstack_5ftop_8',['load_kstack_top',['../structkernel_1_1_sched_per_cpu_pod.html#a258fe27a0733ae458269201f14420904',1,'kernel::SchedPerCpuPod']]],
   ['load_5frsp_5ffrom_9',['load_rsp_from',['../structkernel_1_1_sched_per_cpu_pod.html#af49d5242711d10fae2adbad2f2c6d735',1,'kernel::SchedPerCpuPod']]],
-  ['loadavg_5fdisplay_5fdiv_10',['LOADAVG_DISPLAY_DIV',['../classkernel_1_1_scheduler.html#aea490393d92cca79f525dda574e96983',1,'kernel::Scheduler']]],
-  ['loadavg_5fscale_11',['LOADAVG_SCALE',['../classkernel_1_1_scheduler.html#adfb3b2f598049466e2b48a0aee96c3d9',1,'kernel::Scheduler']]],
-  ['lock_5f_12',['lock_',['../classkernel_1_1cap_1_1_c_node.html#a7760d9783298fa791fa883280b127cca',1,'kernel::cap::CNode::lock_'],['../classkernel_1_1cap_1_1_endpoint.html#a40699f535c935245c038e8d33ae5189c',1,'kernel::cap::Endpoint::lock_'],['../structkernel_1_1_irq_registration.html#ae2a8afb1e907f26a2ad720bb8cbbe47a',1,'kernel::IrqRegistration::lock_']]]
+  ['load_5ftls_5ffrom_10',['load_tls_from',['../structkernel_1_1_sched_per_cpu_pod.html#a30106e96f7adfd8438c41c45a479c906',1,'kernel::SchedPerCpuPod']]],
+  ['loadavg_5fdisplay_5fdiv_11',['LOADAVG_DISPLAY_DIV',['../classkernel_1_1_scheduler.html#aea490393d92cca79f525dda574e96983',1,'kernel::Scheduler']]],
+  ['loadavg_5fscale_12',['LOADAVG_SCALE',['../classkernel_1_1_scheduler.html#adfb3b2f598049466e2b48a0aee96c3d9',1,'kernel::Scheduler']]],
+  ['lock_5f_13',['lock_',['../classkernel_1_1cap_1_1_c_node.html#a7760d9783298fa791fa883280b127cca',1,'kernel::cap::CNode::lock_'],['../classkernel_1_1cap_1_1_endpoint.html#a40699f535c935245c038e8d33ae5189c',1,'kernel::cap::Endpoint::lock_'],['../structkernel_1_1_irq_registration.html#ae2a8afb1e907f26a2ad720bb8cbbe47a',1,'kernel::IrqRegistration::lock_']]]
 ];

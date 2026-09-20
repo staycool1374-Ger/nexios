@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -121,9 +121,232 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
+<tr class="memitem:ItimerspecU" id="r_ItimerspecU"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1time_1_1_itimerspec_u.html">ItimerspecU</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-local itimerspec (value + interval).  <a href="structkernel_1_1time_1_1_itimerspec_u.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PosixTime" id="r_PosixTime"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1time_1_1_posix_time.html">PosixTime</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">POSIX time/timer registries + clock sources (issue #76).  <a href="classkernel_1_1time_1_1_posix_time.html#details">More...</a><br /></td></tr>
 <tr class="memitem:TimerWheel" id="r_TimerWheel"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1time_1_1_timer_wheel.html">TimerWheel</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU event-timer wheel with generation-tagged handles.  <a href="classkernel_1_1time_1_1_timer_wheel.html#details">More...</a><br /></td></tr>
+<tr class="memitem:TimespecU" id="r_TimespecU"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1time_1_1_timespec_u.html">TimespecU</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-local timespec (sign-extended fields, range-checked).  <a href="structkernel_1_1time_1_1_timespec_u.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a37bf0aee4d287b1d413e122e666ba52e" id="r_a37bf0aee4d287b1d413e122e666ba52e"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a37bf0aee4d287b1d413e122e666ba52e">PosixClock</a> : uint64_t { <a class="el" href="#a37bf0aee4d287b1d413e122e666ba52ea4abfc22ad3c3ef567d80c65263fd7754">REALTIME</a> = 0
+, <a class="el" href="#a37bf0aee4d287b1d413e122e666ba52ea109ce01d0775b5372b9b2cc517630d39">MONOTONIC</a> = 1
+ }</td></tr>
+<tr class="memdesc:a37bf0aee4d287b1d413e122e666ba52e"><td class="mdescLeft">&#160;</td><td class="mdescRight">POSIX clock IDs (Linux values).  <a href="#a37bf0aee4d287b1d413e122e666ba52e">More...</a><br /></td></tr>
+<tr class="memitem:ab13778b383b7889160470c87141ea20a" id="r_ab13778b383b7889160470c87141ea20a"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#ab13778b383b7889160470c87141ea20a">PosixTimerOp</a> : uint64_t { <a class="el" href="#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d">CREATE</a> = 0
+, <a class="el" href="#ab13778b383b7889160470c87141ea20aa43ba32de819fd830dde898661e7d75f8">SETTIME</a> = 1
+, <a class="el" href="#ab13778b383b7889160470c87141ea20aa319e8770e4375709d8a4907b0faa6754">GETTIME</a> = 2
+, <a class="el" href="#ab13778b383b7889160470c87141ea20aa32f68a60cef40faedbc6af20298c1a1e">DELETE</a> = 3
+ }</td></tr>
+<tr class="memdesc:ab13778b383b7889160470c87141ea20a"><td class="mdescLeft">&#160;</td><td class="mdescRight">TIMER_CREATE multiplex operations.  <a href="#ab13778b383b7889160470c87141ea20a">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:ad023c2cd69773d005fba1ac4331ae98f" id="r_ad023c2cd69773d005fba1ac4331ae98f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad023c2cd69773d005fba1ac4331ae98f">kPosixErrInvalid</a> = 22</td></tr>
+<tr class="memdesc:ad023c2cd69773d005fba1ac4331ae98f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reachable errno values (Linux numbers, mirrored in <a class="el" href="errno_8h.html">src/libc/errno.h</a>).  <br /></td></tr>
+<tr class="memitem:a0dbc4e6dc04704af973b5cfd199f7939" id="r_a0dbc4e6dc04704af973b5cfd199f7939"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0dbc4e6dc04704af973b5cfd199f7939">kPosixErrFault</a> = 14</td></tr>
+<tr class="memitem:a17d57ee06221a9cb02e1f9f088493fc3" id="r_a17d57ee06221a9cb02e1f9f088493fc3"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a17d57ee06221a9cb02e1f9f088493fc3">kPosixErrAgain</a> = 11</td></tr>
+<tr class="memitem:a6eac064681f39cd28b6a9bee74aca45c" id="r_a6eac064681f39cd28b6a9bee74aca45c"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6eac064681f39cd28b6a9bee74aca45c">kPosixErrIntr</a> = 4</td></tr>
+<tr class="memitem:af089c8d5023a0728fd47d1d9f39e3c1e" id="r_af089c8d5023a0728fd47d1d9f39e3c1e"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af089c8d5023a0728fd47d1d9f39e3c1e">kPosixErrBadFd</a> = 9</td></tr>
+<tr class="memitem:a62c1511adc23a5d97f475b69c32c11dd" id="r_a62c1511adc23a5d97f475b69c32c11dd"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a62c1511adc23a5d97f475b69c32c11dd">kPosixErrNoSys</a> = 38</td></tr>
 </table>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="a37bf0aee4d287b1d413e122e666ba52e" name="a37bf0aee4d287b1d413e122e666ba52e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37bf0aee4d287b1d413e122e666ba52e">&#9670;&#160;</a></span>PosixClock</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a37bf0aee4d287b1d413e122e666ba52e">kernel::time::PosixClock</a> : <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>POSIX clock IDs (Linux values). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a37bf0aee4d287b1d413e122e666ba52ea4abfc22ad3c3ef567d80c65263fd7754" name="a37bf0aee4d287b1d413e122e666ba52ea4abfc22ad3c3ef567d80c65263fd7754"></a>REALTIME&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a37bf0aee4d287b1d413e122e666ba52ea109ce01d0775b5372b9b2cc517630d39" name="a37bf0aee4d287b1d413e122e666ba52ea109ce01d0775b5372b9b2cc517630d39"></a>MONOTONIC&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="ab13778b383b7889160470c87141ea20a" name="ab13778b383b7889160470c87141ea20a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab13778b383b7889160470c87141ea20a">&#9670;&#160;</a></span>PosixTimerOp</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#ab13778b383b7889160470c87141ea20a">kernel::time::PosixTimerOp</a> : <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>TIMER_CREATE multiplex operations. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d" name="ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d"></a>CREATE&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="ab13778b383b7889160470c87141ea20aa43ba32de819fd830dde898661e7d75f8" name="ab13778b383b7889160470c87141ea20aa43ba32de819fd830dde898661e7d75f8"></a>SETTIME&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="ab13778b383b7889160470c87141ea20aa319e8770e4375709d8a4907b0faa6754" name="ab13778b383b7889160470c87141ea20aa319e8770e4375709d8a4907b0faa6754"></a>GETTIME&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="ab13778b383b7889160470c87141ea20aa32f68a60cef40faedbc6af20298c1a1e" name="ab13778b383b7889160470c87141ea20aa32f68a60cef40faedbc6af20298c1a1e"></a>DELETE&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a17d57ee06221a9cb02e1f9f088493fc3" name="a17d57ee06221a9cb02e1f9f088493fc3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17d57ee06221a9cb02e1f9f088493fc3">&#9670;&#160;</a></span>kPosixErrAgain</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrAgain = 11</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af089c8d5023a0728fd47d1d9f39e3c1e" name="af089c8d5023a0728fd47d1d9f39e3c1e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af089c8d5023a0728fd47d1d9f39e3c1e">&#9670;&#160;</a></span>kPosixErrBadFd</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrBadFd = 9</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0dbc4e6dc04704af973b5cfd199f7939" name="a0dbc4e6dc04704af973b5cfd199f7939"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0dbc4e6dc04704af973b5cfd199f7939">&#9670;&#160;</a></span>kPosixErrFault</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrFault = 14</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6eac064681f39cd28b6a9bee74aca45c" name="a6eac064681f39cd28b6a9bee74aca45c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6eac064681f39cd28b6a9bee74aca45c">&#9670;&#160;</a></span>kPosixErrIntr</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrIntr = 4</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad023c2cd69773d005fba1ac4331ae98f" name="ad023c2cd69773d005fba1ac4331ae98f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad023c2cd69773d005fba1ac4331ae98f">&#9670;&#160;</a></span>kPosixErrInvalid</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrInvalid = 22</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Reachable errno values (Linux numbers, mirrored in <a class="el" href="errno_8h.html">src/libc/errno.h</a>). </p>
+
+</div>
+</div>
+<a id="a62c1511adc23a5d97f475b69c32c11dd" name="a62c1511adc23a5d97f475b69c32c11dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a62c1511adc23a5d97f475b69c32c11dd">&#9670;&#160;</a></span>kPosixErrNoSys</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2f2ac413d894553957c9a59c1f4653df">int64_t</a> kernel::time::kPosixErrNoSys = 38</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

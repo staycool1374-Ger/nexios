@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -133,6 +133,7 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:aec870842b02fa2e9d6978a93e32f0d39" id="r_aec870842b02fa2e9d6978a93e32f0d39"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&amp;&#160;</td><td class="memItemRight"><a class="el" href="#aec870842b02fa2e9d6978a93e32f0d39">save_rsp_to</a> ()</td></tr>
 <tr class="memitem:acd4e75f82af049887c9f718dc5976d43" id="r_acd4e75f82af049887c9f718dc5976d43"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#acd4e75f82af049887c9f718dc5976d43">load_rsp_from</a> ()</td></tr>
 <tr class="memitem:a4ce153d0f4dc44232689d5ae7dba907a" id="r_a4ce153d0f4dc44232689d5ae7dba907a"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a4ce153d0f4dc44232689d5ae7dba907a">load_cr3_from</a> ()</td></tr>
+<tr class="memitem:abb1b6fcbf40d6675147154772449e83d" id="r_abb1b6fcbf40d6675147154772449e83d"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#abb1b6fcbf40d6675147154772449e83d">load_tls_from</a> ()</td></tr>
 <tr class="memitem:a08af57e0db53661a6990cc8d06273bce" id="r_a08af57e0db53661a6990cc8d06273bce"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a08af57e0db53661a6990cc8d06273bce">next_task_id</a> ()</td></tr>
 <tr class="memitem:a5e0c4f6ba33490e1631bc2a98288dd64" id="r_a5e0c4f6ba33490e1631bc2a98288dd64"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a5e0c4f6ba33490e1631bc2a98288dd64">load_kstack_base</a> ()</td></tr>
 <tr class="memitem:a8e6789134bf2d305442491bc691f9685" id="r_a8e6789134bf2d305442491bc691f9685"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a8e6789134bf2d305442491bc691f9685">load_kstack_top</a> ()</td></tr>
@@ -295,6 +296,37 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="abb1b6fcbf40d6675147154772449e83d" name="abb1b6fcbf40d6675147154772449e83d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abb1b6fcbf40d6675147154772449e83d">&#9670;&#160;</a></span>load_tls_from()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> &amp; kernel::Scheduler::SwSlots::load_tls_from </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_scheduler_1_1_sw_slots_abb1b6fcbf40d6675147154772449e83d_cgraph.png" border="0" usemap="#astructkernel_1_1_scheduler_1_1_sw_slots_abb1b6fcbf40d6675147154772449e83d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
 <a id="a77225a1431789fe95538efd2597a8e31" name="a77225a1431789fe95538efd2597a8e31"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a77225a1431789fe95538efd2597a8e31">&#9670;&#160;</a></span>need_resched()</h2>
 
@@ -321,7 +353,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_scheduler_1_1_sw_slots_a77225a1431789fe95538efd2597a8e31_cgraph.png" border="0" usemap="#astructkernel_1_1_scheduler_1_1_sw_slots_a77225a1431789fe95538efd2597a8e31_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -352,7 +384,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_scheduler_1_1_sw_slots_a08af57e0db53661a6990cc8d06273bce_cgraph.png" border="0" usemap="#astructkernel_1_1_scheduler_1_1_sw_slots_a08af57e0db53661a6990cc8d06273bce_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -383,7 +415,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_scheduler_1_1_sw_slots_aec870842b02fa2e9d6978a93e32f0d39_cgraph.png" border="0" usemap="#astructkernel_1_1_scheduler_1_1_sw_slots_aec870842b02fa2e9d6978a93e32f0d39_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -414,7 +446,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_scheduler_1_1_sw_slots_a4ff75cf4085dcefaa20c54a29805f3b7_cgraph.png" border="0" usemap="#astructkernel_1_1_scheduler_1_1_sw_slots_a4ff75cf4085dcefaa20c54a29805f3b7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>

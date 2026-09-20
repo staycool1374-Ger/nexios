@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -118,48 +118,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('compiler__rt_8
   <div class="headertitle"><div class="title">compiler_rt.cpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
-Functions</h2></td></tr>
-<tr class="memitem:a10daef3ffa3b7251c58d0ea9cfcde591" id="r_a10daef3ffa3b7251c58d0ea9cfcde591"><td class="memItemLeft">unsigned long&#160;</td><td class="memItemRight"><a class="el" href="#a10daef3ffa3b7251c58d0ea9cfcde591">__clzdi2</a> (unsigned long val)</td></tr>
-<tr class="memitem:ab7544ab87a57edd38439e58f851305fe" id="r_ab7544ab87a57edd38439e58f851305fe"><td class="memItemLeft">unsigned long&#160;</td><td class="memItemRight"><a class="el" href="#ab7544ab87a57edd38439e58f851305fe">__ctzdi2</a> (unsigned long val)</td></tr>
-</table>
-<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="a10daef3ffa3b7251c58d0ea9cfcde591" name="a10daef3ffa3b7251c58d0ea9cfcde591"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a10daef3ffa3b7251c58d0ea9cfcde591">&#9670;&#160;</a></span>__clzdi2()</h2>
 
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">unsigned long __clzdi2 </td>
-          <td>(</td>
-          <td class="paramtype">unsigned long</td>          <td class="paramname"><span class="paramname"><em>val</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a id="ab7544ab87a57edd38439e58f851305fe" name="ab7544ab87a57edd38439e58f851305fe"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab7544ab87a57edd38439e58f851305fe">&#9670;&#160;</a></span>__ctzdi2()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">unsigned long __ctzdi2 </td>
-          <td>(</td>
-          <td class="paramtype">unsigned long</td>          <td class="paramname"><span class="paramname"><em>val</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-</div><!-- contents -->
+<p>Software implementations of the gcc runtime helpers __clzdi2 / __ctzdi2. RISC-V ONLY (issue #182 / #184): rv64imafdc without the Zbb extension lowers __builtin_clzll/__builtin_ctzll to libcalls, and the prebuilt libgcc.a cannot satisfy them (R_RISCV_HI20 medany/medlow relocation mismatch), so the kernel provides its own copies. x86_64 and AArch64 lower these builtins to inline instructions (verified: zero undefined refs in their objects), so the functions are compiled out there — and out of the x86 coverage denominator.  
+<a href="#details">More...</a></p>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Software implementations of the gcc runtime helpers __clzdi2 / __ctzdi2. RISC-V ONLY (issue #182 / #184): rv64imafdc without the Zbb extension lowers __builtin_clzll/__builtin_ctzll to libcalls, and the prebuilt libgcc.a cannot satisfy them (R_RISCV_HI20 medany/medlow relocation mismatch), so the kernel provides its own copies. x86_64 and AArch64 lower these builtins to inline instructions (verified: zero undefined refs in their objects), so the functions are compiled out there — and out of the x86 coverage denominator. </p>
+</div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

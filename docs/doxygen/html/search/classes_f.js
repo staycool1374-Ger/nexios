@@ -14,11 +14,12 @@ var searchData=
   ['teststruct_11',['TestStruct',['../struct_test_struct.html',1,'']]],
   ['timerwheel_12',['TimerWheel',['../classkernel_1_1time_1_1_timer_wheel.html',1,'kernel::time']]],
   ['timespec_13',['timespec',['../structtimespec.html',1,'']]],
-  ['timeval_14',['Timeval',['../structkernel_1_1_timeval.html',1,'kernel::Timeval'],['../struct_timeval.html',1,'Timeval']]],
-  ['timeval_15',['timeval',['../structtimeval.html',1,'']]],
-  ['tlbshootdown_16',['TlbShootdown',['../classkernel_1_1_tlb_shootdown.html',1,'kernel']]],
-  ['tm_17',['tm',['../structtm.html',1,'']]],
-  ['tmpfsentry_18',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
-  ['toprow_19',['TopRow',['../structservice_1_1_top_row.html',1,'service']]],
-  ['tprguard_20',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
+  ['timespecu_14',['TimespecU',['../structkernel_1_1time_1_1_timespec_u.html',1,'kernel::time']]],
+  ['timeval_15',['Timeval',['../structkernel_1_1_timeval.html',1,'kernel::Timeval'],['../struct_timeval.html',1,'Timeval']]],
+  ['timeval_16',['timeval',['../structtimeval.html',1,'']]],
+  ['tlbshootdown_17',['TlbShootdown',['../classkernel_1_1_tlb_shootdown.html',1,'kernel']]],
+  ['tm_18',['tm',['../structtm.html',1,'']]],
+  ['tmpfsentry_19',['TmpfsEntry',['../structkernel_1_1vfs_1_1_tmpfs_entry.html',1,'kernel::vfs']]],
+  ['toprow_20',['TopRow',['../structservice_1_1_top_row.html',1,'service']]],
+  ['tprguard_21',['TprGuard',['../classarch_1_1_tpr_guard.html',1,'arch']]]
 ];

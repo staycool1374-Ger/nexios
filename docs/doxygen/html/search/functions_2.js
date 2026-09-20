@@ -6,9 +6,10 @@ var searchData=
   ['bench_5fcpu_3',['bench_cpu',['../namespaceprograms.html#a7853d1b851a49c614301a9c00d8cf1c3',1,'programs']]],
   ['bitmap_4',['bitmap',['../classkernel_1_1_ready_queue_manager.html#acd3ec729284f5c1396d0889fa4bfe9d3',1,'kernel::ReadyQueueManager']]],
   ['boot_5finfo_5',['boot_info',['../namespacekernel_1_1gs.html#a99803c705efa5830cf47e3773c2a7fa1',1,'kernel::gs']]],
-  ['boot_5fmadt_6',['boot_madt',['../namespacekernel_1_1smp.html#adf4c7c3638cf5ca19596e47b8335f84d',1,'kernel::smp']]],
-  ['bring_5fup_7',['bring_up',['../namespacekernel_1_1smp.html#abf26a6a85fe60bbad0a6fb41b45bd276',1,'kernel::smp']]],
-  ['brk_8',['brk',['../stdlib_8c.html#a4b20a70d83d7f74a2734da590b4b8cf8',1,'brk(void *addr):&#160;stdlib.c'],['../unistd_8h.html#a4b20a70d83d7f74a2734da590b4b8cf8',1,'brk(void *addr):&#160;stdlib.c']]],
-  ['build_5fdate_9',['build_date',['../structkernel_1_1_version.html#a1b90692348e0b01a55537750a2e25318',1,'kernel::Version']]],
-  ['build_5ftime_10',['build_time',['../structkernel_1_1_version.html#ab8a7b6147736f55162bc5b5d88cb3b26',1,'kernel::Version']]]
+  ['boot_5flatch_6',['boot_latch',['../classkernel_1_1time_1_1_posix_time.html#a9b71b1ce88cdfa987c9e702e162d3dd3',1,'kernel::time::PosixTime']]],
+  ['boot_5fmadt_7',['boot_madt',['../namespacekernel_1_1smp.html#adf4c7c3638cf5ca19596e47b8335f84d',1,'kernel::smp']]],
+  ['bring_5fup_8',['bring_up',['../namespacekernel_1_1smp.html#abf26a6a85fe60bbad0a6fb41b45bd276',1,'kernel::smp']]],
+  ['brk_9',['brk',['../stdlib_8c.html#a4b20a70d83d7f74a2734da590b4b8cf8',1,'brk(void *addr):&#160;stdlib.c'],['../unistd_8h.html#a4b20a70d83d7f74a2734da590b4b8cf8',1,'brk(void *addr):&#160;stdlib.c']]],
+  ['build_5fdate_10',['build_date',['../structkernel_1_1_version.html#a1b90692348e0b01a55537750a2e25318',1,'kernel::Version']]],
+  ['build_5ftime_11',['build_time',['../structkernel_1_1_version.html#ab8a7b6147736f55162bc5b5d88cb3b26',1,'kernel::Version']]]
 ];

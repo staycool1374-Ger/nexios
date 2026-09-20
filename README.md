@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.4.10-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.5.0-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -33,7 +33,7 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 
 * **Target:** x86_64 (ARM64 & RISC-V in preparation)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.4.10 — Test-Coverage Closure (1535 debug tests, 85 release tests, all sub-80% areas closed: vfs, services/shell, lib, memory, debug, profiling, driver, top-level kernel, sync, iommu, syscall, daemon, core, cap, net, boot; test-found defects fixed in syscall/fs, net, checked-ptr, coverage boot path)
+* **Status:** v0.5.0 — picolibc + ABI (1564 debug tests, 85 release tests: syscall ABI freeze, picolibc integration, TLS, POSIX time API, loader verification)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.

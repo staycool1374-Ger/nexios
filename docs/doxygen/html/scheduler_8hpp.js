@@ -13,6 +13,7 @@ var scheduler_8hpp =
     [ "kernel::scheduler_load_kstack_base", "namespacekernel.html#a37bdeed47659d598826673faf0480073", null ],
     [ "kernel::scheduler_load_kstack_top", "namespacekernel.html#a687798275dc6880000977475427d7f60", null ],
     [ "kernel::scheduler_load_rsp_from", "namespacekernel.html#abc2636a4499534ec927314c4986490c9", null ],
+    [ "kernel::scheduler_load_tls_from", "namespacekernel.html#a5f0ed8f52ab6874d2938edb23d258ada", null ],
     [ "kernel::scheduler_need_resched", "namespacekernel.html#afb68be65bad6d813cd555b20b9500a4f", null ],
     [ "kernel::scheduler_next_task_id", "namespacekernel.html#a34491a1a1dfdbb4bc359f8110d283e93", null ],
     [ "kernel::scheduler_save_rsp_to", "namespacekernel.html#a8817c181097f042b8820d9cee86cc4b7", null ],

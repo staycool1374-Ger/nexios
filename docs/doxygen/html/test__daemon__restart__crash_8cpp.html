@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -127,6 +127,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__daemon__
 <code>#include &lt;<a class="el" href="daemon__mgr_8hpp_source.html">kernel/daemon/daemon_mgr.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="vfsd_8hpp_source.html">kernel/vfs/vfsd.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="iocd_8hpp_source.html">kernel/driver/iocd.hpp</a>&gt;</code><br />
+<code>#include &quot;<a class="el" href="test__sched__helpers_8hpp_source.html">test_sched_helpers.hpp</a>&quot;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_daemon_restart_crash.cpp:</div>
 <div class="dyncontent">
@@ -136,6 +139,8 @@ Include dependency graph for test_daemon_restart_crash.cpp:</div>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a0d5436dd40b8f5c13ea8182aff31b0a3" id="r_a0d5436dd40b8f5c13ea8182aff31b0a3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a0d5436dd40b8f5c13ea8182aff31b0a3">JARVIS_TEST</a> (daemon_unknown_name_rejected, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a23dc79e65a2bb0d4627613967ea51654" id="r_a23dc79e65a2bb0d4627613967ea51654"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a23dc79e65a2bb0d4627613967ea51654">JARVIS_TEST</a> (daemon_terminate_ensure_resurrects, &quot;PRE: vfsd, <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
 <tr class="memitem:a2869ae06e47101f041dbf01bd18e051c" id="r_a2869ae06e47101f041dbf01bd18e051c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2869ae06e47101f041dbf01bd18e051c">register_daemon_restart_crash_tests</a> ()</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -144,6 +149,70 @@ Functions</h2></td></tr>
 <p>The crash is observable in the serial output: [DAEMON] 'vfsd' restarted (PID=4, restart #1) ← created <a class="el" href="classkernel_1_1_scheduler.html" title="Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (d...">Scheduler</a>: task '' (ID=4) terminated ← crashes [DAEMON] 'vfsd' died (PID=4), restart_count=1 ← notify_death in cleanup</p>
 <p>The dmesg_push_base(0xDA01) in notify_death persists the event across reboot_from_table() because the dmesg buffer is never cleared. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a23dc79e65a2bb0d4627613967ea51654" name="a23dc79e65a2bb0d4627613967ea51654"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23dc79e65a2bb0d4627613967ea51654">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">daemon_terminate_ensure_resurrects</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__daemon__restart__crash_8cpp_a23dc79e65a2bb0d4627613967ea51654_cgraph.png" border="0" usemap="#atest__daemon__restart__crash_8cpp_a23dc79e65a2bb0d4627613967ea51654_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a0d5436dd40b8f5c13ea8182aff31b0a3" name="a0d5436dd40b8f5c13ea8182aff31b0a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0d5436dd40b8f5c13ea8182aff31b0a3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">daemon_unknown_name_rejected</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE:</td>          <td class="paramname"><span class="paramname"><em>vfsd</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacekernel_1_1iocd.html">iocd</a>|POST:none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__daemon__restart__crash_8cpp_a0d5436dd40b8f5c13ea8182aff31b0a3_cgraph.png" border="0" usemap="#atest__daemon__restart__crash_8cpp_a0d5436dd40b8f5c13ea8182aff31b0a3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
 <a id="a2869ae06e47101f041dbf01bd18e051c" name="a2869ae06e47101f041dbf01bd18e051c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2869ae06e47101f041dbf01bd18e051c">&#9670;&#160;</a></span>register_daemon_restart_crash_tests()</h2>
 
@@ -162,7 +231,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="test__daemon__restart__crash_8cpp_a2869ae06e47101f041dbf01bd18e051c_cgraph.png" border="0" usemap="#atest__daemon__restart__crash_8cpp_a2869ae06e47101f041dbf01bd18e051c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>

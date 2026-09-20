@@ -15,6 +15,8 @@ var structkernel_1_1test_1_1_resource_counters =
     [ "pager_registrations", "structkernel_1_1test_1_1_resource_counters.html#a62cdb50d7d60d25736c22ee733fcbe52", null ],
     [ "pipe_buffers", "structkernel_1_1test_1_1_resource_counters.html#a261390eacea36062b586ccd8178ee5b3", null ],
     [ "pmm_pages_used", "structkernel_1_1test_1_1_resource_counters.html#ab85e8b09994f94242b55108844b9cc26", null ],
+    [ "posix_timerfds", "structkernel_1_1test_1_1_resource_counters.html#a0cd24aa4566447dda7a78c47bee10ab9", null ],
+    [ "posix_timers", "structkernel_1_1test_1_1_resource_counters.html#abe7577835ea3c2f8558830ef240be7ef", null ],
     [ "tasks", "structkernel_1_1test_1_1_resource_counters.html#a5618a47f1f59452a7d6c81810412e111", null ],
     [ "vnodes", "structkernel_1_1test_1_1_resource_counters.html#a4e8f4cb19eed10d9d3b8b1172d493c1d", null ]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -154,11 +154,25 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_s
 <li>STDIN_FILENO&#160;:&#160;<a class="el" href="unistd_8h.html#afcf80a6d91178952d107ad00b165752b">unistd.h</a></li>
 <li>STDOUT_FILENO&#160;:&#160;<a class="el" href="unistd_8h.html#abd165ee6474b5b75bf075842fff13a04">unistd.h</a></li>
 <li>STRINGIFY&#160;:&#160;<a class="el" href="assert_8hpp.html#a6df1d22fb5f09eccc23b9f399670cfd7">assert.hpp</a></li>
+<li>SYS_ABI_VERSION&#160;:&#160;<a class="el" href="syscall_8h.html#a66810d9d0e4667f3a9284968b4721494">syscall.h</a></li>
 <li>SYS_ALARM&#160;:&#160;<a class="el" href="syscall_8h.html#aa42636ce9eca0bf140ed6c644b7556f8">syscall.h</a></li>
 <li>SYS_BRK&#160;:&#160;<a class="el" href="syscall_8h.html#a268eadd4d5fd87c310df80c449fd8568">syscall.h</a></li>
+<li>SYS_BUF_ALLOC&#160;:&#160;<a class="el" href="syscall_8h.html#af60674b21922cd13aea344ca85102664">syscall.h</a></li>
+<li>SYS_BUF_FREE&#160;:&#160;<a class="el" href="syscall_8h.html#a359097d8651f32bfb569eaba890048e4">syscall.h</a></li>
+<li>SYS_BUF_MAP&#160;:&#160;<a class="el" href="syscall_8h.html#ade85fe78583dbf388895927247b93b5f">syscall.h</a></li>
+<li>SYS_BUF_UNMAP&#160;:&#160;<a class="el" href="syscall_8h.html#ab5f2cab393f7ecdaa52c9b0a0edb1bde">syscall.h</a></li>
+<li>SYS_CAP_COPY&#160;:&#160;<a class="el" href="syscall_8h.html#a5d25286e2bf2efbae7d819f5b4ea953e">syscall.h</a></li>
+<li>SYS_CAP_GRANT&#160;:&#160;<a class="el" href="syscall_8h.html#a6f3746cd57fb01822fc38ab611ad057c">syscall.h</a></li>
+<li>SYS_CAP_MINT&#160;:&#160;<a class="el" href="syscall_8h.html#a60c1222fe610e580ef52cba7fe8a7e22">syscall.h</a></li>
+<li>SYS_CAP_RETYPE&#160;:&#160;<a class="el" href="syscall_8h.html#aa929c46383033b7373ba9a345b11ad8c">syscall.h</a></li>
+<li>SYS_CAP_REVOKE&#160;:&#160;<a class="el" href="syscall_8h.html#aa43793e7a0f450df1451d2c1160de03b">syscall.h</a></li>
 <li>SYS_CHDIR&#160;:&#160;<a class="el" href="syscall_8h.html#a212310df0529f18d76ce3701658ed72f">syscall.h</a></li>
+<li>SYS_CLOCK_GETTIME&#160;:&#160;<a class="el" href="syscall_8h.html#a5a3422cc10032416878a1fd24bee0d36">syscall.h</a></li>
 <li>SYS_CLOSE&#160;:&#160;<a class="el" href="syscall_8h.html#adede9a13ca34fe3ad84694c9f9b34a7b">syscall.h</a></li>
 <li>SYS_CREATE_MAILBOX&#160;:&#160;<a class="el" href="syscall_8h.html#ab70850a1700ef0ee1be7020a1ece1f29">syscall.h</a></li>
+<li>SYS_DEATH_RECV&#160;:&#160;<a class="el" href="syscall_8h.html#a119deb3fc888f7791dc4ab380b08c027">syscall.h</a></li>
+<li>SYS_DEATH_UNWATCH&#160;:&#160;<a class="el" href="syscall_8h.html#a5634b42d834998f66db7df43bc983124">syscall.h</a></li>
+<li>SYS_DEATH_WATCH&#160;:&#160;<a class="el" href="syscall_8h.html#a090ce3afaf94c778b49f8acb8f11c4b3">syscall.h</a></li>
 <li>SYS_DESTROY_MAILBOX&#160;:&#160;<a class="el" href="syscall_8h.html#aa4081003a801ac4692763b110045ab7f">syscall.h</a></li>
 <li>SYS_DUP&#160;:&#160;<a class="el" href="syscall_8h.html#a43626d40cf574d3e9654d7e805663561">syscall.h</a></li>
 <li>SYS_DUP2&#160;:&#160;<a class="el" href="syscall_8h.html#ae2e714e6097ba3739bb72a707b8f0779">syscall.h</a></li>
@@ -167,6 +181,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_s
 <li>SYS_EXEC&#160;:&#160;<a class="el" href="syscall_8h.html#ae14f25e5393f2785e77fcba7feb2efc2">syscall.h</a></li>
 <li>SYS_EXIT&#160;:&#160;<a class="el" href="syscall_8h.html#a1812279c69c5d8d2e1d3e9355c7b1304">syscall.h</a></li>
 <li>SYS_FORK&#160;:&#160;<a class="el" href="syscall_8h.html#acecfcf23c2e9cb416c729d19fbddd61e">syscall.h</a></li>
+<li>SYS_FRAME_CREATE&#160;:&#160;<a class="el" href="syscall_8h.html#a0b0f9400409f80f7675066a689842059">syscall.h</a></li>
+<li>SYS_FRAME_MAP&#160;:&#160;<a class="el" href="syscall_8h.html#ab7a2ca662f0ed1f95d8f827d5b005078">syscall.h</a></li>
+<li>SYS_FRAME_UNMAP&#160;:&#160;<a class="el" href="syscall_8h.html#adca8e82357a055f32c4746518f42e29e">syscall.h</a></li>
 <li>SYS_FSTAT&#160;:&#160;<a class="el" href="syscall_8h.html#a85a9053110fa6071696f704cf805734a">syscall.h</a></li>
 <li>SYS_GET_AFFINITY&#160;:&#160;<a class="el" href="syscall_8h.html#a124d87b1381c4d79f025abf0604cccb3">syscall.h</a></li>
 <li>SYS_GET_TICKS&#160;:&#160;<a class="el" href="syscall_8h.html#a2e9355affcd5929bb37ed9043dc95163">syscall.h</a></li>
@@ -176,12 +193,27 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_s
 <li>SYS_GETTOD&#160;:&#160;<a class="el" href="syscall_8h.html#a15cbc27abaa48ca5354231d0e51a5562">syscall.h</a></li>
 <li>SYS_HALT&#160;:&#160;<a class="el" href="syscall_8h.html#a0ab4c59a00bbb0748e2a79162fd25a0b">syscall.h</a></li>
 <li>SYS_IOCTL&#160;:&#160;<a class="el" href="syscall_8h.html#af608941da74f84864e9995e2eba4c50a">syscall.h</a></li>
+<li>SYS_IOMMU_MAP&#160;:&#160;<a class="el" href="syscall_8h.html#a3923013b2d8d9b910412877c1c912631">syscall.h</a></li>
+<li>SYS_IOMMU_UNMAP&#160;:&#160;<a class="el" href="syscall_8h.html#ab943123c116ae79ab3d5dd72371108db">syscall.h</a></li>
+<li>SYS_IOPORT_GRANT&#160;:&#160;<a class="el" href="syscall_8h.html#af7fa79a6b58ff7de676227c9f096954c">syscall.h</a></li>
+<li>SYS_IRQ_REGISTER&#160;:&#160;<a class="el" href="syscall_8h.html#aa4ada30b1f9ec1e7f354ff3e7d2a5645">syscall.h</a></li>
+<li>SYS_IRQ_WAIT&#160;:&#160;<a class="el" href="syscall_8h.html#a24ef829993800bfe848afdab3cbf15af">syscall.h</a></li>
 <li>SYS_KILL&#160;:&#160;<a class="el" href="syscall_8h.html#a8ad8eb5218b176ff3984cbb5170549fc">syscall.h</a></li>
+<li>SYS_KLOG&#160;:&#160;<a class="el" href="syscall_8h.html#a952a81408bad362d65014dc1da961dcf">syscall.h</a></li>
 <li>SYS_LSEEK&#160;:&#160;<a class="el" href="syscall_8h.html#ad36336c8ab4712ed598a2eddcb37665b">syscall.h</a></li>
+<li>SYS_MAX&#160;:&#160;<a class="el" href="syscall_8h.html#a68910f4a6427ee1dc248e34fd41b1538">syscall.h</a></li>
 <li>SYS_MKDIR&#160;:&#160;<a class="el" href="syscall_8h.html#a20eeacb9be5aeba71a5800d9369b653c">syscall.h</a></li>
+<li>SYS_MMIO_MAP&#160;:&#160;<a class="el" href="syscall_8h.html#a6f5bf7337e8cd894dd5a3a1906a88152">syscall.h</a></li>
+<li>SYS_MMIO_UNMAP&#160;:&#160;<a class="el" href="syscall_8h.html#aec26505f9ebfa199df6deb4dea3fbc18">syscall.h</a></li>
+<li>SYS_NANOSLEEP&#160;:&#160;<a class="el" href="syscall_8h.html#a3f83f02811008caf3b105b478f02675a">syscall.h</a></li>
 <li>SYS_NOTIFY&#160;:&#160;<a class="el" href="syscall_8h.html#aa8e5ce45f0509839eeb39ba62a6f933e">syscall.h</a></li>
 <li>SYS_NOTIFY_WAIT&#160;:&#160;<a class="el" href="syscall_8h.html#a42966a5efd96d1769a2479e8fab3d58b">syscall.h</a></li>
 <li>SYS_OPEN&#160;:&#160;<a class="el" href="syscall_8h.html#a679385bbb1a8dd5d987c6141091ed580">syscall.h</a></li>
+<li>SYS_PAGER_ABORT&#160;:&#160;<a class="el" href="syscall_8h.html#ae88bb804ed2167c5a88a800fa72f035b">syscall.h</a></li>
+<li>SYS_PAGER_MAP&#160;:&#160;<a class="el" href="syscall_8h.html#ad56df99eab081b8755b273fc32003941">syscall.h</a></li>
+<li>SYS_PAGER_RECV&#160;:&#160;<a class="el" href="syscall_8h.html#a8de98511c437b1cd0470ecb50e00a7e3">syscall.h</a></li>
+<li>SYS_PAGER_REGISTER&#160;:&#160;<a class="el" href="syscall_8h.html#aa95083221d66a5c3b58e1e44a67e9746">syscall.h</a></li>
+<li>SYS_PAGER_UNREGISTER&#160;:&#160;<a class="el" href="syscall_8h.html#aa06160821f1bb9a960101eb2cbe12b3b">syscall.h</a></li>
 <li>SYS_PAUSE&#160;:&#160;<a class="el" href="syscall_8h.html#a72045fba689c8b08538203abe8fba37b">syscall.h</a></li>
 <li>SYS_PIPE&#160;:&#160;<a class="el" href="syscall_8h.html#a1468ce28bf393be9840b6ac2bfd98059">syscall.h</a></li>
 <li>SYS_PRINT&#160;:&#160;<a class="el" href="syscall_8h.html#a3919b887dc71761c488436e6c6599b24">syscall.h</a></li>
@@ -200,6 +232,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('globals_defs_s
 <li>SYS_SIGNAL&#160;:&#160;<a class="el" href="syscall_8h.html#a77e3de1554bd9925b18fe6d9d9117c0f">syscall.h</a></li>
 <li>SYS_SIGRETURN&#160;:&#160;<a class="el" href="syscall_8h.html#a503102d1ba43a3412b10fb0a8f477bec">syscall.h</a></li>
 <li>SYS_STAT&#160;:&#160;<a class="el" href="syscall_8h.html#aa8fa2c43ce2b7ef7c85890cf4809b28c">syscall.h</a></li>
+<li>SYS_TIMER_CREATE&#160;:&#160;<a class="el" href="syscall_8h.html#ac2f0265fdc4498e0325588ab04add432">syscall.h</a></li>
+<li>SYS_TIMERFD_CREATE&#160;:&#160;<a class="el" href="syscall_8h.html#ab9bd120ab05a25ec489369c26a706cde">syscall.h</a></li>
+<li>SYS_TIMES&#160;:&#160;<a class="el" href="syscall_8h.html#a671732f1e69c8c2ce6832234443f0079">syscall.h</a></li>
+<li>SYS_TLS_SET&#160;:&#160;<a class="el" href="syscall_8h.html#afd5c4e98559ab6dfc67bfc3f933db4b8">syscall.h</a></li>
 <li>SYS_UNAME&#160;:&#160;<a class="el" href="syscall_8h.html#a5e86aeeb6c36885c63c51f45afd6810a">syscall.h</a></li>
 <li>SYS_UNLINK&#160;:&#160;<a class="el" href="syscall_8h.html#ad6cd58960ba6c69c79cdd195a6b9f4f4">syscall.h</a></li>
 <li>SYS_WAITPID&#160;:&#160;<a class="el" href="syscall_8h.html#aecded11a130b00224aed5a246e4fda35">syscall.h</a></li>

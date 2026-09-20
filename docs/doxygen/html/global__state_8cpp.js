@@ -58,6 +58,7 @@ var global__state_8cpp =
     [ "scheduler_load_kstack_base", "global__state_8cpp.html#a4b408757cb3f937ec09d754ff766532f", null ],
     [ "scheduler_load_kstack_top", "global__state_8cpp.html#aa12fc4739f30cc4f74bd51a3f03347bd", null ],
     [ "scheduler_load_rsp_from", "global__state_8cpp.html#ae16355f40464ea93fcb085be94200e13", null ],
+    [ "scheduler_load_tls_from", "global__state_8cpp.html#ac218fdbc9e87e320b28af9ba39af4092", null ],
     [ "scheduler_need_resched", "global__state_8cpp.html#aa2763d16430feb1ccac97ac767dfd600", null ],
     [ "scheduler_next_task_id", "global__state_8cpp.html#a89c74440ba970f0b411b2e92af44475f", null ],
     [ "scheduler_save_rsp_to", "global__state_8cpp.html#ab55c0952c6a6486565047a5258b4f41c", null ],

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -197,9 +197,9 @@ Static Public Attributes</h2></td></tr>
 <tr class="memitem:a32ec0f8547f4e3e6b64f01d2d5e2c1b7" id="r_a32ec0f8547f4e3e6b64f01d2d5e2c1b7"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a32ec0f8547f4e3e6b64f01d2d5e2c1b7">TPR_CLASS_MAX</a> = <a class="el" href="#ab241402171ad0535f0412d3d77b7c5ed">TPR_CLASS_SCHED</a></td></tr>
 <tr class="memitem:a979dd51d337cf5460d62951dae759652" id="r_a979dd51d337cf5460d62951dae759652"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a979dd51d337cf5460d62951dae759652">APIC_TIMER_VECTOR</a> = 0xE0</td></tr>
 <tr class="memitem:a119fe66aa1954384cb4b6d51758e73f2" id="r_a119fe66aa1954384cb4b6d51758e73f2"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a119fe66aa1954384cb4b6d51758e73f2">SCHED_VECTOR</a> = 0xEC</td></tr>
-<tr class="memdesc:a119fe66aa1954384cb4b6d51758e73f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF).  <br /></td></tr>
+<tr class="memdesc:a119fe66aa1954384cb4b6d51758e73f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF). §1 frozen (ABI v1, issue #67).  <br /></td></tr>
 <tr class="memitem:a7be32486fcc6b89abf1498ef029b8ddb" id="r_a7be32486fcc6b89abf1498ef029b8ddb"><td class="memItemLeft">static constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7be32486fcc6b89abf1498ef029b8ddb">SHOOTDOWN_BATCH_VECTOR</a> = 0x73</td></tr>
-<tr class="memdesc:a7be32486fcc6b89abf1498ef029b8ddb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious).  <br /></td></tr>
+<tr class="memdesc:a7be32486fcc6b89abf1498ef029b8ddb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious). §1 frozen (ABI v1, issue #67); 0x71 TPR probe / 0x72 batch probe are test-only (test_ipi_batching/test_apic_tpr).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>x86_64 <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> driver — Local <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a> (xAPIC + x2APIC), I/O <a class="el" href="classarch_1_1_a_p_i_c.html" title="x86_64 APIC driver — Local APIC (xAPIC + x2APIC), I/O APIC, timer.">APIC</a>, timer. </p>
@@ -1003,7 +1003,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF). </p>
+<p>Cross-CPU scheduler wake vector (issue #25 C1): a FIXED IPI telling the target CPU to drain its wake mailbox and arm its reschedule flag. Free (timer 0xE0, syscall 0x80, self-test 0xEF, spurious 0xFF). §1 frozen (ABI v1, issue #67). </p>
 
 </div>
 </div>
@@ -1027,7 +1027,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious). </p>
+<p>Batched TLB-shootdown delivery vector (issue #159): a FIXED IPI telling the target CPU to apply its shootdown batch slot. Free (0x71 TPR probe, 0x72 batch probe, 0xE0 timer, 0x80 syscall, 0xEF self-test, 0xEC sched, 0xFF spurious). §1 frozen (ABI v1, issue #67); 0x71 TPR probe / 0x72 batch probe are test-only (test_ipi_batching/test_apic_tpr). </p>
 
 </div>
 </div>

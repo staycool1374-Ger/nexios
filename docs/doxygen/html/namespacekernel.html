@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -315,6 +315,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
 <tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
 <tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
+<tr class="memitem:a39fa71941abf971947793936af03c774" id="r_a39fa71941abf971947793936af03c774"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a39fa71941abf971947793936af03c774">is_timerfd_vnode</a> (const vfs::Vnode *node)</td></tr>
+<tr class="memdesc:a39fa71941abf971947793936af03c774"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a vnode is a timerfd (ops-pointer identity — never parses private_data of foreign vnodes). External linkage for the sys_read branch; timerfd_ops itself stays TU-local.  <br /></td></tr>
+<tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa583fe65545291d14aa9afd4b95f2576">timerfd_read_entry</a> (vfs::Vnode &amp;node, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count, bool nonblock)</td></tr>
+<tr class="memdesc:aa583fe65545291d14aa9afd4b95f2576"><td class="mdescLeft">&#160;</td><td class="mdescRight">Blocking timerfd read helper (sys_read branch target).  <br /></td></tr>
 <tr class="memitem:a5f757c7023bc8616bb0fd21b7c6d8f9f" id="r_a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5f757c7023bc8616bb0fd21b7c6d8f9f">admission_boot_selftest</a> () <a class="el" href="#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a5f757c7023bc8616bb0fd21b7c6d8f9f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Verifies the admission gate math + budget gate + miss-action configuration during kernel init (issue #24).  <br /></td></tr>
 <tr class="memitem:aef2c5f8888b21de09ec3a76f5b964885" id="r_aef2c5f8888b21de09ec3a76f5b964885"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a> ((noinline)) static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bucket_of(const TaskControlBlock *t</td></tr>
@@ -371,7 +375,7 @@ Variables</h2></td></tr>
 <tr class="memitem:ac685742eaa07e592bff0bab7216c0253" id="r_ac685742eaa07e592bff0bab7216c0253"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac685742eaa07e592bff0bab7216c0253">g_user_access_recover_ip</a> = 0</td></tr>
 <tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Global recovery IP for safe user memory access. Non-zero means we are in a user memory access recovery zone. If a fault occurs and this is set, execution is redirected here.  <br /></td></tr>
 <tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad6ca324811bf34cc24e412c7353d1c31">IRQ_VECTOR_MIN</a> = 33</td></tr>
-<tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
+<tr class="memdesc:ad6ca324811bf34cc24e412c7353d1c31"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). §1 freeze (ABI v1): vector 32 = TIMER = IRQ0, 33–47 = IRQ1–15 (<span class="tt">irq_line = vector - 32</span>); claim window starts at 33. The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook.  <br /></td></tr>
 <tr class="memitem:af20030e5e873fe85b3929d0ffb1bbeca" id="r_af20030e5e873fe85b3929d0ffb1bbeca"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af20030e5e873fe85b3929d0ffb1bbeca">IRQ_VECTOR_MAX</a> = 47</td></tr>
 <tr class="memitem:a92ff3aab226103aecc5cee29134cd925" id="r_a92ff3aab226103aecc5cee29134cd925"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a92ff3aab226103aecc5cee29134cd925">MSIX_VECTOR_MAX</a> = 255</td></tr>
 <tr class="memdesc:a92ff3aab226103aecc5cee29134cd925"><td class="mdescLeft">&#160;</td><td class="mdescRight">MSI-X vector window upper bound (x86_64: 0xFF is the highest vector). MSI-X vectors live in 48–255, excluding the syscall vector 0x80.  <br /></td></tr>
@@ -394,6 +398,7 @@ Variables</h2></td></tr>
 <tr class="memdesc:a8817c181097f042b8820d9cee86cc4b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot).  <br /></td></tr>
 <tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a5f0ed8f52ab6874d2938edb23d258ada" id="r_a5f0ed8f52ab6874d2938edb23d258ada"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5f0ed8f52ab6874d2938edb23d258ada">scheduler_load_tls_from</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a37bdeed47659d598826673faf0480073"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
@@ -1478,6 +1483,25 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a39fa71941abf971947793936af03c774" name="a39fa71941abf971947793936af03c774"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39fa71941abf971947793936af03c774">&#9670;&#160;</a></span>is_timerfd_vnode()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::is_timerfd_vnode </td>
+          <td>(</td>
+          <td class="paramtype">const vfs::Vnode *</td>          <td class="paramname"><span class="paramname"><em>node</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>True when a vnode is a timerfd (ops-pointer identity — never parses private_data of foreign vnodes). External linkage for the sys_read branch; timerfd_ops itself stays TU-local. </p>
+
+</div>
+</div>
 <a id="a0571e17de31b74de7a47a25459361c20" name="a0571e17de31b74de7a47a25459361c20"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a0571e17de31b74de7a47a25459361c20">&#9670;&#160;</a></span>isr_nesting_own()</h2>
 
@@ -1704,6 +1728,46 @@ Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="aa583fe65545291d14aa9afd4b95f2576" name="aa583fe65545291d14aa9afd4b95f2576"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa583fe65545291d14aa9afd4b95f2576">&#9670;&#160;</a></span>timerfd_read_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::timerfd_read_entry </td>
+          <td>(</td>
+          <td class="paramtype">vfs::Vnode &amp;</td>          <td class="paramname"><span class="paramname"><em>node</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>nonblock</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Blocking timerfd read helper (sys_read branch target). </p>
+<dl class="section return"><dt>Returns</dt><dd>0 + out count, -EAGAIN (empty/nonblock), -EBADF (stale), -EINTR (signals), -EFAULT (bad buffer). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph.png" border="0" usemap="#anamespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -2502,7 +2566,7 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook. </p>
+<p>Hardware IRQ window (x86_64 PIC cascade: IRQ0-15 → vectors 32-47). §1 freeze (ABI v1): vector 32 = TIMER = IRQ0, 33–47 = IRQ1–15 (<span class="tt">irq_line = vector - 32</span>); claim window starts at 33. The timer vector (32) is reserved for the scheduler and must never be handed to a user task — a user task claiming it would steal every scheduler tick through the delivery hook. </p>
 
 </div>
 </div>
@@ -2729,6 +2793,28 @@ template&lt;typename T&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_rsp_from</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5f0ed8f52ab6874d2938edb23d258ada" name="a5f0ed8f52ab6874d2938edb23d258ada"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f0ed8f52ab6874d2938edb23d258ada">&#9670;&#160;</a></span>scheduler_load_tls_from</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_load_tls_from</td>
         </tr>
       </table>
   </td>

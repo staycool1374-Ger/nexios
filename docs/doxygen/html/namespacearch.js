@@ -10,6 +10,7 @@ var namespacearch =
     [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
     [ "ShootdownBatch", "classarch_1_1_shootdown_batch.html", "classarch_1_1_shootdown_batch" ],
     [ "TprGuard", "classarch_1_1_tpr_guard.html", "classarch_1_1_tpr_guard" ],
+    [ "aarch64_el0_fault_handler", "namespacearch.html#a02f1e46be9bd915e24696367061cebf5", null ],
     [ "cpu_index", "namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e", null ],
     [ "exception_entry", "namespacearch.html#a46488b8cc19b71e9d4bd3d8ea44603e4", null ],
     [ "gic_v3_read_iar", "namespacearch.html#abe825a3f67343b75c57efa83cb71feec", null ],

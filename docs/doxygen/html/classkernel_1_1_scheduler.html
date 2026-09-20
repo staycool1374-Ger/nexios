@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -188,6 +188,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a596d9088e1f0680b0b636847a365ab96"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a task's CPU affinity mask (issue #25 C1). Bit N = may run on CPU N. Task-context only (takes scheduler_lock_; documented NOT-ISR-safe). Runs inside the quiesce window so the lock-free AP current-apply path cannot race the check. Empty mask clamps to CPU0 (+warn); user tasks force CPU0 (shared-TSS limitation); bits beyond up-CPUs clamp (+warn); tasks running on another CPU are refused (warn). Legacy warn-only wrapper around set_affinity_err (issue #23): denial (destination-CPU bound) is logged and swallowed here; fallible callers (syscall) must use set_affinity_err.  <br /></td></tr>
 <tr class="memitem:afd72a0a3a500b9a324188949d6a5e6b4" id="r_afd72a0a3a500b9a324188949d6a5e6b4"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#afd72a0a3a500b9a324188949d6a5e6b4">set_affinity_err</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> mask) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:afd72a0a3a500b9a324188949d6a5e6b4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallible affinity move with destination-CPU admission probe (issue #23, partitioned EDF). Same clamp/refuse/move machinery as set_affinity, plus: when the effective target differs and the task is non-exempt, the destination partition bound is probed BEFORE any mutation — denial returns SCHED_ERR_ADMISSION_DENIED (or WCET_INVALID) with mask, queues, EDF lists and tracker untouched. Exempt moves are always allowed. This is the hook a future CPU-pinning mode (#167) will reuse.  <br /></td></tr>
+<tr class="memitem:aaca22e0e3dd5b34954cd7b5a0a986036" id="r_aaca22e0e3dd5b34954cd7b5a0a986036"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#aaca22e0e3dd5b34954cd7b5a0a986036">set_tls_base_err</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> base) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aaca22e0e3dd5b34954cd7b5a0a986036"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallible TLS-base store (issue #74). Takes IrqGuard + scheduler_lock_ (NOT ISR-safe); stores task.tls_base_ and, when the target IS the running task, live-loads the register after unlock (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) — the §13 crt0 TLS_SET-then-use sequence has no preemption between. IrqGuard stays alive across the gate + live write (no preemption window). Never touches scheduler_lock_ callers' state.  <br /></td></tr>
 <tr class="memitem:a11b174230bd8bc0816778133ed36b700" id="r_a11b174230bd8bc0816778133ed36b700"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a11b174230bd8bc0816778133ed36b700">balancer_tick</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a11b174230bd8bc0816778133ed36b700"><td class="mdescLeft">&#160;</td><td class="mdescRight">RT load balancer tick (issue #61): migrate queued aperiodic kernel tasks from the busiest up-CPU to the idlest when depths differ beyond BALANCER_THRESHOLD. BSP-only (AP ticks are dispatch-only); quiesce window + try_lock (never blocks — contention skips the tick). Takes its own IrqGuard (ISR-safe: restores IF=0 in ISRs). Production cadence comes from the on_tick tail (non-test runs only); tests call it directly under IrqGuard.  <br /></td></tr>
 <tr class="memitem:adad603d784ed57a134fd9483ae5f881a" id="r_adad603d784ed57a134fd9483ae5f881a"><td class="memItemLeft">static <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adad603d784ed57a134fd9483ae5f881a">queue_depth</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> cpu) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -242,6 +244,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a9b47f39412b4ffc881beb1d44368661d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Rebuild <a class="el" href="classkernel_1_1_all_tasks_registry.html" title="Bitmap-backed, per-priority intrusive list of all registered tasks. Provides O(1) insert/remove and O...">AllTasksRegistry</a> per-priority linked lists using each task's current priority. Called after test-isolation snapshot restore to fix stale priority-grouping.  <br /></td></tr>
 <tr class="memitem:a79305bfd1ec5dc31b569e5d2ecfdf544" id="r_a79305bfd1ec5dc31b569e5d2ecfdf544"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a79305bfd1ec5dc31b569e5d2ecfdf544">terminate</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_code) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a79305bfd1ec5dc31b569e5d2ecfdf544"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of directly setting <span class="tt">task.state = TERMINATED</span> to keep the ready queue consistent.  <br /></td></tr>
+<tr class="memitem:a8b62d46d54af00497df9bf4b37778557" id="r_a8b62d46d54af00497df9bf4b37778557"><td class="memItemLeft">static errors::SchedulerError&#160;</td><td class="memItemRight"><a class="el" href="#a8b62d46d54af00497df9bf4b37778557">terminate_err</a> (TaskControlBlock &amp;task, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> exit_code) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a8b62d46d54af00497df9bf4b37778557"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fallible terminate (issue #197): refuses with SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is current on ANOTHER CPU — freeing an AP-live stack poisons the running task. Self-termination always succeeds. The void <a class="el" href="#a79305bfd1ec5dc31b569e5d2ecfdf544" title="Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of dire...">terminate()</a> above delegates and warns on refusal.  <br /></td></tr>
 <tr class="memitem:a5c115dae407624bae7db3b31baa29a14" id="r_a5c115dae407624bae7db3b31baa29a14"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a5c115dae407624bae7db3b31baa29a14">monitor_task_entry</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
 <tr class="memdesc:a5c115dae407624bae7db3b31baa29a14"><td class="mdescLeft">&#160;</td><td class="mdescRight">Entry point for the deadline-monitor task (priority 127). Waits on an atomic handoff flag, calls <a class="el" href="#aabd465f67eed45ec2c20877a6f7398b8" title="Deadline scan entry — runs in task context when the monitor task is enabled. Identical deadline detec...">scan_deadlines()</a> when woken by <a class="el" href="#abde09e0c1b73175a95f3e78104e437fd" title="Called on each timer tick; updates scheduling state.">on_tick()</a>. Only compiled when CONFIG_DEADLINE_MONITOR_TASK &gt; 0.  <br /></td></tr>
 <tr class="memitem:a8c46258f8feca3ec4f56691ca491df8d" id="r_a8c46258f8feca3ec4f56691ca491df8d"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8c46258f8feca3ec4f56691ca491df8d">needs_switch</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
@@ -3813,6 +3817,51 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aaca22e0e3dd5b34954cd7b5a0a986036" name="aaca22e0e3dd5b34954cd7b5a0a986036"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaca22e0e3dd5b34954cd7b5a0a986036">&#9670;&#160;</a></span>set_tls_base_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">errors::SchedulerError kernel::Scheduler::set_tls_base_err </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>base</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fallible TLS-base store (issue #74). Takes IrqGuard + scheduler_lock_ (NOT ISR-safe); stores task.tls_base_ and, when the target IS the running task, live-loads the register after unlock (x86_64 FS_BASE, aarch64 TPIDR_EL0, riscv64 tp) — the §13 crt0 TLS_SET-then-use sequence has no preemption between. IrqGuard stays alive across the gate + live write (no preemption window). Never touches scheduler_lock_ callers' state. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">task</td><td>Target TCB (already validated by the caller). </td></tr>
+    <tr><td class="paramname">base</td><td>User VA, 0 = unset. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>SCHED_ERR_OK, SCHED_ERR_NO_CURRENT. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_aaca22e0e3dd5b34954cd7b5a0a986036_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_aaca22e0e3dd5b34954cd7b5a0a986036_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 65 -->
+</div>
+
+</div>
+</div>
 <a id="aab329dc8044aa9af0f574cfeebf9863f" name="aab329dc8044aa9af0f574cfeebf9863f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aab329dc8044aa9af0f574cfeebf9863f">&#9670;&#160;</a></span>snapshot_id_size()</h2>
 
@@ -3982,7 +4031,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a5a5da40795060d45b9fa143b26805e42_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 65 -->
+<!-- MAP 66 -->
 </div>
 
 </div>
@@ -4081,7 +4130,44 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a79305bfd1ec5dc31b569e5d2ecfdf544_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 66 -->
+<!-- MAP 67 -->
+</div>
+
+</div>
+</div>
+<a id="a8b62d46d54af00497df9bf4b37778557" name="a8b62d46d54af00497df9bf4b37778557"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b62d46d54af00497df9bf4b37778557">&#9670;&#160;</a></span>terminate_err()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">errors::SchedulerError kernel::Scheduler::terminate_err </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>exit_code</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fallible terminate (issue #197): refuses with SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is current on ANOTHER CPU — freeing an AP-live stack poisons the running task. Self-termination always succeeds. The void <a class="el" href="#a79305bfd1ec5dc31b569e5d2ecfdf544" title="Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of dire...">terminate()</a> above delegates and warns on refusal. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_scheduler_a8b62d46d54af00497df9bf4b37778557_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8b62d46d54af00497df9bf4b37778557_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 68 -->
 </div>
 
 </div>
@@ -4115,7 +4201,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a8ff081fb1988f881f037ef8ed51901a9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 67 -->
+<!-- MAP 69 -->
 </div>
 
 </div>
@@ -4176,7 +4262,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph.png" border="0" usemap="#aclasskernel_1_1_scheduler_a12d6760a23050c89d2d65bc86ac5e032_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 68 -->
+<!-- MAP 70 -->
 </div>
 
 </div>

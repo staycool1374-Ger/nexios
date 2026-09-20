@@ -19,5 +19,6 @@ var searchData=
   ['next_5fptr_16',['next_ptr',['../classkernel_1_1_all_tasks_registry.html#a6d8ea5bceb1ebe20c3a30c1f420a44c9',1,'kernel::AllTasksRegistry']]],
   ['next_5ftask_17',['next_task',['../classkernel_1_1_scheduler.html#a852663edfb9d43d51ca280727c2295a3',1,'kernel::Scheduler']]],
   ['next_5ftask_5fid_18',['next_task_id',['../structkernel_1_1_scheduler_1_1_sw_slots.html#a08af57e0db53661a6990cc8d06273bce',1,'kernel::Scheduler::SwSlots']]],
-  ['notify_5fdeath_19',['notify_death',['../namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3',1,'kernel::daemon']]]
+  ['notify_5fdeath_19',['notify_death',['../namespacekernel_1_1daemon.html#a92ec4786a10d49508858cb50f5a83ce3',1,'kernel::daemon']]],
+  ['ns_5fto_5ftimespec_20',['ns_to_timespec',['../classkernel_1_1time_1_1_posix_time.html#a20bec68fe8955ca5b07f79c26091e144',1,'kernel::time::PosixTime']]]
 ];

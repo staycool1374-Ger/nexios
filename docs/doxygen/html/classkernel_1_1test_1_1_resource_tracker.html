@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -167,6 +167,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a6807cc1dbe44beca152c2ef929a48e48" id="r_a6807cc1dbe44beca152c2ef929a48e48"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6807cc1dbe44beca152c2ef929a48e48">track_pager_registration_reset</a> ()</td></tr>
 <tr class="memitem:afd22f8c9eccebf0db5d1fd20702e1269" id="r_afd22f8c9eccebf0db5d1fd20702e1269"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#afd22f8c9eccebf0db5d1fd20702e1269">track_pager_fault_reset</a> ()</td></tr>
 <tr class="memitem:af58151462028ea6279b0423a29731b8b" id="r_af58151462028ea6279b0423a29731b8b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af58151462028ea6279b0423a29731b8b">track_pager_mapping_reset</a> ()</td></tr>
+<tr class="memitem:a7c67446c74cb7a16caabe9c5c0e49088" id="r_a7c67446c74cb7a16caabe9c5c0e49088"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7c67446c74cb7a16caabe9c5c0e49088">track_posix_timer_add</a> ()</td></tr>
+<tr class="memitem:a77fbc0f8170af97067fbced2ba44461b" id="r_a77fbc0f8170af97067fbced2ba44461b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a77fbc0f8170af97067fbced2ba44461b">track_posix_timer_remove</a> ()</td></tr>
+<tr class="memitem:a5a4daefebe16aa844074054cc86149bc" id="r_a5a4daefebe16aa844074054cc86149bc"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5a4daefebe16aa844074054cc86149bc">track_posix_timer_reset</a> ()</td></tr>
+<tr class="memitem:a7f1b4bde6a96d4fe74d5a2c0b086e877" id="r_a7f1b4bde6a96d4fe74d5a2c0b086e877"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7f1b4bde6a96d4fe74d5a2c0b086e877">track_posix_timerfd_add</a> ()</td></tr>
+<tr class="memitem:a79286efc37c1000cb7a67c2d5b997240" id="r_a79286efc37c1000cb7a67c2d5b997240"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a79286efc37c1000cb7a67c2d5b997240">track_posix_timerfd_remove</a> ()</td></tr>
+<tr class="memitem:a4b7d76cfc049bbe1e7b0b126c8b5d09f" id="r_a4b7d76cfc049bbe1e7b0b126c8b5d09f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4b7d76cfc049bbe1e7b0b126c8b5d09f">track_posix_timerfd_reset</a> ()</td></tr>
 <tr class="memitem:aa40c9e9b5a5f70b87cfa885f87746f87" id="r_aa40c9e9b5a5f70b87cfa885f87746f87"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa40c9e9b5a5f70b87cfa885f87746f87">capture</a> (<a class="el" href="structkernel_1_1test_1_1_resource_counters.html">ResourceCounters</a> &amp;) const</td></tr>
 <tr class="memitem:a9cbf258352ad6e1bb21722afbd6921e9" id="r_a9cbf258352ad6e1bb21722afbd6921e9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9cbf258352ad6e1bb21722afbd6921e9">restore</a> (const <a class="el" href="structkernel_1_1test_1_1_resource_counters.html">ResourceCounters</a> &amp;)</td></tr>
 <tr class="memitem:a564f1155089c2d73d397d4ba55e2e115" id="r_a564f1155089c2d73d397d4ba55e2e115"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a564f1155089c2d73d397d4ba55e2e115">check</a> (const <a class="el" href="structkernel_1_1test_1_1_resource_counters.html">ResourceCounters</a> &amp;, const char *)</td></tr>
@@ -1118,6 +1124,156 @@ Static Public Member Functions</h2></td></tr>
           <td class="memname">void kernel::test::ResourceTracker::track_pmm_free </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7c67446c74cb7a16caabe9c5c0e49088" name="a7c67446c74cb7a16caabe9c5c0e49088"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7c67446c74cb7a16caabe9c5c0e49088">&#9670;&#160;</a></span>track_posix_timer_add()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timer_add </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a77fbc0f8170af97067fbced2ba44461b" name="a77fbc0f8170af97067fbced2ba44461b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77fbc0f8170af97067fbced2ba44461b">&#9670;&#160;</a></span>track_posix_timer_remove()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timer_remove </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5a4daefebe16aa844074054cc86149bc" name="a5a4daefebe16aa844074054cc86149bc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a4daefebe16aa844074054cc86149bc">&#9670;&#160;</a></span>track_posix_timer_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timer_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7f1b4bde6a96d4fe74d5a2c0b086e877" name="a7f1b4bde6a96d4fe74d5a2c0b086e877"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f1b4bde6a96d4fe74d5a2c0b086e877">&#9670;&#160;</a></span>track_posix_timerfd_add()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timerfd_add </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a79286efc37c1000cb7a67c2d5b997240" name="a79286efc37c1000cb7a67c2d5b997240"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79286efc37c1000cb7a67c2d5b997240">&#9670;&#160;</a></span>track_posix_timerfd_remove()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timerfd_remove </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4b7d76cfc049bbe1e7b0b126c8b5d09f" name="a4b7d76cfc049bbe1e7b0b126c8b5d09f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4b7d76cfc049bbe1e7b0b126c8b5d09f">&#9670;&#160;</a></span>track_posix_timerfd_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::ResourceTracker::track_posix_timerfd_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

@@ -19,5 +19,7 @@ var searchData=
   ['is_5fintegral_16',['is_integral',['../structis__integral.html',1,'']]],
   ['is_5fpod_17',['is_pod',['../structis__pod.html',1,'']]],
   ['is_5fsame_18',['is_same',['../structis__same.html',1,'']]],
-  ['is_5fsame_3c_20t_2c_20t_20_3e_19',['is_same&lt; T, T &gt;',['../structis__same_3_01_t_00_01_t_01_4.html',1,'']]]
+  ['is_5fsame_3c_20t_2c_20t_20_3e_19',['is_same&lt; T, T &gt;',['../structis__same_3_01_t_00_01_t_01_4.html',1,'']]],
+  ['itimerspec_20',['itimerspec',['../structitimerspec.html',1,'']]],
+  ['itimerspecu_21',['ItimerspecU',['../structkernel_1_1time_1_1_itimerspec_u.html',1,'kernel::time']]]
 ];

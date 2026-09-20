@@ -85,7 +85,10 @@ var annotated_dup =
         [ "TestClass", "structkernel_1_1test_1_1_test_class.html", "structkernel_1_1test_1_1_test_class" ]
       ] ],
       [ "time", "namespacekernel_1_1time.html", [
-        [ "TimerWheel", "classkernel_1_1time_1_1_timer_wheel.html", "classkernel_1_1time_1_1_timer_wheel" ]
+        [ "ItimerspecU", "structkernel_1_1time_1_1_itimerspec_u.html", "structkernel_1_1time_1_1_itimerspec_u" ],
+        [ "PosixTime", "classkernel_1_1time_1_1_posix_time.html", null ],
+        [ "TimerWheel", "classkernel_1_1time_1_1_timer_wheel.html", "classkernel_1_1time_1_1_timer_wheel" ],
+        [ "TimespecU", "structkernel_1_1time_1_1_timespec_u.html", "structkernel_1_1time_1_1_timespec_u" ]
       ] ],
       [ "vfs", "namespacekernel_1_1vfs.html", [
         [ "DevEntry", "structkernel_1_1vfs_1_1_dev_entry.html", "structkernel_1_1vfs_1_1_dev_entry" ],
@@ -148,6 +151,7 @@ var annotated_dup =
     [ "is_pod", "structis__pod.html", null ],
     [ "is_same", "structis__same.html", null ],
     [ "is_same&lt; T, T &gt;", "structis__same_3_01_t_00_01_t_01_4.html", null ],
+    [ "itimerspec", "structitimerspec.html", "structitimerspec" ],
     [ "PmmAllocHdr", "struct_pmm_alloc_hdr.html", "struct_pmm_alloc_hdr" ],
     [ "remove_reference", "structremove__reference.html", "structremove__reference" ],
     [ "remove_reference&lt; T &amp; &gt;", "structremove__reference_3_01_t_01_6_01_4.html", "structremove__reference_3_01_t_01_6_01_4" ],

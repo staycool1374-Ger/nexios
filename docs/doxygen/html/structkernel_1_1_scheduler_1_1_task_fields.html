@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -161,6 +161,9 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a49ab52b96140dca92d3c5760c8fc2b7e" id="r_a49ab52b96140dca92d3c5760c8fc2b7e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a49ab52b96140dca92d3c5760c8fc2b7e">recv_timeout_armed</a></td></tr>
 <tr class="memdesc:a49ab52b96140dca92d3c5760c8fc2b7e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded-receive timeout slot (issue #18): flags rewind with the snapshot (always to false — captured pre-arm at suite setup). The wheel handle/generation are deliberately NOT captured: no arm survives rewind (wheel snapshot_reset disarms everything and flags read false), so no stale handle can outlive the wait it belonged to.  <br /></td></tr>
 <tr class="memitem:a4c33f7cfacc100183cec02955be0ec63" id="r_a4c33f7cfacc100183cec02955be0ec63"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c33f7cfacc100183cec02955be0ec63">recv_timed_out</a></td></tr>
+<tr class="memitem:ab86c8406cae7dfe55589811c12d7fe48" id="r_ab86c8406cae7dfe55589811c12d7fe48"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab86c8406cae7dfe55589811c12d7fe48">sleep_armed</a></td></tr>
+<tr class="memdesc:ab86c8406cae7dfe55589811c12d7fe48"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded-nanosleep slot (issue #76): flags rewind with the snapshot (always to false — captured pre-arm at suite setup). The wheel handle/generation are deliberately NOT captured: no arm survives rewind (wheel snapshot_reset disarms everything and flags read false), so no stale handle can outlive the wait it belonged to.  <br /></td></tr>
+<tr class="memitem:a5dc27e36c6857669cab39a3b729b94be" id="r_a5dc27e36c6857669cab39a3b729b94be"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5dc27e36c6857669cab39a3b729b94be">sleep_expired</a></td></tr>
 <tr class="memitem:ac73ae1af5ef6915c916d0c3b1f1850ad" id="r_ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#ac73ae1af5ef6915c916d0c3b1f1850ad">runq_next</a></td></tr>
 <tr class="memdesc:ac73ae1af5ef6915c916d0c3b1f1850ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ready-queue intrusive list pointers (POD copy). These form doubly-linked lists; TCBs are in-place across snapshot cycles so pointer values remain valid.  <br /></td></tr>
 <tr class="memitem:a79d3a773fa7cb12eb78681ed6fc4cdb6" id="r_a79d3a773fa7cb12eb78681ed6fc4cdb6"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a79d3a773fa7cb12eb78681ed6fc4cdb6">runq_prev</a></td></tr>
@@ -177,6 +180,8 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a3749b14b62fad5b1f55b4281964ad10a"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU affinity bitmask (issue #25 C1).  <br /></td></tr>
 <tr class="memitem:af3b53e828391b6112b1484dca370cb69" id="r_af3b53e828391b6112b1484dca370cb69"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3b53e828391b6112b1484dca370cb69">iopb_slot</a></td></tr>
 <tr class="memdesc:af3b53e828391b6112b1484dca370cb69"><td class="mdescLeft">&#160;</td><td class="mdescRight">I/O permission bitmap pool slot (issue #3).  <br /></td></tr>
+<tr class="memitem:a49103023bc79a7d3fbba4acc48fdd020" id="r_a49103023bc79a7d3fbba4acc48fdd020"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a49103023bc79a7d3fbba4acc48fdd020">tls_base</a></td></tr>
+<tr class="memdesc:a49103023bc79a7d3fbba4acc48fdd020"><td class="mdescLeft">&#160;</td><td class="mdescRight">Thread-local-storage base, user VA (issue #74).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Per-task plain fields that are deep-copied into the snapshot. Pointers to heap sub-objects (kernel_stack, page_table_, msg_queue, etc.) are NOT included — they survive via the pointer array restore and MemPool/PMM restoration. </p>
@@ -637,6 +642,36 @@ Data Fields</h2></td></tr>
 
 </div>
 </div>
+<a id="ab86c8406cae7dfe55589811c12d7fe48" name="ab86c8406cae7dfe55589811c12d7fe48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab86c8406cae7dfe55589811c12d7fe48">&#9670;&#160;</a></span>sleep_armed</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::sleep_armed</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Bounded-nanosleep slot (issue #76): flags rewind with the snapshot (always to false — captured pre-arm at suite setup). The wheel handle/generation are deliberately NOT captured: no arm survives rewind (wheel snapshot_reset disarms everything and flags read false), so no stale handle can outlive the wait it belonged to. </p>
+
+</div>
+</div>
+<a id="a5dc27e36c6857669cab39a3b729b94be" name="a5dc27e36c6857669cab39a3b729b94be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5dc27e36c6857669cab39a3b729b94be">&#9670;&#160;</a></span>sleep_expired</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::sleep_expired</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a01bde2d9b3887ac260ba8d6e8b1cbd2c" name="a01bde2d9b3887ac260ba8d6e8b1cbd2c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a01bde2d9b3887ac260ba8d6e8b1cbd2c">&#9670;&#160;</a></span>state</h2>
 
@@ -648,6 +683,22 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a49103023bc79a7d3fbba4acc48fdd020" name="a49103023bc79a7d3fbba4acc48fdd020"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a49103023bc79a7d3fbba4acc48fdd020">&#9670;&#160;</a></span>tls_base</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::Scheduler::TaskFields::tls_base</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Thread-local-storage base, user VA (issue #74). </p>
 
 </div>
 </div>

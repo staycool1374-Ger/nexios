@@ -2,6 +2,8 @@ var test__lib_8cpp =
 [
     [ "JARVIS_TEST", "test__lib_8cpp.html#adff6f464e575d649526ad3537baf459e", null ],
     [ "JARVIS_TEST", "test__lib_8cpp.html#a189e5696249abd8e9b90c69a335c3d3f", null ],
+    [ "JARVIS_TEST", "test__lib_8cpp.html#a0f756430bb3cf8c08959b179c7df54eb", null ],
+    [ "JARVIS_TEST", "test__lib_8cpp.html#a7c5934ddbd41343e35bf04258755283c", null ],
     [ "JARVIS_TEST", "test__lib_8cpp.html#a6742d010f9d3056750ee475d34dbbc49", null ],
     [ "JARVIS_TEST", "test__lib_8cpp.html#aa11451f7a1af3b8bbdd095cf69050598", null ],
     [ "JARVIS_TEST", "test__lib_8cpp.html#a9b53ec380e07ee2e0a981b28b0c6a9c1", null ],

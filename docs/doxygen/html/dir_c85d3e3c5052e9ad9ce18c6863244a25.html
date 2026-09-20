@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.4.9</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
    </div>
   </td>
  </tr>
@@ -144,6 +144,7 @@ Files</h2></td></tr>
 <tr class="memitem:chacha_2Ehpp" id="r_chacha_2Ehpp"><td class="memItemLeft"><a href="chacha_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="chacha_8hpp.html">chacha.hpp</a></td></tr>
 <tr class="memdesc:chacha_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ChaCha20 stream cipher core (RFC 8439 variant). <br /></td></tr>
 <tr class="memitem:compiler_5Frt_2Ecpp" id="r_compiler_5Frt_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="compiler__rt_8cpp.html">compiler_rt.cpp</a></td></tr>
+<tr class="memdesc:compiler__rt_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Software implementations of the gcc runtime helpers __clzdi2 / __ctzdi2. RISC-V ONLY (issue #182 / #184): rv64imafdc without the Zbb extension lowers __builtin_clzll/__builtin_ctzll to libcalls, and the prebuilt libgcc.a cannot satisfy them (R_RISCV_HI20 medany/medlow relocation mismatch), so the kernel provides its own copies. x86_64 and AArch64 lower these builtins to inline instructions (verified: zero undefined refs in their objects), so the functions are compiled out there — and out of the x86 coverage denominator. <br /></td></tr>
 <tr class="memitem:concepts_2Ehpp" id="r_concepts_2Ehpp"><td class="memItemLeft"><a href="concepts_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="concepts_8hpp.html">concepts.hpp</a></td></tr>
 <tr class="memitem:constants_2Ehpp" id="r_constants_2Ehpp"><td class="memItemLeft"><a href="constants_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="constants_8hpp.html">constants.hpp</a></td></tr>
 <tr class="memdesc:constants_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Central hardware and memory-layout constants (no magic numbers). <br /></td></tr>
