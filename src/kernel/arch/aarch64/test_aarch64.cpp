@@ -36,6 +36,158 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/test/test_sched_helpers.hpp>
+#include <kernel/test/test_isolate.hpp>
+#include <kernel/elf/elf_loader.hpp>
+#include <kernel/vfs/vfs.hpp>
+
+/// @brief aarch64 EL0 fork smoke test (issue #104): the fork-marker program
+///        forks; the child prints CHILD-MARKER and exits 0; the parent
+///        waitpids and prints PARENT-OK on (pid match, status 0).
+///        The test asserts PARENT-OK in the stdout capture plus clean exit:
+///        PARENT-OK requires the child's _exit(0) (status write) and the
+///        waitpid pid return, so it is a positive child-execution marker —
+///        a translation-faulted child never exits and waitpid never succeeds.
+///        CHILD-MARKER itself is NOT asserted: parent and child share fd
+///        offset 0 on the cloned descriptor, so the parent's later write
+///        overwrites the child's bytes by construction.
+///        Join via wait_for_termination_safe (need_resched + hlt): raw
+///        pause-spins starve the deferred scheduler under TCG.
+extern "C" {
+extern const uint8_t _binary_fork_marker_img_start[];
+extern const uint8_t _binary_fork_marker_img_end[];
+}
+
+namespace {
+constexpr const char *kFmImagePath = "/tmp/fork_marker.elf";
+constexpr const char *kFmStdoutPath = "/tmp/fork_stdout.txt";
+
+void fm_cleanup(const char *path) {
+    kernel::test::mark_vfs_touched();
+    kernel::vfs::unlink(path);
+}
+
+uint64_t fm_write_file(const char *path, const uint8_t *data, size_t size) {
+    kernel::test::mark_vfs_touched();
+    if (size == 0)
+        return 0;
+    if (kernel::vfs::create(path, 0) != 0)
+        return 0;
+    kernel::vfs::Vnode *file = kernel::vfs::resolve(path);
+    if (file == nullptr || file->ops == nullptr ||
+        file->ops->write == nullptr) {
+        fm_cleanup(path);
+        return 0;
+    }
+    // 4 KiB chunks: a single large write exceeds tmpfs call limits.
+    size_t off = 0;
+    while (off < size) {
+        size_t chunk = size - off;
+        if (chunk > 4096)
+            chunk = 4096;
+        int64_t written =
+            file->ops->write(*file, data + off, chunk, off);
+        if (written <= 0) {
+            fm_cleanup(path);
+            return 0;
+        }
+        off += static_cast<size_t>(written);
+    }
+    return (off == size) ? size : 0ULL;
+}
+
+bool fm_capture_contains(const char *capbuf, const char *needle) {
+    for (size_t i = 0; capbuf[i] != '\0'; ++i) {
+        size_t j = 0;
+        while (needle[j] != '\0' && capbuf[i + j] == needle[j])
+            ++j;
+        if (needle[j] == '\0')
+            return true;
+    }
+    return false;
+}
+}  // namespace
+
+// Runmode: kernel
+// Testidea: End-to-end EL0 fork/exit/waitpid on aarch64 (issue #104).
+// Input: Stage the fork-marker ELF to tmpfs, ElfLoader-load, wire fd 1 to
+//        a capture file, dispatch at prio 11, join to TERMINATED.
+// Expect: Clean exit (code 0) and PARENT-OK in the capture.
+// Depends: ElfLoader, tmpfs, SVC fork/waitpid/exit, scheduler dispatch.
+JARVIS_TEST(aarch64_fork_marker_smoke, "PRE: none | POST: none") {
+    using namespace kernel;
+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
+                                          _binary_fork_marker_img_start);
+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        fm_write_file(kFmImagePath, _binary_fork_marker_img_start, img_size) !=
+            0,
+        "tmpfs stage failed");
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load(kFmImagePath) == elf::LoadResult::OK,
+        "request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+                      "take_completed failed");
+    JARVIS_ASSERT_FMT(t->fd_table.fds[1].used, "fd1 not set by loader");
+    test::mark_vfs_touched();
+    JARVIS_ASSERT_FMT(vfs::create(kFmStdoutPath, 0) == 0,
+                      "stdout create failed");
+    vfs::Vnode *cap_vn = vfs::resolve(kFmStdoutPath);
+    JARVIS_ASSERT_FMT(cap_vn != nullptr, "stdout resolve failed");
+    // Direct slot overwrite (no free/alloc: destroy_completed_tcb no-dec
+    // discipline, mirroring test_libc_verify).
+    t->fd_table.fds[1].vnode = cap_vn;
+    t->fd_table.fds[1].offset = 0;
+    t->fd_table.fds[1].flags = 0;
+    // Prio 11: the harness idles lower-priority waitees would starve
+    // (every driven test uses >= 11).  Set before add_task (not yet
+    // queued: no re-bucket needed).
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool clean =
+        (t->state == TaskState::TERMINATED && t->exit_code == 0);
+    // Read back the capture BEFORE teardown; teardown mirrors the
+    // test_syscall.cpp fixture pattern (is_valid + terminate-if-needed).
+    static char capbuf[256];
+    size_t pos = 0;
+    {
+        vfs::Vnode *cap = vfs::resolve(kFmStdoutPath);
+        if (cap != nullptr && cap->ops != nullptr &&
+            cap->ops->read != nullptr) {
+            while (pos < sizeof(capbuf) - 1) {
+                int64_t rd = cap->ops->read(
+                    *cap, reinterpret_cast<uint8_t *>(capbuf + pos), 1,
+                    pos);
+                if (rd <= 0)
+                    break;
+                pos += static_cast<size_t>(rd);
+            }
+        }
+        capbuf[pos] = '\0';
+    }
+    bool parent_ok = fm_capture_contains(capbuf, "PARENT-OK");
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    fm_cleanup(kFmImagePath);
+    test::mark_vfs_touched();
+    vfs::unlink(kFmStdoutPath);
+    JARVIS_ASSERT_FMT(clean, "fork-marker did not exit clean");
+    JARVIS_ASSERT_FMT(parent_ok, "PARENT-OK missing from capture");
+    JARVIS_TEST_PASS();
+}
 #include <lib/string.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <fdt/libfdt.h>
@@ -834,6 +986,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_abi_frame_conform);
     JARVIS_REGISTER_TEST(aarch64_abi_arg_routing);
     JARVIS_REGISTER_TEST(aarch64_abi_bad_number);
+    JARVIS_REGISTER_TEST(aarch64_fork_marker_smoke);
 }
 
 #endif

@@ -247,7 +247,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   26,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30)
+    {"arch_aarch64",          0,   27,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,       3      },  // 3 ABI frame tests (issue #30); validation enabled by nonzero counts

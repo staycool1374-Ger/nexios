@@ -1,44 +1,16 @@
-diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
---- a/src/kernel/syscall/syscall_handlers_ipc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
-@@ -76,10 +76,12 @@
-             if (cur->get_sporadic_server()) {
-                 kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
-                 cur->get_sporadic_server()->on_completion(
-                     arch::Timer::ticks());
-             }
--            cur->state = TaskState::BLOCKED;
--            was_blocked = true;
--            // Issue #208: mark the IPC wait channel (see blocked_in_recv).
--            cur->blocked_in_recv = true;
-+            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
-+            // BLOCKED transition so an arrival landing between the two stores
-+            // still observes the channel (old code woke on state alone).
-+            cur->blocked_in_recv = true;
-+            cur->state = TaskState::BLOCKED;
-+            was_blocked = true;
-             // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
-@@ -237,5 +239,11 @@
-             if (!cur->msg_queue.is_empty()) {
-+                // Issue #208 audit (S2): clear the recv channel marker on
-+                // every loop exit.  Past the first iteration the flag is
-+                // still set here; returning without clearing leaks a
-+                // stale-true flag, and a later non-IPC BLOCKED + message
-+                // arrival would then spuriously wake this task (#208 recurs).
-+                cur->blocked_in_recv = false;
-                 IPC::recv_wait_cancel(*cur);
-                 return static_cast<uint64_t>(-1);
-             }
-             if (cur->get_sporadic_server()) {
-@@ -245,6 +253,7 @@
-             }
--            cur->state = TaskState::BLOCKED;
--            was_blocked = true;
--            // Issue #208: mark the IPC wait channel (see blocked_in_recv).
--            cur->blocked_in_recv = true;
-+            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
-+            // BLOCKED transition (same rationale as sys_receive above).
-+            cur->blocked_in_recv = true;
-+            cur->state = TaskState::BLOCKED;
-+            was_blocked = true;
-             Scheduler::dequeue_ready(*cur);
+diff --git a/mk/rules.mk b/mk/rules.mk
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -371,10 +371,10 @@
+ 	@python3 tools/patch_code_crc.py $@
+ 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
+ 
+-$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
++$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+ 	@mkdir -p $(dir $@)
+ 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
+-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
++	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+ 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
+ 	@python3 tools/patch_code_crc.py $@
+ 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
