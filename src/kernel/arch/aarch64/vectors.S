@@ -13,7 +13,7 @@ vectors:
 exception_entry:
     // Current EL with SP0
     .align 7
-    b       default_exception  // Sync
+    b       el1_sync_unexpected  // Sync (EL1t — unused, any arrival is wrong)
     .align 7
     b       default_exception  // IRQ
     .align 7
@@ -23,7 +23,7 @@ exception_entry:
 
     // Current EL with SPx (kernel runs in EL1h, so this is the active set)
     .align 7
-    b       default_exception  // Sync (EL1t sync — unused, kernel uses EL1h)
+    b       el1_sync_unexpected  // Sync (EL1 kernel fault — issue #214)
     .align 7
     b       el1_irq            // IRQ
     .align 7
@@ -57,6 +57,8 @@ exception_entry:
 g_debug_esr: .quad 0
 .globl g_debug_far
 g_debug_far: .quad 0
+.globl g_debug_elr
+g_debug_elr: .quad 0
 
 .section .text
 .type default_exception, @function
@@ -68,6 +70,40 @@ default_exception:
     mrs     x0, far_el1
     adrp    x1, g_debug_far
     str     x0, [x1, #:lo12:g_debug_far]
+    mrs     x0, elr_el1
+    add     x0, x0, #4
+    msr     elr_el1, x0
+    ldp     x0, x1, [sp], #16
+    eret
+
+// EL1 sync unexpected-fault handler (issue #214).  The old behavior routed
+// these slots through default_exception, which silently skipped the faulting
+// instruction (ELR+=4, no log) — masking kernel bugs (issue #209: 36 faulting
+// frame-build stores became no-ops with zero output).  Now: record
+// ESR/FAR/ELR, call the C handler (dumps + panics in debug builds), and on
+// return (release builds) fall through to the legacy skip epilogue.
+.type el1_sync_unexpected, @function
+el1_sync_unexpected:
+    stp     x0, x1, [sp, #-16]!
+    stp     x2, x3, [sp, #-16]!
+    str     x30, [sp, #-16]!
+    mrs     x0, esr_el1
+    adrp    x1, g_debug_esr
+    str     x0, [x1, #:lo12:g_debug_esr]
+    mrs     x1, far_el1
+    adrp    x2, g_debug_far
+    str     x1, [x2, #:lo12:g_debug_far]
+    mrs     x2, elr_el1
+    adrp    x3, g_debug_elr
+    str     x2, [x3, #:lo12:g_debug_elr]
+    // Marshal (esr, far, elr) into x0-x2 for the C handler.
+    mrs     x0, esr_el1
+    mrs     x1, far_el1
+    mrs     x2, elr_el1
+    bl      aarch64_el1_unexpected_fault
+    // Release return path (debug panics, never returns): restore and skip.
+    ldr     x30, [sp], #16
+    ldp     x2, x3, [sp], #16
     mrs     x0, elr_el1
     add     x0, x0, #4
     msr     elr_el1, x0

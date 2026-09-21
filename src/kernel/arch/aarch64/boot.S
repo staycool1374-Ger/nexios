@@ -174,6 +174,30 @@ _start:
     ldr     x13, =0x40026000  // L1 base
     str     x12, [x13]        // L1[0]
 
+    // Map PCIe ECAM at VA 0xFFFF804010000000 (PA 0x4010000000), 256MB
+    // window (issue #216: QEMU virt pcie-ecam; Device, 128x2MB blocks).
+    // L1[256] = L2 table at 0x40029000; L2[128..255] cover the window.
+    ldr     x14, =0x40029000
+    mov     x15, #512
+211:
+    sub     x15, x15, #1
+    str     xzr, [x14, x15, lsl #3]
+    cbnz    x15, 211b
+    ldr     x15, =0x4010000000
+    mov     x16, #0x421       // Device: Valid|Block|NS=1|AF=1
+    mov     x11, #128
+212:
+    orr     x0, x15, x16
+    str     x0, [x14, x11, lsl #3]
+    add     x15, x15, #0x200000
+    add     x11, x11, #1
+    cmp     x11, #256
+    b.lo    212b
+    ldr     x12, =0x40029000
+    orr     x12, x12, #3      // table descriptor
+    ldr     x13, =0x40026800  // L1 base 0x40026000 + 256*8
+    str     x12, [x13]        // L1[256]
+
     // L1[1] = L2 table at 0x40027000 (kernel at VA 0xFFFF800040000000)
     ldr     x12, =0x40027000
     orr     x12, x12, #3      // table descriptor
@@ -206,9 +230,9 @@ _start:
     dsb     sy
     isb
 
-    // Clean page table pages (0x40020000-0x40028FFF) and invalidate TLBI
+    // Clean page table pages (0x40020000-0x40029FFF) and invalidate TLBI
     mov     x11, #0x40020000
-    mov     x15, #9
+    mov     x15, #10
 202:
     dc      cvac, x11
     add     x11, x11, #0x1000

@@ -24,27 +24,34 @@
 #pragma once
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 // NOTE: included inside namespace arch {} in pci.hpp — do not re-wrap
 
 /// QEMU virt aarch64 ECAM base address (PCIe configuration space)
-/// This is memory-mapped, not I/O port based like x86 CF8/CFC
+/// This is memory-mapped, not I/O port based like x86 CF8/CFC.
+/// Issue #216: pre-highmem QEMU used 0x3F000000; current virt maps
+/// pcie-ecam at 0x4010000000 (256MB window, `info mtree` proof).
 #ifndef CONFIG_PCI_ECAM_BASE
-#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
+#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt aarch64 PCIe ECAM
 #endif
 
 constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
 constexpr uint64_t PCI_ECAM_SIZE =
-    0x100000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB (ECAM window at 0x3f000000)
+    0x10000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB
 
 /// @brief Build ECAM address from BDF + register offset.
 /// ECAM layout: base | (bus << 20) | (device << 15) | (function << 12) | reg
+/// Issue #216: the result is an HHDM-aliased VA (raw phys is unmapped at
+/// EL1 — same #209 disease; UART/GIC precedent).  boot.S maps the 256MB
+/// window at HHDM_OFFSET + PCI_ECAM_BASE (L1[256] -> L2[128..255]).
 /// @param[in] bdf PCI bus/device/function identifier.
 /// @param[in] reg Configuration space register offset.
-/// @return Physical memory address for ECAM access.
+/// @return HHDM virtual address for ECAM access.
 inline uint64_t pci_ecam_addr(PciBdf bdf, uint8_t reg) {
-    return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
+    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
+           (static_cast<uint64_t>(bdf.bus) << 20) |
            (static_cast<uint64_t>(bdf.device) << 15) |
            (static_cast<uint64_t>(bdf.function) << 12) | reg;
 }

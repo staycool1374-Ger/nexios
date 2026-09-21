@@ -1,122 +1,258 @@
-diff --git a/Makefile b/Makefile
-index 22e947fe..a6b86bc9 100644
---- a/Makefile
-+++ b/Makefile
-@@ -65,6 +65,19 @@ _map_arch = $(or \
-     $(filter $(SUPPORTED_ARCHS),$(1)), \
-     $(patsubst x86,x86_64,$(patsubst arm,aarch64,$(patsubst riscv,riscv64,$(1)))))
+diff --git a/src/kernel/arch/aarch64/boot.S b/src/kernel/arch/aarch64/boot.S
+index 4dfc19ec..5e4e3f63 100644
+--- a/src/kernel/arch/aarch64/boot.S
++++ b/src/kernel/arch/aarch64/boot.S
+@@ -174,6 +174,30 @@ _start:
+     ldr     x13, =0x40026000  // L1 base
+     str     x12, [x13]        // L1[0]
  
-+# Issue #210: arch-dispatching entry points take a positional <arch>
-+# (execute-test/run-debug-mode/run-release-mode/debug-test/debug-shell/
-+# test-full).  When the first goal is one of them, the remaining goals are
-+# positionals — notably `debug`/`release` (build TYPE) which also name real
-+# build targets.  Without the guard below, the outer make (parsing with the
-+# default ARCH) builds the positional as a real target: a second, cross-arch
-+# build in the same tree (x86_64-elf-ld vs AARCH64 objects, EM:183).
-+# _DISPATCH_IN_PROGRESS is non-empty exactly in that case; the real
-+# debug/release definitions yield to a no-op (the worker recursion builds
-+# the real target with the right ARCH).
-+_arch_dispatch_goals := execute-test run-debug-mode run-release-mode debug-test debug-shell test-full
-+_DISPATCH_IN_PROGRESS := $(filter $(_arch_dispatch_goals),$(word 1,$(MAKECMDGOALS)))
++    // Map PCIe ECAM at VA 0xFFFF804010000000 (PA 0x4010000000), 256MB
++    // window (issue #216: QEMU virt pcie-ecam; Device, 128x2MB blocks).
++    // L1[256] = L2 table at 0x40029000; L2[128..255] cover the window.
++    ldr     x14, =0x40029000
++    mov     x15, #512
++211:
++    sub     x15, x15, #1
++    str     xzr, [x14, x15, lsl #3]
++    cbnz    x15, 211b
++    ldr     x15, =0x4010000000
++    mov     x16, #0x421       // Device: Valid|Block|NS=1|AF=1
++    mov     x11, #128
++212:
++    orr     x0, x15, x16
++    str     x0, [x14, x11, lsl #3]
++    add     x15, x15, #0x200000
++    add     x11, x11, #1
++    cmp     x11, #256
++    b.lo    212b
++    ldr     x12, =0x40029000
++    orr     x12, x12, #3      // table descriptor
++    ldr     x13, =0x40026800  // L1 base 0x40026000 + 256*8
++    str     x12, [x13]        // L1[256]
 +
- QEMU_UEFI  ?= /opt/homebrew/share/qemu/edk2-$(ARCH)-code.fd
+     // L1[1] = L2 table at 0x40027000 (kernel at VA 0xFFFF800040000000)
+     ldr     x12, =0x40027000
+     orr     x12, x12, #3      // table descriptor
+@@ -206,9 +230,9 @@ _start:
+     dsb     sy
+     isb
  
- # ------------------------------------------------------------------------------
-@@ -319,7 +332,9 @@ $(AHCI_SCRATCH_IMG):
- 	@mkdir -p $(dir $@)
- 	@dd if=/dev/zero of=$@ bs=1M count=64 status=none
- # Build the scratch disk as part of the debug build when this class runs.
-+ifeq ($(_DISPATCH_IN_PROGRESS),)
- debug: $(AHCI_SCRATCH_IMG)
-+endif
- QEMU_FLAGS := -m 256M \
-                 -chardev stdio,id=dbg,mux=on \
-                 -serial chardev:dbg -device isa-debugcon,chardev=dbg \
-@@ -399,15 +414,29 @@ BUILD_STAMP := build/.build-type
- # already committed to "object up to date" from the previous arch's .d files
- # and never rebuild it.  Cleaning here, before any dependency file is loaded,
- # guarantees every object is re-derived for the target architecture.
-+#
-+# Issue #210: the stamp must track the arch the user actually asked for, not
-+# the ARCH default.  A bare `make execute-test aarch64 …` parses the outer
-+# make with ARCH=x86_64 (the `?=` default); stamping x86_64 there and then
-+# recursing with ARCH=aarch64 cleans TWICE (outer→x86_64, inner→aarch64).
-+# ARCH_EFFECTIVE prefers an explicit ARCH= on the command line, then the
-+# positional <arch> of the arch-dispatching entry points
-+# (execute-test/run-debug-mode/run-release-mode/debug-test/debug-shell),
-+# then $(ARCH).  Other targets (test-full/debug/build/clean/…) keep $(ARCH)
-+# exactly as before.
- # ------------------------------------------------------------------------------
- ARCH_STAMP := build/.arch-stamp
-+_arch_goal_word := $(word 1,$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS)))
-+_goal_arch := $(if $(_DISPATCH_IN_PROGRESS),$(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(_arch_goal_word))))
-+ARCH_EFFECTIVE := $(if $(filter command line,$(origin ARCH)),$(ARCH),$(or $(_goal_arch),$(ARCH)))
- _arch_stamp_now := $(shell cat $(ARCH_STAMP) 2>/dev/null)
--ifneq ($(_arch_stamp_now),$(ARCH))
--$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH)))
-+ifneq ($(_arch_stamp_now),$(ARCH_EFFECTIVE))
-+$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH_EFFECTIVE)))
- $(shell rm -rf build initrd_root debug release profiling)
- $(shell rm -f $(shell find userspace -maxdepth 1 -name '*.elf' 2>/dev/null) src/kernel/test/test_registry.gen.hpp *.d build/fat32.img build/external)
-+$(shell git ls-files --others --ignored --exclude-standard -z userspace 2>/dev/null | xargs -0 rm -f)
- endif
--$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
-+$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH_EFFECTIVE) > $(ARCH_STAMP))
+-    // Clean page table pages (0x40020000-0x40028FFF) and invalidate TLBI
++    // Clean page table pages (0x40020000-0x40029FFF) and invalidate TLBI
+     mov     x11, #0x40020000
+-    mov     x15, #9
++    mov     x15, #10
+ 202:
+     dc      cvac, x11
+     add     x11, x11, #0x1000
+diff --git a/src/kernel/arch/aarch64/hal/pci_impl.hpp b/src/kernel/arch/aarch64/hal/pci_impl.hpp
+index 30ca1116..691aea22 100644
+--- a/src/kernel/arch/aarch64/hal/pci_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/pci_impl.hpp
+@@ -24,27 +24,34 @@
+ #pragma once
  
- # ------------------------------------------------------------------------------
- # Shared build rules (pattern rules, libc, userspace, initrd)
-@@ -596,6 +625,7 @@ check-build-stamp:
- # ------------------------------------------------------------------------------
- # Debug build
- # ------------------------------------------------------------------------------
-+ifeq ($(_DISPATCH_IN_PROGRESS),)
- debug: clang-tidy
- ifneq ($(NO_LTO),1)
- # Link-time optimization: cross-TU inlining/IPO across kernel C++ TUs.
-@@ -628,6 +658,12 @@ else ifeq ($(ARCH),riscv64)
- else
- 	@printf '  %-7s %s\n' 'DONE' 'Debug kernel: $(KERNEL_DEBUG)'
- endif
-+else
-+# Issue #210: positional build-type under a dispatcher — no-op here, the
-+# worker recursion (`$(MAKE) debug ARCH=…`) builds the real target.
-+debug:
-+	@true
-+endif
+ #include <types.hpp>
++#include <constants.hpp>
+ #include <kernel/arch/hal/io.hpp>
  
- # ------------------------------------------------------------------------------
- # Release build
-@@ -640,6 +676,7 @@ endif
- # -Wanalyzer-undefined-behavior-ptrdiff: GCC 15+), so keep only the
- # suppressions this compiler actually knows (CI uses GCC 13).
- # ------------------------------------------------------------------------------
-+ifeq ($(_DISPATCH_IN_PROGRESS),)
- ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
- cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
- release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
-@@ -664,6 +701,12 @@ endif
- 	@printf '  %-7s %s\n' 'DONE' "Release ISO: $(RELEASE_ISO) (tests: $$(cat release/.baked-test-config))"
- 	@echo ""
- 	@echo "  Validate with:  make release-test"
-+else
-+# Issue #210: positional build-type under a dispatcher — no-op here, the
-+# worker recursion (`$(MAKE) release ARCH=…`) builds the real target.
-+release:
-+	@true
-+endif
+ // NOTE: included inside namespace arch {} in pci.hpp — do not re-wrap
  
- # ------------------------------------------------------------------------------
- # Profiling
-diff --git a/mk/rules.mk b/mk/rules.mk
-index c536bde0..76dce0df 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -246,7 +246,7 @@ $(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_G
- 	@printf '  %-7s %s\n' 'CC' '$@'
- 	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
+ /// QEMU virt aarch64 ECAM base address (PCIe configuration space)
+-/// This is memory-mapped, not I/O port based like x86 CF8/CFC
++/// This is memory-mapped, not I/O port based like x86 CF8/CFC.
++/// Issue #216: pre-highmem QEMU used 0x3F000000; current virt maps
++/// pcie-ecam at 0x4010000000 (256MB window, `info mtree` proof).
+ #ifndef CONFIG_PCI_ECAM_BASE
+-#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
++#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt aarch64 PCIe ECAM
+ #endif
  
--$(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c
-+$(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
- 	@printf '  %-7s %s\n' 'CC' '$@'
- 	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -I src/libc -c -o $@ $<
+ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
+ constexpr uint64_t PCI_ECAM_SIZE =
+-    0x100000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB (ECAM window at 0x3f000000)
++    0x10000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB
  
+ /// @brief Build ECAM address from BDF + register offset.
+ /// ECAM layout: base | (bus << 20) | (device << 15) | (function << 12) | reg
++/// Issue #216: the result is an HHDM-aliased VA (raw phys is unmapped at
++/// EL1 — same #209 disease; UART/GIC precedent).  boot.S maps the 256MB
++/// window at HHDM_OFFSET + PCI_ECAM_BASE (L1[256] -> L2[128..255]).
+ /// @param[in] bdf PCI bus/device/function identifier.
+ /// @param[in] reg Configuration space register offset.
+-/// @return Physical memory address for ECAM access.
++/// @return HHDM virtual address for ECAM access.
+ inline uint64_t pci_ecam_addr(PciBdf bdf, uint8_t reg) {
+-    return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
++    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
++           (static_cast<uint64_t>(bdf.bus) << 20) |
+            (static_cast<uint64_t>(bdf.device) << 15) |
+            (static_cast<uint64_t>(bdf.function) << 12) | reg;
+ }
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index bfff8aa1..4906eba3 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -1,8 +1,10 @@
+ #include <kernel/arch/interrupt_controller.hpp>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/arch/serial.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/aarch64/hal/gic.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/kernel.hpp>
+ 
+ namespace arch {
+ 
+@@ -201,4 +203,33 @@ extern "C" void aarch64_el0_fault_handler() {
+     }
+ }
+ 
++/// @brief EL1 unexpected-sync-fault handler called from vectors.S (issue
++///        #214).  Any EL1 sync fault is a kernel bug — the old skip-and-eret
++///        behavior masked them (issue #209).  Dumps ESR/FAR/ELR over the
++///        lock-free UART path (bounded poll, byte-drop; no Logger format
++///        strings — %lx hangs) and panics in debug builds.  In release
++///        builds returns and the asm stub resumes with the legacy skip.
++///        Runs with interrupts masked (vector entry); must not re-enable
++///        IRQs, touch the scheduler, or (in debug) return.
++extern "C" void aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
++                                             uint64_t elr) {
++    arch::Serial::puts("\nEL1 sync fault: ESR=0x");
++    for (int i = 60; i >= 0; i -= 4)
++        arch::Serial::putchar("0123456789ABCDEF"[(esr >> i) & 0xF]);
++    arch::Serial::puts(" FAR=0x");
++    for (int i = 60; i >= 0; i -= 4)
++        arch::Serial::putchar("0123456789ABCDEF"[(far >> i) & 0xF]);
++    arch::Serial::puts(" ELR=0x");
++    for (int i = 60; i >= 0; i -= 4)
++        arch::Serial::putchar("0123456789ABCDEF"[(elr >> i) & 0xF]);
++    arch::Serial::puts("\n");
++#ifdef CONFIG_DEBUG
++    panic("EL1 sync fault");
++#else
++    (void)esr;
++    (void)far;
++    (void)elr;
++#endif
++}
++
+ } // namespace arch
+diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
+index 5a44250d..97a536ad 100644
+--- a/src/kernel/arch/aarch64/vectors.S
++++ b/src/kernel/arch/aarch64/vectors.S
+@@ -13,7 +13,7 @@ vectors:
+ exception_entry:
+     // Current EL with SP0
+     .align 7
+-    b       default_exception  // Sync
++    b       el1_sync_unexpected  // Sync (EL1t — unused, any arrival is wrong)
+     .align 7
+     b       default_exception  // IRQ
+     .align 7
+@@ -23,7 +23,7 @@ exception_entry:
+ 
+     // Current EL with SPx (kernel runs in EL1h, so this is the active set)
+     .align 7
+-    b       default_exception  // Sync (EL1t sync — unused, kernel uses EL1h)
++    b       el1_sync_unexpected  // Sync (EL1 kernel fault — issue #214)
+     .align 7
+     b       el1_irq            // IRQ
+     .align 7
+@@ -57,6 +57,8 @@ exception_entry:
+ g_debug_esr: .quad 0
+ .globl g_debug_far
+ g_debug_far: .quad 0
++.globl g_debug_elr
++g_debug_elr: .quad 0
+ 
+ .section .text
+ .type default_exception, @function
+@@ -74,6 +76,40 @@ default_exception:
+     ldp     x0, x1, [sp], #16
+     eret
+ 
++// EL1 sync unexpected-fault handler (issue #214).  The old behavior routed
++// these slots through default_exception, which silently skipped the faulting
++// instruction (ELR+=4, no log) — masking kernel bugs (issue #209: 36 faulting
++// frame-build stores became no-ops with zero output).  Now: record
++// ESR/FAR/ELR, call the C handler (dumps + panics in debug builds), and on
++// return (release builds) fall through to the legacy skip epilogue.
++.type el1_sync_unexpected, @function
++el1_sync_unexpected:
++    stp     x0, x1, [sp, #-16]!
++    stp     x2, x3, [sp, #-16]!
++    str     x30, [sp, #-16]!
++    mrs     x0, esr_el1
++    adrp    x1, g_debug_esr
++    str     x0, [x1, #:lo12:g_debug_esr]
++    mrs     x1, far_el1
++    adrp    x2, g_debug_far
++    str     x1, [x2, #:lo12:g_debug_far]
++    mrs     x2, elr_el1
++    adrp    x3, g_debug_elr
++    str     x2, [x3, #:lo12:g_debug_elr]
++    // Marshal (esr, far, elr) into x0-x2 for the C handler.
++    mrs     x0, esr_el1
++    mrs     x1, far_el1
++    mrs     x2, elr_el1
++    bl      aarch64_el1_unexpected_fault
++    // Release return path (debug panics, never returns): restore and skip.
++    ldr     x30, [sp], #16
++    ldp     x2, x3, [sp], #16
++    mrs     x0, elr_el1
++    add     x0, x0, #4
++    msr     elr_el1, x0
++    ldp     x0, x1, [sp], #16
++    eret
++
+ // EL0 sync handler — SVC from userspace → syscall_entry
+ // NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
+ // EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
+diff --git a/src/kernel/arch/hal/pci.hpp b/src/kernel/arch/hal/pci.hpp
+index 4373485f..22e0129e 100644
+--- a/src/kernel/arch/hal/pci.hpp
++++ b/src/kernel/arch/hal/pci.hpp
+@@ -139,6 +139,7 @@ inline void pci_config_writeb(uint64_t addr, uint8_t val) {
+ 
+ #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+ 
++#include <constants.hpp>
+ #include <kernel/arch/hal/io.hpp>
+ 
+ // NOLINTBEGIN(bugprone-easily-swappable-parameters,performance-no-int-to-ptr)
+@@ -146,7 +147,7 @@ namespace arch {
+ 
+ #ifndef CONFIG_PCI_ECAM_BASE
+ #if defined(CONFIG_ARCH_AARCH64)
+-#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
++#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt pcie-ecam (issue #216)
+ #else
+ #define CONFIG_PCI_ECAM_BASE 0x100000000ULL // riscv64 fallback (per-platform)
+ #endif
+@@ -156,13 +157,24 @@ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
+ 
+ /// @brief Build a PCI configuration address from BDF and register offset (ECAM
+ /// format).
++/// Issue #216: on aarch64 the result is an HHDM-aliased VA (raw phys is
++/// unmapped at EL1 — same #209 disease; UART/GIC precedent; boot.S maps the
++/// window).  riscv64 keeps the raw-phys convention (unvalidated territory —
++/// see riscv chain).
+ /// @param bdf Bus:Device.Function address.
+ /// @param reg Register offset.
+ /// @return Memory-mapped address for use with pci_config_{read,write}*.
+ inline uint64_t pci_make_addr(PciBdf bdf, uint8_t reg) {
++#if defined(CONFIG_ARCH_AARCH64)
++    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
++           (static_cast<uint64_t>(bdf.bus) << 20) |
++           (static_cast<uint64_t>(bdf.device) << 15) |
++           (static_cast<uint64_t>(bdf.function) << 12) | reg;
++#else
+     return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
+            (static_cast<uint64_t>(bdf.device) << 15) |
+            (static_cast<uint64_t>(bdf.function) << 12) | reg;
++#endif
+ }
+ 
+ /// @brief Read a 32-bit dword from PCI config space (ECAM memory-mapped).

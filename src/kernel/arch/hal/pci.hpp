@@ -139,6 +139,7 @@ inline void pci_config_writeb(uint64_t addr, uint8_t val) {
 
 #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
 
+#include <constants.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters,performance-no-int-to-ptr)
@@ -146,7 +147,7 @@ namespace arch {
 
 #ifndef CONFIG_PCI_ECAM_BASE
 #if defined(CONFIG_ARCH_AARCH64)
-#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
+#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt pcie-ecam (issue #216)
 #else
 #define CONFIG_PCI_ECAM_BASE 0x100000000ULL // riscv64 fallback (per-platform)
 #endif
@@ -156,13 +157,24 @@ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
 
 /// @brief Build a PCI configuration address from BDF and register offset (ECAM
 /// format).
+/// Issue #216: on aarch64 the result is an HHDM-aliased VA (raw phys is
+/// unmapped at EL1 — same #209 disease; UART/GIC precedent; boot.S maps the
+/// window).  riscv64 keeps the raw-phys convention (unvalidated territory —
+/// see riscv chain).
 /// @param bdf Bus:Device.Function address.
 /// @param reg Register offset.
 /// @return Memory-mapped address for use with pci_config_{read,write}*.
 inline uint64_t pci_make_addr(PciBdf bdf, uint8_t reg) {
+#if defined(CONFIG_ARCH_AARCH64)
+    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
+           (static_cast<uint64_t>(bdf.bus) << 20) |
+           (static_cast<uint64_t>(bdf.device) << 15) |
+           (static_cast<uint64_t>(bdf.function) << 12) | reg;
+#else
     return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
            (static_cast<uint64_t>(bdf.device) << 15) |
            (static_cast<uint64_t>(bdf.function) << 12) | reg;
+#endif
 }
 
 /// @brief Read a 32-bit dword from PCI config space (ECAM memory-mapped).

@@ -1,8 +1,10 @@
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/hal/io.hpp>
+#include <kernel/arch/serial.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/aarch64/hal/gic.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/kernel.hpp>
 
 namespace arch {
 
@@ -199,6 +201,35 @@ extern "C" void aarch64_el0_fault_handler() {
     for (;;) {
         arch::pause();
     }
+}
+
+/// @brief EL1 unexpected-sync-fault handler called from vectors.S (issue
+///        #214).  Any EL1 sync fault is a kernel bug — the old skip-and-eret
+///        behavior masked them (issue #209).  Dumps ESR/FAR/ELR over the
+///        lock-free UART path (bounded poll, byte-drop; no Logger format
+///        strings — %lx hangs) and panics in debug builds.  In release
+///        builds returns and the asm stub resumes with the legacy skip.
+///        Runs with interrupts masked (vector entry); must not re-enable
+///        IRQs, touch the scheduler, or (in debug) return.
+extern "C" void aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
+                                             uint64_t elr) {
+    arch::Serial::puts("\nEL1 sync fault: ESR=0x");
+    for (int i = 60; i >= 0; i -= 4)
+        arch::Serial::putchar("0123456789ABCDEF"[(esr >> i) & 0xF]);
+    arch::Serial::puts(" FAR=0x");
+    for (int i = 60; i >= 0; i -= 4)
+        arch::Serial::putchar("0123456789ABCDEF"[(far >> i) & 0xF]);
+    arch::Serial::puts(" ELR=0x");
+    for (int i = 60; i >= 0; i -= 4)
+        arch::Serial::putchar("0123456789ABCDEF"[(elr >> i) & 0xF]);
+    arch::Serial::puts("\n");
+#ifdef CONFIG_DEBUG
+    panic("EL1 sync fault");
+#else
+    (void)esr;
+    (void)far;
+    (void)elr;
+#endif
 }
 
 } // namespace arch
