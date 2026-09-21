@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #104 — EL0 fork smoke landed (2026-09-21, CLOSED)
+- **Learned:** (1) Audit iter-1 caught a real release-link gap (FORK_MARKER_OBJ debug-only; release KERNEL link would break) — applied verbatim; aarch64 release is additionally guarded unreachable, defense in depth kept. (2) PARENT-OK (waitpid pid + status 0) is a genuine positive child-execution marker (faulted children never exit); CHILD-MARKER itself unassertable (shared fd offset overwrite by construction). (3) wait_for_termination_safe (need_resched + hlt) is the only viable EL0 join under TCG; pause-spins starve ticks.
+- **Adapted:** aarch64_fork_marker_smoke (tmpfs stage 4 KiB chunks → ElfLoader → fd1 capture → prio 11 → join → PARENT-OK assert); counts arch_aarch64 26→27.
+- **Measured:** 27/27 x6 consecutive (incl. 5/5 pre-landing); SIL 3 APPROVED after one REJECT round. #209 stays open (distinct raw-phys readback path).
+- **Style re-surface:** assert-before-teardown with allocation-free asserts after teardown; snapshot boundary contains failure-path leaks.
+
 ### #212 — synchronous deschedule-on-block, aarch64 SVC (2026-09-21, CLOSED)
 - **Learned:** (1) Reused switch_away_from_terminating for BLOCKED callers instead of a new helper (skips RUNNING-requeue, early-returns if armed, never self-selects) — smaller audit surface, auditor-approved first round. (2) Planner aggregates must be verified in test_registry.cpp (claimed proc_elf, actually core). (3) Test tick races: guard publish+reads with IrqGuard (cookbook Rule 2) — pre-existing atomics_assembly_bridge flake filed as #213 (S3, out of scope). (4) First core anomaly on record (8 straight passes) was investigated, not dismissed: HANG with changes + assert-fail on clean baseline proved pre-existing tick flakes, not the fix. (5) wait_for_termination_safe (need_resched + hlt) beats pause-spins under TCG (fast-forwards through halts). (6) reschedule() DOES NOT ARM (only need_resched; arming is tick-side) — confirmed in code.
 - **Adapted:** aarch64-only bridge tail (BLOCKED → switch_away; TERMINATED owned by sys_exit; x86/riscv untouched); 2 scheduler_preemption tests (arm-to-child, arm-to-idle, slot save/restore); counts 11→13, core 439→441.
