@@ -26,6 +26,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -221,6 +222,13 @@ JARVIS_TEST(atomics_assembly_bridge, "PRE: none | POST: none") {
 
     auto *task = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(task != nullptr);
+
+    // Issue #213: the store -> bridge -> read sequence is a tick race — a
+    // timer IRQ landing in the window consumes the slot or moves current.
+    // Close it under IrqGuard (cookbook Rule 2 precedent, test-only).  The
+    // guard also covers add_task so no tick can dispatch the fresh task
+    // (or consume an armed slot) before the bridge sequence runs.
+    arch::IrqGuard _guard{};
     Scheduler::add_task(*task);
 
     // Simulate what switch_to_task + isr_common do:
