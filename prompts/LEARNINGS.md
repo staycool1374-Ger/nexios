@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #214 + #216 — EL1 fail-stop exposes PCI ECAM rot (2026-09-22, CLOSED)
+- **Learned:** (1) Fail-stop instrumentation EXPOSES latent bugs by design: the new EL1 panic immediately caught a boot PCI fault (masked for months by silent-skip + stale regs). Budget for exposed-bug fallout when landing fail-stop. (2) aarch64 PCI had TWO stacked defects: wrong ECAM base (0x3F000000 pre-highmem vs 0x4010000000 — `info mtree` via piped HMP is the ground truth, not code comments) + raw-phys VA (#209 disease). (3) L0/L1/L2 index math: NEVER hand-compute (two self-contradictions); shell/python is authoritative (L0=256 L1=256 L2=128..255). (4) Duplicate constants across headers (pci.hpp vs pci_impl.hpp shadow copies): the LIVE path may not be the one you edit first — FAR (0x3F000000 still!) proves which copy is live. (5) panic() is extern C noreturn callable from asm; Serial::putchar/puts is the only proven lock-free dump; %lx hangs.
+- **Adapted:** el1_sync_unexpected (record ESR/FAR/new g_debug_elr → C dump + debug panic, release skip preserved); ECAM base + HHDM alias (aarch64-only, riscv byte-identical) + boot.S L1[256]→L2 mapping + dc-range extend. TEMP live-fire probes (removed): deliberate fault → panic signature; real vendor 0x1B36.
+- **Measured:** arch_aarch64 28/28 x3, riscv64 links, build Errors 0. SIL 3 APPROVED (3 S3 notes, incl. riscv SIZE drift untouched).
+- **Style re-surface:** fail-stop > availability for unexpected kernel faults (debug); SError/FIQ slots deliberately out of scope.
+
 ### #213 — atomics_assembly_bridge tick race (2026-09-21, CLOSED)
 - **Learned:** store→bridge→read with no IRQ guard is a cookbook Rule 2 violation by construction — any tick in the window consumes the slot or moves current. Guard must ALSO cover add_task (a tick could dispatch the fresh task first).
 - **Adapted:** arch::IrqGuard over add_task + full bridge sequence (test-only, no audit per acceptance).
