@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #213 — atomics_assembly_bridge tick race (2026-09-21, CLOSED)
+- **Learned:** store→bridge→read with no IRQ guard is a cookbook Rule 2 violation by construction — any tick in the window consumes the slot or moves current. Guard must ALSO cover add_task (a tick could dispatch the fresh task first).
+- **Adapted:** arch::IrqGuard over add_task + full bridge sequence (test-only, no audit per acceptance).
+- **Measured:** basic_atomic 12/12 x6 + core 472/472 (flake site). Planner skipped: trivially-diagnosed, documented on issue.
+- **Style re-surface:** IrqGuard-first for all multi-step scheduler-slot sequences in tests.
+
 ### #210 — no-prefix arch switch double-build (2026-09-21, CLOSED)
 - **Learned:** (1) TRUE root cause was NOT the stamp: positional `debug`/`release` goals ALSO match real targets, so the outer default-ARCH make built a second cross-arch tree (x86_64-elf-ld vs AARCH64 crt0.o EM:183 — reproduced exactly). Stamp double-clean was a red herring for correctness (only cost). (2) `ARCH_EFFECTIVE` fixes stamp only; toolchain comes from `$(ARCH)` at parse — a stamp-only fix would have masked the real bug (my first fix attempt did exactly this; the rerun failure proved it). (3) -n parses still run $(shell) side effects (rm + stamp write) — never trust -n runs to preserve state; rebuild after. (4) Tracked build blobs (*.elf in git) churn on every relink (M) and make deletes failed targets (D) — restore before commit; xargs without -r is portable (empty input → rm -f no-op, exit 0).
 - **Adapted:** _DISPATCH_IN_PROGRESS no-op guard on debug/release (+AHCI line); ARCH_EFFECTIVE goal-aware stamp (2→1 cleans proven); switch-clean removes untracked source-adjacent artifacts (tracked *.elf excluded); glue order-only sysroot edge (my clean exposed the missing edge — fix your exposed breakage). test-full positional stays dead (documented, one-shot clean accepted).
