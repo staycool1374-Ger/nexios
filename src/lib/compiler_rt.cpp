@@ -31,7 +31,10 @@
 
 extern "C" {
 
-unsigned long __clzdi2(unsigned long val) {
+// Issue #204: LTO must not internalize or GC these runtime-provided
+// libcalls (the rv64 full-kernel link otherwise reports them undefined).
+// externally_visible implies used and keeps them exported.
+__attribute__((externally_visible)) unsigned long __clzdi2(unsigned long val) {
     if (val == 0) return 64;
     unsigned long count = 0;
     if ((val >> 32) == 0) { count += 32; val <<= 32; }
@@ -43,7 +46,7 @@ unsigned long __clzdi2(unsigned long val) {
     return count;
 }
 
-unsigned long __ctzdi2(unsigned long val) {
+__attribute__((externally_visible)) unsigned long __ctzdi2(unsigned long val) {
     if (val == 0) return 64;
     unsigned long count = 0;
     if ((val & 0xFFFFFFFFUL) == 0) { count += 32; val >>= 32; }

@@ -1,61 +1,60 @@
-diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
-index bc88cfaa..813af682 100644
---- a/src/kernel/arch/riscv64/syscall_entry.S
-+++ b/src/kernel/arch/riscv64/syscall_entry.S
-@@ -57,11 +57,6 @@ syscall_entry:
- .equ OFF_STVAL, 272
- .equ OFF_RET,  280
+diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
+index 8591bebb..66ed945a 100644
+--- a/src/kernel/test/test_tls.cpp
++++ b/src/kernel/test/test_tls.cpp
+@@ -252,12 +252,30 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
+         g_set_ret = tls_call(k_tls_base);
+         // clone() builds the child iret frame from regs[] — pass a
+         // synthetic user frame (test_process.cpp pattern), never null.
++        // Frame shape is per-arch (issue #204): clone() reads up to
++        // regs[21] on x86_64, regs[30] on aarch64, regs[36] on riscv64 —
++        // undersizing over-reads the stack. Content is irrelevant here
++        // (only tls_base_ inheritance is asserted).
++#if defined(CONFIG_ARCH_X86_64)
+         uint64_t regs[22] = {};
+         regs[17] = 0x1000;
+         regs[18] = arch::SEG_USER_CODE;
+         regs[19] = arch::RFLAGS_DEFAULT;
+         regs[20] = 0x80000000;
+         regs[21] = arch::SEG_USER_DATA;
++#elif defined(CONFIG_ARCH_AARCH64)
++        uint64_t regs[31] = {};
++        regs[17] = 0x1000;  // ELR_EL1
++        regs[19] = 0;       // SPSR_EL1
++        regs[20] = 0x80000000;  // SP_EL0
++#elif defined(CONFIG_ARCH_RISCV64)
++        uint64_t regs[37] = {};
++        regs[31] = 0x1000;  // SEPC
++        regs[32] = 0;       // SSTATUS
++#else
++        uint64_t regs[22] = {};
++        regs[17] = 0x1000;
++#endif
+         auto *c = TaskControlBlock::clone(regs);
+         if (c != nullptr) {
+             g_child_base = c->tls_base_;
+diff --git a/src/lib/compiler_rt.cpp b/src/lib/compiler_rt.cpp
+index b1fdd04a..dce0055f 100644
+--- a/src/lib/compiler_rt.cpp
++++ b/src/lib/compiler_rt.cpp
+@@ -31,7 +31,10 @@
  
--    # TRACE: print 'A' after save area alloc
--    li a0, 65
--    li a7, 1
--    ecall
--
-     # Save all GPRs (x1-x31)
-     sd x1, OFF_RA(sp)
-     sd x2, OFF_SP(sp)
-@@ -105,6 +100,12 @@ syscall_entry:
-     csrr t0, stval
-     sd t0, OFF_STVAL(sp)
+ extern "C" {
  
-+    # TRACE: print 'A' (relocated post-save by issue #185 — the pre-save
-+    # SBI ecall clobbered the incoming user a0/a7 before they were saved)
-+    li a0, 65
-+    li a7, 1
-+    ecall
-+
-     # TRACE: print 'B' after CSR save
-     li a0, 66
-     li a7, 1
-@@ -153,18 +154,19 @@ syscall_entry:
-     call handle_kernel_exception
+-unsigned long __clzdi2(unsigned long val) {
++// Issue #204: LTO must not internalize or GC these runtime-provided
++// libcalls (the rv64 full-kernel link otherwise reports them undefined).
++// externally_visible implies used and keeps them exported.
++__attribute__((externally_visible)) unsigned long __clzdi2(unsigned long val) {
+     if (val == 0) return 64;
+     unsigned long count = 0;
+     if ((val >> 32) == 0) { count += 32; val <<= 32; }
+@@ -43,7 +46,7 @@ unsigned long __clzdi2(unsigned long val) {
+     return count;
+ }
  
- 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
--    # §2 CONTRACT GAP (issues #67/#68 verification, ABI v1): this reads
--    # the number from OFF_A0 (user a0) and args from a1-a3, but
--    # src/libc/syscall.h specifies a7=num, a0-a3=args. riscv64 has no
--    # production boot path (issue #29), so this stub is unexecuted
--    # scaffolding — DO NOT "fix" the mapping without a runtime check;
--    # tracked separately. The TRACE ecalls above also clobber a0/a7
--    # before the GPR save for the same reason.
--    ld a0, OFF_A0(sp)          # syscall number from a0
--    ld a1, OFF_A1(sp)          # arg1
--    ld a2, OFF_A2(sp)          # arg2
--    ld a3, OFF_A3(sp)          # arg3
--    mv a4, sp                  # regs pointer
-+    # §2 ABI (issue #185; docs/specs/syscall-abi-picolibc.md): number rides
-+    # in user a7, args in a0-a3 (src/libc/syscall.h __syscall5) — mirrors
-+    # the aarch64 stub (x8=num, x0-x3=args). C args go in a0-a5.
-+    # sepc advances past the 4-byte ecall so sret does not re-trap.
-+    ld t0, OFF_SEPC(sp)
-+    addi t0, t0, 4
-+    sd t0, OFF_SEPC(sp)
-+    ld a0, OFF_A7(sp)          # number = user a7
-+    ld a1, OFF_A0(sp)          # arg0
-+    ld a2, OFF_A1(sp)          # arg1
-+    ld a3, OFF_A2(sp)          # arg2
-+    ld a4, OFF_A3(sp)          # arg3
-+    mv a5, sp                  # regs pointer
-     call syscall_handler
-     sd a0, OFF_A0(sp)         # store return value into saved a0 slot
- 
+-unsigned long __ctzdi2(unsigned long val) {
++__attribute__((externally_visible)) unsigned long __ctzdi2(unsigned long val) {
+     if (val == 0) return 64;
+     unsigned long count = 0;
+     if ((val & 0xFFFFFFFFUL) == 0) { count += 32; val >>= 32; }

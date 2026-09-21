@@ -252,12 +252,30 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
         g_set_ret = tls_call(k_tls_base);
         // clone() builds the child iret frame from regs[] — pass a
         // synthetic user frame (test_process.cpp pattern), never null.
+        // Frame shape is per-arch (issue #204): clone() reads up to
+        // regs[21] on x86_64, regs[30] on aarch64, regs[36] on riscv64 —
+        // undersizing over-reads the stack. Content is irrelevant here
+        // (only tls_base_ inheritance is asserted).
+#if defined(CONFIG_ARCH_X86_64)
         uint64_t regs[22] = {};
         regs[17] = 0x1000;
         regs[18] = arch::SEG_USER_CODE;
         regs[19] = arch::RFLAGS_DEFAULT;
         regs[20] = 0x80000000;
         regs[21] = arch::SEG_USER_DATA;
+#elif defined(CONFIG_ARCH_AARCH64)
+        uint64_t regs[31] = {};
+        regs[17] = 0x1000;  // ELR_EL1
+        regs[19] = 0;       // SPSR_EL1
+        regs[20] = 0x80000000;  // SP_EL0
+#elif defined(CONFIG_ARCH_RISCV64)
+        uint64_t regs[37] = {};
+        regs[31] = 0x1000;  // SEPC
+        regs[32] = 0;       // SSTATUS
+#else
+        uint64_t regs[22] = {};
+        regs[17] = 0x1000;
+#endif
         auto *c = TaskControlBlock::clone(regs);
         if (c != nullptr) {
             g_child_base = c->tls_base_;
