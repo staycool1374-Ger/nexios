@@ -1,258 +1,262 @@
-diff --git a/src/kernel/arch/aarch64/boot.S b/src/kernel/arch/aarch64/boot.S
-index 4dfc19ec..5e4e3f63 100644
---- a/src/kernel/arch/aarch64/boot.S
-+++ b/src/kernel/arch/aarch64/boot.S
-@@ -174,6 +174,30 @@ _start:
-     ldr     x13, =0x40026000  // L1 base
-     str     x12, [x13]        // L1[0]
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 53f82ece..1712b36b 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -831,10 +831,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     regs[21] = arch::SEG_USER_DATA;
+     regs[0] = 0;
+ #elif defined(CONFIG_ARCH_AARCH64)
+-    regs[0] = 0;           // X0 = 0
+-    regs[17] = hdr->entry; // ELR_EL1 (index 17)
+-    regs[19] = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) (index 19)
+-    regs[20] = user_rsp;   // SP_EL0 (index 20)
++    regs[0] = 0;                 // X0 = 0
++    regs[32] = hdr->entry;       // ELR_EL1 (issue #215: was regs[17]/x17)
++    regs[33] = 0x0;              // SPSR_EL1: M[4:0]=EL0t (was regs[19])
++    regs[31] = user_rsp;         // SP_EL0 (was regs[20])
+ #elif defined(CONFIG_ARCH_RISCV64)
+     (void)regs;
+     (void)user_rsp;
+diff --git a/src/kernel/test/test_pml4_clone.cpp b/src/kernel/test/test_pml4_clone.cpp
+index 5bb32293..427d5529 100644
+--- a/src/kernel/test/test_pml4_clone.cpp
++++ b/src/kernel/test/test_pml4_clone.cpp
+@@ -490,12 +490,8 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
+     auto *parent = TaskControlBlock::create(
+         []() {
+             auto *self = Scheduler::current_task();
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
-+    // Map PCIe ECAM at VA 0xFFFF804010000000 (PA 0x4010000000), 256MB
-+    // window (issue #216: QEMU virt pcie-ecam; Device, 128x2MB blocks).
-+    // L1[256] = L2 table at 0x40029000; L2[128..255] cover the window.
-+    ldr     x14, =0x40029000
-+    mov     x15, #512
-+211:
-+    sub     x15, x15, #1
-+    str     xzr, [x14, x15, lsl #3]
-+    cbnz    x15, 211b
-+    ldr     x15, =0x4010000000
-+    mov     x16, #0x421       // Device: Valid|Block|NS=1|AF=1
-+    mov     x11, #128
-+212:
-+    orr     x0, x15, x16
-+    str     x0, [x14, x11, lsl #3]
-+    add     x15, x15, #0x200000
-+    add     x11, x11, #1
-+    cmp     x11, #256
-+    b.lo    212b
-+    ldr     x12, =0x40029000
-+    orr     x12, x12, #3      // table descriptor
-+    ldr     x13, =0x40026800  // L1 base 0x40026000 + 256*8
-+    str     x12, [x13]        // L1[256]
-+
-     // L1[1] = L2 table at 0x40027000 (kernel at VA 0xFFFF800040000000)
-     ldr     x12, =0x40027000
-     orr     x12, x12, #3      // table descriptor
-@@ -206,9 +230,9 @@ _start:
-     dsb     sy
-     isb
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -660,12 +656,8 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
+     auto *parent = TaskControlBlock::create(
+         []() {
+             auto *self = Scheduler::current_task();
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
--    // Clean page table pages (0x40020000-0x40028FFF) and invalidate TLBI
-+    // Clean page table pages (0x40020000-0x40029FFF) and invalidate TLBI
-     mov     x11, #0x40020000
--    mov     x15, #9
-+    mov     x15, #10
- 202:
-     dc      cvac, x11
-     add     x11, x11, #0x1000
-diff --git a/src/kernel/arch/aarch64/hal/pci_impl.hpp b/src/kernel/arch/aarch64/hal/pci_impl.hpp
-index 30ca1116..691aea22 100644
---- a/src/kernel/arch/aarch64/hal/pci_impl.hpp
-+++ b/src/kernel/arch/aarch64/hal/pci_impl.hpp
-@@ -24,27 +24,34 @@
- #pragma once
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -746,12 +738,8 @@ JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
  
- #include <types.hpp>
-+#include <constants.hpp>
- #include <kernel/arch/hal/io.hpp>
+     auto *parent = TaskControlBlock::create(
+         []() {
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
- // NOTE: included inside namespace arch {} in pci.hpp — do not re-wrap
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+diff --git a/src/kernel/test/test_process.cpp b/src/kernel/test/test_process.cpp
+index 4c46472b..93523d2c 100644
+--- a/src/kernel/test/test_process.cpp
++++ b/src/kernel/test/test_process.cpp
+@@ -324,12 +324,8 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
+     auto *parent = TaskControlBlock::create(
+         []() {
+             auto *self = Scheduler::current_task();
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
- /// QEMU virt aarch64 ECAM base address (PCIe configuration space)
--/// This is memory-mapped, not I/O port based like x86 CF8/CFC
-+/// This is memory-mapped, not I/O port based like x86 CF8/CFC.
-+/// Issue #216: pre-highmem QEMU used 0x3F000000; current virt maps
-+/// pcie-ecam at 0x4010000000 (256MB window, `info mtree` proof).
- #ifndef CONFIG_PCI_ECAM_BASE
--#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
-+#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt aarch64 PCIe ECAM
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -472,12 +468,8 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
+     auto *parent = TaskControlBlock::create(
+         []() {
+             auto *self = Scheduler::current_task();
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
+ 
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -539,12 +531,8 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
+ 
+     auto *parent = TaskControlBlock::create(
+         []() {
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
+ 
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -628,12 +616,8 @@ JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
+                 return;
+             g_ret = 0;
+ 
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
+ 
+             // clone() copies the fd_table (with vnode_ref_inc on each used
+             // vnode).  The child is never add_task'd; cleanup + delete frees
+diff --git a/src/kernel/test/test_sched_helpers.hpp b/src/kernel/test/test_sched_helpers.hpp
+index 287e3e2c..a8a0a830 100644
+--- a/src/kernel/test/test_sched_helpers.hpp
++++ b/src/kernel/test/test_sched_helpers.hpp
+@@ -244,6 +244,38 @@ inline void trigger_deadline_monitor_scan() {
+ }
  #endif
  
- constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
- constexpr uint64_t PCI_ECAM_SIZE =
--    0x100000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB (ECAM window at 0x3f000000)
-+    0x10000000ULL; // 256 buses * 32 devices * 8 functions * 4KB = 256MB
- 
- /// @brief Build ECAM address from BDF + register offset.
- /// ECAM layout: base | (bus << 20) | (device << 15) | (function << 12) | reg
-+/// Issue #216: the result is an HHDM-aliased VA (raw phys is unmapped at
-+/// EL1 — same #209 disease; UART/GIC precedent).  boot.S maps the 256MB
-+/// window at HHDM_OFFSET + PCI_ECAM_BASE (L1[256] -> L2[128..255]).
- /// @param[in] bdf PCI bus/device/function identifier.
- /// @param[in] reg Configuration space register offset.
--/// @return Physical memory address for ECAM access.
-+/// @return HHDM virtual address for ECAM access.
- inline uint64_t pci_ecam_addr(PciBdf bdf, uint8_t reg) {
--    return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
-+    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
-+           (static_cast<uint64_t>(bdf.bus) << 20) |
-            (static_cast<uint64_t>(bdf.device) << 15) |
-            (static_cast<uint64_t>(bdf.function) << 12) | reg;
- }
-diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
-index bfff8aa1..4906eba3 100644
---- a/src/kernel/arch/aarch64/interrupt_controller.cpp
-+++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
-@@ -1,8 +1,10 @@
- #include <kernel/arch/interrupt_controller.hpp>
- #include <kernel/arch/hal/io.hpp>
-+#include <kernel/arch/serial.hpp>
- #include <kernel/arch/idt.hpp>
- #include <kernel/arch/aarch64/hal/gic.hpp>
- #include <kernel/arch/timer.hpp>
-+#include <kernel/kernel.hpp>
- 
- namespace arch {
- 
-@@ -201,4 +203,33 @@ extern "C" void aarch64_el0_fault_handler() {
-     }
- }
- 
-+/// @brief EL1 unexpected-sync-fault handler called from vectors.S (issue
-+///        #214).  Any EL1 sync fault is a kernel bug — the old skip-and-eret
-+///        behavior masked them (issue #209).  Dumps ESR/FAR/ELR over the
-+///        lock-free UART path (bounded poll, byte-drop; no Logger format
-+///        strings — %lx hangs) and panics in debug builds.  In release
-+///        builds returns and the asm stub resumes with the legacy skip.
-+///        Runs with interrupts masked (vector entry); must not re-enable
-+///        IRQs, touch the scheduler, or (in debug) return.
-+extern "C" void aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
-+                                             uint64_t elr) {
-+    arch::Serial::puts("\nEL1 sync fault: ESR=0x");
-+    for (int i = 60; i >= 0; i -= 4)
-+        arch::Serial::putchar("0123456789ABCDEF"[(esr >> i) & 0xF]);
-+    arch::Serial::puts(" FAR=0x");
-+    for (int i = 60; i >= 0; i -= 4)
-+        arch::Serial::putchar("0123456789ABCDEF"[(far >> i) & 0xF]);
-+    arch::Serial::puts(" ELR=0x");
-+    for (int i = 60; i >= 0; i -= 4)
-+        arch::Serial::putchar("0123456789ABCDEF"[(elr >> i) & 0xF]);
-+    arch::Serial::puts("\n");
-+#ifdef CONFIG_DEBUG
-+    panic("EL1 sync fault");
-+#else
-+    (void)esr;
-+    (void)far;
-+    (void)elr;
++/// @brief Build a synthetic per-arch register frame for
++///        TaskControlBlock::clone() (issue #215).  Sized for the arch frame
++///        layout so clone() never reads out of bounds: x86_64 reads
++///        regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1,
++///        SPSR_EL1), riscv64 reads regs[0..36].  Callers declare 37 slots on
++///        every arch; each arch populates its own PC/SP slots (content is
++///        otherwise zero — no test asserts frame echo).
++/// @param[out] regs  37-slot frame to fill.
++/// @param[in]  entry Entry-point/PC value for the arch's program-counter slot.
++/// @param[in]  stack Stack-pointer value for the arch's SP slot.
++inline void make_synthetic_clone_frame(uint64_t (&regs)[37],
++                                       uint64_t entry = 0x1000,
++                                       uint64_t stack = 0x80000000) {
++    for (int i = 0; i < 37; ++i)
++        regs[i] = 0;
++#if defined(CONFIG_ARCH_X86_64)
++    regs[17] = entry;
++    regs[18] = arch::SEG_USER_CODE;
++    regs[19] = arch::RFLAGS_DEFAULT;
++    regs[20] = stack;
++    regs[21] = arch::SEG_USER_DATA;
++#elif defined(CONFIG_ARCH_AARCH64)
++    regs[32] = entry;  // ELR_EL1
++    regs[33] = 0;      // SPSR_EL1
++    regs[31] = stack;  // SP_EL0
++#elif defined(CONFIG_ARCH_RISCV64)
++    regs[31] = entry;  // SEPC
++    regs[32] = 0;      // SSTATUS
++    (void)stack;  // no SP slot in the riscv64 frame layout
 +#endif
 +}
 +
- } // namespace arch
-diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
-index 5a44250d..97a536ad 100644
---- a/src/kernel/arch/aarch64/vectors.S
-+++ b/src/kernel/arch/aarch64/vectors.S
-@@ -13,7 +13,7 @@ vectors:
- exception_entry:
-     // Current EL with SP0
-     .align 7
--    b       default_exception  // Sync
-+    b       el1_sync_unexpected  // Sync (EL1t — unused, any arrival is wrong)
-     .align 7
-     b       default_exception  // IRQ
-     .align 7
-@@ -23,7 +23,7 @@ exception_entry:
+ } // namespace kernel::test
  
-     // Current EL with SPx (kernel runs in EL1h, so this is the active set)
-     .align 7
--    b       default_exception  // Sync (EL1t sync — unused, kernel uses EL1h)
-+    b       el1_sync_unexpected  // Sync (EL1 kernel fault — issue #214)
-     .align 7
-     b       el1_irq            // IRQ
-     .align 7
-@@ -57,6 +57,8 @@ exception_entry:
- g_debug_esr: .quad 0
- .globl g_debug_far
- g_debug_far: .quad 0
-+.globl g_debug_elr
-+g_debug_elr: .quad 0
+ /// @brief  Create a TCB for test use and register it with the scheduler WITHOUT
+diff --git a/src/kernel/test/test_task.cpp b/src/kernel/test/test_task.cpp
+index bbb3e96a..e12f9f6a 100644
+--- a/src/kernel/test/test_task.cpp
++++ b/src/kernel/test/test_task.cpp
+@@ -90,12 +90,8 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
  
- .section .text
- .type default_exception, @function
-@@ -74,6 +76,40 @@ default_exception:
-     ldp     x0, x1, [sp], #16
-     eret
+     auto *parent = TaskControlBlock::create(
+         []() {
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
-+// EL1 sync unexpected-fault handler (issue #214).  The old behavior routed
-+// these slots through default_exception, which silently skipped the faulting
-+// instruction (ELR+=4, no log) — masking kernel bugs (issue #209: 36 faulting
-+// frame-build stores became no-ops with zero output).  Now: record
-+// ESR/FAR/ELR, call the C handler (dumps + panics in debug builds), and on
-+// return (release builds) fall through to the legacy skip epilogue.
-+.type el1_sync_unexpected, @function
-+el1_sync_unexpected:
-+    stp     x0, x1, [sp, #-16]!
-+    stp     x2, x3, [sp, #-16]!
-+    str     x30, [sp, #-16]!
-+    mrs     x0, esr_el1
-+    adrp    x1, g_debug_esr
-+    str     x0, [x1, #:lo12:g_debug_esr]
-+    mrs     x1, far_el1
-+    adrp    x2, g_debug_far
-+    str     x1, [x2, #:lo12:g_debug_far]
-+    mrs     x2, elr_el1
-+    adrp    x3, g_debug_elr
-+    str     x2, [x3, #:lo12:g_debug_elr]
-+    // Marshal (esr, far, elr) into x0-x2 for the C handler.
-+    mrs     x0, esr_el1
-+    mrs     x1, far_el1
-+    mrs     x2, elr_el1
-+    bl      aarch64_el1_unexpected_fault
-+    // Release return path (debug panics, never returns): restore and skip.
-+    ldr     x30, [sp], #16
-+    ldp     x2, x3, [sp], #16
-+    mrs     x0, elr_el1
-+    add     x0, x0, #4
-+    msr     elr_el1, x0
-+    ldp     x0, x1, [sp], #16
-+    eret
-+
- // EL0 sync handler — SVC from userspace → syscall_entry
- // NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
- // EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
-diff --git a/src/kernel/arch/hal/pci.hpp b/src/kernel/arch/hal/pci.hpp
-index 4373485f..22e0129e 100644
---- a/src/kernel/arch/hal/pci.hpp
-+++ b/src/kernel/arch/hal/pci.hpp
-@@ -139,6 +139,7 @@ inline void pci_config_writeb(uint64_t addr, uint8_t val) {
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+@@ -178,12 +174,8 @@ JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
  
- #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+     auto *parent = TaskControlBlock::create(
+         []() {
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
-+#include <constants.hpp>
- #include <kernel/arch/hal/io.hpp>
+             auto *self = Scheduler::current_task();
+             auto *child = TaskControlBlock::clone(regs);
+@@ -224,12 +216,8 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
  
- // NOLINTBEGIN(bugprone-easily-swappable-parameters,performance-no-int-to-ptr)
-@@ -146,7 +147,7 @@ namespace arch {
+     auto *parent = TaskControlBlock::create(
+         []() {
+-            uint64_t regs[22] = {};
+-            regs[17] = 0x1000;
+-            regs[18] = arch::SEG_USER_CODE;
+-            regs[19] = arch::RFLAGS_DEFAULT;
+-            regs[20] = 0x80000000;
+-            regs[21] = arch::SEG_USER_DATA;
++            uint64_t regs[37] = {};
++            test::make_synthetic_clone_frame(regs);
  
- #ifndef CONFIG_PCI_ECAM_BASE
- #if defined(CONFIG_ARCH_AARCH64)
--#define CONFIG_PCI_ECAM_BASE 0x3f000000ULL // QEMU virt aarch64 PCIe ECAM
-+#define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt pcie-ecam (issue #216)
+             auto *child = TaskControlBlock::clone(regs);
+             if (child == nullptr)
+diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
+index 66ed945a..607a60be 100644
+--- a/src/kernel/test/test_tls.cpp
++++ b/src/kernel/test/test_tls.cpp
+@@ -251,9 +251,9 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
+     auto *t = run_tls_task([]() {
+         g_set_ret = tls_call(k_tls_base);
+         // clone() builds the child iret frame from regs[] — pass a
+-        // synthetic user frame (test_process.cpp pattern), never null.
+-        // Frame shape is per-arch (issue #204): clone() reads up to
+-        // regs[21] on x86_64, regs[30] on aarch64, regs[36] on riscv64 —
++        // synthetic per-arch frame (test_sched_helpers pattern), never null.
++        // Frame shape is per-arch (issues #104/#204/#215): clone() reads up
++        // to regs[21] on x86_64, regs[33] on aarch64, regs[36] on riscv64 —
+         // undersizing over-reads the stack. Content is irrelevant here
+         // (only tls_base_ inheritance is asserted).
+ #if defined(CONFIG_ARCH_X86_64)
+@@ -263,18 +263,9 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
+         regs[19] = arch::RFLAGS_DEFAULT;
+         regs[20] = 0x80000000;
+         regs[21] = arch::SEG_USER_DATA;
+-#elif defined(CONFIG_ARCH_AARCH64)
+-        uint64_t regs[31] = {};
+-        regs[17] = 0x1000;  // ELR_EL1
+-        regs[19] = 0;       // SPSR_EL1
+-        regs[20] = 0x80000000;  // SP_EL0
+-#elif defined(CONFIG_ARCH_RISCV64)
+-        uint64_t regs[37] = {};
+-        regs[31] = 0x1000;  // SEPC
+-        regs[32] = 0;       // SSTATUS
  #else
- #define CONFIG_PCI_ECAM_BASE 0x100000000ULL // riscv64 fallback (per-platform)
+-        uint64_t regs[22] = {};
+-        regs[17] = 0x1000;
++        uint64_t regs[37] = {};
++        test::make_synthetic_clone_frame(regs);
  #endif
-@@ -156,13 +157,24 @@ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
- 
- /// @brief Build a PCI configuration address from BDF and register offset (ECAM
- /// format).
-+/// Issue #216: on aarch64 the result is an HHDM-aliased VA (raw phys is
-+/// unmapped at EL1 — same #209 disease; UART/GIC precedent; boot.S maps the
-+/// window).  riscv64 keeps the raw-phys convention (unvalidated territory —
-+/// see riscv chain).
- /// @param bdf Bus:Device.Function address.
- /// @param reg Register offset.
- /// @return Memory-mapped address for use with pci_config_{read,write}*.
- inline uint64_t pci_make_addr(PciBdf bdf, uint8_t reg) {
-+#if defined(CONFIG_ARCH_AARCH64)
-+    return (arch::HHDM_OFFSET + PCI_ECAM_BASE) |
-+           (static_cast<uint64_t>(bdf.bus) << 20) |
-+           (static_cast<uint64_t>(bdf.device) << 15) |
-+           (static_cast<uint64_t>(bdf.function) << 12) | reg;
-+#else
-     return PCI_ECAM_BASE | (static_cast<uint64_t>(bdf.bus) << 20) |
-            (static_cast<uint64_t>(bdf.device) << 15) |
-            (static_cast<uint64_t>(bdf.function) << 12) | reg;
-+#endif
- }
- 
- /// @brief Read a 32-bit dword from PCI config space (ECAM memory-mapped).
+         auto *c = TaskControlBlock::clone(regs);
+         if (c != nullptr) {

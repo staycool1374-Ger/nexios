@@ -244,6 +244,38 @@ inline void trigger_deadline_monitor_scan() {
 }
 #endif
 
+/// @brief Build a synthetic per-arch register frame for
+///        TaskControlBlock::clone() (issue #215).  Sized for the arch frame
+///        layout so clone() never reads out of bounds: x86_64 reads
+///        regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1,
+///        SPSR_EL1), riscv64 reads regs[0..36].  Callers declare 37 slots on
+///        every arch; each arch populates its own PC/SP slots (content is
+///        otherwise zero — no test asserts frame echo).
+/// @param[out] regs  37-slot frame to fill.
+/// @param[in]  entry Entry-point/PC value for the arch's program-counter slot.
+/// @param[in]  stack Stack-pointer value for the arch's SP slot.
+inline void make_synthetic_clone_frame(uint64_t (&regs)[37],
+                                       uint64_t entry = 0x1000,
+                                       uint64_t stack = 0x80000000) {
+    for (int i = 0; i < 37; ++i)
+        regs[i] = 0;
+#if defined(CONFIG_ARCH_X86_64)
+    regs[17] = entry;
+    regs[18] = arch::SEG_USER_CODE;
+    regs[19] = arch::RFLAGS_DEFAULT;
+    regs[20] = stack;
+    regs[21] = arch::SEG_USER_DATA;
+#elif defined(CONFIG_ARCH_AARCH64)
+    regs[32] = entry;  // ELR_EL1
+    regs[33] = 0;      // SPSR_EL1
+    regs[31] = stack;  // SP_EL0
+#elif defined(CONFIG_ARCH_RISCV64)
+    regs[31] = entry;  // SEPC
+    regs[32] = 0;      // SSTATUS
+    (void)stack;  // no SP slot in the riscv64 frame layout
+#endif
+}
+
 } // namespace kernel::test
 
 /// @brief  Create a TCB for test use and register it with the scheduler WITHOUT

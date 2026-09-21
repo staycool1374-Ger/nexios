@@ -90,12 +90,8 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
 
     auto *parent = TaskControlBlock::create(
         []() {
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
@@ -178,12 +174,8 @@ JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
 
     auto *parent = TaskControlBlock::create(
         []() {
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *self = Scheduler::current_task();
             auto *child = TaskControlBlock::clone(regs);
@@ -224,12 +216,8 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
 
     auto *parent = TaskControlBlock::create(
         []() {
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)

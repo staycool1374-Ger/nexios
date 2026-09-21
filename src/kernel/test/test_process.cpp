@@ -324,12 +324,8 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
     auto *parent = TaskControlBlock::create(
         []() {
             auto *self = Scheduler::current_task();
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
@@ -472,12 +468,8 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
     auto *parent = TaskControlBlock::create(
         []() {
             auto *self = Scheduler::current_task();
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
@@ -539,12 +531,8 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
 
     auto *parent = TaskControlBlock::create(
         []() {
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             auto *child = TaskControlBlock::clone(regs);
             if (child == nullptr)
@@ -628,12 +616,8 @@ JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
                 return;
             g_ret = 0;
 
-            uint64_t regs[22] = {};
-            regs[17] = 0x1000;
-            regs[18] = arch::SEG_USER_CODE;
-            regs[19] = arch::RFLAGS_DEFAULT;
-            regs[20] = 0x80000000;
-            regs[21] = arch::SEG_USER_DATA;
+            uint64_t regs[37] = {};
+            test::make_synthetic_clone_frame(regs);
 
             // clone() copies the fd_table (with vnode_ref_inc on each used
             // vnode).  The child is never add_task'd; cleanup + delete frees

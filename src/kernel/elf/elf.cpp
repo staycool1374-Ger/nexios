@@ -831,10 +831,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     regs[21] = arch::SEG_USER_DATA;
     regs[0] = 0;
 #elif defined(CONFIG_ARCH_AARCH64)
-    regs[0] = 0;           // X0 = 0
-    regs[17] = hdr->entry; // ELR_EL1 (index 17)
-    regs[19] = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) (index 19)
-    regs[20] = user_rsp;   // SP_EL0 (index 20)
+    regs[0] = 0;                 // X0 = 0
+    regs[32] = hdr->entry;       // ELR_EL1 (issue #215: was regs[17]/x17)
+    regs[33] = 0x0;              // SPSR_EL1: M[4:0]=EL0t (was regs[19])
+    regs[31] = user_rsp;         // SP_EL0 (was regs[20])
 #elif defined(CONFIG_ARCH_RISCV64)
     (void)regs;
     (void)user_rsp;
