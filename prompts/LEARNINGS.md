@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #215 — stale clone caller conventions (2026-09-22, CLOSED)
+- **Learned:** (1) exec_into_current's aarch64 branch was a LIVE bug hiding as dead code: sys_exec forwards the live SVC frame; convention-B writes never redirected ELR (no EL0 caller yet → unobservable, but one exec away from failure). Untested ≠ dead — classify reachability, not coverage. (2) Shadow/duplicated constants strike again (pci.hpp vs pci_impl.hpp in #216; regs maps in tests here) — single-choke-point helpers beat scattered ifdefs (10 sites → 1 helper). (3) Cross-arch header changes break the THIRD arch first: riscv -Werror unused-param caught what x86/aarch64 builds hid — always link-check all three arches for shared-header edits.
+- **Adapted:** make_synthetic_clone_frame() (37 slots, per-arch PC/SP); elf exec slots regs[31/32/33]; stale #204 comment corrected.
+- **Measured:** 7 x86 classes green (task_core/lifecycle, process_lifecycle/waitpid, tls, pml4_clone, elf_loader), arch_aarch64 28/28, riscv64 links, build Errors 0. SIL 3 APPROVED (2 S3 notes, accepted).
+- **Style re-surface:** default args must be USED on all arches ((void) silencers for arch-N/A params).
+
 ### #214 + #216 — EL1 fail-stop exposes PCI ECAM rot (2026-09-22, CLOSED)
 - **Learned:** (1) Fail-stop instrumentation EXPOSES latent bugs by design: the new EL1 panic immediately caught a boot PCI fault (masked for months by silent-skip + stale regs). Budget for exposed-bug fallout when landing fail-stop. (2) aarch64 PCI had TWO stacked defects: wrong ECAM base (0x3F000000 pre-highmem vs 0x4010000000 — `info mtree` via piped HMP is the ground truth, not code comments) + raw-phys VA (#209 disease). (3) L0/L1/L2 index math: NEVER hand-compute (two self-contradictions); shell/python is authoritative (L0=256 L1=256 L2=128..255). (4) Duplicate constants across headers (pci.hpp vs pci_impl.hpp shadow copies): the LIVE path may not be the one you edit first — FAR (0x3F000000 still!) proves which copy is live. (5) panic() is extern C noreturn callable from asm; Serial::putchar/puts is the only proven lock-free dump; %lx hangs.
 - **Adapted:** el1_sync_unexpected (record ESR/FAR/new g_debug_elr → C dump + debug panic, release skip preserved); ECAM base + HHDM alias (aarch64-only, riscv byte-identical) + boot.S L1[256]→L2 mapping + dc-range extend. TEMP live-fire probes (removed): deliberate fault → panic signature; real vendor 0x1B36.
