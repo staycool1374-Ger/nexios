@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #204 — riscv64/aarch64 test link (2026-09-21)
+- **Learned:** (1) Check for existing patterns FIRST: per-arch test_stubs.cpp already stubbed registrations — my 4 added stubs collided (multiple-definition) and were reverted. (2) clone() reads regs[0..21]/[0..30]/[0..36] per arch — fixed-size test arrays OVER-READ on non-x86; size arrays per arch (22/31/37). (3) LTO can internalize/GC runtime libcalls at scale (trivial 2-object link worked, 332-object failed) — `externally_visible` fixes it; verify with from-scratch (ccache-disabled) rebuilds. (4) NO_LTO builds mix LTO-bytecode objects with raw ld ('plugin needed') — NO_LTO link errors are artifacts, always diagnose on the LTO path. (5) clang-tidy cross-arch 'unknown register' errors are non-fatal host-triple noise. (6) riscv QEMU boots to an early scause-0xD panic (handoff on #205) — link-green ≠ runs-green; say which explicitly.
+- **Adapted:** per-arch tls clone frame + LTO attributes in compiler_rt.cpp; reverted redundant stubs.
+- **Measured:** riscv64 + aarch64 `make debug` link green (were test_tls.o/builtins fails); x86 Errors 0; x86 tls 12/12; SIL 3 APPROVED; commit 221ba37c (fixes #204, closed; subsumes #31's test_tls half).
+- **Style re-surface:** N/A (test + attribute).
+
 ### #185 — riscv64 ECALL dispatch ABI (2026-09-21)
 - **Learned:** (1) The dispatch had THREE bugs, not one: wrong number reg (a0 vs a7) + DROPPED arg3 (5 C args passed for a 6-arg prototype) + missing sepc+=4 (infinite re-trap — ECALL is always 4 bytes). Always check arg COUNT against the prototype, not just mapping. (2) The aarch64 stub is the exact pattern to mirror (num + 4 args + sp in 6 regs) — cross-arch precedent beats reasoning from scratch. (3) riscv S-mode ecalls trap to OpenSBI (M-mode), NOT stvec — so no S-mode self-test of dispatch is possible; U-mode needs #29. The TRACE self-recursion worry is disproven by green runs (any trap would recurse). (4) riscv test build broken pre-existing (test_tls x86-only symbols) — `make debug ARCH=riscv64` fails before any test object; objdump-on-cross-assemble is the available verification. (5) Overriding a reporter's explicit constraint ('NOT fixed without a runtime check') needs a user decision + filed follow-up (#203), not unilateral action.
 - **Adapted:** 6-load dispatch + TRACE-A post-save + sepc+=4 in syscall_entry.S; #203 filed (post-#29 runtime cookies test + test_tls gating note).
