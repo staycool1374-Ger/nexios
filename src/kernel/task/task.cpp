@@ -1502,10 +1502,24 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
             tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
             tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
         } else {
+            // Issue #209: a raw physical address is NOT a valid VA on
+            // non-x86 (no identity map — EL1 faults translate to a silent
+            // skip in default_exception, so the 36-push frame build becomes
+            // 36 no-ops and readback observes stale registers).  Route
+            // kernel-task stacks through HHDM like create() does
+            // (task.cpp:1047-1052); x86 keeps its raw-phys convention.
+#if defined(CONFIG_ARCH_X86_64)
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             TCB_WRITE(tcb, kernel_stack,
                       reinterpret_cast<uint8_t *>(kstack_phys));
             tcb->kernel_stack_top = kstack_phys + STACK_SIZE;
+#else
+            uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            TCB_WRITE(tcb, kernel_stack,
+                      reinterpret_cast<uint8_t *>(kstack_virt));
+            tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
+#endif
         }
     }
 

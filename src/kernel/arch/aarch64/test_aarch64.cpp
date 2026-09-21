@@ -956,6 +956,47 @@ JARVIS_TEST(aarch64_abi_bad_number, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: clone() frame slots read back exactly on aarch64 (issue #209).
+// Input: Synthetic regs[37] (regs[i]=0x1000+i, SP/ELR/SPSR markers), clone
+//        from the harness (kernel parent -> HHDM kstack fallback).
+// Expect: All 36 slots exact (x0==0 forced, x1..x30 echo, SP/ELR/SPSR
+//        match, padding zero). Pre-fix this failed: the kernel-parent
+//        fallback used the raw physical address as VA (unmapped at EL1),
+//        and EL1-sync default_exception silently skips faulting accesses,
+//        so the frame build was 36 no-ops and readback saw stale registers.
+// Depends: TaskControlBlock::clone kstack fallback (issue #209).
+JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
+    using namespace kernel;
+    auto *parent = Scheduler::current_task();
+    JARVIS_ASSERT(parent != nullptr);
+
+    static uint64_t regs[37];
+    for (int i = 0; i < 37; ++i)
+        regs[i] = 0x1000ULL + static_cast<uint64_t>(i);
+    regs[31] = 0x70000000ULL;
+    regs[32] = 0x400044ULL;
+    regs[33] = 0;
+    auto *c = TaskControlBlock::clone(regs);
+    JARVIS_ASSERT(c != nullptr);
+
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    const auto *f = reinterpret_cast<const uint64_t *>(c->context.sp_el0);
+    JARVIS_ASSERT_EQ(c->kernel_stack_top - c->context.sp_el0, 288ULL);
+    JARVIS_ASSERT_EQ(0ULL, f[0]);
+    for (int i = 1; i <= 30; ++i)
+        JARVIS_ASSERT_EQ(0x1000ULL + static_cast<uint64_t>(i), f[i]);
+    JARVIS_ASSERT_EQ(0x70000000ULL, f[31]);
+    JARVIS_ASSERT_EQ(0x400044ULL, f[32]);
+    JARVIS_ASSERT_EQ(0ULL, f[33]);
+    JARVIS_ASSERT_EQ(0ULL, f[34]);
+    JARVIS_ASSERT_EQ(0ULL, f[35]);
+
+    kernel::test::terminate_and_drain(*c);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all AArch64 architecture test cases.
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -987,6 +1028,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_abi_arg_routing);
     JARVIS_REGISTER_TEST(aarch64_abi_bad_number);
     JARVIS_REGISTER_TEST(aarch64_fork_marker_smoke);
+    JARVIS_REGISTER_TEST(aarch64_clone_frame_readback);  // issue #209
 }
 
 #endif
