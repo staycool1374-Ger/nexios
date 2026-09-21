@@ -65,6 +65,19 @@ _map_arch = $(or \
     $(filter $(SUPPORTED_ARCHS),$(1)), \
     $(patsubst x86,x86_64,$(patsubst arm,aarch64,$(patsubst riscv,riscv64,$(1)))))
 
+# Issue #210: arch-dispatching entry points take a positional <arch>
+# (execute-test/run-debug-mode/run-release-mode/debug-test/debug-shell/
+# test-full).  When the first goal is one of them, the remaining goals are
+# positionals — notably `debug`/`release` (build TYPE) which also name real
+# build targets.  Without the guard below, the outer make (parsing with the
+# default ARCH) builds the positional as a real target: a second, cross-arch
+# build in the same tree (x86_64-elf-ld vs AARCH64 objects, EM:183).
+# _DISPATCH_IN_PROGRESS is non-empty exactly in that case; the real
+# debug/release definitions yield to a no-op (the worker recursion builds
+# the real target with the right ARCH).
+_arch_dispatch_goals := execute-test run-debug-mode run-release-mode debug-test debug-shell test-full
+_DISPATCH_IN_PROGRESS := $(filter $(_arch_dispatch_goals),$(word 1,$(MAKECMDGOALS)))
+
 QEMU_UEFI  ?= /opt/homebrew/share/qemu/edk2-$(ARCH)-code.fd
 
 # ------------------------------------------------------------------------------
@@ -319,7 +332,9 @@ $(AHCI_SCRATCH_IMG):
 	@mkdir -p $(dir $@)
 	@dd if=/dev/zero of=$@ bs=1M count=64 status=none
 # Build the scratch disk as part of the debug build when this class runs.
+ifeq ($(_DISPATCH_IN_PROGRESS),)
 debug: $(AHCI_SCRATCH_IMG)
+endif
 QEMU_FLAGS := -m 256M \
                 -chardev stdio,id=dbg,mux=on \
                 -serial chardev:dbg -device isa-debugcon,chardev=dbg \
@@ -399,15 +414,31 @@ BUILD_STAMP := build/.build-type
 # already committed to "object up to date" from the previous arch's .d files
 # and never rebuild it.  Cleaning here, before any dependency file is loaded,
 # guarantees every object is re-derived for the target architecture.
+#
+# Issue #210: the stamp must track the arch the user actually asked for, not
+# the ARCH default.  A bare `make execute-test aarch64 …` parses the outer
+# make with ARCH=x86_64 (the `?=` default); stamping x86_64 there and then
+# recursing with ARCH=aarch64 cleans TWICE (outer→x86_64, inner→aarch64).
+# ARCH_EFFECTIVE prefers an explicit ARCH= on the command line, then the
+# positional <arch> of the arch-dispatching entry points
+# (execute-test/run-debug-mode/run-release-mode/debug-test/debug-shell/
+# test-full), then $(ARCH).  Plain single-goal targets (debug/build/clean/…)
+# keep $(ARCH) exactly as before.  NOTE: test-full's recipe ignores the
+# positional (dead `or`, pre-existing) — it stamps the goal arch but builds
+# $(ARCH), converging with one extra clean; accepted, do not "fix" here.
 # ------------------------------------------------------------------------------
 ARCH_STAMP := build/.arch-stamp
+_arch_goal_word := $(word 1,$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS)))
+_goal_arch := $(if $(_DISPATCH_IN_PROGRESS),$(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(_arch_goal_word))))
+ARCH_EFFECTIVE := $(if $(filter command line,$(origin ARCH)),$(ARCH),$(or $(_goal_arch),$(ARCH)))
 _arch_stamp_now := $(shell cat $(ARCH_STAMP) 2>/dev/null)
-ifneq ($(_arch_stamp_now),$(ARCH))
-$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH)))
+ifneq ($(_arch_stamp_now),$(ARCH_EFFECTIVE))
+$(info CLEAN Architecture changed ($(_arch_stamp_now) -> $(ARCH_EFFECTIVE)))
 $(shell rm -rf build initrd_root debug release profiling)
 $(shell rm -f $(shell find userspace -maxdepth 1 -name '*.elf' 2>/dev/null) src/kernel/test/test_registry.gen.hpp *.d build/fat32.img build/external)
+$(shell git ls-files --others --ignored --exclude-standard -z userspace 2>/dev/null | xargs -0 rm -f)
 endif
-$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH) > $(ARCH_STAMP))
+$(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH_EFFECTIVE) > $(ARCH_STAMP))
 
 # ------------------------------------------------------------------------------
 # Shared build rules (pattern rules, libc, userspace, initrd)
@@ -596,6 +627,7 @@ check-build-stamp:
 # ------------------------------------------------------------------------------
 # Debug build
 # ------------------------------------------------------------------------------
+ifeq ($(_DISPATCH_IN_PROGRESS),)
 debug: clang-tidy
 ifneq ($(NO_LTO),1)
 # Link-time optimization: cross-TU inlining/IPO across kernel C++ TUs.
@@ -628,6 +660,12 @@ else ifeq ($(ARCH),riscv64)
 else
 	@printf '  %-7s %s\n' 'DONE' 'Debug kernel: $(KERNEL_DEBUG)'
 endif
+else
+# Issue #210: positional build-type under a dispatcher — no-op here, the
+# worker recursion (`$(MAKE) debug ARCH=…`) builds the real target.
+debug:
+	@true
+endif
 
 # ------------------------------------------------------------------------------
 # Release build
@@ -640,6 +678,7 @@ endif
 # -Wanalyzer-undefined-behavior-ptrdiff: GCC 15+), so keep only the
 # suppressions this compiler actually knows (CI uses GCC 13).
 # ------------------------------------------------------------------------------
+ifeq ($(_DISPATCH_IN_PROGRESS),)
 ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
 cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
 release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
@@ -664,6 +703,12 @@ endif
 	@printf '  %-7s %s\n' 'DONE' "Release ISO: $(RELEASE_ISO) (tests: $$(cat release/.baked-test-config))"
 	@echo ""
 	@echo "  Validate with:  make release-test"
+else
+# Issue #210: positional build-type under a dispatcher — no-op here, the
+# worker recursion (`$(MAKE) release ARCH=…`) builds the real target.
+release:
+	@true
+endif
 
 # ------------------------------------------------------------------------------
 # Profiling

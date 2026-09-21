@@ -246,7 +246,7 @@ $(PICOLIBC_ELF): userspace/picolibc/%.c.elf: userspace/picolibc/%.c $(PICOLIBC_G
 	@printf '  %-7s %s\n' 'CC' '$@'
 	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -o $@ build/libc/crt0.o $< $(PICOLIBC_GLUE) build/libc/picolib_stubs.o -L $(PICOLIBC_SYSROOT)/lib -lc -lm
 
-$(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c
+$(PICOLIBC_GLUE): userspace/picolibc/nexios_glue.c | $(PICOLIBC_SYSROOT)/lib/libc.a $(PICOLIBC_SYSROOT)/lib/libm.a
 	@printf '  %-7s %s\n' 'CC' '$@'
 	$(CC) $(CCFLAGS) -I $(PICOLIBC_SYSROOT)/include -I src/libc -c -o $@ $<
 
