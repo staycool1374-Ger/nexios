@@ -38,7 +38,16 @@ void MemPool::init() {
     sync::IrqSpinLockGuard lock(mempool_lock_);
 
     static const size_t sizes[POOL_COUNT] = {16,  32,   64,   128, 256,
-                                             512, 1024, 2048, 8192};
+                                              512, 1024, 2048,
+#if defined(CONFIG_ARCH_AARCH64)
+                                              // Issue #104: aarch64
+                                              // TaskControlBlock is 8256 B
+                                              // (larger ArchContext + debug
+                                              // ring) — pool8 must clear it.
+                                              16384};
+#else
+                                              8192};
+#endif
     static const size_t counts[POOL_COUNT] = {256, 128, 320, 32, 16,
                                               8,   16,  64, 64};
 

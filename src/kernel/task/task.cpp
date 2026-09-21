@@ -884,6 +884,17 @@ bool canary_verify_kernel_stack(const TaskControlBlock *t) {
 /// @param period_ticks  Period for rate-monotonic scheduling.
 /// @return  Pointer to the new TCB, or nullptr on OOM.
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+//
+// Issue #104: the TCB must fit pool8 (MemPool::init sizes[] in
+// mempool.cpp) — aarch64 needs 16384 (TCB 8256 B there).  A silent
+// overflow fails at BOOT (idle-task OOM), so pin it at build time.
+#if defined(CONFIG_ARCH_AARCH64)
+static_assert(sizeof(TaskControlBlock) <= 16384,
+              "TCB exceeds pool8 (aarch64)");
+#else
+static_assert(sizeof(TaskControlBlock) <= 8192,
+              "TCB exceeds pool8");
+#endif
 TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
                                            uint64_t period_ticks)
 // NOLINTEND(bugprone-easily-swappable-parameters)
@@ -1529,15 +1540,23 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     *--stack = 0;        // rax = 0 (child return value)
     tcb->context.rsp = reinterpret_cast<uint64_t>(stack);
 #elif defined(CONFIG_ARCH_AARCH64)
+    // Issue #104: indices follow the vectors.S save-area layout (x0-x30 @
+    // regs[0..30], SP_EL0 @ regs[31], ELR @ regs[32], SPSR @ regs[33]) —
+    // NOT the x86 map (regs[17/19/20] are user x17/x19/x20 here).  Push
+    // DESCENDING (like x86) so memory order matches the layout (lowest =
+    // X0); ascending would mirror x1-x30.  X0 reads back zero so the child
+    // observes fork-return-0 (x86 zeroes rax and riscv zeroes A0 the same
+    // way).
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
     // aarch64 exception frame: padding, SPSR, ELR, SP_EL0, X0-X30
     *--stack = 0;        // padding
     *--stack = 0;        // padding
-    *--stack = regs[19]; // SPSR_EL1 (from regs[19])
-    *--stack = regs[17]; // ELR_EL1 (from regs[17])
-    *--stack = regs[20]; // SP_EL0 (from regs[20])
-    for (int i = 0; i < 31; ++i)
+    *--stack = regs[33]; // SPSR_EL1
+    *--stack = regs[32]; // ELR_EL1
+    *--stack = regs[31]; // SP_EL0
+    for (int i = 30; i >= 0; --i)
         *--stack = regs[i];
+    stack[0] = 0; // X0 = 0 (fork returns 0 in child)
     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
 #elif defined(CONFIG_ARCH_RISCV64)
     // Copy trap frame from parent (regs matches syscall_entry.S save area

@@ -65,13 +65,18 @@ JARVIS_TEST(memory_safety_mempool_free_null, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: Verifies MemPool::alloc rejects sizes larger than any pool.
-// The largest pool is 8192 bytes (mempool.cpp). Allocating 8193 should fail.
-// Input: MemPool::alloc(8193)
+// The largest pool is 8192 bytes (16384 on aarch64, mempool.cpp issue #104).
+// Allocating above the largest pool must fail.
+// Input: MemPool::alloc(max+1)
 // Expect: Returns nullptr
 // Depends: MemPool
 JARVIS_TEST(memory_safety_mempool_alloc_large_rejected,
             "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_AARCH64)
+    void *p = MemPool::alloc(16385);
+#else
     void *p = MemPool::alloc(8193);
+#endif
     JARVIS_ASSERT(p == nullptr);
     JARVIS_TEST_PASS();
 }

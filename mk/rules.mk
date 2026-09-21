@@ -231,7 +231,10 @@ userspace/%.S.elf: userspace/%.S
 
 userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
 	@printf '  %-7s %s\n' 'CC' '$@'
-	$(CC) $(CCFLAGS) -I src/libc -o $@ build/libc/crt0.o $< -L build/libc -lc
+	# Issue #104: 4 KiB max-page-size keeps the file dense (the default
+	# AArch64 64 KiB page size pads LOAD segments apart, blowing past the
+	# 64 KiB tmpfs file cap the kernel tests stage through).
+	$(CC) $(CCFLAGS) -Wl,-z,max-page-size=0x1000 -I src/libc -o $@ build/libc/crt0.o $< -L build/libc -lc
 
 # picolibc-based programs (issue #73): static pattern rule (beats the
 # generic implicit rule deterministically — first-match-wins applies).
@@ -333,10 +336,37 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
 	    $< $@
 
-$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+# Issue #104: the fork-marker ELF is embedded for the aarch64 EL0 smoke
+# test (same initrd-not-mounted reason as above). aarch64 only — the
+# program is built by the generic userspace/%.c.elf rule with the arch
+# compiler against the in-tree libc (no picolibc sysroot needed).
+ifeq ($(ARCH),aarch64)
+FORK_MARKER_OBJ := build/initrd/fork_marker_img.o
+FORK_MARKER_SRC := userspace/fork-marker.c.elf
+FORK_MARKER_STRIPPED := build/initrd/fork_marker_stripped.elf
+else
+FORK_MARKER_OBJ :=
+FORK_MARKER_SRC :=
+FORK_MARKER_STRIPPED :=
+endif
+
+$(FORK_MARKER_STRIPPED): $(FORK_MARKER_SRC)
+	@mkdir -p $(dir $@)
+	cp $< $@
+	$(AARCH64_TRIPLET)strip $@
+
+$(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
+	@mkdir -p $(dir $@)
+	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
+	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_start=_binary_fork_marker_img_start \
+	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_end=_binary_fork_marker_img_end \
+	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_size=_binary_fork_marker_img_size \
+	    $< $@
+
+$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
 	@mkdir -p $(dir $@)
 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
 	@python3 tools/patch_code_crc.py $@
 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"

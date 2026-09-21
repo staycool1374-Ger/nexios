@@ -1,60 +1,208 @@
-diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
-index 8591bebb..66ed945a 100644
---- a/src/kernel/test/test_tls.cpp
-+++ b/src/kernel/test/test_tls.cpp
-@@ -252,12 +252,30 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
-         g_set_ret = tls_call(k_tls_base);
-         // clone() builds the child iret frame from regs[] — pass a
-         // synthetic user frame (test_process.cpp pattern), never null.
-+        // Frame shape is per-arch (issue #204): clone() reads up to
-+        // regs[21] on x86_64, regs[30] on aarch64, regs[36] on riscv64 —
-+        // undersizing over-reads the stack. Content is irrelevant here
-+        // (only tls_base_ inheritance is asserted).
-+#if defined(CONFIG_ARCH_X86_64)
-         uint64_t regs[22] = {};
-         regs[17] = 0x1000;
-         regs[18] = arch::SEG_USER_CODE;
-         regs[19] = arch::RFLAGS_DEFAULT;
-         regs[20] = 0x80000000;
-         regs[21] = arch::SEG_USER_DATA;
-+#elif defined(CONFIG_ARCH_AARCH64)
-+        uint64_t regs[31] = {};
-+        regs[17] = 0x1000;  // ELR_EL1
-+        regs[19] = 0;       // SPSR_EL1
-+        regs[20] = 0x80000000;  // SP_EL0
-+#elif defined(CONFIG_ARCH_RISCV64)
-+        uint64_t regs[37] = {};
-+        regs[31] = 0x1000;  // SEPC
-+        regs[32] = 0;       // SSTATUS
+diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
+index 1d241930..ed9239f4 100644
+--- a/linker/linker_aarch64.ld
++++ b/linker/linker_aarch64.ld
+@@ -59,9 +59,11 @@ SECTIONS
+     .text : AT(phys_lma) ALIGN(4K)
+     {
+         _text_start = .;
++        KEEP(*(.marker.text.start))
+         *(.vectors)
+         *(.text*)
+         *(.text.*)
++        KEEP(*(.marker.text.end))
+         _text_end = .;
+     } :text
+     phys_lma = ALIGN(phys_lma + SIZEOF(.text), 4K);
+@@ -69,11 +71,13 @@ SECTIONS
+     .rodata : AT(phys_lma) ALIGN(4K)
+     {
+         _rodata_start = .;
++        KEEP(*(.marker.rodata.start))
+         *(.rodata*)
+         *(.rodata.*)
+         . = ALIGN(8);
+         _expected_code_crc = .;
+         QUAD(0x0000000000000000)
++        KEEP(*(.marker.rodata.end))
+         _rodata_end = .;
+     } :rodata
+     phys_lma = ALIGN(phys_lma + SIZEOF(.rodata), 4K);
+@@ -81,10 +85,12 @@ SECTIONS
+     .data : AT(phys_lma) ALIGN(4K)
+     {
+         _data_start = .;
++        KEEP(*(.marker.data.start))
+         *(.data*)
+         *(.data.*)
+         *(.got)
+         *(.got.plt)
++        KEEP(*(.marker.data.end))
+         _data_end = .;
+     } :data
+     phys_lma = ALIGN(phys_lma + SIZEOF(.data), 4K);
+@@ -92,9 +98,11 @@ SECTIONS
+     .bss : AT(phys_lma) ALIGN(4K)
+     {
+         _bss_start = .;
++        KEEP(*(.marker.bss.start))
+         *(COMMON)
+         *(.bss*)
+         *(.bss.*)
++        KEEP(*(.marker.bss.end))
+         _bss_end = .;
+     } :data
+ 
+diff --git a/mk/rules.mk b/mk/rules.mk
+index 09ecc99f..da07ede7 100644
+--- a/mk/rules.mk
++++ b/mk/rules.mk
+@@ -231,7 +231,10 @@ userspace/%.S.elf: userspace/%.S
+ 
+ userspace/%.c.elf: userspace/%.c $(LIBC_A) build/libc/crt0.o
+ 	@printf '  %-7s %s\n' 'CC' '$@'
+-	$(CC) $(CCFLAGS) -I src/libc -o $@ build/libc/crt0.o $< -L build/libc -lc
++	# Issue #104: 4 KiB max-page-size keeps the file dense (the default
++	# AArch64 64 KiB page size pads LOAD segments apart, blowing past the
++	# 64 KiB tmpfs file cap the kernel tests stage through).
++	$(CC) $(CCFLAGS) -Wl,-z,max-page-size=0x1000 -I src/libc -o $@ build/libc/crt0.o $< -L build/libc -lc
+ 
+ # picolibc-based programs (issue #73): static pattern rule (beats the
+ # generic implicit rule deterministically — first-match-wins applies).
+@@ -333,10 +336,37 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
+ 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
+ 	    $< $@
+ 
+-$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
++# Issue #104: the fork-marker ELF is embedded for the aarch64 EL0 smoke
++# test (same initrd-not-mounted reason as above). aarch64 only — the
++# program is built by the generic userspace/%.c.elf rule with the arch
++# compiler against the in-tree libc (no picolibc sysroot needed).
++ifeq ($(ARCH),aarch64)
++FORK_MARKER_OBJ := build/initrd/fork_marker_img.o
++FORK_MARKER_SRC := userspace/fork-marker.c.elf
++FORK_MARKER_STRIPPED := build/initrd/fork_marker_stripped.elf
++else
++FORK_MARKER_OBJ :=
++FORK_MARKER_SRC :=
++FORK_MARKER_STRIPPED :=
++endif
++
++$(FORK_MARKER_STRIPPED): $(FORK_MARKER_SRC)
++	@mkdir -p $(dir $@)
++	cp $< $@
++	$(AARCH64_TRIPLET)strip $@
++
++$(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
++	@mkdir -p $(dir $@)
++	$(OBJCOPY) -I binary -O $(OBJCOPY_FMT) -B $(OBJCOPY_ARCH) \
++	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_start=_binary_fork_marker_img_start \
++	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_end=_binary_fork_marker_img_end \
++	    --redefine-sym _binary_build_initrd_fork_marker_stripped_elf_size=_binary_fork_marker_img_size \
++	    $< $@
++
++$(KERNEL_DEBUG): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
+ 	@mkdir -p $(dir $@)
+ 	@printf '  %-7s %s\n' 'LD' 'kernel-debug.elf'
+-	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
++	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
+ 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
+ 	@python3 tools/patch_code_crc.py $@
+ 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
+diff --git a/src/kernel/memory/mempool.cpp b/src/kernel/memory/mempool.cpp
+index 6874f640..3d0354ab 100644
+--- a/src/kernel/memory/mempool.cpp
++++ b/src/kernel/memory/mempool.cpp
+@@ -38,7 +38,16 @@ void MemPool::init() {
+     sync::IrqSpinLockGuard lock(mempool_lock_);
+ 
+     static const size_t sizes[POOL_COUNT] = {16,  32,   64,   128, 256,
+-                                             512, 1024, 2048, 8192};
++                                              512, 1024, 2048,
++#if defined(CONFIG_ARCH_AARCH64)
++                                              // Issue #104: aarch64
++                                              // TaskControlBlock is 8256 B
++                                              // (larger ArchContext + debug
++                                              // ring) — pool8 must clear it.
++                                              16384};
 +#else
-+        uint64_t regs[22] = {};
-+        regs[17] = 0x1000;
++                                              8192};
 +#endif
-         auto *c = TaskControlBlock::clone(regs);
-         if (c != nullptr) {
-             g_child_base = c->tls_base_;
-diff --git a/src/lib/compiler_rt.cpp b/src/lib/compiler_rt.cpp
-index b1fdd04a..dce0055f 100644
---- a/src/lib/compiler_rt.cpp
-+++ b/src/lib/compiler_rt.cpp
-@@ -31,7 +31,10 @@
+     static const size_t counts[POOL_COUNT] = {256, 128, 320, 32, 16,
+                                               8,   16,  64, 64};
  
- extern "C" {
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 7c48704d..96832ebf 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -884,6 +884,17 @@ bool canary_verify_kernel_stack(const TaskControlBlock *t) {
+ /// @param period_ticks  Period for rate-monotonic scheduling.
+ /// @return  Pointer to the new TCB, or nullptr on OOM.
+ // NOLINTBEGIN(bugprone-easily-swappable-parameters)
++//
++// Issue #104: the TCB must fit pool8 (MemPool::init sizes[] in
++// mempool.cpp) — aarch64 needs 16384 (TCB 8256 B there).  A silent
++// overflow fails at BOOT (idle-task OOM), so pin it at build time.
++#if defined(CONFIG_ARCH_AARCH64)
++static_assert(sizeof(TaskControlBlock) <= 16384,
++              "TCB exceeds pool8 (aarch64)");
++#else
++static_assert(sizeof(TaskControlBlock) <= 8192,
++              "TCB exceeds pool8");
++#endif
+ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+                                            uint64_t period_ticks)
+ // NOLINTEND(bugprone-easily-swappable-parameters)
+@@ -1529,15 +1540,23 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     *--stack = 0;        // rax = 0 (child return value)
+     tcb->context.rsp = reinterpret_cast<uint64_t>(stack);
+ #elif defined(CONFIG_ARCH_AARCH64)
++    // Issue #104: indices follow the vectors.S save-area layout (x0-x30 @
++    // regs[0..30], SP_EL0 @ regs[31], ELR @ regs[32], SPSR @ regs[33]) —
++    // NOT the x86 map (regs[17/19/20] are user x17/x19/x20 here).  Push
++    // DESCENDING (like x86) so memory order matches the layout (lowest =
++    // X0); ascending would mirror x1-x30.  X0 reads back zero so the child
++    // observes fork-return-0 (x86 zeroes rax and riscv zeroes A0 the same
++    // way).
+     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
+     // aarch64 exception frame: padding, SPSR, ELR, SP_EL0, X0-X30
+     *--stack = 0;        // padding
+     *--stack = 0;        // padding
+-    *--stack = regs[19]; // SPSR_EL1 (from regs[19])
+-    *--stack = regs[17]; // ELR_EL1 (from regs[17])
+-    *--stack = regs[20]; // SP_EL0 (from regs[20])
+-    for (int i = 0; i < 31; ++i)
++    *--stack = regs[33]; // SPSR_EL1
++    *--stack = regs[32]; // ELR_EL1
++    *--stack = regs[31]; // SP_EL0
++    for (int i = 30; i >= 0; --i)
+         *--stack = regs[i];
++    stack[0] = 0; // X0 = 0 (fork returns 0 in child)
+     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
+ #elif defined(CONFIG_ARCH_RISCV64)
+     // Copy trap frame from parent (regs matches syscall_entry.S save area
+diff --git a/src/kernel/test/test_memory_safety.cpp b/src/kernel/test/test_memory_safety.cpp
+index b8d7839d..d2137822 100644
+--- a/src/kernel/test/test_memory_safety.cpp
++++ b/src/kernel/test/test_memory_safety.cpp
+@@ -65,13 +65,18 @@ JARVIS_TEST(memory_safety_mempool_free_null, "PRE: none | POST: none") {
  
--unsigned long __clzdi2(unsigned long val) {
-+// Issue #204: LTO must not internalize or GC these runtime-provided
-+// libcalls (the rv64 full-kernel link otherwise reports them undefined).
-+// externally_visible implies used and keeps them exported.
-+__attribute__((externally_visible)) unsigned long __clzdi2(unsigned long val) {
-     if (val == 0) return 64;
-     unsigned long count = 0;
-     if ((val >> 32) == 0) { count += 32; val <<= 32; }
-@@ -43,7 +46,7 @@ unsigned long __clzdi2(unsigned long val) {
-     return count;
+ // Runmode: kernel
+ // Testidea: Verifies MemPool::alloc rejects sizes larger than any pool.
+-// The largest pool is 8192 bytes (mempool.cpp). Allocating 8193 should fail.
+-// Input: MemPool::alloc(8193)
++// The largest pool is 8192 bytes (16384 on aarch64, mempool.cpp issue #104).
++// Allocating above the largest pool must fail.
++// Input: MemPool::alloc(max+1)
+ // Expect: Returns nullptr
+ // Depends: MemPool
+ JARVIS_TEST(memory_safety_mempool_alloc_large_rejected,
+             "PRE: none | POST: none") {
++#if defined(CONFIG_ARCH_AARCH64)
++    void *p = MemPool::alloc(16385);
++#else
+     void *p = MemPool::alloc(8193);
++#endif
+     JARVIS_ASSERT(p == nullptr);
+     JARVIS_TEST_PASS();
  }
- 
--unsigned long __ctzdi2(unsigned long val) {
-+__attribute__((externally_visible)) unsigned long __ctzdi2(unsigned long val) {
-     if (val == 0) return 64;
-     unsigned long count = 0;
-     if ((val & 0xFFFFFFFFUL) == 0) { count += 32; val >>= 32; }
