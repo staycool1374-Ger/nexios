@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #209 — clone frame unreadable: raw-phys VA + silent-skip (2026-09-21, CLOSED)
+- **Learned:** (1) clone()'s kernel-parent fallback used raw phys as VA on non-x86 (unmapped at EL1); EL1-sync default_exception (vectors.S) SILENTLY SKIPS faulting insns (elr+=4, no log) → 36 pushes became no-ops (sp=top-40 = the 5 non-writeback sturs), loads returned stale regs. Proved via in-kernel probe: top-sp=0x28, walk=0, ESR DFSC translation-L0, FAR in stack range, objdump loop present. (2) print via Logger::raw_write+print_hex only (%lx hangs). (3) `task`/`process` are NOT class names (task_core/process_lifecycle are) — 0-test runs are harness config errors, investigate before concluding. (4) Planner caveat (f) was wrong: canary installer only runs in user branch — verify side-benefit claims (auditor caught it).
+- **Adapted:** clone fallback HHDM on non-x86 (x86 ifdef-identical); aarch64_clone_frame_readback (36 slots + top-sp==288); counts 27→28. Filed #214 (silent-skip handler S3), #215 (caller OOB S3). riscv64 inherits fix uncovered — pin when riscv chain lands.
+- **Measured:** pre-fix FAIL (28/1, expected) vs post-fix 28/28 x5; x86 task_core/task_lifecycle/process_lifecycle/process_waitpid/tls green. SIL 3 APPROVED first round (3 S3 notes).
+- **Style re-surface:** failure-path leaks contained by snapshot boundary (accepted precedent); assert-before-teardown with allocation-free asserts.
+
 ### #104 — EL0 fork smoke landed (2026-09-21, CLOSED)
 - **Learned:** (1) Audit iter-1 caught a real release-link gap (FORK_MARKER_OBJ debug-only; release KERNEL link would break) — applied verbatim; aarch64 release is additionally guarded unreachable, defense in depth kept. (2) PARENT-OK (waitpid pid + status 0) is a genuine positive child-execution marker (faulted children never exit); CHILD-MARKER itself unassertable (shared fd offset overwrite by construction). (3) wait_for_termination_safe (need_resched + hlt) is the only viable EL0 join under TCG; pause-spins starve ticks.
 - **Adapted:** aarch64_fork_marker_smoke (tmpfs stage 4 KiB chunks → ElfLoader → fd1 capture → prio 11 → join → PARENT-OK assert); counts arch_aarch64 26→27.
