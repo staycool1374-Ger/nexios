@@ -78,6 +78,10 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                 cur->get_sporadic_server()->on_completion(
                     arch::Timer::ticks());
             }
+            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
+            // BLOCKED transition so an arrival landing between the two stores
+            // still observes the channel (old code woke on state alone).
+            cur->blocked_in_recv = true;
             cur->state = TaskState::BLOCKED;
             was_blocked = true;
             // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
@@ -100,10 +104,12 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                 break;
             }
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
+                cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 return static_cast<uint64_t>(-1);
             }
         }
+        cur->blocked_in_recv = false;
         IPC::recv_wait_cancel(*cur);
     } else {
         // Fallback (wheel arm failed: full wheel / non-BSP). The task
@@ -231,6 +237,12 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             // full RECEIVE, INV-4) — disambiguate empty-vs-oversized with
             // is_empty().
             if (!cur->msg_queue.is_empty()) {
+                // Issue #208 audit (S2): clear the recv channel marker on
+                // every loop exit.  Past the first iteration the flag is
+                // still set here; returning without clearing leaks a
+                // stale-true flag, and a later non-IPC BLOCKED + message
+                // arrival would then spuriously wake this task (#208 recurs).
+                cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 return static_cast<uint64_t>(-1);
             }
@@ -239,6 +251,9 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 cur->get_sporadic_server()->on_completion(
                     arch::Timer::ticks());
             }
+            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
+            // BLOCKED transition (same rationale as sys_receive above).
+            cur->blocked_in_recv = true;
             cur->state = TaskState::BLOCKED;
             was_blocked = true;
             Scheduler::dequeue_ready(*cur);
@@ -257,14 +272,17 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 break;
             }
             if (!cur->msg_queue.is_empty()) {
+                cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 return static_cast<uint64_t>(-1);
             }
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
+                cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 return static_cast<uint64_t>(-1);
             }
         }
+        cur->blocked_in_recv = false;
         IPC::recv_wait_cancel(*cur);
     } else {
         // Fallback (wheel arm failed: full wheel / non-BSP). The task

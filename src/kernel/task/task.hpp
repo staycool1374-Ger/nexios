@@ -282,6 +282,7 @@ struct TaskControlBlock {
            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
+          blocked_in_recv(false),
           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
           blocked_on_pager_fault(nullptr),
@@ -600,6 +601,15 @@ struct TaskControlBlock {
     /// when its reply is delivered (otherwise send_sync senders are never
     /// unblocked and hang forever).
     bool reply_wait;
+
+    /// @brief True while a task is BLOCKED in a receive wait (sys_receive /
+    /// sys_recv_fast) for a message on its own queue.  Lets IPC::send wake
+    /// a recv-waiter on message arrival.  Set immediately before the BLOCKED
+    /// transition, cleared on every loop exit (ok / timeout / oversized).
+    /// Issue #208: without this channel marker, the arrival wake cannot
+    /// distinguish recv-waiters from tasks blocked in non-IPC channels
+    /// (waitpid, pager, IRQ) and resumes them with stale wait state.
+    bool blocked_in_recv;
 
     /// @brief Pointer to the mutex this task is blocked on (as a waiter).
     /// Used for transitive priority inheritance propagation.

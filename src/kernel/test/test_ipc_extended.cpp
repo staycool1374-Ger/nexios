@@ -472,6 +472,110 @@ JARVIS_TEST(ipc_priority_inheritance_send, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: A message arriving for a task blocked in a NON-IPC channel must
+//           NOT requeue it (issue #208: a waitpid-blocked parent woken by an
+//           unrelated message resumes with the -1 block sentinel instead of
+//           the child's pid because the waitpid wake protocol never ran).
+// Input: Undispatched kernel task, BLOCKED + dequeued with waiting_child_pid
+//        set (mirrors the sys_waitpid block exactly) and no IPC wait flags;
+//        IPC::send one message to it.
+// Expect: send returns true (message delivered to the queue); the waiter
+//         stays BLOCKED and stays out of the ready queue; the message pops
+//         back intact (delivery really happened — the no-wake is not vacuous).
+// Depends: IPC::send arrival-wake gate, Scheduler::dequeue_ready.
+JARVIS_TEST(ipc_send_no_wake_non_ipc_waiter, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    // Non-returning entry: a timer tick between add_task and the block
+    // below must never terminate a fresh task (use-after-free on the
+    // waiter pointer).  The IrqGuard closes the add/block window
+    // (cookbook Rule 2); the spin is defense-in-depth.
+    auto *waiter = TaskControlBlock::create(
+        []() {
+            for (;;)
+                arch::pause();
+        },
+        11, 10);
+    JARVIS_ASSERT(waiter != nullptr);
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*waiter);
+        // Mirror the sys_waitpid block: BLOCKED + dequeued + non-IPC channel.
+        waiter->waiting_child_pid = 999999;
+        waiter->state = TaskState::BLOCKED;
+        Scheduler::dequeue_ready(*waiter);
+    }
+    JARVIS_ASSERT(!waiter->reply_wait);
+    JARVIS_ASSERT(waiter->blocked_on_queue == nullptr);
+    JARVIS_ASSERT(!waiter->blocked_in_recv);
+
+    Message msg{};
+    msg.sender_id = cur->id;
+    msg.type = 77;
+    msg.priority = 0;
+    msg.data_size = 0;
+    bool ok = IPC::send(waiter->id, msg, 0);
+    JARVIS_ASSERT_FMT(ok, "send to blocked waiter failed");
+    JARVIS_ASSERT_FMT(waiter->state == TaskState::BLOCKED,
+                      "non-IPC waiter woken by message arrival");
+    JARVIS_ASSERT_FMT(!waiter->in_ready_queue_,
+                      "non-IPC waiter requeued by message arrival");
+
+    Message back{};
+    JARVIS_ASSERT_FMT(waiter->msg_queue.pop(back), "message not queued");
+    JARVIS_ASSERT_FMT(back.type == 77, "message corrupted in queue");
+    kernel::test::terminate_and_drain(*waiter);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The gate's positive half — a task BLOCKED in a receive wait
+//           (blocked_in_recv, mirroring the sys_receive block) MUST still
+//           wake on message arrival (vfsd-style daemons depend on it).
+// Input: Undispatched kernel task, BLOCKED + dequeued with blocked_in_recv
+//        set; IPC::send one message to it.
+// Expect: send returns true; the waiter is READY and requeued.
+// Depends: IPC::send arrival-wake gate.
+JARVIS_TEST(ipc_send_wakes_recv_waiter, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    auto *waiter = TaskControlBlock::create(
+        []() {
+            for (;;)
+                arch::pause();
+        },
+        11, 10);
+    JARVIS_ASSERT(waiter != nullptr);
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*waiter);
+        // Mirror the sys_receive block: BLOCKED + dequeued + IPC wait channel.
+        waiter->blocked_in_recv = true;
+        waiter->state = TaskState::BLOCKED;
+        Scheduler::dequeue_ready(*waiter);
+    }
+
+    Message msg{};
+    msg.sender_id = cur->id;
+    msg.type = 78;
+    msg.priority = 0;
+    msg.data_size = 0;
+    bool ok = IPC::send(waiter->id, msg, 0);
+    JARVIS_ASSERT_FMT(ok, "send to recv waiter failed");
+    JARVIS_ASSERT_FMT(waiter->state == TaskState::READY,
+                      "recv waiter not woken by message arrival");
+    JARVIS_ASSERT_FMT(waiter->in_ready_queue_ || waiter->in_edf_queue_,
+                      "recv waiter not requeued by message arrival");
+
+    Message back{};
+    JARVIS_ASSERT_FMT(waiter->msg_queue.pop(back), "message not queued");
+    kernel::test::terminate_and_drain(*waiter);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all extended IPC unit tests with the test framework.
 // Input: None
 // Expect: All IPC extended tests registered via JARVIS_REGISTER_TEST
@@ -487,4 +591,6 @@ void register_ipc_extended_tests() {
     JARVIS_REGISTER_TEST(ipc_send_self_max_message_size);
     JARVIS_REGISTER_TEST(ipc_buf_handle_max_size);
     JARVIS_REGISTER_TEST(ipc_priority_inheritance_send);
+    JARVIS_REGISTER_TEST(ipc_send_no_wake_non_ipc_waiter);
+    JARVIS_REGISTER_TEST(ipc_send_wakes_recv_waiter);
 }

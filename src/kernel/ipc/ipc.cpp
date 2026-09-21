@@ -298,7 +298,18 @@ bool IPC::send(uint64_t dest_id, const Message &msg, uint64_t flags) {
         }
     }
 
-    if (tcb->state == TaskState::BLOCKED) {
+    // Issue #208: wake ONLY tasks waiting on an IPC channel.  A BLOCKED
+    // task may wait in a non-IPC channel (waitpid, pager fault, IRQ,
+    // mutex/semaphore/eventgroup/queue) — requeuing it on an unrelated
+    // message arrival resumes it with stale wait state (e.g. a waitpid
+    // waiter resumes with the -1 block sentinel instead of the child's
+    // pid because the waitpid wake protocol never ran).  reply_wait
+    // (send_sync) is already handled above; queue-full senders
+    // (blocked_on_queue) self-correct on the fullness re-check; receive
+    // waiters (blocked_in_recv) consume the arrival.
+    if (tcb->state == TaskState::BLOCKED &&
+        (tcb->reply_wait || tcb->blocked_on_queue != nullptr ||
+         tcb->blocked_in_recv)) {
         Scheduler::set_task_ready(*tcb);
         tcb->remaining_ticks = tcb->period_ticks;
     }
@@ -371,7 +382,14 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, uint64_t flags) {
         SpinLockGuard<sync::SpinLock> guard(ep->lock_);
         receiver = ep->bound_receiver;
     }
-    if (receiver && receiver->state == TaskState::BLOCKED) {
+    // Issue #208: same gate as IPC::send — do not requeue a receiver
+    // blocked in a non-IPC channel (waitpid, pager, IRQ, ...).  Endpoint
+    // receive never blocks, so a BLOCKED bound_receiver waits elsewhere;
+    // only IPC-channel waiters (reply_wait, queue-full senders,
+    // receive waiters) may wake on message arrival.
+    if (receiver && receiver->state == TaskState::BLOCKED &&
+        (receiver->reply_wait || receiver->blocked_on_queue != nullptr ||
+         receiver->blocked_in_recv)) {
         Scheduler::set_task_ready(*receiver);
         receiver->remaining_ticks = receiver->period_ticks;
     }

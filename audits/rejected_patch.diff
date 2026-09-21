@@ -1,24 +1,44 @@
-diff --git a/src/kernel/test/test_memory_safety.cpp b/src/kernel/test/test_memory_safety.cpp
---- a/src/kernel/test/test_memory_safety.cpp
-+++ b/src/kernel/test/test_memory_safety.cpp
-@@ -66,12 +66,17 @@
- // Runmode: kernel
- // Testidea: Verifies MemPool::alloc rejects sizes larger than any pool.
--// The largest pool is 8192 bytes (mempool.cpp). Allocating 8193 should fail.
--// Input: MemPool::alloc(8193)
-+// The largest pool is 8192 bytes (16384 on aarch64, mempool.cpp issue #104).
-+// Allocating above the largest pool must fail.
-+// Input: MemPool::alloc(max+1)
- // Expect: Returns nullptr
- // Depends: MemPool
- JARVIS_TEST(memory_safety_mempool_alloc_large_rejected,
-             "PRE: none | POST: none") {
--    void *p = MemPool::alloc(8193);
-+#if defined(CONFIG_ARCH_AARCH64)
-+    void *p = MemPool::alloc(16385);
-+#else
-+    void *p = MemPool::alloc(8193);
-+#endif
-     JARVIS_ASSERT(p == nullptr);
-     JARVIS_TEST_PASS();
- }
+diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
+--- a/src/kernel/syscall/syscall_handlers_ipc.cpp
++++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
+@@ -76,10 +76,12 @@
+             if (cur->get_sporadic_server()) {
+                 kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
+                 cur->get_sporadic_server()->on_completion(
+                     arch::Timer::ticks());
+             }
+-            cur->state = TaskState::BLOCKED;
+-            was_blocked = true;
+-            // Issue #208: mark the IPC wait channel (see blocked_in_recv).
+-            cur->blocked_in_recv = true;
++            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
++            // BLOCKED transition so an arrival landing between the two stores
++            // still observes the channel (old code woke on state alone).
++            cur->blocked_in_recv = true;
++            cur->state = TaskState::BLOCKED;
++            was_blocked = true;
+             // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
+@@ -237,5 +239,11 @@
+             if (!cur->msg_queue.is_empty()) {
++                // Issue #208 audit (S2): clear the recv channel marker on
++                // every loop exit.  Past the first iteration the flag is
++                // still set here; returning without clearing leaks a
++                // stale-true flag, and a later non-IPC BLOCKED + message
++                // arrival would then spuriously wake this task (#208 recurs).
++                cur->blocked_in_recv = false;
+                 IPC::recv_wait_cancel(*cur);
+                 return static_cast<uint64_t>(-1);
+             }
+             if (cur->get_sporadic_server()) {
+@@ -245,6 +253,7 @@
+             }
+-            cur->state = TaskState::BLOCKED;
+-            was_blocked = true;
+-            // Issue #208: mark the IPC wait channel (see blocked_in_recv).
+-            cur->blocked_in_recv = true;
++            // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
++            // BLOCKED transition (same rationale as sys_receive above).
++            cur->blocked_in_recv = true;
++            cur->state = TaskState::BLOCKED;
++            was_blocked = true;
+             Scheduler::dequeue_ready(*cur);

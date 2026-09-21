@@ -138,7 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
     {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
-    {"ipc_extended",          9,    0,       0      },  // size limits, mid-queue removal, timeout, inversion
+    {"ipc_extended",          11,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208)
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",        7,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A)
     {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
@@ -273,7 +273,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
     {"core",                439,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30)
-    {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
+    {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)
     {"libc_verify",          5,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only)
