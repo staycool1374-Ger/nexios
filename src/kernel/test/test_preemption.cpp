@@ -264,6 +264,177 @@ JARVIS_TEST(preemption_task_switch_does_not_switch_to_self,
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: A BLOCKED task's switch-away arms the deferred switch
+//           synchronously — no timer tick involved (issue #212: the aarch64
+//           SVC bridge calls exactly this function when the current task is
+//           BLOCKED after the handler; x86 covers the shared mechanism).
+// Input: Real parent (prio 11, FIXED) blocks in WAITPID on a live child
+//        (prio 5, FIXED), both registered under an IRQ guard; then invoke
+//        Scheduler::switch_away_from_terminating on the blocked parent
+//        (the bridge's call) and inspect the switch slots.
+// Expect: save_rsp_to armed (non-null), next_task_id == child,
+//         load_rsp_from == child's frame.
+// Depends: Scheduler::switch_away_from_terminating, SwSlots, sys_waitpid.
+JARVIS_TEST(preemption_blocked_arms_switch_synchronously,
+            "PRE: none | POST: none") {
+    PreemptionWaitContext ctx{};
+    auto *parent =
+        TaskControlBlock::create(preemption_wait_parent_entry, 11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->user_data = &ctx;
+
+    auto *child = TaskControlBlock::create(preemption_forever_child_entry, 5, 10);
+    JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
+    parent->add_child(child);
+    ctx.child_id_ = child->id;
+
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*parent);
+        Scheduler::add_task(*child);
+    }
+
+    Scheduler::reschedule();
+    while (parent->state != TaskState::BLOCKED &&
+           parent->state != TaskState::TERMINATED)
+        arch::pause();
+    JARVIS_ASSERT(parent->state == TaskState::BLOCKED);
+
+    // Save slot priors for restore (atomic-test precedent).
+    auto *old_save = __atomic_load_n(
+        &::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
+    uint64_t old_load = __atomic_load_n(
+        &::kernel::Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
+    uint64_t old_id = __atomic_load_n(
+        &::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+
+    // The exact call the aarch64 SVC bridge makes for a BLOCKED current.
+    // Under IrqGuard (cookbook Rule 2): a tick between publish and the
+    // slot reads below would consume the arm and fail the asserts.
+    uint64_t load_from = 0;
+    uint64_t armed_id = 0;
+    bool armed = false;
+    {
+        arch::IrqGuard arm_guard;
+        Scheduler::switch_away_from_terminating(*parent);
+
+        auto *save_to = __atomic_load_n(
+            &::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
+        load_from = __atomic_load_n(
+            &::kernel::Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
+        armed_id = __atomic_load_n(
+            &::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+        armed = (save_to != nullptr);
+    }
+#if defined(CONFIG_ARCH_X86_64)
+    uint64_t want_load = child->context.rsp;
+#elif defined(CONFIG_ARCH_AARCH64)
+    uint64_t want_load = child->context.sp_el0;
+#else
+    uint64_t want_load = child->context.sp;
+#endif
+    JARVIS_ASSERT_FMT(armed,
+                      "switch_away did not arm save_rsp_to for BLOCKED task");
+    JARVIS_ASSERT_FMT(armed_id == child->id,
+                      "arm targets %lu, want child %lu", armed_id, child->id);
+    JARVIS_ASSERT_FMT(load_from == want_load,
+                      "load_rsp_from %lx != child frame %lx", load_from,
+                      want_load);
+
+    // Restore slots before teardown (no stale arm may survive).
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), old_save,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::load_rsp_from(), old_load,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), old_id,
+                     __ATOMIC_RELEASE);
+
+    kernel::test::terminate_and_drain(*child);
+    Scheduler::terminate(*parent, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: switch_away on a BLOCKED task with no eligible next arms the
+//           idle fallback (never strands, never re-selects the blocked
+//           caller) — issue #212.
+// Input: Parent blocks in WAITPID on a live child then the child is fully
+//        terminated (TERMINATED, drained); invoke
+//        Scheduler::switch_away_from_terminating on the still-BLOCKED
+//        parent and inspect the arm target.
+// Expect: save_rsp_to armed; next_task_id == own idle task; the blocked
+//         parent is not selected.
+// Depends: Scheduler::switch_away_from_terminating, SwSlots.
+JARVIS_TEST(preemption_blocked_no_next_arms_idle,
+            "PRE: none | POST: none") {
+    PreemptionWaitContext ctx{};
+    auto *parent =
+        TaskControlBlock::create(preemption_wait_parent_entry, 11, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->user_data = &ctx;
+
+    auto *child = TaskControlBlock::create(preemption_forever_child_entry, 5, 10);
+    JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
+    parent->add_child(child);
+    ctx.child_id_ = child->id;
+
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*parent);
+        Scheduler::add_task(*child);
+    }
+
+    Scheduler::reschedule();
+    while (parent->state != TaskState::BLOCKED &&
+           parent->state != TaskState::TERMINATED)
+        arch::pause();
+    JARVIS_ASSERT(parent->state == TaskState::BLOCKED);
+
+    // Remove the only alternative: terminate and fully reap the child.
+    kernel::test::terminate_and_drain(*child);
+    auto *idle = Scheduler::task_at(0);
+    JARVIS_ASSERT_FMT(idle != nullptr, "no idle task at index 0");
+
+    auto *old_save = __atomic_load_n(
+        &::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
+    uint64_t old_id = __atomic_load_n(
+        &::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+
+    // Under IrqGuard (cookbook Rule 2): a tick between publish and the
+    // slot reads would consume the arm.
+    bool armed = false;
+    uint64_t armed_id = 0;
+    {
+        arch::IrqGuard arm_guard;
+        Scheduler::switch_away_from_terminating(*parent);
+
+        auto *save_to = __atomic_load_n(
+            &::kernel::Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE);
+        armed_id = __atomic_load_n(
+            &::kernel::Scheduler::SwSlots::next_task_id(), __ATOMIC_ACQUIRE);
+        armed = (save_to != nullptr);
+    }
+    JARVIS_ASSERT_FMT(armed,
+                      "switch_away did not arm for BLOCKED task");
+    JARVIS_ASSERT_FMT(armed_id == idle->id,
+                      "arm targets %lu, want idle %lu", armed_id, idle->id);
+
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), old_save,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), old_id,
+                     __ATOMIC_RELEASE);
+
+    Scheduler::terminate(*parent, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 void register_preemption_tests() {
     Logger::info("Registering preemption tests");
     JARVIS_REGISTER_TEST(preemption_needs_switch_higher_priority);
@@ -273,4 +444,6 @@ void register_preemption_tests() {
     JARVIS_REGISTER_TEST(preemption_interrupt_enable_disable_cycle);
     JARVIS_REGISTER_TEST(preemption_quantum_exhaustion);
     JARVIS_REGISTER_TEST(preemption_task_switch_does_not_switch_to_self);
+    JARVIS_REGISTER_TEST(preemption_blocked_arms_switch_synchronously);
+    JARVIS_REGISTER_TEST(preemption_blocked_no_next_arms_idle);
 }

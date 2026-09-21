@@ -51,7 +51,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
     {"scheduler_idle",       11,    0,       0      },  // idle_task(10) + idle_cleanup(1)
     {"scheduler_zombie",      5,    0,       0      },  // zombie_cleanup(4) + wcet_cleanup(1)
-    {"scheduler_preemption", 11,    0,       0      },  // preemption(7) + preemption_under_syscall(4)
+    {"scheduler_preemption", 13,    0,       0      },  // preemption(7) + preemption_under_syscall(4) + 2 block-arm tests (issue #212)
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
     {"scheduler_starvation",  3,    0,       0      },  // SchedulerStarvation + PriorityInversionChain5 + DeadlockNestedMutexLoad
@@ -272,7 +272,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                439,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30)
+    {"core",                441,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30) + 2 block-arm tests (issue #212)
     {"ipc",                 81,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208)
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)

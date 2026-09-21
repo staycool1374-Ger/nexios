@@ -1863,7 +1863,25 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
                                     uint64_t arg1, uint64_t arg2, uint64_t arg3,
                                     uint64_t *regs) {
-    return kernel::Syscall::handle(number, arg0, arg1, arg2, arg3, regs);
+    uint64_t ret =
+        kernel::Syscall::handle(number, arg0, arg1, arg2, arg3, regs);
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #212: synchronous deschedule-on-block.  A handler that blocks
+    // its task (waitpid/IPC — state BLOCKED + dequeued, no arm published)
+    // must not eret back to EL0: the task would synchronously consume the
+    // -1 with tick-timing deciding whether it ever deschedules.  Reuse
+    // switch_away_from_terminating's select+publish (it skips the
+    // RUNNING-requeue branch for non-RUNNING callers, early-returns if
+    // already armed, and never selects the BLOCKED caller itself); the
+    // syscall_entry.S epilogue applies the arm via
+    // irq_context_switch_common.  TERMINATED is owned by sys_exit's own
+    // call — gate BLOCKED only.  x86 untouched (own epilogue contract).
+    auto *cur = kernel::Scheduler::current_task();
+    if (cur != nullptr && cur->state == kernel::TaskState::BLOCKED) {
+        kernel::Scheduler::switch_away_from_terminating(*cur);
+    }
+#endif
+    return ret;
 }
 
 // ── Boot-time clock capture ──────────────────────────────────────────────────
