@@ -57,11 +57,6 @@ syscall_entry:
 .equ OFF_STVAL, 272
 .equ OFF_RET,  280
 
-    # TRACE: print 'A' after save area alloc
-    li a0, 65
-    li a7, 1
-    ecall
-
     # Save all GPRs (x1-x31)
     sd x1, OFF_RA(sp)
     sd x2, OFF_SP(sp)
@@ -104,6 +99,12 @@ syscall_entry:
     sd t0, OFF_SCAUSE(sp)
     csrr t0, stval
     sd t0, OFF_STVAL(sp)
+
+    # TRACE: print 'A' (relocated post-save by issue #185 — the pre-save
+    # SBI ecall clobbered the incoming user a0/a7 before they were saved)
+    li a0, 65
+    li a7, 1
+    ecall
 
     # TRACE: print 'B' after CSR save
     li a0, 66
@@ -153,18 +154,19 @@ syscall_entry:
     call handle_kernel_exception
 
 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
-    # §2 CONTRACT GAP (issues #67/#68 verification, ABI v1): this reads
-    # the number from OFF_A0 (user a0) and args from a1-a3, but
-    # src/libc/syscall.h specifies a7=num, a0-a3=args. riscv64 has no
-    # production boot path (issue #29), so this stub is unexecuted
-    # scaffolding — DO NOT "fix" the mapping without a runtime check;
-    # tracked separately. The TRACE ecalls above also clobber a0/a7
-    # before the GPR save for the same reason.
-    ld a0, OFF_A0(sp)          # syscall number from a0
-    ld a1, OFF_A1(sp)          # arg1
-    ld a2, OFF_A2(sp)          # arg2
-    ld a3, OFF_A3(sp)          # arg3
-    mv a4, sp                  # regs pointer
+    # §2 ABI (issue #185; docs/specs/syscall-abi-picolibc.md): number rides
+    # in user a7, args in a0-a3 (src/libc/syscall.h __syscall5) — mirrors
+    # the aarch64 stub (x8=num, x0-x3=args). C args go in a0-a5.
+    # sepc advances past the 4-byte ecall so sret does not re-trap.
+    ld t0, OFF_SEPC(sp)
+    addi t0, t0, 4
+    sd t0, OFF_SEPC(sp)
+    ld a0, OFF_A7(sp)          # number = user a7
+    ld a1, OFF_A0(sp)          # arg0
+    ld a2, OFF_A1(sp)          # arg1
+    ld a3, OFF_A2(sp)          # arg2
+    ld a4, OFF_A3(sp)          # arg3
+    mv a5, sp                  # regs pointer
     call syscall_handler
     sd a0, OFF_A0(sp)         # store return value into saved a0 slot
 
