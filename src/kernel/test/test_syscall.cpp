@@ -28,6 +28,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <string.hpp>
+#include <kernel/kernel.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -999,6 +1000,100 @@ JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+#if defined(CONFIG_ARCH_X86_64)
+
+// Runmode: kernel
+// Testidea: Pin the x86_64 int $0x80 bridge (issue #30): regs[0]=rax carries
+//           the number, return lands back in regs[0] (kernel.cpp:1776-1780).
+// Input: Dispatched kernel task builds a synthetic isr_stubs frame
+//        (isr_stubs.asm:140-154 push order: regs[0]=rax) with regs[0]=GETPID
+//        and calls the REAL handle_interrupt_c(0x80).
+// Expect: regs[0] == the calling task's id after the call.
+// Depends: handle_interrupt_c vector-0x80 path, Syscall::sys_getpid.
+JARVIS_TEST(syscall_abi_x86_bridge_conform, "PRE: none | POST: none") {
+    static uint64_t g_self = 0;
+    static uint64_t g_ret = 0;
+    auto *t = run_syscall_task([]() {
+        g_self = Scheduler::current_task() ? Scheduler::current_task()->id : 0;
+        uint64_t regs[22] = {};
+        regs[0] = static_cast<uint64_t>(SyscallNumber::GETPID);
+        regs[17] = 0x1000;  // rip slot (unused by the 0x80 path)
+        regs[18] = 0x08;    // kernel CS slot (unused by the 0x80 path)
+        handle_interrupt_c(0x80, 0, regs[17], regs, 0);
+        g_ret = regs[0];
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_FMT(g_ret == g_self && g_ret != 0,
+                      "GETPID via 0x80 bridge returned %lx, want task %lx",
+                      g_ret, g_self);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Pin the x86_64 arg slots (issue #30): regs[1]=rbx is arg0,
+//           regs[2]=rcx is arg1, and the two slots route independently.
+// Input: Dispatched kernel task drives KILL through handle_interrupt_c:
+//        (999999, 1) must fail pid lookup (-1); (999999, 0) must take the
+//        SIG_NONE short-circuit (0) without touching pid lookup
+//        (syscall_handlers_process.cpp:248-257).
+// Expect: -1 then 0 — proving arg0 and arg1 arrive from distinct slots.
+// Depends: handle_interrupt_c vector-0x80 path, Syscall::sys_kill.
+JARVIS_TEST(syscall_abi_x86_arg_routing, "PRE: none | POST: none") {
+    static uint64_t g_r1 = 0;
+    static uint64_t g_r2 = 0;
+    auto *t = run_syscall_task([]() {
+        uint64_t regs[22] = {};
+        regs[0] = static_cast<uint64_t>(SyscallNumber::KILL);
+        regs[1] = 999999;  // arg0 = nonexistent pid
+        regs[2] = 1;       // arg1 = valid signal -> pid lookup fails
+        handle_interrupt_c(0x80, 0, 0x1000, regs, 0);
+        g_r1 = regs[0];
+        // The bridge publishes the return into regs[0], clobbering the
+        // number slot — restore the frame exactly like a re-trapped SVC
+        // would before the second dispatch.
+        regs[0] = static_cast<uint64_t>(SyscallNumber::KILL);
+        regs[1] = 999999;
+        regs[2] = 0;  // arg1 = SIG_NONE -> short-circuit 0, pid ignored
+        handle_interrupt_c(0x80, 0, 0x1000, regs, 0);
+        g_r2 = regs[0];
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_FMT(g_r1 == static_cast<uint64_t>(-1),
+                      "KILL(999999,1) via bridge returned %lx, want -1", g_r1);
+    JARVIS_ASSERT_FMT(g_r2 == 0, "KILL(999999,0) via bridge returned %lx, want 0",
+                      g_r2);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Pin the x86_64 number-slot error path (issue #30): an
+//           out-of-range number in regs[0] dispatches to -1 (syscall.cpp:126).
+// Input: Dispatched kernel task calls handle_interrupt_c(0x80) with
+//        regs[0] = MAX_SYSCALL.
+// Expect: regs[0] == (uint64_t)-1.
+// Depends: handle_interrupt_c vector-0x80 path, Syscall::handle bounds check.
+JARVIS_TEST(syscall_abi_x86_bad_number, "PRE: none | POST: none") {
+    static uint64_t g_ret = 0;
+    auto *t = run_syscall_task([]() {
+        uint64_t regs[22] = {};
+        regs[0] = static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL);
+        handle_interrupt_c(0x80, 0, 0x1000, regs, 0);
+        g_ret = regs[0];
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_FMT(g_ret == static_cast<uint64_t>(-1),
+                      "bad number via bridge returned %lx, want -1", g_ret);
+    release_task(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+#endif  // defined(CONFIG_ARCH_X86_64)
+
 void register_syscall_tests() {
     Logger::info("Registering syscall tests");
 
@@ -1033,6 +1128,12 @@ void register_syscall_tests() {
     JARVIS_REGISTER_TEST(syscall_user_exec_valid_argv);
     JARVIS_REGISTER_TEST(syscall_user_exec_hostile_argv);
     JARVIS_REGISTER_TEST(syscall_error_string_maps);
+
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_REGISTER_TEST(syscall_abi_x86_bridge_conform);
+    JARVIS_REGISTER_TEST(syscall_abi_x86_arg_routing);
+    JARVIS_REGISTER_TEST(syscall_abi_x86_bad_number);
+#endif
 
     register_syscall_affinity_tests();
 }

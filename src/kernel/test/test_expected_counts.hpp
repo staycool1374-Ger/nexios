@@ -66,7 +66,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         29,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map
+    {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
 
@@ -247,10 +247,10 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   23,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression
+    {"arch_aarch64",          0,   26,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
-    {"arch_riscv64",          0,    0,       0      },
+    {"arch_riscv64",          0,    0,       3      },  // 3 ABI frame tests (issue #30); validation enabled by nonzero counts
 #endif
 
     // bench
@@ -272,7 +272,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // Structural/semantic aggregates (issue #173).  Values are filled
     // from measured `dump-counts` output; 0 disables validation.
-    {"core",                436,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift
+    {"core",                439,  0,       0      },  // scheduler+tasks+memory+syscall+sync+basic (#173): +1 checked_ptr api, +2 user-open, +4 klog/exec (#127/#134), +2 prior drift + 3 x86 ABI bridge tests (issue #30)
     {"ipc",                 79,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173)
     {"capability",          147,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134)
     {"proc_elf",            83,   0,       0      },  // process_* + elf_* + pt_merge + libc_verify 5 (issues #173, #75)

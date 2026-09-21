@@ -34,6 +34,8 @@
 #include <kernel/arch/pci.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/syscall/syscall.hpp>
+#include <kernel/task/scheduler.hpp>
 #include <lib/string.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <fdt/libfdt.h>
@@ -256,28 +258,31 @@ JARVIS_TEST(aarch64_gic_init) {
     JARVIS_TEST_PASS();
 }
 
-/// @brief Mask and unmask IRQ 64, verify the ISENABLER enable state.
+/// @brief Mask and unmask IRQ 32, verify the ISENABLER enable state.
 /// ICENABLER is a write-to-disable bank whose read-back is unreliable on
 /// QEMU virt GICv2; the enabled state is authoritative in ISENABLER.
+/// NOTE (issue #30): IRQ 64 is OUTSIDE the driver's valid window
+/// (GIC_MAX_IRQ=64, issue #198 — lines >= 64 must not touch MMIO), so the
+/// SPI probe uses IRQ 32 (ISENABLER bank 1, bit 0), the lowest SPI.
 JARVIS_TEST(aarch64_gic_mask_unmask) {
     volatile uint32_t *gicd = arch::gicd_reg(0);
 
-    // Enable IRQ 64 (SPI, ISENABLER bank 2, bit 0).
-    arch::ArchInterruptController::unmask(64);
-    uint32_t isenabler = gicd[0x100 / 4 + 2];
+    // Enable IRQ 32 (SPI, ISENABLER bank 1, bit 0).
+    arch::ArchInterruptController::unmask(32);
+    uint32_t isenabler = gicd[0x100 / 4 + 1];
     JARVIS_ASSERT_FMT(isenabler & (1U << 0),
-                      "GICD_ISENABLER bit 0 not set after unmask IRQ 64: 0x%x",
+                      "GICD_ISENABLER bit 0 not set after unmask IRQ 32: 0x%x",
                       isenabler);
 
-    // Mask IRQ 64 — the enable bit must clear.
-    arch::ArchInterruptController::mask(64);
-    isenabler = gicd[0x100 / 4 + 2];
+    // Mask IRQ 32 — the enable bit must clear.
+    arch::ArchInterruptController::mask(32);
+    isenabler = gicd[0x100 / 4 + 1];
     JARVIS_ASSERT_FMT((isenabler & (1U << 0)) == 0,
-                      "GICD_ISENABLER bit 0 still set after mask IRQ 64: 0x%x",
+                      "GICD_ISENABLER bit 0 still set after mask IRQ 32: 0x%x",
                       isenabler);
 
     // Restore the enabled state.
-    arch::ArchInterruptController::unmask(64);
+    arch::ArchInterruptController::unmask(32);
 
     JARVIS_TEST_PASS();
 }
@@ -732,6 +737,73 @@ JARVIS_TEST(aarch64_deep_copy_user_descriptors_valid) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Pin the aarch64 SVC register convention, dispatch half (issue #30):
+///        the saved-x8 slot carries the number, saved x0-x3 carry args, and
+///        the handler return is the x0 value (syscall_entry.S:55-61; the
+///        slot-0/+272 publish is asm-only and needs an EL0 round-trip — the
+///        #104 smoke test — so this pins extraction+mapping+dispatch here).
+///        Frame layout: frame[0..30]=x0..x30, [31]=SP_EL0, [32]=ELR,
+///        [33]=SPSR (syscall_entry.S:20-28).
+// Testidea: Build a synthetic save-area frame with GETPID in the x8 slot,
+//           extract number/args exactly per the asm rules, dispatch through
+//           the real Syscall::handle, assert the return equals GETPID's.
+// Input: frame[8]=GETPID, frame[0..3]=sentinels, frame[32]=ELR marker.
+// Expect: return == current task id (0 when the harness has no task).
+// Depends: Syscall::handle, Syscall::sys_getpid.
+JARVIS_TEST(aarch64_abi_frame_conform, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[8] = static_cast<uint64_t>(SyscallNumber::GETPID);  // x8 = number
+    frame[0] = 0xDEAD;  // x0 = arg0 sentinel (GETPID ignores args)
+    frame[1] = 0xBEEF;  // x1 = arg1 sentinel
+    frame[32] = 0x400044ULL;  // ELR marker (carried, not dispatched)
+    // Extraction replicates syscall_entry.S:57-59 exactly.
+    uint64_t num = frame[8];
+    uint64_t ret =
+        Syscall::handle(num, frame[0], frame[1], frame[2], frame[3], frame);
+    auto *cur = Scheduler::current_task();
+    uint64_t want = (cur != nullptr) ? cur->id : 0;
+    JARVIS_ASSERT_FMT(ret == want, "GETPID via x8-slot returned %lx, want %lx",
+                      ret, want);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Pin the aarch64 arg slots independently (issue #30): the x0 slot
+//           is arg0, the x1 slot is arg1.
+// Input: KILL through the documented extraction: (999999, 1) must fail pid
+//        lookup (-1); (999999, 0) must take the SIG_NONE short-circuit (0)
+//        (syscall_handlers_process.cpp:248-257).
+// Expect: -1 then 0 — proving arg0/arg1 arrive from distinct slots.
+// Depends: Syscall::handle, Syscall::sys_kill.
+JARVIS_TEST(aarch64_abi_arg_routing, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[8] = static_cast<uint64_t>(SyscallNumber::KILL);  // x8 = number
+    frame[0] = 999999;  // x0 = arg0 = nonexistent pid
+    frame[1] = 1;       // x1 = arg1 = valid signal -> pid lookup fails
+    uint64_t r1 =
+        Syscall::handle(frame[8], frame[0], frame[1], frame[2], frame[3], frame);
+    frame[1] = 0;  // x1 = SIG_NONE -> short-circuit 0, pid ignored
+    uint64_t r2 =
+        Syscall::handle(frame[8], frame[0], frame[1], frame[2], frame[3], frame);
+    JARVIS_ASSERT_FMT(r1 == static_cast<uint64_t>(-1),
+                      "KILL(999999,1) returned %lx, want -1", r1);
+    JARVIS_ASSERT_FMT(r2 == 0, "KILL(999999,0) returned %lx, want 0", r2);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Pin the aarch64 number-slot error path (issue #30).
+// Input: x8 slot = MAX_SYSCALL through the documented extraction.
+// Expect: (uint64_t)-1 (syscall.cpp:126 bounds check).
+// Depends: Syscall::handle bounds check.
+JARVIS_TEST(aarch64_abi_bad_number, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[8] = static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL);
+    uint64_t ret =
+        Syscall::handle(frame[8], frame[0], frame[1], frame[2], frame[3], frame);
+    JARVIS_ASSERT_FMT(ret == static_cast<uint64_t>(-1),
+                      "bad number returned %lx, want -1", ret);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all AArch64 architecture test cases.
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -759,6 +831,9 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_pte_user_page_pxn);
     JARVIS_REGISTER_TEST(aarch64_pte_user_nx_uxn);
     JARVIS_REGISTER_TEST(aarch64_deep_copy_user_descriptors_valid);
+    JARVIS_REGISTER_TEST(aarch64_abi_frame_conform);
+    JARVIS_REGISTER_TEST(aarch64_abi_arg_routing);
+    JARVIS_REGISTER_TEST(aarch64_abi_bad_number);
 }
 
 #endif

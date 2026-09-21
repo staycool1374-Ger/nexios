@@ -34,6 +34,8 @@
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/syscall/syscall.hpp>
+#include <kernel/task/scheduler.hpp>
 #include <lib/string.hpp>
 
 using namespace kernel;
@@ -452,6 +454,72 @@ JARVIS_TEST(riscv64_medeleg_selected) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Pin the riscv64 ecall register convention, dispatch half (issue #30):
+///        the saved-a7 slot carries the number, saved a0-a3 carry args, and
+///        the handler return is the a0 value (syscall_entry.S:164-171; the
+///        OFF_A0-slot store is asm-only and needs a U-mode round-trip — the
+///        #29 runtime test — so this pins extraction+mapping+dispatch here).
+///        Slot indices are qword offsets of the OFF_* values
+///        (syscall_entry.S:32-39: A0=72, A1=80, A2=88, A3=96, A7=128).
+// Testidea: Build a synthetic trap frame with GETPID in the a7 slot,
+//           extract number/args exactly per the asm rules, dispatch through
+//           the real Syscall::handle, assert the return equals GETPID's.
+// Input: frame[16]=GETPID, frame[9..10]=sentinels.
+// Expect: return == current task id (0 when the harness has no task).
+// Depends: Syscall::handle, Syscall::sys_getpid.
+JARVIS_TEST(riscv64_abi_frame_conform, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[16] = static_cast<uint64_t>(SyscallNumber::GETPID);  // a7 = number
+    frame[9] = 0xDEAD;   // a0 = arg0 sentinel (GETPID ignores args)
+    frame[10] = 0xBEEF;  // a1 = arg1 sentinel
+    // Extraction replicates syscall_entry.S:164-168 exactly.
+    uint64_t num = frame[16];
+    uint64_t ret =
+        Syscall::handle(num, frame[9], frame[10], frame[11], frame[12], frame);
+    auto *cur = Scheduler::current_task();
+    uint64_t want = (cur != nullptr) ? cur->id : 0;
+    JARVIS_ASSERT_FMT(ret == want, "GETPID via a7-slot returned %lx, want %lx",
+                      ret, want);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Pin the riscv64 arg slots independently (issue #30): the a0 slot
+//           is arg0, the a1 slot is arg1.
+// Input: KILL through the documented extraction: (999999, 1) must fail pid
+//        lookup (-1); (999999, 0) must take the SIG_NONE short-circuit (0)
+//        (syscall_handlers_process.cpp:248-257).
+// Expect: -1 then 0 — proving arg0/arg1 arrive from distinct slots.
+// Depends: Syscall::handle, Syscall::sys_kill.
+JARVIS_TEST(riscv64_abi_arg_routing, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[16] = static_cast<uint64_t>(SyscallNumber::KILL);  // a7 = number
+    frame[9] = 999999;   // a0 = arg0 = nonexistent pid
+    frame[10] = 1;       // a1 = arg1 = valid signal -> pid lookup fails
+    uint64_t r1 = Syscall::handle(frame[16], frame[9], frame[10], frame[11],
+                                  frame[12], frame);
+    frame[10] = 0;  // a1 = SIG_NONE -> short-circuit 0, pid ignored
+    uint64_t r2 = Syscall::handle(frame[16], frame[9], frame[10], frame[11],
+                                  frame[12], frame);
+    JARVIS_ASSERT_FMT(r1 == static_cast<uint64_t>(-1),
+                      "KILL(999999,1) returned %lx, want -1", r1);
+    JARVIS_ASSERT_FMT(r2 == 0, "KILL(999999,0) returned %lx, want 0", r2);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Pin the riscv64 number-slot error path (issue #30).
+// Input: a7 slot = MAX_SYSCALL through the documented extraction.
+// Expect: (uint64_t)-1 (syscall.cpp:126 bounds check).
+// Depends: Syscall::handle bounds check.
+JARVIS_TEST(riscv64_abi_bad_number, "PRE: none | POST: none") {
+    uint64_t frame[36] = {};
+    frame[16] = static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL);
+    uint64_t ret = Syscall::handle(frame[16], frame[9], frame[10], frame[11],
+                                   frame[12], frame);
+    JARVIS_ASSERT_FMT(ret == static_cast<uint64_t>(-1),
+                      "bad number returned %lx, want -1", ret);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all riscv64 architecture tests.
 void register_riscv64_tests() {
     Logger::info("Registering riscv64 architecture tests");
@@ -474,6 +542,9 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_satp_csr);
     JARVIS_REGISTER_TEST(riscv64_boot_mvendorid);
     JARVIS_REGISTER_TEST(riscv64_medeleg_selected);
+    JARVIS_REGISTER_TEST(riscv64_abi_frame_conform);
+    JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
+    JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
 }
 
 #endif
