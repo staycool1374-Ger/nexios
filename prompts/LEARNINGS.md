@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #28 — aarch64 production boot path (2026-09-22, CLOSED)
+- **Learned:** (1) EL1→EL0 return was already live (fork-marker smoke green) — the gap was fault POLICY, not mechanism: park-on-EL0-fault wedged the whole gate (proven by pre-fix TIMEOUT probe). Untested failure paths, not happy paths, gate "production". (2) sys_exit's ISR rule generalizes: never Scheduler::terminate the current task from exception context — state+exit+switch_away_from_terminating, asm applies via irq_context_switch_common. (3) Reaper timing vs snapshot check: TERMINATED TCBs freed ~100 ticks later log EG/FD deltas — teardown with terminate_err+drain for deterministic zero-delta (check() is warn-only, restore cleans anyway, but zero-delta is the discipline).
+- **Adapted:** el0 fault → TERMINATED/-SIGSEGV + switch; vectors.S apply-or-park epilogue; aarch64_el0_fault_terminates (29/29); waitpid-parent wake filed as #217.
+- **Measured:** 29/29 aarch64 zero RESOURCE deltas, x86 task_core 6/6, riscv64 links, build Errors 0. SIL 3 APPROVED (1 S3 doc note, accepted).
+- **Style re-surface:** extern-C getters for test-observable latches; fault-path comments must state what is NOT done (waitpid wake) + where it goes (#217).
+
 ### #215 — stale clone caller conventions (2026-09-22, CLOSED)
 - **Learned:** (1) exec_into_current's aarch64 branch was a LIVE bug hiding as dead code: sys_exec forwards the live SVC frame; convention-B writes never redirected ELR (no EL0 caller yet → unobservable, but one exec away from failure). Untested ≠ dead — classify reachability, not coverage. (2) Shadow/duplicated constants strike again (pci.hpp vs pci_impl.hpp in #216; regs maps in tests here) — single-choke-point helpers beat scattered ifdefs (10 sites → 1 helper). (3) Cross-arch header changes break the THIRD arch first: riscv -Werror unused-param caught what x86/aarch64 builds hid — always link-check all three arches for shared-header edits.
 - **Adapted:** make_synthetic_clone_frame() (37 slots, per-arch PC/SP); elf exec slots regs[31/32/33]; stale #204 comment corrected.
