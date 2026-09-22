@@ -1332,17 +1332,21 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
 
 /// @brief Wake a parent blocked in waitpid for a child that just terminated.
 /// Mirrors the wake performed by Syscall::sys_exit, but for non-sys_exit
-/// termination paths (Scheduler::terminate, deadline miss, cleanup_test_tasks)
-/// so a parent blocked in waitpid is not left waiting forever on a child that
-/// exited via a path other than sys_exit.
+/// termination paths (Scheduler::terminate, deadline miss, cleanup_test_tasks,
+/// EL0-fault kill — issue #217) so a parent blocked in waitpid is not left
+/// waiting forever on a child that exited via a path other than sys_exit.
 /// @param child The just-terminated child task.
-static void wake_waiting_parent(TaskControlBlock &child) {
+void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     if (child.parent_id == 0)
         return;
     auto *p = Scheduler::find_task(child.parent_id);
     if (!p)
         return;
-    if (p->waiting_child_pid != child.id)
+    // Issue #217: match waitpid(-1) (any child) like sys_exit does — a
+    // wait-any parent must observe every child death, not just sys_exit.
+    constexpr uint64_t kWaitAny = static_cast<uint64_t>(-1);
+    if (p->waiting_child_pid != child.id &&
+        p->waiting_child_pid != kWaitAny)
         return;
 
     // Deliver the child's exit status to a parent blocked in waitpid.

@@ -194,8 +194,8 @@ volatile uint64_t g_last_el0_elr = 0;
 ///        syscall_handlers_misc.cpp).  The asm caller applies the pending
 ///        switch via irq_context_switch_common; if no task is current (no
 ///        user context to kill) park as a last resort.
-///        Caveat (#28 Phase B): a parent BLOCKED in waitpid on the faulted
-///        child is not woken (status write needs the parent pagetable) —
+///        A parent BLOCKED in waitpid IS woken (issue #217:
+///        wake_waiting_parent delivers status + PID before the switch);
 ///        polled waiters (wait_for_termination_safe) observe TERMINATED.
 extern "C" void aarch64_el0_fault_handler() {
     uint64_t esr = 0;
@@ -213,6 +213,10 @@ extern "C" void aarch64_el0_fault_handler() {
         t->state = kernel::TaskState::TERMINATED;
         t->exit_code = static_cast<uint64_t>(
             -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+        // Issue #217: wake a parent blocked in waitpid BEFORE switching
+        // away (wake needs parent_id, which it clears) so the woken
+        // parent can be selected as the switch successor.
+        kernel::Scheduler::wake_waiting_parent(*t);
         kernel::Scheduler::switch_away_from_terminating(*t);
         return;
     }

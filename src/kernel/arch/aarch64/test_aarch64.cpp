@@ -249,6 +249,111 @@ JARVIS_TEST(aarch64_el0_fault_terminates, "PRE: none | POST: none") {
     test::mark_vfs_touched();
     JARVIS_TEST_PASS();
 }
+
+namespace {
+// Issue #217: kernel parent blocking in the real WAITPID syscall
+// (preemption_wait_parent_entry pattern).  The resumed flag is set only
+// after the BLOCKED spin exits, i.e. only if the fault kill woke us.
+struct FaultWaitContext {
+    uint64_t child_id_;
+    uint64_t status_;
+    uint64_t slot0_;
+    volatile bool resumed_;
+};
+void fault_wait_parent_entry() {
+    auto *self = kernel::Scheduler::current_task();
+    auto *ctx =
+        reinterpret_cast<FaultWaitContext *>(self->user_data);
+    ctx->status_ = 0;
+    kernel::Syscall::handle(
+        static_cast<uint64_t>(kernel::SyscallNumber::WAITPID),
+        ctx->child_id_, reinterpret_cast<uint64_t>(&ctx->status_), 0, 0,
+        nullptr);
+    while (self->state == kernel::TaskState::BLOCKED)
+        arch::hlt();
+    ctx->resumed_ = true;
+    // Capture the saved-x0 PID return immediately: the wake wrote it into
+    // this frame's slot 0, but any later switch-out would overlay slot 0
+    // with live x0.  The harness cannot read it reliably post-mortem.
+    auto *sp = reinterpret_cast<uint64_t *>(self->context.sp_el0);
+    ctx->slot0_ = (sp != nullptr) ? sp[0] : 0;
+    // Self-terminate via the full path (task context — safe), then park:
+    // aarch64 kernel tasks have no entry-return trampoline (x30 == 0),
+    // so returning would ret into 0 (EL1 fault).
+    kernel::Scheduler::terminate(*self, 0);
+    for (;;)
+        arch::hlt();
+}
+}  // namespace
+
+// Issue #217: fault kill must wake a parent blocked in waitpid with the
+// child's PID (saved-x0 slot) + status -SIGSEGV.  Kernel parent (prio 20)
+// blocks in real WAITPID on the poisoned-ELR loader child (prio 11);
+// the EL0 fault → handler marks TERMINATED, wakes the parent, switches
+// away.  No EL0/userspace changes: the child never executes userspace.
+JARVIS_TEST(aarch64_el0_fault_wakes_waitpid_parent, "PRE: none | POST: none") {
+    using namespace kernel;
+    FaultWaitContext ctx{};
+    ctx.resumed_ = false;
+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
+                                          _binary_fork_marker_img_start);
+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        fm_write_file(kFmImagePath, _binary_fork_marker_img_start, img_size) !=
+            0,
+        "tmpfs stage failed");
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load(kFmImagePath) == elf::LoadResult::OK,
+        "request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+                      "take_completed failed");
+    test::mark_vfs_touched();
+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);
+    JARVIS_ASSERT_FMT(frame != nullptr, "no initial frame");
+    frame[32] = 0x5000000000ULL;  // unmapped user VA: fetch faults at EL0
+    t->priority = 11;
+    t->base_priority = 11;
+    auto *parent = TaskControlBlock::create(fault_wait_parent_entry, 20, 10);
+    JARVIS_ASSERT_FMT(parent != nullptr, "parent create failed");
+    parent->user_data = &ctx;
+    // Pinned FIXED (issue #19 cookbook): no EDF surprises on either side.
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
+    parent->add_child(t);
+    ctx.child_id_ = t->id;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*parent);
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    // Parent (prio 20) blocks first; child faults; wake resumes the
+    // parent, which self-terminates on entry return.
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::wait_for_termination_safe(parent);
+    // Capture TCB state BEFORE teardown (Rule 5: teardown frees).
+    const uint64_t status = ctx.status_;
+    const uint64_t waiting = parent->waiting_child_pid;
+    const bool resumed = ctx.resumed_;
+    const uint64_t child_id = ctx.child_id_;
+    const uint64_t slot0 = ctx.slot0_;
+    if (TaskControlBlock::is_valid(t) && t != Scheduler::current_task())
+        (void)Scheduler::terminate_err(*t, t->exit_code);
+    kernel::test::terminate_and_drain(*parent);
+    Scheduler::drain_zombie_list();
+    fm_cleanup(kFmImagePath);
+    test::mark_vfs_touched();
+    JARVIS_ASSERT_FMT(resumed, "waitpid parent was never woken");
+    JARVIS_ASSERT_FMT(waiting == 0, "parent still waiting after wake");
+    JARVIS_ASSERT_FMT(
+        status == static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGSEGV)),
+        "status is not -SIGSEGV");
+    JARVIS_ASSERT_FMT(slot0 == child_id, "saved-x0 PID return missing");
+    JARVIS_TEST_PASS();
+}
 #include <lib/string.hpp>
 #include <kernel/boot/bootinfo.hpp>
 #include <fdt/libfdt.h>
@@ -1091,6 +1196,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_fork_marker_smoke);
     JARVIS_REGISTER_TEST(aarch64_clone_frame_readback);  // issue #209
     JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
+    JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
 }
 
 #endif

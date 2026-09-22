@@ -443,6 +443,14 @@ class Scheduler {
     ///        terminate() above delegates and warns on refusal.
     static errors::SchedulerError terminate_err(TaskControlBlock &task,
                                                 uint64_t exit_code) noexcept;
+    /// @brief Wake a parent blocked in waitpid for a child that just
+    ///        terminated via a non-sys_exit path (issue #217: EL0-fault
+    ///        kill; also terminate, deadline miss).  Mirrors the wake
+    ///        Syscall::sys_exit performs inline, including the waitpid(-1)
+    ///        match.  Lock-free on the UP/test path (set_task_ready only
+    ///        takes scheduler_lock_ for down-CPU targets); safe from
+    ///        IRQ-masked fault context.
+    static void wake_waiting_parent(TaskControlBlock &child) noexcept;
     /// @brief Entry point for the deadline-monitor task (priority 127).
     ///        Waits on an atomic handoff flag, calls scan_deadlines() when
     ///        woken by on_tick().  Only compiled when
