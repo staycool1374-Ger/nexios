@@ -1,262 +1,188 @@
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 53f82ece..1712b36b 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -831,10 +831,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     regs[21] = arch::SEG_USER_DATA;
-     regs[0] = 0;
- #elif defined(CONFIG_ARCH_AARCH64)
--    regs[0] = 0;           // X0 = 0
--    regs[17] = hdr->entry; // ELR_EL1 (index 17)
--    regs[19] = 0x0;        // SPSR_EL1: M[4:0]=EL0t (AArch64 EL0) (index 19)
--    regs[20] = user_rsp;   // SP_EL0 (index 20)
-+    regs[0] = 0;                 // X0 = 0
-+    regs[32] = hdr->entry;       // ELR_EL1 (issue #215: was regs[17]/x17)
-+    regs[33] = 0x0;              // SPSR_EL1: M[4:0]=EL0t (was regs[19])
-+    regs[31] = user_rsp;         // SP_EL0 (was regs[20])
- #elif defined(CONFIG_ARCH_RISCV64)
-     (void)regs;
-     (void)user_rsp;
-diff --git a/src/kernel/test/test_pml4_clone.cpp b/src/kernel/test/test_pml4_clone.cpp
-index 5bb32293..427d5529 100644
---- a/src/kernel/test/test_pml4_clone.cpp
-+++ b/src/kernel/test/test_pml4_clone.cpp
-@@ -490,12 +490,8 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
-     auto *parent = TaskControlBlock::create(
-         []() {
-             auto *self = Scheduler::current_task();
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index 4906eba3..2729db15 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -5,6 +5,8 @@
+ #include <kernel/arch/aarch64/hal/gic.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/kernel.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <signal.hpp>
  
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -660,12 +656,8 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
-     auto *parent = TaskControlBlock::create(
-         []() {
-             auto *self = Scheduler::current_task();
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
+ namespace arch {
  
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -746,12 +738,8 @@ JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
+@@ -181,13 +183,20 @@ volatile uint64_t g_last_el0_far = 0;
+ volatile uint64_t g_last_el0_elr = 0;
+ } // namespace
  
-     auto *parent = TaskControlBlock::create(
-         []() {
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-diff --git a/src/kernel/test/test_process.cpp b/src/kernel/test/test_process.cpp
-index 4c46472b..93523d2c 100644
---- a/src/kernel/test/test_process.cpp
-+++ b/src/kernel/test/test_process.cpp
-@@ -324,12 +324,8 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
-     auto *parent = TaskControlBlock::create(
-         []() {
-             auto *self = Scheduler::current_task();
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -472,12 +468,8 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
-     auto *parent = TaskControlBlock::create(
-         []() {
-             auto *self = Scheduler::current_task();
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -539,12 +531,8 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
- 
-     auto *parent = TaskControlBlock::create(
-         []() {
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -628,12 +616,8 @@ JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
-                 return;
-             g_ret = 0;
- 
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             // clone() copies the fd_table (with vnode_ref_inc on each used
-             // vnode).  The child is never add_task'd; cleanup + delete frees
-diff --git a/src/kernel/test/test_sched_helpers.hpp b/src/kernel/test/test_sched_helpers.hpp
-index 287e3e2c..a8a0a830 100644
---- a/src/kernel/test/test_sched_helpers.hpp
-+++ b/src/kernel/test/test_sched_helpers.hpp
-@@ -244,6 +244,38 @@ inline void trigger_deadline_monitor_scan() {
+-/// @brief EL0 synchronous-fault handler called from vectors.S (issue #184).
+-///        Non-SVC faults from EL0 land here.  EL0 tasks do not run yet
+-///        (bring-up issue #28), so any arrival is deeply wrong: latch
+-///        ESR/FAR/ELR for post-mortem GDB and park the CPU.  Runs with
+-///        interrupts masked (vector entry); must not re-enable IRQs,
+-///        touch the scheduler, or return (vectors.S erets on return,
+-///        but there is no task to resume to).
++/// @brief EL0 synchronous-fault handler called from vectors.S (issues
++///        #184/#28).  Non-SVC faults from EL0 land here.  Latch ESR/FAR/ELR
++///        for post-mortem GDB, mark the faulting task TERMINATED
++///        (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit
++///        self-termination path.  Runs with interrupts masked (vector
++///        entry); must not re-enable IRQs, and must NOT call
++///        Scheduler::terminate (ISR-unsafe: switch_to_task resolves the
++///        live exception RSP as the save owner — see
++///        syscall_handlers_misc.cpp).  The asm caller applies the pending
++///        switch via irq_context_switch_common; if no task is current (no
++///        user context to kill) park as a last resort.
++///        Caveat (#28 Phase B): a parent BLOCKED in waitpid on the faulted
++///        child is not woken (status write needs the parent pagetable) —
++///        polled waiters (wait_for_termination_safe) observe TERMINATED.
+ extern "C" void aarch64_el0_fault_handler() {
+     uint64_t esr = 0;
+     uint64_t far = 0;
+@@ -198,11 +207,23 @@ extern "C" void aarch64_el0_fault_handler() {
+     g_last_el0_esr = esr;
+     g_last_el0_far = far;
+     g_last_el0_elr = elr;
++    kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
++    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
++        t->state != kernel::TaskState::TERMINATED) {
++        t->state = kernel::TaskState::TERMINATED;
++        t->exit_code = static_cast<uint64_t>(
++            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
++        kernel::Scheduler::switch_away_from_terminating(*t);
++        return;
++    }
+     for (;;) {
+         arch::pause();
+     }
  }
- #endif
  
-+/// @brief Build a synthetic per-arch register frame for
-+///        TaskControlBlock::clone() (issue #215).  Sized for the arch frame
-+///        layout so clone() never reads out of bounds: x86_64 reads
-+///        regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1,
-+///        SPSR_EL1), riscv64 reads regs[0..36].  Callers declare 37 slots on
-+///        every arch; each arch populates its own PC/SP slots (content is
-+///        otherwise zero — no test asserts frame echo).
-+/// @param[out] regs  37-slot frame to fill.
-+/// @param[in]  entry Entry-point/PC value for the arch's program-counter slot.
-+/// @param[in]  stack Stack-pointer value for the arch's SP slot.
-+inline void make_synthetic_clone_frame(uint64_t (&regs)[37],
-+                                       uint64_t entry = 0x1000,
-+                                       uint64_t stack = 0x80000000) {
-+    for (int i = 0; i < 37; ++i)
-+        regs[i] = 0;
-+#if defined(CONFIG_ARCH_X86_64)
-+    regs[17] = entry;
-+    regs[18] = arch::SEG_USER_CODE;
-+    regs[19] = arch::RFLAGS_DEFAULT;
-+    regs[20] = stack;
-+    regs[21] = arch::SEG_USER_DATA;
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    regs[32] = entry;  // ELR_EL1
-+    regs[33] = 0;      // SPSR_EL1
-+    regs[31] = stack;  // SP_EL0
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    regs[31] = entry;  // SEPC
-+    regs[32] = 0;      // SSTATUS
-+    (void)stack;  // no SP slot in the riscv64 frame layout
-+#endif
-+}
++/// @brief Post-mortem readback of the last latched EL0 fault ESR (tests).
++extern "C" uint64_t aarch64_last_el0_esr() { return g_last_el0_esr; }
 +
- } // namespace kernel::test
+ /// @brief EL1 unexpected-sync-fault handler called from vectors.S (issue
+ ///        #214).  Any EL1 sync fault is a kernel bug — the old skip-and-eret
+ ///        behavior masked them (issue #209).  Dumps ESR/FAR/ELR over the
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index 7a2e21e3..76358dd0 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -41,6 +41,7 @@
+ #include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/test/test_isolate.hpp>
+ #include <kernel/elf/elf_loader.hpp>
++#include <signal.hpp>
+ #include <kernel/vfs/vfs.hpp>
  
- /// @brief  Create a TCB for test use and register it with the scheduler WITHOUT
-diff --git a/src/kernel/test/test_task.cpp b/src/kernel/test/test_task.cpp
-index bbb3e96a..e12f9f6a 100644
---- a/src/kernel/test/test_task.cpp
-+++ b/src/kernel/test/test_task.cpp
-@@ -90,12 +90,8 @@ JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
+ /// @brief aarch64 EL0 fork smoke test (issue #104): the fork-marker program
+@@ -188,6 +189,66 @@ JARVIS_TEST(aarch64_fork_marker_smoke, "PRE: none | POST: none") {
+     JARVIS_ASSERT_FMT(parent_ok, "PARENT-OK missing from capture");
+     JARVIS_TEST_PASS();
+ }
++
++// Issue #28: a non-SVC EL0 fault must terminate the task (exit -SIGSEGV),
++// not park the CPU.  Loads the fork-marker image (valid user pagetable +
++// stack), poisons the initial frame's ELR slot (vectors.S save area,
++// ELR at slot 32) with an unmapped VA, and dispatches: fetch faults at
++// EL0 (Instruction Abort) → el0_sync → aarch64_el0_fault_handler.
++extern "C" uint64_t aarch64_last_el0_esr();
++JARVIS_TEST(aarch64_el0_fault_terminates, "PRE: none | POST: none") {
++    using namespace kernel;
++    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
++                                          _binary_fork_marker_img_start);
++    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
++    elf::ElfLoader::reset();
++    JARVIS_ASSERT_FMT(
++        fm_write_file(kFmImagePath, _binary_fork_marker_img_start, img_size) !=
++            0,
++        "tmpfs stage failed");
++    JARVIS_ASSERT_FMT(
++        elf::ElfLoader::request_load(kFmImagePath) == elf::LoadResult::OK,
++        "request_load failed");
++    elf::ElfLoader::wait_loader_idle();
++    TaskControlBlock *t = elf::ElfLoader::take_completed();
++    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
++                      "take_completed failed");
++    test::mark_vfs_touched();
++    // Poison ELR only — SP_EL0/SPSR stay loader-valid so the dispatch
++    // guard (non-zero ELR, EL0t mode) passes and eret reaches EL0.
++    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);
++    JARVIS_ASSERT_FMT(frame != nullptr, "no initial frame");
++    frame[32] = 0x5000000000ULL;  // unmapped user VA: fetch faults at EL0
++    t->priority = 11;
++    t->base_priority = 11;
++    {
++        arch::IrqGuard ig{};
++        Scheduler::add_task(*t);
++    }
++    Scheduler::reschedule();
++    kernel::test::wait_for_termination_safe(t);
++    JARVIS_ASSERT_FMT(t->state == TaskState::TERMINATED,
++                      "EL0 fault did not terminate the task");
++    JARVIS_ASSERT_FMT(
++        t->exit_code ==
++            static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGSEGV)),
++        "exit code is not -SIGSEGV");
++    const uint64_t esr = aarch64_last_el0_esr();
++    JARVIS_ASSERT_FMT(((esr >> 26) & 0x3FULL) == 0x20,
++                      "ESR EC is not EL0 Instruction Abort");
++    // Deterministic release: the periodic reaper would collect the
++    // TERMINATED TCB ~100 ticks later, but the snapshot check runs first
++    // and would log an EventGroup/FD delta.  terminate_err is the
++    // non-current full path (dequeue + wake + release_zombie); drain
++    // frees synchronously (task is not current on any CPU).
++    if (TaskControlBlock::is_valid(t) &&
++        t != Scheduler::current_task())
++        (void)Scheduler::terminate_err(*t, t->exit_code);
++    Scheduler::drain_zombie_list();
++    fm_cleanup(kFmImagePath);
++    test::mark_vfs_touched();
++    JARVIS_TEST_PASS();
++}
+ #include <lib/string.hpp>
+ #include <kernel/boot/bootinfo.hpp>
+ #include <fdt/libfdt.h>
+@@ -1029,6 +1090,7 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_abi_bad_number);
+     JARVIS_REGISTER_TEST(aarch64_fork_marker_smoke);
+     JARVIS_REGISTER_TEST(aarch64_clone_frame_readback);  // issue #209
++    JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
+ }
  
-     auto *parent = TaskControlBlock::create(
-         []() {
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-@@ -178,12 +174,8 @@ JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
- 
-     auto *parent = TaskControlBlock::create(
-         []() {
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *self = Scheduler::current_task();
-             auto *child = TaskControlBlock::clone(regs);
-@@ -224,12 +216,8 @@ JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
- 
-     auto *parent = TaskControlBlock::create(
-         []() {
--            uint64_t regs[22] = {};
--            regs[17] = 0x1000;
--            regs[18] = arch::SEG_USER_CODE;
--            regs[19] = arch::RFLAGS_DEFAULT;
--            regs[20] = 0x80000000;
--            regs[21] = arch::SEG_USER_DATA;
-+            uint64_t regs[37] = {};
-+            test::make_synthetic_clone_frame(regs);
- 
-             auto *child = TaskControlBlock::clone(regs);
-             if (child == nullptr)
-diff --git a/src/kernel/test/test_tls.cpp b/src/kernel/test/test_tls.cpp
-index 66ed945a..607a60be 100644
---- a/src/kernel/test/test_tls.cpp
-+++ b/src/kernel/test/test_tls.cpp
-@@ -251,9 +251,9 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
-     auto *t = run_tls_task([]() {
-         g_set_ret = tls_call(k_tls_base);
-         // clone() builds the child iret frame from regs[] — pass a
--        // synthetic user frame (test_process.cpp pattern), never null.
--        // Frame shape is per-arch (issue #204): clone() reads up to
--        // regs[21] on x86_64, regs[30] on aarch64, regs[36] on riscv64 —
-+        // synthetic per-arch frame (test_sched_helpers pattern), never null.
-+        // Frame shape is per-arch (issues #104/#204/#215): clone() reads up
-+        // to regs[21] on x86_64, regs[33] on aarch64, regs[36] on riscv64 —
-         // undersizing over-reads the stack. Content is irrelevant here
-         // (only tls_base_ inheritance is asserted).
- #if defined(CONFIG_ARCH_X86_64)
-@@ -263,18 +263,9 @@ JARVIS_TEST(tls_clone_inherits, "PRE: none | POST: none") {
-         regs[19] = arch::RFLAGS_DEFAULT;
-         regs[20] = 0x80000000;
-         regs[21] = arch::SEG_USER_DATA;
--#elif defined(CONFIG_ARCH_AARCH64)
--        uint64_t regs[31] = {};
--        regs[17] = 0x1000;  // ELR_EL1
--        regs[19] = 0;       // SPSR_EL1
--        regs[20] = 0x80000000;  // SP_EL0
--#elif defined(CONFIG_ARCH_RISCV64)
--        uint64_t regs[37] = {};
--        regs[31] = 0x1000;  // SEPC
--        regs[32] = 0;       // SSTATUS
- #else
--        uint64_t regs[22] = {};
--        regs[17] = 0x1000;
-+        uint64_t regs[37] = {};
-+        test::make_synthetic_clone_frame(regs);
  #endif
-         auto *c = TaskControlBlock::clone(regs);
-         if (c != nullptr) {
+\ No newline at end of file
+diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
+index 97a536ad..59ac4391 100644
+--- a/src/kernel/arch/aarch64/vectors.S
++++ b/src/kernel/arch/aarch64/vectors.S
+@@ -140,7 +140,16 @@ el0_sync:
+     b.eq    1f
+     ldp     x0, x1, [sp], #16
+     bl      aarch64_el0_fault_handler
+-    eret                       // handler adjusts ELR or parks the task
++    // The handler terminates the faulting task and arms a deferred switch
++    // (issue #28) — apply it.  If no switch is armed (no current task;
++    // handler parked path is unreachable here) fall into a park loop:
++    // restore_all on this near-empty stack would eret into garbage.
++    adrp    x0, scheduler_save_rsp_to
++    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
++    cbz     x0, .Lel0_fault_park
++    b       irq_context_switch_common
++.Lel0_fault_park:
++    b       .Lel0_fault_park
+ 1:
+     ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
+     b       syscall_entry
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 3cfbfe48..ec5ff4b9 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -247,7 +247,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   28,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209)
++    {"arch_aarch64",          0,   29,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,       3      },  // 3 ABI frame tests (issue #30); validation enabled by nonzero counts

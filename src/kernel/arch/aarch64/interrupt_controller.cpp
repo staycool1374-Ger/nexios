@@ -5,6 +5,8 @@
 #include <kernel/arch/aarch64/hal/gic.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/kernel.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <signal.hpp>
 
 namespace arch {
 
@@ -181,13 +183,20 @@ volatile uint64_t g_last_el0_far = 0;
 volatile uint64_t g_last_el0_elr = 0;
 } // namespace
 
-/// @brief EL0 synchronous-fault handler called from vectors.S (issue #184).
-///        Non-SVC faults from EL0 land here.  EL0 tasks do not run yet
-///        (bring-up issue #28), so any arrival is deeply wrong: latch
-///        ESR/FAR/ELR for post-mortem GDB and park the CPU.  Runs with
-///        interrupts masked (vector entry); must not re-enable IRQs,
-///        touch the scheduler, or return (vectors.S erets on return,
-///        but there is no task to resume to).
+/// @brief EL0 synchronous-fault handler called from vectors.S (issues
+///        #184/#28).  Non-SVC faults from EL0 land here.  Latch ESR/FAR/ELR
+///        for post-mortem GDB, mark the faulting task TERMINATED
+///        (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit
+///        self-termination path.  Runs with interrupts masked (vector
+///        entry); must not re-enable IRQs, and must NOT call
+///        Scheduler::terminate (ISR-unsafe: switch_to_task resolves the
+///        live exception RSP as the save owner — see
+///        syscall_handlers_misc.cpp).  The asm caller applies the pending
+///        switch via irq_context_switch_common; if no task is current (no
+///        user context to kill) park as a last resort.
+///        Caveat (#28 Phase B): a parent BLOCKED in waitpid on the faulted
+///        child is not woken (status write needs the parent pagetable) —
+///        polled waiters (wait_for_termination_safe) observe TERMINATED.
 extern "C" void aarch64_el0_fault_handler() {
     uint64_t esr = 0;
     uint64_t far = 0;
@@ -198,10 +207,22 @@ extern "C" void aarch64_el0_fault_handler() {
     g_last_el0_esr = esr;
     g_last_el0_far = far;
     g_last_el0_elr = elr;
+    kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
+    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
+        t->state != kernel::TaskState::TERMINATED) {
+        t->state = kernel::TaskState::TERMINATED;
+        t->exit_code = static_cast<uint64_t>(
+            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+        kernel::Scheduler::switch_away_from_terminating(*t);
+        return;
+    }
     for (;;) {
         arch::pause();
     }
 }
+
+/// @brief Post-mortem readback of the last latched EL0 fault ESR (tests).
+extern "C" uint64_t aarch64_last_el0_esr() { return g_last_el0_esr; }
 
 /// @brief EL1 unexpected-sync-fault handler called from vectors.S (issue
 ///        #214).  Any EL1 sync fault is a kernel bug — the old skip-and-eret

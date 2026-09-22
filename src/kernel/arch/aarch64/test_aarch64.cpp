@@ -41,6 +41,7 @@
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/elf/elf_loader.hpp>
+#include <signal.hpp>
 #include <kernel/vfs/vfs.hpp>
 
 /// @brief aarch64 EL0 fork smoke test (issue #104): the fork-marker program
@@ -186,6 +187,66 @@ JARVIS_TEST(aarch64_fork_marker_smoke, "PRE: none | POST: none") {
     vfs::unlink(kFmStdoutPath);
     JARVIS_ASSERT_FMT(clean, "fork-marker did not exit clean");
     JARVIS_ASSERT_FMT(parent_ok, "PARENT-OK missing from capture");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #28: a non-SVC EL0 fault must terminate the task (exit -SIGSEGV),
+// not park the CPU.  Loads the fork-marker image (valid user pagetable +
+// stack), poisons the initial frame's ELR slot (vectors.S save area,
+// ELR at slot 32) with an unmapped VA, and dispatches: fetch faults at
+// EL0 (Instruction Abort) → el0_sync → aarch64_el0_fault_handler.
+extern "C" uint64_t aarch64_last_el0_esr();
+JARVIS_TEST(aarch64_el0_fault_terminates, "PRE: none | POST: none") {
+    using namespace kernel;
+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
+                                          _binary_fork_marker_img_start);
+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        fm_write_file(kFmImagePath, _binary_fork_marker_img_start, img_size) !=
+            0,
+        "tmpfs stage failed");
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load(kFmImagePath) == elf::LoadResult::OK,
+        "request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+                      "take_completed failed");
+    test::mark_vfs_touched();
+    // Poison ELR only — SP_EL0/SPSR stay loader-valid so the dispatch
+    // guard (non-zero ELR, EL0t mode) passes and eret reaches EL0.
+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);
+    JARVIS_ASSERT_FMT(frame != nullptr, "no initial frame");
+    frame[32] = 0x5000000000ULL;  // unmapped user VA: fetch faults at EL0
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_FMT(t->state == TaskState::TERMINATED,
+                      "EL0 fault did not terminate the task");
+    JARVIS_ASSERT_FMT(
+        t->exit_code ==
+            static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGSEGV)),
+        "exit code is not -SIGSEGV");
+    const uint64_t esr = aarch64_last_el0_esr();
+    JARVIS_ASSERT_FMT(((esr >> 26) & 0x3FULL) == 0x20,
+                      "ESR EC is not EL0 Instruction Abort");
+    // Deterministic release: the periodic reaper would collect the
+    // TERMINATED TCB ~100 ticks later, but the snapshot check runs first
+    // and would log an EventGroup/FD delta.  terminate_err is the
+    // non-current full path (dequeue + wake + release_zombie); drain
+    // frees synchronously (task is not current on any CPU).
+    if (TaskControlBlock::is_valid(t) &&
+        t != Scheduler::current_task())
+        (void)Scheduler::terminate_err(*t, t->exit_code);
+    Scheduler::drain_zombie_list();
+    fm_cleanup(kFmImagePath);
+    test::mark_vfs_touched();
     JARVIS_TEST_PASS();
 }
 #include <lib/string.hpp>
@@ -1029,6 +1090,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_abi_bad_number);
     JARVIS_REGISTER_TEST(aarch64_fork_marker_smoke);
     JARVIS_REGISTER_TEST(aarch64_clone_frame_readback);  // issue #209
+    JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
 }
 
 #endif

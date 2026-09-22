@@ -140,7 +140,16 @@ el0_sync:
     b.eq    1f
     ldp     x0, x1, [sp], #16
     bl      aarch64_el0_fault_handler
-    eret                       // handler adjusts ELR or parks the task
+    // The handler terminates the faulting task and arms a deferred switch
+    // (issue #28) — apply it.  If no switch is armed (no current task;
+    // handler parked path is unreachable here) fall into a park loop:
+    // restore_all on this near-empty stack would eret into garbage.
+    adrp    x0, scheduler_save_rsp_to
+    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
+    cbz     x0, .Lel0_fault_park
+    b       irq_context_switch_common
+.Lel0_fault_park:
+    b       .Lel0_fault_park
 1:
     ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
     b       syscall_entry
