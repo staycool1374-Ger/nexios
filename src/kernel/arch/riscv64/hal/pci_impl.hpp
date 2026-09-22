@@ -29,14 +29,19 @@
 // NOTE: included inside namespace arch {} in pci.hpp — do not re-wrap
 
 /// @brief QEMU virt riscv64 ECAM base address (PCIe configuration space)
+/// NOTE: the live base is owned by kernel/arch/hal/pci.hpp (issue #29:
+/// 0x30000000, `info mtree` proof); this #ifndef is a dead fallback that
+/// never fires (pci.hpp defines the macro first).  Raw phys is valid:
+/// boot.S identity-maps 0x30000000-0x3FFFFFFF (L2_page[384..511)),
+/// following the in-tree PLIC/UART precedent.
 #ifndef CONFIG_PCI_ECAM_BASE
 #define CONFIG_PCI_ECAM_BASE 0x100000000ULL // 4GB default
 #endif
 
 /// @brief Base physical address of the PCI ECAM region.
 constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
-/// @brief Size of the PCI ECAM region (4 GB).
-constexpr uint64_t PCI_ECAM_SIZE = 0x100000000ULL;
+/// @brief Size of the PCI ECAM region (256MB: 256 buses x 32 dev x 8 fn x 4KB).
+constexpr uint64_t PCI_ECAM_SIZE = 0x10000000ULL;
 
 /// @brief Compute the memory-mapped ECAM address for a given BDF and register.
 /// @param bdf PCI Bus/Device/Function identifier.

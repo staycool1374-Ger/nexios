@@ -202,10 +202,17 @@ syscall_entry:
     ld ra, 0(sp)
     addi sp, sp, 16
 
-    # Check SATP switch
+    # Check SATP switch.  load_cr3_from carries the RAW root physical
+    # address (in-tree convention: producers pass phys, consumers add the
+    # mode — cf. io_impl write_cr3; issue #29).  A raw csrw would install
+    # MODE=0 (Bare) and switch the MMU off mid-return.
     la t0, scheduler_load_cr3_from
     ld t0, 0(t0)
     beqz t0, 7f
+    srli t0, t0, 12              // PPN = phys >> 12
+    li t1, 8
+    slli t1, t1, 60              // Sv39 mode
+    or t0, t0, t1
     csrw satp, t0
     sfence.vma
     la t0, scheduler_load_cr3_from

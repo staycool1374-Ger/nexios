@@ -797,6 +797,13 @@ void PMM::reserve_range(uint64_t start_phys, uint64_t end_phys) {
         owner_set_kernel(idx);
         --free_pages_;
     }
+    // Issue #29: the O(1) free list is derived state built once by
+    // rebuild_free_list() in PMM::init().  Without a rebuild the reserved
+    // indices stay linked and the single-page fast path in
+    // try_alloc_kernel()/try_alloc_user() (no bitmap_test on pop) would
+    // hand out the reserved range — here the live BSP boot stack.
+    // Rebuild so the reservation holds on every allocation path.
+    rebuild_free_list();
 }
 
 /// @brief Set the allocation bit for a page index.

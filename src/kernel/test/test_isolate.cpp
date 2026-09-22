@@ -375,6 +375,12 @@ bool snapshot_create() {
     uint64_t guard_before_phys = phys;
     uint64_t buf_phys = phys + arch::PAGE_SIZE;
     uint64_t guard_after_phys = phys + (guard_pages - 1) * arch::PAGE_SIZE;
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #29: guard pages are skipped on riscv64 (map/unmap uses the
+    // x86-shaped VMM backend) — silence -Werror for the then-unused vars.
+    (void)guard_before_phys;
+    (void)guard_after_phys;
+#endif
     g_snapshot = reinterpret_cast<uint8_t *>(buf_phys + arch::HHDM_OFFSET);
     g_snapshot_size = total;
     g_snapshot_guard_phys = phys;
@@ -573,6 +579,14 @@ bool snapshot_create() {
     // ---- HHDM PD save ----
     // Save PDPT[0]→PD (512 entries) so snapshot_restore can undo any
     // huge-page splits performed by kernel-space VMM tests.
+    // Issue #29: x86/aarch64 4-level-MMU-shaped only (PML4[256] walk,
+    // ~0xFFF PTE decode).  Sv39 has 3 levels and (pte>>10)<<12 decode —
+    // this walk misdecodes L0 entries into unmapped HHDM (load fault).
+    // Skipped on riscv64: its Sv39 map_page branch never sets the
+    // hhdm/identity-modified flags, so the flag-gated restores below stay
+    // unfired regardless; the real Sv39 save/restore backend is #152
+    // follow-up work.
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -591,12 +605,15 @@ bool snapshot_create() {
             }
         }
     }
+#endif
 
     // ---- Identity PD save ----
     // Save PML4[0]→PDPT[0]→PD (PD_IDENTITY phys 0x3000, 512 entries) so
     // snapshot_restore can undo huge-page splits in the LOW identity map.
     // Always captured (pristine boot state at class start); the restore is
     // gated on identity_was_modified().
+    // Issue #29: same 4-level gate as above (misdecodes Sv39 L0[0]).
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -615,10 +632,15 @@ bool snapshot_create() {
             }
         }
     }
+#endif
 
     // ---- Map-then-unmap guard pages (after PD save, so saved PD is clean) ----
     // Guard pages must be within HHDM window (phys < 128MB) and above reserved
     // kernel area (phys > 11MB).  If they're at the window edge, skip them.
+    // Issue #29: skipped on riscv64 — VMM::map_page uses the same x86-shaped
+    // backend (#152), and mapping would set the modified flags, arming the
+    // (also x86-shaped) restore path.
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     {
         uint64_t gb_end = guard_before_phys + arch::PAGE_SIZE;
         uint64_t ga_end = guard_after_phys + arch::PAGE_SIZE;
@@ -634,6 +656,7 @@ bool snapshot_create() {
             VMM::unmap_page(ga_va);
         }
     }
+#endif
 
     // ---- Resource Counters + page-table pool snapshot ----
     // Captured AFTER the guard-page map/unmap block above.  The guard block

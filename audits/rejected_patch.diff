@@ -1,16 +1,16 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -371,10 +371,10 @@
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
- 
--$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
-+$(KERNEL): $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) check-arch linker/linker_$(ARCH).ld
- 	@mkdir -p $(dir $@)
- 	@printf '  %-7s %s\n' 'LD' 'kernel.elf'
--	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
-+	@$(if $(filter -flto,$(LDFLAGS)),$(CXX) $(subst -Map=,-Wl$(comma)-Map=,$(filter-out -m elf_x86_64,$(LDFLAGS))) -flto,$(LD) $(LDFLAGS)) -o $@ $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) $(VERIFY_IMG_OBJ) $(FORK_MARKER_OBJ) $(EXTRA_LINK_OBJ) $(LD_LIBS)
- 	@printf '  %-7s %s\n' 'CRC' 'Patching code CRC…'
- 	@python3 tools/patch_code_crc.py $@
- 	@printf '  %-7s %s\n' 'SIZE' "$$($(GET_SIZE) $@) bytes"
+diff --git a/src/kernel/arch/riscv64/boot.S b/src/kernel/arch/riscv64/boot.S
+--- a/src/kernel/arch/riscv64/boot.S
++++ b/src/kernel/arch/riscv64/boot.S
+@@ -23,6 +23,12 @@ _start:
+      * s0/s1 preserved). */
+     la t0, kernel_phys_end
+     li t1, 0x80C00000         /* stack base - 2MB metadata slack */
++    /* RV64 LUI sign-extends bit 31, so the li above yields
++     * 0xFFFFFFFF80C00000, not 0x0000000080C00000; the unsigned bltu
++     * below would then be always-taken and the fail-stop dead.
++     * Zero-extend into the true physical domain before comparing. */
++    slli t1, t1, 32
++    srli t1, t1, 32
+     bltu t0, t1, 10f
+     li a0, 33                 /* '!' */
+     li a7, 1

@@ -669,7 +669,19 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
     {
-        void *dtb = reinterpret_cast<void *>(kernel::gs::boot_info().dtb_ptr);
+        uint64_t dtb_phys = kernel::gs::boot_info().dtb_ptr;
+#if defined(CONFIG_ARCH_RISCV64)
+        // Issue #29: OpenSBI passes the DTB physical address (a1); the
+        // 2 MB boot identity window covers only 0x80200000-0x80400000, so
+        // the DTB (typically ~0x8FE00000) faults on raw deref (load page
+        // fault, scause=0xD — #209 class).  Alias through the HHDM, which
+        // maps all 256 MB RAM (boot.S).  aarch64 keeps its working path.
+        // Guard the zero case: the `if (dtb && ...)` below must still skip
+        // when no DTB was passed (audit #29: unguarded alias defeats it).
+        if (dtb_phys != 0)
+            dtb_phys += arch::HHDM_OFFSET;
+#endif
+        void *dtb = reinterpret_cast<void *>(dtb_phys);
         if (dtb && fdt_check_header(dtb) == 0) {
             int offset = fdt_node_offset_by_prop_value(dtb, -1, "device_type",
                                                        "memory", 7);
@@ -740,6 +752,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
     }
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #29: pin the 64KB boot stack (linker .boot_stack_rv at
+    // 0x80E00000) before any allocation can take it — the BSP stays
+    // parked on it until the scheduler starts (same discipline as the
+    // Multiboot2 info reservation below).
+    kernel::PMM::reserve_range(0x80E00000ULL, 0x80F00000ULL);
+#endif
     // Issue #20: size the global memory budget from PMM capacity so the
     // create()-time admission gate (CONFIG_MEMORY_BUDGET, default ON) is
     // live from boot.  Slight overcount (kernel image, VMM tables) is

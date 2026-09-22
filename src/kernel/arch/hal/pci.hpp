@@ -149,7 +149,7 @@ namespace arch {
 #if defined(CONFIG_ARCH_AARCH64)
 #define CONFIG_PCI_ECAM_BASE 0x4010000000ULL // QEMU virt pcie-ecam (issue #216)
 #else
-#define CONFIG_PCI_ECAM_BASE 0x100000000ULL // riscv64 fallback (per-platform)
+#define CONFIG_PCI_ECAM_BASE 0x30000000ULL // riscv64 virt pcie-ecam (issue #29, `info mtree` proof)
 #endif
 #endif
 /// @brief ECAM base address for memory-mapped PCI config space.
@@ -159,8 +159,9 @@ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
 /// format).
 /// Issue #216: on aarch64 the result is an HHDM-aliased VA (raw phys is
 /// unmapped at EL1 — same #209 disease; UART/GIC precedent; boot.S maps the
-/// window).  riscv64 keeps the raw-phys convention (unvalidated territory —
-/// see riscv chain).
+/// window).  riscv64 keeps the raw-phys convention (issue #29: boot.S
+/// identity-maps 0x30000000-0x3FFFFFFF via L2_page[384..511), same as the
+/// PLIC/UART leaves).
 /// @param bdf Bus:Device.Function address.
 /// @param reg Register offset.
 /// @return Memory-mapped address for use with pci_config_{read,write}*.

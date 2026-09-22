@@ -111,4 +111,24 @@ SECTIONS
 
     kernel_phys_end = phys_lma;
     kernel_virt_end = ALIGN(., 4K);
+
+    /* Issue #29: 64KB boot stack at a fixed identity-mappable address.
+     * NOLOAD: excluded from the raw binary (QEMU zero-fills RAM; a raw
+     * stack needs no init) so the image stays small.  Must clear the
+     * image (kernel_phys_end) and PMM metadata (bitmaps + free list grow
+     * from kernel_phys_end; ~528KB for 256MB RAM).  The ASSERT below guards
+     * image growth; boot.S maps one L1_id leaf for it (index derived
+     * from the symbol at runtime); HHDM covers it post-transition;
+     * kernel.cpp PMM::reserve_range() pins it. */
+    .boot_stack_rv 0x80E00000 (NOLOAD) : AT(0x80E00000)
+    {
+        _boot_stack_rv_low = .;
+        KEEP(*(.boot_stack_rv))
+        KEEP(*(.boot_stack_rv.*))
+    }
+
+    /* A fixed-address NOLOAD section never moves phys_lma, so image growth
+     * would silently overlay it.  No ASSERT: this ld rejects ASSERT() here,
+     * so boot.S fail-stops at runtime instead (kernel_phys_end check at
+     * _start — image + 2MB metadata slack must stay below 0x80E00000). */
 }

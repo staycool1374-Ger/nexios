@@ -37,6 +37,7 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <lib/string.hpp>
+#include <constants.hpp>
 
 using namespace kernel;
 
@@ -56,7 +57,7 @@ JARVIS_TEST(riscv64_sv39_3level_walk) {
     constexpr uint64_t A = 1ULL << 6;
     constexpr uint64_t LEAF = R | W | X;
 
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(root_pa);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + root_pa);
     size_t l0_idx = (VA >> L0_SHIFT) & TABLE_MASK;
     uint64_t l0e = l0[l0_idx];
     JARVIS_ASSERT_FMT(l0e & V, "L0 entry %zu invalid: 0x%lx", l0_idx, l0e);
@@ -64,14 +65,14 @@ JARVIS_TEST(riscv64_sv39_3level_walk) {
                       l0_idx, l0e);
 
     uint64_t l1_pa = (l0e & ~0xFFFULL) >> 10 << 12;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l1_pa);
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_pa);
     size_t l1_idx = (VA >> L1_SHIFT) & TABLE_MASK;
     uint64_t l1e = l1[l1_idx];
     JARVIS_ASSERT_FMT(l1e & V, "L1 entry %zu invalid: 0x%lx", l1_idx, l1e);
 
     if ((l1e & LEAF) == 0) {
         uint64_t l2_pa = (l1e & ~0xFFFULL) >> 10 << 12;
-        uint64_t *l2 = reinterpret_cast<uint64_t *>(l2_pa);
+        uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_pa);
         size_t l2_idx = (VA >> L2_SHIFT) & TABLE_MASK;
         uint64_t l2e = l2[l2_idx];
         JARVIS_ASSERT_FMT(l2e & V, "L2 entry %zu invalid: 0x%lx", l2_idx, l2e);
