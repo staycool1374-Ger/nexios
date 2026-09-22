@@ -726,6 +726,12 @@ uint64_t VMM::clone_kernel_pml4() {
     for (size_t i = 0; i < 256; ++i) {
         dst[i] = 0;
     }
+    // Issue #205: riscv64 low half holds kernel MMIO+identity (L0[0]:
+    // 1GB window with PLIC/UART/ECAM leaves + RAM identity), not user
+    // space — every address space needs it (drivers touch raw-phys
+    // identity; aarch64 instead uses HHDM aliases so its clear stands).
+    // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
+    dst[0] = src[0];
     // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
     for (size_t i = 256; i < 512; ++i) {
         dst[i] = src[i];

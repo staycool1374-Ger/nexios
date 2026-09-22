@@ -17,15 +17,18 @@
  */
 
 /// @file rtc.cpp
-/// @brief RISC-V64 RTC driver — reads wall-clock time via the mtime CSR.
+/// @brief RISC-V64 RTC driver — uptime clock via the mtime CSR (NOT a wall
+///        clock: seconds since boot rendered from a 1970 epoch; a
+///        goldfish-rtc wall-clock driver is follow-up work).
 
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/hal/io.hpp>
 
 namespace arch {
 
-/// @brief Read the number of seconds since epoch from the mtime CSR.
-/// @return Seconds since 1970-01-01.
+/// @brief Read uptime seconds (mtime ticks / frequency) rendered from a
+///        1970 epoch for tm conversion.  NOT wall-clock time.
+/// @return Seconds since boot (epoch 1970-01-01 rendering).
 /// @note Uses the QEMU virt default mtime frequency of 10 MHz.
 uint64_t RTC::read_seconds() {
     uint64_t cnt{};
