@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #205 — arch_riscv64 gate proof (2026-09-22, CLOSED)
+- **Learned:** (1) Triage by direct read beats planner summaries: planner returned summary-only, self-read of one 551-line file gave the exact 13/2/1/5 split. (2) Clone semantics are arch-shaped: x86 zeroes low half for user isolation, but riscv low half IS kernel MMIO/identity — copy L0[0] (U=0, #206-safe). aarch64 survives via HHDM aliases. (3) S-mode cannot read misa/mvendorid/medeleg (illegal-insn) — M-mode-only CSRs can never gate in S; banner/banner-proof replaces them. (4) The RTC is an uptime clock: pin the epoch contract instead of deferring everything.
+- **Adapted:** L0[0] clone copy; init_stack by-ref (riscv); plic_init unmask-first; RTC 1970 pin; 5 deregistrations with pointers (#152/M-mode); counts {0,0,16}.
+- **Measured:** arch_riscv64 16/16 x4, x86 task_core 6/6, aarch64 30/30, build Errors 0. SIL 3 APPROVED (5 S3 notes; nested-if + rtc comment fixed, 3 carried to #152/#206/arch_cross).
+- **Style re-surface:** deregistration comments must carry the follow-up issue or the deferral rots.
+
 ### #29 — riscv64 production boot path (2026-09-22, CLOSED after 2 REJECTs)
 - **Learned:** (1) Stacked faults need evidence-per-layer: DTB raw-phys (objdump lw), 4KB stack overflow into PTEs (&cand=0x80203140 proof), ECAM base+unmapped (mtree), satp MODE=0 (slot dump), x86-shaped snapshot walks — each proven, none guessed. (2) Stale-TLB masking is real: diag reads need sfence.vma to force walks, else pre-wipe PTEs hide RAM wipes. (3) `la` + fixed VMA/LMA correspondence is load-bearing: removing 4KB from .boot shifted .text LMA and broke the HHDM VMA match (silent death) — restored with load-bearing padding. (4) RV64 LUI sign-extends: li 0x80C00000 = 0xFFFFFFFF80C00000 — zero-extend before unsigned compares (caught by auditor, twice: ASSERT→runtime guard→sign fix). (5) reserve_range without free-list rebuild is void on the fast alloc path (auditor S1). (6) Conventions cross-check: producers-pass-raw-phys (write_cr3) means every consumer must add MODE — audit the consumer, not just the producer.
 - **Adapted:** DTB HHDM alias; 64KB .boot_stack_rv + L1_id leaf + PMM reserve + boot-time guard; ECAM 0x30000000 + leaves; satp MODE-or; snapshot arch-gates (#152 pointer).
