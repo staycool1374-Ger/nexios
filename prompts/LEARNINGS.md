@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #29 — riscv64 production boot path (2026-09-22, CLOSED after 2 REJECTs)
+- **Learned:** (1) Stacked faults need evidence-per-layer: DTB raw-phys (objdump lw), 4KB stack overflow into PTEs (&cand=0x80203140 proof), ECAM base+unmapped (mtree), satp MODE=0 (slot dump), x86-shaped snapshot walks — each proven, none guessed. (2) Stale-TLB masking is real: diag reads need sfence.vma to force walks, else pre-wipe PTEs hide RAM wipes. (3) `la` + fixed VMA/LMA correspondence is load-bearing: removing 4KB from .boot shifted .text LMA and broke the HHDM VMA match (silent death) — restored with load-bearing padding. (4) RV64 LUI sign-extends: li 0x80C00000 = 0xFFFFFFFF80C00000 — zero-extend before unsigned compares (caught by auditor, twice: ASSERT→runtime guard→sign fix). (5) reserve_range without free-list rebuild is void on the fast alloc path (auditor S1). (6) Conventions cross-check: producers-pass-raw-phys (write_cr3) means every consumer must add MODE — audit the consumer, not just the producer.
+- **Adapted:** DTB HHDM alias; 64KB .boot_stack_rv + L1_id leaf + PMM reserve + boot-time guard; ECAM 0x30000000 + leaves; satp MODE-or; snapshot arch-gates (#152 pointer).
+- **Measured:** riscv idle 508 ticks/15s + dispatch, PCI honest 0x1B36:0x8; x86 task_core 6/6, aarch64 30/30, riscv links, build Errors 0. SIL 3 APPROVED after 3 rounds (2 REJECTs fixed: free-list rebuild, sign-extension).
+- **Style re-surface:** TEMP-DIAG must be fully reverted (grep-verified); rejected_patch.diff applies verbatim or hand-apply identical lines; multi-line ASSERT + semicolon-strings break this ld.
+
 ### #217 — waitpid wake on fault kill (2026-09-22, CLOSED)
 - **Learned:** (1) Promote-don't-duplicate: file-static wake_waiting_parent already ran on aarch64 via cleanup_test_tasks→terminate_err, so promoting it to Scheduler API added zero new arch risk — the only new surface was the call site. (2) Parity bugs hide in disjunctions: wake matched only exact-PID while sys_exit matched -1 — wait-any parents hung on every non-sys_exit death on ALL arches, unnoticed. (3) aarch64 kernel entries must NEVER return (no trampoline, x30=0 → EL1 insn abort at 0); test entries self-terminate + park. (4) Saved-frame asserts must be captured in-entry: any re-switch overlays slot 0 — post-mortem reads race.
 - **Adapted:** Scheduler::wake_waiting_parent (+-1 match); fault handler wakes before switch_away; aarch64_el0_fault_wakes_waitpid_parent (30/30 x3).
