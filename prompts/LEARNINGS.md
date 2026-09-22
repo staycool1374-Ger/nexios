@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #217 — waitpid wake on fault kill (2026-09-22, CLOSED)
+- **Learned:** (1) Promote-don't-duplicate: file-static wake_waiting_parent already ran on aarch64 via cleanup_test_tasks→terminate_err, so promoting it to Scheduler API added zero new arch risk — the only new surface was the call site. (2) Parity bugs hide in disjunctions: wake matched only exact-PID while sys_exit matched -1 — wait-any parents hung on every non-sys_exit death on ALL arches, unnoticed. (3) aarch64 kernel entries must NEVER return (no trampoline, x30=0 → EL1 insn abort at 0); test entries self-terminate + park. (4) Saved-frame asserts must be captured in-entry: any re-switch overlays slot 0 — post-mortem reads race.
+- **Adapted:** Scheduler::wake_waiting_parent (+-1 match); fault handler wakes before switch_away; aarch64_el0_fault_wakes_waitpid_parent (30/30 x3).
+- **Measured:** arch_aarch64 30/30 x3 zero deltas; x86 process_waitpid/scheduler_preemption/task_lifecycle/task_core green; riscv links; build Errors 0. SIL 3 APPROVED (3 S3 doc notes; stale-caveat one fixed post-audit comment-only, no codegen).
+- **Style re-surface:** Rule-5 capture-then-teardown mandatory when teardown frees (locals + stack ctx only in asserts).
+
 ### #28 — aarch64 production boot path (2026-09-22, CLOSED)
 - **Learned:** (1) EL1→EL0 return was already live (fork-marker smoke green) — the gap was fault POLICY, not mechanism: park-on-EL0-fault wedged the whole gate (proven by pre-fix TIMEOUT probe). Untested failure paths, not happy paths, gate "production". (2) sys_exit's ISR rule generalizes: never Scheduler::terminate the current task from exception context — state+exit+switch_away_from_terminating, asm applies via irq_context_switch_common. (3) Reaper timing vs snapshot check: TERMINATED TCBs freed ~100 ticks later log EG/FD deltas — teardown with terminate_err+drain for deterministic zero-delta (check() is warn-only, restore cleans anyway, but zero-delta is the discipline).
 - **Adapted:** el0 fault → TERMINATED/-SIGSEGV + switch; vectors.S apply-or-park epilogue; aarch64_el0_fault_terminates (29/29); waitpid-parent wake filed as #217.
