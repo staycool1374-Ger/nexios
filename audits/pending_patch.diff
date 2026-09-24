@@ -1,113 +1,1185 @@
-diff --git a/src/kernel/arch/hal/context.hpp b/src/kernel/arch/hal/context.hpp
-index 11f14232..0b32f2eb 100644
---- a/src/kernel/arch/hal/context.hpp
-+++ b/src/kernel/arch/hal/context.hpp
-@@ -178,7 +178,7 @@ class ArchContextManager {
-     /// @param entry Entry point function.
-     /// @param psr Initial SSTATUS value.
-     /// @param user_rsp Initial user-mode SP.
--    static inline void init_stack(uint64_t *stack_top, void (*entry)(),
-+    static inline void init_stack(uint64_t *&stack_top, void (*entry)(),
-                                   uint64_t /*cs*/, uint64_t /*ss*/,
-                                   uint64_t psr, uint64_t user_rsp) {
-         *--stack_top = 0;
+diff --git a/src/kernel/arch/riscv64/hal/page_table_impl.hpp b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+index 50683e54..d2db0b44 100644
+--- a/src/kernel/arch/riscv64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+@@ -25,6 +25,7 @@
+ #pragma once
+ 
+ #include <types.hpp>
++#include <constants.hpp>
+ #include <kernel/arch/hal/io.hpp>
+ #include <kernel/arch/hal/page_flags.hpp>
+ #include <lib/error.hpp>
+@@ -174,11 +175,18 @@ class ArchPageTable {
+ ///         or on OOM.
+ inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
+                                           bool create) {
+-    uint64_t *table = reinterpret_cast<uint64_t *>(table_base);
++    // Issue #206: table_base is raw phys — alias through the HHDM; decode
++    // children with the Sv39 PTE codec (raw & ~0xFFF is x86-domain).
++    uint64_t *table =
++        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + table_base);
+     uint64_t entry = table[index];
+ 
+     if (entry & DESC_VALID) {
+-        return reinterpret_cast<uint64_t *>(entry & ~0xFFF);
++        // A leaf (R|W|X) cannot be descended — caller handles blocks.
++        if (entry & (DESC_R | DESC_W | DESC_X))
++            return nullptr;
++        return reinterpret_cast<uint64_t *>(
++            arch::HHDM_OFFSET + (((entry >> 10) << 12) & 0xFFFFFFFFFFF000ULL));
+     }
+ 
+     if (!create)
+@@ -188,12 +196,11 @@ inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
+     if (!new_page)
+         return nullptr;
+ 
+-    void *new_page_ptr = reinterpret_cast<void *>(new_page);
++    void *new_page_ptr = reinterpret_cast<void *>(arch::HHDM_OFFSET + new_page);
+     memset(new_page_ptr, 0, PAGE_SIZE);
+-    // Mark as valid, readable, writable table pointer
+-    table[index] =
+-        (new_page & ~0xFFF) | DESC_VALID | DESC_TABLE | DESC_R | DESC_W;
+-    return reinterpret_cast<uint64_t *>(new_page);
++    // Non-leaf: V=1, R=W=X=0 (Sv39 reserves nonzero RWX on table entries).
++    table[index] = ((new_page >> 12) << 10) | DESC_VALID;
++    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
+ }
+ 
+ /// @brief Convert kernel PageFlags to Sv39 descriptor attributes.
+@@ -257,28 +264,42 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
+     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
+     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
+ 
++    // Issue #206: phys/va pairs — get_table takes raw phys, returns
++    // HHDM-aliased pointers; entries encode (PPN << 10), not raw phys.
+     uint64_t l0_phys = current();
++    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
+     uint64_t *l1 = walk_l0(l0_phys, l0_idx, true);
+     if (!l1)
+         return kernel::Error::OOM;
+ 
+-    uint64_t *l2 = walk_l1(reinterpret_cast<uint64_t>(l1), l1_idx, true);
++    // Split a 2MB block leaf so a 4KB page can be installed.
++    if ((l1[l1_idx] & DESC_VALID) &&
++        (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))) {
++        uint64_t block_phys =
++            ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++        uint64_t base_flags = l1[l1_idx] & 0x3FFULL;
++        uint64_t split_phys = kernel::PMM::alloc_page_table();
++        if (!split_phys)
++            return kernel::Error::OOM;
++        uint64_t *split = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                       split_phys);
++        for (size_t i = 0; i < 512; ++i)
++            split[i] = (((block_phys + i * 0x1000) >> 12) << 10) |
++                       base_flags | DESC_A | DESC_D;
++        l1[l1_idx] = ((split_phys >> 12) << 10) | DESC_VALID;
++    }
++
++    uint64_t l1_phys =
++        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    uint64_t *l2 = walk_l1(l1_phys, l1_idx, true);
+     if (!l2)
+         return kernel::Error::OOM;
+ 
+     uint64_t entry_flags = attr_from_flags(flags);
+ 
+-    // Try 2MB block mapping if aligned
+-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 &&
+-        (phys & ((1ULL << L1_SHIFT) - 1)) == 0) {
+-        l2[l1_idx] =
+-            (phys & ~0x1FFFFF) | entry_flags | DESC_BLOCK | (1ULL << 6);
+-        return {};
+-    }
+-
+-    // 4KB page at L2
+-    l2[l2_idx] =
+-        (phys & ~0xFFF) | entry_flags | DESC_PAGE | (1ULL << 6) | (1ULL << 7);
++    // 4KB leaf: PPN-shifted store (raw phys decodes 4x too high).
++    l2[l2_idx] = ((phys >> 12) << 10) | entry_flags | DESC_A | DESC_D;
++    tlb_flush(virt);
+     return {};
+ }
+ 
+@@ -290,25 +311,31 @@ inline kernel::ErrorOr<void> ArchPageTable::unmap_page(uint64_t virt) {
+     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
+     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
+ 
++    // Issue #206: VA-domain walk with Sv39 codec (raw & ~mask is x86).
+     uint64_t l0_phys = current();
+-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
++    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
+ 
+     if (!(l0[l0_idx] & DESC_VALID))
+         return kernel::Error::NOT_FOUND;
+-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
++    // 1GB block: not ours to clear.
++    if (l0[l0_idx] & (DESC_R | DESC_W | DESC_X))
++        return kernel::Error::NOT_FOUND;
++    uint64_t l1_phys =
++        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
+     if (!(l1[l1_idx] & DESC_VALID))
+         return kernel::Error::NOT_FOUND;
+-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+-
+-    // Check for 2MB block
+-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 && !(l2[l1_idx] & DESC_TABLE)) {
+-        l2[l1_idx] = 0;
+-        return {};
+-    }
++    // 2MB block: not ours to clear.
++    if (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))
++        return kernel::Error::NOT_FOUND;
++    uint64_t l2_phys =
++        ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
+ 
+     if (!(l2[l2_idx] & DESC_VALID))
+         return kernel::Error::NOT_FOUND;
+     l2[l2_idx] = 0;
++    tlb_flush(virt);
+     return {};
+ }
+ 
+@@ -321,24 +348,33 @@ inline uint64_t ArchPageTable::get_physical(uint64_t virt) {
+     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
+     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
+ 
++    // Issue #206: VA-domain walk with Sv39 codec.
+     uint64_t l0_phys = current();
+-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
++    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
+ 
+     if (!(l0[l0_idx] & DESC_VALID))
+         return 0;
+-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
++    // 1GB block leaf.
++    if (l0[l0_idx] & (DESC_R | DESC_W | DESC_X))
++        return (((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
++               (virt & 0x3FFFFFFFULL);
++    uint64_t l1_phys =
++        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
+     if (!(l1[l1_idx] & DESC_VALID))
+         return 0;
+-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
+-
+-    // 2MB block mapping
+-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 && !(l2[l1_idx] & DESC_TABLE)) {
+-        return (l2[l1_idx] & ~0x1FFFFF) | (virt & 0x1FFFFF);
+-    }
++    // 2MB block leaf.
++    if (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))
++        return (((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
++               (virt & 0x1FFFFFULL);
++    uint64_t l2_phys =
++        ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
+ 
+     if (!(l2[l2_idx] & DESC_VALID))
+         return 0;
+-    return (l2[l2_idx] & ~0xFFF) | (virt & 0xFFF);
++    return (((l2[l2_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
++           (virt & 0xFFFULL);
+ }
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
+index a4e20e5d..452087b8 100644
+--- a/src/kernel/arch/riscv64/syscall_entry.S
++++ b/src/kernel/arch/riscv64/syscall_entry.S
+@@ -8,18 +8,15 @@
+ .balign 4
+ .equ SAVE_SIZE, 296
+ 
+-trap_vector:
+-syscall_entry:
+-    # Save area: subtract SAVE_SIZE from SP
+-    addi sp, sp, -SAVE_SIZE
+-
+-# Register save area offsets (from sp):
+-#   0-248: x1-x31 (GPRs)
+-#   256:   sepc
+-#   264:   sstatus
+-#   272:   scause
+-#   280:   stval
+-#   288:   return value (for syscalls)
++# Register save area offsets (from sp) — up here because the entry swap
++# path (issue #206 E1) references OFF_* before the classic save block:
++#   0-240:   x1-x31 (GPRs)
++#   248: sepc
++#   256: sstatus
++#   264: scause
++#   272: stval
++#   280: return value (for syscalls)
++#   (total SAVE_SIZE = 296)
+ .equ OFF_RA,   0
+ .equ OFF_SP,   8
+ .equ OFF_GP,   16
+@@ -57,13 +54,65 @@ syscall_entry:
+ .equ OFF_STVAL, 272
+ .equ OFF_RET,  280
+ 
+-    # Save all GPRs (x1-x31)
++trap_vector:
++syscall_entry:
++    # Clear SIE first (uses no registers): no nested trap can interleave
++    # entry past this point — a tick *before* it restarts entry pristinely.
++    # See the SIE note below (before `csrr t0, sstatus`) for rationale.
++    csrci sstatus, 2
++    # Issue #206 (E1): land on the current task's own kernel stack.
++    # sscratch is a pure one-word spill (never read for value); the swap
++    # source is the published scheduler_load_kstack_top slot.  S-mode
++    # traps (sp already a kernel stack incl. boot stack) save directly;
++    # U-mode traps (user sp) swap to the slot's top.  Discrimination is by
++    # SPP (no sp-sign heuristics: boot phys and user VAs share the low
++    # range), using sscratch itself as the spill so no GPR is lost.
++    csrrw t0, sscratch, t0   // spill entry-t0; t0 = stale (discarded)
++    # SIE is already clear (csrci at function top, before any state change):
++    # no nested trap can interleave entry, so the SPP branch below always
++    # sees hardware-fresh state.  Rationale (issue #206): a nested trap
++    # reads a STALE SPP (the outer trap's trapped-from marker) and would
++    # take the wrong entry path over the live frame (nested S-tick with
++    # SPP=0 clobbered OFF_SP).  sret restores SIE from SPIE (U-ticks keep
++    # working); S-mode callers keep their trapped SIE.  Closes #219 too.
++    csrr t0, sstatus
++    andi t0, t0, 0x100       // SPP bit: 1 = S-mode, 0 = U-mode
++    beqz t0, 41f
++    # from_s: recover entry-t0 (spill still intact — nothing read it).
++    csrr t0, sscratch
++    addi sp, sp, -SAVE_SIZE
++    j 42f
++41:
++    # from_u: sscratch holds user-t0; x2 holds the user sp; t0 holds the
++    # discardable SPP==0 test result (dead).  x2 IS sp: reloading sp below
++    # would destroy the user sp before its OFF_SP save (issue #206 S1 —
++    # the slot recorded the frame base).  Park user-sp in dead t0 first.
++    mv t0, x2                # t0=user_sp (parked; x2 dies at sp reload)
++    la sp, scheduler_load_kstack_top
++    ld sp, 0(sp)             # sp=kstack top (user sp safe in t0)
++    addi sp, sp, -SAVE_SIZE
++    # Park user-t0 via swap (csrrw): t1 = user-t0, sscratch = user-t1.
++    # A plain csrr here would clobber user-t1 (x6) before its save.
++    csrrw t1, sscratch, t1
++    sd t1, OFF_T0(sp)
+     sd x1, OFF_RA(sp)
+-    sd x2, OFF_SP(sp)
++    sd t0, OFF_SP(sp)        # F[1]=user_sp (t0 intact: nothing above wrote t0)
+     sd x3, OFF_GP(sp)
+     sd x4, OFF_TP(sp)
++    # Reload user-t1 from the swap slot into its own save slot.
++    csrr t1, sscratch
++    sd t1, OFF_T1(sp)
++    j 44f
++42:
+     sd x5, OFF_T0(sp)
++    sd x1, OFF_RA(sp)
++    sd x2, OFF_SP(sp)
++    sd x3, OFF_GP(sp)
++    sd x4, OFF_TP(sp)
+     sd x6, OFF_T1(sp)
++44:
++    # Shared saves continue (x7-x31; x2 holds the pre-trap sp value which
++    # OFF_SP preserves for the sret restore)
+     sd x7, OFF_T2(sp)
+     sd x8, OFF_S0(sp)
+     sd x9, OFF_S1(sp)
+@@ -100,16 +149,8 @@ syscall_entry:
+     csrr t0, stval
+     sd t0, OFF_STVAL(sp)
+ 
+-    # TRACE: print 'A' (relocated post-save by issue #185 — the pre-save
+-    # SBI ecall clobbered the incoming user a0/a7 before they were saved)
+-    li a0, 65
+-    li a7, 1
+-    ecall
+-
+-    # TRACE: print 'B' after CSR save
+-    li a0, 66
+-    li a7, 1
+-    ecall
++    # TRACE prints removed (issue #206: they interleave every Logger print
++    # under ticks and were slated for removal before acceptance).
+ 
+     # Increment isr_nesting_depth (matches x86_64: wrap entire handler)
+     la t0, isr_nesting_depth
+@@ -117,11 +158,6 @@ syscall_entry:
+     addi t1, t1, 1
+     sd t1, 0(t0)
+ 
+-    # TRACE: print 'C' after nesting depth inc
+-    li a0, 67
+-    li a7, 1
+-    ecall
+-
+     # Load scause
+     ld t0, OFF_SCAUSE(sp)
+ 
+@@ -195,6 +231,10 @@ syscall_entry:
+     la t2, scheduler_save_rsp_to
+     sd zero, 0(t2)
+ 
++    # Issue #206 (E1 note): sscratch is a pure entry spill, not a stack
++    # pointer — the trap entry reads the kstack top from
++    # scheduler_load_kstack_top directly, so nothing is maintained here.
++
+     # Call scheduler_on_context_switch()
+     addi sp, sp, -16
+     sd ra, 0(sp)
+@@ -235,16 +275,21 @@ syscall_entry:
+ 
+     # Restore CSRs
+     ld t0, OFF_SSTAT(sp)
++    # Issue #219: run the whole return with SIE=0 (clear bit 1 here); sret
++    # restores SIE from SPIE, so ticks merely pend (~50 insns) instead of
++    # nesting over the live frame mid-restore. SPP/SPIE preserved.
++    andi t0, t0, -3
+     csrw sstatus, t0
+     ld t0, OFF_SEPC(sp)
+     csrw sepc, t0
+ 
+-    # Restore all GPRs (x1-x31)
++    # Restore all GPRs except x2/x5/x6 (x2 IS sp: restored conditionally
++    # below; x5/x6 restore after E2 so no restored register is reused as
++    # scratch — reusing t0 after its restore clobbered pre-trap t0).
++    # OFF_SP preserves x2's entry value (the user sp for U-mode traps).
+     ld x1, OFF_RA(sp)
+     ld x3, OFF_GP(sp)
+     ld x4, OFF_TP(sp)
+-    ld x5, OFF_T0(sp)
+-    ld x6, OFF_T1(sp)
+     ld x7, OFF_T2(sp)
+     ld x8, OFF_S0(sp)
+     ld x9, OFF_S1(sp)
+@@ -273,5 +318,29 @@ syscall_entry:
+ 
+     # Restore sp last
+     addi sp, sp, SAVE_SIZE
+-
++    # Restore t0 first via x6 as scratch (x6 still holds handler garbage,
++    # so it is safe to reuse; t0 becomes live after its load).
++    addi x6, sp, -SAVE_SIZE
++    ld x5, OFF_T0(x6)
++    # Issue #206 (E2): x2 IS the sp register, so it restores conditionally.
++    # S-mode: sp is already correct (frame popped); the slot holds a stale
++    # entry value that must NOT overwrite it — skip x2.  U-mode (SPP==0):
++    # sp must become the user stack pointer from OFF_SP.  x6 is dead until
++    # its restore below, so it serves as scratch.
++    # (E2 debug print removed: printing inside the trap return is reentered
++    # by ticks and corrupts Logger state.)
++    csrr x6, sstatus
++    andi x6, x6, 0x100
++    bnez x6, 40f
++    addi x6, sp, -SAVE_SIZE
++    ld x2, OFF_SP(x6)
++    # U-path: x2 IS sp, so sp is user_sp from here on — never recompute
++    # the frame base from sp again (that faulted: user_sp-296 is not the
++    # frame). x6 still holds the base: load t1 directly, then sret.
++    ld x6, OFF_T1(x6)
++    sret
++40:
++    # S-path: x2 (hence sp) untouched, so the sp recompute is valid here.
++    addi x6, sp, -SAVE_SIZE
++    ld x6, OFF_T1(x6)
+     sret
 diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
-index 00538460..562a9c3c 100644
+index 562a9c3c..9307522a 100644
 --- a/src/kernel/arch/riscv64/test_riscv64.cpp
 +++ b/src/kernel/arch/riscv64/test_riscv64.cpp
-@@ -219,6 +219,10 @@ JARVIS_TEST(riscv64_plic_init) {
-     JARVIS_ASSERT_FMT(thresh_val == 0, "PLIC threshold not 0: 0x%x",
-                       thresh_val);
+@@ -36,8 +36,12 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/syscall/syscall.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/memory/vmm.hpp>
+ #include <lib/string.hpp>
+ #include <constants.hpp>
++#include <kernel/test/test_sched_helpers.hpp>
  
-+    // Issue #205: init() intentionally enables nothing (stays disabled
-+    // comment in interrupt_controller.cpp); enable IRQ 10 in-test so the
-+    // enable-path assertion below tests the mask/unmask registers.
-+    arch::ArchInterruptController::unmask(10);
-     volatile uint32_t *enable =
-         reinterpret_cast<volatile uint32_t *>(0x0C002000ULL);
-     uint32_t enable_val = enable[0];
-@@ -382,8 +386,10 @@ JARVIS_TEST(riscv64_rtc_mtime_read) {
-     arch::RTC::read_time(&t1);
+ using namespace kernel;
  
-     uint16_t year1 = t1.tm_year + 1900;
--    JARVIS_ASSERT_FMT(year1 >= 2025 && year1 <= 2035,
--                      "RTC year out of range: %u", year1);
-+    // Issue #205: the riscv64 RTC is an mtime uptime clock (epoch 1970),
-+    // not a wall clock — pin the uptime-epoch contract + monotonicity.
-+    // A goldfish-rtc wall-clock driver is follow-up work.
-+    JARVIS_ASSERT_FMT(year1 == 1970, "RTC epoch not 1970: %u", year1);
+@@ -88,6 +92,39 @@ JARVIS_TEST(riscv64_sv39_3level_walk) {
+     JARVIS_TEST_PASS();
+ }
  
-     for (int i = 0; i < 100000; ++i) {
-         asm volatile("");
-@@ -526,8 +532,11 @@ void register_riscv64_tests() {
++/// @brief Save/restore guard for the L1 block entry a test splits.
++///        riscv64 HHDM RAM lives in 2MB block leaves; splitting one for a
++///        map test then unmapping would destroy live linear-map entries
++///        with no rewind on riscv (x86 relies on snapshot PD restore).
++///        Capture values, restore the block leaf + sfence, THEN assert.
++///        Usage: BlockGuard g(VA); ...ops...; vals...; g.restore(); asserts.
++struct BlockGuard {
++    uint64_t *l1 = nullptr;
++    size_t idx = 0;
++    uint64_t saved = 0;
++    bool armed = false;
++    explicit BlockGuard(uint64_t va) {
++        uint64_t root = arch::read_cr3();
++        auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + root);
++        size_t l0_idx = (va >> 30) & 0x1FF;
++        uint64_t l0e = l0[l0_idx];
++        if (!(l0e & 1ULL))
++            return;
++        uint64_t l1_phys = ((l0e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++        l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
++        idx = (va >> 21) & 0x1FF;
++        saved = l1[idx];
++        armed = true;
++    }
++    void restore() {
++        if (!armed)
++            return;
++        armed = false;
++        l1[idx] = saved;
++        asm volatile("sfence.vma" ::: "memory");
++    }
++};
++
+ /// @brief Map a single 4 KB page and verify get_physical matches, then
+ ///        unmap and confirm the mapping is removed.
+ JARVIS_TEST(riscv64_sv39_map_unmap) {
+@@ -97,57 +134,101 @@ JARVIS_TEST(riscv64_sv39_map_unmap) {
+     constexpr uint64_t VA = 0xFFFFFFC08043F000ULL;
+     constexpr uint64_t FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
+ 
++    // BlockGuard (see block_split): without restoring the split L1 entry,
++    // the leaked split-L2 page is freed by snapshot pool-rollback while
++    // still referenced — a dangling table pointer serving wild reads to
++    // later tests (observed: zeroed s_pages reads → phys-0 leaf → fault).
++    BlockGuard guard(VA);
+     auto r = arch::ArchPageTable::map_page(VA, phys, FLAGS);
+-    JARVIS_ASSERT(r.ok());
++    bool ok_map = r.ok();
+ 
+     uint64_t retrieved = arch::ArchPageTable::get_physical(VA);
+-    JARVIS_ASSERT_EQ(phys, retrieved);
+ 
+     auto ur = arch::ArchPageTable::unmap_page(VA);
+-    JARVIS_ASSERT(ur.ok());
+-
+-    retrieved = arch::ArchPageTable::get_physical(VA);
+-    JARVIS_ASSERT_EQ(0ULL, retrieved);
++    bool ok_unmap = ur.ok();
+ 
++    uint64_t after = arch::ArchPageTable::get_physical(VA);
++    guard.restore();
+     PMM::free_page(phys);
++    JARVIS_ASSERT(ok_map);
++    JARVIS_ASSERT_EQ(phys, retrieved);
++    JARVIS_ASSERT(ok_unmap);
++    JARVIS_ASSERT_EQ(0ULL, after);
++
+     JARVIS_TEST_PASS();
+ }
+ 
+ /// @brief Fill a 2 MB-aligned region with 512 page mappings, then overlay
+ ///        a single page to trigger an L2 block-split scenario.
+ JARVIS_TEST(riscv64_sv39_block_split) {
+-    constexpr uint64_t BLOCK_VA = 0xFFFFFFC080600000ULL;
++    // Issue #206: scratch VA in an UNMAPPED L1 range (L1[128], beyond the
++    // 256MB RAM window).  Mapping over live HHDM RAM (e.g. 0x80600000)
++    // remaps the test's own .bss/PMM metadata underneath itself: L2[i]
++    // installs redirect s_pages/bitmap reads to test pages (observed:
++    // pages[492] reading 0 → phys-0 leaf → access fault).  L1[128] is
++    // invalid at entry, so no split occurs (fresh L2 via get_table) and
++    // the guard below restores invalid (not a block leaf).
++    constexpr uint64_t BLOCK_VA = 0xFFFFFFC090000000ULL;
+     constexpr uint64_t PAGE_VA = BLOCK_VA + 0x1000;
+     constexpr uint64_t FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
+ 
++    // Static scratch (fully rewritten every run): 512-entry arrays would
++    // consume 8KB of harness stack.  NOTE: these live in kernel .bss —
++    // never map test pages over the kernel image ranges they occupy
++    // (observed: self-remap zeroes your own reads).
++    static uint64_t s_pages[512];
++    static uint64_t s_check[512];
++    uint64_t *pages = s_pages;
++    uint64_t *check = s_check;
++    bool setup_ok = true;
+     for (size_t i = 0; i < 512; ++i) {
+-        uint64_t p = PMM::alloc_page();
+-        JARVIS_ASSERT(p != 0);
+-        auto r = arch::ArchPageTable::map_page(BLOCK_VA + i * 0x1000, p, FLAGS);
+-        JARVIS_ASSERT(r.ok());
++        pages[i] = PMM::alloc_page();
++        if (pages[i] == 0)
++            setup_ok = false;
++    }
++
++    BlockGuard guard(BLOCK_VA);
++    bool map_ok = true;
++    if (setup_ok) {
++        for (size_t i = 0; i < 512; ++i) {
++            auto r = arch::ArchPageTable::map_page(BLOCK_VA + i * 0x1000,
++                                                   pages[i], FLAGS);
++            if (!r.ok())
++                map_ok = false;
++        }
+     }
+ 
+     uint64_t new_p = PMM::alloc_page();
+-    JARVIS_ASSERT(new_p != 0);
+-    auto r = arch::ArchPageTable::map_page(PAGE_VA, new_p, FLAGS);
+-    JARVIS_ASSERT(r.ok());
++    bool overlay_ok = false;
++    uint64_t retrieved = 0;
++    if (new_p != 0 && map_ok) {
++        auto r = arch::ArchPageTable::map_page(PAGE_VA, new_p, FLAGS);
++        overlay_ok = r.ok();
++        retrieved = arch::ArchPageTable::get_physical(PAGE_VA);
++    }
+ 
+-    uint64_t retrieved = arch::ArchPageTable::get_physical(PAGE_VA);
+-    JARVIS_ASSERT_EQ(new_p, retrieved);
++    for (size_t i = 0; i < 512; ++i)
++        check[i] = arch::ArchPageTable::get_physical(BLOCK_VA + i * 0x1000);
+ 
+     for (size_t i = 0; i < 512; ++i) {
+-        uint64_t pa = arch::ArchPageTable::get_physical(BLOCK_VA + i * 0x1000);
+-        if (i == 1) {
+-            JARVIS_ASSERT_EQ(new_p, pa);
+-        } else {
+-            JARVIS_ASSERT(pa != 0);
+-        }
++        arch::ArchPageTable::unmap_page(BLOCK_VA + i * 0x1000);
++        PMM::free_page(pages[i]);
+     }
++    guard.restore();
++    if (new_p != 0)
++        PMM::free_page(new_p);
+ 
++    JARVIS_ASSERT(setup_ok);
++    JARVIS_ASSERT(map_ok);
++    JARVIS_ASSERT(overlay_ok);
++    JARVIS_ASSERT_EQ(new_p, retrieved);
+     for (size_t i = 0; i < 512; ++i) {
+-        arch::ArchPageTable::unmap_page(BLOCK_VA + i * 0x1000);
++        if (i == 1) {
++            JARVIS_ASSERT_EQ(new_p, check[i]);
++        } else {
++            JARVIS_ASSERT(check[i] != 0);
++        }
+     }
+-    PMM::free_page(new_p);
+ 
+     JARVIS_TEST_PASS();
+ }
+@@ -527,16 +608,163 @@ JARVIS_TEST(riscv64_abi_bad_number, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Issue #206 (M1): synthetic U-mode ECALL round-trip without any ELF.
++// A 48-byte raw stub (post-ecall x2 regression sample for issue #220).
++// Store cookie / GETPID ecall / store cookie /
++// spin runs in U-mode from private user mappings.
++// runs in U-mode from private user mappings; the harness observes both
++// cookies through the HHDM alias of the data page.  Cookie 1 proves the
++// sret entry (fetch + store in U-mode); cookie 2 proves the ECALL trap
++// AND the sret return (without the Phase-1 trap fixes this faults or
++// wedges: no kstack switch, no x2 restore).
++namespace {
++// RV64LE.  M1 U-mode ECALL probe: tp carries the data-page base
++// (x2 untouched after dispatch; tp is callee-saved and restored
++// unconditionally).  CAREFUL: tp=x4 (rd/rs1=4), NOT t0=x5!
++// All multi-byte encodings below were verified with the python RV decoder
++// (lesson: never hand-commit without decoding).
++//   lui tp,0x41001        -> tp = 0x41001000 (data page)
++//   addi t1,zero,0x111    -> cookie 1
++//   sw t1,0(tp)
++//   mv t1,x2              -> snapshot live user-x2 pre-ecall (dispatch proof)
++//   sw t1,8(tp)           -> cookie 3 (expect 0x70009000)
++//   addi a7,zero,23       -> GETPID
++//   ecall                 -> at +0x18
++//   mv t1,x2              -> snapshot live user-x2 POST-ecall (issue #220:
++//                            trap-round-trip x2 preservation proof)
++//   sw t1,12(tp)          -> cookie 4 (expect 0x70009000)
++//   addi t1,zero,0x222    -> cookie 2
++//   sw t1,4(tp)
++//   jal x0,0              -> spin at +0x2C
++constexpr uint8_t kUmodeProbeStub[] = {
++    0x37, 0x12, 0x00, 0x41, 0x13, 0x03, 0x10, 0x11, 0x23, 0x20, 0x62, 0x00,
++    0x13, 0x03, 0x01, 0x00, 0x23, 0x24, 0x62, 0x00, 0x93, 0x08, 0x70, 0x01,
++    0x73, 0x00, 0x00, 0x00, 0x13, 0x03, 0x01, 0x00, 0x23, 0x26, 0x62, 0x00,
++    0x13, 0x03, 0x20, 0x22, 0x23, 0x22, 0x62, 0x00, 0x6F, 0x00, 0x00, 0x00,
++};
++constexpr uint64_t kUmodeStubVa = 0x41000000ULL;
++constexpr uint64_t kUmodeDataVa = 0x41001000ULL;
++constexpr uint32_t kUmodeCookie1 = 0x111;
++constexpr uint32_t kUmodeCookie2 = 0x222;
++}  // namespace
++
++JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
++    using namespace kernel;
++    const uint64_t free_before = PMM::free_pages_ref();
++
++    // Private stub (R+X) + data (R+W) pages, USER-owned so cleanup
++    // reclaims them via free_user_pages.
++    const uint64_t stub_phys = PMM::alloc_user_page();
++    const uint64_t data_phys = PMM::alloc_user_page();
++    JARVIS_ASSERT_FMT(stub_phys != 0 && data_phys != 0, "user alloc failed");
++
++    auto *stub = reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET +
++                                                      stub_phys);
++    for (size_t i = 0; i < sizeof(kUmodeProbeStub); ++i)
++        stub[i] = kUmodeProbeStub[i];
++    auto *data = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
++                                                        data_phys);
++    data[0] = 0;
++    data[1] = 0;
++    data[2] = 0;
++    data[3] = 0;  // cookie 4 slot (issue #220)
++
++    auto *t = TaskControlBlock::create_user(
++        reinterpret_cast<void (*)()>(kUmodeStubVa), 11, 10, 32_KiB);
++    JARVIS_ASSERT_FMT(t != nullptr, "create_user failed");
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
++
++    // Map our pages into the task's tables (create_user maps its own
++    // stack + yield stub elsewhere; our VAs don't collide).
++    VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
++                          t->page_table_);
++    VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
++                          t->page_table_);
++    // Point the initial frame past create_user's yield stub.
++    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
++    frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
++
++    // Fail fast if the map didn't land (else the U-fetch fault below
++    // misattributes a mapping bug to the trap path).
++    JARVIS_ASSERT_FMT(
++        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
++        "stub VA not mapped in task tables");
++    JARVIS_ASSERT_FMT(
++        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
++        "data VA not mapped in task tables");
++
++    {
++        arch::IrqGuard ig{};
++        Scheduler::add_task(*t);
++    }
++    Scheduler::reschedule();
++
++    // ecall sits at stub+0x18, post-advance +0x1C, spin at +0x2C.
++    const uint64_t child_id = t->id;
++    const uint64_t start = arch::Timer::ticks();
++    uint64_t sepc_now = 0;
++    uint64_t a0_now = 0;
++    uint64_t x2_live = 0;
++    uint64_t x2_post = 0;  // post-ecall x2 (issue #220)
++    bool cookies_ok = false;
++    while (arch::Timer::ticks() - start < 200) {
++        // Handler-side progress (proves trap+return even before cookies).
++        // Captured pre-teardown: frame dangles after delete t (Rule 5).
++        sepc_now = frame[31];
++        a0_now = frame[9];
++        // Live x2 sampled by the stub itself (mv t1,x2 pre-ecall),
++        // race-free: the data page is written once by U-mode and never
++        // touched by the kernel, unlike frame[1] which every tick entry
++        // rewrites (return-path SIE window, issue #206 follow-up).
++        x2_live = data[2];
++        x2_post = data[3];
++        // Cookie round trip in the data page (proves tp/stores, no x2).
++        if (data[0] == kUmodeCookie1 && data[1] == kUmodeCookie2) {
++            cookies_ok = true;
++            break;
++        }
++        arch::hlt();
++    }
++
++    // Teardown BEFORE asserting (cookbook Rule 5): terminate (spinning
++    // in U-mode), drain, release user resources, free the TCB.
++    if (TaskControlBlock::is_valid(t) &&
++        t->state != TaskState::TERMINATED)
++        (void)Scheduler::terminate_err(*t, 0);
++    Scheduler::drain_zombie_list();
++    if (TaskControlBlock::is_valid(t)) {
++        t->cleanup();
++        delete t;
++    }
++    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT_FMT(sepc_now >= kUmodeStubVa + 0x1C &&
++                          sepc_now <= kUmodeStubVa + 0x2C,
++                      "sepc not past ecall: 0x%lx", sepc_now);
++    JARVIS_ASSERT_FMT(cookies_ok, "cookie round trip failed");
++    JARVIS_ASSERT_FMT(a0_now == child_id, "a0 != task id: 0x%lx", a0_now);
++    // Dispatch-x2 proof via the stub's own sample (frame[1] is not a
++    // stable dispatch record: tick entries rewrite the live frame; see
++    // the post-ecall-x2 follow-up issue for the remaining question).
++    JARVIS_ASSERT_FMT(x2_live == 0x70009000ULL, "live x2 != user_rsp: 0x%lx",
++                      x2_live);
++    // Trap-round-trip x2 proof (issue #220): entry preserved x2, E2 restored it.
++    JARVIS_ASSERT_FMT(x2_post == 0x70009000ULL, "post-trap x2 != user_rsp: 0x%lx",
++                      x2_post);
++    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
++                      "PMM delta %ld pages after umode smoke",
++                      (long)(PMM::free_pages_ref() - free_before));
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Register all riscv64 architecture tests.
+ void register_riscv64_tests() {
      Logger::info("Registering riscv64 architecture tests");
  
      JARVIS_REGISTER_TEST(riscv64_sv39_3level_walk);
--    JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
--    JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
-+    // Issue #205: deregistered until the Sv39 VMM backend lands (#152) —
-+    // ArchPageTable map/unmap/get_physical decode PTEs x86-style.
-+    // JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
-+    // Issue #205: same Sv39 backend gate as map_unmap (#152).
-+    // JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
+-    // Issue #205: deregistered until the Sv39 VMM backend lands (#152) —
+-    // ArchPageTable map/unmap/get_physical decode PTEs x86-style.
+-    // JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
+-    // Issue #205: same Sv39 backend gate as map_unmap (#152).
+-    // JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
++    // Issue #206: re-enabled — Sv39 backend fixed (shift codec); these two
++    // are the proof (were #205-deferred to #152).
++    JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
++    JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
      JARVIS_REGISTER_TEST(riscv64_context_save_restore);
      JARVIS_REGISTER_TEST(riscv64_context_sret_frame);
      JARVIS_REGISTER_TEST(riscv64_plic_init);
-@@ -536,13 +545,22 @@ void register_riscv64_tests() {
-     JARVIS_REGISTER_TEST(riscv64_sbi_timer_set_stime);
-     JARVIS_REGISTER_TEST(riscv64_timer_ticks_monotonic);
-     JARVIS_REGISTER_TEST(riscv64_timer_ns_conversion);
--    JARVIS_REGISTER_TEST(riscv64_fpu_extension_detection);
-+    // Issue #205: deregistered — misa is M-mode-only (csrr faults
-+    // illegal-insn in S-mode); S-mode FPU detection needs DTB isa-string
-+    // parsing or tentative FS-enable follow-up work.
-+    // JARVIS_REGISTER_TEST(riscv64_fpu_extension_detection);
-     JARVIS_REGISTER_TEST(riscv64_sbi_console_putchar);
-     JARVIS_REGISTER_TEST(riscv64_pci_ecam_read);
-     JARVIS_REGISTER_TEST(riscv64_rtc_mtime_read);
-     JARVIS_REGISTER_TEST(riscv64_satp_csr);
--    JARVIS_REGISTER_TEST(riscv64_boot_mvendorid);
--    JARVIS_REGISTER_TEST(riscv64_medeleg_selected);
-+    // Issue #205: deregistered — mvendorid/marchid/mimpid are M-mode-only
-+    // CSRs; reading them in S-mode raises illegal-insn (no S-gate proof
-+    // possible; QEMU banner already shows the values).
-+    // JARVIS_REGISTER_TEST(riscv64_boot_mvendorid);
-+    // Issue #205: deregistered — medeleg/mideleg are M-mode-only CSRs
-+    // (same illegal-insn class as mvendorid; U-ecall delegation proven
-+    // indirectly when #206 runs U-mode).
-+    // JARVIS_REGISTER_TEST(riscv64_medeleg_selected);
+@@ -564,6 +792,7 @@ void register_riscv64_tests() {
      JARVIS_REGISTER_TEST(riscv64_abi_frame_conform);
      JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
      JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
++    JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
+ }
+ 
+ #endif
 diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 9c99b0ea..f51be652 100644
+index 99d1b68f..8625a7bf 100644
 --- a/src/kernel/memory/vmm.cpp
 +++ b/src/kernel/memory/vmm.cpp
-@@ -726,6 +726,14 @@ uint64_t VMM::clone_kernel_pml4() {
-     for (size_t i = 0; i < 256; ++i) {
-         dst[i] = 0;
-     }
+@@ -126,16 +126,23 @@ void VMM::init() {
+ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+                          bool user_alloc) {
+     if (table[index] & PAGE_PRESENT) {
 +#if defined(CONFIG_ARCH_RISCV64)
-+    // Issue #205: riscv64 low half holds kernel MMIO+identity (L0[0]:
-+    // 1GB window with PLIC/UART/ECAM leaves + RAM identity), not user
-+    // space — every address space needs it (drivers touch raw-phys
-+    // identity; aarch64 instead uses HHDM aliases so its clear stands).
-+    // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
-+    dst[0] = src[0];
++        uint64_t target_phys = VMM::sv39_pte_phys(table[index]);
++#else
+         uint64_t target_phys = table[index] & ~0xFFFULL;
 +#endif
-     // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
-     for (size_t i = 256; i < 512; ++i) {
-         dst[i] = src[i];
+         if (!PMM::is_allocated(target_phys)) {
+             table[index] = 0;
+         } else if (
+ #if defined(CONFIG_ARCH_AARCH64)
+             (table[index] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT
+ #elif defined(CONFIG_ARCH_RISCV64)
+-            // For RISC-V, table entry has V=1, R=W=X=0
+-            (table[index] & (PAGE_PRESENT | PAGE_READ | PAGE_WRITE |
+-                             PAGE_EXEC)) == PAGE_PRESENT
++            // Issue #206: Sv39 is the INVERSE of the aarch64 test above —
++            // a V-only entry is a TABLE pointer (descend), while V+R|W|X
++            // is a block LEAF (split to descend).  The old condition split
++            // tables and descended into leaves (second map of a shared L1
++            // entry orphaned the first map's L2).
++            (table[index] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0
+ #else
+             table[index] & PAGE_HUGE
+ #endif
+@@ -148,7 +155,12 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+             auto *new_table =
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
++#if defined(CONFIG_ARCH_RISCV64)
++            uint64_t huge_base =
++                VMM::sv39_pte_phys(table[index]) & ~0x1FFFFFULL;
++#else
+             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
++#endif
+ #if defined(CONFIG_ARCH_AARCH64)
+             uint64_t base_flags =
+                 table[index] &
+@@ -162,17 +174,19 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+             table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
+ #elif defined(CONFIG_ARCH_RISCV64)
+             // For RISC-V, 2MB block entry has V=1, R=1, W=1, X=1 (leaf)
+-            // Need to split into 512 4KB entries
++            // Need to split into 512 4KB entries.  Issue #206: huge_base
++            // decoded above with sv39_pte_phys; store shifted PPNs below.
+             uint64_t base_flags =
+                 table[index] &
+                 (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC | PAGE_USER |
+                  PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
+             for (size_t i = 0; i < 512; ++i) {
+-                new_table[i] = (huge_base + i * 0x1000) | base_flags |
+-                               PAGE_ACCESSED | PAGE_DIRTY;
++                new_table[i] = VMM::sv39_phys_pte(huge_base + i * 0x1000) |
++                               base_flags | PAGE_ACCESSED | PAGE_DIRTY;
+             }
+-            // Table entry: V=1, no RWX = points to next level table
+-            table[index] = new_page | PAGE_PRESENT;
++            // Table entry: V=1, no RWX = points to next level table.
++            // PPN-shifted store (raw phys would decode 4x too high).
++            table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
+ #else
+             uint64_t base_flags =
+                 table[index] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+@@ -184,8 +198,14 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+             return new_table;
+         } else {
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
++#if defined(CONFIG_ARCH_RISCV64)
++            // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
++            return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                VMM::sv39_pte_phys(table[index]));
++#else
+             return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                 (table[index] & ~0xFFFULL));
++#endif
+         }
+     }
+     if (!create)
+@@ -206,8 +226,9 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
+ #if defined(CONFIG_ARCH_AARCH64)
+     table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
+ #elif defined(CONFIG_ARCH_RISCV64)
+-    // Table entry: V=1, R=W=X=0 points to next level
+-    table[index] = new_page | PAGE_PRESENT;
++    // Table entry: V=1, R=W=X=0 points to next level.  PPN-shifted store
++    // (issue #206: raw phys decodes 4x too high through an Sv39 PTE).
++    table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
+ #else
+     table[index] = new_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+ #endif
+@@ -234,7 +255,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     if (!l1)
+         return;
+ 
+-    // If L1 entry is a 2MB block, split it into 512 4KB entries
++    // If L1 entry is a 2MB block, split it into 512 4KB entries.
++    // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
+     if ((l1[l1_idx] & PAGE_PRESENT) &&
+         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+         uint64_t new_l2_phys = PMM::alloc_page_table();
+@@ -242,15 +264,16 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+             return;
+         auto *new_l2 =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
+-        uint64_t block_base = l1[l1_idx] & ~0x1FFFFFULL;
++        uint64_t block_base =
++            VMM::sv39_pte_phys(l1[l1_idx]) & ~0x1FFFFFULL;
+         uint64_t base_flags =
+             l1[l1_idx] & (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC |
+                           PAGE_USER | PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
+         for (size_t i = 0; i < 512; ++i) {
+-            new_l2[i] = (block_base + i * 0x1000) | base_flags | PAGE_ACCESSED |
+-                        PAGE_DIRTY;
++            new_l2[i] = VMM::sv39_phys_pte(block_base + i * 0x1000) |
++                        base_flags | PAGE_ACCESSED | PAGE_DIRTY;
+         }
+-        l1[l1_idx] = new_l2_phys | PAGE_PRESENT;
++        l1[l1_idx] = VMM::sv39_phys_pte(new_l2_phys) | PAGE_PRESENT;
+     }
+ 
+     auto *l2 = get_table(l1, l1_idx, true);
+@@ -261,12 +284,12 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+         ENSURE(PMM::is_user_page(phys_addr) &&
+                "map_page: KERNEL page mapped as user-accessible");
+ 
+-    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC;
++    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE;
+     if (user)
+         flags |= PAGE_USER;
+     flags |= PAGE_ACCESSED | PAGE_DIRTY;
+ 
+-    l2[l2_idx] = phys_addr | flags;
++    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
+     arch::ArchPageTable::tlb_flush(virt_addr);
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+@@ -452,17 +475,18 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
+     if (!l1)
+         return 0;
+ 
+-    // Check for 2MB block mapping (leaf at L1 level)
++    // Check for 2MB block mapping (leaf at L1 level).  Issue #206:
++    // shift-based Sv39 decode (the HugeFrameMask is x86-domain).
+     if ((l1[l1_idx] & PAGE_PRESENT) &&
+         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-        return (l1[l1_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
++        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
+     }
+ 
+     auto *l2 = get_table(l1, l1_idx, false);
+     if (!l2 || !(l2[l2_idx] & PAGE_PRESENT))
+         return 0;
+ 
+-    return (l2[l2_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
++    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+@@ -550,7 +574,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+         flags |= PAGE_USER;
+     flags |= PAGE_ACCESSED | PAGE_DIRTY;
+ 
+-    l2[l2_idx] = phys_addr | flags;
++    // Issue #206: PPN-shifted store (raw phys decodes 4x too high).
++    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+@@ -920,19 +945,21 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+ #if defined(CONFIG_ARCH_RISCV64)
+     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (pml4_phys & ~0xFFFULL));
+-    // User space: L0 indices 0-255 for Sv39 (0-256GB)
++    // User space: L0 indices 0-255 for Sv39 (0-256GB).  Issue #206: all
++    // address codecs below are shift-based Sv39 (raw & ~mask is x86-domain
++    // and decodes 4x too high); L2 non-leaves are invalid in Sv39 (no L3).
+     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
+         if (!(l0[l0_idx] & PAGE_PRESENT))
+             continue;
+         // Check for 1GB block at L0
+         if ((l0[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-            uint64_t page = l0[l0_idx] & ~0x3FFFFFFFULL;
++            uint64_t page = VMM::sv39_pte_phys(l0[l0_idx]);
+             if (!PMM::is_user_page(page))
+                 continue;
+             PMM::free_page(page);
+             continue;
+         }
+-        uint64_t l1_phys = l0[l0_idx] & ~0xFFFULL;
++        uint64_t l1_phys = VMM::sv39_pte_phys(l0[l0_idx]);
+         if (!PMM::is_user_page(l1_phys))
+             continue;
+         auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
+@@ -941,13 +968,13 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+                 continue;
+             // Check for 2MB block at L1
+             if ((l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-                uint64_t page = l1[l1_idx] & ~0x1FFFFFULL;
++                uint64_t page = VMM::sv39_pte_phys(l1[l1_idx]);
+                 if (!PMM::is_user_page(page))
+                     continue;
+                 PMM::free_page(page);
+                 continue;
+             }
+-            uint64_t l2_phys = l1[l1_idx] & ~0xFFFULL;
++            uint64_t l2_phys = VMM::sv39_pte_phys(l1[l1_idx]);
+             if (!PMM::is_user_page(l2_phys))
+                 continue;
+             auto *l2 =
+@@ -955,35 +982,15 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+             for (int l2_idx = 0; l2_idx < 512; ++l2_idx) {
+                 if (!(l2[l2_idx] & PAGE_PRESENT))
+                     continue;
+-                // Check for leaf PTE (V=1, R|W|X=1) — 3-level Sv39 format
+-                if ((l2[l2_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-                    uint64_t leaf = l2[l2_idx] & PAGE_FRAME_MASK;
+-                    if (!PMM::is_user_page(leaf))
+-                        continue;
+-                    PMM::free_page(leaf);
+-                    if ((l2_idx & 0x3F) == 0x3F)
+-                        Scheduler::cleanup_step_try();
+-                    continue;
+-                }
+-                // Table entry (V=1, R=W=X=0) — old 4-level format with L3
+-                // beneath
+-                uint64_t l3_phys = l2[l2_idx] & ~0xFFFULL;
+-                if (!PMM::is_user_page(l3_phys))
++                // Leaf PTE (V=1, R|W|X=1) — 4KB page in 3-level Sv39.
++                if (!VMM::sv39_is_leaf(l2[l2_idx]))
++                    continue;  // invalid non-leaf: leave alone
++                uint64_t leaf = VMM::sv39_pte_phys(l2[l2_idx]);
++                if (!PMM::is_user_page(leaf))
+                     continue;
+-                auto *l3 =
+-                    reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l3_phys);
+-                for (int l3_idx = 0; l3_idx < 512; ++l3_idx) {
+-                    if (!(l3[l3_idx] & PAGE_PRESENT))
+-                        continue;
+-                    uint64_t leaf = l3[l3_idx] & PAGE_FRAME_MASK;
+-                    if (!PMM::is_user_page(leaf))
+-                        continue;
+-                    PMM::free_page(leaf);
+-                    if ((l3_idx & 0x3F) == 0x3F)
+-                        Scheduler::cleanup_step_try();
+-                }
+-                PMM::free_page(l3_phys);
+-                l2[l2_idx] = 0; // clear L2 entry to prevent re-walk
++                PMM::free_page(leaf);
++                if ((l2_idx & 0x3F) == 0x3F)
++                    Scheduler::cleanup_step_try();
+             }
+             PMM::free_page(l2_phys);
+             l1[l1_idx] = 0; // clear L1 entry to prevent re-walk
+@@ -1242,7 +1249,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+     }
+     return true;
+ #elif defined(CONFIG_ARCH_RISCV64)
+-    // RISC-V Sv39: L0 → L1 → L2 → leaf
++    // RISC-V Sv39: L0 → L1 → L2 → leaf.  Issue #206: shift-based PTE
++    // codec throughout (raw & ~mask decodes 4x too high); flags are bits
++    // 9:0 only (0xFFF would capture PPN bits); no L3 exists in Sv39.
+     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                              (src_pml4 & ~0xFFFULL));
+     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+@@ -1260,14 +1269,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+             continue;
+         }
+ 
+-        uint64_t src_l1_phys = src[l0_idx] & ~0xFFFULL;
++        uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
+         uint64_t dst_l1_phys = PMM::alloc_user_page();
+         if (!dst_l1_phys)
+             return false;
+         auto *dst_l1 =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l1_phys);
+         __builtin_memset(dst_l1, 0, 4096);
+-        dst[l0_idx] = dst_l1_phys | VMM::PAGE_PRESENT;
++        dst[l0_idx] = VMM::sv39_phys_pte(dst_l1_phys) | VMM::PAGE_PRESENT;
+ 
+         auto *src_l1 =
+             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l1_phys);
+@@ -1281,14 +1290,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 continue;
+             }
+ 
+-            uint64_t src_l2_phys = src_l1[l1_idx] & ~0xFFFULL;
++            uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);
+             uint64_t dst_l2_phys = PMM::alloc_user_page();
+             if (!dst_l2_phys)
+                 return false;
+             auto *dst_l2 =
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l2_phys);
+             __builtin_memset(dst_l2, 0, 4096);
+-            dst_l1[l1_idx] = dst_l2_phys | VMM::PAGE_PRESENT;
++            dst_l1[l1_idx] = VMM::sv39_phys_pte(dst_l2_phys) | VMM::PAGE_PRESENT;
+ 
+             auto *src_l2 =
+                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l2_phys);
+@@ -1296,10 +1305,10 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 if (!(src_l2[l2_idx] & PAGE_PRESENT))
+                     continue;
+ 
+-                // RISC-V leaf entries have V=1, R|W|X=1
+-                if ((src_l2[l2_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-                    uint64_t src_data = src_l2[l2_idx] & ~0xFFFULL;
+-                    uint64_t flags = src_l2[l2_idx] & 0xFFFULL;
++                // RISC-V leaf entries have V=1, R|W|X=1.
++                if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
++                    uint64_t src_data = VMM::sv39_pte_phys(src_l2[l2_idx]);
++                    uint64_t flags = src_l2[l2_idx] & 0x3FFULL;
+                     if (!PMM::is_user_page(src_data)) {
+                         dst_l2[l2_idx] = 0;
+                         continue;
+@@ -1311,39 +1320,11 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                         reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
+                         reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
+                         4096);
+-                    dst_l2[l2_idx] = dst_data | flags;
++                    dst_l2[l2_idx] =
++                        VMM::sv39_phys_pte(dst_data) | flags;
+                 } else {
+-                    // Table entry: 4-level format with L3 beneath
+-                    uint64_t src_l3_phys = src_l2[l2_idx] & ~0xFFFULL;
+-                    uint64_t dst_l3_phys = PMM::alloc_user_page();
+-                    if (!dst_l3_phys)
+-                        return false;
+-                    auto *dst_l3 = reinterpret_cast<uint64_t *>(
+-                        arch::HHDM_OFFSET + dst_l3_phys);
+-                    __builtin_memset(dst_l3, 0, 4096);
+-                    dst_l2[l2_idx] = dst_l3_phys | VMM::PAGE_PRESENT;
+-
+-                    auto *src_l3 = reinterpret_cast<uint64_t *>(
+-                        arch::HHDM_OFFSET + src_l3_phys);
+-                    for (int l3_idx = 0; l3_idx < 512; ++l3_idx) {
+-                        if (!(src_l3[l3_idx] & PAGE_PRESENT))
+-                            continue;
+-                        uint64_t src_data = src_l3[l3_idx] & ~0xFFFULL;
+-                        uint64_t flags = src_l3[l3_idx] & 0xFFFULL;
+-                        if (!PMM::is_user_page(src_data)) {
+-                            dst_l3[l3_idx] = 0;
+-                            continue;
+-                        }
+-                        uint64_t dst_data = PMM::alloc_user_page();
+-                        if (!dst_data)
+-                            return false;
+-                        __builtin_memcpy(reinterpret_cast<void *>(
+-                                             arch::HHDM_OFFSET + dst_data),
+-                                         reinterpret_cast<void *>(
+-                                             arch::HHDM_OFFSET + src_data),
+-                                         4096);
+-                        dst_l3[l3_idx] = dst_data | flags;
+-                    }
++                    // Non-leaf at L2 is invalid in Sv39 (no L3): skip.
++                    dst_l2[l2_idx] = 0;
+                 }
+             }
+         }
+@@ -1368,28 +1349,29 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+ 
+     if (!(l0[l0_idx] & PAGE_PRESENT))
+         return 0;
++    // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
+     auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (l0[l0_idx] & ~0xFFFULL));
++                                            VMM::sv39_pte_phys(l0[l0_idx]));
+ 
+     if (!(l1[l1_idx] & PAGE_PRESENT))
+         return 0;
+     auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (l1[l1_idx] & ~0xFFFULL));
++                                            VMM::sv39_pte_phys(l1[l1_idx]));
+ 
+     // Check for 2MB block mapping (leaf at L1 level)
+     if ((l2[l1_idx] & PAGE_PRESENT) &&
+         (l2[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-        return (l2[l1_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
++        return VMM::sv39_pte_phys(l2[l1_idx]) + (virt_addr & 0x1FFFFF);
+     }
+ 
+     if (!(l2[l2_idx] & PAGE_PRESENT))
+         return 0;
+-    auto *l3 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+-                                            (l2[l2_idx] & ~0xFFFULL));
+-
+-    if (!(l3[l2_idx] & PAGE_PRESENT))
++    // Issue #206: Sv39 has no level below L2 — a V=1,RWX=0 entry here is
++    // invalid (never created by this backend); fail closed, do not descend
++    // into garbage as the old 4-level fallback did.
++    if (!VMM::sv39_is_leaf(l2[l2_idx]))
+         return 0;
+-    return (l3[l2_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
++    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 90c35358..7d2352c5 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -331,6 +331,19 @@ class VMM {
+     // Sv39: PPN bits [43:12] (34-bit PA).  Masks off flags + reserved bits.
+     static constexpr uint64_t PAGE_FRAME_MASK = 0x00000003FFFFFFF000ULL;
+     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x00000003FFFFE00000ULL;
++    // Issue #206: the masks above are x86-domain (phys & mask) and WRONG for
++    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
++    // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
++    // for documentation of the PA width (1TB cap).
++    static inline uint64_t sv39_pte_phys(uint64_t pte) {
++        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    }
++    static inline uint64_t sv39_phys_pte(uint64_t phys) {
++        return (phys >> 12) << 10;
++    }
++    static inline bool sv39_is_leaf(uint64_t pte) {
++        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
++    }
+ #else
+     // x86_64: physical frame bits [51:12] (52-bit PA).  Masks off all flags
+     // INCLUDING NX (bit 63) — without this, a leaf PTE with NX set yields a
 diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 1914caf5..5f9c4aa2 100644
+index 5f9c4aa2..ca3c5cd4 100644
 --- a/src/kernel/test/test_expected_counts.hpp
 +++ b/src/kernel/test/test_expected_counts.hpp
 @@ -250,7 +250,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
      {"arch_aarch64",          0,   30,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217)
  #endif
  #if defined(CONFIG_ARCH_RISCV64)
--    {"arch_riscv64",          0,    0,       3      },  // 3 ABI frame tests (issue #30); validation enabled by nonzero counts
-+    {"arch_riscv64",          0,    0,      16      },  // 21 registered - 5 deferred (issue #205: sv39_map_unmap + sv39_block_split need Sv39 VMM backend #152; boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + 1 plic_init enable fix + 1 init_stack by-ref fix
+-    {"arch_riscv64",          0,    0,      16      },  // 21 registered - 5 deferred (issue #205: sv39_map_unmap + sv39_block_split need Sv39 VMM backend #152; boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + 1 plic_init enable fix + 1 init_stack by-ref fix
++    {"arch_riscv64",          0,    0,      19      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1)
  #endif
  
      // bench

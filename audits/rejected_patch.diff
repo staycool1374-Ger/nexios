@@ -1,16 +1,15 @@
-diff --git a/src/kernel/arch/riscv64/boot.S b/src/kernel/arch/riscv64/boot.S
---- a/src/kernel/arch/riscv64/boot.S
-+++ b/src/kernel/arch/riscv64/boot.S
-@@ -23,6 +23,12 @@ _start:
-      * s0/s1 preserved). */
-     la t0, kernel_phys_end
-     li t1, 0x80C00000         /* stack base - 2MB metadata slack */
-+    /* RV64 LUI sign-extends bit 31, so the li above yields
-+     * 0xFFFFFFFF80C00000, not 0x0000000080C00000; the unsigned bltu
-+     * below would then be always-taken and the fail-stop dead.
-+     * Zero-extend into the true physical domain before comparing. */
-+    slli t1, t1, 32
-+    srli t1, t1, 32
-     bltu t0, t1, 10f
-     li a0, 33                 /* '!' */
-     li a7, 1
+diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
+--- a/src/kernel/arch/riscv64/syscall_entry.S
++++ b/src/kernel/arch/riscv64/syscall_entry.S
+@@ -74,6 +74,8 @@
+ 41:
+     # from_u: sscratch holds user-t0; x2 still holds the user sp.
+-    # Load the kstack top straight into sp (x2 untouched).
+-    la sp, scheduler_load_kstack_top
+-    ld sp, 0(sp)
++    # Load the kstack top into sp via dead t0 (t0 holds the discardable
++    # SPP==0 test result; user-t0 is parked in sscratch).  x2 stays live
++    # until its OFF_SP save below — `la sp` would destroy the user sp.
++    la t0, scheduler_load_kstack_top
++    ld sp, 0(t0)
+     addi sp, sp, -SAVE_SIZE
