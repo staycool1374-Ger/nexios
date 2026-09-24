@@ -177,17 +177,11 @@ syscall_entry:
     beq t0, t1, 6f
     li t1, 9                   # ECALL from S-mode
     beq t0, t1, 6f
-    # Other exceptions: output 'E' via SBI then call C handler
-    li a0, 69
-    li a7, 1
-    ecall
-    li a0, 10
-    li a7, 1
-    ecall
-    ld a0, OFF_SEPC(sp)
-    ld a1, OFF_SCAUSE(sp)
-    ld a2, OFF_STVAL(sp)
-    call handle_kernel_exception
+    # Other exceptions: SPP-gated dispatch (issue #206 M2) — U-mode faults
+    # terminate the task, S-mode faults panic. Pass frame + sstatus.
+    mv a0, sp
+    csrr a1, sstatus
+    call riscv64_exception_dispatch
 
 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
     # §2 ABI (issue #185; docs/specs/syscall-abi-picolibc.md): number rides
@@ -207,12 +201,30 @@ syscall_entry:
     sd a0, OFF_A0(sp)         # store return value into saved a0 slot
 
 5:  # === Return path / context switch check ===
-    # Only context switch at outermost nesting (depth == 1)
+    # Apply at outermost nesting (depth == 1). Nested timer ticks
+    # (depth == 2, SYSCALL+timer) MUST also apply: a task blocked in a
+    # syscall hlt-loop publishes its voluntary arm and only a depth-1
+    # epilogue could otherwise apply it — the hlt-loop never reaches one,
+    # so without this the arm strands (RMS sees the pending arm and returns
+    # early every tick: total stall). Mirrors the isr_stubs.asm 0xE0-depth-2
+    # rule on x86_64 (issue #221). The existing `sd sp` save below is
+    # already correct for the nested case: sp is the nested frame base and
+    # resuming there completes the nested return back to the hlt-loop, so
+    # no save-side adjustment is made (cf. outer-frame reasoning).
     la t0, isr_nesting_depth
     ld t1, 0(t0)
     li t2, 1
+    beq t1, t2, apply
+    li t2, 2
     bne t1, t2, 7f
-
+    # Depth 2: allow the s_timer nested tick only (scause[63]=1, cause 5);
+    # all other nested sources preserve the arm and skip, as before.
+    ld t0, OFF_SCAUSE(sp)
+    bge t0, zero, 7f
+    andi t0, t0, 0x7ff
+    li t1, 5
+    bne t0, t1, 7f
+apply:
     # Check scheduler_save_rsp_to
     la t0, scheduler_save_rsp_to
     ld t0, 0(t0)

@@ -100,13 +100,20 @@ inline void hlt() {
 inline void pause() {
     asm volatile("nop");
 }
-/// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
-/// @note MP-4.4 scope was aarch64-only.  The aarch64 PAN implementation
-/// (stac/clac via PSTATE.PAN in arch/aarch64/hal/io_impl.hpp + arch::pan_init
-/// in early_init.cpp) is the model for a future SSTATUS.SUM-based port.
-inline void stac() {}
-/// @brief Clear AC-equivalent — no-op (see stac()).
-inline void clac() {}
+/// @brief Set SUM (S-mode User Memory access, sstatus bit 18) so the kernel
+///        can read/write user pages (safe_copy_*, CheckedPtr, argv setup).
+///        RISC-V raises load/store page faults on S-mode U-page accesses
+///        with SUM=0 — the previous no-op broke every user-touching syscall
+///        (issue #206 M2: waitpid status write faulted).
+/// @note Unlike aarch64 PAN (needs FEAT_PAN detection), SUM is a standard
+///       sstatus field — no enable gate required.
+inline void stac() {
+    asm volatile("csrs sstatus, %0" : : "r"((uint64_t)(1ULL << 18)) : "memory");
+}
+/// @brief Clear SUM (see stac()).
+inline void clac() {
+    asm volatile("csrc sstatus, %0" : : "r"((uint64_t)(1ULL << 18)) : "memory");
+}
 /// @brief Read the AC-equivalent flag — no-op placeholder.
 inline uint64_t read_rflags() {
     return 0;

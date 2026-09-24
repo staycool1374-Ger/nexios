@@ -2067,3 +2067,13 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-24 11:35:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #220-t0-park-fix-d3-green-run1of3
 2026-09-24 11:38:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms STATUS: #220-t0-park-fix-d3-green-run2of3
 2026-09-24 11:41:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #220-t0-park-fix-d3-green-run3of3
+2026-09-24 16:49:05 selftest PASSED: 139 FAILED: 0 TIME: 31946ms
+2026-09-24 16:49:31 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 127ms STATUS: M2-baseline-stashed-incremental
+2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: PANIC-full-M2-diff-boot-tables_equal-exc-D
+2026-09-24 16:49:31 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 100ms STATUS: M2-baseline-clean
+2026-09-24 16:49:31 arch_riscv64 PASSED: 20 FAILED: 2 TIME: 119ms STATUS: M2-test-only-elf-stashed-expected-fails
+2026-09-24 16:49:31 arch_riscv64 PASSED: 22 FAILED: 2 TIME: 161ms STATUS: M2-codec-fixed-exec-assert-plus-smoke-minus11
+2026-09-24 16:49:31 arch_riscv64 PASSED: 23 FAILED: 1 TIME: 161ms STATUS: M2-exec-fixed-smoke-minus11-sepc-putsfd
+2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-crt0-fixed-daemon-storm
+2026-09-24 16:49:31 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 161ms STATUS: M2-SUM-recovery-smoke-PASS-24of25-vfsd-direct-hung
+2026-09-24 18:22:46 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 156ms STATUS: M2-plus-nested-apply-table-disabled

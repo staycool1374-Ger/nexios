@@ -18,4 +18,15 @@ _start:
     bl exit
 1:  wfe
     b 1b
+#elif defined(__riscv)
+_start:
+    .option push
+    .option norelax
+    la gp, __global_pointer$
+    .option pop
+    mv a0, sp
+    call main
+    call exit
+1:  wfi
+    j 1b
 #endif

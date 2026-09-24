@@ -42,6 +42,19 @@
 #include <lib/string.hpp>
 #include <constants.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
+#include <kernel/elf/elf.hpp>
+#include <kernel/elf/elf_loader.hpp>
+#include <kernel/vfs/vfs.hpp>
+#include <kernel/test/test_isolate.hpp>
+#include <signal.hpp>
+
+extern "C" {
+extern const uint8_t _binary_fork_marker_img_start[];
+extern const uint8_t _binary_fork_marker_img_end[];
+extern uint64_t riscv64_last_u_scause();
+extern uint64_t riscv64_last_u_stval();
+extern uint64_t riscv64_last_u_sepc();
+}
 
 using namespace kernel;
 
@@ -756,6 +769,251 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #206 M2: e_machine gate — EM_RISCV accepted, x86_64/AArch64 rejected.
+// Runmode: kernel
+// Testidea: Synthetic headers differing only in machine field.
+// Input: ET_EXEC headers with machine 0xF3 / 0x3E / 0xB7.
+// Expect: validate true / false / false.
+// Depends: elf::validate_header.
+JARVIS_TEST(riscv64_elf_bad_machine, "PRE: none | POST: none") {
+    auto make_hdr = [](uint16_t machine) {
+        elf::ELF64Header hdr{};
+        hdr.ident[0] = 0x7F;
+        hdr.ident[1] = 'E';
+        hdr.ident[2] = 'L';
+        hdr.ident[3] = 'F';
+        hdr.ident[4] = 2;
+        hdr.ident[5] = 1;
+        hdr.ident[6] = 1;
+        hdr.type = elf::ET_EXEC;
+        hdr.machine = machine;
+        hdr.version = 1;
+        hdr.entry = 0x41000000ULL;
+        hdr.phoff = 0;
+        hdr.ehsize = sizeof(elf::ELF64Header);
+        hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
+        hdr.phnum = 0;
+        return hdr;
+    };
+    elf::ELF64Header riscv = make_hdr(0xF3);
+    elf::ELF64Header x86 = make_hdr(0x3E);
+    elf::ELF64Header arm = make_hdr(0xB7);
+    JARVIS_ASSERT_FMT(elf::validate_header(&riscv), "EM_RISCV rejected");
+    JARVIS_ASSERT_FMT(!elf::validate_header(&x86), "x86_64 accepted");
+    JARVIS_ASSERT_FMT(!elf::validate_header(&arm), "AArch64 accepted");
+    JARVIS_TEST_PASS();
+}
+
+// Issue #206 M2: 37-slot fork convention (OFF_SP=idx1, SEPC=idx31,
+// SSTATUS=idx32=0x20) + A0-zero child return.
+// Runmode: kernel
+// Testidea: Helper-built frame cloned from the harness task.
+// Input: make_synthetic_clone_frame(entry, stack) with A0 sentinel.
+// Expect: Child frame echoes SEPC/SSTATUS/SP, A0 == 0.
+// Depends: make_synthetic_clone_frame, TaskControlBlock::clone.
+JARVIS_TEST(riscv64_clone_frame_readback, "PRE: none | POST: none") {
+    using namespace kernel;
+    auto *parent = Scheduler::current_task();
+    JARVIS_ASSERT(parent != nullptr);
+    static uint64_t regs[37];
+    test::make_synthetic_clone_frame(regs, 0x41000000ULL, 0x70009000ULL);
+    regs[9] = 0xDEADULL;
+    auto *c = TaskControlBlock::clone(regs);
+    JARVIS_ASSERT(c != nullptr);
+    const auto *f = reinterpret_cast<const uint64_t *>(c->context.sp);
+    JARVIS_ASSERT_FMT(f[31] == 0x41000000ULL, "SEPC not echoed: 0x%lx", f[31]);
+    JARVIS_ASSERT_FMT(f[32] == (1ULL << 5), "SSTATUS not U-mode: 0x%lx",
+                      f[32]);
+    JARVIS_ASSERT_FMT(f[1] == 0x70009000ULL, "OFF_SP not echoed: 0x%lx", f[1]);
+    JARVIS_ASSERT_FMT(f[9] == 0ULL, "child A0 not zero: 0x%lx", f[9]);
+    kernel::test::terminate_and_drain(*c);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Issue #206 M2: exec slot convention — SEPC/SP/SSTATUS/A0 land on the live
+// trap frame (OFF_* indices shared with the M1 ABI tests).
+// Runmode: kernel
+// Testidea: exec_into_current on a create_user task with a minimal
+//           phnum=0 RISC-V image; read back the live frame slots.
+// Input: Synthetic EM_RISCV header (entry 0x41000000), empty file data.
+// Expect: regs[31]==entry, regs[32]==0x20, regs[1]==user_rsp, regs[9]==0.
+// Depends: elf::exec_into_current, ScopedCurrentTask.
+JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
+    using namespace kernel;
+    elf::ELF64Header hdr{};
+    hdr.ident[0] = 0x7F;
+    hdr.ident[1] = 'E';
+    hdr.ident[2] = 'L';
+    hdr.ident[3] = 'F';
+    hdr.ident[4] = 2;
+    hdr.ident[5] = 1;
+    hdr.ident[6] = 1;
+    hdr.type = elf::ET_EXEC;
+    hdr.machine = 0xF3;
+    hdr.version = 1;
+    hdr.entry = 0x41000000ULL;
+    hdr.phoff = 0;
+    hdr.ehsize = sizeof(elf::ELF64Header);
+    hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
+    hdr.phnum = 0;
+    static uint8_t file_data[64] = {};
+    __builtin_memcpy(file_data, &hdr, sizeof(hdr));
+    auto *t = TaskControlBlock::create_user(
+        reinterpret_cast<void (*)()>(0x41000000ULL), 11, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    {
+        test::ScopedCurrentTask guard(*t);
+        static uint64_t regs[37] = {};
+        for (int i = 0; i < 37; ++i)
+            regs[i] = 0xAAAA0000ULL + static_cast<uint64_t>(i);
+        const bool ok =
+            elf::exec_into_current(&hdr, file_data, nullptr, nullptr, regs,
+                                   sizeof(file_data));
+        JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
+        JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
+                          regs[31]);
+        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
+                          regs[32]);
+        JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
+        // SP slot: setup_user_stack returns post-argc SP (not page-aligned
+        // by construction) — verify it was overwritten into the new user
+        // stack window instead.
+        JARVIS_ASSERT_FMT(
+            regs[1] != 0xAAAA0001ULL && regs[1] >= mem::STACK_VADDR &&
+                regs[1] < mem::STACK_VADDR + 2 * mem::STACK_SIZE,
+            "SP slot not in user stack window: 0x%lx", regs[1]);
+    }
+    if (TaskControlBlock::is_valid(t)) {
+        t->cleanup();
+        delete t;
+    }
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Issue #206 M2: U-mode fault terminates (no panic/park). Poison the loader-
+// valid SEPC with an unmapped user VA; fetch faults at U-mode → dispatch →
+// riscv64_u_fault_handler marks TERMINATED/-SIGSEGV and switches away.
+// Runmode: kernel
+// Testidea: create_user task, poison frame[31], dispatch at prio 11.
+// Input: Unmapped user VA 0x5000000000 in SEPC slot.
+// Expect: TERMINATED, exit -SIGSEGV, latched scause != 0.
+// Depends: trap dispatch, riscv64_u_fault_handler, waitpid wake path.
+JARVIS_TEST(riscv64_u_fault_terminates, "PRE: none | POST: none") {
+    using namespace kernel;
+    auto *t = TaskControlBlock::create_user(
+        reinterpret_cast<void (*)()>(0x41000000ULL), 11, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
+    JARVIS_ASSERT(frame != nullptr);
+    frame[31] = 0x5000000000ULL;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_FMT(t->state == TaskState::TERMINATED,
+                      "U-fault did not terminate the task");
+    JARVIS_ASSERT_FMT(
+        t->exit_code ==
+            static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGSEGV)),
+        "exit code is not -SIGSEGV: 0x%lx", t->exit_code);
+    JARVIS_ASSERT_FMT(riscv64_last_u_scause() != 0, "fault scause not latched");
+    if (TaskControlBlock::is_valid(t) &&
+        t != Scheduler::current_task())
+        (void)Scheduler::terminate_err(*t, t->exit_code);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+constexpr const char *kM2ImagePath = "/tmp/riscv64_m2_probe.elf";
+
+uint64_t m2_write_file(const char *path, const uint8_t *data, size_t size) {
+    kernel::test::mark_vfs_touched();
+    if (size == 0)
+        return 0;
+    if (kernel::vfs::create(path, 0) != 0)
+        return 0;
+    kernel::vfs::Vnode *file = kernel::vfs::resolve(path);
+    if (file == nullptr || file->ops == nullptr ||
+        file->ops->write == nullptr) {
+        kernel::test::mark_vfs_touched();
+        kernel::vfs::unlink(path);
+        return 0;
+    }
+    size_t off = 0;
+    while (off < size) {
+        size_t chunk = size - off;
+        if (chunk > 4096)
+            chunk = 4096;
+        int64_t written = file->ops->write(*file, data + off, chunk, off);
+        if (written <= 0) {
+            kernel::test::mark_vfs_touched();
+            kernel::vfs::unlink(path);
+            return 0;
+        }
+        off += static_cast<uint64_t>(written);
+    }
+    return (off == size) ? size : 0ULL;
+}
+}  // namespace
+
+// Issue #206 M2 acceptance: a real riscv64 user ELF (fork-marker) loads via
+// ElfLoader (EM_RISCV + 37-qword finalize) and runs to ECALL in U-mode —
+// fork/waitpid/exit/write all trap through the M1 path and exit clean.
+// Runmode: kernel
+// Testidea: Stage fork-marker to tmpfs, ElfLoader-load, dispatch at prio 11.
+// Input: Embedded _binary_fork_marker_img (riscv64 build).
+// Expect: TERMINATED with exit 0 (positive U-mode execution marker).
+// Depends: ElfLoader, tmpfs, finalize, trap ECALL, scheduler dispatch.
+JARVIS_TEST(riscv64_elf_ecall_smoke, "PRE: none | POST: none") {
+    using namespace kernel;
+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
+                                          _binary_fork_marker_img_start);
+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        m2_write_file(kM2ImagePath, _binary_fork_marker_img_start, img_size) !=
+            0,
+        "tmpfs stage failed");
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load(kM2ImagePath) == elf::LoadResult::OK,
+        "request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
+                      "take_completed failed");
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    const bool is_term = (t->state == TaskState::TERMINATED);
+    const uint64_t exit_code = t->exit_code;
+    const uint64_t fault_scause = riscv64_last_u_scause();
+    const uint64_t fault_stval = riscv64_last_u_stval();
+    const uint64_t fault_sepc = riscv64_last_u_sepc();
+    if (TaskControlBlock::is_valid(t) &&
+        t != Scheduler::current_task())
+        (void)Scheduler::terminate_err(*t, t->exit_code);
+    Scheduler::drain_zombie_list();
+    kernel::test::mark_vfs_touched();
+    kernel::vfs::unlink(kM2ImagePath);
+    JARVIS_ASSERT_FMT(is_term, "riscv64 ELF task not TERMINATED");
+    JARVIS_ASSERT_FMT(exit_code == 0,
+                      "riscv64 ELF exit=0x%lx scause=0x%lx stval=0x%lx "
+                      "sepc=0x%lx",
+                      exit_code, fault_scause, fault_stval, fault_sepc);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all riscv64 architecture tests.
 void register_riscv64_tests() {
     Logger::info("Registering riscv64 architecture tests");
@@ -793,6 +1051,11 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
     JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
     JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
+    JARVIS_REGISTER_TEST(riscv64_elf_bad_machine);    // issue #206 M2
+    JARVIS_REGISTER_TEST(riscv64_clone_frame_readback);  // issue #206 M2
+    JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
+    JARVIS_REGISTER_TEST(riscv64_u_fault_terminates);    // issue #206 M2
+    JARVIS_REGISTER_TEST(riscv64_elf_ecall_smoke);       // issue #206 M2
 }
 
 #endif

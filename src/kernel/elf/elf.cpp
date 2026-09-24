@@ -68,6 +68,9 @@ bool validate_header(const ELF64Header *hdr) {
 #if defined(CONFIG_ARCH_AARCH64)
     if (hdr->machine != 0xB7)
         return false; // AArch64
+#elif defined(CONFIG_ARCH_RISCV64)
+    if (hdr->machine != 0xF3)
+        return false; // RISC-V (EM_RISCV)
 #else
     if (hdr->machine != 0x3E)
         return false; // x86_64 (default)
@@ -477,6 +480,7 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
     uint64_t pml4 = VMM::clone_kernel_pml4();
     if (!pml4)
         return nullptr;
+
     // Issue #96: freshly-cloned tables are the merged state by
     // construction — assert convergence before mapping user pages.
     VMM::assert_kernel_half_converged(pml4);
@@ -605,18 +609,16 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         *--stack = 0;
     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
 #elif defined(CONFIG_ARCH_RISCV64)
+    // Trap frame matching syscall_entry.S save area (SAVE_SIZE 296 = 37
+    // qwords: [0..30]=X1-X31, [31]=SEPC, [32]=SSTATUS, [33]=SCAUSE,
+    // [34]=STVAL, [35]=RET, [36]=pad). Issue #206 M2: the old 21-push frame
+    // under-ran the save area and set sstatus 0x100 (SPP=1 S-mode).
     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
-    *--stack = 0;          // padding
-    *--stack = hdr->entry; // sepc
-    *--stack = user_rsp;   // sp (user stack)
-    *--stack = 0x100;      // sstatus: SPP=0 (U-mode), SPIE=1
-    *--stack = 0;          // stvec
-    for (int j = 0; j < 12; ++j)
-        *--stack = 0; // s0-s11
-    *--stack = 0;     // tp
-    *--stack = 0;     // gp
-    *--stack = 0;     // sp (init)
-    *--stack = 0;     // ra
+    stack -= 37;
+    __builtin_memset(stack, 0, 37 * 8);
+    stack[1] = user_rsp;              // OFF_SP (X2)
+    stack[31] = hdr->entry;           // OFF_SEPC
+    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
@@ -836,9 +838,12 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     regs[33] = 0x0;              // SPSR_EL1: M[4:0]=EL0t (was regs[19])
     regs[31] = user_rsp;         // SP_EL0 (was regs[20])
 #elif defined(CONFIG_ARCH_RISCV64)
-    (void)regs;
-    (void)user_rsp;
-    (void)hdr;
+    // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
+    // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
+    regs[31] = hdr->entry;  // SEPC
+    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+    regs[1] = user_rsp;     // OFF_SP
+    regs[9] = 0;            // A0 = 0 (child/exec return value)
 #endif
 
     if (arch::read_cr3() != new_pml4) {

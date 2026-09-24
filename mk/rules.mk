@@ -336,11 +336,11 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
 	    $< $@
 
-# Issue #104: the fork-marker ELF is embedded for the aarch64 EL0 smoke
-# test (same initrd-not-mounted reason as above). aarch64 only — the
-# program is built by the generic userspace/%.c.elf rule with the arch
-# compiler against the in-tree libc (no picolibc sysroot needed).
-ifeq ($(ARCH),aarch64)
+# Issue #104: the fork-marker ELF is embedded for the EL0/U-mode smoke
+# tests (same initrd-not-mounted reason as above). aarch64 + riscv64 (issue
+# #206 M2) — the program is built by the generic userspace/%.c.elf rule with
+# the arch compiler against the in-tree libc (no picolibc sysroot needed).
+ifeq ($(filter $(ARCH),aarch64 riscv64),$(ARCH))
 FORK_MARKER_OBJ := build/initrd/fork_marker_img.o
 FORK_MARKER_SRC := userspace/fork-marker.c.elf
 FORK_MARKER_STRIPPED := build/initrd/fork_marker_stripped.elf
@@ -353,7 +353,11 @@ endif
 $(FORK_MARKER_STRIPPED): $(FORK_MARKER_SRC)
 	@mkdir -p $(dir $@)
 	cp $< $@
+ifeq ($(ARCH),riscv64)
+	$(RISCV64_TRIPLET)strip $@
+else
 	$(AARCH64_TRIPLET)strip $@
+endif
 
 $(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
 	@mkdir -p $(dir $@)

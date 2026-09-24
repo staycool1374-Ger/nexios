@@ -827,12 +827,22 @@ void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
         if ((dst_entry & PAGE_PRESENT) != 0) {
             if (is_table_entry(src_entry, level) &&
                 is_table_entry(dst_entry, level)) {
+#if defined(CONFIG_ARCH_RISCV64)
+                // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
+                // x86-domain — flags sit in bits[9:0], PPN is shifted).
+                auto *src_next = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(src_entry));
+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                auto *dst_next = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(dst_entry));
+#else
                 // NOLINTNEXTLINE(performance-no-int-to-ptr)
                 auto *src_next = reinterpret_cast<uint64_t *>(
                     arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
                 // NOLINTNEXTLINE(performance-no-int-to-ptr)
                 auto *dst_next = reinterpret_cast<uint64_t *>(
                     arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
+#endif
                 merge_table_level(src_next, dst_next, level + 1, 0);
             }
             continue;
@@ -858,12 +868,22 @@ bool VMM::tables_equal_level(const uint64_t *a_table,
             continue;
         if (is_table_entry(a_entry, level) &&
             is_table_entry(b_entry, level)) {
+#if defined(CONFIG_ARCH_RISCV64)
+            // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
+            // x86-domain — flags sit in bits[9:0], PPN is shifted).
+            auto *a_next = reinterpret_cast<const uint64_t *>(
+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(a_entry));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *b_next = reinterpret_cast<const uint64_t *>(
+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(b_entry));
+#else
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *a_next = reinterpret_cast<const uint64_t *>(
                 arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *b_next = reinterpret_cast<const uint64_t *>(
                 arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
+#endif
             if (!tables_equal_level(a_next, b_next, level + 1, 0))
                 return false;
         } else if (a_entry != b_entry) {
@@ -1359,9 +1379,9 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
                                             VMM::sv39_pte_phys(l1[l1_idx]));
 
     // Check for 2MB block mapping (leaf at L1 level)
-    if ((l2[l1_idx] & PAGE_PRESENT) &&
-        (l2[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        return VMM::sv39_pte_phys(l2[l1_idx]) + (virt_addr & 0x1FFFFF);
+    if ((l1[l1_idx] & PAGE_PRESENT) &&
+        (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
     }
 
     if (!(l2[l2_idx] & PAGE_PRESENT))

@@ -2,6 +2,10 @@
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/riscv64/hal/plic.hpp>
+#include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <signal.hpp>
 
 namespace arch {
 
@@ -151,6 +155,70 @@ extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
                      : "a0", "a7", "memory");
     }
     panic("riscv64: unhandled exception");
+}
+
+/// @brief Latched last U-mode fault CSRs for test readback.
+static uint64_t g_last_u_scause = 0;
+static uint64_t g_last_u_stval = 0;
+static uint64_t g_last_u_sepc = 0;
+
+/// @brief Terminate a U-mode faulting task (issue #206 M2, mirrors
+///        aarch64_el0_fault_handler). Runs IRQ-masked from the trap entry;
+///        must not re-enable IRQs and must NOT call Scheduler::terminate
+///        (ISR-unsafe) — marks TERMINATED, wakes a waitpid parent, and arms
+///        the deferred switch via switch_away_from_terminating. The asm
+///        return path applies the pending switch. Parks only when there is
+///        no live user task to kill.
+/// @param frame Trap save area (OFF_* layout: SEPC=idx31, SCAUSE=idx33,
+///        STVAL=idx34).
+extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
+    uint64_t sepc = frame[31];
+    uint64_t scause = frame[33];
+    uint64_t stval = frame[34];
+    g_last_u_scause = scause;
+    g_last_u_stval = stval;
+    g_last_u_sepc = sepc;
+    kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
+    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
+        t->state != kernel::TaskState::TERMINATED) {
+        t->state = kernel::TaskState::TERMINATED;
+        t->exit_code = static_cast<uint64_t>(
+            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+        kernel::Scheduler::wake_waiting_parent(*t);
+        kernel::Scheduler::switch_away_from_terminating(*t);
+        return;
+    }
+    for (;;) {
+        arch::pause();
+    }
+}
+
+/// @brief Post-mortem readback of the last latched U-mode fault (tests).
+extern "C" uint64_t riscv64_last_u_scause() { return g_last_u_scause; }
+extern "C" uint64_t riscv64_last_u_stval() { return g_last_u_stval; }
+extern "C" uint64_t riscv64_last_u_sepc() { return g_last_u_sepc; }
+
+/// @brief SPP-gated exception dispatch (issue #206 M2). U-mode (SPP==0)
+///        faults terminate the task; S-mode faults keep the SBI-dump +
+///        panic path (kernel bug).
+/// @param frame Trap save area base (sp).
+/// @param sstatus Live sstatus (SPP bit 8 discriminates).
+extern "C" void riscv64_exception_dispatch(uint64_t *frame, uint64_t sstatus) {
+    // Fault recovery for safe_copy_from/to_user (mirrors x86
+    // kernel.cpp:1669): while a guarded copy runs, ANY fault redirects
+    // SEPC to the recovery label so the copy returns false instead of
+    // panicking (S-mode) or terminating (U-mode) the task. Checked first:
+    // copies execute in S-mode task context.
+    if (kernel::g_user_access_recover_ip != 0) {
+        frame[31] = kernel::g_user_access_recover_ip; // OFF_SEPC slot
+        kernel::g_user_access_recover_ip = 0;
+        return;
+    }
+    if ((sstatus & (1ULL << 8)) == 0) {
+        riscv64_u_fault_handler(frame);
+        return;
+    }
+    handle_kernel_exception(frame[31], frame[33], frame[34]);
 }
 
 } // namespace arch

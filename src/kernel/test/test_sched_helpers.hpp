@@ -270,9 +270,9 @@ inline void make_synthetic_clone_frame(uint64_t (&regs)[37],
     regs[33] = 0;      // SPSR_EL1
     regs[31] = stack;  // SP_EL0
 #elif defined(CONFIG_ARCH_RISCV64)
-    regs[31] = entry;  // SEPC
-    regs[32] = 0;      // SSTATUS
-    (void)stack;  // no SP slot in the riscv64 frame layout
+    regs[31] = entry;      // SEPC
+    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+    regs[1] = stack;       // OFF_SP (X2)
 #endif
 }
 
