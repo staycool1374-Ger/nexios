@@ -168,6 +168,8 @@ make execute-test x86 release selftest    # CI gate
 14. **kslot vs HHDM stacks** — Kernel tasks in test mode use HHDM direct mapping (no guard page). Production kernel tasks and all user tasks use the kslot window (guard page below stack). The dual-path is ASIL-D-certified safe: test isolation provides equivalent fault containment via full memory rewind.
 15. **O(1) free list covers HHDM only** — The PMM free list (VULN-003) only includes pages within the 128MB HHDM window. Pages beyond 128MB are inaccessible via the direct map and are never added to the free list. The bitmap scan fallback is also limited to the HHDM window.
 16. **RSP-owner resolution in switch_to_task** — The O(n) scan that resolves the physically-running task by kernel-stack ownership is retained in debug builds and for release-build drift detection. It cannot be removed while mixed kslot/HHDM stacks exist (SCHED-008 was reverted for this reason).
+17. **riscv64 x2-IS-sp aliasing in trap asm** — every `sp` write is an `x2` write: `la sp` before the OFF_SP save records the frame (not user sp); recomputing the frame base from `sp` after a conditional `x2` load faults (user_sp−296 is unmapped). Save user-sp via a dead scratch *before* reloading sp; never read sp relatively after an x2 load on the U-path (issue #206).
+18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
 
 ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
 

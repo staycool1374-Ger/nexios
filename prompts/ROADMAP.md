@@ -26,7 +26,7 @@
 | IOMMU / SMMU DMA protection | covered (closed: #4, #9) | — |
 | Demand paging / CoW | **open** | #162 |
 | stac/clac (ARM64 PAN) | covered (closed: #5) | — |
-| Paging / IRQ (RISC-V) | open | #29, #152 |
+| Paging / IRQ (RISC-V) | open | #152, #206, #203, #207 (#29, #219, #220 closed) |
 | PLT/GOT runtime resolution | covered (closed: #95) | — |
 | POSIX signals (sigaction/sigreturn) | **open** | #164 |
 | Stack unwinding (user-space) | **open** | #163 |
@@ -48,11 +48,16 @@
 - All 16 coverage issues #124–#139 closed, plus #182 (dead-code removal).
 
 ## v0.5.1 — Bring-up Multi-Arch Boot (OPEN)
-- #28 [open] aarch64 production boot path.
-- #29 [open] riscv64 production boot path (Sv39 MMU, PLIC, UART, timer).
-- #30 [open] Per-arch syscall ABI conformance tests.
-- #104 [open] aarch64 fork/clone EL0 smoke test.
-- #152 [open] riscv64 map/unmap hhdm/identity flags (follow-up of #60).
+- #28 [closed] aarch64 production boot path.
+- #29 [closed] riscv64 production boot path (Sv39 MMU, PLIC, UART, timer).
+- #30 [closed] Per-arch syscall ABI conformance tests.
+- #104 [closed] aarch64 fork/clone EL0 smoke test.
+- #152 [open] riscv64 map/unmap hhdm/identity flags (follow-up of #60; sub-issues complete, verify-and-close pending).
+- #206 [open] riscv64 U-mode user tasks — M1 ECALL round trip DONE (SIL 3 approved); M2 loader wiring remains.
+- #203 [open] riscv64 ECALL dispatch runtime test (unblocked by #206 M1).
+- #207 [open] riscv64 release + gate integration.
+- #219 [closed] riscv64 sret-restore SIE window (single-andi gate, APPROVED).
+- #220 [closed] riscv64 post-ECALL x2 transparency (t0-park fix, APPROVED).
 
 ## v0.5.2 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.
