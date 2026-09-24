@@ -36,8 +36,12 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/task.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/memory/vmm.hpp>
 #include <lib/string.hpp>
 #include <constants.hpp>
+#include <kernel/test/test_sched_helpers.hpp>
 
 using namespace kernel;
 
@@ -88,6 +92,39 @@ JARVIS_TEST(riscv64_sv39_3level_walk) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief Save/restore guard for the L1 block entry a test splits.
+///        riscv64 HHDM RAM lives in 2MB block leaves; splitting one for a
+///        map test then unmapping would destroy live linear-map entries
+///        with no rewind on riscv (x86 relies on snapshot PD restore).
+///        Capture values, restore the block leaf + sfence, THEN assert.
+///        Usage: BlockGuard g(VA); ...ops...; vals...; g.restore(); asserts.
+struct BlockGuard {
+    uint64_t *l1 = nullptr;
+    size_t idx = 0;
+    uint64_t saved = 0;
+    bool armed = false;
+    explicit BlockGuard(uint64_t va) {
+        uint64_t root = arch::read_cr3();
+        auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + root);
+        size_t l0_idx = (va >> 30) & 0x1FF;
+        uint64_t l0e = l0[l0_idx];
+        if (!(l0e & 1ULL))
+            return;
+        uint64_t l1_phys = ((l0e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+        l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
+        idx = (va >> 21) & 0x1FF;
+        saved = l1[idx];
+        armed = true;
+    }
+    void restore() {
+        if (!armed)
+            return;
+        armed = false;
+        l1[idx] = saved;
+        asm volatile("sfence.vma" ::: "memory");
+    }
+};
+
 /// @brief Map a single 4 KB page and verify get_physical matches, then
 ///        unmap and confirm the mapping is removed.
 JARVIS_TEST(riscv64_sv39_map_unmap) {
@@ -97,57 +134,101 @@ JARVIS_TEST(riscv64_sv39_map_unmap) {
     constexpr uint64_t VA = 0xFFFFFFC08043F000ULL;
     constexpr uint64_t FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
 
+    // BlockGuard (see block_split): without restoring the split L1 entry,
+    // the leaked split-L2 page is freed by snapshot pool-rollback while
+    // still referenced — a dangling table pointer serving wild reads to
+    // later tests (observed: zeroed s_pages reads → phys-0 leaf → fault).
+    BlockGuard guard(VA);
     auto r = arch::ArchPageTable::map_page(VA, phys, FLAGS);
-    JARVIS_ASSERT(r.ok());
+    bool ok_map = r.ok();
 
     uint64_t retrieved = arch::ArchPageTable::get_physical(VA);
-    JARVIS_ASSERT_EQ(phys, retrieved);
 
     auto ur = arch::ArchPageTable::unmap_page(VA);
-    JARVIS_ASSERT(ur.ok());
+    bool ok_unmap = ur.ok();
 
-    retrieved = arch::ArchPageTable::get_physical(VA);
-    JARVIS_ASSERT_EQ(0ULL, retrieved);
-
+    uint64_t after = arch::ArchPageTable::get_physical(VA);
+    guard.restore();
     PMM::free_page(phys);
+    JARVIS_ASSERT(ok_map);
+    JARVIS_ASSERT_EQ(phys, retrieved);
+    JARVIS_ASSERT(ok_unmap);
+    JARVIS_ASSERT_EQ(0ULL, after);
+
     JARVIS_TEST_PASS();
 }
 
 /// @brief Fill a 2 MB-aligned region with 512 page mappings, then overlay
 ///        a single page to trigger an L2 block-split scenario.
 JARVIS_TEST(riscv64_sv39_block_split) {
-    constexpr uint64_t BLOCK_VA = 0xFFFFFFC080600000ULL;
+    // Issue #206: scratch VA in an UNMAPPED L1 range (L1[128], beyond the
+    // 256MB RAM window).  Mapping over live HHDM RAM (e.g. 0x80600000)
+    // remaps the test's own .bss/PMM metadata underneath itself: L2[i]
+    // installs redirect s_pages/bitmap reads to test pages (observed:
+    // pages[492] reading 0 → phys-0 leaf → access fault).  L1[128] is
+    // invalid at entry, so no split occurs (fresh L2 via get_table) and
+    // the guard below restores invalid (not a block leaf).
+    constexpr uint64_t BLOCK_VA = 0xFFFFFFC090000000ULL;
     constexpr uint64_t PAGE_VA = BLOCK_VA + 0x1000;
     constexpr uint64_t FLAGS = PageFlags::PRESENT | PageFlags::WRITE;
 
+    // Static scratch (fully rewritten every run): 512-entry arrays would
+    // consume 8KB of harness stack.  NOTE: these live in kernel .bss —
+    // never map test pages over the kernel image ranges they occupy
+    // (observed: self-remap zeroes your own reads).
+    static uint64_t s_pages[512];
+    static uint64_t s_check[512];
+    uint64_t *pages = s_pages;
+    uint64_t *check = s_check;
+    bool setup_ok = true;
     for (size_t i = 0; i < 512; ++i) {
-        uint64_t p = PMM::alloc_page();
-        JARVIS_ASSERT(p != 0);
-        auto r = arch::ArchPageTable::map_page(BLOCK_VA + i * 0x1000, p, FLAGS);
-        JARVIS_ASSERT(r.ok());
+        pages[i] = PMM::alloc_page();
+        if (pages[i] == 0)
+            setup_ok = false;
     }
 
-    uint64_t new_p = PMM::alloc_page();
-    JARVIS_ASSERT(new_p != 0);
-    auto r = arch::ArchPageTable::map_page(PAGE_VA, new_p, FLAGS);
-    JARVIS_ASSERT(r.ok());
-
-    uint64_t retrieved = arch::ArchPageTable::get_physical(PAGE_VA);
-    JARVIS_ASSERT_EQ(new_p, retrieved);
-
-    for (size_t i = 0; i < 512; ++i) {
-        uint64_t pa = arch::ArchPageTable::get_physical(BLOCK_VA + i * 0x1000);
-        if (i == 1) {
-            JARVIS_ASSERT_EQ(new_p, pa);
-        } else {
-            JARVIS_ASSERT(pa != 0);
+    BlockGuard guard(BLOCK_VA);
+    bool map_ok = true;
+    if (setup_ok) {
+        for (size_t i = 0; i < 512; ++i) {
+            auto r = arch::ArchPageTable::map_page(BLOCK_VA + i * 0x1000,
+                                                   pages[i], FLAGS);
+            if (!r.ok())
+                map_ok = false;
         }
     }
 
+    uint64_t new_p = PMM::alloc_page();
+    bool overlay_ok = false;
+    uint64_t retrieved = 0;
+    if (new_p != 0 && map_ok) {
+        auto r = arch::ArchPageTable::map_page(PAGE_VA, new_p, FLAGS);
+        overlay_ok = r.ok();
+        retrieved = arch::ArchPageTable::get_physical(PAGE_VA);
+    }
+
+    for (size_t i = 0; i < 512; ++i)
+        check[i] = arch::ArchPageTable::get_physical(BLOCK_VA + i * 0x1000);
+
     for (size_t i = 0; i < 512; ++i) {
         arch::ArchPageTable::unmap_page(BLOCK_VA + i * 0x1000);
+        PMM::free_page(pages[i]);
     }
-    PMM::free_page(new_p);
+    guard.restore();
+    if (new_p != 0)
+        PMM::free_page(new_p);
+
+    JARVIS_ASSERT(setup_ok);
+    JARVIS_ASSERT(map_ok);
+    JARVIS_ASSERT(overlay_ok);
+    JARVIS_ASSERT_EQ(new_p, retrieved);
+    for (size_t i = 0; i < 512; ++i) {
+        if (i == 1) {
+            JARVIS_ASSERT_EQ(new_p, check[i]);
+        } else {
+            JARVIS_ASSERT(check[i] != 0);
+        }
+    }
 
     JARVIS_TEST_PASS();
 }
@@ -527,16 +608,163 @@ JARVIS_TEST(riscv64_abi_bad_number, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #206 (M1): synthetic U-mode ECALL round-trip without any ELF.
+// A 48-byte raw stub (post-ecall x2 regression sample for issue #220).
+// Store cookie / GETPID ecall / store cookie /
+// spin runs in U-mode from private user mappings.
+// runs in U-mode from private user mappings; the harness observes both
+// cookies through the HHDM alias of the data page.  Cookie 1 proves the
+// sret entry (fetch + store in U-mode); cookie 2 proves the ECALL trap
+// AND the sret return (without the Phase-1 trap fixes this faults or
+// wedges: no kstack switch, no x2 restore).
+namespace {
+// RV64LE.  M1 U-mode ECALL probe: tp carries the data-page base
+// (x2 untouched after dispatch; tp is callee-saved and restored
+// unconditionally).  CAREFUL: tp=x4 (rd/rs1=4), NOT t0=x5!
+// All multi-byte encodings below were verified with the python RV decoder
+// (lesson: never hand-commit without decoding).
+//   lui tp,0x41001        -> tp = 0x41001000 (data page)
+//   addi t1,zero,0x111    -> cookie 1
+//   sw t1,0(tp)
+//   mv t1,x2              -> snapshot live user-x2 pre-ecall (dispatch proof)
+//   sw t1,8(tp)           -> cookie 3 (expect 0x70009000)
+//   addi a7,zero,23       -> GETPID
+//   ecall                 -> at +0x18
+//   mv t1,x2              -> snapshot live user-x2 POST-ecall (issue #220:
+//                            trap-round-trip x2 preservation proof)
+//   sw t1,12(tp)          -> cookie 4 (expect 0x70009000)
+//   addi t1,zero,0x222    -> cookie 2
+//   sw t1,4(tp)
+//   jal x0,0              -> spin at +0x2C
+constexpr uint8_t kUmodeProbeStub[] = {
+    0x37, 0x12, 0x00, 0x41, 0x13, 0x03, 0x10, 0x11, 0x23, 0x20, 0x62, 0x00,
+    0x13, 0x03, 0x01, 0x00, 0x23, 0x24, 0x62, 0x00, 0x93, 0x08, 0x70, 0x01,
+    0x73, 0x00, 0x00, 0x00, 0x13, 0x03, 0x01, 0x00, 0x23, 0x26, 0x62, 0x00,
+    0x13, 0x03, 0x20, 0x22, 0x23, 0x22, 0x62, 0x00, 0x6F, 0x00, 0x00, 0x00,
+};
+constexpr uint64_t kUmodeStubVa = 0x41000000ULL;
+constexpr uint64_t kUmodeDataVa = 0x41001000ULL;
+constexpr uint32_t kUmodeCookie1 = 0x111;
+constexpr uint32_t kUmodeCookie2 = 0x222;
+}  // namespace
+
+JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
+    using namespace kernel;
+    const uint64_t free_before = PMM::free_pages_ref();
+
+    // Private stub (R+X) + data (R+W) pages, USER-owned so cleanup
+    // reclaims them via free_user_pages.
+    const uint64_t stub_phys = PMM::alloc_user_page();
+    const uint64_t data_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT_FMT(stub_phys != 0 && data_phys != 0, "user alloc failed");
+
+    auto *stub = reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET +
+                                                      stub_phys);
+    for (size_t i = 0; i < sizeof(kUmodeProbeStub); ++i)
+        stub[i] = kUmodeProbeStub[i];
+    auto *data = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                        data_phys);
+    data[0] = 0;
+    data[1] = 0;
+    data[2] = 0;
+    data[3] = 0;  // cookie 4 slot (issue #220)
+
+    auto *t = TaskControlBlock::create_user(
+        reinterpret_cast<void (*)()>(kUmodeStubVa), 11, 10, 32_KiB);
+    JARVIS_ASSERT_FMT(t != nullptr, "create_user failed");
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
+
+    // Map our pages into the task's tables (create_user maps its own
+    // stack + yield stub elsewhere; our VAs don't collide).
+    VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
+                          t->page_table_);
+    VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
+                          t->page_table_);
+    // Point the initial frame past create_user's yield stub.
+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
+    frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
+
+    // Fail fast if the map didn't land (else the U-fetch fault below
+    // misattributes a mapping bug to the trap path).
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
+        "stub VA not mapped in task tables");
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
+        "data VA not mapped in task tables");
+
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+
+    // ecall sits at stub+0x18, post-advance +0x1C, spin at +0x2C.
+    const uint64_t child_id = t->id;
+    const uint64_t start = arch::Timer::ticks();
+    uint64_t sepc_now = 0;
+    uint64_t a0_now = 0;
+    uint64_t x2_live = 0;
+    uint64_t x2_post = 0;  // post-ecall x2 (issue #220)
+    bool cookies_ok = false;
+    while (arch::Timer::ticks() - start < 200) {
+        // Handler-side progress (proves trap+return even before cookies).
+        // Captured pre-teardown: frame dangles after delete t (Rule 5).
+        sepc_now = frame[31];
+        a0_now = frame[9];
+        // Live x2 sampled by the stub itself (mv t1,x2 pre-ecall),
+        // race-free: the data page is written once by U-mode and never
+        // touched by the kernel, unlike frame[1] which every tick entry
+        // rewrites (return-path SIE window, issue #206 follow-up).
+        x2_live = data[2];
+        x2_post = data[3];
+        // Cookie round trip in the data page (proves tp/stores, no x2).
+        if (data[0] == kUmodeCookie1 && data[1] == kUmodeCookie2) {
+            cookies_ok = true;
+            break;
+        }
+        arch::hlt();
+    }
+
+    // Teardown BEFORE asserting (cookbook Rule 5): terminate (spinning
+    // in U-mode), drain, release user resources, free the TCB.
+    if (TaskControlBlock::is_valid(t) &&
+        t->state != TaskState::TERMINATED)
+        (void)Scheduler::terminate_err(*t, 0);
+    Scheduler::drain_zombie_list();
+    if (TaskControlBlock::is_valid(t)) {
+        t->cleanup();
+        delete t;
+    }
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(sepc_now >= kUmodeStubVa + 0x1C &&
+                          sepc_now <= kUmodeStubVa + 0x2C,
+                      "sepc not past ecall: 0x%lx", sepc_now);
+    JARVIS_ASSERT_FMT(cookies_ok, "cookie round trip failed");
+    JARVIS_ASSERT_FMT(a0_now == child_id, "a0 != task id: 0x%lx", a0_now);
+    // Dispatch-x2 proof via the stub's own sample (frame[1] is not a
+    // stable dispatch record: tick entries rewrite the live frame; see
+    // the post-ecall-x2 follow-up issue for the remaining question).
+    JARVIS_ASSERT_FMT(x2_live == 0x70009000ULL, "live x2 != user_rsp: 0x%lx",
+                      x2_live);
+    // Trap-round-trip x2 proof (issue #220): entry preserved x2, E2 restored it.
+    JARVIS_ASSERT_FMT(x2_post == 0x70009000ULL, "post-trap x2 != user_rsp: 0x%lx",
+                      x2_post);
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after umode smoke",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all riscv64 architecture tests.
 void register_riscv64_tests() {
     Logger::info("Registering riscv64 architecture tests");
 
     JARVIS_REGISTER_TEST(riscv64_sv39_3level_walk);
-    // Issue #205: deregistered until the Sv39 VMM backend lands (#152) —
-    // ArchPageTable map/unmap/get_physical decode PTEs x86-style.
-    // JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
-    // Issue #205: same Sv39 backend gate as map_unmap (#152).
-    // JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
+    // Issue #206: re-enabled — Sv39 backend fixed (shift codec); these two
+    // are the proof (were #205-deferred to #152).
+    JARVIS_REGISTER_TEST(riscv64_sv39_map_unmap);
+    JARVIS_REGISTER_TEST(riscv64_sv39_block_split);
     JARVIS_REGISTER_TEST(riscv64_context_save_restore);
     JARVIS_REGISTER_TEST(riscv64_context_sret_frame);
     JARVIS_REGISTER_TEST(riscv64_plic_init);
@@ -564,6 +792,7 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_abi_frame_conform);
     JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
     JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
+    JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
 }
 
 #endif

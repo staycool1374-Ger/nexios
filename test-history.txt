@@ -2035,3 +2035,35 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-22 11:16:00 arch_aarch64 PASSED: 30 FAILED: 0 TIME: 224ms
 2026-09-22 11:30:00 arch_riscv64 PASSED: 16 FAILED: 0 TIME: 82ms
 2026-09-22 11:31:00 task_core PASSED: 6 FAILED: 0 TIME: 214ms
+2026-09-22 08:40:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 1296ms STATUS: M1-cookie-imm-nibblerotated
+2026-09-22 08:55:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 1124ms STATUS: M1-cookie-imm-nibblerotated-reordered-asserts
+2026-09-23 18:19:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 114ms STATUS: M1-sepc-window-stale
+2026-09-23 18:20:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 116ms STATUS: M1-x2slot-tick-alias-confirmed-by-rerun
+2026-09-23 18:21:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms
+2026-09-23 18:21:30 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms
+2026-09-23 18:35:00 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT-faultloop-S1hunks
+2026-09-23 18:55:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 116ms STATUS: revert-to-main-noE1-x2live-ABCback
+2026-09-23 19:02:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: green-restored-ownerE1E2
+2026-09-23 19:05:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: hunk1-entry-swap-only
+2026-09-23 21:05:00 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT-hunk2-repro
+2026-09-23 21:08:00 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT-hunk2-rerun-deterministic
+2026-09-23 21:20:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: hunk1-only-run1of3
+2026-09-23 21:22:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: hunk1-only-run2of3
+2026-09-23 21:24:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: hunk1-only-run3of3
+2026-09-23 21:50:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: S1both-plus-spclobberfix-run1of3
+2026-09-23 21:52:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: S1both-plus-spclobberfix-run2of3
+2026-09-23 21:54:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: S1both-plus-spclobberfix-run3of3
+2026-09-23 22:10:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 115ms STATUS: d3-post-trap-x2-F-investigation
+2026-09-23 23:40:00 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120s STATUS: TIMEOUT-sie-swap-silent-entry-fault-loop
+2026-09-24 07:10:00 arch_riscv64 PASSED: 18 FAILED: 1 TIME: 116ms STATUS: d3-post-trap-x2-0-MAGIC-d2-delivery proven
+2026-09-24 08:20:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: triaged-T2-plus-S1fixes-run1of3
+2026-09-24 08:22:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: triaged-T2-plus-S1fixes-run2of3
+2026-09-24 08:24:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: triaged-T2-plus-S1fixes-run3of3
+2026-09-24 09:12:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #219-SIE-mask-run1of5
+2026-09-24 09:14:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms STATUS: #219-SIE-mask-run2of5
+2026-09-24 09:16:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 113ms STATUS: #219-SIE-mask-run3of5
+2026-09-24 09:18:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #219-SIE-mask-run4of5
+2026-09-24 09:20:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms STATUS: #219-SIE-mask-run5of5
+2026-09-24 11:35:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #220-t0-park-fix-d3-green-run1of3
+2026-09-24 11:38:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 115ms STATUS: #220-t0-park-fix-d3-green-run2of3
+2026-09-24 11:41:00 arch_riscv64 PASSED: 19 FAILED: 0 TIME: 114ms STATUS: #220-t0-park-fix-d3-green-run3of3

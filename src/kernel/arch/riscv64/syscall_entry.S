@@ -8,18 +8,15 @@
 .balign 4
 .equ SAVE_SIZE, 296
 
-trap_vector:
-syscall_entry:
-    # Save area: subtract SAVE_SIZE from SP
-    addi sp, sp, -SAVE_SIZE
-
-# Register save area offsets (from sp):
-#   0-248: x1-x31 (GPRs)
-#   256:   sepc
-#   264:   sstatus
-#   272:   scause
-#   280:   stval
-#   288:   return value (for syscalls)
+# Register save area offsets (from sp) — up here because the entry swap
+# path (issue #206 E1) references OFF_* before the classic save block:
+#   0-240:   x1-x31 (GPRs)
+#   248: sepc
+#   256: sstatus
+#   264: scause
+#   272: stval
+#   280: return value (for syscalls)
+#   (total SAVE_SIZE = 296)
 .equ OFF_RA,   0
 .equ OFF_SP,   8
 .equ OFF_GP,   16
@@ -57,13 +54,65 @@ syscall_entry:
 .equ OFF_STVAL, 272
 .equ OFF_RET,  280
 
-    # Save all GPRs (x1-x31)
+trap_vector:
+syscall_entry:
+    # Clear SIE first (uses no registers): no nested trap can interleave
+    # entry past this point — a tick *before* it restarts entry pristinely.
+    # See the SIE note below (before `csrr t0, sstatus`) for rationale.
+    csrci sstatus, 2
+    # Issue #206 (E1): land on the current task's own kernel stack.
+    # sscratch is a pure one-word spill (never read for value); the swap
+    # source is the published scheduler_load_kstack_top slot.  S-mode
+    # traps (sp already a kernel stack incl. boot stack) save directly;
+    # U-mode traps (user sp) swap to the slot's top.  Discrimination is by
+    # SPP (no sp-sign heuristics: boot phys and user VAs share the low
+    # range), using sscratch itself as the spill so no GPR is lost.
+    csrrw t0, sscratch, t0   // spill entry-t0; t0 = stale (discarded)
+    # SIE is already clear (csrci at function top, before any state change):
+    # no nested trap can interleave entry, so the SPP branch below always
+    # sees hardware-fresh state.  Rationale (issue #206): a nested trap
+    # reads a STALE SPP (the outer trap's trapped-from marker) and would
+    # take the wrong entry path over the live frame (nested S-tick with
+    # SPP=0 clobbered OFF_SP).  sret restores SIE from SPIE (U-ticks keep
+    # working); S-mode callers keep their trapped SIE.  Closes #219 too.
+    csrr t0, sstatus
+    andi t0, t0, 0x100       // SPP bit: 1 = S-mode, 0 = U-mode
+    beqz t0, 41f
+    # from_s: recover entry-t0 (spill still intact — nothing read it).
+    csrr t0, sscratch
+    addi sp, sp, -SAVE_SIZE
+    j 42f
+41:
+    # from_u: sscratch holds user-t0; x2 holds the user sp; t0 holds the
+    # discardable SPP==0 test result (dead).  x2 IS sp: reloading sp below
+    # would destroy the user sp before its OFF_SP save (issue #206 S1 —
+    # the slot recorded the frame base).  Park user-sp in dead t0 first.
+    mv t0, x2                # t0=user_sp (parked; x2 dies at sp reload)
+    la sp, scheduler_load_kstack_top
+    ld sp, 0(sp)             # sp=kstack top (user sp safe in t0)
+    addi sp, sp, -SAVE_SIZE
+    # Park user-t0 via swap (csrrw): t1 = user-t0, sscratch = user-t1.
+    # A plain csrr here would clobber user-t1 (x6) before its save.
+    csrrw t1, sscratch, t1
+    sd t1, OFF_T0(sp)
+    sd x1, OFF_RA(sp)
+    sd t0, OFF_SP(sp)        # F[1]=user_sp (t0 intact: nothing above wrote t0)
+    sd x3, OFF_GP(sp)
+    sd x4, OFF_TP(sp)
+    # Reload user-t1 from the swap slot into its own save slot.
+    csrr t1, sscratch
+    sd t1, OFF_T1(sp)
+    j 44f
+42:
+    sd x5, OFF_T0(sp)
     sd x1, OFF_RA(sp)
     sd x2, OFF_SP(sp)
     sd x3, OFF_GP(sp)
     sd x4, OFF_TP(sp)
-    sd x5, OFF_T0(sp)
     sd x6, OFF_T1(sp)
+44:
+    # Shared saves continue (x7-x31; x2 holds the pre-trap sp value which
+    # OFF_SP preserves for the sret restore)
     sd x7, OFF_T2(sp)
     sd x8, OFF_S0(sp)
     sd x9, OFF_S1(sp)
@@ -100,27 +149,14 @@ syscall_entry:
     csrr t0, stval
     sd t0, OFF_STVAL(sp)
 
-    # TRACE: print 'A' (relocated post-save by issue #185 — the pre-save
-    # SBI ecall clobbered the incoming user a0/a7 before they were saved)
-    li a0, 65
-    li a7, 1
-    ecall
-
-    # TRACE: print 'B' after CSR save
-    li a0, 66
-    li a7, 1
-    ecall
+    # TRACE prints removed (issue #206: they interleave every Logger print
+    # under ticks and were slated for removal before acceptance).
 
     # Increment isr_nesting_depth (matches x86_64: wrap entire handler)
     la t0, isr_nesting_depth
     ld t1, 0(t0)
     addi t1, t1, 1
     sd t1, 0(t0)
-
-    # TRACE: print 'C' after nesting depth inc
-    li a0, 67
-    li a7, 1
-    ecall
 
     # Load scause
     ld t0, OFF_SCAUSE(sp)
@@ -195,6 +231,10 @@ syscall_entry:
     la t2, scheduler_save_rsp_to
     sd zero, 0(t2)
 
+    # Issue #206 (E1 note): sscratch is a pure entry spill, not a stack
+    # pointer — the trap entry reads the kstack top from
+    # scheduler_load_kstack_top directly, so nothing is maintained here.
+
     # Call scheduler_on_context_switch()
     addi sp, sp, -16
     sd ra, 0(sp)
@@ -235,16 +275,21 @@ syscall_entry:
 
     # Restore CSRs
     ld t0, OFF_SSTAT(sp)
+    # Issue #219: run the whole return with SIE=0 (clear bit 1 here); sret
+    # restores SIE from SPIE, so ticks merely pend (~50 insns) instead of
+    # nesting over the live frame mid-restore. SPP/SPIE preserved.
+    andi t0, t0, -3
     csrw sstatus, t0
     ld t0, OFF_SEPC(sp)
     csrw sepc, t0
 
-    # Restore all GPRs (x1-x31)
+    # Restore all GPRs except x2/x5/x6 (x2 IS sp: restored conditionally
+    # below; x5/x6 restore after E2 so no restored register is reused as
+    # scratch — reusing t0 after its restore clobbered pre-trap t0).
+    # OFF_SP preserves x2's entry value (the user sp for U-mode traps).
     ld x1, OFF_RA(sp)
     ld x3, OFF_GP(sp)
     ld x4, OFF_TP(sp)
-    ld x5, OFF_T0(sp)
-    ld x6, OFF_T1(sp)
     ld x7, OFF_T2(sp)
     ld x8, OFF_S0(sp)
     ld x9, OFF_S1(sp)
@@ -273,5 +318,29 @@ syscall_entry:
 
     # Restore sp last
     addi sp, sp, SAVE_SIZE
-
+    # Restore t0 first via x6 as scratch (x6 still holds handler garbage,
+    # so it is safe to reuse; t0 becomes live after its load).
+    addi x6, sp, -SAVE_SIZE
+    ld x5, OFF_T0(x6)
+    # Issue #206 (E2): x2 IS the sp register, so it restores conditionally.
+    # S-mode: sp is already correct (frame popped); the slot holds a stale
+    # entry value that must NOT overwrite it — skip x2.  U-mode (SPP==0):
+    # sp must become the user stack pointer from OFF_SP.  x6 is dead until
+    # its restore below, so it serves as scratch.
+    # (E2 debug print removed: printing inside the trap return is reentered
+    # by ticks and corrupts Logger state.)
+    csrr x6, sstatus
+    andi x6, x6, 0x100
+    bnez x6, 40f
+    addi x6, sp, -SAVE_SIZE
+    ld x2, OFF_SP(x6)
+    # U-path: x2 IS sp, so sp is user_sp from here on — never recompute
+    # the frame base from sp again (that faulted: user_sp-296 is not the
+    # frame). x6 still holds the base: load t1 directly, then sret.
+    ld x6, OFF_T1(x6)
+    sret
+40:
+    # S-path: x2 (hence sp) untouched, so the sp recompute is valid here.
+    addi x6, sp, -SAVE_SIZE
+    ld x6, OFF_T1(x6)
     sret

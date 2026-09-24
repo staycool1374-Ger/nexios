@@ -331,6 +331,19 @@ class VMM {
     // Sv39: PPN bits [43:12] (34-bit PA).  Masks off flags + reserved bits.
     static constexpr uint64_t PAGE_FRAME_MASK = 0x00000003FFFFFFF000ULL;
     static constexpr uint64_t PAGE_HUGE_FRAME_MASK = 0x00000003FFFFE00000ULL;
+    // Issue #206: the masks above are x86-domain (phys & mask) and WRONG for
+    // Sv39 PTEs, which carry (PPN << 10).  Use the shift-based helpers below
+    // for every Sv39 PTE address codec; the masks stay for x86/aarch64 and
+    // for documentation of the PA width (1TB cap).
+    static inline uint64_t sv39_pte_phys(uint64_t pte) {
+        return ((pte >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    }
+    static inline uint64_t sv39_phys_pte(uint64_t phys) {
+        return (phys >> 12) << 10;
+    }
+    static inline bool sv39_is_leaf(uint64_t pte) {
+        return (pte & 0xEU) != 0;  // R|W|X set = leaf (table: V only)
+    }
 #else
     // x86_64: physical frame bits [51:12] (52-bit PA).  Masks off all flags
     // INCLUDING NX (bit 63) — without this, a leaf PTE with NX set yields a

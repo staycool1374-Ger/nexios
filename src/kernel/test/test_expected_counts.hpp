@@ -250,7 +250,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"arch_aarch64",          0,   30,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
-    {"arch_riscv64",          0,    0,      16      },  // 21 registered - 5 deferred (issue #205: sv39_map_unmap + sv39_block_split need Sv39 VMM backend #152; boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + 1 plic_init enable fix + 1 init_stack by-ref fix
+    {"arch_riscv64",          0,    0,      19      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1)
 #endif
 
     // bench

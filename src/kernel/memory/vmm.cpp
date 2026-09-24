@@ -126,16 +126,23 @@ void VMM::init() {
 uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
                          bool user_alloc) {
     if (table[index] & PAGE_PRESENT) {
+#if defined(CONFIG_ARCH_RISCV64)
+        uint64_t target_phys = VMM::sv39_pte_phys(table[index]);
+#else
         uint64_t target_phys = table[index] & ~0xFFFULL;
+#endif
         if (!PMM::is_allocated(target_phys)) {
             table[index] = 0;
         } else if (
 #if defined(CONFIG_ARCH_AARCH64)
             (table[index] & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT
 #elif defined(CONFIG_ARCH_RISCV64)
-            // For RISC-V, table entry has V=1, R=W=X=0
-            (table[index] & (PAGE_PRESENT | PAGE_READ | PAGE_WRITE |
-                             PAGE_EXEC)) == PAGE_PRESENT
+            // Issue #206: Sv39 is the INVERSE of the aarch64 test above —
+            // a V-only entry is a TABLE pointer (descend), while V+R|W|X
+            // is a block LEAF (split to descend).  The old condition split
+            // tables and descended into leaves (second map of a shared L1
+            // entry orphaned the first map's L2).
+            (table[index] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0
 #else
             table[index] & PAGE_HUGE
 #endif
@@ -148,7 +155,12 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *new_table =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
+#if defined(CONFIG_ARCH_RISCV64)
+            uint64_t huge_base =
+                VMM::sv39_pte_phys(table[index]) & ~0x1FFFFFULL;
+#else
             uint64_t huge_base = table[index] & ~0x1FFFFFULL;
+#endif
 #if defined(CONFIG_ARCH_AARCH64)
             uint64_t base_flags =
                 table[index] &
@@ -162,17 +174,19 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
 #elif defined(CONFIG_ARCH_RISCV64)
             // For RISC-V, 2MB block entry has V=1, R=1, W=1, X=1 (leaf)
-            // Need to split into 512 4KB entries
+            // Need to split into 512 4KB entries.  Issue #206: huge_base
+            // decoded above with sv39_pte_phys; store shifted PPNs below.
             uint64_t base_flags =
                 table[index] &
                 (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC | PAGE_USER |
                  PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
             for (size_t i = 0; i < 512; ++i) {
-                new_table[i] = (huge_base + i * 0x1000) | base_flags |
-                               PAGE_ACCESSED | PAGE_DIRTY;
+                new_table[i] = VMM::sv39_phys_pte(huge_base + i * 0x1000) |
+                               base_flags | PAGE_ACCESSED | PAGE_DIRTY;
             }
-            // Table entry: V=1, no RWX = points to next level table
-            table[index] = new_page | PAGE_PRESENT;
+            // Table entry: V=1, no RWX = points to next level table.
+            // PPN-shifted store (raw phys would decode 4x too high).
+            table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
 #else
             uint64_t base_flags =
                 table[index] & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
@@ -184,8 +198,14 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             return new_table;
         } else {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+#if defined(CONFIG_ARCH_RISCV64)
+            // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
+            return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                VMM::sv39_pte_phys(table[index]));
+#else
             return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                 (table[index] & ~0xFFFULL));
+#endif
         }
     }
     if (!create)
@@ -206,8 +226,9 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
 #if defined(CONFIG_ARCH_AARCH64)
     table[index] = new_page | PAGE_PRESENT | PAGE_TABLE;
 #elif defined(CONFIG_ARCH_RISCV64)
-    // Table entry: V=1, R=W=X=0 points to next level
-    table[index] = new_page | PAGE_PRESENT;
+    // Table entry: V=1, R=W=X=0 points to next level.  PPN-shifted store
+    // (issue #206: raw phys decodes 4x too high through an Sv39 PTE).
+    table[index] = VMM::sv39_phys_pte(new_page) | PAGE_PRESENT;
 #else
     table[index] = new_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
 #endif
@@ -234,7 +255,8 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     if (!l1)
         return;
 
-    // If L1 entry is a 2MB block, split it into 512 4KB entries
+    // If L1 entry is a 2MB block, split it into 512 4KB entries.
+    // Issue #206: Sv39 PTE codec (raw & ~0x1FFFFF is x86-domain).
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
         uint64_t new_l2_phys = PMM::alloc_page_table();
@@ -242,15 +264,16 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
             return;
         auto *new_l2 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_l2_phys);
-        uint64_t block_base = l1[l1_idx] & ~0x1FFFFFULL;
+        uint64_t block_base =
+            VMM::sv39_pte_phys(l1[l1_idx]) & ~0x1FFFFFULL;
         uint64_t base_flags =
             l1[l1_idx] & (PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC |
                           PAGE_USER | PAGE_GLOBAL | PAGE_ACCESSED | PAGE_DIRTY);
         for (size_t i = 0; i < 512; ++i) {
-            new_l2[i] = (block_base + i * 0x1000) | base_flags | PAGE_ACCESSED |
-                        PAGE_DIRTY;
+            new_l2[i] = VMM::sv39_phys_pte(block_base + i * 0x1000) |
+                        base_flags | PAGE_ACCESSED | PAGE_DIRTY;
         }
-        l1[l1_idx] = new_l2_phys | PAGE_PRESENT;
+        l1[l1_idx] = VMM::sv39_phys_pte(new_l2_phys) | PAGE_PRESENT;
     }
 
     auto *l2 = get_table(l1, l1_idx, true);
@@ -261,12 +284,12 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
-    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+    uint64_t flags = PAGE_PRESENT | PAGE_READ | PAGE_WRITE;
     if (user)
         flags |= PAGE_USER;
     flags |= PAGE_ACCESSED | PAGE_DIRTY;
 
-    l2[l2_idx] = phys_addr | flags;
+    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
     arch::ArchPageTable::tlb_flush(virt_addr);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -452,17 +475,18 @@ uint64_t VMM::virt_to_phys(uint64_t virt_addr) {
     if (!l1)
         return 0;
 
-    // Check for 2MB block mapping (leaf at L1 level)
+    // Check for 2MB block mapping (leaf at L1 level).  Issue #206:
+    // shift-based Sv39 decode (the HugeFrameMask is x86-domain).
     if ((l1[l1_idx] & PAGE_PRESENT) &&
         (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        return (l1[l1_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
+        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
     }
 
     auto *l2 = get_table(l1, l1_idx, false);
     if (!l2 || !(l2[l2_idx] & PAGE_PRESENT))
         return 0;
 
-    return (l2[l2_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
+    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -550,7 +574,8 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
         flags |= PAGE_USER;
     flags |= PAGE_ACCESSED | PAGE_DIRTY;
 
-    l2[l2_idx] = phys_addr | flags;
+    // Issue #206: PPN-shifted store (raw phys decodes 4x too high).
+    l2[l2_idx] = VMM::sv39_phys_pte(phys_addr) | flags;
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -920,19 +945,21 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
 #if defined(CONFIG_ARCH_RISCV64)
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (pml4_phys & ~0xFFFULL));
-    // User space: L0 indices 0-255 for Sv39 (0-256GB)
+    // User space: L0 indices 0-255 for Sv39 (0-256GB).  Issue #206: all
+    // address codecs below are shift-based Sv39 (raw & ~mask is x86-domain
+    // and decodes 4x too high); L2 non-leaves are invalid in Sv39 (no L3).
     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
         if (!(l0[l0_idx] & PAGE_PRESENT))
             continue;
         // Check for 1GB block at L0
         if ((l0[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            uint64_t page = l0[l0_idx] & ~0x3FFFFFFFULL;
+            uint64_t page = VMM::sv39_pte_phys(l0[l0_idx]);
             if (!PMM::is_user_page(page))
                 continue;
             PMM::free_page(page);
             continue;
         }
-        uint64_t l1_phys = l0[l0_idx] & ~0xFFFULL;
+        uint64_t l1_phys = VMM::sv39_pte_phys(l0[l0_idx]);
         if (!PMM::is_user_page(l1_phys))
             continue;
         auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
@@ -941,13 +968,13 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
                 continue;
             // Check for 2MB block at L1
             if ((l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                uint64_t page = l1[l1_idx] & ~0x1FFFFFULL;
+                uint64_t page = VMM::sv39_pte_phys(l1[l1_idx]);
                 if (!PMM::is_user_page(page))
                     continue;
                 PMM::free_page(page);
                 continue;
             }
-            uint64_t l2_phys = l1[l1_idx] & ~0xFFFULL;
+            uint64_t l2_phys = VMM::sv39_pte_phys(l1[l1_idx]);
             if (!PMM::is_user_page(l2_phys))
                 continue;
             auto *l2 =
@@ -955,35 +982,15 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
             for (int l2_idx = 0; l2_idx < 512; ++l2_idx) {
                 if (!(l2[l2_idx] & PAGE_PRESENT))
                     continue;
-                // Check for leaf PTE (V=1, R|W|X=1) — 3-level Sv39 format
-                if ((l2[l2_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                    uint64_t leaf = l2[l2_idx] & PAGE_FRAME_MASK;
-                    if (!PMM::is_user_page(leaf))
-                        continue;
-                    PMM::free_page(leaf);
-                    if ((l2_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step_try();
+                // Leaf PTE (V=1, R|W|X=1) — 4KB page in 3-level Sv39.
+                if (!VMM::sv39_is_leaf(l2[l2_idx]))
+                    continue;  // invalid non-leaf: leave alone
+                uint64_t leaf = VMM::sv39_pte_phys(l2[l2_idx]);
+                if (!PMM::is_user_page(leaf))
                     continue;
-                }
-                // Table entry (V=1, R=W=X=0) — old 4-level format with L3
-                // beneath
-                uint64_t l3_phys = l2[l2_idx] & ~0xFFFULL;
-                if (!PMM::is_user_page(l3_phys))
-                    continue;
-                auto *l3 =
-                    reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l3_phys);
-                for (int l3_idx = 0; l3_idx < 512; ++l3_idx) {
-                    if (!(l3[l3_idx] & PAGE_PRESENT))
-                        continue;
-                    uint64_t leaf = l3[l3_idx] & PAGE_FRAME_MASK;
-                    if (!PMM::is_user_page(leaf))
-                        continue;
-                    PMM::free_page(leaf);
-                    if ((l3_idx & 0x3F) == 0x3F)
-                        Scheduler::cleanup_step_try();
-                }
-                PMM::free_page(l3_phys);
-                l2[l2_idx] = 0; // clear L2 entry to prevent re-walk
+                PMM::free_page(leaf);
+                if ((l2_idx & 0x3F) == 0x3F)
+                    Scheduler::cleanup_step_try();
             }
             PMM::free_page(l2_phys);
             l1[l1_idx] = 0; // clear L1 entry to prevent re-walk
@@ -1242,7 +1249,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
     }
     return true;
 #elif defined(CONFIG_ARCH_RISCV64)
-    // RISC-V Sv39: L0 → L1 → L2 → leaf
+    // RISC-V Sv39: L0 → L1 → L2 → leaf.  Issue #206: shift-based PTE
+    // codec throughout (raw & ~mask decodes 4x too high); flags are bits
+    // 9:0 only (0xFFF would capture PPN bits); no L3 exists in Sv39.
     auto *src = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                              (src_pml4 & ~0xFFFULL));
     auto *dst = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -1260,14 +1269,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
             continue;
         }
 
-        uint64_t src_l1_phys = src[l0_idx] & ~0xFFFULL;
+        uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
         uint64_t dst_l1_phys = PMM::alloc_user_page();
         if (!dst_l1_phys)
             return false;
         auto *dst_l1 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l1_phys);
         __builtin_memset(dst_l1, 0, 4096);
-        dst[l0_idx] = dst_l1_phys | VMM::PAGE_PRESENT;
+        dst[l0_idx] = VMM::sv39_phys_pte(dst_l1_phys) | VMM::PAGE_PRESENT;
 
         auto *src_l1 =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l1_phys);
@@ -1281,14 +1290,14 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 continue;
             }
 
-            uint64_t src_l2_phys = src_l1[l1_idx] & ~0xFFFULL;
+            uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);
             uint64_t dst_l2_phys = PMM::alloc_user_page();
             if (!dst_l2_phys)
                 return false;
             auto *dst_l2 =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + dst_l2_phys);
             __builtin_memset(dst_l2, 0, 4096);
-            dst_l1[l1_idx] = dst_l2_phys | VMM::PAGE_PRESENT;
+            dst_l1[l1_idx] = VMM::sv39_phys_pte(dst_l2_phys) | VMM::PAGE_PRESENT;
 
             auto *src_l2 =
                 reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + src_l2_phys);
@@ -1296,10 +1305,10 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 if (!(src_l2[l2_idx] & PAGE_PRESENT))
                     continue;
 
-                // RISC-V leaf entries have V=1, R|W|X=1
-                if ((src_l2[l2_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                    uint64_t src_data = src_l2[l2_idx] & ~0xFFFULL;
-                    uint64_t flags = src_l2[l2_idx] & 0xFFFULL;
+                // RISC-V leaf entries have V=1, R|W|X=1.
+                if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
+                    uint64_t src_data = VMM::sv39_pte_phys(src_l2[l2_idx]);
+                    uint64_t flags = src_l2[l2_idx] & 0x3FFULL;
                     if (!PMM::is_user_page(src_data)) {
                         dst_l2[l2_idx] = 0;
                         continue;
@@ -1311,39 +1320,11 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + dst_data),
                         reinterpret_cast<void *>(arch::HHDM_OFFSET + src_data),
                         4096);
-                    dst_l2[l2_idx] = dst_data | flags;
+                    dst_l2[l2_idx] =
+                        VMM::sv39_phys_pte(dst_data) | flags;
                 } else {
-                    // Table entry: 4-level format with L3 beneath
-                    uint64_t src_l3_phys = src_l2[l2_idx] & ~0xFFFULL;
-                    uint64_t dst_l3_phys = PMM::alloc_user_page();
-                    if (!dst_l3_phys)
-                        return false;
-                    auto *dst_l3 = reinterpret_cast<uint64_t *>(
-                        arch::HHDM_OFFSET + dst_l3_phys);
-                    __builtin_memset(dst_l3, 0, 4096);
-                    dst_l2[l2_idx] = dst_l3_phys | VMM::PAGE_PRESENT;
-
-                    auto *src_l3 = reinterpret_cast<uint64_t *>(
-                        arch::HHDM_OFFSET + src_l3_phys);
-                    for (int l3_idx = 0; l3_idx < 512; ++l3_idx) {
-                        if (!(src_l3[l3_idx] & PAGE_PRESENT))
-                            continue;
-                        uint64_t src_data = src_l3[l3_idx] & ~0xFFFULL;
-                        uint64_t flags = src_l3[l3_idx] & 0xFFFULL;
-                        if (!PMM::is_user_page(src_data)) {
-                            dst_l3[l3_idx] = 0;
-                            continue;
-                        }
-                        uint64_t dst_data = PMM::alloc_user_page();
-                        if (!dst_data)
-                            return false;
-                        __builtin_memcpy(reinterpret_cast<void *>(
-                                             arch::HHDM_OFFSET + dst_data),
-                                         reinterpret_cast<void *>(
-                                             arch::HHDM_OFFSET + src_data),
-                                         4096);
-                        dst_l3[l3_idx] = dst_data | flags;
-                    }
+                    // Non-leaf at L2 is invalid in Sv39 (no L3): skip.
+                    dst_l2[l2_idx] = 0;
                 }
             }
         }
@@ -1368,28 +1349,29 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
 
     if (!(l0[l0_idx] & PAGE_PRESENT))
         return 0;
+    // Issue #206: Sv39 PTE codec (raw & ~0xFFF is x86-domain).
     auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (l0[l0_idx] & ~0xFFFULL));
+                                            VMM::sv39_pte_phys(l0[l0_idx]));
 
     if (!(l1[l1_idx] & PAGE_PRESENT))
         return 0;
     auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (l1[l1_idx] & ~0xFFFULL));
+                                            VMM::sv39_pte_phys(l1[l1_idx]));
 
     // Check for 2MB block mapping (leaf at L1 level)
     if ((l2[l1_idx] & PAGE_PRESENT) &&
         (l2[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-        return (l2[l1_idx] & PAGE_HUGE_FRAME_MASK) + (virt_addr & 0x1FFFFF);
+        return VMM::sv39_pte_phys(l2[l1_idx]) + (virt_addr & 0x1FFFFF);
     }
 
     if (!(l2[l2_idx] & PAGE_PRESENT))
         return 0;
-    auto *l3 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (l2[l2_idx] & ~0xFFFULL));
-
-    if (!(l3[l2_idx] & PAGE_PRESENT))
+    // Issue #206: Sv39 has no level below L2 — a V=1,RWX=0 entry here is
+    // invalid (never created by this backend); fail closed, do not descend
+    // into garbage as the old 4-level fallback did.
+    if (!VMM::sv39_is_leaf(l2[l2_idx]))
         return 0;
-    return (l3[l2_idx] & PAGE_FRAME_MASK) + (virt_addr & 0xFFF);
+    return VMM::sv39_pte_phys(l2[l2_idx]) + (virt_addr & 0xFFF);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +

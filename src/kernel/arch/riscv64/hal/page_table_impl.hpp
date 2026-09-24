@@ -25,6 +25,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <constants.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/hal/page_flags.hpp>
 #include <lib/error.hpp>
@@ -174,11 +175,18 @@ class ArchPageTable {
 ///         or on OOM.
 inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
                                           bool create) {
-    uint64_t *table = reinterpret_cast<uint64_t *>(table_base);
+    // Issue #206: table_base is raw phys — alias through the HHDM; decode
+    // children with the Sv39 PTE codec (raw & ~0xFFF is x86-domain).
+    uint64_t *table =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + table_base);
     uint64_t entry = table[index];
 
     if (entry & DESC_VALID) {
-        return reinterpret_cast<uint64_t *>(entry & ~0xFFF);
+        // A leaf (R|W|X) cannot be descended — caller handles blocks.
+        if (entry & (DESC_R | DESC_W | DESC_X))
+            return nullptr;
+        return reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + (((entry >> 10) << 12) & 0xFFFFFFFFFFF000ULL));
     }
 
     if (!create)
@@ -188,12 +196,11 @@ inline uint64_t *ArchPageTable::get_table(uint64_t table_base, uint64_t index,
     if (!new_page)
         return nullptr;
 
-    void *new_page_ptr = reinterpret_cast<void *>(new_page);
+    void *new_page_ptr = reinterpret_cast<void *>(arch::HHDM_OFFSET + new_page);
     memset(new_page_ptr, 0, PAGE_SIZE);
-    // Mark as valid, readable, writable table pointer
-    table[index] =
-        (new_page & ~0xFFF) | DESC_VALID | DESC_TABLE | DESC_R | DESC_W;
-    return reinterpret_cast<uint64_t *>(new_page);
+    // Non-leaf: V=1, R=W=X=0 (Sv39 reserves nonzero RWX on table entries).
+    table[index] = ((new_page >> 12) << 10) | DESC_VALID;
+    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + new_page);
 }
 
 /// @brief Convert kernel PageFlags to Sv39 descriptor attributes.
@@ -257,28 +264,42 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
 
+    // Issue #206: phys/va pairs — get_table takes raw phys, returns
+    // HHDM-aliased pointers; entries encode (PPN << 10), not raw phys.
     uint64_t l0_phys = current();
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
     uint64_t *l1 = walk_l0(l0_phys, l0_idx, true);
     if (!l1)
         return kernel::Error::OOM;
 
-    uint64_t *l2 = walk_l1(reinterpret_cast<uint64_t>(l1), l1_idx, true);
+    // Split a 2MB block leaf so a 4KB page can be installed.
+    if ((l1[l1_idx] & DESC_VALID) &&
+        (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))) {
+        uint64_t block_phys =
+            ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+        uint64_t base_flags = l1[l1_idx] & 0x3FFULL;
+        uint64_t split_phys = kernel::PMM::alloc_page_table();
+        if (!split_phys)
+            return kernel::Error::OOM;
+        uint64_t *split = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                       split_phys);
+        for (size_t i = 0; i < 512; ++i)
+            split[i] = (((block_phys + i * 0x1000) >> 12) << 10) |
+                       base_flags | DESC_A | DESC_D;
+        l1[l1_idx] = ((split_phys >> 12) << 10) | DESC_VALID;
+    }
+
+    uint64_t l1_phys =
+        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    uint64_t *l2 = walk_l1(l1_phys, l1_idx, true);
     if (!l2)
         return kernel::Error::OOM;
 
     uint64_t entry_flags = attr_from_flags(flags);
 
-    // Try 2MB block mapping if aligned
-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 &&
-        (phys & ((1ULL << L1_SHIFT) - 1)) == 0) {
-        l2[l1_idx] =
-            (phys & ~0x1FFFFF) | entry_flags | DESC_BLOCK | (1ULL << 6);
-        return {};
-    }
-
-    // 4KB page at L2
-    l2[l2_idx] =
-        (phys & ~0xFFF) | entry_flags | DESC_PAGE | (1ULL << 6) | (1ULL << 7);
+    // 4KB leaf: PPN-shifted store (raw phys decodes 4x too high).
+    l2[l2_idx] = ((phys >> 12) << 10) | entry_flags | DESC_A | DESC_D;
+    tlb_flush(virt);
     return {};
 }
 
@@ -290,25 +311,31 @@ inline kernel::ErrorOr<void> ArchPageTable::unmap_page(uint64_t virt) {
     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
 
+    // Issue #206: VA-domain walk with Sv39 codec (raw & ~mask is x86).
     uint64_t l0_phys = current();
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     if (!(l0[l0_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    // 1GB block: not ours to clear.
+    if (l0[l0_idx] & (DESC_R | DESC_W | DESC_X))
+        return kernel::Error::NOT_FOUND;
+    uint64_t l1_phys =
+        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
     if (!(l1[l1_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
-
-    // Check for 2MB block
-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 && !(l2[l1_idx] & DESC_TABLE)) {
-        l2[l1_idx] = 0;
-        return {};
-    }
+    // 2MB block: not ours to clear.
+    if (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))
+        return kernel::Error::NOT_FOUND;
+    uint64_t l2_phys =
+        ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
 
     if (!(l2[l2_idx] & DESC_VALID))
         return kernel::Error::NOT_FOUND;
     l2[l2_idx] = 0;
+    tlb_flush(virt);
     return {};
 }
 
@@ -321,24 +348,33 @@ inline uint64_t ArchPageTable::get_physical(uint64_t virt) {
     uint64_t l1_idx = (virt >> L1_SHIFT) & TABLE_MASK;
     uint64_t l2_idx = (virt >> L2_SHIFT) & TABLE_MASK;
 
+    // Issue #206: VA-domain walk with Sv39 codec.
     uint64_t l0_phys = current();
-    uint64_t *l0 = reinterpret_cast<uint64_t *>(l0_phys);
+    uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
 
     if (!(l0[l0_idx] & DESC_VALID))
         return 0;
-    uint64_t *l1 = reinterpret_cast<uint64_t *>(l0[l0_idx] & ~0xFFF);
+    // 1GB block leaf.
+    if (l0[l0_idx] & (DESC_R | DESC_W | DESC_X))
+        return (((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
+               (virt & 0x3FFFFFFFULL);
+    uint64_t l1_phys =
+        ((l0[l0_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    uint64_t *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
     if (!(l1[l1_idx] & DESC_VALID))
         return 0;
-    uint64_t *l2 = reinterpret_cast<uint64_t *>(l1[l1_idx] & ~0xFFF);
-
-    // 2MB block mapping
-    if ((virt & ((1ULL << L1_SHIFT) - 1)) == 0 && !(l2[l1_idx] & DESC_TABLE)) {
-        return (l2[l1_idx] & ~0x1FFFFF) | (virt & 0x1FFFFF);
-    }
+    // 2MB block leaf.
+    if (l1[l1_idx] & (DESC_R | DESC_W | DESC_X))
+        return (((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
+               (virt & 0x1FFFFFULL);
+    uint64_t l2_phys =
+        ((l1[l1_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    uint64_t *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
 
     if (!(l2[l2_idx] & DESC_VALID))
         return 0;
-    return (l2[l2_idx] & ~0xFFF) | (virt & 0xFFF);
+    return (((l2[l2_idx] >> 10) << 12) & 0xFFFFFFFFFFF000ULL) +
+           (virt & 0xFFFULL);
 }
 
 } // namespace arch
