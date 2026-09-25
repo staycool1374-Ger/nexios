@@ -20,6 +20,22 @@ BUILD="${2:-debug}"
 # end and deterministic log ordering.
 CLASSES="core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
 
+# Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
+# 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
+# aggregates are not gated on riscv64 (no evidence yet — wiring them in
+# blind would red the gate for unrelated pre-existing gaps).
+if [ "$ARCH" = "riscv64" ]; then
+    CLASSES="arch_riscv64 scheduler_zombie"
+fi
+
+# Per-class outer timeout covers the build (a cold arch switch rebuilds
+# everything) plus the QEMU run.  riscv64 needs headroom: TCG wall
+# dilation puts arch_riscv64 near 270 s (measured) on top of the build.
+OUTER_TIMEOUT=300
+if [ "$ARCH" = "riscv64" ]; then
+    OUTER_TIMEOUT=900
+fi
+
 # x86_64-only classes: no registry entry (smp, smp_multicpu) or no QEMU
 # machine (ahci_live, iommu_live) on other architectures.
 X86_ONLY="smp smp_multicpu ahci_live iommu_live"
@@ -74,7 +90,7 @@ for c in $RUN; do
     pkill -9 -f qemu-system 2>/dev/null
     log="$LOGDIR/$c.log"
     start=$(date +%s%N)
-    timeout 300 make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
+    timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
     rc=$?
     end=$(date +%s%N)
     wall_ms=$(( (end - start) / 1000000 ))

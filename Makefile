@@ -686,6 +686,7 @@ release: $(TEST_REGISTRY_GEN)
 release:
 ifneq ($(ARCH),x86_64)
 	@printf '  %-7s %s\n' 'ERROR' 'Release builds only supported on x86_64 (arch=$(ARCH))'
+	@printf '  %-7s %s\n' 'NOTE' 'riscv64 release deferred, see issue #207: release builds a GRUB ISO (x86 boot concept; riscv64 boots a raw BIN), and no release BIN has been built/booted/gated yet'
 	@exit 1
 endif
 	@printf '  %-7s %s\n' 'RELEASE' 'Building release ISO…'
@@ -992,7 +993,7 @@ _do_execute_test:
 	elif [ "$(CLASS)" = "dump-counts" ]; then \
 	    $(call _run_dump_counts_qemu); \
 	else \
-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS))); \
+	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
 	fi
 
 # Full suite (issue #173, replaces the removed `all` class): run every
@@ -1000,7 +1001,7 @@ _do_execute_test:
 # class, recording PASS/FAIL per class into test-history.txt.
 # Usage: make test-full [x86_64] [debug]  (arch/build optional positionals)
 test-full:
-	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(ARCH),$(call _map_arch,$(word 1,$(_ae))),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
+	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(word 1,$(_ae)))),$(ARCH),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
 	@case "$(_BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
 	bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD)
 
@@ -1136,10 +1137,14 @@ TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
 #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
 #   - the host stall-watchdog fires EARLIER (WATCHDOG_STALL) so it catches a
 #     frozen-but-still-emitting serial stream before expect's coarser timeout.
-#   WATCHDOG_STALL must be strictly less than the longest expect timeout (250),
-#   else the watchdog can never fire before expect gives up. 30s margin used.
+#   WATCHDOG_STALL must be strictly less than the longest expect timeout (400),
+#   else the watchdog can never fire before expect gives up.
 TEST_TIMEOUT_ALL    := 250
 TEST_TIMEOUT_CLASS  := 120
+# Issue #207: riscv64 classes run under QEMU TCG wall dilation — arch_riscv64
+# measures ~270 s wall (daemon boot + 24 tests).  Applies to every riscv64
+# class (only green-evidenced ones run there); x86_64 selection unchanged.
+TEST_TIMEOUT_RISCV  := 400
 WATCHDOG_STALL      := 220
 
 # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)

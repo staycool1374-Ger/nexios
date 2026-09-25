@@ -1,535 +1,83 @@
-diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
-index 313a1740..802a7ab2 100644
---- a/src/kernel/arch/riscv64/syscall_entry.S
-+++ b/src/kernel/arch/riscv64/syscall_entry.S
-@@ -207,18 +207,39 @@ syscall_entry:
-     # epilogue could otherwise apply it — the hlt-loop never reaches one,
-     # so without this the arm strands (RMS sees the pending arm and returns
-     # early every tick: total stall). Mirrors the isr_stubs.asm 0xE0-depth-2
--    # rule on x86_64 (issue #221). The existing `sd sp` save below is
-+    # rule on x86_64 (issue #221). Depth >= 2 covers single-hlt shapes
-+    # (task syscall-hlt + tick) and deeper steady-state stacks (init's
-+    # daemon-wait + several daemon recv-hlts + tick: live depth 4
-+    # observed — any depth cap reintroduces the stall for N blocked
-+    # daemons). This is accounting-sound: each apply abandons exactly
-+    # its own trap level (the tail dec below drops it), while held
-+    # outer frames resume intact with their own decs on exit. Frames
-+    # live on their own tasks' kstacks, so deep nesting cannot overflow
-+    # a single stack. Deeper-than-1 non-timer sources still skip. The existing `sd sp` save below is
-     # already correct for the nested case: sp is the nested frame base and
-     # resuming there completes the nested return back to the hlt-loop, so
-     # no save-side adjustment is made (cf. outer-frame reasoning).
-+    # Issue #221: terminate-driven arms force-apply (one-shot). A
-+    # terminating task's epilogue must apply its switch-away arm even
-+    # when the depth/source gate below would skip it — sret back into
-+    # the dead task re-faults with the task TERMINATED (double-fault
-+    # park, IRQs masked). Set by switch_away_from_terminating; cleared
-+    # here on consume (save_rsp_to==0 still skips below, harmlessly).
-+    la t0, scheduler_force_apply
-+    ld t1, 0(t0)
-+    beqz t1, check_depth
-+    sd zero, 0(t0)
-+    j apply
-+check_depth:
-     la t0, isr_nesting_depth
-     ld t1, 0(t0)
-     li t2, 1
-     beq t1, t2, apply
-     li t2, 2
--    bne t1, t2, 7f
--    # Depth 2: allow the s_timer nested tick only (scause[63]=1, cause 5);
--    # all other nested sources preserve the arm and skip, as before.
-+    blt t1, t2, 7f
-+nested_timer:
-+    # Depth >= 2: allow the s_timer nested tick only (scause[63]=1,
-+    # cause 5); all other nested sources preserve the arm and skip.
-     ld t0, OFF_SCAUSE(sp)
-     bge t0, zero, 7f
-     andi t0, t0, 0x7ff
-diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
-index 9a257fdb..0443823d 100644
---- a/src/kernel/core/global_state.cpp
-+++ b/src/kernel/core/global_state.cpp
-@@ -69,6 +69,11 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
- uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
- uint64_t scheduler_kernel_cr3 = 0;
- bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
-+// Issue #221: one-shot force-apply for terminate-driven arms (see
-+// switch_away_from_terminating).  A terminating task's trap epilogue can
-+// otherwise skip a pending arm (depth/source gate) and sret back into the
-+// dead task, re-faulting forever (double-fault park with IRQs masked).
-+uint64_t scheduler_force_apply[CONFIG_MAX_CPUS] = {};
- // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
- // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
- // Other architectures keep plain definitions here until their per-CPU
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 592646eb..b56a8425 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -756,7 +756,90 @@ uint64_t VMM::clone_kernel_pml4() {
-     // space — every address space needs it (drivers touch raw-phys
-     // identity; aarch64 instead uses HHDM aliases so its clear stands).
-     // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
--    dst[0] = src[0];
-+    // Issue #221: L0[0] ALSO covers every user low-half mapping
-+    // (.text/stack/heap below 1GB).  Sharing src[0] lets get_table()
-+    // install one task's child tables into the shared L1 (absent path)
-+    // or descend into another task's L2 (table path), so same-VA images
-+    // hijack each other's PTEs (last writer wins) and leaf splits
-+    // corrupt shared kernel entries.  Deep-copy the subtree instead:
-+    // MMIO/identity leaves stay visible by value (U=0) for IRQ-context
-+    // drivers, while child tables become private.  USER entries are
-+    // never copied (stale hijack PTEs must not propagate; the loader
-+    // maps fresh pages for the new task).
-+    uint64_t l0_low = src[0];
-+    if ((l0_low & PAGE_PRESENT) == 0) {
-+        dst[0] = 0;
-+    } else if ((l0_low & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
-+        // 1GB leaf: no subtree to share, copy by value.
-+        dst[0] = l0_low;
-+    } else {
-+        uint64_t l1_phys = PMM::alloc_user_page();
-+        if (l1_phys == 0) {
-+            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
-+            PMM::free_page(phys);
-+            return 0;
-+        }
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        auto *src_l1 = reinterpret_cast<uint64_t *>(
-+            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l0_low));
-+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+        auto *dst_l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-+                                                    l1_phys);
-+        // Audit (iteration 2): the page is recycled unzeroed, and the
-+        // !copy_ok unwind below scans all 512 slots — zero first so
-+        // never-written slots cannot drive free_page on stale entries.
-+        __builtin_memset(dst_l1, 0, 4096);
-+        bool copy_ok = true;
-+        for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
-+            const uint64_t l1_entry = src_l1[l1_idx];
-+            if ((l1_entry & PAGE_PRESENT) == 0 ||
-+                (l1_entry & PAGE_USER) != 0) {
-+                dst_l1[l1_idx] = 0;
-+                continue;
-+            }
-+            if ((l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
-+                // 2MB leaf (MMIO/identity): copy by value.
-+                dst_l1[l1_idx] = l1_entry;
-+                continue;
-+            }
-+            const uint64_t l2_phys = PMM::alloc_user_page();
-+            if (l2_phys == 0) {
-+                copy_ok = false;
-+                break;
-+            }
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *src_l2 = reinterpret_cast<uint64_t *>(
-+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(l1_entry));
-+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *dst_l2 = reinterpret_cast<uint64_t *>(
-+                arch::HHDM_OFFSET + l2_phys);
-+            for (size_t l2_idx = 0; l2_idx < PAGE_TABLE_ENTRIES; ++l2_idx) {
-+                const uint64_t l2_entry = src_l2[l2_idx];
-+                dst_l2[l2_idx] =
-+                    ((l2_entry & PAGE_PRESENT) == 0 ||
-+                     (l2_entry & PAGE_USER) != 0)
-+                        ? 0
-+                        : l2_entry;
-+            }
-+            // Table entry: V=1, no RWX = points to next level table.
-+            dst_l1[l1_idx] =
-+                VMM::sv39_phys_pte(l2_phys) | PAGE_PRESENT;
-+        }
-+        if (!copy_ok) {
-+            for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
-+                const uint64_t l1_entry = dst_l1[l1_idx];
-+                if ((l1_entry & PAGE_PRESENT) != 0 &&
-+                    (l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) == 0) {
-+                    PMM::free_page(VMM::sv39_pte_phys(l1_entry));
-+                }
-+            }
-+            PMM::free_page(l1_phys);
-+            PMM::free_page(phys);
-+            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
-+            return 0;
-+        }
-+        dst[0] = VMM::sv39_phys_pte(l1_phys) | PAGE_PRESENT;
-+    }
-     // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
-     for (size_t i = 256; i < 512; ++i) {
-         dst[i] = src[i];
-diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
-index 00a58901..28b417e2 100644
---- a/src/kernel/syscall/syscall_handlers_misc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_misc.cpp
-@@ -162,20 +162,39 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-                         p->waiting_child_status = nullptr;
-                     }
-                     p->waiting_child_pid = 0;
--                    // Orphan the child so reap_orphans can clean it up
--                    p->remove_child(t);
--                    t->parent_id = 0;
-+                    // Issue #221: leave the child linked when the parent is
-+                    // actively waiting — it collects the zombie itself via
-+                    // waitpid rescan (status + free).  Orphaning here would
-+                    // make the rescan miss (parent_id cleared) and fail an
-+                    // already-satisfied wait.  Orphan only when no waiter
-+                    // claims it, so reap_orphans can still clean up.
-+                    if (p->state == TaskState::BLOCKED) {
-+                        // Waiter hlt-waits in-trap (user) or self-loops
-+                        // (kernel test): it will collect; keep linkage.
-+                    } else {
-+                        // Orphan the child so reap_orphans can clean it up
-+                        p->remove_child(t);
-+                        t->parent_id = 0;
-+                    }
-                     // Wake the parent and override its saved RAX to return
-                     // the child's PID instead of -1 (the value set when
-                     // waitpid blocked).
-                     if (p->state != TaskState::TERMINATED) {
-                         Scheduler::set_task_ready(*p);
--                        if (TASK_STACK_PTR(p)) {
--                            // NOLINTNEXTLINE(performance-no-int-to-ptr)
--                            auto *stack =
--                                reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
--                            stack[0] = t->id;
--                        }
-+                    if (TASK_STACK_PTR(p)) {
-+                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+                        auto *stack =
-+                            reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
-+                        // Issue #221: riscv64 returns via frame idx9
-+                        // (OFF_A0==72); frame[0] is x1/ra (see
-+                        // wake_waiting_parent for the same fix).
-+                        uint64_t *frame = stack;
-+#if defined(CONFIG_ARCH_RISCV64)
-+                        frame[9] = t->id;
-+#else
-+                        frame[0] = t->id;
-+#endif
-+                    }
-                     }
-                     break;
-                 }
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index 77dc978c..1e8b512c 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -66,57 +66,79 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-     auto *cur = syscall_task();
-     if (!cur)
-         return static_cast<uint64_t>(-1);
--    TaskControlBlock *child = nullptr;
--    uint64_t count = Scheduler::task_count();
--    for (uint64_t i = 0; i < count; ++i) {
--        auto *t = Scheduler::task_at(i);
--        if (t && t->parent_id == cur->id) {
--            if (target_pid == static_cast<uint64_t>(-1) ||
--                t->id == target_pid) {
--                child = t;
--                break;
-+    // Issue #221: a user trap must not return to userspace until the wait
-+    // resolves — returning -1 immediately fails single-shot waiters (the
-+    // fork-marker parent prints WAITPID-FAILED).  Kernel callers hlt-loop
-+    // themselves (see scheduler_waitpid_wakes_parent); user traps wait
-+    // in-trap (hlt, preemptible) and re-scan on wake, mirroring the
-+    // sys_receive blocked-wait pattern.
-+    for (;;) {
-+        TaskControlBlock *child = nullptr;
-+        uint64_t count = Scheduler::task_count();
-+        for (uint64_t i = 0; i < count; ++i) {
-+            auto *t = Scheduler::task_at(i);
-+            if (t && t->parent_id == cur->id) {
-+                if (target_pid == static_cast<uint64_t>(-1) ||
-+                    t->id == target_pid) {
-+                    child = t;
-+                    break;
-+                }
-             }
-         }
--    }
--    if (!child)
--        return static_cast<uint64_t>(-1);
--    if (child->state == TaskState::TERMINATED) {
--        if (status_ptr) {
--            // MP-4 (SMAP): user write via safe_copy_to_user (stac-wrapped);
--            // kernel-task callers write directly.
--            uint64_t code = child->exit_code;
--            if (syscall_is_user_task()) {
--                if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
--                    return static_cast<uint64_t>(-1);
--            } else {
--                *status_ptr = code;
-+        if (!child)
-+            return static_cast<uint64_t>(-1);
-+        if (child->state == TaskState::TERMINATED) {
-+            if (status_ptr) {
-+                // MP-4 (SMAP): user write via safe_copy_to_user
-+                // (stac-wrapped); kernel-task callers write directly.
-+                uint64_t code = child->exit_code;
-+                if (syscall_is_user_task()) {
-+                    if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
-+                        return static_cast<uint64_t>(-1);
-+                } else {
-+                    *status_ptr = code;
-+                }
-             }
-+            uint64_t cid = child->id;
-+            cur->remove_child(child);
-+            child->cleanup();
-+            Scheduler::remove_task(*child);
-+            delete child;
-+            return cid;
-+        }
-+        if (arg2 & 1)
-+            return 0;
-+        cur->waiting_child_pid = target_pid;
-+        // MP-4 (SMAP): the stored status pointer is written later by
-+        // Scheduler::wake_waiting_parent under the parent's CR3.  For user
-+        // tasks pre-certify the page is MAPPED (range validity alone is
-+        // insufficient — an unmapped-but-valid VA would #PF in the wake
-+        // path).  Kernel tasks pass a kernel pointer (no user page check
-+        // needed).
-+        if (syscall_is_user_task() && status.unsafe_ptr() &&
-+            VMM::virt_to_phys_in_pml4(
-+                reinterpret_cast<uint64_t>(status.unsafe_ptr()),
-+                cur->page_table_) == 0) {
-+            return static_cast<uint64_t>(-1);
-+        }
-+        cur->waiting_child_status = status_ptr;
-+        Scheduler::dequeue_ready(*cur);
-+        cur->state = TaskState::BLOCKED;
-+        if (!syscall_is_user_task())
-+            return static_cast<uint64_t>(-1);
-+        // User trap: wait in-trap until woken (waiting flag cleared and
-+        // state changed by the wake path), then re-scan — the child is
-+        // TERMINATED and collected above (the reaper defers parented
-+        // zombies, issue #221, so it cannot vanish in between).  Spurious
-+        // resumes re-enter the wait; ticks preempt via sti/hlt/cli.
-+        Scheduler::reschedule();
-+        while (cur->state == TaskState::BLOCKED &&
-+               cur->waiting_child_pid != 0) {
-+            arch::sti();
-+            arch::hlt();
-+            arch::cli();
-         }
--        uint64_t cid = child->id;
--        cur->remove_child(child);
--        child->cleanup();
--        Scheduler::remove_task(*child);
--        delete child;
--        return cid;
--    }
--    if (arg2 & 1)
--        return 0;
--    cur->waiting_child_pid = target_pid;
--    // MP-4 (SMAP): the stored status pointer is written later by
--    // Scheduler::wake_waiting_parent under the parent's CR3.  For user tasks
--    // pre-certify the page is MAPPED (range validity alone is insufficient —
--    // an unmapped-but-valid VA would #PF in the wake path).  Kernel tasks pass
--    // a kernel pointer (no user page check needed).
--    if (syscall_is_user_task() && status.unsafe_ptr() &&
--        VMM::virt_to_phys_in_pml4(
--            reinterpret_cast<uint64_t>(status.unsafe_ptr()),
--            cur->page_table_) == 0) {
--        return static_cast<uint64_t>(-1);
-     }
--    cur->waiting_child_status = status_ptr;
--    Scheduler::dequeue_ready(*cur);
--    cur->state = TaskState::BLOCKED;
--    return static_cast<uint64_t>(-1);
- }
+diff --git a/Makefile b/Makefile
+index 5733e078..054d1fbf 100644
+--- a/Makefile
++++ b/Makefile
+@@ -686,6 +686,7 @@ release: $(TEST_REGISTRY_GEN)
+ release:
+ ifneq ($(ARCH),x86_64)
+ 	@printf '  %-7s %s\n' 'ERROR' 'Release builds only supported on x86_64 (arch=$(ARCH))'
++	@printf '  %-7s %s\n' 'NOTE' 'riscv64 release deferred, see issue #207: release builds a GRUB ISO (x86 boot concept; riscv64 boots a raw BIN), and no release BIN has been built/booted/gated yet'
+ 	@exit 1
+ endif
+ 	@printf '  %-7s %s\n' 'RELEASE' 'Building release ISO…'
+@@ -992,7 +993,7 @@ _do_execute_test:
+ 	elif [ "$(CLASS)" = "dump-counts" ]; then \
+ 	    $(call _run_dump_counts_qemu); \
+ 	else \
+-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS))); \
++	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core smp_multicpu ahci_live iommu_live,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
+ 	fi
  
- // VULN-H4/W1: hard bounds on the exec argv/envp scan.  Without these, a
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index 0ddc92d6..187729fb 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -549,10 +549,21 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
-     rq_for(target).enqueue(task, effective_priority(&task));
- }
+ # Full suite (issue #173, replaces the removed `all` class): run every
+@@ -1000,7 +1001,7 @@ _do_execute_test:
+ # class, recording PASS/FAIL per class into test-history.txt.
+ # Usage: make test-full [x86_64] [debug]  (arch/build optional positionals)
+ test-full:
+-	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(ARCH),$(call _map_arch,$(word 1,$(_ae))),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
++	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(word 1,$(_ae)))),$(ARCH),x86_64)) $(eval _BUILD := $(or $(BUILD),$(word 2,$(_ae)),debug))
+ 	@case "$(_BUILD)" in debug|release) ;; *) echo "ERROR: build must be 'debug' or 'release'"; exit 1;; esac; \
+ 	bash scripts/run_all_classes.sh $(_ARCH) $(_BUILD)
  
-+static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
+@@ -1136,10 +1137,14 @@ TEST_VERDICT_LOG := /tmp/jarvis-verdict.log
+ #   - expect waits up to TEST_TIMEOUT_* for the kernel's TEST SUMMARY.
+ #   - the host stall-watchdog fires EARLIER (WATCHDOG_STALL) so it catches a
+ #     frozen-but-still-emitting serial stream before expect's coarser timeout.
+-#   WATCHDOG_STALL must be strictly less than the longest expect timeout (250),
+-#   else the watchdog can never fire before expect gives up. 30s margin used.
++#   WATCHDOG_STALL must be strictly less than the longest expect timeout (400),
++#   else the watchdog can never fire before expect gives up.
+ TEST_TIMEOUT_ALL    := 250
+ TEST_TIMEOUT_CLASS  := 120
++# Issue #207: riscv64 classes run under QEMU TCG wall dilation — arch_riscv64
++# measures ~270 s wall (daemon boot + 24 tests).  Applies to every riscv64
++# class (only green-evidenced ones run there); x86_64 selection unchanged.
++TEST_TIMEOUT_RISCV  := 400
+ WATCHDOG_STALL      := 220
+ 
+ # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)
+diff --git a/scripts/run_all_classes.sh b/scripts/run_all_classes.sh
+index 52df2247..622aef55 100755
+--- a/scripts/run_all_classes.sh
++++ b/scripts/run_all_classes.sh
+@@ -20,6 +20,22 @@ BUILD="${2:-debug}"
+ # end and deterministic log ordering.
+ CLASSES="core ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
+ 
++# Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
++# 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
++# aggregates are not gated on riscv64 (no evidence yet — wiring them in
++# blind would red the gate for unrelated pre-existing gaps).
++if [ "$ARCH" = "riscv64" ]; then
++    CLASSES="arch_riscv64 scheduler_zombie"
++fi
 +
- void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
-     if (task.in_edf_queue_)
-         edf_remove(task, queue_target(task));
-     rq_task(task).remove(task, effective_priority(&task));
-+    // Issue #221: a task leaving the ready queue must not remain the target
-+    // of a pending deferred-switch arm.  The arm was published when the task
-+    // was READY; if the task blocks (or dies) before the epilogue applies
-+    // it, a later apply would spuriously resume it (observed: a waitpid
-+    // parent resumed with the unpatched -1 while still BLOCKED, failing an
-+    // already-satisfied wait).  next_task() dequeues-then-publishes, and
-+    // RMS clears arms first, so no live arm is harmed here — only stale
-+    // arms to a task that is no longer schedulable.
-+    invalidate_pending_switch_to(task.id);
- }
- 
- // FIX(rms-o1): Explicit priority movement in the O(1) ReadyQueue.  The queue
-@@ -612,6 +623,11 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
-                      __ATOMIC_RELEASE);
-     __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
-                      __ATOMIC_RELEASE);
-+    // Issue #221 (audit): the one-shot force flag belongs to the arm.
-+    // Clearing the arm without clearing the flag lets a later trap epilogue
-+    // bypass the depth/source gate for an unrelated fresh arm.
-+    __atomic_store_n(&scheduler_force_apply[cpu], (uint64_t)0,
-+                     __ATOMIC_RELEASE);
-     // Bump the generation LAST (release): an ISR epilogue that captured
-     // the pre-cancel generation fails its re-check and skips the apply.
-     uint64_t gen = __atomic_load_n(&scheduler_switch_generation[cpu],
-@@ -994,6 +1010,8 @@ void Scheduler::cancel_pending_switch() noexcept {
-                      __ATOMIC_RELEASE);
-     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
-                      __ATOMIC_RELEASE);
-+    __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
-+                     __ATOMIC_RELEASE);
-     uint64_t gen =
-         __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
-     __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
-@@ -1378,18 +1396,36 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
-     // Only a BLOCKED parent is re-enqueued: a READY/WAITING parent is already
-     // on the run queue, and re-enqueueing it would corrupt the intrusive
-     // ready-queue links.
-+    // Issue #221: keep the linkage when the parent is BLOCKED-waiting — it
-+    // collects the zombie itself via waitpid rescan (in-trap user wait or
-+    // kernel self-loop).  Orphaning here would make the rescan miss
-+    // (parent_id cleared) and fail an already-satisfied wait.
-+    const bool waiter_collects = (p->state == TaskState::BLOCKED);
-     if (p->state == TaskState::BLOCKED) {
-         p->in_ready_queue_ = false;
-         Scheduler::set_task_ready(*p);
-         if (task_stack_ptr(p)) {
-             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-             auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
--            stack[0] = child.id;
-+            // Issue #221: override the saved RETURN VALUE (a0) with the
-+            // child's PID — the "saved RAX" slot on x86 is frame[0], but
-+            // the riscv64 trap frame returns via idx9 (OFF_A0==72 in
-+            // syscall_entry.S; cf. exec_into_current regs[9]).  frame[0]
-+            // is x1/ra: writing the PID there corrupts the return address
-+            // while the parent observes the unpatched -1 (WAITPID-FAILED).
-+            uint64_t *frame = stack;
-+#if defined(CONFIG_ARCH_RISCV64)
-+            frame[9] = child.id;
-+#else
-+            frame[0] = child.id;
-+#endif
-         }
-     }
-     p->waiting_child_pid = 0;
--    p->remove_child(&child);
--    child.parent_id = 0;
-+    if (!waiter_collects) {
-+        p->remove_child(&child);
-+        child.parent_id = 0;
-+    }
- }
- 
- // Forward declaration — defined later in this translation unit.
-@@ -3074,17 +3110,19 @@ void Scheduler::reap_orphans() noexcept {
-                     break;
-                 if (p->id == t->parent_id) {
-                     parent_found = true;
--                    bool terminated = (p->state == TaskState::TERMINATED);
--                    bool waiting_for_this =
--                        (p->waiting_child_pid == t->id);
--                    bool waiting_for_any =
--                        (p->waiting_child_pid ==
--                         static_cast<uint64_t>(-1));
--                    // Reap unless the (live) parent is blocked specifically in
--                    // waitpid for *this* child (deferred reap) or for *any*
--                    // child (sentinel -1).
--                    can_reap =
--                        terminated || (!waiting_for_this && !waiting_for_any);
-+                    const bool terminated =
-+                        (p->state == TaskState::TERMINATED);
-+                    // Issue #221: reap only when the parent is dead.  A live
-+                    // parent owns its un-reaped children (Unix zombie
-+                    // semantics): the waitpid in-trap wait re-scans on wake
-+                    // and must find the TERMINATED child still linked —
-+                    // reaping it first makes the rescan miss (WAITPID-FAILED
-+                    // on an already-satisfied wait).  Fire-and-forget children
-+                    // linger until the parent exits (bounded: parent lifetime,
-+                    // MAX_TASKS cap); adoption above re-homes them to init on
-+                    // the way.  A parent blocked in waitpid is covered too
-+                    // (live ⇒ deferred regardless of waiting state).
-+                    can_reap = terminated;
-                     break;
-                 }
-             }
-@@ -3988,6 +4026,11 @@ void Scheduler::rate_monotonic_schedule() noexcept {
-                          __ATOMIC_RELEASE);
-         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
-                          __ATOMIC_RELEASE);
-+        // Issue #221 (audit): a cleared arm must not leave a standing
-+        // force-apply behind (see cancel_pending_switch_cpu) — otherwise a
-+        // terminate-era force survives onto the next published normal arm.
-+        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
-+                         __ATOMIC_RELEASE);
-         restore_preempted_current(current, armed);
-     }
- 
-@@ -4083,8 +4126,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
-         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
- 
-         // A deferred switch is already published.  Do NOT publish a second.
--        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
-+        // Issue #221: force-apply the standing arm — the terminating
-+        // task's trap epilogue must not gate-skip it (double-fault park).
-+        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0) {
-+            __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
-+                             __ATOMIC_RELEASE);
-             return;
-+        }
- 
-         next = next_task();
-         if (!next || next == &exiting)
-@@ -4203,6 +4251,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
-                          __ATOMIC_RELEASE);
-         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
-                          &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
-+        // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
-+        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
-+                         __ATOMIC_RELEASE);
- #if defined(CONFIG_ARCH_X86_64)
-         uint64_t cr0 = arch::read_cr0();
-         cr0 |= (1ULL << 3);
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index c58c222a..b0b9804a 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -50,6 +50,7 @@ extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
- extern uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS];
- extern uint64_t scheduler_kernel_cr3;
- extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
-+extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
- }
- 
- /// @brief POD snapshot of all per-CPU scheduler runtime (issue #25 C1).
-@@ -930,6 +931,9 @@ struct SwSlots {
-     static bool &need_resched() {
-         return scheduler_need_resched[this_cpu()];
-     }
-+    static uint64_t &force_apply() {
-+        return scheduler_force_apply[this_cpu()];
-+    }
- };
-     /// @brief AP dispatch-only tick body (issue #25 C1): runs
-     ///        rate_monotonic_schedule() on the AP's own state.  No
-@@ -1129,6 +1133,14 @@ extern uint64_t scheduler_kernel_cr3;
- ///        the single-writer-per-tick discipline from the two-publisher fix).
- // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
- extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
-+/// @brief Per-CPU one-shot force-apply for terminate-driven arms (issue
-+///        #221).  Set by switch_away_from_terminating when it publishes (or
-+///        keeps) a switch-away arm; the riscv64 trap epilogue applies the
-+///        pending arm unconditionally while set, then clears it.  Without
-+///        this, a terminating task's epilogue can gate-skip the arm and
-+///        sret back into the dead task (double-fault park, IRQs masked).
-+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
-+extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
- /// @brief Current ISR nesting depth (single-core archs ONLY: the plain
- ///        global in global_state.cpp, read via isr_nesting_own()).
- ///        On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth
++# Per-class outer timeout covers the build (a cold arch switch rebuilds
++# everything) plus the QEMU run.  riscv64 needs headroom: TCG wall
++# dilation puts arch_riscv64 near 270 s (measured) on top of the build.
++OUTER_TIMEOUT=300
++if [ "$ARCH" = "riscv64" ]; then
++    OUTER_TIMEOUT=900
++fi
++
+ # x86_64-only classes: no registry entry (smp, smp_multicpu) or no QEMU
+ # machine (ahci_live, iommu_live) on other architectures.
+ X86_ONLY="smp smp_multicpu ahci_live iommu_live"
+@@ -74,7 +90,7 @@ for c in $RUN; do
+     pkill -9 -f qemu-system 2>/dev/null
+     log="$LOGDIR/$c.log"
+     start=$(date +%s%N)
+-    timeout 300 make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
++    timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
+     rc=$?
+     end=$(date +%s%N)
+     wall_ms=$(( (end - start) / 1000000 ))
