@@ -544,3 +544,9 @@
 - **Adapted:** vmm.cpp exact-match (==258) hhdm stores + warn (map/unmap/in_pml4), no identity on riscv64; test_isolate Sv39 save (whole L0[258] L1) + restore (reclaim + memcpy + flush_all), x86 restores arch-gated; 3 riscv64 tests (take-semantics, split-leave, split-verify).
 - **Measured:** arch_riscv64 25/25 → 28/28 PASS (pair proves end-to-end boundary rewind); x86 core 472/472 PASS; `make build` Errors 0; SIL 3 APPROVED 1xS3 (audits/report-2026-09-25T07:27:15Z.md).
 - **Style re-surface:** N/A (kernel/test code, style-clean) — BlockGuard codec idiom reused verbatim; IrqGuard across table surgery (x86 #200 precedent).
+
+### #222 — CI riscv64 toolchain + gate job (2026-09-25, main)
+- **Learned:** (1) The Makefile already carried everything CI needed (Linux `riscv64-linux-gnu-` triplet, `qemu-system-riscv64`, BIN-via-objcopy with no ISO tooling, self-skipping clang-tidy) — the gap was purely the workflow file. Check local build-system support before assuming toolchain work. (2) Keep arch CI jobs parallel and independent (fast x86 gate must never wait on TCG wall time); size TCG timeouts from MEASURED walls + margin (2×270 s + build → 30 min). (3) Aspirational comments rot ("all three architectures" with one arch built) — fix them in the same patch. (4) No-GH-runner limit: ruby YAML parse + make -n dry-runs are the local ceiling; the first push run is the real proof — say so on the issue.
+- **Adapted:** `build-riscv64` job (apt gcc-riscv64-linux-gnu + qemu-system-misc + expect; verify; `make debug ARCH=riscv64`; `make test-full riscv64 debug`; BIN artifact); comment corrected.
+- **Measured:** no test runs (CI-only change — no history rows); SIL 3 APPROVED zero findings (audits/report-2026-09-25T07:40:04Z.md).
+- **Style re-surface:** N/A (YAML only).
