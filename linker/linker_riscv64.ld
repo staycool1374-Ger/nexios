@@ -16,6 +16,14 @@ SECTIONS
         *(.eh_frame_hdr)
         *(.init_array)
         *(.init_array.*)
+        /* Issue #222: Debian/Ubuntu drivers inject --build-id (plus
+         * .note.gnu.property in every object) while the bare-metal elf
+         * toolchain emits neither.  Unassigned NOTE orphans derail this
+         * script's custom PHDRS + AT() file-offset assignment on some
+         * ld versions (4GB sparse ELF, overlapping ranges).  The kernel
+         * never reads notes — discard them toolchain-independently. */
+        *(.note*)
+        *(.note.*)
     }
 
     /* Physical load address (QEMU virt RAM starts at 0x80000000) */
