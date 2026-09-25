@@ -769,6 +769,138 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #203: real-trap ECALL dispatch proof with cookie args (the #185
+// contract: a7=num, a0-a3=args, sepc+=4, return in OFF_A0). The synthetic
+// abi_* tests pin extraction+mapping; the umode smoke pins round-trip for
+// GETPID (arg-ignoring). This closes the gap: KILL's return differs ONLY
+// by arg1 (999999,1 -> -1 pid-lookup fail; 999999,0 -> 0 SIG_NONE
+// short-circuit), so user-observed results prove number AND arg routing
+// through the real trap, and reaching the spin proves sepc+=4 past TWO
+// 4-byte ecalls (a re-trap wedge would never store the results).
+// A 80-byte raw stub (lui/addi/sw/ecall/jal only). Every word was decoded
+// with the python RV decoder (lesson from the M1 stub: never hand-commit
+// without decoding; decoder self-check + 999999 math verified 2026-09-25):
+//   lui tp,0x41001         -> tp = 0x41001000 (data page)
+//   addi t1,zero,0x111     -> cookie 1
+//   sw t1,0(tp)
+//   lui a0,0xF4            -> 0xF4000
+//   addi a0,a0,0x23F       -> a0 = 999999 (0xF423F, nonexistent pid)
+//   addi a1,zero,1         -> valid signal: pid lookup must fail (-1)
+//   addi a2,zero,0x333     -> cookie (KILL ignores a2/a3; pinned live below)
+//   addi a3,zero,0x444     -> cookie
+//   addi a7,zero,24        -> KILL
+//   ecall                  -> at +0x24
+//   sw a0,4(tp)            -> result 1 (expect 0xFFFFFFFF)
+//   lui a0,0xF4            -> reload cookie: ecall1 left -1 in a0
+//   addi a0,a0,0x23F       -> a0 = 999999 again
+//   addi a1,zero,0         -> SIG_NONE: short-circuit 0, pid ignored
+//   addi a7,zero,24        -> KILL
+//   ecall                  -> at +0x3C
+//   sw a0,8(tp)            -> result 2 (expect 0)
+//   addi t1,zero,0x222     -> cookie 2
+//   sw t1,12(tp)
+//   jal x0,0               -> spin at +0x4C
+// CAREFUL (issue #203): the committed bytes below were decoded FROM THE
+// FILE (not the derivation list) after a 0x22->0x24 transcription slip
+// turned sw a0,8(tp) into sw a0,8(s0) (fault stval=0x8, iword=0x00A42423).
+// Re-verify with the decoder if any byte changes.
+namespace {
+// RV64LE. Data slots: [cookie1, result1, result2, cookie2].
+constexpr uint8_t kEcallCookieStub[] = {
+    0x37, 0x12, 0x00, 0x41, 0x13, 0x03, 0x10, 0x11, 0x23, 0x20, 0x62, 0x00,
+    0x37, 0x45, 0x0F, 0x00, 0x13, 0x05, 0xF5, 0x23, 0x93, 0x05, 0x10, 0x00,
+    0x13, 0x06, 0x30, 0x33, 0x93, 0x06, 0x40, 0x44, 0x93, 0x08, 0x80, 0x01,
+    0x73, 0x00, 0x00, 0x00, 0x23, 0x22, 0xA2, 0x00, 0x37, 0x45, 0x0F, 0x00,
+    0x13, 0x05, 0xF5, 0x23, 0x93, 0x05, 0x00, 0x00, 0x93, 0x08, 0x80, 0x01,
+    0x73, 0x00, 0x00, 0x00, 0x23, 0x24, 0xA2, 0x00, 0x13, 0x03, 0x20, 0x22,
+    0x23, 0x26, 0x62, 0x00, 0x6F, 0x00, 0x00, 0x00,
+};
+constexpr uint32_t kCookieResultSentinel = 0xDEAD;
+}  // namespace
+
+JARVIS_TEST(riscv64_ecall_dispatch_cookies, "PRE: none | POST: none") {
+    using namespace kernel;
+    const uint64_t free_before = PMM::free_pages_ref();
+
+    const uint64_t stub_phys = PMM::alloc_user_page();
+    const uint64_t data_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT_FMT(stub_phys != 0 && data_phys != 0, "user alloc failed");
+
+    auto *stub = reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET +
+                                                      stub_phys);
+    for (size_t i = 0; i < sizeof(kEcallCookieStub); ++i)
+        stub[i] = kEcallCookieStub[i];
+    auto *data = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
+                                                        data_phys);
+    data[0] = 0;
+    data[1] = kCookieResultSentinel;
+    data[2] = kCookieResultSentinel;
+    data[3] = 0;
+
+    auto *t = TaskControlBlock::create_user(
+        reinterpret_cast<void (*)()>(kUmodeStubVa), 11, 10, 32_KiB);
+    JARVIS_ASSERT_FMT(t != nullptr, "create_user failed");
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
+
+    VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
+                          t->page_table_);
+    VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
+                          t->page_table_);
+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
+    frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
+
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
+        "stub VA not mapped in task tables");
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
+        "data VA not mapped in task tables");
+
+    {
+        arch::IrqGuard ig{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+
+    // Two ecalls at stub+0x24 / +0x3C, spin at +0x4C.
+    const uint64_t start = arch::Timer::ticks();
+    bool done = false;
+    while (arch::Timer::ticks() - start < 200) {
+        if (data[0] == kUmodeCookie1 && data[3] == kUmodeCookie2) {
+            done = true;
+            break;
+        }
+        arch::hlt();
+    }
+    const uint32_t result1 = data[1];
+    const uint32_t result2 = data[2];
+
+    // Teardown BEFORE asserting (cookbook Rule 5): terminate (spinning
+    // in U-mode), drain, release user resources, free the TCB.
+    if (TaskControlBlock::is_valid(t) &&
+        t->state != TaskState::TERMINATED)
+        (void)Scheduler::terminate_err(*t, 0);
+    Scheduler::drain_zombie_list();
+    if (TaskControlBlock::is_valid(t)) {
+        t->cleanup();
+        delete t;
+    }
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(done, "cookie round trip failed (re-trap wedge?)");
+    JARVIS_ASSERT_FMT(result1 == 0xFFFFFFFFU,
+                      "KILL(999999,1) user-a0 = 0x%x, want -1 "
+                      "(number/arg misroute?)",
+                      result1);
+    JARVIS_ASSERT_FMT(result2 == 0,
+                      "KILL(999999,0) user-a0 = 0x%x, want 0 "
+                      "(return-slot miss?)",
+                      result2);
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after ecall cookie test",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
 // Issue #206 M2: e_machine gate — EM_RISCV accepted, x86_64/AArch64 rejected.
 // Runmode: kernel
 // Testidea: Synthetic headers differing only in machine field.
@@ -1051,6 +1183,7 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
     JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
     JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
+    JARVIS_REGISTER_TEST(riscv64_ecall_dispatch_cookies);  // issue #203
     JARVIS_REGISTER_TEST(riscv64_elf_bad_machine);    // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_clone_frame_readback);  // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2

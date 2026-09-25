@@ -2098,3 +2098,4 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-25 07:30:48 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 2797ms
 
 SUMMARY: total=2 ok=2 fail=0
+2026-09-25 07:47:30 arch_riscv64 PASSED: 25 FAILED: 0 TIME: 12s
