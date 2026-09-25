@@ -1,676 +1,535 @@
-diff --git a/mk/rules.mk b/mk/rules.mk
-index 76dce0df..bb87b7a8 100644
---- a/mk/rules.mk
-+++ b/mk/rules.mk
-@@ -336,11 +336,11 @@ $(VERIFY_IMG_OBJ): $(VERIFY_IMG_STRIPPED)
- 	    --redefine-sym _binary_build_initrd_libc_verify_stripped_elf_size=_binary_libc_verify_img_size \
- 	    $< $@
- 
--# Issue #104: the fork-marker ELF is embedded for the aarch64 EL0 smoke
--# test (same initrd-not-mounted reason as above). aarch64 only — the
--# program is built by the generic userspace/%.c.elf rule with the arch
--# compiler against the in-tree libc (no picolibc sysroot needed).
--ifeq ($(ARCH),aarch64)
-+# Issue #104: the fork-marker ELF is embedded for the EL0/U-mode smoke
-+# tests (same initrd-not-mounted reason as above). aarch64 + riscv64 (issue
-+# #206 M2) — the program is built by the generic userspace/%.c.elf rule with
-+# the arch compiler against the in-tree libc (no picolibc sysroot needed).
-+ifeq ($(filter $(ARCH),aarch64 riscv64),$(ARCH))
- FORK_MARKER_OBJ := build/initrd/fork_marker_img.o
- FORK_MARKER_SRC := userspace/fork-marker.c.elf
- FORK_MARKER_STRIPPED := build/initrd/fork_marker_stripped.elf
-@@ -353,7 +353,11 @@ endif
- $(FORK_MARKER_STRIPPED): $(FORK_MARKER_SRC)
- 	@mkdir -p $(dir $@)
- 	cp $< $@
-+ifeq ($(ARCH),riscv64)
-+	$(RISCV64_TRIPLET)strip $@
-+else
- 	$(AARCH64_TRIPLET)strip $@
-+endif
- 
- $(FORK_MARKER_OBJ): $(FORK_MARKER_STRIPPED)
- 	@mkdir -p $(dir $@)
-diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
-index 4330d82b..720d4ef5 100644
---- a/src/kernel/arch/riscv64/hal/io_impl.hpp
-+++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
-@@ -100,13 +100,20 @@ inline void hlt() {
- inline void pause() {
-     asm volatile("nop");
- }
--/// @brief Set AC-equivalent — no-op (no SMAP on RISC-V; shared stub).
--/// @note MP-4.4 scope was aarch64-only.  The aarch64 PAN implementation
--/// (stac/clac via PSTATE.PAN in arch/aarch64/hal/io_impl.hpp + arch::pan_init
--/// in early_init.cpp) is the model for a future SSTATUS.SUM-based port.
--inline void stac() {}
--/// @brief Clear AC-equivalent — no-op (see stac()).
--inline void clac() {}
-+/// @brief Set SUM (S-mode User Memory access, sstatus bit 18) so the kernel
-+///        can read/write user pages (safe_copy_*, CheckedPtr, argv setup).
-+///        RISC-V raises load/store page faults on S-mode U-page accesses
-+///        with SUM=0 — the previous no-op broke every user-touching syscall
-+///        (issue #206 M2: waitpid status write faulted).
-+/// @note Unlike aarch64 PAN (needs FEAT_PAN detection), SUM is a standard
-+///       sstatus field — no enable gate required.
-+inline void stac() {
-+    asm volatile("csrs sstatus, %0" : : "r"((uint64_t)(1ULL << 18)) : "memory");
-+}
-+/// @brief Clear SUM (see stac()).
-+inline void clac() {
-+    asm volatile("csrc sstatus, %0" : : "r"((uint64_t)(1ULL << 18)) : "memory");
-+}
- /// @brief Read the AC-equivalent flag — no-op placeholder.
- inline uint64_t read_rflags() {
-     return 0;
-diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
-index e48d1d10..f5b61577 100644
---- a/src/kernel/arch/riscv64/interrupt_controller.cpp
-+++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
-@@ -2,6 +2,10 @@
- #include <kernel/arch/hal/io.hpp>
- #include <kernel/arch/idt.hpp>
- #include <kernel/arch/riscv64/hal/plic.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/arch/irq_guard.hpp>
-+#include <signal.hpp>
- 
- namespace arch {
- 
-@@ -153,4 +157,68 @@ extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
-     panic("riscv64: unhandled exception");
- }
- 
-+/// @brief Latched last U-mode fault CSRs for test readback.
-+static uint64_t g_last_u_scause = 0;
-+static uint64_t g_last_u_stval = 0;
-+static uint64_t g_last_u_sepc = 0;
-+
-+/// @brief Terminate a U-mode faulting task (issue #206 M2, mirrors
-+///        aarch64_el0_fault_handler). Runs IRQ-masked from the trap entry;
-+///        must not re-enable IRQs and must NOT call Scheduler::terminate
-+///        (ISR-unsafe) — marks TERMINATED, wakes a waitpid parent, and arms
-+///        the deferred switch via switch_away_from_terminating. The asm
-+///        return path applies the pending switch. Parks only when there is
-+///        no live user task to kill.
-+/// @param frame Trap save area (OFF_* layout: SEPC=idx31, SCAUSE=idx33,
-+///        STVAL=idx34).
-+extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
-+    uint64_t sepc = frame[31];
-+    uint64_t scause = frame[33];
-+    uint64_t stval = frame[34];
-+    g_last_u_scause = scause;
-+    g_last_u_stval = stval;
-+    g_last_u_sepc = sepc;
-+    kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
-+    if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
-+        t->state != kernel::TaskState::TERMINATED) {
-+        t->state = kernel::TaskState::TERMINATED;
-+        t->exit_code = static_cast<uint64_t>(
-+            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
-+        kernel::Scheduler::wake_waiting_parent(*t);
-+        kernel::Scheduler::switch_away_from_terminating(*t);
-+        return;
-+    }
-+    for (;;) {
-+        arch::pause();
-+    }
-+}
-+
-+/// @brief Post-mortem readback of the last latched U-mode fault (tests).
-+extern "C" uint64_t riscv64_last_u_scause() { return g_last_u_scause; }
-+extern "C" uint64_t riscv64_last_u_stval() { return g_last_u_stval; }
-+extern "C" uint64_t riscv64_last_u_sepc() { return g_last_u_sepc; }
-+
-+/// @brief SPP-gated exception dispatch (issue #206 M2). U-mode (SPP==0)
-+///        faults terminate the task; S-mode faults keep the SBI-dump +
-+///        panic path (kernel bug).
-+/// @param frame Trap save area base (sp).
-+/// @param sstatus Live sstatus (SPP bit 8 discriminates).
-+extern "C" void riscv64_exception_dispatch(uint64_t *frame, uint64_t sstatus) {
-+    // Fault recovery for safe_copy_from/to_user (mirrors x86
-+    // kernel.cpp:1669): while a guarded copy runs, ANY fault redirects
-+    // SEPC to the recovery label so the copy returns false instead of
-+    // panicking (S-mode) or terminating (U-mode) the task. Checked first:
-+    // copies execute in S-mode task context.
-+    if (kernel::g_user_access_recover_ip != 0) {
-+        frame[31] = kernel::g_user_access_recover_ip; // OFF_SEPC slot
-+        kernel::g_user_access_recover_ip = 0;
-+        return;
-+    }
-+    if ((sstatus & (1ULL << 8)) == 0) {
-+        riscv64_u_fault_handler(frame);
-+        return;
-+    }
-+    handle_kernel_exception(frame[31], frame[33], frame[34]);
-+}
-+
- } // namespace arch
 diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
-index 452087b8..313a1740 100644
+index 313a1740..802a7ab2 100644
 --- a/src/kernel/arch/riscv64/syscall_entry.S
 +++ b/src/kernel/arch/riscv64/syscall_entry.S
-@@ -177,17 +177,11 @@ syscall_entry:
-     beq t0, t1, 6f
-     li t1, 9                   # ECALL from S-mode
-     beq t0, t1, 6f
--    # Other exceptions: output 'E' via SBI then call C handler
--    li a0, 69
--    li a7, 1
--    ecall
--    li a0, 10
--    li a7, 1
--    ecall
--    ld a0, OFF_SEPC(sp)
--    ld a1, OFF_SCAUSE(sp)
--    ld a2, OFF_STVAL(sp)
--    call handle_kernel_exception
-+    # Other exceptions: SPP-gated dispatch (issue #206 M2) — U-mode faults
-+    # terminate the task, S-mode faults panic. Pass frame + sstatus.
-+    mv a0, sp
-+    csrr a1, sstatus
-+    call riscv64_exception_dispatch
- 
- 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
-     # §2 ABI (issue #185; docs/specs/syscall-abi-picolibc.md): number rides
-@@ -207,12 +201,30 @@ syscall_entry:
-     sd a0, OFF_A0(sp)         # store return value into saved a0 slot
- 
- 5:  # === Return path / context switch check ===
--    # Only context switch at outermost nesting (depth == 1)
-+    # Apply at outermost nesting (depth == 1). Nested timer ticks
-+    # (depth == 2, SYSCALL+timer) MUST also apply: a task blocked in a
-+    # syscall hlt-loop publishes its voluntary arm and only a depth-1
-+    # epilogue could otherwise apply it — the hlt-loop never reaches one,
-+    # so without this the arm strands (RMS sees the pending arm and returns
-+    # early every tick: total stall). Mirrors the isr_stubs.asm 0xE0-depth-2
-+    # rule on x86_64 (issue #221). The existing `sd sp` save below is
-+    # already correct for the nested case: sp is the nested frame base and
-+    # resuming there completes the nested return back to the hlt-loop, so
-+    # no save-side adjustment is made (cf. outer-frame reasoning).
+@@ -207,18 +207,39 @@ syscall_entry:
+     # epilogue could otherwise apply it — the hlt-loop never reaches one,
+     # so without this the arm strands (RMS sees the pending arm and returns
+     # early every tick: total stall). Mirrors the isr_stubs.asm 0xE0-depth-2
+-    # rule on x86_64 (issue #221). The existing `sd sp` save below is
++    # rule on x86_64 (issue #221). Depth >= 2 covers single-hlt shapes
++    # (task syscall-hlt + tick) and deeper steady-state stacks (init's
++    # daemon-wait + several daemon recv-hlts + tick: live depth 4
++    # observed — any depth cap reintroduces the stall for N blocked
++    # daemons). This is accounting-sound: each apply abandons exactly
++    # its own trap level (the tail dec below drops it), while held
++    # outer frames resume intact with their own decs on exit. Frames
++    # live on their own tasks' kstacks, so deep nesting cannot overflow
++    # a single stack. Deeper-than-1 non-timer sources still skip. The existing `sd sp` save below is
+     # already correct for the nested case: sp is the nested frame base and
+     # resuming there completes the nested return back to the hlt-loop, so
+     # no save-side adjustment is made (cf. outer-frame reasoning).
++    # Issue #221: terminate-driven arms force-apply (one-shot). A
++    # terminating task's epilogue must apply its switch-away arm even
++    # when the depth/source gate below would skip it — sret back into
++    # the dead task re-faults with the task TERMINATED (double-fault
++    # park, IRQs masked). Set by switch_away_from_terminating; cleared
++    # here on consume (save_rsp_to==0 still skips below, harmlessly).
++    la t0, scheduler_force_apply
++    ld t1, 0(t0)
++    beqz t1, check_depth
++    sd zero, 0(t0)
++    j apply
++check_depth:
      la t0, isr_nesting_depth
      ld t1, 0(t0)
      li t2, 1
-+    beq t1, t2, apply
-+    li t2, 2
-     bne t1, t2, 7f
--
-+    # Depth 2: allow the s_timer nested tick only (scause[63]=1, cause 5);
-+    # all other nested sources preserve the arm and skip, as before.
-+    ld t0, OFF_SCAUSE(sp)
-+    bge t0, zero, 7f
-+    andi t0, t0, 0x7ff
-+    li t1, 5
-+    bne t0, t1, 7f
-+apply:
-     # Check scheduler_save_rsp_to
-     la t0, scheduler_save_rsp_to
-     ld t0, 0(t0)
-diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
-index 9307522a..f2c66392 100644
---- a/src/kernel/arch/riscv64/test_riscv64.cpp
-+++ b/src/kernel/arch/riscv64/test_riscv64.cpp
-@@ -42,6 +42,19 @@
- #include <lib/string.hpp>
- #include <constants.hpp>
- #include <kernel/test/test_sched_helpers.hpp>
-+#include <kernel/elf/elf.hpp>
-+#include <kernel/elf/elf_loader.hpp>
-+#include <kernel/vfs/vfs.hpp>
-+#include <kernel/test/test_isolate.hpp>
-+#include <signal.hpp>
-+
-+extern "C" {
-+extern const uint8_t _binary_fork_marker_img_start[];
-+extern const uint8_t _binary_fork_marker_img_end[];
-+extern uint64_t riscv64_last_u_scause();
-+extern uint64_t riscv64_last_u_stval();
-+extern uint64_t riscv64_last_u_sepc();
-+}
- 
- using namespace kernel;
- 
-@@ -756,6 +769,251 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
- }
- 
-+// Issue #206 M2: e_machine gate — EM_RISCV accepted, x86_64/AArch64 rejected.
-+// Runmode: kernel
-+// Testidea: Synthetic headers differing only in machine field.
-+// Input: ET_EXEC headers with machine 0xF3 / 0x3E / 0xB7.
-+// Expect: validate true / false / false.
-+// Depends: elf::validate_header.
-+JARVIS_TEST(riscv64_elf_bad_machine, "PRE: none | POST: none") {
-+    auto make_hdr = [](uint16_t machine) {
-+        elf::ELF64Header hdr{};
-+        hdr.ident[0] = 0x7F;
-+        hdr.ident[1] = 'E';
-+        hdr.ident[2] = 'L';
-+        hdr.ident[3] = 'F';
-+        hdr.ident[4] = 2;
-+        hdr.ident[5] = 1;
-+        hdr.ident[6] = 1;
-+        hdr.type = elf::ET_EXEC;
-+        hdr.machine = machine;
-+        hdr.version = 1;
-+        hdr.entry = 0x41000000ULL;
-+        hdr.phoff = 0;
-+        hdr.ehsize = sizeof(elf::ELF64Header);
-+        hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
-+        hdr.phnum = 0;
-+        return hdr;
-+    };
-+    elf::ELF64Header riscv = make_hdr(0xF3);
-+    elf::ELF64Header x86 = make_hdr(0x3E);
-+    elf::ELF64Header arm = make_hdr(0xB7);
-+    JARVIS_ASSERT_FMT(elf::validate_header(&riscv), "EM_RISCV rejected");
-+    JARVIS_ASSERT_FMT(!elf::validate_header(&x86), "x86_64 accepted");
-+    JARVIS_ASSERT_FMT(!elf::validate_header(&arm), "AArch64 accepted");
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Issue #206 M2: 37-slot fork convention (OFF_SP=idx1, SEPC=idx31,
-+// SSTATUS=idx32=0x20) + A0-zero child return.
-+// Runmode: kernel
-+// Testidea: Helper-built frame cloned from the harness task.
-+// Input: make_synthetic_clone_frame(entry, stack) with A0 sentinel.
-+// Expect: Child frame echoes SEPC/SSTATUS/SP, A0 == 0.
-+// Depends: make_synthetic_clone_frame, TaskControlBlock::clone.
-+JARVIS_TEST(riscv64_clone_frame_readback, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    auto *parent = Scheduler::current_task();
-+    JARVIS_ASSERT(parent != nullptr);
-+    static uint64_t regs[37];
-+    test::make_synthetic_clone_frame(regs, 0x41000000ULL, 0x70009000ULL);
-+    regs[9] = 0xDEADULL;
-+    auto *c = TaskControlBlock::clone(regs);
-+    JARVIS_ASSERT(c != nullptr);
-+    const auto *f = reinterpret_cast<const uint64_t *>(c->context.sp);
-+    JARVIS_ASSERT_FMT(f[31] == 0x41000000ULL, "SEPC not echoed: 0x%lx", f[31]);
-+    JARVIS_ASSERT_FMT(f[32] == (1ULL << 5), "SSTATUS not U-mode: 0x%lx",
-+                      f[32]);
-+    JARVIS_ASSERT_FMT(f[1] == 0x70009000ULL, "OFF_SP not echoed: 0x%lx", f[1]);
-+    JARVIS_ASSERT_FMT(f[9] == 0ULL, "child A0 not zero: 0x%lx", f[9]);
-+    kernel::test::terminate_and_drain(*c);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Issue #206 M2: exec slot convention — SEPC/SP/SSTATUS/A0 land on the live
-+// trap frame (OFF_* indices shared with the M1 ABI tests).
-+// Runmode: kernel
-+// Testidea: exec_into_current on a create_user task with a minimal
-+//           phnum=0 RISC-V image; read back the live frame slots.
-+// Input: Synthetic EM_RISCV header (entry 0x41000000), empty file data.
-+// Expect: regs[31]==entry, regs[32]==0x20, regs[1]==user_rsp, regs[9]==0.
-+// Depends: elf::exec_into_current, ScopedCurrentTask.
-+JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    elf::ELF64Header hdr{};
-+    hdr.ident[0] = 0x7F;
-+    hdr.ident[1] = 'E';
-+    hdr.ident[2] = 'L';
-+    hdr.ident[3] = 'F';
-+    hdr.ident[4] = 2;
-+    hdr.ident[5] = 1;
-+    hdr.ident[6] = 1;
-+    hdr.type = elf::ET_EXEC;
-+    hdr.machine = 0xF3;
-+    hdr.version = 1;
-+    hdr.entry = 0x41000000ULL;
-+    hdr.phoff = 0;
-+    hdr.ehsize = sizeof(elf::ELF64Header);
-+    hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
-+    hdr.phnum = 0;
-+    static uint8_t file_data[64] = {};
-+    __builtin_memcpy(file_data, &hdr, sizeof(hdr));
-+    auto *t = TaskControlBlock::create_user(
-+        reinterpret_cast<void (*)()>(0x41000000ULL), 11, 10, 32_KiB);
-+    JARVIS_ASSERT(t != nullptr);
-+    {
-+        test::ScopedCurrentTask guard(*t);
-+        static uint64_t regs[37] = {};
-+        for (int i = 0; i < 37; ++i)
-+            regs[i] = 0xAAAA0000ULL + static_cast<uint64_t>(i);
-+        const bool ok =
-+            elf::exec_into_current(&hdr, file_data, nullptr, nullptr, regs,
-+                                   sizeof(file_data));
-+        JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
-+        JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
-+                          regs[31]);
-+        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
-+                          regs[32]);
-+        JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
-+        // SP slot: setup_user_stack returns post-argc SP (not page-aligned
-+        // by construction) — verify it was overwritten into the new user
-+        // stack window instead.
-+        JARVIS_ASSERT_FMT(
-+            regs[1] != 0xAAAA0001ULL && regs[1] >= mem::STACK_VADDR &&
-+                regs[1] < mem::STACK_VADDR + 2 * mem::STACK_SIZE,
-+            "SP slot not in user stack window: 0x%lx", regs[1]);
-+    }
-+    if (TaskControlBlock::is_valid(t)) {
-+        t->cleanup();
-+        delete t;
-+    }
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+// Issue #206 M2: U-mode fault terminates (no panic/park). Poison the loader-
-+// valid SEPC with an unmapped user VA; fetch faults at U-mode → dispatch →
-+// riscv64_u_fault_handler marks TERMINATED/-SIGSEGV and switches away.
-+// Runmode: kernel
-+// Testidea: create_user task, poison frame[31], dispatch at prio 11.
-+// Input: Unmapped user VA 0x5000000000 in SEPC slot.
-+// Expect: TERMINATED, exit -SIGSEGV, latched scause != 0.
-+// Depends: trap dispatch, riscv64_u_fault_handler, waitpid wake path.
-+JARVIS_TEST(riscv64_u_fault_terminates, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    auto *t = TaskControlBlock::create_user(
-+        reinterpret_cast<void (*)()>(0x41000000ULL), 11, 10, 32_KiB);
-+    JARVIS_ASSERT(t != nullptr);
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
-+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
-+    JARVIS_ASSERT(frame != nullptr);
-+    frame[31] = 0x5000000000ULL;
-+    {
-+        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
-+    }
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    JARVIS_ASSERT_FMT(t->state == TaskState::TERMINATED,
-+                      "U-fault did not terminate the task");
-+    JARVIS_ASSERT_FMT(
-+        t->exit_code ==
-+            static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGSEGV)),
-+        "exit code is not -SIGSEGV: 0x%lx", t->exit_code);
-+    JARVIS_ASSERT_FMT(riscv64_last_u_scause() != 0, "fault scause not latched");
-+    if (TaskControlBlock::is_valid(t) &&
-+        t != Scheduler::current_task())
-+        (void)Scheduler::terminate_err(*t, t->exit_code);
-+    Scheduler::drain_zombie_list();
-+    JARVIS_TEST_PASS();
-+}
-+
-+namespace {
-+constexpr const char *kM2ImagePath = "/tmp/riscv64_m2_probe.elf";
-+
-+uint64_t m2_write_file(const char *path, const uint8_t *data, size_t size) {
-+    kernel::test::mark_vfs_touched();
-+    if (size == 0)
-+        return 0;
-+    if (kernel::vfs::create(path, 0) != 0)
-+        return 0;
-+    kernel::vfs::Vnode *file = kernel::vfs::resolve(path);
-+    if (file == nullptr || file->ops == nullptr ||
-+        file->ops->write == nullptr) {
-+        kernel::test::mark_vfs_touched();
-+        kernel::vfs::unlink(path);
-+        return 0;
-+    }
-+    size_t off = 0;
-+    while (off < size) {
-+        size_t chunk = size - off;
-+        if (chunk > 4096)
-+            chunk = 4096;
-+        int64_t written = file->ops->write(*file, data + off, chunk, off);
-+        if (written <= 0) {
-+            kernel::test::mark_vfs_touched();
-+            kernel::vfs::unlink(path);
-+            return 0;
-+        }
-+        off += static_cast<uint64_t>(written);
-+    }
-+    return (off == size) ? size : 0ULL;
-+}
-+}  // namespace
-+
-+// Issue #206 M2 acceptance: a real riscv64 user ELF (fork-marker) loads via
-+// ElfLoader (EM_RISCV + 37-qword finalize) and runs to ECALL in U-mode —
-+// fork/waitpid/exit/write all trap through the M1 path and exit clean.
-+// Runmode: kernel
-+// Testidea: Stage fork-marker to tmpfs, ElfLoader-load, dispatch at prio 11.
-+// Input: Embedded _binary_fork_marker_img (riscv64 build).
-+// Expect: TERMINATED with exit 0 (positive U-mode execution marker).
-+// Depends: ElfLoader, tmpfs, finalize, trap ECALL, scheduler dispatch.
-+JARVIS_TEST(riscv64_elf_ecall_smoke, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
-+                                          _binary_fork_marker_img_start);
-+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
-+    elf::ElfLoader::reset();
-+    JARVIS_ASSERT_FMT(
-+        m2_write_file(kM2ImagePath, _binary_fork_marker_img_start, img_size) !=
-+            0,
-+        "tmpfs stage failed");
-+    JARVIS_ASSERT_FMT(
-+        elf::ElfLoader::request_load(kM2ImagePath) == elf::LoadResult::OK,
-+        "request_load failed");
-+    elf::ElfLoader::wait_loader_idle();
-+    TaskControlBlock *t = elf::ElfLoader::take_completed();
-+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
-+                      "take_completed failed");
-+    t->priority = 11;
-+    t->base_priority = 11;
-+    {
-+        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
-+    }
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    const bool is_term = (t->state == TaskState::TERMINATED);
-+    const uint64_t exit_code = t->exit_code;
-+    const uint64_t fault_scause = riscv64_last_u_scause();
-+    const uint64_t fault_stval = riscv64_last_u_stval();
-+    const uint64_t fault_sepc = riscv64_last_u_sepc();
-+    if (TaskControlBlock::is_valid(t) &&
-+        t != Scheduler::current_task())
-+        (void)Scheduler::terminate_err(*t, t->exit_code);
-+    Scheduler::drain_zombie_list();
-+    kernel::test::mark_vfs_touched();
-+    kernel::vfs::unlink(kM2ImagePath);
-+    JARVIS_ASSERT_FMT(is_term, "riscv64 ELF task not TERMINATED");
-+    JARVIS_ASSERT_FMT(exit_code == 0,
-+                      "riscv64 ELF exit=0x%lx scause=0x%lx stval=0x%lx "
-+                      "sepc=0x%lx",
-+                      exit_code, fault_scause, fault_stval, fault_sepc);
-+    JARVIS_TEST_PASS();
-+}
-+
- /// @brief Register all riscv64 architecture tests.
- void register_riscv64_tests() {
-     Logger::info("Registering riscv64 architecture tests");
-@@ -793,6 +1051,11 @@ void register_riscv64_tests() {
-     JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
-     JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
-     JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
-+    JARVIS_REGISTER_TEST(riscv64_elf_bad_machine);    // issue #206 M2
-+    JARVIS_REGISTER_TEST(riscv64_clone_frame_readback);  // issue #206 M2
-+    JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
-+    JARVIS_REGISTER_TEST(riscv64_u_fault_terminates);    // issue #206 M2
-+    JARVIS_REGISTER_TEST(riscv64_elf_ecall_smoke);       // issue #206 M2
- }
- 
- #endif
-diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
-index 1712b36b..a52e94e3 100644
---- a/src/kernel/elf/elf.cpp
-+++ b/src/kernel/elf/elf.cpp
-@@ -68,6 +68,9 @@ bool validate_header(const ELF64Header *hdr) {
- #if defined(CONFIG_ARCH_AARCH64)
-     if (hdr->machine != 0xB7)
-         return false; // AArch64
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    if (hdr->machine != 0xF3)
-+        return false; // RISC-V (EM_RISCV)
- #else
-     if (hdr->machine != 0x3E)
-         return false; // x86_64 (default)
-@@ -477,6 +480,7 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
-     uint64_t pml4 = VMM::clone_kernel_pml4();
-     if (!pml4)
-         return nullptr;
-+
-     // Issue #96: freshly-cloned tables are the merged state by
-     // construction — assert convergence before mapping user pages.
-     VMM::assert_kernel_half_converged(pml4);
-@@ -605,18 +609,16 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
-         *--stack = 0;
-     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(stack);
- #elif defined(CONFIG_ARCH_RISCV64)
-+    // Trap frame matching syscall_entry.S save area (SAVE_SIZE 296 = 37
-+    // qwords: [0..30]=X1-X31, [31]=SEPC, [32]=SSTATUS, [33]=SCAUSE,
-+    // [34]=STVAL, [35]=RET, [36]=pad). Issue #206 M2: the old 21-push frame
-+    // under-ran the save area and set sstatus 0x100 (SPP=1 S-mode).
-     uint64_t *stack = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
--    *--stack = 0;          // padding
--    *--stack = hdr->entry; // sepc
--    *--stack = user_rsp;   // sp (user stack)
--    *--stack = 0x100;      // sstatus: SPP=0 (U-mode), SPIE=1
--    *--stack = 0;          // stvec
--    for (int j = 0; j < 12; ++j)
--        *--stack = 0; // s0-s11
--    *--stack = 0;     // tp
--    *--stack = 0;     // gp
--    *--stack = 0;     // sp (init)
--    *--stack = 0;     // ra
-+    stack -= 37;
-+    __builtin_memset(stack, 0, 37 * 8);
-+    stack[1] = user_rsp;              // OFF_SP (X2)
-+    stack[31] = hdr->entry;           // OFF_SEPC
-+    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
-     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
- #endif
- 
-@@ -836,9 +838,12 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
-     regs[33] = 0x0;              // SPSR_EL1: M[4:0]=EL0t (was regs[19])
-     regs[31] = user_rsp;         // SP_EL0 (was regs[20])
- #elif defined(CONFIG_ARCH_RISCV64)
--    (void)regs;
--    (void)user_rsp;
--    (void)hdr;
-+    // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
-+    // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
-+    regs[31] = hdr->entry;  // SEPC
-+    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
-+    regs[1] = user_rsp;     // OFF_SP
-+    regs[9] = 0;            // A0 = 0 (child/exec return value)
- #endif
- 
-     if (arch::read_cr3() != new_pml4) {
+     beq t1, t2, apply
+     li t2, 2
+-    bne t1, t2, 7f
+-    # Depth 2: allow the s_timer nested tick only (scause[63]=1, cause 5);
+-    # all other nested sources preserve the arm and skip, as before.
++    blt t1, t2, 7f
++nested_timer:
++    # Depth >= 2: allow the s_timer nested tick only (scause[63]=1,
++    # cause 5); all other nested sources preserve the arm and skip.
+     ld t0, OFF_SCAUSE(sp)
+     bge t0, zero, 7f
+     andi t0, t0, 0x7ff
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 9a257fdb..0443823d 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -69,6 +69,11 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
+ uint64_t scheduler_kernel_cr3 = 0;
+ bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
++// Issue #221: one-shot force-apply for terminate-driven arms (see
++// switch_away_from_terminating).  A terminating task's trap epilogue can
++// otherwise skip a pending arm (depth/source gate) and sret back into the
++// dead task, re-faulting forever (double-fault park with IRQs masked).
++uint64_t scheduler_force_apply[CONFIG_MAX_CPUS] = {};
+ // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
+ // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
+ // Other architectures keep plain definitions here until their per-CPU
 diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 8625a7bf..592646eb 100644
+index 592646eb..b56a8425 100644
 --- a/src/kernel/memory/vmm.cpp
 +++ b/src/kernel/memory/vmm.cpp
-@@ -827,12 +827,22 @@ void VMM::merge_table_level(uint64_t *src_table, uint64_t *dst_table,
-         if ((dst_entry & PAGE_PRESENT) != 0) {
-             if (is_table_entry(src_entry, level) &&
-                 is_table_entry(dst_entry, level)) {
-+#if defined(CONFIG_ARCH_RISCV64)
-+                // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
-+                // x86-domain — flags sit in bits[9:0], PPN is shifted).
-+                auto *src_next = reinterpret_cast<uint64_t *>(
-+                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(src_entry));
-+                // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+                auto *dst_next = reinterpret_cast<uint64_t *>(
-+                    arch::HHDM_OFFSET + VMM::sv39_pte_phys(dst_entry));
-+#else
-                 // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                 auto *src_next = reinterpret_cast<uint64_t *>(
-                     arch::HHDM_OFFSET + (src_entry & PAGE_FRAME_MASK));
-                 // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                 auto *dst_next = reinterpret_cast<uint64_t *>(
-                     arch::HHDM_OFFSET + (dst_entry & PAGE_FRAME_MASK));
-+#endif
-                 merge_table_level(src_next, dst_next, level + 1, 0);
-             }
-             continue;
-@@ -858,12 +868,22 @@ bool VMM::tables_equal_level(const uint64_t *a_table,
-             continue;
-         if (is_table_entry(a_entry, level) &&
-             is_table_entry(b_entry, level)) {
-+#if defined(CONFIG_ARCH_RISCV64)
-+            // Sv39 PTE codec (issue #206: raw & PAGE_FRAME_MASK is
-+            // x86-domain — flags sit in bits[9:0], PPN is shifted).
-+            auto *a_next = reinterpret_cast<const uint64_t *>(
-+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(a_entry));
+@@ -756,7 +756,90 @@ uint64_t VMM::clone_kernel_pml4() {
+     // space — every address space needs it (drivers touch raw-phys
+     // identity; aarch64 instead uses HHDM aliases so its clear stands).
+     // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
+-    dst[0] = src[0];
++    // Issue #221: L0[0] ALSO covers every user low-half mapping
++    // (.text/stack/heap below 1GB).  Sharing src[0] lets get_table()
++    // install one task's child tables into the shared L1 (absent path)
++    // or descend into another task's L2 (table path), so same-VA images
++    // hijack each other's PTEs (last writer wins) and leaf splits
++    // corrupt shared kernel entries.  Deep-copy the subtree instead:
++    // MMIO/identity leaves stay visible by value (U=0) for IRQ-context
++    // drivers, while child tables become private.  USER entries are
++    // never copied (stale hijack PTEs must not propagate; the loader
++    // maps fresh pages for the new task).
++    uint64_t l0_low = src[0];
++    if ((l0_low & PAGE_PRESENT) == 0) {
++        dst[0] = 0;
++    } else if ((l0_low & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
++        // 1GB leaf: no subtree to share, copy by value.
++        dst[0] = l0_low;
++    } else {
++        uint64_t l1_phys = PMM::alloc_user_page();
++        if (l1_phys == 0) {
++            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
++            PMM::free_page(phys);
++            return 0;
++        }
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *src_l1 = reinterpret_cast<uint64_t *>(
++            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l0_low));
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *dst_l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                    l1_phys);
++        // Audit (iteration 2): the page is recycled unzeroed, and the
++        // !copy_ok unwind below scans all 512 slots — zero first so
++        // never-written slots cannot drive free_page on stale entries.
++        __builtin_memset(dst_l1, 0, 4096);
++        bool copy_ok = true;
++        for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
++            const uint64_t l1_entry = src_l1[l1_idx];
++            if ((l1_entry & PAGE_PRESENT) == 0 ||
++                (l1_entry & PAGE_USER) != 0) {
++                dst_l1[l1_idx] = 0;
++                continue;
++            }
++            if ((l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
++                // 2MB leaf (MMIO/identity): copy by value.
++                dst_l1[l1_idx] = l1_entry;
++                continue;
++            }
++            const uint64_t l2_phys = PMM::alloc_user_page();
++            if (l2_phys == 0) {
++                copy_ok = false;
++                break;
++            }
 +            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+            auto *b_next = reinterpret_cast<const uint64_t *>(
-+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(b_entry));
++            auto *src_l2 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + VMM::sv39_pte_phys(l1_entry));
++            // NOLINTNEXTLINE(performance-no-int-to-ptr)
++            auto *dst_l2 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + l2_phys);
++            for (size_t l2_idx = 0; l2_idx < PAGE_TABLE_ENTRIES; ++l2_idx) {
++                const uint64_t l2_entry = src_l2[l2_idx];
++                dst_l2[l2_idx] =
++                    ((l2_entry & PAGE_PRESENT) == 0 ||
++                     (l2_entry & PAGE_USER) != 0)
++                        ? 0
++                        : l2_entry;
++            }
++            // Table entry: V=1, no RWX = points to next level table.
++            dst_l1[l1_idx] =
++                VMM::sv39_phys_pte(l2_phys) | PAGE_PRESENT;
++        }
++        if (!copy_ok) {
++            for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
++                const uint64_t l1_entry = dst_l1[l1_idx];
++                if ((l1_entry & PAGE_PRESENT) != 0 &&
++                    (l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) == 0) {
++                    PMM::free_page(VMM::sv39_pte_phys(l1_entry));
++                }
++            }
++            PMM::free_page(l1_phys);
++            PMM::free_page(phys);
++            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
++            return 0;
++        }
++        dst[0] = VMM::sv39_phys_pte(l1_phys) | PAGE_PRESENT;
++    }
+     // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
+     for (size_t i = 256; i < 512; ++i) {
+         dst[i] = src[i];
+diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
+index 00a58901..28b417e2 100644
+--- a/src/kernel/syscall/syscall_handlers_misc.cpp
++++ b/src/kernel/syscall/syscall_handlers_misc.cpp
+@@ -162,20 +162,39 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
+                         p->waiting_child_status = nullptr;
+                     }
+                     p->waiting_child_pid = 0;
+-                    // Orphan the child so reap_orphans can clean it up
+-                    p->remove_child(t);
+-                    t->parent_id = 0;
++                    // Issue #221: leave the child linked when the parent is
++                    // actively waiting — it collects the zombie itself via
++                    // waitpid rescan (status + free).  Orphaning here would
++                    // make the rescan miss (parent_id cleared) and fail an
++                    // already-satisfied wait.  Orphan only when no waiter
++                    // claims it, so reap_orphans can still clean up.
++                    if (p->state == TaskState::BLOCKED) {
++                        // Waiter hlt-waits in-trap (user) or self-loops
++                        // (kernel test): it will collect; keep linkage.
++                    } else {
++                        // Orphan the child so reap_orphans can clean it up
++                        p->remove_child(t);
++                        t->parent_id = 0;
++                    }
+                     // Wake the parent and override its saved RAX to return
+                     // the child's PID instead of -1 (the value set when
+                     // waitpid blocked).
+                     if (p->state != TaskState::TERMINATED) {
+                         Scheduler::set_task_ready(*p);
+-                        if (TASK_STACK_PTR(p)) {
+-                            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-                            auto *stack =
+-                                reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
+-                            stack[0] = t->id;
+-                        }
++                    if (TASK_STACK_PTR(p)) {
++                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++                        auto *stack =
++                            reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
++                        // Issue #221: riscv64 returns via frame idx9
++                        // (OFF_A0==72); frame[0] is x1/ra (see
++                        // wake_waiting_parent for the same fix).
++                        uint64_t *frame = stack;
++#if defined(CONFIG_ARCH_RISCV64)
++                        frame[9] = t->id;
 +#else
-             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-             auto *a_next = reinterpret_cast<const uint64_t *>(
-                 arch::HHDM_OFFSET + (a_entry & PAGE_FRAME_MASK));
-             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-             auto *b_next = reinterpret_cast<const uint64_t *>(
-                 arch::HHDM_OFFSET + (b_entry & PAGE_FRAME_MASK));
++                        frame[0] = t->id;
 +#endif
-             if (!tables_equal_level(a_next, b_next, level + 1, 0))
-                 return false;
-         } else if (a_entry != b_entry) {
-@@ -1359,9 +1379,9 @@ uint64_t VMM::virt_to_phys_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
-                                             VMM::sv39_pte_phys(l1[l1_idx]));
- 
-     // Check for 2MB block mapping (leaf at L1 level)
--    if ((l2[l1_idx] & PAGE_PRESENT) &&
--        (l2[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
--        return VMM::sv39_pte_phys(l2[l1_idx]) + (virt_addr & 0x1FFFFF);
-+    if ((l1[l1_idx] & PAGE_PRESENT) &&
-+        (l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-+        return VMM::sv39_pte_phys(l1[l1_idx]) + (virt_addr & 0x1FFFFF);
++                    }
+                     }
+                     break;
+                 }
+diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
+index 77dc978c..1e8b512c 100644
+--- a/src/kernel/syscall/syscall_handlers_process.cpp
++++ b/src/kernel/syscall/syscall_handlers_process.cpp
+@@ -66,57 +66,79 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+     auto *cur = syscall_task();
+     if (!cur)
+         return static_cast<uint64_t>(-1);
+-    TaskControlBlock *child = nullptr;
+-    uint64_t count = Scheduler::task_count();
+-    for (uint64_t i = 0; i < count; ++i) {
+-        auto *t = Scheduler::task_at(i);
+-        if (t && t->parent_id == cur->id) {
+-            if (target_pid == static_cast<uint64_t>(-1) ||
+-                t->id == target_pid) {
+-                child = t;
+-                break;
++    // Issue #221: a user trap must not return to userspace until the wait
++    // resolves — returning -1 immediately fails single-shot waiters (the
++    // fork-marker parent prints WAITPID-FAILED).  Kernel callers hlt-loop
++    // themselves (see scheduler_waitpid_wakes_parent); user traps wait
++    // in-trap (hlt, preemptible) and re-scan on wake, mirroring the
++    // sys_receive blocked-wait pattern.
++    for (;;) {
++        TaskControlBlock *child = nullptr;
++        uint64_t count = Scheduler::task_count();
++        for (uint64_t i = 0; i < count; ++i) {
++            auto *t = Scheduler::task_at(i);
++            if (t && t->parent_id == cur->id) {
++                if (target_pid == static_cast<uint64_t>(-1) ||
++                    t->id == target_pid) {
++                    child = t;
++                    break;
++                }
+             }
+         }
+-    }
+-    if (!child)
+-        return static_cast<uint64_t>(-1);
+-    if (child->state == TaskState::TERMINATED) {
+-        if (status_ptr) {
+-            // MP-4 (SMAP): user write via safe_copy_to_user (stac-wrapped);
+-            // kernel-task callers write directly.
+-            uint64_t code = child->exit_code;
+-            if (syscall_is_user_task()) {
+-                if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
+-                    return static_cast<uint64_t>(-1);
+-            } else {
+-                *status_ptr = code;
++        if (!child)
++            return static_cast<uint64_t>(-1);
++        if (child->state == TaskState::TERMINATED) {
++            if (status_ptr) {
++                // MP-4 (SMAP): user write via safe_copy_to_user
++                // (stac-wrapped); kernel-task callers write directly.
++                uint64_t code = child->exit_code;
++                if (syscall_is_user_task()) {
++                    if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
++                        return static_cast<uint64_t>(-1);
++                } else {
++                    *status_ptr = code;
++                }
+             }
++            uint64_t cid = child->id;
++            cur->remove_child(child);
++            child->cleanup();
++            Scheduler::remove_task(*child);
++            delete child;
++            return cid;
++        }
++        if (arg2 & 1)
++            return 0;
++        cur->waiting_child_pid = target_pid;
++        // MP-4 (SMAP): the stored status pointer is written later by
++        // Scheduler::wake_waiting_parent under the parent's CR3.  For user
++        // tasks pre-certify the page is MAPPED (range validity alone is
++        // insufficient — an unmapped-but-valid VA would #PF in the wake
++        // path).  Kernel tasks pass a kernel pointer (no user page check
++        // needed).
++        if (syscall_is_user_task() && status.unsafe_ptr() &&
++            VMM::virt_to_phys_in_pml4(
++                reinterpret_cast<uint64_t>(status.unsafe_ptr()),
++                cur->page_table_) == 0) {
++            return static_cast<uint64_t>(-1);
++        }
++        cur->waiting_child_status = status_ptr;
++        Scheduler::dequeue_ready(*cur);
++        cur->state = TaskState::BLOCKED;
++        if (!syscall_is_user_task())
++            return static_cast<uint64_t>(-1);
++        // User trap: wait in-trap until woken (waiting flag cleared and
++        // state changed by the wake path), then re-scan — the child is
++        // TERMINATED and collected above (the reaper defers parented
++        // zombies, issue #221, so it cannot vanish in between).  Spurious
++        // resumes re-enter the wait; ticks preempt via sti/hlt/cli.
++        Scheduler::reschedule();
++        while (cur->state == TaskState::BLOCKED &&
++               cur->waiting_child_pid != 0) {
++            arch::sti();
++            arch::hlt();
++            arch::cli();
+         }
+-        uint64_t cid = child->id;
+-        cur->remove_child(child);
+-        child->cleanup();
+-        Scheduler::remove_task(*child);
+-        delete child;
+-        return cid;
+-    }
+-    if (arg2 & 1)
+-        return 0;
+-    cur->waiting_child_pid = target_pid;
+-    // MP-4 (SMAP): the stored status pointer is written later by
+-    // Scheduler::wake_waiting_parent under the parent's CR3.  For user tasks
+-    // pre-certify the page is MAPPED (range validity alone is insufficient —
+-    // an unmapped-but-valid VA would #PF in the wake path).  Kernel tasks pass
+-    // a kernel pointer (no user page check needed).
+-    if (syscall_is_user_task() && status.unsafe_ptr() &&
+-        VMM::virt_to_phys_in_pml4(
+-            reinterpret_cast<uint64_t>(status.unsafe_ptr()),
+-            cur->page_table_) == 0) {
+-        return static_cast<uint64_t>(-1);
      }
- 
-     if (!(l2[l2_idx] & PAGE_PRESENT))
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index ca3c5cd4..a31d32b6 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -250,7 +250,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"arch_aarch64",          0,   30,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217)
- #endif
- #if defined(CONFIG_ARCH_RISCV64)
--    {"arch_riscv64",          0,    0,      19      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1)
-+    {"arch_riscv64",          0,    0,      24      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall)
- #endif
- 
-     // bench
-diff --git a/src/kernel/test/test_sched_helpers.hpp b/src/kernel/test/test_sched_helpers.hpp
-index a8a0a830..cc171a77 100644
---- a/src/kernel/test/test_sched_helpers.hpp
-+++ b/src/kernel/test/test_sched_helpers.hpp
-@@ -270,9 +270,9 @@ inline void make_synthetic_clone_frame(uint64_t (&regs)[37],
-     regs[33] = 0;      // SPSR_EL1
-     regs[31] = stack;  // SP_EL0
- #elif defined(CONFIG_ARCH_RISCV64)
--    regs[31] = entry;  // SEPC
--    regs[32] = 0;      // SSTATUS
--    (void)stack;  // no SP slot in the riscv64 frame layout
-+    regs[31] = entry;      // SEPC
-+    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
-+    regs[1] = stack;       // OFF_SP (X2)
- #endif
+-    cur->waiting_child_status = status_ptr;
+-    Scheduler::dequeue_ready(*cur);
+-    cur->state = TaskState::BLOCKED;
+-    return static_cast<uint64_t>(-1);
  }
  
-diff --git a/src/libc/crt0.S b/src/libc/crt0.S
-index 219f3b3e..00825c31 100644
---- a/src/libc/crt0.S
-+++ b/src/libc/crt0.S
-@@ -18,4 +18,15 @@ _start:
-     bl exit
- 1:  wfe
-     b 1b
-+#elif defined(__riscv)
-+_start:
-+    .option push
-+    .option norelax
-+    la gp, __global_pointer$
-+    .option pop
-+    mv a0, sp
-+    call main
-+    call exit
-+1:  wfi
-+    j 1b
- #endif
+ // VULN-H4/W1: hard bounds on the exec argv/envp scan.  Without these, a
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 0ddc92d6..187729fb 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -549,10 +549,21 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
+     rq_for(target).enqueue(task, effective_priority(&task));
+ }
+ 
++static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
++
+ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
+     if (task.in_edf_queue_)
+         edf_remove(task, queue_target(task));
+     rq_task(task).remove(task, effective_priority(&task));
++    // Issue #221: a task leaving the ready queue must not remain the target
++    // of a pending deferred-switch arm.  The arm was published when the task
++    // was READY; if the task blocks (or dies) before the epilogue applies
++    // it, a later apply would spuriously resume it (observed: a waitpid
++    // parent resumed with the unpatched -1 while still BLOCKED, failing an
++    // already-satisfied wait).  next_task() dequeues-then-publishes, and
++    // RMS clears arms first, so no live arm is harmed here — only stale
++    // arms to a task that is no longer schedulable.
++    invalidate_pending_switch_to(task.id);
+ }
+ 
+ // FIX(rms-o1): Explicit priority movement in the O(1) ReadyQueue.  The queue
+@@ -612,6 +623,11 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
+                      __ATOMIC_RELEASE);
++    // Issue #221 (audit): the one-shot force flag belongs to the arm.
++    // Clearing the arm without clearing the flag lets a later trap epilogue
++    // bypass the depth/source gate for an unrelated fresh arm.
++    __atomic_store_n(&scheduler_force_apply[cpu], (uint64_t)0,
++                     __ATOMIC_RELEASE);
+     // Bump the generation LAST (release): an ISR epilogue that captured
+     // the pre-cancel generation fails its re-check and skips the apply.
+     uint64_t gen = __atomic_load_n(&scheduler_switch_generation[cpu],
+@@ -994,6 +1010,8 @@ void Scheduler::cancel_pending_switch() noexcept {
+                      __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
+                      __ATOMIC_RELEASE);
++    __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
++                     __ATOMIC_RELEASE);
+     uint64_t gen =
+         __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
+     __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
+@@ -1378,18 +1396,36 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
+     // Only a BLOCKED parent is re-enqueued: a READY/WAITING parent is already
+     // on the run queue, and re-enqueueing it would corrupt the intrusive
+     // ready-queue links.
++    // Issue #221: keep the linkage when the parent is BLOCKED-waiting — it
++    // collects the zombie itself via waitpid rescan (in-trap user wait or
++    // kernel self-loop).  Orphaning here would make the rescan miss
++    // (parent_id cleared) and fail an already-satisfied wait.
++    const bool waiter_collects = (p->state == TaskState::BLOCKED);
+     if (p->state == TaskState::BLOCKED) {
+         p->in_ready_queue_ = false;
+         Scheduler::set_task_ready(*p);
+         if (task_stack_ptr(p)) {
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+             auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
+-            stack[0] = child.id;
++            // Issue #221: override the saved RETURN VALUE (a0) with the
++            // child's PID — the "saved RAX" slot on x86 is frame[0], but
++            // the riscv64 trap frame returns via idx9 (OFF_A0==72 in
++            // syscall_entry.S; cf. exec_into_current regs[9]).  frame[0]
++            // is x1/ra: writing the PID there corrupts the return address
++            // while the parent observes the unpatched -1 (WAITPID-FAILED).
++            uint64_t *frame = stack;
++#if defined(CONFIG_ARCH_RISCV64)
++            frame[9] = child.id;
++#else
++            frame[0] = child.id;
++#endif
+         }
+     }
+     p->waiting_child_pid = 0;
+-    p->remove_child(&child);
+-    child.parent_id = 0;
++    if (!waiter_collects) {
++        p->remove_child(&child);
++        child.parent_id = 0;
++    }
+ }
+ 
+ // Forward declaration — defined later in this translation unit.
+@@ -3074,17 +3110,19 @@ void Scheduler::reap_orphans() noexcept {
+                     break;
+                 if (p->id == t->parent_id) {
+                     parent_found = true;
+-                    bool terminated = (p->state == TaskState::TERMINATED);
+-                    bool waiting_for_this =
+-                        (p->waiting_child_pid == t->id);
+-                    bool waiting_for_any =
+-                        (p->waiting_child_pid ==
+-                         static_cast<uint64_t>(-1));
+-                    // Reap unless the (live) parent is blocked specifically in
+-                    // waitpid for *this* child (deferred reap) or for *any*
+-                    // child (sentinel -1).
+-                    can_reap =
+-                        terminated || (!waiting_for_this && !waiting_for_any);
++                    const bool terminated =
++                        (p->state == TaskState::TERMINATED);
++                    // Issue #221: reap only when the parent is dead.  A live
++                    // parent owns its un-reaped children (Unix zombie
++                    // semantics): the waitpid in-trap wait re-scans on wake
++                    // and must find the TERMINATED child still linked —
++                    // reaping it first makes the rescan miss (WAITPID-FAILED
++                    // on an already-satisfied wait).  Fire-and-forget children
++                    // linger until the parent exits (bounded: parent lifetime,
++                    // MAX_TASKS cap); adoption above re-homes them to init on
++                    // the way.  A parent blocked in waitpid is covered too
++                    // (live ⇒ deferred regardless of waiting state).
++                    can_reap = terminated;
+                     break;
+                 }
+             }
+@@ -3988,6 +4026,11 @@ void Scheduler::rate_monotonic_schedule() noexcept {
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
+                          __ATOMIC_RELEASE);
++        // Issue #221 (audit): a cleared arm must not leave a standing
++        // force-apply behind (see cancel_pending_switch_cpu) — otherwise a
++        // terminate-era force survives onto the next published normal arm.
++        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
++                         __ATOMIC_RELEASE);
+         restore_preempted_current(current, armed);
+     }
+ 
+@@ -4083,8 +4126,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+ 
+         // A deferred switch is already published.  Do NOT publish a second.
+-        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
++        // Issue #221: force-apply the standing arm — the terminating
++        // task's trap epilogue must not gate-skip it (double-fault park).
++        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0) {
++            __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
++                             __ATOMIC_RELEASE);
+             return;
++        }
+ 
+         next = next_task();
+         if (!next || next == &exiting)
+@@ -4203,6 +4251,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+                          __ATOMIC_RELEASE);
+         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
+                          &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
++        // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
++        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
++                         __ATOMIC_RELEASE);
+ #if defined(CONFIG_ARCH_X86_64)
+         uint64_t cr0 = arch::read_cr0();
+         cr0 |= (1ULL << 3);
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index c58c222a..b0b9804a 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -50,6 +50,7 @@ extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS];
+ extern uint64_t scheduler_kernel_cr3;
+ extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
++extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
+ }
+ 
+ /// @brief POD snapshot of all per-CPU scheduler runtime (issue #25 C1).
+@@ -930,6 +931,9 @@ struct SwSlots {
+     static bool &need_resched() {
+         return scheduler_need_resched[this_cpu()];
+     }
++    static uint64_t &force_apply() {
++        return scheduler_force_apply[this_cpu()];
++    }
+ };
+     /// @brief AP dispatch-only tick body (issue #25 C1): runs
+     ///        rate_monotonic_schedule() on the AP's own state.  No
+@@ -1129,6 +1133,14 @@ extern uint64_t scheduler_kernel_cr3;
+ ///        the single-writer-per-tick discipline from the two-publisher fix).
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
++/// @brief Per-CPU one-shot force-apply for terminate-driven arms (issue
++///        #221).  Set by switch_away_from_terminating when it publishes (or
++///        keeps) a switch-away arm; the riscv64 trap epilogue applies the
++///        pending arm unconditionally while set, then clears it.  Without
++///        this, a terminating task's epilogue can gate-skip the arm and
++///        sret back into the dead task (double-fault park, IRQs masked).
++// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
+ /// @brief Current ISR nesting depth (single-core archs ONLY: the plain
+ ///        global in global_state.cpp, read via isr_nesting_own()).
+ ///        On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth

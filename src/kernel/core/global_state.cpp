@@ -69,6 +69,11 @@ uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS] = {};
 uint64_t scheduler_kernel_cr3 = 0;
 bool scheduler_need_resched[CONFIG_MAX_CPUS] = {};
+// Issue #221: one-shot force-apply for terminate-driven arms (see
+// switch_away_from_terminating).  A terminating task's trap epilogue can
+// otherwise skip a pending arm (depth/source gate) and sret back into the
+// dead task, re-faulting forever (double-fault park with IRQs masked).
+uint64_t scheduler_force_apply[CONFIG_MAX_CPUS] = {};
 // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
 // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
 // Other architectures keep plain definitions here until their per-CPU

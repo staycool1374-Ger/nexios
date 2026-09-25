@@ -207,18 +207,39 @@ syscall_entry:
     # epilogue could otherwise apply it — the hlt-loop never reaches one,
     # so without this the arm strands (RMS sees the pending arm and returns
     # early every tick: total stall). Mirrors the isr_stubs.asm 0xE0-depth-2
-    # rule on x86_64 (issue #221). The existing `sd sp` save below is
+    # rule on x86_64 (issue #221). Depth >= 2 covers single-hlt shapes
+    # (task syscall-hlt + tick) and deeper steady-state stacks (init's
+    # daemon-wait + several daemon recv-hlts + tick: live depth 4
+    # observed — any depth cap reintroduces the stall for N blocked
+    # daemons). This is accounting-sound: each apply abandons exactly
+    # its own trap level (the tail dec below drops it), while held
+    # outer frames resume intact with their own decs on exit. Frames
+    # live on their own tasks' kstacks, so deep nesting cannot overflow
+    # a single stack. Deeper-than-1 non-timer sources still skip. The existing `sd sp` save below is
     # already correct for the nested case: sp is the nested frame base and
     # resuming there completes the nested return back to the hlt-loop, so
     # no save-side adjustment is made (cf. outer-frame reasoning).
+    # Issue #221: terminate-driven arms force-apply (one-shot). A
+    # terminating task's epilogue must apply its switch-away arm even
+    # when the depth/source gate below would skip it — sret back into
+    # the dead task re-faults with the task TERMINATED (double-fault
+    # park, IRQs masked). Set by switch_away_from_terminating; cleared
+    # here on consume (save_rsp_to==0 still skips below, harmlessly).
+    la t0, scheduler_force_apply
+    ld t1, 0(t0)
+    beqz t1, check_depth
+    sd zero, 0(t0)
+    j apply
+check_depth:
     la t0, isr_nesting_depth
     ld t1, 0(t0)
     li t2, 1
     beq t1, t2, apply
     li t2, 2
-    bne t1, t2, 7f
-    # Depth 2: allow the s_timer nested tick only (scause[63]=1, cause 5);
-    # all other nested sources preserve the arm and skip, as before.
+    blt t1, t2, 7f
+nested_timer:
+    # Depth >= 2: allow the s_timer nested tick only (scause[63]=1,
+    # cause 5); all other nested sources preserve the arm and skip.
     ld t0, OFF_SCAUSE(sp)
     bge t0, zero, 7f
     andi t0, t0, 0x7ff

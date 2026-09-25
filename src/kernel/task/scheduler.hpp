@@ -50,6 +50,7 @@ extern uint64_t scheduler_load_kstack_top[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_switch_generation[CONFIG_MAX_CPUS];
 extern uint64_t scheduler_kernel_cr3;
 extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
+extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
 }
 
 /// @brief POD snapshot of all per-CPU scheduler runtime (issue #25 C1).
@@ -930,6 +931,9 @@ struct SwSlots {
     static bool &need_resched() {
         return scheduler_need_resched[this_cpu()];
     }
+    static uint64_t &force_apply() {
+        return scheduler_force_apply[this_cpu()];
+    }
 };
     /// @brief AP dispatch-only tick body (issue #25 C1): runs
     ///        rate_monotonic_schedule() on the AP's own state.  No
@@ -1129,6 +1133,14 @@ extern uint64_t scheduler_kernel_cr3;
 ///        the single-writer-per-tick discipline from the two-publisher fix).
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 extern bool scheduler_need_resched[CONFIG_MAX_CPUS];
+/// @brief Per-CPU one-shot force-apply for terminate-driven arms (issue
+///        #221).  Set by switch_away_from_terminating when it publishes (or
+///        keeps) a switch-away arm; the riscv64 trap epilogue applies the
+///        pending arm unconditionally while set, then clears it.  Without
+///        this, a terminating task's epilogue can gate-skip the arm and
+///        sret back into the dead task (double-fault park, IRQs masked).
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+extern uint64_t scheduler_force_apply[CONFIG_MAX_CPUS];
 /// @brief Current ISR nesting depth (single-core archs ONLY: the plain
 ///        global in global_state.cpp, read via isr_nesting_own()).
 ///        On x86_64 the depth lives in per_cpu[cpu].isr_nesting_depth

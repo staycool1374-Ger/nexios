@@ -549,10 +549,21 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
     rq_for(target).enqueue(task, effective_priority(&task));
 }
 
+static void invalidate_pending_switch_to(uint64_t task_id) noexcept;
+
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
     if (task.in_edf_queue_)
         edf_remove(task, queue_target(task));
     rq_task(task).remove(task, effective_priority(&task));
+    // Issue #221: a task leaving the ready queue must not remain the target
+    // of a pending deferred-switch arm.  The arm was published when the task
+    // was READY; if the task blocks (or dies) before the epilogue applies
+    // it, a later apply would spuriously resume it (observed: a waitpid
+    // parent resumed with the unpatched -1 while still BLOCKED, failing an
+    // already-satisfied wait).  next_task() dequeues-then-publishes, and
+    // RMS clears arms first, so no live arm is harmed here — only stale
+    // arms to a task that is no longer schedulable.
+    invalidate_pending_switch_to(task.id);
 }
 
 // FIX(rms-o1): Explicit priority movement in the O(1) ReadyQueue.  The queue
@@ -611,6 +622,11 @@ void Scheduler::cancel_pending_switch_cpu(uint64_t cpu) noexcept {
     __atomic_store_n(&scheduler_next_task_id[cpu], UINT64_MAX,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_save_rsp_to[cpu], (uint64_t *)nullptr,
+                     __ATOMIC_RELEASE);
+    // Issue #221 (audit): the one-shot force flag belongs to the arm.
+    // Clearing the arm without clearing the flag lets a later trap epilogue
+    // bypass the depth/source gate for an unrelated fresh arm.
+    __atomic_store_n(&scheduler_force_apply[cpu], (uint64_t)0,
                      __ATOMIC_RELEASE);
     // Bump the generation LAST (release): an ISR epilogue that captured
     // the pre-cancel generation fails its re-check and skips the apply.
@@ -993,6 +1009,8 @@ void Scheduler::cancel_pending_switch() noexcept {
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
                      __ATOMIC_RELEASE);
     uint64_t gen =
         __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
@@ -1378,18 +1396,36 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     // Only a BLOCKED parent is re-enqueued: a READY/WAITING parent is already
     // on the run queue, and re-enqueueing it would corrupt the intrusive
     // ready-queue links.
+    // Issue #221: keep the linkage when the parent is BLOCKED-waiting — it
+    // collects the zombie itself via waitpid rescan (in-trap user wait or
+    // kernel self-loop).  Orphaning here would make the rescan miss
+    // (parent_id cleared) and fail an already-satisfied wait.
+    const bool waiter_collects = (p->state == TaskState::BLOCKED);
     if (p->state == TaskState::BLOCKED) {
         p->in_ready_queue_ = false;
         Scheduler::set_task_ready(*p);
         if (task_stack_ptr(p)) {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
-            stack[0] = child.id;
+            // Issue #221: override the saved RETURN VALUE (a0) with the
+            // child's PID — the "saved RAX" slot on x86 is frame[0], but
+            // the riscv64 trap frame returns via idx9 (OFF_A0==72 in
+            // syscall_entry.S; cf. exec_into_current regs[9]).  frame[0]
+            // is x1/ra: writing the PID there corrupts the return address
+            // while the parent observes the unpatched -1 (WAITPID-FAILED).
+            uint64_t *frame = stack;
+#if defined(CONFIG_ARCH_RISCV64)
+            frame[9] = child.id;
+#else
+            frame[0] = child.id;
+#endif
         }
     }
     p->waiting_child_pid = 0;
-    p->remove_child(&child);
-    child.parent_id = 0;
+    if (!waiter_collects) {
+        p->remove_child(&child);
+        child.parent_id = 0;
+    }
 }
 
 // Forward declaration — defined later in this translation unit.
@@ -3074,17 +3110,19 @@ void Scheduler::reap_orphans() noexcept {
                     break;
                 if (p->id == t->parent_id) {
                     parent_found = true;
-                    bool terminated = (p->state == TaskState::TERMINATED);
-                    bool waiting_for_this =
-                        (p->waiting_child_pid == t->id);
-                    bool waiting_for_any =
-                        (p->waiting_child_pid ==
-                         static_cast<uint64_t>(-1));
-                    // Reap unless the (live) parent is blocked specifically in
-                    // waitpid for *this* child (deferred reap) or for *any*
-                    // child (sentinel -1).
-                    can_reap =
-                        terminated || (!waiting_for_this && !waiting_for_any);
+                    const bool terminated =
+                        (p->state == TaskState::TERMINATED);
+                    // Issue #221: reap only when the parent is dead.  A live
+                    // parent owns its un-reaped children (Unix zombie
+                    // semantics): the waitpid in-trap wait re-scans on wake
+                    // and must find the TERMINATED child still linked —
+                    // reaping it first makes the rescan miss (WAITPID-FAILED
+                    // on an already-satisfied wait).  Fire-and-forget children
+                    // linger until the parent exits (bounded: parent lifetime,
+                    // MAX_TASKS cap); adoption above re-homes them to init on
+                    // the way.  A parent blocked in waitpid is covered too
+                    // (live ⇒ deferred regardless of waiting state).
+                    can_reap = terminated;
                     break;
                 }
             }
@@ -3988,6 +4026,11 @@ void Scheduler::rate_monotonic_schedule() noexcept {
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), (uint64_t)-1,
                          __ATOMIC_RELEASE);
+        // Issue #221 (audit): a cleared arm must not leave a standing
+        // force-apply behind (see cancel_pending_switch_cpu) — otherwise a
+        // terminate-era force survives onto the next published normal arm.
+        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
+                         __ATOMIC_RELEASE);
         restore_preempted_current(current, armed);
     }
 
@@ -4083,8 +4126,13 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
 
         // A deferred switch is already published.  Do NOT publish a second.
-        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
+        // Issue #221: force-apply the standing arm — the terminating
+        // task's trap epilogue must not gate-skip it (double-fault park).
+        if (__atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0) {
+            __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
+                             __ATOMIC_RELEASE);
             return;
+        }
 
         next = next_task();
         if (!next || next == &exiting)
@@ -4203,6 +4251,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
                          &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
+        // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
+        __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
+                         __ATOMIC_RELEASE);
 #if defined(CONFIG_ARCH_X86_64)
         uint64_t cr0 = arch::read_cr0();
         cr0 |= (1ULL << 3);

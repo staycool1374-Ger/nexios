@@ -66,57 +66,79 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto *cur = syscall_task();
     if (!cur)
         return static_cast<uint64_t>(-1);
-    TaskControlBlock *child = nullptr;
-    uint64_t count = Scheduler::task_count();
-    for (uint64_t i = 0; i < count; ++i) {
-        auto *t = Scheduler::task_at(i);
-        if (t && t->parent_id == cur->id) {
-            if (target_pid == static_cast<uint64_t>(-1) ||
-                t->id == target_pid) {
-                child = t;
-                break;
+    // Issue #221: a user trap must not return to userspace until the wait
+    // resolves — returning -1 immediately fails single-shot waiters (the
+    // fork-marker parent prints WAITPID-FAILED).  Kernel callers hlt-loop
+    // themselves (see scheduler_waitpid_wakes_parent); user traps wait
+    // in-trap (hlt, preemptible) and re-scan on wake, mirroring the
+    // sys_receive blocked-wait pattern.
+    for (;;) {
+        TaskControlBlock *child = nullptr;
+        uint64_t count = Scheduler::task_count();
+        for (uint64_t i = 0; i < count; ++i) {
+            auto *t = Scheduler::task_at(i);
+            if (t && t->parent_id == cur->id) {
+                if (target_pid == static_cast<uint64_t>(-1) ||
+                    t->id == target_pid) {
+                    child = t;
+                    break;
+                }
             }
         }
-    }
-    if (!child)
-        return static_cast<uint64_t>(-1);
-    if (child->state == TaskState::TERMINATED) {
-        if (status_ptr) {
-            // MP-4 (SMAP): user write via safe_copy_to_user (stac-wrapped);
-            // kernel-task callers write directly.
-            uint64_t code = child->exit_code;
-            if (syscall_is_user_task()) {
-                if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
-                    return static_cast<uint64_t>(-1);
-            } else {
-                *status_ptr = code;
+        if (!child)
+            return static_cast<uint64_t>(-1);
+        if (child->state == TaskState::TERMINATED) {
+            if (status_ptr) {
+                // MP-4 (SMAP): user write via safe_copy_to_user
+                // (stac-wrapped); kernel-task callers write directly.
+                uint64_t code = child->exit_code;
+                if (syscall_is_user_task()) {
+                    if (!safe_copy_to_user(status.unsafe_ptr(), &code, 1))
+                        return static_cast<uint64_t>(-1);
+                } else {
+                    *status_ptr = code;
+                }
             }
+            uint64_t cid = child->id;
+            cur->remove_child(child);
+            child->cleanup();
+            Scheduler::remove_task(*child);
+            delete child;
+            return cid;
         }
-        uint64_t cid = child->id;
-        cur->remove_child(child);
-        child->cleanup();
-        Scheduler::remove_task(*child);
-        delete child;
-        return cid;
+        if (arg2 & 1)
+            return 0;
+        cur->waiting_child_pid = target_pid;
+        // MP-4 (SMAP): the stored status pointer is written later by
+        // Scheduler::wake_waiting_parent under the parent's CR3.  For user
+        // tasks pre-certify the page is MAPPED (range validity alone is
+        // insufficient — an unmapped-but-valid VA would #PF in the wake
+        // path).  Kernel tasks pass a kernel pointer (no user page check
+        // needed).
+        if (syscall_is_user_task() && status.unsafe_ptr() &&
+            VMM::virt_to_phys_in_pml4(
+                reinterpret_cast<uint64_t>(status.unsafe_ptr()),
+                cur->page_table_) == 0) {
+            return static_cast<uint64_t>(-1);
+        }
+        cur->waiting_child_status = status_ptr;
+        Scheduler::dequeue_ready(*cur);
+        cur->state = TaskState::BLOCKED;
+        if (!syscall_is_user_task())
+            return static_cast<uint64_t>(-1);
+        // User trap: wait in-trap until woken (waiting flag cleared and
+        // state changed by the wake path), then re-scan — the child is
+        // TERMINATED and collected above (the reaper defers parented
+        // zombies, issue #221, so it cannot vanish in between).  Spurious
+        // resumes re-enter the wait; ticks preempt via sti/hlt/cli.
+        Scheduler::reschedule();
+        while (cur->state == TaskState::BLOCKED &&
+               cur->waiting_child_pid != 0) {
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+        }
     }
-    if (arg2 & 1)
-        return 0;
-    cur->waiting_child_pid = target_pid;
-    // MP-4 (SMAP): the stored status pointer is written later by
-    // Scheduler::wake_waiting_parent under the parent's CR3.  For user tasks
-    // pre-certify the page is MAPPED (range validity alone is insufficient —
-    // an unmapped-but-valid VA would #PF in the wake path).  Kernel tasks pass
-    // a kernel pointer (no user page check needed).
-    if (syscall_is_user_task() && status.unsafe_ptr() &&
-        VMM::virt_to_phys_in_pml4(
-            reinterpret_cast<uint64_t>(status.unsafe_ptr()),
-            cur->page_table_) == 0) {
-        return static_cast<uint64_t>(-1);
-    }
-    cur->waiting_child_status = status_ptr;
-    Scheduler::dequeue_ready(*cur);
-    cur->state = TaskState::BLOCKED;
-    return static_cast<uint64_t>(-1);
 }
 
 // VULN-H4/W1: hard bounds on the exec argv/envp scan.  Without these, a

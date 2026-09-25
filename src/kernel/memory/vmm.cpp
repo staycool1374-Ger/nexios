@@ -756,7 +756,90 @@ uint64_t VMM::clone_kernel_pml4() {
     // space — every address space needs it (drivers touch raw-phys
     // identity; aarch64 instead uses HHDM aliases so its clear stands).
     // U=0 on all copied entries: U-mode cannot reach them (#206-safe).
-    dst[0] = src[0];
+    // Issue #221: L0[0] ALSO covers every user low-half mapping
+    // (.text/stack/heap below 1GB).  Sharing src[0] lets get_table()
+    // install one task's child tables into the shared L1 (absent path)
+    // or descend into another task's L2 (table path), so same-VA images
+    // hijack each other's PTEs (last writer wins) and leaf splits
+    // corrupt shared kernel entries.  Deep-copy the subtree instead:
+    // MMIO/identity leaves stay visible by value (U=0) for IRQ-context
+    // drivers, while child tables become private.  USER entries are
+    // never copied (stale hijack PTEs must not propagate; the loader
+    // maps fresh pages for the new task).
+    uint64_t l0_low = src[0];
+    if ((l0_low & PAGE_PRESENT) == 0) {
+        dst[0] = 0;
+    } else if ((l0_low & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
+        // 1GB leaf: no subtree to share, copy by value.
+        dst[0] = l0_low;
+    } else {
+        uint64_t l1_phys = PMM::alloc_user_page();
+        if (l1_phys == 0) {
+            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
+            PMM::free_page(phys);
+            return 0;
+        }
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *src_l1 = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l0_low));
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *dst_l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    l1_phys);
+        // Audit (iteration 2): the page is recycled unzeroed, and the
+        // !copy_ok unwind below scans all 512 slots — zero first so
+        // never-written slots cannot drive free_page on stale entries.
+        __builtin_memset(dst_l1, 0, 4096);
+        bool copy_ok = true;
+        for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
+            const uint64_t l1_entry = src_l1[l1_idx];
+            if ((l1_entry & PAGE_PRESENT) == 0 ||
+                (l1_entry & PAGE_USER) != 0) {
+                dst_l1[l1_idx] = 0;
+                continue;
+            }
+            if ((l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) != 0) {
+                // 2MB leaf (MMIO/identity): copy by value.
+                dst_l1[l1_idx] = l1_entry;
+                continue;
+            }
+            const uint64_t l2_phys = PMM::alloc_user_page();
+            if (l2_phys == 0) {
+                copy_ok = false;
+                break;
+            }
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *src_l2 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(l1_entry));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *dst_l2 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + l2_phys);
+            for (size_t l2_idx = 0; l2_idx < PAGE_TABLE_ENTRIES; ++l2_idx) {
+                const uint64_t l2_entry = src_l2[l2_idx];
+                dst_l2[l2_idx] =
+                    ((l2_entry & PAGE_PRESENT) == 0 ||
+                     (l2_entry & PAGE_USER) != 0)
+                        ? 0
+                        : l2_entry;
+            }
+            // Table entry: V=1, no RWX = points to next level table.
+            dst_l1[l1_idx] =
+                VMM::sv39_phys_pte(l2_phys) | PAGE_PRESENT;
+        }
+        if (!copy_ok) {
+            for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
+                const uint64_t l1_entry = dst_l1[l1_idx];
+                if ((l1_entry & PAGE_PRESENT) != 0 &&
+                    (l1_entry & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) == 0) {
+                    PMM::free_page(VMM::sv39_pte_phys(l1_entry));
+                }
+            }
+            PMM::free_page(l1_phys);
+            PMM::free_page(phys);
+            ASSERT(errors::VmmError::VMM_ERR_PML4_ALLOC);
+            return 0;
+        }
+        dst[0] = VMM::sv39_phys_pte(l1_phys) | PAGE_PRESENT;
+    }
     // Copy kernel-space entries (L0 indices 256-511 for 256GB-512GB)
     for (size_t i = 256; i < 512; ++i) {
         dst[i] = src[i];

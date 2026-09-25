@@ -162,20 +162,39 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                         p->waiting_child_status = nullptr;
                     }
                     p->waiting_child_pid = 0;
-                    // Orphan the child so reap_orphans can clean it up
-                    p->remove_child(t);
-                    t->parent_id = 0;
+                    // Issue #221: leave the child linked when the parent is
+                    // actively waiting — it collects the zombie itself via
+                    // waitpid rescan (status + free).  Orphaning here would
+                    // make the rescan miss (parent_id cleared) and fail an
+                    // already-satisfied wait.  Orphan only when no waiter
+                    // claims it, so reap_orphans can still clean up.
+                    if (p->state == TaskState::BLOCKED) {
+                        // Waiter hlt-waits in-trap (user) or self-loops
+                        // (kernel test): it will collect; keep linkage.
+                    } else {
+                        // Orphan the child so reap_orphans can clean it up
+                        p->remove_child(t);
+                        t->parent_id = 0;
+                    }
                     // Wake the parent and override its saved RAX to return
                     // the child's PID instead of -1 (the value set when
                     // waitpid blocked).
                     if (p->state != TaskState::TERMINATED) {
                         Scheduler::set_task_ready(*p);
-                        if (TASK_STACK_PTR(p)) {
-                            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                            auto *stack =
-                                reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
-                            stack[0] = t->id;
-                        }
+                    if (TASK_STACK_PTR(p)) {
+                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                        auto *stack =
+                            reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
+                        // Issue #221: riscv64 returns via frame idx9
+                        // (OFF_A0==72); frame[0] is x1/ra (see
+                        // wake_waiting_parent for the same fix).
+                        uint64_t *frame = stack;
+#if defined(CONFIG_ARCH_RISCV64)
+                        frame[9] = t->id;
+#else
+                        frame[0] = t->id;
+#endif
+                    }
                     }
                     break;
                 }

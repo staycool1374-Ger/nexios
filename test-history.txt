@@ -2077,3 +2077,9 @@ SUMMARY: total=20 ok=19 fail=1
 2026-09-24 16:49:31 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 120000ms STATUS: TIMEOUT-crt0-fixed-daemon-storm
 2026-09-24 16:49:31 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 161ms STATUS: M2-SUM-recovery-smoke-PASS-24of25-vfsd-direct-hung
 2026-09-24 18:22:46 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 156ms STATUS: M2-plus-nested-apply-table-disabled
+2026-09-25 02:36:11 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 270s STATUS: full-config-daemons-24of24-issue221-fixed
+2026-09-25 02:39:00 selftest PASSED: 139 FAILED: 0 TIME: 150s STATUS: x86-regression-post-221-fixes
+2026-09-25 02:46:00 scheduler_core PASSED: 17 FAILED: 0 TIME: 150s STATUS: x86-regression-post-221-fixes
+2026-09-25 02:52:00 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 150s STATUS: x86-regression-post-221-fixes
+2026-09-25 03:35:00 arch_riscv64 PASSED: 24 FAILED: 0 TIME: 270s STATUS: audited-tree-24of24-issue221-APPROVED
+2026-09-25 03:20:00 scheduler_zombie-riscv64 PASSED: 5 FAILED: 0 TIME: 200s STATUS: manual-boot-bonus
