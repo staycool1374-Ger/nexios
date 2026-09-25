@@ -283,13 +283,15 @@ struct TaskControlBlock {
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
           blocked_in_recv(false),
-          waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
-          waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
-          blocked_on_pager_fault(nullptr),
-          held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
-           next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
-           generation(0) {
-    }
+           waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+           waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+           blocked_on_pager_fault(nullptr), debugger_id(0),
+           debug_stop_requested(false), debug_parked(false),
+           has_utrap_frame(false),
+           held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
+            next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
+            generation(0) {
+     }
 
     uint64_t magic;
     uint64_t id;
@@ -645,6 +647,32 @@ struct TaskControlBlock {
     ///        single wake path (never read stale).  The record pointer is
     ///        valid for the block duration (the registry slot owns it).
     kernel::ipc::PagerFault *blocked_on_pager_fault;
+
+    /// @brief Debugger task id attached to this task (issue #225, spec
+    ///        docs/specs/debugd.md §3–§4).  Zero when unattached; at most
+    ///        one debugger per target (second attach fails EBUSY).
+    ///        Written at attach/detach (debugger's syscall context),
+    ///        read by data calls and the tick park hook.
+    uint64_t debugger_id;
+
+    /// @brief Deferred-stop request (issue #225).  Set by data calls on a
+    ///        RUNNING/READY target (returns EAGAIN); consumed by the tick
+    ///        park hook.  ISR-vs-task race: accessed with __atomic ops.
+    bool debug_stop_requested;
+
+    /// @brief True while parked by the tick hook for the debugger
+    ///        (issue #225).  Distinguishes debugger-parks (detach resumes)
+    ///        from other BLOCKED channels (detach leaves them blocked).
+    ///        Written under scheduler_lock_, read by detach/data calls.
+    bool debug_parked;
+
+    /// @brief True once this task has entered the kernel through a
+    ///        user-mode trap (issue #225).  Gates debugger register reads:
+    ///        the U-trap frame slot (kstack_top - frame size) is only
+    ///        meaningful after the first trap.  Set in Syscall::handle,
+    ///        never cleared (monotonic: the slot always holds the last
+    ///        U-trap once set).  Never-dispatched tasks read EAGAIN.
+    bool has_utrap_frame;
 
     /// @brief Number of mutexes currently held by this task (for PCP ceiling
     /// tracking).

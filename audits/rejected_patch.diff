@@ -1,127 +1,315 @@
-diff --git a/docs/specs/debugd.md b/docs/specs/debugd.md
-index 1afa721..6a60080 100644
---- a/docs/specs/debugd.md
-+++ b/docs/specs/debugd.md
-@@ -68,27 +68,34 @@ Non-goals (explicitly out):
- - `debugd` is an ordinary user-space task (picolibc-linked), started
-   only in debug mode / on explicit request. It owns no privilege
-   beyond the debug capabilities explicitly granted to it (§3).
--- The kernel exposes exactly four debug syscalls (§3) plus a
--  stop-event delivery channel (§4). No RSP, no string parsing, no
--  packet buffers in the kernel.
-+- The kernel exposes five debug syscalls (§3–§4: four data-plane calls plus
-+  `sys_task_debug_attach`) and a stop-event delivery channel (§4). No RSP,
-+  no string parsing, no packet buffers in the kernel.
- - Relation to `docs/debugging.md`: QEMU-GDB remains the kernel-debug
-   path. debugd is the *task-debug* path. The two MUST coexist (a
-   kernel panic under QEMU-GDB while debugd holds a task stopped is
--  legal; §10 defines the semantics).
-+  legal; on panic all stop/park state is discarded with the machine —
-+  no resume-across-panic; a restarted debugd re-attaches explicitly
-+  per §10).
+diff --git a/src/kernel/syscall/syscall_handlers_debug.cpp b/src/kernel/syscall/syscall_handlers_debug.cpp
+index 54e88a76..ef9ed811 100644
+--- a/src/kernel/syscall/syscall_handlers_debug.cpp
++++ b/src/kernel/syscall/syscall_handlers_debug.cpp
+@@ -33,6 +33,8 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/checked_ptr.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/debug/debug_regs.hpp>
+ #include <kernel/arch/page_table.hpp>
  
- ## 3. Kernel debug API (normative — new syscalls)
+@@ -56,6 +58,7 @@ struct DebugBinding {
+     uint64_t target_id = 0;
+     uint64_t debugger_id = 0;
+     uint32_t gen = 0;
++    uint32_t target_gen = 0;
+     bool live = false;
+ };
  
- All four calls take a debug capability handle (`target_cap`), NOT a
- raw pid. Capability semantics (grant/revoke, attenuation) follow #50;
- until #50 lands, handles are kernel-issued unforgeable tokens scoped
--to one debugger↔target pair, revocable by killing either endpoint.
-+ to one debugger↔target pair, revocable by killing either endpoint.
-+The initial handle for a task is issued to its launcher at spawn; attaching
-+to any other running task requires a grant from its launcher or supervisor.
-+Raw pid-to-handle lookup does not exist.
+@@ -64,6 +67,11 @@ constexpr size_t kDebugBindings = 64;
+ DebugBinding g_bindings[kDebugBindings]{};
+ uint64_t g_debug_gen = 1; // gen 0 is never minted (decode sentinel)
  
- - `sys_task_read_regs(target_cap, &regs)` / `sys_task_write_regs`:
-   arch-sized register file (x86_64 GPRs + RIP/RFLAGS;
-   aarch64 x0–x30 + ELR/SPSR; riscv64 x1–x31 + sepc/sstatus).
-   Reads/writes target the task's *saved trap frame*; if the target is
--  currently running on any CPU the call parks it first (§4 stop
--  mechanics) and returns `EAGAIN`-retry semantics — never torn reads.
-+  currently running on any CPU the call requests a deferred stop at the
-+  next user-mode boundary (§4 stop mechanics) and returns `EAGAIN` until
-+  the corresponding stop event is queued — never torn reads, never parked
-+  mid-critical-section.
-   Writing `pc`/`sepc`/`ELR` redirects execution (the continue/step
-   primitive); writing other regs mutates state. Return: 0 or
-   negative errno (`EBADF` bad handle, `ESRCH` target gone,
-@@ -102,22 +109,24 @@ to one debugger↔target pair, revocable by killing either endpoint.
-   (`fence.i` / ICIALLU / `ic ialluis` per arch — the #186
-   QEMU-forgives-this pitfall is explicitly called out: TCG hides
-   missing I-flushes, hardware does not).
--- All four calls are valid only when the caller holds a live debug
-+- All four data-plane calls are valid only when the caller holds a live debug
-   capability AND the target is in a debuggable state (alive,
-   non-kernel; kernel tasks and PID 1's reaper internals reject with
-   `EPERM`). Calls from interrupt context are rejected.
- - Syscall numbers: allocated from the caps range (51–60 per the live
-   table in syscall-abi-picolibc.md §0), frozen under ABI v1 like the
--  rest of the table. Exact numbers assigned at implementation time;
--  this spec reserves four contiguous slots.
-+  rest of the table, with an explicit debug-only carve-out (release builds
-+  return `ENOSYS` per §10: same numbers, no behavior contract). Exact
-+  numbers assigned at implementation time; this spec reserves five
-+  contiguous slots (four data-plane + attach).
++// Serializes binding mint/clear/resolve (task context only; the tick park
++// hook never takes this lock, so nesting it outside scheduler_lock_ in
++// debugger_resume cannot invert the lock order).
++sync::SpinLock g_bind_lock;
++
+ /// @brief Resolve a handle for caller. Returns 0 with slot/target set,
+ ///        or a Linux errno (EBADF/ESRCH) otherwise.
+ uint64_t debug_resolve(uint64_t caller_id, uint64_t handle,
+@@ -74,12 +82,14 @@ uint64_t debug_resolve(uint64_t caller_id, uint64_t handle,
+     uint32_t gen = static_cast<uint32_t>(handle >> 32);
+     if (idx >= kDebugBindings || gen == 0)
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
++    // Caller holds g_bind_lock: slot mutation (mint/clear) is serialized.
+     DebugBinding &slot = g_bindings[idx];
+     if (!slot.live || slot.gen != gen || slot.debugger_id != caller_id)
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
+     TaskControlBlock *tgt = Scheduler::find_task(slot.target_id);
+     if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
+-        tgt->state == TaskState::TERMINATED || tgt->state == TaskState::REAPED)
++        tgt->state == TaskState::TERMINATED || tgt->state == TaskState::REAPED ||
++        slot.target_gen != tgt->generation)
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
+     slot_out = &slot;
+     tgt_out = tgt;
+@@ -102,6 +112,7 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t,
+         // Handle path: a valid owned handle toggles DETACH (the only
+         // detach in Phase 1 — keeps the exact-five slot count). Unknown
+         // handles fail EBADF (supervisor grants arrive in Phase 4).
++        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+         DebugBinding *slot = nullptr;
+         TaskControlBlock *tgt = nullptr;
+         uint64_t err = debug_resolve(caller->id, id, slot, tgt);
+@@ -109,15 +120,12 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t,
+             return err;
+         // Detach: drop the binding, clear target state, resume only what
+         // the debugger parked (other BLOCKED channels keep their waiter).
++        // Resume is scheduler-locked inside debugger_resume (READY, never
++        // RUNNING: the runq owns READY tasks only).
+         slot->live = false;
+-        tgt->debugger_id = 0;
+-        __atomic_store_n(&tgt->debug_stop_requested, false,
+-                         __ATOMIC_RELEASE);
+-        if (tgt->debug_parked) {
+-            tgt->debug_parked = false;
+-            tgt->state = TaskState::RUNNING;
+-            Scheduler::enqueue_ready(*tgt);
+-        }
++        slot->target_gen = 0;
++        __atomic_store_n(&tgt->debugger_id, 0, __ATOMIC_RELEASE);
++        Scheduler::debugger_resume(*tgt);
+         return 0;
+     }
+     if (sel == 1) {
+@@ -131,7 +139,10 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t,
+             return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
+         if (tgt->parent_id != caller->id)
+             return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
+-        if (tgt->debugger_id != 0)
++        if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
++        if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
+             return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+         for (size_t i = 0; i < kDebugBindings; ++i) {
+             if (g_bindings[i].live)
+@@ -144,8 +155,9 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t,
+             g_bindings[i].target_id = tgt->id;
+             g_bindings[i].debugger_id = caller->id;
+             g_bindings[i].gen = gen;
++            g_bindings[i].target_gen = tgt->generation;
+             g_bindings[i].live = true;
+-            tgt->debugger_id = caller->id;
++            __atomic_store_n(&tgt->debugger_id, caller->id, __ATOMIC_RELEASE);
+             return (static_cast<uint64_t>(gen) << 32) | i;
+         }
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+@@ -160,6 +172,8 @@ uint64_t debug_data_begin(uint64_t caller_id, uint64_t handle,
+                           TaskControlBlock *&tgt_out) {
+     DebugBinding *slot = nullptr;
+     TaskControlBlock *tgt = nullptr;
++    // Binding lookup serialized (mint/clear cannot interleave the resolve).
++    SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
+     uint64_t err = debug_resolve(caller_id, handle, slot, tgt);
+     if (err != 0)
+         return err;
+@@ -172,7 +186,7 @@ uint64_t debug_data_begin(uint64_t caller_id, uint64_t handle,
+         __atomic_store_n(&tgt->debug_stop_requested, true, __ATOMIC_RELEASE);
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     }
+-    if (!tgt->has_utrap_frame)
++    if (!__atomic_load_n(&tgt->has_utrap_frame, __ATOMIC_ACQUIRE))
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     tgt_out = tgt;
+     return 0;
+@@ -192,6 +206,10 @@ uint64_t Syscall::sys_task_debug_read_regs(uint64_t handle, uint64_t ubuf,
+     if (!debug::debug_read_regs(*tgt, blob, kQwords))
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     const size_t bytes = debug::debug_blob_bytes();
++    // The target may wake past BLOCKED between resolve and delivery
++    // (sleep/IPC expiry): recheck, never deliver a torn frame.
++    if (tgt->state == TaskState::RUNNING || tgt->state == TaskState::READY)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     auto *dst = reinterpret_cast<uint8_t *>(ubuf);
+     if (!safe_copy_to_user(dst, reinterpret_cast<const uint8_t *>(blob),
+                            bytes))
+@@ -214,6 +232,10 @@ uint64_t Syscall::sys_task_debug_write_regs(uint64_t handle, uint64_t ubuf,
+     auto *src = reinterpret_cast<const uint8_t *>(ubuf);
+     if (!safe_copy_from_user(reinterpret_cast<uint8_t *>(blob), src, bytes))
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEfault));
++    // The target may wake past BLOCKED between resolve and delivery:
++    // recheck, never race live execution with a register write.
++    if (tgt->state == TaskState::RUNNING || tgt->state == TaskState::READY)
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     if (!debug::debug_write_regs(*tgt, blob, kQwords))
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEagain));
+     return 0;
+diff --git a/src/kernel/syscall/syscall.cpp b/src/kernel/syscall/syscall.cpp
+index b8e58a9b..ed18db98 100644
+--- a/src/kernel/syscall/syscall.cpp
++++ b/src/kernel/syscall/syscall.cpp
+@@ -128,8 +128,9 @@ int syscall_path_open(const char *path, uint64_t flags) {
  
- ## 4. Stop-event routing (normative)
+     // Issue #225: every syscall proves a user-mode trap frame exists for
+     // the caller (monotonic has_utrap_frame for debugger register reads).
++    // Atomic: debugger data calls on other tasks load this flag (cf. S2).
+     if (TaskControlBlock *t = syscall_task())
+-        t->has_utrap_frame = true;
++        __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
  
- Today a user fault terminates the task. With a debugger attached:
+ #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_X86_64)
+     // MP-4 (SMAP) AC-leak detector: AC must be 0 on syscall entry.  A leaked
+@@ -169,8 +170,9 @@ int syscall_path_open(const char *path, uint64_t flags) {
+         return static_cast<uint64_t>(-1);
+     // Issue #225: same U-trap proof as handle() (fast-path syscalls trap
+     // identically; a yield-only spinner must still become readable).
++    // Atomic: debugger data calls on other tasks load this flag (cf. S2).
+     if (TaskControlBlock *t = syscall_task())
+-        t->has_utrap_frame = true;
++        __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
+     // Lean path: bounds check only, then direct table dispatch.  The caller
+     // guarantees `number` is a FAST member (no user-pointer dereference).
+     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
+diff --git a/src/kernel/debug/debug_regs.cpp b/src/kernel/debug/debug_regs.cpp
+index 51ec8b27..e63c5078 100644
+--- a/src/kernel/debug/debug_regs.cpp
++++ b/src/kernel/debug/debug_regs.cpp
+@@ -175,9 +175,9 @@ bool debug_read_regs(const TaskControlBlock &tcb, uint64_t *blob_out,
+     // A6=15 A7=16 S2=17 S3=18 S4=19 S5=20 S6=21 S7=22 S8=23 S9=24
+     // S10=25 S11=26 T3=27 T4=28 T5=29 T6=30, pc=SEPC idx 31.
+     blob_out[0] = 0; // x0 is always zero
+-    for (size_t i = 1; i < 31; ++i)
+-        blob_out[i] = frame[i];
+-    blob_out[31] = frame[16]; // x31 (T6, OFF_T6=240)
++    // Frame idx i holds x(i+1) (RA=x1 at 0 ... T6=x31 at 30): shift by one.
++    for (size_t i = 1; i < 32; ++i)
++        blob_out[i] = frame[i - 1];
+     blob_out[32] = frame[31]; // pc (OFF_SEPC=248)
+     return true;
+ #else
+@@ -236,9 +236,8 @@ bool debug_write_regs(TaskControlBlock &tcb, const uint64_t *blob_in,
+ #elif defined(CONFIG_ARCH_RISCV64)
+     if (blob_qwords < kRiscvBlobQwords)
+         return false;
+-    for (size_t i = 1; i < 31; ++i)
+-        frame[i] = blob_in[i]; // x1-x30 (x0 stays zero: never stored)
+-    frame[16] = blob_in[31];   // x31
++    for (size_t i = 0; i < 31; ++i)
++        frame[i] = blob_in[i + 1]; // RA..T6 (x0 is never stored)
+     frame[31] = blob_in[32];   // sepc (pc redirect)
+     // sstatus (frame[32]): SPP/SPIE/SIE not debugger-mutable; preserved.
+     return true;
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index b90b31bc..2c935c85 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -2319,6 +2319,27 @@ void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
+                          __ATOMIC_RELAXED);
+ }
  
--- Attach model: `debugd` issues an attach operation (a fifth
--  syscall, `sys_task_debug_attach(target_cap)`, or an attach flag on
--  first use — implementation choice, same semantics). Exactly one
-+- Attach model: `debugd` issues `sys_task_debug_attach(target_cap)` (the fifth
-+  reserved slot from §3 — no attach-flag alternative, so the §2 count is
-+  exact). Exactly one
-   debugger per target; second attach fails `EBUSY`. Detach (or
-   debugger death — see #191 supervision) resumes the target or, if
-   it was fault-stopped, applies the default disposition (terminate).
-@@ -126,9 +135,12 @@ Today a user fault terminates the task. With a debugger attached:
-   page faults / illegal instructions / alignment faults, and
-   task death (exit/terminate — reported as `W`/`X` stop replies).
- - While stopped, the target is descheduled and parked (never runs,
--  never consumes budget — §10 accounting). Stop events queue to
--  debugd in order; overflow policy is drop-oldest with a counter
--  (bounded memory — no unbounded queues in an RT kernel).
-+  never consumes budget — §10 accounting). Stops are taken only at
-+  user-mode boundaries (fault, breakpoint/trap return, or syscall-wait
-+  boundary with wait state preserved for resume-or-reap). Stop events queue
-+  to debugd in order; overflow policy is drop-oldest with a counter
-+  (bounded memory — no unbounded queues in an RT kernel), except task-death
-+  (`W`/`X`) events, which are never dropped (reserved slot).
- - Breakpoint instructions per arch (single source of truth):
-   x86_64 `int3` (0xCC), aarch64 `brk #0` (0xD4200000), riscv64
-   `ebreak` (0x00100073) / `c.ebreak` where C is enabled. The kernel
-@@ -185,8 +197,9 @@ Today a user fault terminates the task. With a debugger attached:
- - v1 adapter: UART-IPC byte stream (console/UART endpoint; shares
-   nothing with the early-boot polled serial of §8 — by the time
-   debugd runs, the interrupt driver owns the UART; concurrent
--  Logger output during a debug session is multiplexed by policy,
--  defaulting to session-priority with a ring spill).
-+  Logger output on the RSP stream is forbidden during a debug session
-+  (dedicated endpoint or Logger fully muted) — interleaved bytes would
-+  invalidate §5 framing).
- - v2 adapter (gated on Phase 9 netstack): TCP listener. The parser
-   and controller MUST compile and pass tests with the TCP adapter
-   absent (transport independence is unit-tested by building with a
-@@ -245,14 +258,18 @@ debugd doubles as the introspection engine — no second mechanism:
++// Issue #225: debugger detach resume. Task-context only (takes IrqGuard +
++// scheduler_lock_); the tick park path never takes g_bind_lock, so the
++// detach order (bind -> scheduler) cannot invert.
++void Scheduler::debugger_resume(TaskControlBlock &tgt) noexcept {
++    arch::IrqGuard irq_guard{};
++    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
++    __atomic_store_n(&tgt.debug_stop_requested, false, __ATOMIC_RELEASE);
++    if (!__atomic_load_n(&tgt.debug_parked, __ATOMIC_ACQUIRE))
++        return;
++    __atomic_store_n(&tgt.debug_parked, false, __ATOMIC_RELEASE);
++    // Resume only what the park hook still owns: BLOCKED with a debugger
++    // attached. Any other BLOCKED channel keeps its waiter.
++    if (tgt.state != TaskState::BLOCKED ||
++        __atomic_load_n(&tgt.debugger_id, __ATOMIC_ACQUIRE) == 0)
++        return;
++    // The park hook dequeued before blocking and enqueue_ready self-unlinks
++    // the EDF case: READY, never RUNNING (the runq owns READY tasks only).
++    tgt.state = TaskState::READY;
++    enqueue_ready(tgt);
++}
++
+ void Scheduler::on_tick() noexcept {
+     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
+     // body below is BSP-only (unchanged); the AP skips accounting,
+@@ -4001,8 +4022,8 @@ void Scheduler::rate_monotonic_schedule() noexcept {
+                 CONFIG_USER_SPACE_LIMIT) {
+             __atomic_store_n(&current->debug_stop_requested, false,
+                              __ATOMIC_RELEASE);
+-            current->debug_parked = true;
+-            current->has_utrap_frame = true;
++            __atomic_store_n(&current->debug_parked, true, __ATOMIC_RELEASE);
++            __atomic_store_n(&current->has_utrap_frame, true, __ATOMIC_RELEASE);
+             current->state = TaskState::BLOCKED;
+             dequeue_ready(*current);
+         }
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 02328f1e..a974460a 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -219,6 +219,13 @@ class Scheduler {
+     /// @param interrupted_pc PC at interrupt time (rip/sepc/elr).
+     static void note_debug_tick_pc(uint64_t interrupted_pc) noexcept;
  
- - debugd runs at the lowest debuggable priority under a bounded
-   budget (sporadic-server envelope); a chatty host cannot starve
--  HRT tasks. Stopped targets consume zero budget and hold no locks
--  the scheduler needs.
-+  HRT tasks. Stopped targets consume zero budget; because stops are
-+  deferred to user-mode boundaries (§4), a stopped target holds no
-+  scheduler locks, and terminating one runs the standard task-reaper
-+  path (IPC objects and kernel-side resources released).
- - Release builds MUST NOT expose §3–§4 (syscalls return `ENOSYS`,
-   attach impossible). A release binary with debugger hooks is a
-   safety defect, not a feature.
- - Watchdog interaction: a stopped target MUST NOT trip task
-   watchdogs (#41); the kernel suspends watchdog accounting for
--  debugger-stopped tasks and resumes on continue/detach.
-+  debugger-stopped tasks, marks them supervisor-visible as
-+  `DEBUG_STOPPED`, and on continue/detach realigns (never back-charges)
-+  their supervision windows.
- - Debugger death (crash/kill of debugd) MUST fail-safe: all its
-   targets detach with default dispositions applied (fault-stopped
-   targets terminate; cleanly-stopped targets resume). No orphaned
++    /// @brief Debugger detach resume (issue #225). Task-context only:
++    ///        takes IrqGuard + scheduler_lock_, clears a parked stop and
++    ///        re-queues the target as READY. No-ops unless the target is
++    ///        still debugger-parked and BLOCKED (other BLOCKED channels
++    ///        keep their waiter).
++    static void debugger_resume(TaskControlBlock &tgt) noexcept;
++
+     /// @brief Forces a reschedule — selects the next task and sets
+     /// up context switch.
+     static void reschedule() noexcept;
+diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
+index 266f80cf..a82bea01 100644
+--- a/src/kernel/test/test_debug_syscall.cpp
++++ b/src/kernel/test/test_debug_syscall.cpp
+@@ -181,9 +181,11 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
+         return nullptr;
+     }
+     if (!Scheduler::set_sched_policy(*t, SchedPolicy::FIXED)) {
+-        debug_reap_child(t);
++        // Unmap/free BEFORE reaping: reap deletes the TCB, so any later
++        // t->page_table_ read is use-after-free.
+         VMM::unmap_page_in_pml4(kSpinVa, t->page_table_);
+         PMM::free_page(phys);
++        debug_reap_child(t);
+         return nullptr;
+     }
+     me->add_child(t);
+@@ -426,8 +428,8 @@ JARVIS_TEST(debug_codec_synthetic, "PRE: none | POST: none") {
+     frame[31] = 0x41000000ULL; // sepc
+     JARVIS_ASSERT_FMT(debug::debug_blob_bytes() == 264, "blob size moved");
+     JARVIS_ASSERT_FMT(debug::debug_read_regs(t, blob, kQwords), "read failed");
+-    JARVIS_ASSERT_FMT(blob[9] == 0xAAAA && blob[10] == 0xBBBB &&
+-                          blob[11] == 0xCCCC && blob[12] == 0xDDDD &&
++    JARVIS_ASSERT_FMT(blob[10] == 0xAAAA && blob[11] == 0xBBBB &&
++                          blob[12] == 0xCCCC && blob[13] == 0xDDDD &&
+                           blob[32] == 0x41000000ULL && blob[0] == 0,
+                       "riscv mapping wrong");
+     blob[32] = 0x42000000ULL;
+@@ -498,7 +500,8 @@ JARVIS_TEST(debug_park_read_write_detach, "PRE: none | POST: none") {
+         debug_sleep_ms(2);
+     }
+     JARVIS_ASSERT_FMT(parked, "target never parked");
+-    JARVIS_ASSERT_FMT(t->state == TaskState::BLOCKED && t->debug_parked,
++    JARVIS_ASSERT_FMT(t->state == TaskState::BLOCKED &&
++                          __atomic_load_n(&t->debug_parked, __ATOMIC_ACQUIRE),
+                       "park markers wrong");
+     // Determinism: two reads of a parked task are identical.
+     uint64_t snap1[kQwords] = {};
+@@ -540,7 +543,8 @@ JARVIS_TEST(debug_park_read_write_detach, "PRE: none | POST: none") {
+     JARVIS_ASSERT_FMT(scratch[kPcIdx] == mod[kPcIdx], "pc slot disturbed");
+     JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                       "detach failed");
+-    JARVIS_ASSERT_FMT(t->debugger_id == 0 && !t->debug_parked,
++    JARVIS_ASSERT_FMT(__atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE) == 0 &&
++                          !__atomic_load_n(&t->debug_parked, __ATOMIC_ACQUIRE),
+                       "detach state wrong");
+     JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
+                           t->state == TaskState::READY,
+@@ -588,7 +592,8 @@ JARVIS_TEST(debug_mem_partial, "PRE: none | POST: none") {
+         debug_sleep_ms(2);
+     }
+     JARVIS_ASSERT_FMT(parked, "target never parked");
+-    JARVIS_ASSERT_FMT(t->state == TaskState::BLOCKED && t->debug_parked,
++    JARVIS_ASSERT_FMT(t->state == TaskState::BLOCKED &&
++                          __atomic_load_n(&t->debug_parked, __ATOMIC_ACQUIRE),
+                       "park markers wrong");
+     // Map the data page only now (post-park: stable by construction).
+     VMM::map_page_in_pml4(kVa, data_phys, true, false, t->page_table_);

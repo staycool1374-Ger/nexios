@@ -40,8 +40,11 @@ constinit bool Timer::calibrated_ = false;
 void Timer::init(uint32_t frequency_hz) {
     set_frequency(frequency_hz);
     IDT::register_handler(InterruptVector::TIMER,
-                          [](uint64_t, uint64_t, uint64_t rip) {
-                              handle_irq(rip);
+                          [](uint64_t, uint64_t, uint64_t elr) {
+                              handle_irq(elr);
+                              // Issue #225: record for the debugger park
+                              // (user-mode boundary by elr range).
+                              kernel::Scheduler::note_debug_tick_pc(elr);
                               kernel::Scheduler::on_tick();
                           });
 }

@@ -99,6 +99,7 @@ void register_pt_merge_tests();
 void register_cap_core_tests();
 void register_cap_lifecycle_tests();
 void register_cap_syscall_tests();
+void register_debug_syscall_tests();
 void register_cap_ipc_tests();
 void register_cap_untyped_tests();
 void register_cap_mmio_tests();
@@ -382,6 +383,7 @@ static void run_process_secure_exec_group() { register_secure_exec_tests(); }
 static void run_cap_core_group() { register_cap_core_tests(); }
 static void run_cap_lifecycle_group() { register_cap_lifecycle_tests(); }
 static void run_cap_syscall_group() { register_cap_syscall_tests(); }
+static void run_debug_syscall_group() { register_debug_syscall_tests(); }
 static void run_cap_ipc_group() { register_cap_ipc_tests(); }
 static void run_cap_untyped_group() { register_cap_untyped_tests(); }
 static void run_cap_mmio_group() { register_cap_mmio_tests(); }
@@ -695,6 +697,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_core", []() { run_cap_core_group(); }},
     {"cap_lifecycle", []() { run_cap_lifecycle_group(); }},
     {"cap_syscall", []() { run_cap_syscall_group(); }},
+    {"debug_syscall", []() { run_debug_syscall_group(); }},
     {"cap_ipc", []() { run_cap_ipc_group(); }},
     {"cap_untyped", []() { run_cap_untyped_group(); }},
     {"cap_mmio", []() { run_cap_mmio_group(); }},
@@ -1000,6 +1003,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_memory_isolation_group();
          run_memory_vmm_group();
          run_syscall_core_group();
+         run_debug_syscall_group();
          run_syscall_fuzz_group();
           run_syscall_fastpath_group();
           run_syscall_affinity_group();

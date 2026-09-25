@@ -50,8 +50,11 @@ inline constexpr uint64_t MTIMECMP_DISARMED = ~0ULL;
 void Timer::init(uint32_t frequency_hz) {
     set_frequency(frequency_hz);
     IDT::register_handler(InterruptVector::TIMER,
-                          [](uint64_t, uint64_t, uint64_t) {
+                          [](uint64_t, uint64_t, uint64_t sepc) {
                               handle_irq(0);
+                              // Issue #225: record for the debugger park
+                              // (user-mode boundary by sepc range).
+                              kernel::Scheduler::note_debug_tick_pc(sepc);
                               kernel::Scheduler::on_tick();
                           });
 }

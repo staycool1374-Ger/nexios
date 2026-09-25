@@ -113,9 +113,14 @@ enum class SyscallNumber : uint8_t {
     NANOSLEEP = 81,      ///< POSIX nanosleep via timer wheel (issue #76)
     TIMER_CREATE = 82,   ///< POSIX timer_create (issue #76)
     TIMERFD_CREATE = 83, ///< POSIX timerfd_create (issue #76)
-    ABI_VERSION = 84,    ///< query NEXIOS_ABI_MAJOR<<16|MINOR (issue #70)
+    ABI_VERSION = 84, ///< query NEXIOS_ABI_MAJOR<<16|MINOR (issue #70)
     TLS_SET = 85,        ///< set thread-local-storage base (issue #74)
-    MAX_SYSCALL = 86,
+    TASK_DEBUG_ATTACH = 86, ///< attach debugger (selector+id, returns handle; issue #225)
+    TASK_DEBUG_READ_REGS = 87, ///< read target regs via handle (issue #225)
+    TASK_DEBUG_WRITE_REGS = 88, ///< write target regs via handle (issue #225)
+    TASK_DEBUG_READ_MEM = 89, ///< read target memory via handle (issue #225)
+    TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
+    MAX_SYSCALL = 91,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -380,6 +385,16 @@ class Syscall {
                                     uint64_t *);
     static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
                                 uint64_t *);
+    static uint64_t sys_task_debug_attach(uint64_t, uint64_t, uint64_t,
+                                          uint64_t, uint64_t *);
+    static uint64_t sys_task_debug_read_regs(uint64_t, uint64_t, uint64_t,
+                                             uint64_t, uint64_t *);
+    static uint64_t sys_task_debug_write_regs(uint64_t, uint64_t, uint64_t,
+                                              uint64_t, uint64_t *);
+    static uint64_t sys_task_debug_read_mem(uint64_t, uint64_t, uint64_t,
+                                            uint64_t, uint64_t *);
+    static uint64_t sys_task_debug_write_mem(uint64_t, uint64_t, uint64_t,
+                                             uint64_t, uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -479,6 +494,21 @@ class Syscall {
             &Syscall::sys_timerfd_create, // 83 TIMERFD_CREATE (issue #76)
             &Syscall::sys_abi_version,   // 84 ABI_VERSION (issue #70)
             &Syscall::sys_tls_set,       // 85 TLS_SET (issue #74)
+#if defined(CONFIG_DEBUG)
+            &Syscall::sys_task_debug_attach,    // 86 (issue #225)
+            &Syscall::sys_task_debug_read_regs, // 87 (issue #225)
+            &Syscall::sys_task_debug_write_regs, // 88 (issue #225)
+            &Syscall::sys_task_debug_read_mem,  // 89 (issue #225)
+            &Syscall::sys_task_debug_write_mem, // 90 (issue #225)
+#else
+            // Release carve-out (spec docs/specs/debugd.md §10/N4): same
+            // numbers, no behavior contract — ENOSYS via sys_unimplemented.
+            &Syscall::sys_unimplemented, // 86
+            &Syscall::sys_unimplemented, // 87
+            &Syscall::sys_unimplemented, // 88
+            &Syscall::sys_unimplemented, // 89
+            &Syscall::sys_unimplemented, // 90
+#endif
     };
 };
 

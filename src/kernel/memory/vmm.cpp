@@ -718,6 +718,11 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
 
     pt[pt_idx] = phys_addr | flags;
 #endif
+    // Issue #225: invalidate like every other map/unmap site in this
+    // file. Harmless when these tables are not current (local INVLPG);
+    // required when they are (present→present remaps would otherwise
+    // serve stale TLB/PCID entries, globals included).
+    arch::ArchPageTable::tlb_flush(virt_addr);
 }
 
 void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {

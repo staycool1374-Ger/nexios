@@ -2308,6 +2308,38 @@ void Scheduler::credit_task_memory(uint64_t pages) {
 // on_tick — timer tick handler
 // ---------------------------------------------------------------------------
 
+// Issue #225: per-CPU interrupted-PC slot for the debugger park check.
+// Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.
+static uint64_t debug_tick_pc_[CONFIG_MAX_CPUS] = {};
+
+void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
+    uint64_t cpu = sched_cpu();
+    if (cpu < CONFIG_MAX_CPUS)
+        __atomic_store_n(&debug_tick_pc_[cpu], interrupted_pc,
+                         __ATOMIC_RELAXED);
+}
+
+// Issue #225: debugger detach resume. Task-context only (takes IrqGuard +
+// scheduler_lock_); the tick park path never takes g_bind_lock, so the
+// detach order (bind -> scheduler) cannot invert.
+void Scheduler::debugger_resume(TaskControlBlock &tgt) noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    __atomic_store_n(&tgt.debug_stop_requested, false, __ATOMIC_RELEASE);
+    if (!__atomic_load_n(&tgt.debug_parked, __ATOMIC_ACQUIRE))
+        return;
+    __atomic_store_n(&tgt.debug_parked, false, __ATOMIC_RELEASE);
+    // Resume only what the park hook still owns: BLOCKED with a debugger
+    // attached. Any other BLOCKED channel keeps its waiter.
+    if (tgt.state != TaskState::BLOCKED ||
+        __atomic_load_n(&tgt.debugger_id, __ATOMIC_ACQUIRE) == 0)
+        return;
+    // The park hook dequeued before blocking and enqueue_ready self-unlinks
+    // the EDF case: READY, never RUNNING (the runq owns READY tasks only).
+    tgt.state = TaskState::READY;
+    enqueue_ready(tgt);
+}
+
 void Scheduler::on_tick() noexcept {
     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
     // body below is BSP-only (unchanged); the AP skips accounting,
@@ -3967,6 +3999,35 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     auto *current = current_task();
     if (!current || current->magic != TaskControlBlock::TCB_MAGIC)
         return;
+
+    // Issue #225: debugger deferred-stop park. Runs inside the normal
+    // tick decision (lock held) so the battle-tested pick/switch flow
+    // below handles the parked task (including empty-queue/idle) exactly
+    // like any blocking path — no bespoke ISR switch dance (whose
+    // reschedule() arm can legitimately decide there is nothing to
+    // switch to yet, stranding a BLOCKED-marked task on CPU). The stop
+    // is taken only at a user-mode boundary: stop requested + RUNNING +
+    // recorded interrupted PC below the user limit (nested ticks record
+    // kernel PCs and skip for a later tick). Consumes the request; marks
+    // has_utrap_frame (the tick wrote the U-frame slot). Task-context
+    // on_tick() callers (tests) are unaffected: only flagged user tasks
+    // park, and none exist outside debugger tests.
+    {
+        uint64_t cpu = sched_cpu();
+        if (cpu < CONFIG_MAX_CPUS &&
+            __atomic_load_n(&current->debug_stop_requested,
+                            __ATOMIC_ACQUIRE) &&
+            current->state == TaskState::RUNNING &&
+            __atomic_load_n(&debug_tick_pc_[cpu], __ATOMIC_RELAXED) <
+                CONFIG_USER_SPACE_LIMIT) {
+            __atomic_store_n(&current->debug_stop_requested, false,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&current->debug_parked, true, __ATOMIC_RELEASE);
+            __atomic_store_n(&current->has_utrap_frame, true, __ATOMIC_RELEASE);
+            current->state = TaskState::BLOCKED;
+            dequeue_ready(*current);
+        }
+    }
 
 #if CONFIG_CANARY_GUARD
     // v0.4.0 MP-3: per-tick kernel-stack canary check.  Pure read under the

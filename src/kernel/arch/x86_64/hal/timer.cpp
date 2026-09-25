@@ -124,6 +124,12 @@ void Timer::init(uint32_t frequency_hz) {
                                           APIC::TPR_CLASS_ACCEPT_ALL;
                                       APIC::tpr_restore(
                                           APIC::TPR_CLASS_ACCEPT_ALL);
+                                      // Issue #225: record the interrupted
+                                      // PC for the debugger park check in
+                                      // rate_monotonic_schedule (covers AP
+                                      // tasks too).
+                                      kernel::Scheduler::note_debug_tick_pc(
+                                          rip);
                                       if (arch::cpu_index() != 0) {
                                           kernel::Scheduler::ap_tick();
                                           if (arch::APIC::is_timer_active())
@@ -152,6 +158,8 @@ void Timer::init(uint32_t frequency_hz) {
     IDT::register_handler(InterruptVector::TIMER,
                           [](uint64_t, uint64_t, uint64_t rip) {
                               handle_irq(rip);
+                              // Issue #225: record for the debugger park.
+                              kernel::Scheduler::note_debug_tick_pc(rip);
                               kernel::Scheduler::on_tick();
                           });
 }

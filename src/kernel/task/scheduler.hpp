@@ -202,6 +202,30 @@ class Scheduler {
     /// @brief Called on each timer tick; updates scheduling state.
     static void on_tick() noexcept;
 
+    /// @brief Debugger deferred-stop park (issue #225, spec
+    ///        docs/specs/debugd.md §4). Records the interrupted PC for
+    ///        this CPU; rate_monotonic_schedule() parks current when it
+    ///        carries a stop request, is RUNNING, and the recorded PC is
+    ///        a user VA (a user-mode boundary by construction: nested
+    ///        ticks and trampolines record kernel PCs and are skipped
+    ///        for a later tick). Called from each arch's timer handler
+    ///        before on_tick()/ap_tick(). Lock-free single-u64 store
+    ///        (own CPU writes, own CPU tick reads); a nested tick that
+    ///        overwrites it with a kernel PC fails closed toward
+    ///        skipping. Never parks non-RUNNING tasks (their frames
+    ///        are stable and readable without parking). AP ticks share
+    ///        the path (user tasks are CPU0-pinned per #25 C1, so the
+    ///        check is naturally dormant elsewhere).
+    /// @param interrupted_pc PC at interrupt time (rip/sepc/elr).
+    static void note_debug_tick_pc(uint64_t interrupted_pc) noexcept;
+
+    /// @brief Debugger detach resume (issue #225). Task-context only:
+    ///        takes IrqGuard + scheduler_lock_, clears a parked stop and
+    ///        re-queues the target as READY. No-ops unless the target is
+    ///        still debugger-parked and BLOCKED (other BLOCKED channels
+    ///        keep their waiter).
+    static void debugger_resume(TaskControlBlock &tgt) noexcept;
+
     /// @brief Forces a reschedule — selects the next task and sets
     /// up context switch.
     static void reschedule() noexcept;

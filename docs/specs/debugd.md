@@ -113,12 +113,27 @@ Raw pid-to-handle lookup does not exist.
   capability AND the target is in a debuggable state (alive,
   non-kernel; kernel tasks and PID 1's reaper internals reject with
   `EPERM`). Calls from interrupt context are rejected.
-- Syscall numbers: allocated from the caps range (51–60 per the live
-  table in syscall-abi-picolibc.md §0), frozen under ABI v1 like the
-  rest of the table, with an explicit debug-only carve-out (release builds
-  return `ENOSYS` per §10: same numbers, no behavior contract). Exact
-  numbers assigned at implementation time; this spec reserves five
-  contiguous slots (four data-plane + attach).
+- Syscall numbers: allocated from the free tail (86–90: ATTACH,
+  READ_REGS, WRITE_REGS, READ_MEM, WRITE_MEM), frozen under ABI v1
+  like the rest of the table, with an explicit debug-only carve-out
+  (release builds return `ENOSYS` per §10: same numbers, no behavior
+  contract). (Correction, 2026-09-25: the draft's "caps range 51–60"
+  was stale — that range holds CAP/IRQ/IOMMU/MMIO/FRAME/DEATH/PAGER.)
+  Exact numbers assigned at implementation time; this spec reserves
+  five contiguous slots (four data-plane + attach).
+- Attach selectors (exact-five preservation): `attach(0, handle)` toggles
+  detach for a valid owned handle (the only detach in Phase 1);
+  `attach(1, child-pid)` mints a handle on parenthood proof (launcher
+  claim); supervisor grants arrive in Phase 4. Raw pid-to-handle lookup
+  does not exist.
+- Stops are taken at user-mode boundaries as observed at timer ticks:
+  the tick records the interrupted PC per CPU, and the scheduler parks
+  current when it carries a stop request, is RUNNING, and the recorded
+  PC is below the user-space limit (nested ticks record kernel PCs and
+  skip). No trap-epilogue surgery; no scheduler-lock taking in ISR
+  context beyond what the tick already does.
+- Copy-side faults (caller buffer) report EIO, distinct from walker-side
+  EFAULT (unmapped target): tells the debugger which side faulted.
 
 ## 4. Stop-event routing (normative)
 

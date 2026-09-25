@@ -8,13 +8,12 @@ clion/.idea/
 initrd.cpio
 iso/boot/kernel.elf
 nexios-rtos.iso
-debug/
+/debug/
 release/
 jarvis/
 nexios/
 userspace/*.elf
-debug/
-release/
+/release/
 pico.save
 .idea/
 __pycache__/

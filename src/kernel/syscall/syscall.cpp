@@ -126,6 +126,12 @@ int syscall_path_open(const char *path, uint64_t flags) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
         return static_cast<uint64_t>(-1);
 
+    // Issue #225: every syscall proves a user-mode trap frame exists for
+    // the caller (monotonic has_utrap_frame for debugger register reads).
+    // Atomic: debugger data calls on other tasks load this flag (cf. S2).
+    if (TaskControlBlock *t = syscall_task())
+        __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
+
 #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_X86_64)
     // MP-4 (SMAP) AC-leak detector: AC must be 0 on syscall entry.  A leaked
     // AC=1 (a missed clac in a user-access path) would otherwise be handed to
@@ -162,6 +168,11 @@ int syscall_path_open(const char *path, uint64_t flags) {
                               uint64_t arg2, uint64_t arg3, uint64_t *regs) {
     if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
         return static_cast<uint64_t>(-1);
+    // Issue #225: same U-trap proof as handle() (fast-path syscalls trap
+    // identically; a yield-only spinner must still become readable).
+    // Atomic: debugger data calls on other tasks load this flag (cf. S2).
+    if (TaskControlBlock *t = syscall_task())
+        __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
     // Lean path: bounds check only, then direct table dispatch.  The caller
     // guarantees `number` is a FAST member (no user-pointer dereference).
     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
