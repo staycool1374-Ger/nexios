@@ -550,3 +550,7 @@
 - **Adapted:** `build-riscv64` job (apt gcc-riscv64-linux-gnu + qemu-system-misc + expect; verify; `make debug ARCH=riscv64`; `make test-full riscv64 debug`; BIN artifact); comment corrected.
 - **Measured:** no test runs (CI-only change — no history rows); SIL 3 APPROVED zero findings (audits/report-2026-09-25T07:40:04Z.md).
 - **Style re-surface:** N/A (YAML only).
+
+### #222 follow-up — CI apt gaps (2026-09-25, main)
+- **Learned:** (1) On Ubuntu, `gcc-<triplet>` ships ONLY the C compiler — the kernel builds C++ (`riscv64-linux-gnu-g++: command not found` killed the first CI run). Always install AND verify the exact binaries the build invokes (CC and CXX and objcopy), never just `gcc --version`. My verify step checked gcc/objcopy/qemu but not g++ — verify every tool or the check is theater. (2) First CI runs fail fast and cheap: apt/toolchain gaps surface in minutes, long before TCG walls matter. (3) Pre-existing red (x86 meson gap, failing since the #152 push) must be fixed alongside, or a new green job can never prove the workflow green — I filed it as #223 and fixed both jobs' shared picolibc prerequisite in the same pass.
+- **Adapted:** `g++-riscv64-linux-gnu` + g++ verify in build-riscv64; `meson ninja-build` in both jobs' apt lists.

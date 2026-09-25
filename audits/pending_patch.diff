@@ -1,61 +1,34 @@
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-index b2d4fb60..c4dfc276 100644
+index c4dfc276..2dec39f8 100644
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -62,7 +62,7 @@ jobs:
+@@ -27,7 +27,9 @@ jobs:
+           qemu-system-x86 \
+           ovmf \
+           expect \
+-          wget
++          wget \
++          meson \
++          ninja-build
  
-     # NOTE: Full test suites (selftest/all) are run manually before a
-     # release — CI only verifies that the kernel compiles and links into
--    # a bootable ISO on all three architectures.
-+    # a bootable ISO for x86_64 (the riscv64 job below covers that arch).
+     - name: Locate OVMF firmware
+       id: ovmf
+@@ -98,13 +100,17 @@ jobs:
+         sudo apt-get install -y \
+           build-essential \
+           gcc-riscv64-linux-gnu \
++          g++-riscv64-linux-gnu \
+           qemu-system-misc \
+           expect \
+-          wget
++          wget \
++          meson \
++          ninja-build
  
-     - name: Build Kernel (x86_64 Debug ISO)
-       run: make debug QEMU_UEFI=${{ steps.ovmf.outputs.firmware }}
-@@ -76,3 +76,47 @@ jobs:
-         name: nexios-x86_64-debug-iso
-         path: debug/nexios-rtos.iso
-         retention-days: 7
-+
-+  # Issue #222: riscv64 toolchain + gate. Separate job (not part of
-+  # `build`) so the fast x86_64 gate stays independent of the slower
-+  # riscv64 TCG wall time (~270 s per class measured). riscv64 emits a
-+  # raw BIN (no GRUB ISO — see #207), boots with QEMU `-bios default`
-+  # (no firmware), and needs no grub/xorriso/mtools.
-+  build-riscv64:
-+    runs-on: ubuntu-24.04
-+    # Two gate classes + rebuild under TCG: size generously (locally
-+    # ~270 s wall per class; GH runners are typically slower).
-+    timeout-minutes: 30
-+
-+    steps:
-+    - name: Checkout Code
-+      uses: actions/checkout@v4
-+
-+    - name: Install riscv64 Toolchain and Dependencies
-+      run: |
-+        sudo apt-get update
-+        sudo apt-get install -y \
-+          build-essential \
-+          gcc-riscv64-linux-gnu \
-+          qemu-system-misc \
-+          expect \
-+          wget
-+
-+    - name: Verify riscv64 toolchain
-+      run: |
-+        riscv64-linux-gnu-gcc --version
-+        riscv64-linux-gnu-objcopy --version | head -n 1
-+        qemu-system-riscv64 --version | head -n 1
-+
-+    - name: Build Kernel (riscv64 Debug BIN)
-+      run: make debug ARCH=riscv64
-+
-+    - name: Run riscv64 gate (arch_riscv64 + scheduler_zombie)
-+      run: make test-full riscv64 debug
-+
-+    - name: Upload riscv64 Debug BIN
-+      uses: actions/upload-artifact@v4
-+      with:
-+        name: nexios-riscv64-debug-bin
-+        path: build/kernel-riscv64.bin
-+        retention-days: 7
+     - name: Verify riscv64 toolchain
+       run: |
+         riscv64-linux-gnu-gcc --version
++        riscv64-linux-gnu-g++ --version | head -n 1
+         riscv64-linux-gnu-objcopy --version | head -n 1
+         qemu-system-riscv64 --version | head -n 1
+ 
