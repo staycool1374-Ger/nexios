@@ -16,6 +16,12 @@ SECTIONS
         *(.eh_frame_hdr)
         *(.init_array)
         *(.init_array.*)
+        /* Issue #222 follow-up: same NOTE-orphan hardening as riscv64.
+         * Debian drivers inject --build-id / .note.gnu.property while
+         * bare-metal toolchains emit neither; unassigned orphans are a
+         * proven layout hazard under custom PHDRS + AT() scripts. */
+        *(.note*)
+        *(.note.*)
     }
 
     . = 0x40080000;

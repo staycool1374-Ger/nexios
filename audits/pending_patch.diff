@@ -1,19 +1,34 @@
-diff --git a/linker/linker_riscv64.ld b/linker/linker_riscv64.ld
-index 0e394d53..507bce67 100644
---- a/linker/linker_riscv64.ld
-+++ b/linker/linker_riscv64.ld
-@@ -16,6 +16,14 @@ SECTIONS
+diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
+index ed9239f4..47bd1314 100644
+--- a/linker/linker_aarch64.ld
++++ b/linker/linker_aarch64.ld
+@@ -16,6 +16,12 @@ SECTIONS
          *(.eh_frame_hdr)
          *(.init_array)
          *(.init_array.*)
-+        /* Issue #222: Debian/Ubuntu drivers inject --build-id (plus
-+         * .note.gnu.property in every object) while the bare-metal elf
-+         * toolchain emits neither.  Unassigned NOTE orphans derail this
-+         * script's custom PHDRS + AT() file-offset assignment on some
-+         * ld versions (4GB sparse ELF, overlapping ranges).  The kernel
-+         * never reads notes — discard them toolchain-independently. */
++        /* Issue #222 follow-up: same NOTE-orphan hardening as riscv64.
++         * Debian drivers inject --build-id / .note.gnu.property while
++         * bare-metal toolchains emit neither; unassigned orphans are a
++         * proven layout hazard under custom PHDRS + AT() scripts. */
 +        *(.note*)
 +        *(.note.*)
      }
  
-     /* Physical load address (QEMU virt RAM starts at 0x80000000) */
+     . = 0x40080000;
+diff --git a/linker/linker_x86_64.ld b/linker/linker_x86_64.ld
+index defcb7ef..d3fc52b7 100644
+--- a/linker/linker_x86_64.ld
++++ b/linker/linker_x86_64.ld
+@@ -18,6 +18,12 @@ SECTIONS
+         *(.eh_frame_hdr)
+         *(.init_array)
+         *(.init_array.*)
++        /* Issue #222 follow-up: same NOTE-orphan hardening as riscv64.
++         * Debian drivers inject --build-id / .note.gnu.property while
++         * bare-metal toolchains emit neither; unassigned orphans are a
++         * proven layout hazard under custom PHDRS + AT() scripts. */
++        *(.note*)
++        *(.note.*)
+     }
+ 
+     .boot_text : ALIGN(4K)
