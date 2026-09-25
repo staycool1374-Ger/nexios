@@ -44,6 +44,18 @@ def patch_crc(elf_path):
 
         if text_offset is None:
             print("ERROR: .text section not found")
+            print(f"  (e_shnum={e_shnum} e_shstrndx={e_shstrndx} "
+                  f"e_shoff=0x{e_shoff:X}) sections:")
+            for i in range(min(e_shnum, 60)):
+                sh_off = e_shoff + i * e_shentsize
+                sh_name_idx = struct.unpack_from('<I', data, sh_off)[0]
+                try:
+                    end = shstrtab.index(b'\0', sh_name_idx)
+                    sh_name = shstrtab[sh_name_idx:end].decode(
+                        'utf-8', errors='replace')
+                except ValueError:
+                    sh_name = f"<bad idx {sh_name_idx}>"
+                print(f"    [{i}] {sh_name}")
             return 1
 
         # CRC32 of .text section (skip first 8 bytes for the start marker)
