@@ -1,34 +1,971 @@
-diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
-index ed9239f4..47bd1314 100644
---- a/linker/linker_aarch64.ld
-+++ b/linker/linker_aarch64.ld
-@@ -16,6 +16,12 @@ SECTIONS
-         *(.eh_frame_hdr)
-         *(.init_array)
-         *(.init_array.*)
-+        /* Issue #222 follow-up: same NOTE-orphan hardening as riscv64.
-+         * Debian drivers inject --build-id / .note.gnu.property while
-+         * bare-metal toolchains emit neither; unassigned orphans are a
-+         * proven layout hazard under custom PHDRS + AT() scripts. */
-+        *(.note*)
-+        *(.note.*)
-     }
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 2dec39f8..f419cbaf 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -72,6 +72,9 @@ jobs:
+     - name: Build Kernel (x86_64 Release ISO)
+       run: make release QEMU_UEFI=${{ steps.ovmf.outputs.firmware }}
  
-     . = 0x40080000;
-diff --git a/linker/linker_x86_64.ld b/linker/linker_x86_64.ld
-index defcb7ef..d3fc52b7 100644
---- a/linker/linker_x86_64.ld
-+++ b/linker/linker_x86_64.ld
-@@ -18,6 +18,12 @@ SECTIONS
-         *(.eh_frame_hdr)
-         *(.init_array)
-         *(.init_array.*)
-+        /* Issue #222 follow-up: same NOTE-orphan hardening as riscv64.
-+         * Debian drivers inject --build-id / .note.gnu.property while
-+         * bare-metal toolchains emit neither; unassigned orphans are a
-+         * proven layout hazard under custom PHDRS + AT() scripts. */
-+        *(.note*)
-+        *(.note.*)
-     }
++    - name: Host unit tests (debugd RSP conformance, issue #224)
++      run: make test-debugd-host
++
+     - name: Upload x86_64 Debug ISO
+       uses: actions/upload-artifact@v4
+       with:
+diff --git a/Makefile b/Makefile
+index ed49e141..c2a91cd8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1371,9 +1371,39 @@ clang-tidy:
+ 		printf '  %-7s %s\n' 'TIDY' 'clang-tidy not found, skipping'; \
+ 	fi
  
-     .boot_text : ALIGN(4K)
++# ------------------------------------------------------------------------------
++# debugd host unit tests (issue #224, spec docs/specs/debugd.md §11)
++# Host-runnable RSP conformance oracle: needs only a C++20 host compiler
++# (Xcode/homebrew c++ on macOS, g++ on Linux). No QEMU, no target
++# toolchain, no gtest. Target C++ runtime for the daemon itself is a
++# Phase-4 prerequisite (no target libstdc++ exists yet); until then the
++# headers stay portable via the hosted-header ban below (only C++20
++# freestanding headers: array/span/string_view/cstdint/cstddef).
++# ------------------------------------------------------------------------------
++.PHONY: test-debugd-host
++test-debugd-host:
++	@mkdir -p build/host
++	@printf '  %-7s %s\n' 'HOST' 'debugd RSP unit tests…'
++	@CXX_HOST="$(CXX_HOST)"; \
++	if [ -z "$$CXX_HOST" ]; then CXX_HOST=c++; fi; \
++	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror \
++	    -I tools/debugd/include -I tools/debugd/tests \
++	    tools/debugd/tests/test_main.cpp -o build/host/test_debugd && \
++	    ./build/host/test_debugd && \
++	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror -fsanitize=address,undefined \
++	    -I tools/debugd/include -I tools/debugd/tests \
++	    tools/debugd/tests/test_main.cpp -o build/host/test_debugd_asan && \
++	    ./build/host/test_debugd_asan
++	@printf '  %-7s %s\n' 'HOST' 'hosted-header ban (freestanding portability)…'
++	@if grep -rnE '#include <(vector|string|iostream|map|set|list|deque|forward_list|functional|memory|sstream|fstream|cstdio|cstring|cstdlib|new|typeinfo|exception|stdexcept|system_error|thread|mutex|future|chrono|ratio|optional|variant|tuple|bitset|iterator|limits|numeric|random|regex|algorithm)>' \
++	    tools/debugd/include/; then \
++	    printf '  %-7s %s\n' 'ERROR' 'hosted header in tools/debugd/include'; exit 1; \
++	fi
++	@printf '  %-7s %s\n' 'HOST' 'debugd host tests passed.'
++
+ # ------------------------------------------------------------------------------
+ # Module audit: cross-reference a .hpp/.cpp pair for consistency
+-# Example: make audit HPP=src/kernel/task/scheduler.hpp CPP=src/kernel/task/scheduler.cpp
++# Example: make audit HPP=src/kernel/task/scheduler.hpp CPP=src/kernel/task/task.cpp
+ # ------------------------------------------------------------------------------
+ .PHONY: audit
+ audit:
+diff --git a/tools/debugd/include/gdb_rsp.hpp b/tools/debugd/include/gdb_rsp.hpp
+new file mode 100644
+index 00000000..973d2aaf
+--- /dev/null
++++ b/tools/debugd/include/gdb_rsp.hpp
+@@ -0,0 +1,324 @@
++/*
++ * NexIOS RTOS — debugd Phase 3 (issue #224)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * GDB Remote Serial Protocol parser core (spec docs/specs/debugd.md §5).
++ * Header-only, zero-heap: compiles under host g++ AND the freestanding
++ * cross toolchain. Allowed headers only: <span> <string_view> <array>
++ * <cstdint> <cstddef> (all C++20 freestanding).
++ */
++
++#pragma once
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string_view>
++
++namespace debugd {
++
++/// @brief Hard packet-size cap (spec §5). Never grown; oversize input is
++///        rejected, never reallocated.
++constexpr std::size_t kMaxPacket = 4096;
++
++/// @brief Target architectures for register-blob layouts (spec §5).
++enum class Arch : std::uint8_t { kX86_64, kAArch64, kRiscv64 };
++
++/// @brief G-packet blob sizes in bytes (standard GDB layouts):
++///        x86_64 Linux: 16 GPRs + rip + eflags + segregs;
++///        AArch64: x0-x30 + sp + pc + cpsr; RISC-V: x0-x31 + pc.
++constexpr std::size_t RegBlobSize(Arch arch) noexcept {
++    switch (arch) {
++    case Arch::kX86_64:
++        return 16 * 8 + 8 + 4 + 6 * 4;
++    case Arch::kAArch64:
++        return 34 * 8;
++    case Arch::kRiscv64:
++        return 33 * 8;
++    }
++    return 0;
++}
++
++/// @brief Byte-feed result (spec §5 framing). Note on kBadChecksum:
++///        oversize rejection stays in kData (packet continues) while a
++///        checksum mismatch drops to Idle — both converge on the next
++///        '$' (restart) or '#' terminator, so callers may treat the
++///        code uniformly and always answer '-'.
++enum class FeedResult : std::uint8_t {
++    kNeedMore,    // packet incomplete, feed more bytes
++    kPacket,      // complete $data#cs with valid checksum (see packet())
++    kAck,         // '+' from the peer
++    kNack,        // '-' from the peer (caller retransmits last reply)
++    kInterrupted, // Ctrl-C (0x03) — stop the current continue
++    kBadChecksum, // #cs mismatch (caller sends '-' and resyncs)
++};
++
++/// @brief Incremental RSP packet parser. Garbage resyncs: any '$'
++///        restarts a packet, anything outside a packet is ignored
++///        except '+', '-', and 0x03.
++class RspParser {
++  public:
++    RspParser() noexcept { reset(); }
++
++    void reset() noexcept {
++        state_ = State::kIdle;
++        len_ = 0;
++        checksum_ = 0;
++        digits_ = 0;
++    }
++
++    FeedResult feed(char c) noexcept {
++        switch (state_) {
++        case State::kIdle:
++            if (c == '$') {
++                state_ = State::kData;
++                len_ = 0;
++                checksum_ = 0;
++                digits_ = 0;
++            } else if (c == '+') {
++                return FeedResult::kAck;
++            } else if (c == '-') {
++                return FeedResult::kNack;
++            } else if (c == '\x03') {
++                return FeedResult::kInterrupted;
++            }
++            return FeedResult::kNeedMore;
++        case State::kData:
++            if (c == '$') { // nested start: restart, never nest
++                len_ = 0;
++                checksum_ = 0;
++                digits_ = 0;
++                return FeedResult::kNeedMore;
++            }
++            if (c == '#') {
++                state_ = State::kSum0;
++                digits_ = 0;
++                return FeedResult::kNeedMore;
++            }
++            if (len_ >= kMaxPacket)
++                return FeedResult::kBadChecksum; // oversize: reject, no grow
++            buf_[len_++] =
++                static_cast<char>(static_cast<unsigned char>(c));
++            checksum_ =
++                static_cast<std::uint8_t>(checksum_ + static_cast<std::uint8_t>(c));
++            return FeedResult::kNeedMore;
++        case State::kSum0:
++        case State::kSum1: {
++            if (c == '$') { // start beats checksum: restart (resync rule)
++                state_ = State::kData;
++                len_ = 0;
++                checksum_ = 0;
++                digits_ = 0;
++                return FeedResult::kNeedMore;
++            }
++            int v = HexVal(c);
++            if (v < 0) {
++                reset();
++                return FeedResult::kNeedMore; // garbage in checksum: resync
++            }
++            digits_ = static_cast<std::uint8_t>((digits_ << 4) | v);
++            if (state_ == State::kSum0) {
++                state_ = State::kSum1;
++                return FeedResult::kNeedMore;
++            }
++            // Terminal: drop to Idle but PRESERVE len_/buf_ so packet()
++            // stays valid until the next feed (reset() would wipe it).
++            bool ok = (digits_ == checksum_);
++            state_ = State::kIdle;
++            return ok ? FeedResult::kPacket : FeedResult::kBadChecksum;
++        }
++        }
++        return FeedResult::kNeedMore;
++    }
++
++    /// @brief Payload of the last kPacket (valid until next feed/reset).
++    std::string_view packet() const noexcept {
++        return std::string_view(buf_.data(), len_);
++    }
++
++    static int HexVal(char c) noexcept {
++        if (c >= '0' && c <= '9')
++            return c - '0';
++        if (c >= 'a' && c <= 'f')
++            return c - 'a' + 10;
++        if (c >= 'A' && c <= 'F')
++            return c - 'A' + 10;
++        return -1;
++    }
++
++    /// @brief Checksum of a payload (sum of bytes mod 256).
++    static std::uint8_t Checksum(std::string_view payload) noexcept {
++        std::uint8_t sum = 0;
++        for (char c : payload)
++            sum = static_cast<std::uint8_t>(
++                sum + static_cast<std::uint8_t>(c));
++        return sum;
++    }
++
++  private:
++    enum class State : std::uint8_t { kIdle, kData, kSum0, kSum1 };
++    State state_ = State::kIdle;
++    std::array<char, kMaxPacket> buf_{};
++    std::size_t len_ = 0;
++    std::uint8_t checksum_ = 0;
++    std::uint8_t digits_ = 0;
++};
++
++/// @brief Parsed RSP command (spec §5 subset).
++struct Command {
++    enum class Type : std::uint8_t {
++        kUnknown,
++        kStopQuery,   // ?
++        kReadRegs,    // g
++        kWriteRegs,   // G<hex>
++        kReadMem,     // m<addr>,<len>
++        kWriteMem,    // M<addr>,<len>:<hex>
++        kContinue,    // c[addr]
++        kStep,        // s[addr]
++        kBreakSet,    // Z0,addr,kind
++        kBreakClear,  // z0,addr,kind
++        kQSupported,  // qSupported...
++        kSetThread,   // H<op><tid>
++        kDetach,      // D
++        kKill,        // k (detach + terminate target, never kernel kill)
++    };
++    Type type = Type::kUnknown;
++    std::uint64_t addr = 0; // m/M/c/s/Z0/z0 address (or thread op for H)
++    std::uint64_t len = 0;  // m/M length, Z0/z0 kind
++    std::string_view data{}; // G hex / M hex payload (view into packet)
++};
++
++/// @brief Parse an unsigned hex integer; returns false on empty/garbage
++///        or more than 16 digits (64-bit addresses never wrap silently).
++inline bool ParseHexUint(std::string_view s, std::uint64_t &out) noexcept {
++    if (s.empty() || s.size() > 16)
++        return false;
++    std::uint64_t v = 0;
++    for (char c : s) {
++        int d = RspParser::HexVal(c);
++        if (d < 0)
++            return false;
++        v = (v << 4) | static_cast<std::uint64_t>(d);
++    }
++    out = v;
++    return true;
++}
++
++/// @brief Parse a packet payload into a Command. `payload` must outlive
++///        the returned Command (data views into it).
++inline bool ParseCommand(std::string_view payload, Command &out) noexcept {
++    out = Command{};
++    if (payload.empty())
++        return false;
++    char op = payload[0];
++    std::string_view rest = payload.substr(1);
++    switch (op) {
++    case '?':
++        out.type = Command::Type::kStopQuery;
++        return rest.empty();
++    case 'g':
++        out.type = Command::Type::kReadRegs;
++        return rest.empty();
++    case 'G':
++        out.type = Command::Type::kWriteRegs;
++        out.data = rest;
++        return !rest.empty();
++    case 'm': {
++        auto comma = rest.find(',');
++        if (comma == std::string_view::npos)
++            return false;
++        out.type = Command::Type::kReadMem;
++        return ParseHexUint(rest.substr(0, comma), out.addr) &&
++               ParseHexUint(rest.substr(comma + 1), out.len) && out.len > 0;
++    }
++    case 'M': {
++        auto comma = rest.find(',');
++        auto colon = rest.find(':');
++        if (comma == std::string_view::npos || colon == std::string_view::npos ||
++            colon < comma)
++            return false;
++        out.type = Command::Type::kWriteMem;
++        out.data = rest.substr(colon + 1);
++        return ParseHexUint(rest.substr(0, comma), out.addr) &&
++               ParseHexUint(rest.substr(comma + 1, colon - comma - 1),
++                            out.len) &&
++               out.len > 0 && out.data.size() == out.len * 2;
++    }
++    case 'c':
++        out.type = Command::Type::kContinue;
++        return rest.empty() || ParseHexUint(rest, out.addr);
++    case 's':
++        out.type = Command::Type::kStep;
++        return rest.empty() || ParseHexUint(rest, out.addr);
++    case 'Z':
++    case 'z': {
++        // Z0,addr,kind / z0,addr,kind (only type 0 specified).
++        if (rest.size() < 2 || rest[0] != '0' || rest[1] != ',')
++            return false;
++        auto comma = rest.find(',', 2);
++        if (comma == std::string_view::npos)
++            return false;
++        out.type =
++            (op == 'Z') ? Command::Type::kBreakSet : Command::Type::kBreakClear;
++        return ParseHexUint(rest.substr(2, comma - 2), out.addr) &&
++               ParseHexUint(rest.substr(comma + 1), out.len);
++    }
++    case 'q':
++        if (rest.substr(0, 9) == "Supported") {
++            out.type = Command::Type::kQSupported;
++            return true;
++        }
++        return false;
++    case 'H':
++        if (rest.size() < 2)
++            return false;
++        out.type = Command::Type::kSetThread;
++        out.addr = static_cast<std::uint64_t>(rest[0]); // op char
++        out.data = rest.substr(1);                      // thread id
++        return true;
++    case 'D':
++        out.type = Command::Type::kDetach;
++        return rest.empty();
++    case 'k':
++        out.type = Command::Type::kKill;
++        return rest.empty();
++    default:
++        return false;
++    }
++}
++
++/// @brief Encode bytes as lowercase hex into `out`; returns chars written.
++inline std::size_t EncodeHex(std::span<const std::uint8_t> in,
++                             std::span<char> out) noexcept {
++    static constexpr char kDigits[] = "0123456789abcdef";
++    if (out.size() < in.size() * 2)
++        return 0;
++    for (std::size_t i = 0; i < in.size(); ++i) {
++        out[2 * i] = kDigits[in[i] >> 4];
++        out[2 * i + 1] = kDigits[in[i] & 0xF];
++    }
++    return in.size() * 2;
++}
++
++/// @brief Decode hex into bytes; returns bytes written, 0 on error.
++inline std::size_t DecodeHex(std::string_view in,
++                             std::span<std::uint8_t> out) noexcept {
++    if (in.size() % 2 != 0 || out.size() < in.size() / 2)
++        return 0;
++    for (std::size_t i = 0; i < in.size() / 2; ++i) {
++        int hi = RspParser::HexVal(in[2 * i]);
++        int lo = RspParser::HexVal(in[2 * i + 1]);
++        if (hi < 0 || lo < 0)
++            return 0;
++        out[i] = static_cast<std::uint8_t>((hi << 4) | lo);
++    }
++    return in.size() / 2;
++}
++
++/// @brief Fixed qSupported reply (spec §5: PacketSize + swbreak only).
++inline std::string_view QSupportedReply() noexcept {
++    return "PacketSize=1000;qXfer:features:read-;swbreak+";
++}
++
++} // namespace debugd
+diff --git a/tools/debugd/include/target_controller.hpp b/tools/debugd/include/target_controller.hpp
+new file mode 100644
+index 00000000..899312fc
+--- /dev/null
++++ b/tools/debugd/include/target_controller.hpp
+@@ -0,0 +1,150 @@
++/*
++ * NexIOS RTOS — debugd Phase 3 (issue #224)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * Task controller abstraction (spec docs/specs/debugd.md §6): pure
++ * interface between RSP verbs and the §3 debug syscalls, breakpoint
++ * shadow table, total error mapping. Header-only, zero-heap,
++ * freestanding-clean (same allowed headers as gdb_rsp.hpp).
++ */
++
++#pragma once
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string_view>
++
++#include "gdb_rsp.hpp"
++
++namespace debugd {
++
++/// @brief Kernel-style errno subset used across the controller boundary.
++///        Values mirror POSIX numerics for host-test familiarity.
++enum class DbgErr : int {
++    kOk = 0,
++    kGeneric = 1,   // E01
++    kBadHandle = 9, // EBADF
++    kNoTarget = 3,  // ESRCH
++    kDenied = 1,    // EPERM (shares E01 wire code by design)
++    kFault = 14,    // EFAULT (partial copies report bytes done)
++    kBusy = 16,     // EBUSY (second attach)
++};
++
++/// @brief Total error mapping (spec §6): every errno has a defined RSP
++///        encoding; empty reply means unsupported — never a dropped packet.
++///        EFAULT is E0E (errno 14), NOT empty: a real fault must read as an
++///        error, or the host mistakes it for "unsupported" and disables
++///        memory access. (Partial copies bypass this via the int-count
++///        path and report bytes done.)
++inline std::string_view EncodeErrno(DbgErr e) noexcept {
++    switch (e) {
++    case DbgErr::kOk:
++        return "OK";
++    case DbgErr::kFault:
++        return "E0E";
++    default:
++        return "E01";
++    }
++}
++
++/// @brief Pure task-control interface (spec §6). Implementations bridge
++///        to the §3 syscalls (production) or scripted fakes (tests).
++class TargetTaskController {
++  public:
++    virtual ~TargetTaskController() = default;
++    virtual DbgErr read_regs(Arch arch, std::span<std::uint8_t> out) = 0;
++    virtual DbgErr write_regs(Arch arch, std::span<const std::uint8_t> in) = 0;
++    /// @brief Returns bytes transferred (>= 0) or negative errno.
++    virtual int read_mem(std::uint64_t va, std::span<std::uint8_t> out) = 0;
++    virtual int write_mem(std::uint64_t va,
++                          std::span<const std::uint8_t> in) = 0;
++    virtual DbgErr break_at(std::uint64_t va) = 0;
++    virtual DbgErr clear_break(std::uint64_t va) = 0;
++    virtual DbgErr step() = 0;
++    virtual DbgErr cont() = 0;
++    /// @brief Last stop reason, GDB stop-reply format (e.g. "T05", "W00").
++    virtual std::string_view stop_reason() = 0;
++
++  protected:
++    TargetTaskController() = default;
++};
++
++/// @brief Fixed-capacity breakpoint shadow table (spec §6). The kernel
++///        shadow is authoritative at runtime (spec §4); this table is the
++///        controller-side write-through cache. No heap, ever.
++class BreakpointTable {
++  public:
++    static constexpr std::size_t kCapacity = 64;
++
++    struct Entry {
++        std::uint64_t va = 0;
++        std::uint64_t orig_insn = 0; // shadowed instruction word
++        bool used = false;
++    };
++
++    bool insert(std::uint64_t va, std::uint64_t orig) noexcept {
++        if (find(va) != nullptr)
++            return true; // idempotent re-insert
++        for (auto &e : entries_) {
++            if (!e.used) {
++                e.va = va;
++                e.orig_insn = orig;
++                e.used = true;
++                return true;
++            }
++        }
++        return false; // table full: caller reports E01, never grows
++    }
++
++    bool remove(std::uint64_t va) noexcept {
++        Entry *e = find(va);
++        if (e == nullptr)
++            return false;
++        e->used = false;
++        return true;
++    }
++
++    const Entry *find(std::uint64_t va) const noexcept {
++        for (const auto &e : entries_) {
++            if (e.used && e.va == va)
++                return &e;
++        }
++        return nullptr;
++    }
++
++    Entry *find(std::uint64_t va) noexcept {
++        for (auto &e : entries_) {
++            if (e.used && e.va == va)
++                return &e;
++        }
++        return nullptr;
++    }
++
++    std::size_t used() const noexcept {
++        std::size_t n = 0;
++        for (const auto &e : entries_)
++            n += e.used ? 1 : 0;
++        return n;
++    }
++
++  private:
++    std::array<Entry, kCapacity> entries_{};
++};
++
++/// @brief Breakpoint instruction words per arch (spec §4, single source
++///        of truth for the controller side).
++constexpr std::uint32_t BreakInsn(Arch arch) noexcept {
++    switch (arch) {
++    case Arch::kX86_64:
++        return 0xCC; // int3 (one byte, low 8 bits used)
++    case Arch::kAArch64:
++        return 0xD4200000; // brk #0
++    case Arch::kRiscv64:
++        return 0x00100073; // ebreak
++    }
++    return 0;
++}
++
++} // namespace debugd
+diff --git a/tools/debugd/tests/mock_transport.hpp b/tools/debugd/tests/mock_transport.hpp
+new file mode 100644
+index 00000000..5618892c
+--- /dev/null
++++ b/tools/debugd/tests/mock_transport.hpp
+@@ -0,0 +1,73 @@
++/*
++ * NexIOS RTOS — debugd Phase 3 (issue #224)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * Mock ITransport (spec §7): scripted byte source with short-read,
++ * timeout, and noise injection. The mock is deliberately nastier than
++ * a UART: every framing assumption the parser makes is attacked here.
++ */
++
++#pragma once
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include <string_view>
++
++namespace debugd {
++namespace test {
++
++/// @brief Scripted byte-stream transport. Each call serves at most
++///        `max_chunk` bytes (short-read injection: max_chunk == 1
++///        forces byte-at-a-time delivery); once `fail_after` bytes
++///        have been served (or the script is exhausted) calls fail
++///        (timeout). All writes are captured for assertion.
++class MockTransport {
++  public:
++    explicit MockTransport(
++        std::string_view script, std::size_t max_chunk = 1,
++        std::size_t fail_after = static_cast<std::size_t>(-1)) noexcept
++        : script_(script), max_chunk_(max_chunk), fail_after_(fail_after) {}
++
++    /// @brief True iff `dst` was fully filled (short reads return false
++    ///        after serving what they could — callers must loop).
++    bool read_exact(std::span<std::uint8_t> dst) noexcept {
++        std::size_t want = dst.size() < max_chunk_ ? dst.size() : max_chunk_;
++        if (want == 0)
++            return true;
++        for (std::size_t i = 0; i < want; ++i) {
++            if (served_ >= fail_after_ || pos_ >= script_.size())
++                return false;
++            dst[i] = static_cast<std::uint8_t>(script_[pos_++]);
++            ++served_;
++        }
++        return want == dst.size();
++    }
++
++    bool write_all(std::span<const std::uint8_t> src) noexcept {
++        if (written_ + src.size() > out_.size())
++            return false;
++        for (std::size_t i = 0; i < src.size(); ++i)
++            out_[written_++] = static_cast<char>(src[i]);
++        return true;
++    }
++
++    std::string_view written() const noexcept {
++        return std::string_view(out_.data(), written_);
++    }
++
++    std::size_t served() const noexcept { return served_; }
++
++  private:
++    std::string_view script_;
++    std::size_t max_chunk_;
++    std::size_t fail_after_;
++    std::size_t pos_ = 0;
++    std::size_t served_ = 0;
++    std::array<char, 8192> out_{};
++    std::size_t written_ = 0;
++};
++
++} // namespace test
++} // namespace debugd
+diff --git a/tools/debugd/tests/test_main.cpp b/tools/debugd/tests/test_main.cpp
+new file mode 100644
+index 00000000..d2c4b62c
+--- /dev/null
++++ b/tools/debugd/tests/test_main.cpp
+@@ -0,0 +1,341 @@
++/*
++ * NexIOS RTOS — debugd Phase 3 (issue #224)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * Host unit tests for the RSP parser core + controller (spec §5–§6,
++ * §11 host gate). Assert-based, zero dependencies, return-code gate.
++ * Also doubles as the RSP conformance oracle for later phases.
++ */
++
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++
++#include "gdb_rsp.hpp"
++#include "target_controller.hpp"
++#include "mock_transport.hpp"
++
++namespace {
++
++int g_pass = 0;
++int g_fail = 0;
++
++#define CHECK(cond)                                                            \
++    do {                                                                       \
++        if (cond) {                                                            \
++            ++g_pass;                                                          \
++        } else {                                                               \
++            ++g_fail;                                                          \
++            std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);        \
++        }                                                                      \
++    } while (0)
++
++using debugd::Arch;
++using debugd::Command;
++using debugd::FeedResult;
++using debugd::RspParser;
++
++// Feed a whole script byte-by-byte (worst-case short reads); returns the
++// last terminal result and leaves the packet (if any) in the parser.
++FeedResult FeedAll(RspParser &p, const char *script) {
++    FeedResult r = FeedResult::kNeedMore;
++    for (const char *c = script; *c != '\0'; ++c) {
++        r = p.feed(*c);
++        if (r != FeedResult::kNeedMore)
++            break;
++    }
++    return r;
++}
++
++void TestFraming() {
++    RspParser p;
++    CHECK(FeedAll(p, "$?#3f") == FeedResult::kPacket);
++    CHECK(p.packet() == "?");
++}
++
++void TestGarbageResync() {
++    RspParser p;
++    // Garbage, partial packet, nested start: must resync to the real one.
++    CHECK(FeedAll(p, "xyz$?#3") == FeedResult::kNeedMore);
++    CHECK(FeedAll(p, "$g#67") == FeedResult::kPacket);
++    CHECK(p.packet() == "g");
++}
++
++void TestChecksumUpperLower() {
++    RspParser p;
++    CHECK(FeedAll(p, "$?#3F") == FeedResult::kPacket); // upper hex ok
++    CHECK(p.packet() == "?");
++}
++
++void TestBadChecksum() {
++    RspParser p;
++    CHECK(FeedAll(p, "$?#00") == FeedResult::kBadChecksum);
++    // Parser resyncs: next packet parses cleanly.
++    CHECK(FeedAll(p, "$?#3f") == FeedResult::kPacket);
++}
++
++void TestAckNack() {
++    RspParser p;
++    CHECK(p.feed('+') == FeedResult::kAck);
++    CHECK(p.feed('-') == FeedResult::kNack);
++}
++
++void TestCtrlC() {
++    RspParser p;
++    CHECK(p.feed('\x03') == FeedResult::kInterrupted);
++}
++
++void TestStopQuery() {
++    Command c;
++    CHECK(debugd::ParseCommand("?", c));
++    CHECK(c.type == Command::Type::kStopQuery);
++}
++
++void TestReadRegs() {
++    Command c;
++    CHECK(debugd::ParseCommand("g", c));
++    CHECK(c.type == Command::Type::kReadRegs);
++    CHECK(debugd::ParseCommand("Gdeadbeef", c));
++    CHECK(c.type == Command::Type::kWriteRegs);
++    CHECK(c.data == "deadbeef");
++    CHECK(!debugd::ParseCommand("G", c)); // empty payload rejected
++}
++
++void TestRegBlobSizes() {
++    // Golden byte counts per arch (spec §5 layouts: x86_64 Linux GPRs
++    // 16x8 + rip + eflags + 6 segment regs; AArch64 34x8; RISC-V 33x8).
++    CHECK(debugd::RegBlobSize(Arch::kX86_64) == 164);
++    CHECK(debugd::RegBlobSize(Arch::kAArch64) == 272);
++    CHECK(debugd::RegBlobSize(Arch::kRiscv64) == 264);
++}
++
++void TestReadMem() {
++    Command c;
++    CHECK(debugd::ParseCommand("m41000000,10", c));
++    CHECK(c.type == Command::Type::kReadMem);
++    CHECK(c.addr == 0x41000000ULL);
++    CHECK(c.len == 0x10);
++    CHECK(!debugd::ParseCommand("m41000000,0", c)); // zero length rejected
++    CHECK(!debugd::ParseCommand("mZZZZ,10", c));    // garbage rejected
++    CHECK(!debugd::ParseCommand("m123456789abcdef01,10", c)); // >16 digits
++}
++
++void TestWriteMem() {
++    Command c;
++    CHECK(debugd::ParseCommand("M41000000,4:deadbeef", c));
++    CHECK(c.type == Command::Type::kWriteMem);
++    CHECK(c.addr == 0x41000000ULL);
++    CHECK(c.len == 4);
++    CHECK(c.data == "deadbeef");
++    CHECK(!debugd::ParseCommand("M41000000,4:deadbee", c)); // short data
++    CHECK(!debugd::ParseCommand("M41000000,4", c));         // missing colon
++}
++
++void TestContinueStep() {
++    Command c;
++    CHECK(debugd::ParseCommand("c", c));
++    CHECK(c.type == Command::Type::kContinue);
++    CHECK(debugd::ParseCommand("c41000000", c));
++    CHECK(c.type == Command::Type::kContinue);
++    CHECK(c.addr == 0x41000000ULL);
++    CHECK(debugd::ParseCommand("s", c));
++    CHECK(c.type == Command::Type::kStep);
++}
++
++void TestBreakpoints() {
++    Command c;
++    CHECK(debugd::ParseCommand("Z0,41000000,4", c));
++    CHECK(c.type == Command::Type::kBreakSet);
++    CHECK(c.addr == 0x41000000ULL);
++    CHECK(c.len == 4);
++    CHECK(debugd::ParseCommand("z0,41000000,4", c));
++    CHECK(c.type == Command::Type::kBreakClear);
++    CHECK(!debugd::ParseCommand("Z1,41000000,4", c)); // only type 0
++}
++
++void TestQSupported() {
++    Command c;
++    CHECK(debugd::ParseCommand("qSupported:swbreak+", c));
++    CHECK(c.type == Command::Type::kQSupported);
++    CHECK(debugd::QSupportedReply() == "PacketSize=1000;qXfer:features:read-;swbreak+");
++}
++
++void TestSetThread() {
++    Command c;
++    CHECK(debugd::ParseCommand("Hg0", c));
++    CHECK(c.type == Command::Type::kSetThread);
++    CHECK(debugd::ParseCommand("Hc-1", c));
++    CHECK(c.type == Command::Type::kSetThread);
++    CHECK(!debugd::ParseCommand("H", c)); // op+tid required
++    // NOTE (Phase 4 obligation): the parser accepts any H<op><tid>
++    // syntactically; the §5 "everything else E01" single-thread rule is
++    // enforced at dispatch, not here.
++}
++
++void TestDetachKill() {
++    Command c;
++    CHECK(debugd::ParseCommand("D", c));
++    CHECK(c.type == Command::Type::kDetach);
++    CHECK(debugd::ParseCommand("k", c));
++    CHECK(c.type == Command::Type::kKill);
++}
++
++void TestHexCodec() {
++    const std::uint8_t bytes[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF};
++    char hex[16] = {};
++    CHECK(debugd::EncodeHex(bytes, hex) == 12);
++    CHECK(std::string_view(hex, 12) == "deadbeef00ff");
++    std::uint8_t back[6] = {};
++    CHECK(debugd::DecodeHex("deadbeef00ff", back) == 6);
++    CHECK(std::memcmp(back, bytes, 6) == 0);
++    CHECK(debugd::DecodeHex("abc", back) == 0);   // odd length
++    CHECK(debugd::DecodeHex("zz", back) == 0);    // bad digits
++    CHECK(debugd::DecodeHex("dead", back) == 2);  // prefix ok
++}
++
++void TestOversizeRejected() {
++    RspParser p;
++    CHECK(p.feed('$') == FeedResult::kNeedMore);
++    // kMaxPacket+8 data bytes with no '#': must reject, never grow.
++    FeedResult r = FeedResult::kNeedMore;
++    for (std::size_t i = 0; i < debugd::kMaxPacket + 8; ++i) {
++        r = p.feed('A');
++        if (r != FeedResult::kNeedMore)
++            break;
++    }
++    CHECK(r == FeedResult::kBadChecksum);
++}
++
++void TestErrnoMap() {
++    using debugd::DbgErr;
++    using debugd::EncodeErrno;
++    CHECK(EncodeErrno(DbgErr::kOk) == "OK");
++    CHECK(EncodeErrno(DbgErr::kGeneric) == "E01");
++    CHECK(EncodeErrno(DbgErr::kBadHandle) == "E01");
++    CHECK(EncodeErrno(DbgErr::kNoTarget) == "E01");
++    CHECK(EncodeErrno(DbgErr::kFault) == "E0E"); // EFAULT, never empty
++}
++
++void TestBreakpointTable() {
++    debugd::BreakpointTable t;
++    CHECK(t.used() == 0);
++    CHECK(t.insert(0x1000, 0xABCDEF));
++    CHECK(t.insert(0x1000, 0xABCDEF)); // idempotent
++    CHECK(t.used() == 1);
++    CHECK(t.find(0x1000) != nullptr);
++    CHECK(t.find(0x2000) == nullptr);
++    CHECK(t.find(0x1000)->orig_insn == 0xABCDEF);
++    CHECK(t.remove(0x1000));
++    CHECK(!t.remove(0x1000));
++    CHECK(t.used() == 0);
++    // Fill to capacity: 65th insert fails, never grows.
++    for (std::uint64_t i = 0; i < debugd::BreakpointTable::kCapacity; ++i)
++        CHECK(t.insert(0x10000 + i * 4, i));
++    CHECK(!t.insert(0xDEAD, 0));
++    CHECK(t.used() == debugd::BreakpointTable::kCapacity);
++}
++
++void TestBreakInsn() {
++    CHECK(debugd::BreakInsn(Arch::kX86_64) == 0xCC);
++    CHECK(debugd::BreakInsn(Arch::kAArch64) == 0xD4200000);
++    CHECK(debugd::BreakInsn(Arch::kRiscv64) == 0x00100073);
++}
++
++// Minimal fake controller: proves the interface is implementable and
++// exercises the mock transport round-trip ($?#3f through short reads).
++class FakeController : public debugd::TargetTaskController {
++  public:
++    debugd::DbgErr read_regs(Arch, std::span<std::uint8_t> out) override {
++        for (auto &b : out)
++            b = 0xA5;
++        return debugd::DbgErr::kOk;
++    }
++    debugd::DbgErr write_regs(Arch, std::span<const std::uint8_t>) override {
++        return debugd::DbgErr::kOk;
++    }
++    int read_mem(std::uint64_t, std::span<std::uint8_t> out) override {
++        for (auto &b : out)
++            b = 0x5A;
++        return static_cast<int>(out.size());
++    }
++    int write_mem(std::uint64_t, std::span<const std::uint8_t> in) override {
++        return static_cast<int>(in.size());
++    }
++    debugd::DbgErr break_at(std::uint64_t va) override {
++        return table_.insert(va, 0) ? debugd::DbgErr::kOk
++                                    : debugd::DbgErr::kGeneric;
++    }
++    debugd::DbgErr clear_break(std::uint64_t va) override {
++        return table_.remove(va) ? debugd::DbgErr::kOk
++                                 : debugd::DbgErr::kGeneric;
++    }
++    debugd::DbgErr step() override { return debugd::DbgErr::kOk; }
++    debugd::DbgErr cont() override { return debugd::DbgErr::kOk; }
++    std::string_view stop_reason() override { return "T05"; }
++
++    debugd::BreakpointTable table_;
++};
++
++void TestMockRoundTrip() {
++    // Script with noise + short reads (1 byte/call): parser must resync
++    // and deliver the real packet; controller serves it; reply captured.
++    debugd::test::MockTransport t("xx$?#3f", 1);
++    RspParser p;
++    FeedResult r = FeedResult::kNeedMore;
++    std::uint8_t byte = 0;
++    while (r == FeedResult::kNeedMore) {
++        CHECK(t.read_exact(std::span(&byte, 1)));
++        r = p.feed(static_cast<char>(byte));
++    }
++    CHECK(r == FeedResult::kPacket);
++    CHECK(p.packet() == "?");
++    FakeController c;
++    Command cmd;
++    CHECK(debugd::ParseCommand(p.packet(), cmd));
++    CHECK(cmd.type == Command::Type::kStopQuery);
++    std::string_view reason = c.stop_reason();
++    CHECK(reason == "T05");
++    // Reply path through the mock: write_all captures bytes.
++    const char reply[] = "$T05#b9";
++    CHECK(t.write_all(std::span(
++        reinterpret_cast<const std::uint8_t *>(reply), sizeof(reply) - 1)));
++    CHECK(t.written() == "$T05#b9");
++}
++
++void TestMockTimeout() {
++    debugd::test::MockTransport t("$?#3", 1, 2); // fail after 2 bytes
++    std::uint8_t byte = 0;
++    CHECK(t.read_exact(std::span(&byte, 1)));
++    CHECK(t.read_exact(std::span(&byte, 1)));
++    CHECK(!t.read_exact(std::span(&byte, 1))); // timeout: false
++}
++
++} // namespace
++
++int main() {
++    TestFraming();
++    TestGarbageResync();
++    TestChecksumUpperLower();
++    TestBadChecksum();
++    TestAckNack();
++    TestCtrlC();
++    TestStopQuery();
++    TestReadRegs();
++    TestRegBlobSizes();
++    TestReadMem();
++    TestWriteMem();
++    TestContinueStep();
++    TestBreakpoints();
++    TestQSupported();
++    TestSetThread();
++    TestDetachKill();
++    TestHexCodec();
++    TestOversizeRejected();
++    TestErrnoMap();
++    TestBreakpointTable();
++    TestBreakInsn();
++    TestMockRoundTrip();
++    TestMockTimeout();
++    std::printf("debugd-host: PASS %d FAIL %d\n", g_pass, g_fail);
++    return g_fail == 0 ? 0 : 1;
++}

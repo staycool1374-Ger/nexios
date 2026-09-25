@@ -1372,6 +1372,36 @@ clang-tidy:
 	fi
 
 # ------------------------------------------------------------------------------
+# debugd host unit tests (issue #224, spec docs/specs/debugd.md §11)
+# Host-runnable RSP conformance oracle: needs only a C++20 host compiler
+# (Xcode/homebrew c++ on macOS, g++ on Linux). No QEMU, no target
+# toolchain, no gtest. Target C++ runtime for the daemon itself is a
+# Phase-4 prerequisite (no target libstdc++ exists yet); until then the
+# headers stay portable via the hosted-header ban below (only C++20
+# freestanding headers: array/span/string_view/cstdint/cstddef).
+# ------------------------------------------------------------------------------
+.PHONY: test-debugd-host
+test-debugd-host:
+	@mkdir -p build/host
+	@printf '  %-7s %s\n' 'HOST' 'debugd RSP unit tests…'
+	@CXX_HOST="$(CXX_HOST)"; \
+	if [ -z "$$CXX_HOST" ]; then CXX_HOST=c++; fi; \
+	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror \
+	    -I tools/debugd/include -I tools/debugd/tests \
+	    tools/debugd/tests/test_main.cpp -o build/host/test_debugd && \
+	    ./build/host/test_debugd && \
+	$$CXX_HOST -std=c++20 -Wall -Wextra -Werror -fsanitize=address,undefined \
+	    -I tools/debugd/include -I tools/debugd/tests \
+	    tools/debugd/tests/test_main.cpp -o build/host/test_debugd_asan && \
+	    ./build/host/test_debugd_asan
+	@printf '  %-7s %s\n' 'HOST' 'hosted-header ban (freestanding portability)…'
+	@if grep -rnE '#include <(vector|string|iostream|map|set|list|deque|forward_list|functional|memory|sstream|fstream|cstdio|cstring|cstdlib|new|typeinfo|exception|stdexcept|system_error|thread|mutex|future|chrono|ratio|optional|variant|tuple|bitset|iterator|limits|numeric|random|regex|algorithm)>' \
+	    tools/debugd/include/; then \
+	    printf '  %-7s %s\n' 'ERROR' 'hosted header in tools/debugd/include'; exit 1; \
+	fi
+	@printf '  %-7s %s\n' 'HOST' 'debugd host tests passed.'
+
+# ------------------------------------------------------------------------------
 # Module audit: cross-reference a .hpp/.cpp pair for consistency
 # Example: make audit HPP=src/kernel/task/scheduler.hpp CPP=src/kernel/task/scheduler.cpp
 # ------------------------------------------------------------------------------

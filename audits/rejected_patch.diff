@@ -1,15 +1,127 @@
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index 592646eb..a95e45f0 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -783,5 +783,9 @@ uint64_t VMM::clone_kernel_pml4() {
-         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-         auto *dst_l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                     l1_phys);
-+        // Audit (iteration 2): the page is recycled unzeroed, and the
-+        // !copy_ok unwind below scans all 512 slots — zero first so
-+        // never-written slots cannot drive free_page on stale entries.
-+        __builtin_memset(dst_l1, 0, 4096);
-         bool copy_ok = true;
-         for (size_t l1_idx = 0; l1_idx < PAGE_TABLE_ENTRIES; ++l1_idx) {
-             const uint64_t l1_entry = src_l1[l1_idx];
+diff --git a/docs/specs/debugd.md b/docs/specs/debugd.md
+index 1afa721..6a60080 100644
+--- a/docs/specs/debugd.md
++++ b/docs/specs/debugd.md
+@@ -68,27 +68,34 @@ Non-goals (explicitly out):
+ - `debugd` is an ordinary user-space task (picolibc-linked), started
+   only in debug mode / on explicit request. It owns no privilege
+   beyond the debug capabilities explicitly granted to it (§3).
+-- The kernel exposes exactly four debug syscalls (§3) plus a
+-  stop-event delivery channel (§4). No RSP, no string parsing, no
+-  packet buffers in the kernel.
++- The kernel exposes five debug syscalls (§3–§4: four data-plane calls plus
++  `sys_task_debug_attach`) and a stop-event delivery channel (§4). No RSP,
++  no string parsing, no packet buffers in the kernel.
+ - Relation to `docs/debugging.md`: QEMU-GDB remains the kernel-debug
+   path. debugd is the *task-debug* path. The two MUST coexist (a
+   kernel panic under QEMU-GDB while debugd holds a task stopped is
+-  legal; §10 defines the semantics).
++  legal; on panic all stop/park state is discarded with the machine —
++  no resume-across-panic; a restarted debugd re-attaches explicitly
++  per §10).
+ 
+ ## 3. Kernel debug API (normative — new syscalls)
+ 
+ All four calls take a debug capability handle (`target_cap`), NOT a
+ raw pid. Capability semantics (grant/revoke, attenuation) follow #50;
+ until #50 lands, handles are kernel-issued unforgeable tokens scoped
+-to one debugger↔target pair, revocable by killing either endpoint.
++ to one debugger↔target pair, revocable by killing either endpoint.
++The initial handle for a task is issued to its launcher at spawn; attaching
++to any other running task requires a grant from its launcher or supervisor.
++Raw pid-to-handle lookup does not exist.
+ 
+ - `sys_task_read_regs(target_cap, &regs)` / `sys_task_write_regs`:
+   arch-sized register file (x86_64 GPRs + RIP/RFLAGS;
+   aarch64 x0–x30 + ELR/SPSR; riscv64 x1–x31 + sepc/sstatus).
+   Reads/writes target the task's *saved trap frame*; if the target is
+-  currently running on any CPU the call parks it first (§4 stop
+-  mechanics) and returns `EAGAIN`-retry semantics — never torn reads.
++  currently running on any CPU the call requests a deferred stop at the
++  next user-mode boundary (§4 stop mechanics) and returns `EAGAIN` until
++  the corresponding stop event is queued — never torn reads, never parked
++  mid-critical-section.
+   Writing `pc`/`sepc`/`ELR` redirects execution (the continue/step
+   primitive); writing other regs mutates state. Return: 0 or
+   negative errno (`EBADF` bad handle, `ESRCH` target gone,
+@@ -102,22 +109,24 @@ to one debugger↔target pair, revocable by killing either endpoint.
+   (`fence.i` / ICIALLU / `ic ialluis` per arch — the #186
+   QEMU-forgives-this pitfall is explicitly called out: TCG hides
+   missing I-flushes, hardware does not).
+-- All four calls are valid only when the caller holds a live debug
++- All four data-plane calls are valid only when the caller holds a live debug
+   capability AND the target is in a debuggable state (alive,
+   non-kernel; kernel tasks and PID 1's reaper internals reject with
+   `EPERM`). Calls from interrupt context are rejected.
+ - Syscall numbers: allocated from the caps range (51–60 per the live
+   table in syscall-abi-picolibc.md §0), frozen under ABI v1 like the
+-  rest of the table. Exact numbers assigned at implementation time;
+-  this spec reserves four contiguous slots.
++  rest of the table, with an explicit debug-only carve-out (release builds
++  return `ENOSYS` per §10: same numbers, no behavior contract). Exact
++  numbers assigned at implementation time; this spec reserves five
++  contiguous slots (four data-plane + attach).
+ 
+ ## 4. Stop-event routing (normative)
+ 
+ Today a user fault terminates the task. With a debugger attached:
+ 
+-- Attach model: `debugd` issues an attach operation (a fifth
+-  syscall, `sys_task_debug_attach(target_cap)`, or an attach flag on
+-  first use — implementation choice, same semantics). Exactly one
++- Attach model: `debugd` issues `sys_task_debug_attach(target_cap)` (the fifth
++  reserved slot from §3 — no attach-flag alternative, so the §2 count is
++  exact). Exactly one
+   debugger per target; second attach fails `EBUSY`. Detach (or
+   debugger death — see #191 supervision) resumes the target or, if
+   it was fault-stopped, applies the default disposition (terminate).
+@@ -126,9 +135,12 @@ Today a user fault terminates the task. With a debugger attached:
+   page faults / illegal instructions / alignment faults, and
+   task death (exit/terminate — reported as `W`/`X` stop replies).
+ - While stopped, the target is descheduled and parked (never runs,
+-  never consumes budget — §10 accounting). Stop events queue to
+-  debugd in order; overflow policy is drop-oldest with a counter
+-  (bounded memory — no unbounded queues in an RT kernel).
++  never consumes budget — §10 accounting). Stops are taken only at
++  user-mode boundaries (fault, breakpoint/trap return, or syscall-wait
++  boundary with wait state preserved for resume-or-reap). Stop events queue
++  to debugd in order; overflow policy is drop-oldest with a counter
++  (bounded memory — no unbounded queues in an RT kernel), except task-death
++  (`W`/`X`) events, which are never dropped (reserved slot).
+ - Breakpoint instructions per arch (single source of truth):
+   x86_64 `int3` (0xCC), aarch64 `brk #0` (0xD4200000), riscv64
+   `ebreak` (0x00100073) / `c.ebreak` where C is enabled. The kernel
+@@ -185,8 +197,9 @@ Today a user fault terminates the task. With a debugger attached:
+ - v1 adapter: UART-IPC byte stream (console/UART endpoint; shares
+   nothing with the early-boot polled serial of §8 — by the time
+   debugd runs, the interrupt driver owns the UART; concurrent
+-  Logger output during a debug session is multiplexed by policy,
+-  defaulting to session-priority with a ring spill).
++  Logger output on the RSP stream is forbidden during a debug session
++  (dedicated endpoint or Logger fully muted) — interleaved bytes would
++  invalidate §5 framing).
+ - v2 adapter (gated on Phase 9 netstack): TCP listener. The parser
+   and controller MUST compile and pass tests with the TCP adapter
+   absent (transport independence is unit-tested by building with a
+@@ -245,14 +258,18 @@ debugd doubles as the introspection engine — no second mechanism:
+ 
+ - debugd runs at the lowest debuggable priority under a bounded
+   budget (sporadic-server envelope); a chatty host cannot starve
+-  HRT tasks. Stopped targets consume zero budget and hold no locks
+-  the scheduler needs.
++  HRT tasks. Stopped targets consume zero budget; because stops are
++  deferred to user-mode boundaries (§4), a stopped target holds no
++  scheduler locks, and terminating one runs the standard task-reaper
++  path (IPC objects and kernel-side resources released).
+ - Release builds MUST NOT expose §3–§4 (syscalls return `ENOSYS`,
+   attach impossible). A release binary with debugger hooks is a
+   safety defect, not a feature.
+ - Watchdog interaction: a stopped target MUST NOT trip task
+   watchdogs (#41); the kernel suspends watchdog accounting for
+-  debugger-stopped tasks and resumes on continue/detach.
++  debugger-stopped tasks, marks them supervisor-visible as
++  `DEBUG_STOPPED`, and on continue/detach realigns (never back-charges)
++  their supervision windows.
+ - Debugger death (crash/kill of debugd) MUST fail-safe: all its
+   targets detach with default dispositions applied (fault-stopped
+   targets terminate; cleanly-stopped targets resume). No orphaned

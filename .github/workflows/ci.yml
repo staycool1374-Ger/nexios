@@ -72,6 +72,9 @@ jobs:
     - name: Build Kernel (x86_64 Release ISO)
       run: make release QEMU_UEFI=${{ steps.ovmf.outputs.firmware }}
 
+    - name: Host unit tests (debugd RSP conformance, issue #224)
+      run: make test-debugd-host
+
     - name: Upload x86_64 Debug ISO
       uses: actions/upload-artifact@v4
       with:
