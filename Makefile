@@ -196,11 +196,11 @@ else ifeq ($(ARCH),riscv64)
     AR          := $(RISCV64_TRIPLET)ar
     OBJCOPY     := $(RISCV64_TRIPLET)objcopy
 
-    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=rv64imafdc -mabi=lp64d -mcmodel=medany
+    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=rv64imafdc -mabi=lp64d -mcmodel=medany -fno-pie
     CCFLAGS     := -static -nostdlib -ffreestanding -O2 -pipe -MMD -MP \
                    -ffunction-sections -fdata-sections \
                    -DCONFIG_ARCH_RISCV64 \
-                   -mcmodel=medany
+                   -mcmodel=medany -fno-pie
 
     AS          := $(RISCV64_TRIPLET)as
     ASFLAGS     :=
@@ -209,7 +209,15 @@ else ifeq ($(ARCH),riscv64)
     OBJCOPY_ARCH := riscv
     LIBGCC       := $(shell $(CC) --print-libgcc-file-name)
     LD_LIBS      := $(LIBGCC)
-    LDFLAGS      := -nostdlib -T linker/linker_$(ARCH).ld -Map=build/kernel.map
+    # Issue #222: -fno-pie above, -static below.  Debian/Ubuntu linux-gnu
+    # drivers default to PIE (compile: -fPIE, link: -pie); the bare-metal
+    # elf toolchain does not.  Under PIE, boot.S `la` (assembled via the
+    # CC driver, mk/rules.mk) becomes GOT-indirection and the link dies
+    # with R_RISCV_GOT_HI20 truncation against ABS linker-script symbols
+    # (kernel_phys_end).  Non-PIE objects + static link are correct for a
+    # freestanding kernel on both toolchains (both accept these flags;
+    # raw-ld path accepts -static as -Bstatic).
+    LDFLAGS      := -nostdlib -static -T linker/linker_$(ARCH).ld -Map=build/kernel.map
 
     QEMU_SYSTEM     := qemu-system-riscv64
     QEMU_ARCH_FLAGS := -machine virt -bios default
