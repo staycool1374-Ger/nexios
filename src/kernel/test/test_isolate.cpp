@@ -35,6 +35,7 @@
 #include <kernel/driver/iocd.hpp>
 #include <kernel/irq_thread.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/arch/page_table.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #if defined(CONFIG_ARCH_X86_64)
@@ -222,6 +223,19 @@ static size_t off_user_page_data() {
 static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
 static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
 static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+
+#if defined(CONFIG_ARCH_RISCV64)
+// Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
+// window (boot.S: 128 × 2MB leaves for PA 0x80000000-0x8FFFFFFF) lives
+// under L0[258] — not the HHDM base's own L0[256] (that 1GB maps phys
+// below RAM and has no block leaves to split). There is deliberately no
+// identity slot: the boot identity map (L0[2]) is dead at runtime (L0[2]
+// reads zero; the kernel runs via HHDM), so there is no live low map to
+// save or restore.
+constexpr size_t kRiscvHhdmL0 =
+    (static_cast<size_t>(CONFIG_HHDM_OFFSET + 0x80000000ULL) >> 30) & 0x1FF;
+static_assert(kRiscvHhdmL0 == 258, "HHDM RAM L0 moved");
+#endif
 
 static size_t off_kstack_header(size_t user_page_count) {
     return off_user_page_data() +
@@ -633,6 +647,31 @@ bool snapshot_create() {
         }
     }
 #endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #152: Sv39 save backend. The kernel table layout comes from
+    // boot.S: L0[258]→L1 covers the HHDM RAM window (128 × 2MB leaves).
+    // Save the L1 table whole (512 entries = HHDM_PD_BYTES, buffer size
+    // unchanged) so the flag-gated restore below can undo test splits.
+    // Codec mirrors BlockGuard (test_riscv64.cpp): V=bit0, leaf=R|W|X,
+    // child phys = ((entry >> 10) << 12).
+    {
+        constexpr size_t kHhdmL0 = kRiscvHhdmL0;
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            auto *l0 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            uint64_t e = l0[kHhdmL0];
+            if ((e & 1ULL) && (e & 0xEU) == 0) {
+                uint64_t l1_phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+                auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                        l1_phys);
+                __builtin_memcpy(
+                    g_snapshot + off_hhdm_pd(user_page_count, task_count),
+                    l1, 512 * sizeof(uint64_t));
+            }
+        }
+    }
+#endif
 
     // ---- Map-then-unmap guard pages (after PD save, so saved PD is clean) ----
     // Guard pages must be within HHDM window (phys < 128MB) and above reserved
@@ -855,6 +894,10 @@ void snapshot_restore(const char *test_name) {
     // Issue #60: atomic take (not check-then-clear) — a set landing
     // after the exchange stays set, so the next restore over-restores
     // (safe) instead of skipping (stale mappings leak).
+    // Issue #152: 4-level shape (pml4[256]/pdpt[0]/0x5000) — x86_64 and
+    // aarch64 only.  On riscv64 these decodes misread Sv39 tables, so
+    // this block is arch-gated and Sv39 has its own restore below.
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     if (VMM::take_hhdm_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -911,6 +954,7 @@ void snapshot_restore(const char *test_name) {
     // Split PT pages are reclaimed by the page-table pool restore that runs
     // later (off_pt_pool), so this block only restores the PD entries.
     // (Issue #60: same take-instead-of-check-then-clear as above.)
+    // Issue #152: same 4-level gate as the HHDM block above.
     if (VMM::take_identity_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -940,6 +984,57 @@ void snapshot_restore(const char *test_name) {
             }
         }
     }
+#endif // CONFIG_ARCH_X86_64 || CONFIG_ARCH_AARCH64 (4-level PD restores)
+#if defined(CONFIG_ARCH_RISCV64)
+    // ---- Sv39 HHDM L1 restore (before PMM restore, issue #152) ----
+    // Undoes 2MB-block splits in the HHDM RAM window (L0[258]→L1, saved
+    // whole at snapshot).  Gated on the atomic take (same take-instead-
+    // of-check-then-clear as the x86 blocks: over-restore is safe).
+    // Entries that went block-leaf→table get their split L2 freed first
+    // (mirrors the x86 split-PT reclaim; the PMM bitmap restore below
+    // then stays consistent), then the saved L1 is copied back whole
+    // and the TLB flushed (Sv39 has no CR3-reload flush here).
+    if (VMM::take_hhdm_modified()) {
+        constexpr size_t kHhdmL0 = kRiscvHhdmL0;
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            uint64_t nu = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_user_page_count());
+            uint64_t nk = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_kstack_header(nu));
+            auto *saved_l1 = reinterpret_cast<const uint64_t *>(
+                g_snapshot + off_hhdm_pd(nu, nk));
+            auto *l0 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            uint64_t e = l0[kHhdmL0];
+            // Sanity: L0 slot must be a present table (V=1, no R|W|X).
+            // Anything else means corruption — skip rather than write
+            // to kernel data (mirrors the x86 0x5000/0x3000 checks).
+            if ((e & 1ULL) && (e & 0xEU) == 0) {
+                uint64_t l1_phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+                auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                        l1_phys);
+                for (size_t i = 0; i < 512; ++i) {
+                    uint64_t s = saved_l1[i];
+                    uint64_t c = l1[i];
+                    bool saved_leaf = (s & 1ULL) && (s & 0xEU);
+                    bool live_table = (c & 1ULL) && (c & 0xEU) == 0;
+                    if (saved_leaf && live_table)
+                        PMM::free_page((((c >> 10) << 12) &
+                                        0xFFFFFFFFFFF000ULL));
+                }
+                __builtin_memcpy(l1, saved_l1, 512 * sizeof(uint64_t));
+                arch::ArchPageTable::tlb_flush_all();
+            } else {
+                Logger::raw_write("[L1-RESTORE] CORRUPTED l0=");
+                Logger::print_hex(e);
+                Logger::raw_write(" in test=\"");
+                Logger::raw_write(test_name ? test_name : "?");
+                Logger::raw_write("\"\n");
+            }
+        }
+    }
+#endif // CONFIG_ARCH_RISCV64 (Sv39 HHDM L1 restore)
 
     // ---- PMM ----
     {

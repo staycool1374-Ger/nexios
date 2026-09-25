@@ -36,6 +36,20 @@ constinit uint64_t VMM::pml4_kernel_template_[512] = {};
 bool VMM::hhdm_modified_ = false;
 bool VMM::identity_modified_ = false;
 
+#if defined(CONFIG_ARCH_RISCV64)
+// Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
+// window (boot.S: 128 × 2MB leaves for PA 0x80000000-0x8FFFFFFF) lives
+// under L0[258] — the only HHDM L1 tests can split (L0[256/257] map
+// phys below RAM and have no block leaves). Gating is exact-match so the
+// armed flag always has a restore covering it (no silent holes). There
+// is deliberately no identity slot: the boot identity map (L0[2]) is
+// dead at runtime (L0[2] reads zero; the kernel runs via HHDM).
+constexpr size_t kHhdmL0Idx = 258;
+static_assert(
+    ((CONFIG_HHDM_OFFSET + 0x80000000ULL) >> 30 & 0x1FF) == kHhdmL0Idx,
+    "HHDM RAM L0 moved");
+#endif
+
 /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
 /// entries.
 void VMM::init() {
@@ -251,6 +265,22 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
+    // Issue #152: mirror the x86_64 modified-flags (is_test_active-gated
+    // release stores pairing with the acquire take in snapshot_restore).
+    // Exact-match gating (see kHhdmL0Idx below): the armed flag has an
+    // Sv39 restore covering it.  NOTE: no identity flag on riscv64 — the
+    // boot identity map (L0[2], boot.S) is dead at runtime (L0[2] reads
+    // zero; the kernel runs via HHDM), so there is no live low map to
+    // protect.  Low-half maps arm nothing.
+    // Allow kernel-space VAs when tests are active: the Sv39 L1
+    // save/restore in the snapshot mechanism undoes any 2MB-block splits.
+    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
+                     "(l0_idx=%zu) — L1 restore will clean up",
+                     virt_addr, l0_idx);
+        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+    }
+
     auto *l1 = get_table(l0, l0_idx, true);
     if (!l1)
         return;
@@ -413,6 +443,15 @@ void VMM::unmap_page(uint64_t virt_addr) {
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
+    // Issue #152: mirror map_page (x86_64 unmap_page sets the identity
+    // flag only, plus a warn for kernel-space VAs). No identity flag on
+    // riscv64 (dead boot map — see map_page note above).
+    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
+                     "(l0_idx=%zu)",
+                     virt_addr, l0_idx);
+    }
+
     auto *l1 = get_table(l0, l0_idx, false);
     if (!l1)
         return;
@@ -556,6 +595,17 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
 
+    // Issue #152 (mirrors #197 on x86_64): flag unconditionally — no warn
+    // here (designated private-table API), but the target may be the
+    // shared kernel table or share the HHDM L1 with it (riscv64 clones
+    // copy L0[256..511] by value), so a split must arm the snapshot L1
+    // rewind.  Without this, splits never trigger it and persist across
+    // boundaries.  HHDM only (no live identity map on riscv64 — see
+    // map_page note above).
+    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
+        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
+    }
+
     auto *l1 = get_table(l0, l0_idx, true, true);
     if (!l1)
         return;
@@ -682,6 +732,8 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+    // Issue #152: no identity flag on riscv64 (dead boot map — see
+    // map_page note above). Task-private low tables need no snapshot.
     if (top[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
         return; // 1 GiB block: not ours to clear.
     }

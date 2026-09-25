@@ -1,160 +1,380 @@
 diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
-index f2c66392..b37d27d0 100644
+index b37d27d0..501c2c8b 100644
 --- a/src/kernel/arch/riscv64/test_riscv64.cpp
 +++ b/src/kernel/arch/riscv64/test_riscv64.cpp
-@@ -769,6 +769,138 @@ JARVIS_TEST(riscv64_umode_ecall_smoke, "PRE: none | POST: none") {
+@@ -901,6 +901,123 @@ JARVIS_TEST(riscv64_ecall_dispatch_cookies, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
-+// Issue #203: real-trap ECALL dispatch proof with cookie args (the #185
-+// contract: a7=num, a0-a3=args, sepc+=4, return in OFF_A0). The synthetic
-+// abi_* tests pin extraction+mapping; the umode smoke pins round-trip for
-+// GETPID (arg-ignoring). This closes the gap: KILL's return differs ONLY
-+// by arg1 (999999,1 -> -1 pid-lookup fail; 999999,0 -> 0 SIG_NONE
-+// short-circuit), so user-observed results prove number AND arg routing
-+// through the real trap, and reaching the spin proves sepc+=4 past TWO
-+// 4-byte ecalls (a re-trap wedge would never store the results).
-+// A 80-byte raw stub (lui/addi/sw/ecall/jal only). Every word was decoded
-+// with the python RV decoder (lesson from the M1 stub: never hand-commit
-+// without decoding; decoder self-check + 999999 math verified 2026-09-25):
-+//   lui tp,0x41001         -> tp = 0x41001000 (data page)
-+//   addi t1,zero,0x111     -> cookie 1
-+//   sw t1,0(tp)
-+//   lui a0,0xF4            -> 0xF4000
-+//   addi a0,a0,0x23F       -> a0 = 999999 (0xF423F, nonexistent pid)
-+//   addi a1,zero,1         -> valid signal: pid lookup must fail (-1)
-+//   addi a2,zero,0x333     -> cookie (KILL ignores a2/a3; pinned live below)
-+//   addi a3,zero,0x444     -> cookie
-+//   addi a7,zero,24        -> KILL
-+//   ecall                  -> at +0x24
-+//   sw a0,4(tp)            -> result 1 (expect 0xFFFFFFFF)
-+//   lui a0,0xF4            -> reload cookie: ecall1 left -1 in a0
-+//   addi a0,a0,0x23F       -> a0 = 999999 again
-+//   addi a1,zero,0         -> SIG_NONE: short-circuit 0, pid ignored
-+//   addi a7,zero,24        -> KILL
-+//   ecall                  -> at +0x3C
-+//   sw a0,8(tp)            -> result 2 (expect 0)
-+//   addi t1,zero,0x222     -> cookie 2
-+//   sw t1,12(tp)
-+//   jal x0,0               -> spin at +0x4C
-+// CAREFUL (issue #203): the committed bytes below were decoded FROM THE
-+// FILE (not the derivation list) after a 0x22->0x24 transcription slip
-+// turned sw a0,8(tp) into sw a0,8(s0) (fault stval=0x8, iword=0x00A42423).
-+// Re-verify with the decoder if any byte changes.
++// Issue #152: Sv39 snapshot-backend test helpers. Codec mirrors BlockGuard:
++// V=bit0, table=V-only (leaf=R|W|X), child phys=((e>>10)<<12)&mask.
++// The HHDM L0 index is asserted against CONFIG, not hardcoded blindly;
++// L0[2] is the boot.S L1_id identity contract.
 +namespace {
-+// RV64LE. Data slots: [cookie1, result1, result2, cookie2].
-+constexpr uint8_t kEcallCookieStub[] = {
-+    0x37, 0x12, 0x00, 0x41, 0x13, 0x03, 0x10, 0x11, 0x23, 0x20, 0x62, 0x00,
-+    0x37, 0x45, 0x0F, 0x00, 0x13, 0x05, 0xF5, 0x23, 0x93, 0x05, 0x10, 0x00,
-+    0x13, 0x06, 0x30, 0x33, 0x93, 0x06, 0x40, 0x44, 0x93, 0x08, 0x80, 0x01,
-+    0x73, 0x00, 0x00, 0x00, 0x23, 0x22, 0xA2, 0x00, 0x37, 0x45, 0x0F, 0x00,
-+    0x13, 0x05, 0xF5, 0x23, 0x93, 0x05, 0x00, 0x00, 0x93, 0x08, 0x80, 0x01,
-+    0x73, 0x00, 0x00, 0x00, 0x23, 0x24, 0xA2, 0x00, 0x13, 0x03, 0x20, 0x22,
-+    0x23, 0x26, 0x62, 0x00, 0x6F, 0x00, 0x00, 0x00,
-+};
-+constexpr uint32_t kCookieResultSentinel = 0xDEAD;
++uint64_t *riscv_snapshot_l1(size_t l0_idx) {
++    uint64_t root = arch::read_cr3();
++    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + root);
++    uint64_t e = l0[l0_idx];
++    if ((e & 1ULL) == 0 || (e & 0xEU) != 0)
++        return nullptr;
++    uint64_t phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
++}
 +}  // namespace
 +
-+JARVIS_TEST(riscv64_ecall_dispatch_cookies, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    const uint64_t free_before = PMM::free_pages_ref();
-+
-+    const uint64_t stub_phys = PMM::alloc_user_page();
-+    const uint64_t data_phys = PMM::alloc_user_page();
-+    JARVIS_ASSERT_FMT(stub_phys != 0 && data_phys != 0, "user alloc failed");
-+
-+    auto *stub = reinterpret_cast<volatile uint8_t *>(arch::HHDM_OFFSET +
-+                                                      stub_phys);
-+    for (size_t i = 0; i < sizeof(kEcallCookieStub); ++i)
-+        stub[i] = kEcallCookieStub[i];
-+    auto *data = reinterpret_cast<volatile uint32_t *>(arch::HHDM_OFFSET +
-+                                                        data_phys);
-+    data[0] = 0;
-+    data[1] = kCookieResultSentinel;
-+    data[2] = kCookieResultSentinel;
-+    data[3] = 0;
-+
-+    auto *t = TaskControlBlock::create_user(
-+        reinterpret_cast<void (*)()>(kUmodeStubVa), 11, 10, 32_KiB);
-+    JARVIS_ASSERT_FMT(t != nullptr, "create_user failed");
-+    JARVIS_ASSERT(Scheduler::set_sched_policy(*t, SchedPolicy::FIXED));
-+
-+    VMM::map_page_in_pml4(kUmodeStubVa, stub_phys, true, true,
-+                          t->page_table_);
-+    VMM::map_page_in_pml4(kUmodeDataVa, data_phys, true, false,
-+                          t->page_table_);
-+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp);
-+    frame[31] = kUmodeStubVa;  // SEPC slot (OFF_SEPC=248, idx 31)
-+
-+    JARVIS_ASSERT_FMT(
-+        VMM::virt_to_phys_in_pml4(kUmodeStubVa, t->page_table_) == stub_phys,
-+        "stub VA not mapped in task tables");
-+    JARVIS_ASSERT_FMT(
-+        VMM::virt_to_phys_in_pml4(kUmodeDataVa, t->page_table_) == data_phys,
-+        "data VA not mapped in task tables");
-+
++// Issue #152: flag set/take/clear semantics through the real setters,
++// mirroring x86 vmm_hhdm_take_semantics. Difference from x86: the split
++// L2 comes from the page-table pool (get_table default), so — like
++// BlockGuard — the manual restore puts back the block leaf and leaves
++// the orphaned L2 to the boundary pool-rollback (no manual free: the
++// pool bitmap slice is overwritten from snapshot, and a manual free
++// would race it). IRQ-critical window masked like the x86 test.
++JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
++    VMM::clear_hhdm_modified();
++    VMM::clear_identity_modified();
++    JARVIS_ASSERT(!VMM::take_hhdm_modified());
++    JARVIS_ASSERT(!VMM::take_identity_modified());
++    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++    // Scratch HHDM VA inside a live 2MB block leaf. Indices derive from
++    // the full VA (never the offset alone).
++    constexpr uint64_t kScratch = 0xFFFFFFC080000000ULL + 0x400000ULL;
++    constexpr size_t kIdx = (static_cast<size_t>(kScratch) >> 21) & 0x1FF;
++    // L0 slot of the scratch VA itself (self-consistent: the save/restore
++    // backend covers this slot; asserted 258, the HHDM RAM window).
++    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch) >> 30) & 0x1FF;
++    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
++    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
++    JARVIS_ASSERT_FMT((l1[kIdx] & 1ULL) && (l1[kIdx] & 0xEULL),
++                      "HHDM L1[%zu] not a block leaf", kIdx);
++    uint64_t saved_leaf = l1[kIdx];
++    uint64_t data_phys = PMM::alloc_page();
++    JARVIS_ASSERT_FMT(data_phys != 0, "alloc failed");
 +    {
 +        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
++        VMM::map_page(kScratch, data_phys, false);
++        // Round-trip through the real setter: set→take true→was false.
++        JARVIS_ASSERT(VMM::hhdm_was_modified());
++        JARVIS_ASSERT(VMM::take_hhdm_modified());
++        JARVIS_ASSERT(!VMM::hhdm_was_modified());
++        JARVIS_ASSERT(!VMM::take_hhdm_modified());
++        // Set-after-take is preserved (the gap-closure property).
++        VMM::map_page(kScratch, data_phys, false);
++        JARVIS_ASSERT(VMM::take_hhdm_modified());
++        // Manual restore (regression pattern): unmap, put back the block
++        // leaf, fence. The split L2 stays for pool-rollback (see above).
++        VMM::unmap_page(kScratch);
++        l1[kIdx] = saved_leaf;
++        asm volatile("sfence.vma" ::: "memory");
 +    }
-+    Scheduler::reschedule();
++    PMM::free_page(data_phys);
++    // Leave the flags clean for the rest of the suite.
++    VMM::clear_hhdm_modified();
++    VMM::clear_identity_modified();
++    JARVIS_ASSERT(!VMM::hhdm_was_modified());
++    JARVIS_TEST_PASS();
++}
 +
-+    // Two ecalls at stub+0x24 / +0x3C, spin at +0x4C.
-+    const uint64_t start = arch::Timer::ticks();
-+    bool done = false;
-+    while (arch::Timer::ticks() - start < 200) {
-+        if (data[0] == kUmodeCookie1 && data[3] == kUmodeCookie2) {
-+            done = true;
-+            break;
-+        }
-+        arch::hlt();
++// Issue #152: end-to-end proof that the boundary snapshot_restore rewinds
++// an HHDM L1 split left in place. This test maps (split, flag armed) and
++// deliberately does NOT restore the L1 entry; the paired verify test
++// below (registered immediately after; the harness runs registration
++// order) asserts the block leaf is back and the flag was consumed.
++// PMM discipline: the data page is freed manually (regular PMM); the
++// split L2 is pool-tracked and check-neutral (BlockGuard precedent), and
++// the backend frees it before the pool slice is overwritten.
++JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
++    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
++    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
++    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
++    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
++    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
++    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
++                      "HHDM L1[%zu] not a block leaf", kIdx2);
++    uint64_t data_phys = PMM::alloc_page();
++    JARVIS_ASSERT_FMT(data_phys != 0, "alloc failed");
++    {
++        arch::IrqGuard ig{};
++        VMM::map_page(kScratch2, data_phys, false);
 +    }
-+    const uint32_t result1 = data[1];
-+    const uint32_t result2 = data[2];
++    JARVIS_ASSERT_FMT(VMM::hhdm_was_modified(), "hhdm flag not set by map");
++    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL) == 0,
++                      "HHDM L1[%zu] not split (still leaf)", kIdx2);
++    PMM::free_page(data_phys);
++    // No L1 restore, no flag clear: the boundary backend owns them now.
++    JARVIS_TEST_PASS();
++}
 +
-+    // Teardown BEFORE asserting (cookbook Rule 5): terminate (spinning
-+    // in U-mode), drain, release user resources, free the TCB.
-+    if (TaskControlBlock::is_valid(t) &&
-+        t->state != TaskState::TERMINATED)
-+        (void)Scheduler::terminate_err(*t, 0);
-+    Scheduler::drain_zombie_list();
-+    if (TaskControlBlock::is_valid(t)) {
-+        t->cleanup();
-+        delete t;
-+    }
-+    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT_FMT(done, "cookie round trip failed (re-trap wedge?)");
-+    JARVIS_ASSERT_FMT(result1 == 0xFFFFFFFFU,
-+                      "KILL(999999,1) user-a0 = 0x%x, want -1 "
-+                      "(number/arg misroute?)",
-+                      result1);
-+    JARVIS_ASSERT_FMT(result2 == 0,
-+                      "KILL(999999,0) user-a0 = 0x%x, want 0 "
-+                      "(return-slot miss?)",
-+                      result2);
-+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
-+                      "PMM delta %ld pages after ecall cookie test",
-+                      (long)(PMM::free_pages_ref() - free_before));
++// Issue #152: second half of the split/restore pair — must run directly
++// after riscv64_hhdm_split_restored with no test in between.
++JARVIS_TEST(riscv64_hhdm_split_verify, "PRE: none | POST: none") {
++    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
++    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
++    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
++    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
++    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
++    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
++                      "HHDM L1[%zu] not restored to block leaf", kIdx2);
++    JARVIS_ASSERT_FMT(!VMM::take_hhdm_modified(),
++                      "hhdm flag not consumed by boundary restore");
++    JARVIS_ASSERT_FMT(!VMM::hhdm_was_modified(), "hhdm flag still set");
 +    JARVIS_TEST_PASS();
 +}
 +
  // Issue #206 M2: e_machine gate — EM_RISCV accepted, x86_64/AArch64 rejected.
  // Runmode: kernel
  // Testidea: Synthetic headers differing only in machine field.
-@@ -1051,6 +1183,7 @@ void register_riscv64_tests() {
-     JARVIS_REGISTER_TEST(riscv64_abi_arg_routing);
+@@ -1184,6 +1301,9 @@ void register_riscv64_tests() {
      JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
      JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
-+    JARVIS_REGISTER_TEST(riscv64_ecall_dispatch_cookies);  // issue #203
+     JARVIS_REGISTER_TEST(riscv64_ecall_dispatch_cookies);  // issue #203
++    JARVIS_REGISTER_TEST(riscv64_hhdm_take_semantics);      // issue #152
++    JARVIS_REGISTER_TEST(riscv64_hhdm_split_restored);      // issue #152
++    JARVIS_REGISTER_TEST(riscv64_hhdm_split_verify);        // issue #152
      JARVIS_REGISTER_TEST(riscv64_elf_bad_machine);    // issue #206 M2
      JARVIS_REGISTER_TEST(riscv64_clone_frame_readback);  // issue #206 M2
      JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index b56a8425..1a0771f5 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -36,6 +36,20 @@ constinit uint64_t VMM::pml4_kernel_template_[512] = {};
+ bool VMM::hhdm_modified_ = false;
+ bool VMM::identity_modified_ = false;
+ 
++#if defined(CONFIG_ARCH_RISCV64)
++// Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
++// window (boot.S: 128 × 2MB leaves for PA 0x80000000-0x8FFFFFFF) lives
++// under L0[258] — the only HHDM L1 tests can split (L0[256/257] map
++// phys below RAM and have no block leaves). Gating is exact-match so the
++// armed flag always has a restore covering it (no silent holes). There
++// is deliberately no identity slot: the boot identity map (L0[2]) is
++// dead at runtime (L0[2] reads zero; the kernel runs via HHDM).
++constexpr size_t kHhdmL0Idx = 258;
++static_assert(
++    ((CONFIG_HHDM_OFFSET + 0x80000000ULL) >> 30 & 0x1FF) == kHhdmL0Idx,
++    "HHDM RAM L0 moved");
++#endif
++
+ /// @brief Initialise the VMM: capture current PML4, zero residual bootloader
+ /// entries.
+ void VMM::init() {
+@@ -251,6 +265,22 @@ void VMM::map_page(uint64_t virt_addr, uint64_t phys_addr, bool user) {
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+ 
++    // Issue #152: mirror the x86_64 modified-flags (is_test_active-gated
++    // release stores pairing with the acquire take in snapshot_restore).
++    // Exact-match gating (see kHhdmL0Idx below): the armed flag has an
++    // Sv39 restore covering it.  NOTE: no identity flag on riscv64 — the
++    // boot identity map (L0[2], boot.S) is dead at runtime (L0[2] reads
++    // zero; the kernel runs via HHDM), so there is no live low map to
++    // protect.  Low-half maps arm nothing.
++    // Allow kernel-space VAs when tests are active: the Sv39 L1
++    // save/restore in the snapshot mechanism undoes any 2MB-block splits.
++    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
++        Logger::warn("map_page: test modifying kernel-space VA 0x%lx "
++                     "(l0_idx=%zu) — L1 restore will clean up",
++                     virt_addr, l0_idx);
++        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
++    }
++
+     auto *l1 = get_table(l0, l0_idx, true);
+     if (!l1)
+         return;
+@@ -413,6 +443,15 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+ 
++    // Issue #152: mirror map_page (x86_64 unmap_page sets the identity
++    // flag only, plus a warn for kernel-space VAs). No identity flag on
++    // riscv64 (dead boot map — see map_page note above).
++    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
++        Logger::warn("unmap_page: test unmapping kernel-space VA 0x%lx "
++                     "(l0_idx=%zu)",
++                     virt_addr, l0_idx);
++    }
++
+     auto *l1 = get_table(l0, l0_idx, false);
+     if (!l1)
+         return;
+@@ -556,6 +595,17 @@ void VMM::map_page_in_pml4(uint64_t virt_addr, uint64_t phys_addr, bool user,
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
+ 
++    // Issue #152 (mirrors #197 on x86_64): flag unconditionally — no warn
++    // here (designated private-table API), but the target may be the
++    // shared kernel table or share the HHDM L1 with it (riscv64 clones
++    // copy L0[256..511] by value), so a split must arm the snapshot L1
++    // rewind.  Without this, splits never trigger it and persist across
++    // boundaries.  HHDM only (no live identity map on riscv64 — see
++    // map_page note above).
++    if (Scheduler::is_test_active() && l0_idx == kHhdmL0Idx) {
++        __atomic_store_n(&hhdm_modified_, true, __ATOMIC_RELEASE);
++    }
++
+     auto *l1 = get_table(l0, l0_idx, true, true);
+     if (!l1)
+         return;
+@@ -682,6 +732,8 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     size_t l0_idx = (virt_addr & VMM::L0_MASK) >> VMM::L0_SHIFT;
+     size_t l1_idx = (virt_addr & VMM::L1_MASK) >> VMM::L1_SHIFT;
+     size_t l2_idx = (virt_addr & VMM::L2_MASK) >> VMM::L2_SHIFT;
++    // Issue #152: no identity flag on riscv64 (dead boot map — see
++    // map_page note above). Task-private low tables need no snapshot.
+     if (top[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC)) {
+         return; // 1 GiB block: not ours to clear.
+     }
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 623b4950..a7e571f1 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -35,6 +35,7 @@
+ #include <kernel/driver/iocd.hpp>
+ #include <kernel/irq_thread.hpp>
+ #include <kernel/memory/vmm.hpp>
++#include <kernel/arch/page_table.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+ #if defined(CONFIG_ARCH_X86_64)
+@@ -223,6 +224,19 @@ static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
+ static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+ static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+ 
++#if defined(CONFIG_ARCH_RISCV64)
++// Issue #152: Sv39 L0 slot covered by the snapshot backend. The HHDM RAM
++// window (boot.S: 128 × 2MB leaves for PA 0x80000000-0x8FFFFFFF) lives
++// under L0[258] — not the HHDM base's own L0[256] (that 1GB maps phys
++// below RAM and has no block leaves to split). There is deliberately no
++// identity slot: the boot identity map (L0[2]) is dead at runtime (L0[2]
++// reads zero; the kernel runs via HHDM), so there is no live low map to
++// save or restore.
++constexpr size_t kRiscvHhdmL0 =
++    (static_cast<size_t>(CONFIG_HHDM_OFFSET + 0x80000000ULL) >> 30) & 0x1FF;
++static_assert(kRiscvHhdmL0 == 258, "HHDM RAM L0 moved");
++#endif
++
+ static size_t off_kstack_header(size_t user_page_count) {
+     return off_user_page_data() +
+            user_page_count * (sizeof(uint64_t) + arch::PAGE_SIZE) +
+@@ -633,6 +647,31 @@ bool snapshot_create() {
+         }
+     }
+ #endif
++#if defined(CONFIG_ARCH_RISCV64)
++    // Issue #152: Sv39 save backend. The kernel table layout comes from
++    // boot.S: L0[258]→L1 covers the HHDM RAM window (128 × 2MB leaves).
++    // Save the L1 table whole (512 entries = HHDM_PD_BYTES, buffer size
++    // unchanged) so the flag-gated restore below can undo test splits.
++    // Codec mirrors BlockGuard (test_riscv64.cpp): V=bit0, leaf=R|W|X,
++    // child phys = ((entry >> 10) << 12).
++    {
++        constexpr size_t kHhdmL0 = kRiscvHhdmL0;
++        uint64_t pml4_phys = VMM::get_kernel_pml4();
++        if (pml4_phys) {
++            auto *l0 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++            uint64_t e = l0[kHhdmL0];
++            if ((e & 1ULL) && (e & 0xEU) == 0) {
++                uint64_t l1_phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++                auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                        l1_phys);
++                __builtin_memcpy(
++                    g_snapshot + off_hhdm_pd(user_page_count, task_count),
++                    l1, 512 * sizeof(uint64_t));
++            }
++        }
++    }
++#endif
+ 
+     // ---- Map-then-unmap guard pages (after PD save, so saved PD is clean) ----
+     // Guard pages must be within HHDM window (phys < 128MB) and above reserved
+@@ -855,6 +894,10 @@ void snapshot_restore(const char *test_name) {
+     // Issue #60: atomic take (not check-then-clear) — a set landing
+     // after the exchange stays set, so the next restore over-restores
+     // (safe) instead of skipping (stale mappings leak).
++    // Issue #152: 4-level shape (pml4[256]/pdpt[0]/0x5000) — x86_64 and
++    // aarch64 only.  On riscv64 these decodes misread Sv39 tables, so
++    // this block is arch-gated and Sv39 has its own restore below.
++#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
+     if (VMM::take_hhdm_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+@@ -911,6 +954,7 @@ void snapshot_restore(const char *test_name) {
+     // Split PT pages are reclaimed by the page-table pool restore that runs
+     // later (off_pt_pool), so this block only restores the PD entries.
+     // (Issue #60: same take-instead-of-check-then-clear as above.)
++    // Issue #152: same 4-level gate as the HHDM block above.
+     if (VMM::take_identity_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+@@ -940,6 +984,57 @@ void snapshot_restore(const char *test_name) {
+             }
+         }
+     }
++#endif // CONFIG_ARCH_X86_64 || CONFIG_ARCH_AARCH64 (4-level PD restores)
++#if defined(CONFIG_ARCH_RISCV64)
++    // ---- Sv39 HHDM L1 restore (before PMM restore, issue #152) ----
++    // Undoes 2MB-block splits in the HHDM RAM window (L0[258]→L1, saved
++    // whole at snapshot).  Gated on the atomic take (same take-instead-
++    // of-check-then-clear as the x86 blocks: over-restore is safe).
++    // Entries that went block-leaf→table get their split L2 freed first
++    // (mirrors the x86 split-PT reclaim; the PMM bitmap restore below
++    // then stays consistent), then the saved L1 is copied back whole
++    // and the TLB flushed (Sv39 has no CR3-reload flush here).
++    if (VMM::take_hhdm_modified()) {
++        constexpr size_t kHhdmL0 = kRiscvHhdmL0;
++        uint64_t pml4_phys = VMM::get_kernel_pml4();
++        if (pml4_phys) {
++            uint64_t nu = *reinterpret_cast<uint64_t *>(
++                g_snapshot + off_user_page_count());
++            uint64_t nk = *reinterpret_cast<uint64_t *>(
++                g_snapshot + off_kstack_header(nu));
++            auto *saved_l1 = reinterpret_cast<const uint64_t *>(
++                g_snapshot + off_hhdm_pd(nu, nk));
++            auto *l0 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++            uint64_t e = l0[kHhdmL0];
++            // Sanity: L0 slot must be a present table (V=1, no R|W|X).
++            // Anything else means corruption — skip rather than write
++            // to kernel data (mirrors the x86 0x5000/0x3000 checks).
++            if ((e & 1ULL) && (e & 0xEU) == 0) {
++                uint64_t l1_phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++                auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
++                                                        l1_phys);
++                for (size_t i = 0; i < 512; ++i) {
++                    uint64_t s = saved_l1[i];
++                    uint64_t c = l1[i];
++                    bool saved_leaf = (s & 1ULL) && (s & 0xEU);
++                    bool live_table = (c & 1ULL) && (c & 0xEU) == 0;
++                    if (saved_leaf && live_table)
++                        PMM::free_page((((c >> 10) << 12) &
++                                        0xFFFFFFFFFFF000ULL));
++                }
++                __builtin_memcpy(l1, saved_l1, 512 * sizeof(uint64_t));
++                arch::ArchPageTable::tlb_flush_all();
++            } else {
++                Logger::raw_write("[L1-RESTORE] CORRUPTED l0=");
++                Logger::print_hex(e);
++                Logger::raw_write(" in test=\"");
++                Logger::raw_write(test_name ? test_name : "?");
++                Logger::raw_write("\"\n");
++            }
++        }
++    }
++#endif // CONFIG_ARCH_RISCV64 (Sv39 HHDM L1 restore)
+ 
+     // ---- PMM ----
+     {
 diff --git a/test-history.txt b/test-history.txt
-index 76300f10..20991402 100644
+index 20991402..add23a70 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2098,3 +2098,4 @@ SUMMARY: total=20 ok=19 fail=1
- 2026-09-25 07:30:48 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 2797ms
+@@ -2099,3 +2099,5 @@ SUMMARY: total=20 ok=19 fail=1
  
  SUMMARY: total=2 ok=2 fail=0
-+2026-09-25 07:47:30 arch_riscv64 PASSED: 25 FAILED: 0 TIME: 12s
+ 2026-09-25 07:47:30 arch_riscv64 PASSED: 25 FAILED: 0 TIME: 12s
++2026-09-25 07:20:40 arch_riscv64 PASSED: 28 FAILED: 0 TIME: 219ms
++2026-09-25 07:23:10 core PASSED: 472 FAILED: 0 TIME: 111186ms

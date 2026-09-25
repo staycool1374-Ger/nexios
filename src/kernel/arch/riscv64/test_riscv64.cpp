@@ -901,6 +901,123 @@ JARVIS_TEST(riscv64_ecall_dispatch_cookies, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Issue #152: Sv39 snapshot-backend test helpers. Codec mirrors BlockGuard:
+// V=bit0, table=V-only (leaf=R|W|X), child phys=((e>>10)<<12)&mask.
+// The HHDM L0 index is asserted against CONFIG, not hardcoded blindly;
+// L0[2] is the boot.S L1_id identity contract.
+namespace {
+uint64_t *riscv_snapshot_l1(size_t l0_idx) {
+    uint64_t root = arch::read_cr3();
+    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + root);
+    uint64_t e = l0[l0_idx];
+    if ((e & 1ULL) == 0 || (e & 0xEU) != 0)
+        return nullptr;
+    uint64_t phys = ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    return reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
+}
+}  // namespace
+
+// Issue #152: flag set/take/clear semantics through the real setters,
+// mirroring x86 vmm_hhdm_take_semantics. Difference from x86: the split
+// L2 comes from the page-table pool (get_table default), so — like
+// BlockGuard — the manual restore puts back the block leaf and leaves
+// the orphaned L2 to the boundary pool-rollback (no manual free: the
+// pool bitmap slice is overwritten from snapshot, and a manual free
+// would race it). IRQ-critical window masked like the x86 test.
+JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
+    VMM::clear_hhdm_modified();
+    VMM::clear_identity_modified();
+    JARVIS_ASSERT(!VMM::take_hhdm_modified());
+    JARVIS_ASSERT(!VMM::take_identity_modified());
+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
+    // Scratch HHDM VA inside a live 2MB block leaf. Indices derive from
+    // the full VA (never the offset alone).
+    constexpr uint64_t kScratch = 0xFFFFFFC080000000ULL + 0x400000ULL;
+    constexpr size_t kIdx = (static_cast<size_t>(kScratch) >> 21) & 0x1FF;
+    // L0 slot of the scratch VA itself (self-consistent: the save/restore
+    // backend covers this slot; asserted 258, the HHDM RAM window).
+    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch) >> 30) & 0x1FF;
+    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+    JARVIS_ASSERT_FMT((l1[kIdx] & 1ULL) && (l1[kIdx] & 0xEULL),
+                      "HHDM L1[%zu] not a block leaf", kIdx);
+    uint64_t saved_leaf = l1[kIdx];
+    uint64_t data_phys = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(data_phys != 0, "alloc failed");
+    {
+        arch::IrqGuard ig{};
+        VMM::map_page(kScratch, data_phys, false);
+        // Round-trip through the real setter: set→take true→was false.
+        JARVIS_ASSERT(VMM::hhdm_was_modified());
+        JARVIS_ASSERT(VMM::take_hhdm_modified());
+        JARVIS_ASSERT(!VMM::hhdm_was_modified());
+        JARVIS_ASSERT(!VMM::take_hhdm_modified());
+        // Set-after-take is preserved (the gap-closure property).
+        VMM::map_page(kScratch, data_phys, false);
+        JARVIS_ASSERT(VMM::take_hhdm_modified());
+        // Manual restore (regression pattern): unmap, put back the block
+        // leaf, fence. The split L2 stays for pool-rollback (see above).
+        VMM::unmap_page(kScratch);
+        l1[kIdx] = saved_leaf;
+        asm volatile("sfence.vma" ::: "memory");
+    }
+    PMM::free_page(data_phys);
+    // Leave the flags clean for the rest of the suite.
+    VMM::clear_hhdm_modified();
+    VMM::clear_identity_modified();
+    JARVIS_ASSERT(!VMM::hhdm_was_modified());
+    JARVIS_TEST_PASS();
+}
+
+// Issue #152: end-to-end proof that the boundary snapshot_restore rewinds
+// an HHDM L1 split left in place. This test maps (split, flag armed) and
+// deliberately does NOT restore the L1 entry; the paired verify test
+// below (registered immediately after; the harness runs registration
+// order) asserts the block leaf is back and the flag was consumed.
+// PMM discipline: the data page is freed manually (regular PMM); the
+// split L2 is pool-tracked and check-neutral (BlockGuard precedent), and
+// the backend frees it before the pool slice is overwritten.
+JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
+    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
+    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
+    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
+    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
+                      "HHDM L1[%zu] not a block leaf", kIdx2);
+    uint64_t data_phys = PMM::alloc_page();
+    JARVIS_ASSERT_FMT(data_phys != 0, "alloc failed");
+    {
+        arch::IrqGuard ig{};
+        VMM::map_page(kScratch2, data_phys, false);
+    }
+    JARVIS_ASSERT_FMT(VMM::hhdm_was_modified(), "hhdm flag not set by map");
+    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL) == 0,
+                      "HHDM L1[%zu] not split (still leaf)", kIdx2);
+    PMM::free_page(data_phys);
+    // No L1 restore, no flag clear: the boundary backend owns them now.
+    JARVIS_TEST_PASS();
+}
+
+// Issue #152: second half of the split/restore pair — must run directly
+// after riscv64_hhdm_split_restored with no test in between.
+JARVIS_TEST(riscv64_hhdm_split_verify, "PRE: none | POST: none") {
+    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
+    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
+    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
+    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+    JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+    JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
+                      "HHDM L1[%zu] not restored to block leaf", kIdx2);
+    JARVIS_ASSERT_FMT(!VMM::take_hhdm_modified(),
+                      "hhdm flag not consumed by boundary restore");
+    JARVIS_ASSERT_FMT(!VMM::hhdm_was_modified(), "hhdm flag still set");
+    JARVIS_TEST_PASS();
+}
+
 // Issue #206 M2: e_machine gate — EM_RISCV accepted, x86_64/AArch64 rejected.
 // Runmode: kernel
 // Testidea: Synthetic headers differing only in machine field.
@@ -1184,6 +1301,9 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_abi_bad_number);
     JARVIS_REGISTER_TEST(riscv64_umode_ecall_smoke);  // issue #206 M1
     JARVIS_REGISTER_TEST(riscv64_ecall_dispatch_cookies);  // issue #203
+    JARVIS_REGISTER_TEST(riscv64_hhdm_take_semantics);      // issue #152
+    JARVIS_REGISTER_TEST(riscv64_hhdm_split_restored);      // issue #152
+    JARVIS_REGISTER_TEST(riscv64_hhdm_split_verify);        // issue #152
     JARVIS_REGISTER_TEST(riscv64_elf_bad_machine);    // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_clone_frame_readback);  // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
