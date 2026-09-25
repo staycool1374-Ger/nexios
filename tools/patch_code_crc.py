@@ -55,7 +55,13 @@ def patch_crc(elf_path):
                         'utf-8', errors='replace')
                 except ValueError:
                     sh_name = f"<bad idx {sh_name_idx}>"
-                print(f"    [{i}] {sh_name}")
+                sh_type = struct.unpack_from('<I', data, sh_off + 4)[0]
+                sh_addr = struct.unpack_from('<Q', data, sh_off + 16)[0]
+                sh_offset = struct.unpack_from('<Q', data, sh_off + 24)[0]
+                sh_size = struct.unpack_from('<Q', data, sh_off + 32)[0]
+                print(f"    [{i}] {sh_name} type={sh_type} "
+                      f"addr=0x{sh_addr:X} off=0x{sh_offset:X} "
+                      f"size=0x{sh_size:X}")
             return 1
 
         # CRC32 of .text section (skip first 8 bytes for the start marker)
