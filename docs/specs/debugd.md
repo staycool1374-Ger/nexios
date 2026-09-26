@@ -145,6 +145,11 @@ Today a user fault terminates the task. With a debugger attached:
   debugger per target; second attach fails `EBUSY`. Detach (or
   debugger death — see #191 supervision) resumes the target or, if
   it was fault-stopped, applies the default disposition (terminate).
+  (Phase-2 implementation note, issue #226: "fault-stopped" means a
+  genuine fault stop (kind FAULT); breakpoint/step stops are
+  debugger-driven and resume like clean parks — GDB detach semantics.
+  x86_64 additionally requires IDT gate 3 at DPL 3, otherwise a user
+  `int3` raises #GP instead of #BP and breakpoints can never fire.)
 - Stop conditions routed to the debugger instead of the default
   disposition: software breakpoints (§5), single-step traps,
   page faults / illegal instructions / alignment faults, and
@@ -167,10 +172,14 @@ Today a user fault terminates the task. With a debugger attached:
   exact); debugd only asks "break at VA". Source of truth on
   disagreement is the kernel shadow table — the controller keeps a
   write-through cache only (kernel wins, controller re-syncs).
-- Single-step: arch-native (x86 TF, ARM SS bit, RISC-V *no*
-  hardware step — specified as breakpoint-next-instruction emulation
-  with interrupt masking; MUST be specified per arch at
-  implementation, not assumed uniform).
+- Single-step: arch-native where deterministic (x86 TF with IF masked
+  across the one instruction); breakpoint-next-instruction emulation
+  elsewhere — RISC-V (RVC length decode, SIE masked) and AArch64
+  (fixed-4B ISA, temp brk at pc+4, no masking needed as the temp
+  persists across preemption). The emulation avoids any dependence on
+  the QEMU/silicon software-step debug model (MDSCR_EL1.SS); the SPSR.SS
+  path is reserved for future use. MUST be specified per arch at
+  implementation, not assumed uniform.
 
 ## 5. RSP parser core (`gdb_rsp.hpp`, header-only)
 

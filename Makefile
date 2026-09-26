@@ -414,6 +414,7 @@ endif
 # when switching build types so stale object files don't leak between builds.
 # ------------------------------------------------------------------------------
 BUILD_STAMP := build/.build-type
+LTO_STAMP := build/.lto-mode
 
 # ------------------------------------------------------------------------------
 # Architecture stamp — checked at PARSE TIME (before mk/rules.mk -includes the
@@ -611,7 +612,15 @@ help:
 #
 # Triggers clean if:
 #   (a) stamp exists and doesn't match 'debug', or
-#   (b) no stamp exists but .o files are present (interrupted build).
+#   (b) no stamp exists but .o files are present (interrupted build), or
+#   (c) the LTO mode stamp exists and doesn't match the requested mode.
+# (c) is the stale-LTO guard (issue #226): GDB flows (debug-test,
+# debug-shell, rr-record) build with NO_LTO=1 while the default build uses
+# LTO.  Linking LTO-bytecode objects without the plugin fails with "plugin
+# needed to handle lto object" plus undefined references, so a mode switch
+# must rebuild all objects (same doctrine as the ARCH_STAMP clean above).
+# Recipe-time (not parse-time) so target-specific NO_LTO (rr-record) is
+# visible via dependency-chain inheritance.
 # ------------------------------------------------------------------------------
 check-build-stamp:
 	@stamp=; target=debug; \
@@ -630,7 +639,28 @@ check-build-stamp:
 	        $(MAKE) clean >/dev/null 2>&1; \
 	    fi; \
 	fi; \
-	mkdir -p build; echo debug > $(BUILD_STAMP)
+	lto_stamp=; lto_target=lto; \
+	if [ "$(NO_LTO)" = "1" ]; then \
+	    lto_target=no-lto; \
+	fi; \
+	if [ -f $(LTO_STAMP) ]; then \
+	    lto_stamp=$$(cat $(LTO_STAMP)); \
+	fi; \
+	if [ "$$lto_stamp" != "$$lto_target" ]; then \
+	    if [ -n "$$lto_stamp" ]; then \
+	        printf '  %-7s %s\n' 'CLEAN' "LTO mode changed ($$lto_stamp -> $$lto_target)"; \
+	        $(MAKE) clean >/dev/null 2>&1; \
+	    elif ls build/ 2>/dev/null | grep -qv '\.gitkeep\|libc\|initrd\|profiling'; then \
+	        printf '  %-7s %s\n' 'CLEAN' 'Unstamped objects predate LTO tracking'; \
+	        $(MAKE) clean >/dev/null 2>&1; \
+	    fi; \
+	fi; \
+	mkdir -p build; echo debug > $(BUILD_STAMP); \
+	if [ "$(NO_LTO)" = "1" ]; then \
+	    echo no-lto > $(LTO_STAMP); \
+	else \
+	    echo lto > $(LTO_STAMP); \
+	fi
 
 # ------------------------------------------------------------------------------
 # Debug build

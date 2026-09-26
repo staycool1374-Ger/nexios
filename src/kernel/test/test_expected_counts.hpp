@@ -69,7 +69,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"syscall_core",         32,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
-    {"debug_syscall",         5,    5,       5      },  // debugger syscalls (issue #225): attach lifecycle/rejects, codec goldens, park/read/write/detach, mem partials (arch-neutral)
+    {"debug_syscall",         12,   12,      12     },  // debugger syscalls (issues #225/#226): attach/rejects/codec/park/mem + stop routing: bp insert-hit-clear, step-once, fault route, overflow+death slot, detach disposition, debugger death, poll-empty (arch-neutral)
 
     // process
     {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)

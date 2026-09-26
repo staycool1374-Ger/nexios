@@ -2319,6 +2319,33 @@ void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
                          __ATOMIC_RELAXED);
 }
 
+// Issue #226: debugger fault-stop park. ISR-safe: takes scheduler_lock_
+// directly (same position as switch_away_from_terminating, which runs
+// after with the lock released — never nested). The tick park path never
+// takes g_bind_lock, so router order (scheduler -> stop-queue) matches the
+// documented scheduler_lock_ -> registry order.
+bool Scheduler::debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
+                               uint64_t va) noexcept {
+    arch::IrqGuard irq_guard{};
+    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    if (__atomic_load_n(&tgt.debugger_id, __ATOMIC_ACQUIRE) == 0)
+        return false;
+    if (tgt.magic != TaskControlBlock::TCB_MAGIC)
+        return false;
+    __atomic_store_n(&tgt.debug_stop_kind, kind, __ATOMIC_RELEASE);
+    __atomic_store_n(&tgt.debug_stop_va, va, __ATOMIC_RELEASE);
+    // A step-over re-arm belongs to exactly one pending step: any fresh
+    // non-STEP stop supersedes it (otherwise a later unrelated STEP
+    // completion would re-insert an unasked breakpoint).
+    if (kind != 2) // StopKind::STEP numerics (debug_stop.hpp)
+        __atomic_store_n(&tgt.debug_rearm_va, 0, __ATOMIC_RELEASE);
+    tgt.debug_parked = true;
+    tgt.state = TaskState::BLOCKED;
+    dequeue_ready(tgt);
+    tgt.has_utrap_frame = true; // the trap wrote the U-frame slot
+    return true;
+}
+
 // Issue #225: debugger detach resume. Task-context only (takes IrqGuard +
 // scheduler_lock_); the tick park path never takes g_bind_lock, so the
 // detach order (bind -> scheduler) cannot invert.

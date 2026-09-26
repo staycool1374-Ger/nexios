@@ -385,6 +385,13 @@ class Syscall {
                                     uint64_t *);
     static uint64_t sys_tls_set(uint64_t, uint64_t, uint64_t, uint64_t,
                                 uint64_t *);
+    /// @brief Debugger attach/control multiplex (issues #225/#226, slots
+    ///        86–90 debug-only). Selectors: 0 = detach toggle by handle
+    ///        (fault stops terminate, clean/breakpoint/step stops resume);
+    ///        1 = launcher-claim mint by child pid; 2 = poll one stop event
+    ///        into the caller buffer (EAGAIN when empty); 3/4 = insert/clear
+    ///        breakpoint at VA; 5 = single-step the parked target;
+    ///        6 = continue (step-over + re-arm on breakpoint stops).
     static uint64_t sys_task_debug_attach(uint64_t, uint64_t, uint64_t,
                                           uint64_t, uint64_t *);
     static uint64_t sys_task_debug_read_regs(uint64_t, uint64_t, uint64_t,

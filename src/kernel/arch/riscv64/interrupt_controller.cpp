@@ -4,6 +4,7 @@
 #include <kernel/arch/riscv64/hal/plic.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <signal.hpp>
 
@@ -181,6 +182,29 @@ extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
         t->state != kernel::TaskState::TERMINATED) {
+        // Issue #226: debugger stop routing (spec §4). scause 3
+        // (breakpoint: ebreak/c.ebreak, incl. emulated-step temps) reports
+        // a breakpoint at sepc (the router consumes temps into STEP);
+        // other causes report a fault with stval. Attached targets park;
+        // unattached keep the terminate path below.
+        if (__atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE) != 0) {
+            uint64_t stop_kind = static_cast<uint64_t>(
+                kernel::debug::StopKind::FAULT);
+            // stval carries the fault address only for address faults
+            // (misaligned/page faults); illegal instructions leave it
+            // zero — report the trap pc then (mirrors x86 rip/aarch64
+            // ELR for non-address faults).
+            uint64_t stop_addr = (stval != 0) ? stval : sepc;
+            if (scause == 3) {
+                stop_kind = static_cast<uint64_t>(
+                    kernel::debug::StopKind::BREAKPOINT);
+                stop_addr = sepc;
+            }
+            if (kernel::debug::debug_route_fault(*t, stop_kind, scause,
+                                                 stop_addr)) {
+                return;
+            }
+        }
         t->state = kernel::TaskState::TERMINATED;
         t->exit_code = static_cast<uint64_t>(
             -static_cast<int64_t>(kernel::Signal::SIGSEGV));

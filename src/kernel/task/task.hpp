@@ -137,6 +137,11 @@ struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
 namespace task {
 class SporadicServer;
 void dmesg_task_main();
+/// @brief VA of the user-mode yield stub mapped into every create_user()
+///        task (issue #226: tests plant faults at a VA the task is
+///        guaranteed to execute — aarch64/riscv64 rewrite low-VA entries
+///        to this stub, so per-test mapped VAs never run there).
+constexpr uint64_t kUserYieldStubVa = 0x40000000ULL;
 } // namespace task
 
 namespace cap {
@@ -287,7 +292,8 @@ struct TaskControlBlock {
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
            blocked_on_pager_fault(nullptr), debugger_id(0),
            debug_stop_requested(false), debug_parked(false),
-           has_utrap_frame(false),
+           has_utrap_frame(false), debug_stop_kind(0), debug_stop_va(0),
+           debug_rearm_va(0),
            held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
             next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
             generation(0) {
@@ -673,6 +679,24 @@ struct TaskControlBlock {
     ///        never cleared (monotonic: the slot always holds the last
     ///        U-trap once set).  Never-dispatched tasks read EAGAIN.
     bool has_utrap_frame;
+
+    /// @brief Stop kind latched when the fault router parks this task
+    ///        (issue #226, StopKind numerics; 0 = cleanly parked, not
+    ///        fault-stopped).  Decides the detach disposition (fault-stopped
+    ///        targets terminate, cleanly-stopped resume).  ISR-vs-task race:
+    ///        accessed with __atomic ops.
+    uint64_t debug_stop_kind;
+
+    /// @brief Stop VA latched with debug_stop_kind (issue #226): fault
+    ///        address or breakpoint VA (x86: RIP-1 adjusted by the caller).
+    ///        Drives continue step-over + re-arm.  __atomic discipline.
+    uint64_t debug_stop_va;
+
+    /// @brief Step-over re-arm VA (issue #226): continue on a breakpoint
+    ///        restores orig bytes and arms one step; STEP completion
+    ///        re-inserts the breakpoint here.  0 when no re-arm is pending.
+    ///        __atomic discipline.
+    uint64_t debug_rearm_va;
 
     /// @brief Number of mutexes currently held by this task (for PCP ceiling
     /// tracking).

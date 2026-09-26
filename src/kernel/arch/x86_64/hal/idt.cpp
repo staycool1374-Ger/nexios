@@ -70,6 +70,14 @@ void IDT::init() {
         make_entry(__isr_vector[static_cast<int>(InterruptVector::SYSCALL)],
                    GDT_CODE, 0xEE, 0);
 
+    // Issue #226: the breakpoint gate (#BP, vector 3) must be ring-3
+    // accessible (DPL=3, 0xEE) like SYSCALL. With DPL=0 a user `int3`
+    // raises #GP (error 0x1A = IDT gate 3) instead of #BP, so software
+    // breakpoints can never fire (spec §4: int3 is the x86_64 mechanism).
+    entries_[static_cast<int>(InterruptVector::BREAKPOINT)] = make_entry(
+        __isr_vector[static_cast<int>(InterruptVector::BREAKPOINT)], GDT_CODE,
+        0xEE, 0);
+
     // Double-fault handler (vector 8) uses IST1 to switch to a dedicated stack
     entries_[static_cast<int>(InterruptVector::DOUBLE_FAULT)] = make_entry(
         __isr_vector[static_cast<int>(InterruptVector::DOUBLE_FAULT)], GDT_CODE,

@@ -6,6 +6,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #include <signal.hpp>
 
 namespace arch {
@@ -210,6 +211,29 @@ extern "C" void aarch64_el0_fault_handler() {
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
         t->state != kernel::TaskState::TERMINATED) {
+        // Issue #226: debugger stop routing (spec §4). EC 0x3C (BRK
+        // executed) reports a breakpoint at ELR; EC 0x22 (Software Step)
+        // reports step completion; other ECs report a fault with FAR.
+        // Attached targets park; unattached keep the terminate path below.
+        if (__atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE) != 0) {
+            uint64_t ec = (esr >> 26) & 0x3FULL;
+            uint64_t stop_kind = static_cast<uint64_t>(
+                kernel::debug::StopKind::FAULT);
+            uint64_t stop_addr = far;
+            if (ec == 0x3C) {
+                stop_kind = static_cast<uint64_t>(
+                    kernel::debug::StopKind::BREAKPOINT);
+                stop_addr = elr;
+            } else if (ec == 0x22) {
+                stop_kind = static_cast<uint64_t>(
+                    kernel::debug::StopKind::STEP);
+                stop_addr = elr;
+            }
+            if (kernel::debug::debug_route_fault(*t, stop_kind, ec,
+                                                 stop_addr)) {
+                return;
+            }
+        }
         t->state = kernel::TaskState::TERMINATED;
         t->exit_code = static_cast<uint64_t>(
             -static_cast<int64_t>(kernel::Signal::SIGSEGV));

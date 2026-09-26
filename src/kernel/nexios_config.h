@@ -625,6 +625,22 @@
 #define CONFIG_CAP_MAX_DEATH_WATCHES 16
 #endif
 
+/// Maximum number of queued debugger stop events in the DebugStop ring
+/// (issue #226, spec docs/specs/debugd.md §4).  One extra slot is reserved
+/// for task-death events (never dropped); normal events drop-oldest with a
+/// counter when full.  Static bounded array — no dynamic allocation.
+#ifndef CONFIG_DEBUG_MAX_STOPS
+#define CONFIG_DEBUG_MAX_STOPS 16
+#endif
+
+/// Maximum number of kernel-owned software-breakpoint shadows across all
+/// debug targets (issue #226, spec docs/specs/debugd.md §4).  Each entry
+/// shadows the original instruction bytes for one breakpoint VA.  Mirrors
+/// the controller-side table capacity.  Static bounded array.
+#ifndef CONFIG_DEBUG_MAX_BREAKS
+#define CONFIG_DEBUG_MAX_BREAKS 64
+#endif
+
 /// Maximum number of concurrent pager-client registrations in the PagerRegistry
 /// (issue #107).  Each slot pairs one client with its designated pager; a
 /// client with a pending fault is BLOCKED and cannot fault again, so at most

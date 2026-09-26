@@ -226,6 +226,18 @@ class Scheduler {
     ///        keep their waiter).
     static void debugger_resume(TaskControlBlock &tgt) noexcept;
 
+    /// @brief Debugger fault-stop park (issue #226). ISR-safe (takes
+    ///        scheduler_lock_ like switch_away_from_terminating, which the
+    ///        caller invokes after): re-checks the debugger binding, latches
+    ///        the stop kind/VA, marks BLOCKED + parked, dequeues from the
+    ///        ready queue, flags the U-frame slot. Returns false when the
+    ///        target detached mid-flight (caller applies the default
+    ///        disposition instead).
+    /// @param kind StopKind numerics (fault/breakpoint/step).
+    /// @param va Fault address or stop VA.
+    static bool debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
+                               uint64_t va) noexcept;
+
     /// @brief Forces a reschedule — selects the next task and sets
     /// up context switch.
     static void reschedule() noexcept;

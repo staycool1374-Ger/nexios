@@ -249,4 +249,55 @@ bool debug_write_regs(TaskControlBlock &tcb, const uint64_t *blob_in,
 #endif
 }
 
+bool debug_step_arm(TaskControlBlock &tcb) noexcept {
+    uint64_t *frame = debug_frame_slot(tcb);
+    if (frame == nullptr || !debug_frame_is_user(frame))
+        return false;
+#if defined(CONFIG_ARCH_X86_64)
+    // RFLAGS TF (bit 8) + IF masked (bit 9 clear) for exactly one user
+    // instruction (issue #226): a timer tick preempting between resume
+    // and the stepped insn would otherwise take a #DB inside the tick
+    // handler (TF is global CPU state) and panic. IF returns at disarm;
+    // the tick fires immediately after (pending) — no time distortion.
+    // Syscall frames carry rflags in the r11 slot (frame[10]); tick
+    // frames in the IRET slot (frame[19]).
+    if (frame[15] == kX86SyscallCsMagic) {
+        frame[10] |= (1ULL << 8);
+        frame[10] &= ~(1ULL << 9);
+    } else {
+        frame[19] |= (1ULL << 8);
+        frame[19] &= ~(1ULL << 9);
+    }
+    return true;
+#else
+    // aarch64, RISC-V and unknown arches: no hardware step used — the
+    // caller emulates via a temp breakpoint (debug_step in debug_stop.cpp;
+    // RISC-V additionally masks SIE). Rationale (issue #226): AArch64
+    // instructions are fixed 4 bytes so next-insn emulation is exact, and
+    // it avoids any dependence on the QEMU/silicon software-step debug
+    // model (MDSCR_EL1.SS); the SPSR.SS/MDSCR path is reserved for future
+    // use. Temp breakpoints persist across preemption (unlike one-shot
+    // TF/SS state), so no interrupt masking is needed on aarch64.
+    (void)tcb;
+    return false;
+#endif
+}
+
+void debug_step_disarm(TaskControlBlock &tcb) noexcept {
+    uint64_t *frame = debug_frame_slot(tcb);
+    if (frame == nullptr || !debug_frame_is_user(frame))
+        return; // target gone: nothing to clear, completion proceeds
+#if defined(CONFIG_ARCH_X86_64)
+    if (frame[15] == kX86SyscallCsMagic) {
+        frame[10] &= ~(1ULL << 8);
+        frame[10] |= (1ULL << 9);
+    } else {
+        frame[19] &= ~(1ULL << 8);
+        frame[19] |= (1ULL << 9);
+    }
+#else
+    (void)tcb;
+#endif
+}
+
 } // namespace kernel::debug

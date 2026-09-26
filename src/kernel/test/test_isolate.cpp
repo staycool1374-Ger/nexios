@@ -55,6 +55,8 @@
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/death_notify.hpp>
+#include <kernel/debug/debug_stop.hpp>
+#include <kernel/debug/debug_bind.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/cap/msix.hpp>
 #include <logger.hpp>
@@ -1630,6 +1632,11 @@ void snapshot_restore(const char *test_name) {
         // registered death watches can never leak a stale watch across
         // snapshot cycles.
         kernel::ipc::DeathNotify::snapshot_reset();
+        // Reset the debugger bindings, stop queue, and breakpoint shadows
+        // (issues #225/#226) so a debug test can never leak a live handle,
+        // a queued stop, or a shadowed breakpoint into the next cycle.
+        kernel::debug::debug_bindings_reset();
+        kernel::debug::debug_snapshot_reset();
         // Reset the pager registry (issue #107) so a test that registered a
         // pager or left a fault pending can never leak a stale record across
         // snapshot cycles.

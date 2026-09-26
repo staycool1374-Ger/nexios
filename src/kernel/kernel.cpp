@@ -89,6 +89,7 @@
 #include <constants.hpp>
 #include <signal.hpp>
 #include <kernel/debug/dump.hpp>
+#include <kernel/debug/debug_stop.hpp>
 #include <fdt/libfdt.h>
 #include <fdt/libfdt_internal.h>
 #include <string.hpp>
@@ -1706,6 +1707,30 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
                 kernel::ipc::PagerRegistry::delegate_fault(
                     *t, error_code, regs, read_cr2())) {
                 return;
+            }
+
+            // Issue #226: debugger stop routing (spec §4). Attached
+            // targets park on a stop event instead of signal delivery;
+            // unattached targets keep the disposition below unchanged.
+            // #BP(3) reports a breakpoint (RIP advanced past int3, so the
+            // shadow match uses RIP-1); #DB(1) reports step completion.
+            if (__atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE) != 0) {
+                uint64_t stop_kind = static_cast<uint64_t>(
+                    kernel::debug::StopKind::FAULT);
+                uint64_t stop_num = vector;
+                uint64_t stop_addr = (vector == 14) ? read_cr2() : rip;
+                if (vector == 3) {
+                    stop_kind = static_cast<uint64_t>(
+                        kernel::debug::StopKind::BREAKPOINT);
+                    stop_addr = rip - 1;
+                } else if (vector == 1) {
+                    stop_kind = static_cast<uint64_t>(
+                        kernel::debug::StopKind::STEP);
+                }
+                if (kernel::debug::debug_route_fault(*t, stop_kind, stop_num,
+                                                     stop_addr)) {
+                    return;
+                }
             }
 
             bool was_delivered =

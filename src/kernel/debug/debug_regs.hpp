@@ -51,4 +51,18 @@ bool debug_read_regs(const TaskControlBlock &tcb, uint64_t *blob_out,
 bool debug_write_regs(TaskControlBlock &tcb, const uint64_t *blob_in,
                       size_t blob_qwords) noexcept;
 
+/// @brief Arm a single step in the task's live U-trap frame (issue #226):
+///        x86 sets TF (RFLAGS bit 8, tick or syscall frame slot) with IF
+///        masked across the one instruction. aarch64/RISC-V report false —
+///        the caller emulates via a temp breakpoint instead (AArch64 is
+///        fixed-4B so pc+4 is exact; RISC-V decodes RVC; neither depends
+///        on the QEMU/silicon single-step debug model).
+/// @return false when the slot is missing/non-user or the arch emulates.
+bool debug_step_arm(TaskControlBlock &tcb) noexcept;
+
+/// @brief Disarm a step armed by debug_step_arm (issue #226): clears TF
+///        and restores IF. Fail-open true when the frame is gone (target
+///        died — nothing to clear, and completion must still proceed).
+void debug_step_disarm(TaskControlBlock &tcb) noexcept;
+
 } // namespace kernel::debug

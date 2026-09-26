@@ -39,6 +39,8 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/ipc/death_notify.hpp>
+#include <kernel/debug/debug_stop.hpp>
+#include <kernel/debug/debug_bind.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
@@ -445,8 +447,9 @@ static uint64_t stack_size_for_priority(uint64_t priority) {
 
 /// @brief VA where the user-mode yield stub is mapped for every create_user()
 ///        task.  Chosen to avoid mem::STACK_VADDR/HEAP_VADDR and the buffer
-///        test VAs (>= 0x100000000).
-constexpr uint64_t kUserYieldStubVa = 0x40000000;
+///        test VAs (>= 0x100000000).  Canonical value lives in task.hpp
+///        (kernel::task::kUserYieldStubVa) for debugger tests.
+constexpr uint64_t kUserYieldStubVa = task::kUserYieldStubVa;
 
 /// @brief Per-arch machine code for "yield forever" (syscall YIELD=0 loop).
 #if defined(CONFIG_ARCH_X86_64)
@@ -1898,6 +1901,17 @@ void TaskControlBlock::cleanup() noexcept {
     // supervisor for others) before its Notify is destroyed below — a poke or a
     // drain must never touch a recycled supervisor TCB.
     kernel::ipc::DeathNotify::on_task_death(*this);
+
+    // Issue #226: debugger stop routing — publish the task-death stop
+    // event (reserved slot, never dropped) while bindings, Notify, and
+    // page tables are still intact, then run the debugger-death fail-safe
+    // when the dying task owns debug bindings (fault-stopped targets
+    // terminate, cleanly-stopped resume — no orphaned parked tasks).
+    // Debugger-death supervision note (#191): a restarted debugd
+    // re-attaches explicitly; kernel breakpoint shadows are restored
+    // from the authoritative table, never assumed.
+    kernel::debug::debug_publish_death(*this);
+    kernel::debug::debug_drain_debugger(*this);
 
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         if (fd_table.fds[i].used) {
