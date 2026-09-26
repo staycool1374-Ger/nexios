@@ -224,6 +224,87 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ### Prerequisites
 
+Ensure you have the required host toolchain, C++20 freestanding compiler, assembly utilities, bootloader tools, and QEMU emulators installed:
+
+#### Ubuntu / Debian
 ```bash
-sudo apt install build-essential git wget xorriso dosfstools \
-    x86_64-linux-gnu-gcc binutils qemu-system-x86
+sudo apt update
+sudo apt install -y \
+    build-essential \
+    git \
+    wget \
+    xorriso \
+    dosfstools \
+    nasm \
+    grub-pc-bin \
+    grub-common \
+    gcc-x86-64-linux-gnu \
+    g++-x86-64-linux-gnu \
+    qemu-system-x86 \
+    qemu-system-arm \
+    qemu-system-misc
+```
+
+#### macOS (Homebrew)
+```bash
+brew install qemu xorriso llvm nasm
+```
+
+---
+
+### Step-by-Step Setup & Execution
+
+#### 1. Clone the Repository
+Clone the NexIOS source tree and navigate into the root directory:
+```bash
+git clone [https://github.com/staycool1374-Ger/nexios.git](https://github.com/staycool1374-Ger/nexios.git)
+cd nexios
+```
+
+#### 2. Build Targets
+
+NexIOS utilizes standard C++20 freestanding toolchains across target architectures (`x86_64`, `arm64`, and `riscv64`):
+
+* **Debug Build:** Compiles with debug symbols, kernel trace logs, and assertion checks (`-g -Og -DCONFIG_DEBUG`). Outputs `debug/nexios-rtos.iso`.
+  ```bash
+  make debug
+  ```
+* **Release Build:** Executes an optimized production build with static analysis enabled (`-O2 -fanalyzer`), packs the initrd, and outputs `release/nexios-rtos.iso`.
+  ```bash
+  make release
+  ```
+* **Clean Tree:** Removes all build artifacts and generated binary images.
+  ```bash
+  make clean
+  ```
+
+#### 3. Run in QEMU Emulator
+
+* **Interactive Debug Mode (Default x86_64):** Launches the kernel in QEMU with serial debug output active.
+  ```bash
+  make run-debug-mode
+  ```
+* **Interactive Release Mode (Default x86_64):** Boots the production ISO image in QEMU.
+  ```bash
+  make run-release-mode
+  ```
+* **Cross-Architecture Targeting:** Append the target architecture (`x86`, `arm`, or `riscv`) to emulate other platforms:
+  ```bash
+  make run-release-mode arm    # Boots AArch64 target in QEMU
+  make run-release-mode riscv  # Boots RISC-V 64 target in QEMU
+  ```
+
+---
+
+### Testing & Validation
+
+NexIOS relies on an automated test-driven pipeline to verify capability controls, kernel memory management, and IPC mechanisms:
+
+* **Kernel Selftest:** Executes the safe in-kernel self-test suite within QEMU.
+  ```bash
+  make execute-test x86 debug selftest
+  ```
+* **Full Test Suite:** Runs all 16 aggregate test modules across the current architecture.
+  ```bash
+  make test-full
+  ```
