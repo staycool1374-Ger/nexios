@@ -93,26 +93,34 @@ By streaming user binaries via `rsync` (or a network/serial stream) into an in-m
 ### 1. Build the User Binary
 Compile your C++20 freestanding application against the NexIOS syscall headers using the cross-toolchain:
 
-`aarch64-none-elf-g++ -O2 -std=c++20 -fno-exceptions -fno-rtti -Wl,-T user_task.ld main.cpp -o my_app.elf`
+```bash
+aarch64-none-elf-g++ -O2 -std=c++20 -fno-exceptions -fno-rtti -Wl,-T user_task.ld main.cpp -o my_app.elf
+```
 
 ### 2. Stream to RAM-Disk and load binary
 Transfer the compiled ELF binary directly to a mounted loop device on the running target:
 
-`rsync -avz --progress my_app.elf nexios@192.168.1.50:/tmp/my_app.elf`
-`nexios> loadelf /tmp/my_app.elf`
+```bash
+rsync -avz --progress my_app.elf nexios@192.168.1.50:/tmp/my_app.elf
+nexios> loadelf /tmp/my_app.elf
+```
 
 ### 3. Execute via POSIX Shell
 Run the application dynamically from the NexIOS console:
 
-`nexios> runelf `
+```bash
+nexios> runelf my_app.elf
+```
 
 ### 4. Crash Recovery & Hot-Fix Loop
 If the user application crashes:
 
-`[KERNEL FAULT] Core 1: Data Abort at EL0 (FAR: 0x0000000000000000)`
-`[CSPACE] Revoking capabilities for PID 4...`
-`[REAPER] Task 4 terminated cleanly. Kernel resources reclaimed.`
-`nexios>`
+```text
+[KERNEL FAULT] Core 1: Data Abort at EL0 (FAR: 0x0000000000000000)
+[CSPACE] Revoking capabilities for PID 4...
+[REAPER] Task 4 terminated cleanly. Kernel resources reclaimed.
+nexios>
+```
 
 Fix the code on your host, re-run `rsync`, and restart the task from the shell.
 
