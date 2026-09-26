@@ -228,6 +228,16 @@ Full roadmap archived in `prompts/ROADMAP.md` and `prompts/README_done.md`.
 
 ---
 
+## Community, Support & Q&A
+
+Have questions about the architecture, CSpace capabilities, or real-time scheduling guarantees?
+
+* **Q&A Thread:** Check out or participate in our central [Q&A Discussion #189](https://github.com/staycool1374-Ger/nexios/discussions/189).
+* **Issue Tracker:** Report bugs or discuss upcoming features on [GitHub Issues](https://github.com/staycool1374-Ger/nexios/issues).
+* **Contributing:** Pull requests are welcome! Please read through open roadmap issues before submitting major architectural changes.
+
+---
+  
 ## Build & Quick Start
 
 ### Prerequisites
