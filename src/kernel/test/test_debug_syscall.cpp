@@ -138,6 +138,12 @@ void debug_sleep_ms(uint64_t ms) {
                           reinterpret_cast<uint64_t>(&req), 0, 0, 0, nullptr);
 }
 
+/// @brief VA of the test spin stub (entry + mapped page). File scope so
+///        disposition controls can poison the VA the task actually
+///        executes (#235: poisoning kUserYieldStubVa misses — the task
+///        starts at kSpinStubVa).
+constexpr uint64_t kSpinStubVa = 0x41000000ULL;
+
 /// @brief Spawn a child running a custom non-yielding spin stub (2-4
 ///        bytes: x86 jmp -2, aarch64 b #0, riscv64 jal x0,0). Unlike the
 ///        yield stub (microsecond slices between YIELD traps, which timer
@@ -159,7 +165,6 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
 #else
     constexpr uint8_t kSpin[] = {0x00};
 #endif
-    constexpr uint64_t kSpinVa = 0x41000000ULL;
     uint64_t phys = PMM::alloc_user_page();
     if (phys == 0)
         return nullptr;
@@ -170,13 +175,13 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
     // Low user VA: create_user leaves it as-is (the yield-stub rewrite
     // only fires for kernel-half entries), so the task starts in our stub.
     auto *t = TaskControlBlock::create_user(
-        reinterpret_cast<void (*)()>(kSpinVa), 11, 10, 32_KiB);
+        reinterpret_cast<void (*)()>(kSpinStubVa), 11, 10, 32_KiB);
     if (t == nullptr) {
         PMM::free_page(phys);
         return nullptr;
     }
-    VMM::map_page_in_pml4(kSpinVa, phys, true, true, t->page_table_);
-    if (VMM::virt_to_phys_in_pml4(kSpinVa, t->page_table_) != phys) {
+    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->page_table_);
+    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->page_table_) != phys) {
         PMM::free_page(phys);
         (void)Scheduler::terminate_err(*t, 0);
         Scheduler::drain_zombie_list();
@@ -190,7 +195,7 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
     if (!Scheduler::set_sched_policy(*t, SchedPolicy::FIXED)) {
         // Unmap/free BEFORE reaping: reap deletes the TCB, so any later
         // t->page_table_ read is use-after-free.
-        VMM::unmap_page_in_pml4(kSpinVa, t->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
         PMM::free_page(phys);
         debug_reap_child(t);
         return nullptr;
@@ -205,9 +210,8 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
 }
 
 void debug_free_spinner_page(TaskControlBlock *t, uint64_t stub_phys) {
-    constexpr uint64_t kSpinVa = 0x41000000ULL;
     if (t != nullptr && TaskControlBlock::is_valid(t))
-        VMM::unmap_page_in_pml4(kSpinVa, t->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
     if (stub_phys != 0)
         PMM::free_page(stub_phys);
 }
@@ -792,7 +796,6 @@ TaskControlBlock *debug_spawn_faulter(uint64_t &stub_phys_out) {
     if (me == nullptr)
         return nullptr;
     constexpr uint8_t kFault[] = {0x0F, 0x0B}; // ud2 (#UD)
-    constexpr uint64_t kSpinVa = 0x41000000ULL;
     uint64_t phys = PMM::alloc_user_page();
     if (phys == 0)
         return nullptr;
@@ -801,13 +804,13 @@ TaskControlBlock *debug_spawn_faulter(uint64_t &stub_phys_out) {
     for (size_t i = 0; i < sizeof(kFault); ++i)
         dst[i] = kFault[i];
     auto *t = TaskControlBlock::create_user(
-        reinterpret_cast<void (*)()>(kSpinVa), 11, 10, 32_KiB);
+        reinterpret_cast<void (*)()>(kSpinStubVa), 11, 10, 32_KiB);
     if (t == nullptr) {
         PMM::free_page(phys);
         return nullptr;
     }
-    VMM::map_page_in_pml4(kSpinVa, phys, true, true, t->page_table_);
-    if (VMM::virt_to_phys_in_pml4(kSpinVa, t->page_table_) != phys) {
+    VMM::map_page_in_pml4(kSpinStubVa, phys, true, true, t->page_table_);
+    if (VMM::virt_to_phys_in_pml4(kSpinStubVa, t->page_table_) != phys) {
         PMM::free_page(phys);
         (void)Scheduler::terminate_err(*t, 0);
         Scheduler::drain_zombie_list();
@@ -820,7 +823,7 @@ TaskControlBlock *debug_spawn_faulter(uint64_t &stub_phys_out) {
     }
     if (!Scheduler::set_sched_policy(*t, SchedPolicy::FIXED)) {
         debug_reap_child(t);
-        VMM::unmap_page_in_pml4(kSpinVa, t->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, t->page_table_);
         PMM::free_page(phys);
         return nullptr;
     }
@@ -1199,39 +1202,21 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
     TaskControlBlock *c = debug_spawn_faulter(cphys);
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
 #elif defined(CONFIG_ARCH_AARCH64)
-    // Park-then-poison (#235): poisoning a LIVE task races its execution
-    // (stale translations may keep serving pre-write bytes on QEMU TCG);
-    // parking first via a transient attach makes the write land exactly
-    // like the proven test-6 path, then detach lets the default
-    // disposition apply with no debugger attached at death.
+    // Direct live-poison (#235): the park-then-poison flow is
+    // unsatisfiable — sel1 attach only binds (it never stops), and the
+    // tick park requires interrupting user mode, so the park-wait could
+    // never succeed. Poisoning a running task is the proven test-6 path
+    // (sel3/bp_write_at + ic maintenance traps reliably), so poison the
+    // executed stub VA (kSpinStubVa — NOT kUserYieldStubVa, which the
+    // task never executes) directly with no debugger attached and let
+    // the default disposition apply at death.
     uint64_t cphys = 0;
     TaskControlBlock *c = debug_spawn_spinner(cphys);
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
-    {
-        uint64_t ch = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, c->id);
-        JARVIS_ASSERT_FMT(ch != 0 && ch != Neg(kEbusy) &&
-                              ch != Neg(kEperm) && ch != Neg(kEsrch),
-                          "control attach failed: 0x%lx", ch);
-        bool cparked = false;
-        for (int i = 0; i < 100 && !cparked; ++i) {
-            if (DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, ch,
-                          kDebugScratchVa) == 0)
-                cparked = true;
-            else
-                debug_sleep_ms(2);
-        }
-        JARVIS_ASSERT_FMT(cparked, "control never parked");
-        for (uint64_t off = 0; off < 12; off += 4) {
-            JARVIS_ASSERT_FMT(
-                debug_write_target_bytes(c, kernel::task::kUserYieldStubVa +
-                                                off,
-                                         kBrkInsn, sizeof(kBrkInsn)),
-                "stub poison failed");
-        }
-        JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, ch) ==
-                              0,
-                          "control detach failed");
-    }
+    JARVIS_ASSERT_FMT(
+        debug_write_target_bytes(c, kSpinStubVa, kBrkInsn,
+                                 sizeof(kBrkInsn)),
+        "stub poison failed");
 #else
     uint64_t cphys = 0;
     TaskControlBlock *c = debug_spawn_spinner(cphys);
@@ -1503,7 +1488,6 @@ JARVIS_TEST(debug_stop_debugger_death, "PRE: none | POST: none") {
     // Victim: user spinner, parented to D (launcher claim needs it).
     uint64_t stub_phys = PMM::alloc_user_page();
     JARVIS_ASSERT_FMT(stub_phys != 0, "stub alloc failed");
-    constexpr uint64_t kSpinVa = 0x41000000ULL;
 #if defined(CONFIG_ARCH_X86_64)
     constexpr uint8_t kSpin[] = {0xEB, 0xFE};
 #elif defined(CONFIG_ARCH_AARCH64)
@@ -1518,11 +1502,11 @@ JARVIS_TEST(debug_stop_debugger_death, "PRE: none | POST: none") {
     for (size_t i = 0; i < sizeof(kSpin); ++i)
         sdst[i] = kSpin[i];
     TaskControlBlock *v = TaskControlBlock::create_user(
-        reinterpret_cast<void (*)()>(kSpinVa), 11, 10, 32_KiB);
+        reinterpret_cast<void (*)()>(kSpinStubVa), 11, 10, 32_KiB);
     JARVIS_ASSERT_FMT(v != nullptr, "victim spawn failed");
-    VMM::map_page_in_pml4(kSpinVa, stub_phys, true, true, v->page_table_);
+    VMM::map_page_in_pml4(kSpinStubVa, stub_phys, true, true, v->page_table_);
     if (!Scheduler::set_sched_policy(*v, SchedPolicy::FIXED)) {
-        VMM::unmap_page_in_pml4(kSpinVa, v->page_table_);
+        VMM::unmap_page_in_pml4(kSpinStubVa, v->page_table_);
         PMM::free_page(stub_phys);
         debug_reap_child(v);
         debug_reap_child(dbg);
@@ -1562,7 +1546,7 @@ JARVIS_TEST(debug_stop_debugger_death, "PRE: none | POST: none") {
     // Teardown: victim back under T for the shared reaper (D is gone, so
     // no removal from its list — add_child overwrites the stale links).
     me->add_child(v);
-    VMM::unmap_page_in_pml4(kSpinVa, v->page_table_);
+    VMM::unmap_page_in_pml4(kSpinStubVa, v->page_table_);
     PMM::free_page(stub_phys);
     debug_reap_child(v);
     JARVIS_TEST_PASS();
