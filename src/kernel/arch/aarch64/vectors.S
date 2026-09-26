@@ -118,54 +118,6 @@ el1_sync_unexpected:
     ldp     x0, x1, [sp], #16
     eret
 
-// EL0 sync handler — SVC from userspace → syscall_entry
-// NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
-// EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
-// fault (data/page abort etc.) and must NOT be dispatched as a syscall
-// (ereting to the faulting PC would loop forever).
-//
-// EL0 entry also MUST switch SP_EL1 to the current task's own kernel stack
-// (the aarch64 analogue of x86 TSS.RSP0): otherwise every user task's
-// exception frames land on the dispatcher's leftover stack and corrupt it
-// across tasks.  scheduler_load_kstack_top is published by switch_to_task
-// on every dispatch.
-.type el0_sync, @function
-el0_sync:
-    // Stash user x0/x1 BEFORE any register is clobbered: the kstack load
-    // below needs a scratch register and every GPR is user state at EL0.
-    stp     x0, x1, [sp, #-16]!
-    mov     x1, sp             // carry &stash (original x1 is in the stash)
-    adrp    x0, scheduler_load_kstack_top
-    ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
-    cbz     x0, 2f
-    mov     sp, x0             // switch to the task's own kernel stack
-    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
-    stp     x0, x1, [sp, #-16]! // re-stash on the working stack
-2:
-    mrs     x0, esr_el1
-    lsr     x0, x0, #26        // EC = ESR bits [31:26]
-    cmp     x0, #0x15          // SVC from AArch64
-    b.eq    1f
-    ldp     x0, x1, [sp], #16
-    bl      aarch64_el0_fault_handler
-    // The handler terminates the faulting task and arms a deferred switch
-    // (issue #28) — apply it.  If no switch is armed (no current task;
-    // handler parked path is unreachable here) fall into a park loop:
-    // restore_all on this near-empty stack would eret into garbage.
-    adrp    x0, scheduler_save_rsp_to
-    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
-    cbz     x0, .Lel0_fault_park
-    b       irq_context_switch_common
-.Lel0_fault_park:
-    b       .Lel0_fault_park
-1:
-    ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
-    b       syscall_entry
-
-// ---------------------------------------------------------------------------
-// IRQ handlers — full register save/restore with preemptive context switch
-// ---------------------------------------------------------------------------
-
 // Save area layout (36 qwords = 288 bytes):
 //   sp+0:    x0
 //   sp+8:    x1
@@ -174,6 +126,7 @@ el0_sync:
 //   sp+248:  SP_EL0
 //   sp+256:  ELR_EL1
 //   sp+264:  SPSR_EL1
+// (Macros precede all users: el0_sync, el0_irq, el1_irq — issue #236.)
 
 .macro save_all
     sub     sp, sp, #288
@@ -225,6 +178,62 @@ el0_sync:
     ldr     x0, [sp, #0]
     add     sp, sp, #288
 .endm
+
+// EL0 sync handler — SVC from userspace → syscall_entry
+// NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
+// EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
+// fault (data/page abort etc.) and must NOT be dispatched as a syscall
+// (ereting to the faulting PC would loop forever).
+//
+// EL0 entry also MUST switch SP_EL1 to the current task's own kernel stack
+// (the aarch64 analogue of x86 TSS.RSP0): otherwise every user task's
+// exception frames land on the dispatcher's leftover stack and corrupt it
+// across tasks.  scheduler_load_kstack_top is published by switch_to_task
+// on every dispatch.
+.type el0_sync, @function
+el0_sync:
+    // Stash user x0/x1 BEFORE any register is clobbered: the kstack load
+    // below needs a scratch register and every GPR is user state at EL0.
+    stp     x0, x1, [sp, #-16]!
+    mov     x1, sp             // carry &stash (original x1 is in the stash)
+    adrp    x0, scheduler_load_kstack_top
+    ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
+    cbz     x0, 2f
+    mov     sp, x0             // switch to the task's own kernel stack
+    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
+    stp     x0, x1, [sp, #-16]! // re-stash on the working stack
+2:
+    mrs     x0, esr_el1
+    lsr     x0, x0, #26        // EC = ESR bits [31:26]
+    cmp     x0, #0x15          // SVC from AArch64
+    b.eq    1f
+    ldp     x0, x1, [sp], #16
+    // Issue #236: establish the full trap frame in the debug slot
+    // (kstack_top - 288) before the C handler. The slot is both the
+    // debugger-visible frame (debug_frame_slot) and the dispatch
+    // restore source; without save_all it keeps stale content and the
+    // C handler's own frames descend into it. Mirrors el0_irq/el1_irq
+    // (same x0/x1-live contract); the SVC branch above stays ahead.
+    save_all
+    bl      aarch64_el0_fault_handler
+    // The handler terminates the faulting task and arms a deferred switch
+    // (issue #28) — apply it.  If no switch is armed (no current task, or
+    // a debugger park which arms none) fall into a park loop: the fault
+    // frame stays on the stack for the debugger (issue #236).
+    adrp    x0, scheduler_save_rsp_to
+    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
+    cbz     x0, .Lel0_fault_park
+    b       irq_context_switch_common
+.Lel0_fault_park:
+    b       .Lel0_fault_park
+1:
+    ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
+    b       syscall_entry
+
+// ---------------------------------------------------------------------------
+// IRQ handlers — full register save/restore with preemptive context switch
+// ---------------------------------------------------------------------------
+// (save_all/restore_all macros live above el0_sync; all entries share them.)
 
 .extern scheduler_save_rsp_to
 .extern scheduler_load_rsp_from

@@ -55,8 +55,9 @@ constexpr uint64_t kX86SyscallCsMagic = 0xFFFFFFFF80000000ULL;
 constexpr size_t kX86BlobQwords = 23; // 164B GDB x86_64 minimal + pad
 #elif defined(CONFIG_ARCH_AARCH64)
 // vectors.S save_all/restore_all: x0-x30 (0-240), sp_el0+elr (248-255),
-// spsr (264); frame is 288 bytes. EL0 sync AND EL0 IRQ share the layout
-// (both funnel through save_all), so no kind split is needed.
+// spsr (264); frame is 288 bytes. EL0 sync faults AND EL0/EL1 IRQs share
+// the layout (all funnel through save_all — issue #236; the SVC path
+// keeps its own syscall_entry frame), so no kind split is needed.
 constexpr size_t kAarch64FrameQwords = 36;
 constexpr size_t kAarch64BlobQwords = 34; // 272B: x0-x30, sp, pc, cpsr
 #elif defined(CONFIG_ARCH_RISCV64)
