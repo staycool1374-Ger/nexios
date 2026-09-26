@@ -4179,7 +4179,7 @@ void Scheduler::reschedule() noexcept {
     {
         IPC_SCHED_TRACE("[RS]", "cur=", current->id, "next=",
                         next ? next->id : 0u, "hi=",
-                        (uint64_t)ready_queue_.highest_ready_priority(),
+                        (uint64_t)rq_own().highest_ready_priority(),
                         "nt=", (uint64_t)all_tasks_.size());
     }
 #endif

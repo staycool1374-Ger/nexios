@@ -39,6 +39,12 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/page_table.hpp>
 #include <kernel/debug/debug_regs.hpp>
+#if defined(CONFIG_ARCH_AARCH64)
+// TMP-DIAG (#235): post-mortem EL0 fault latch (file scope: function-local
+// externs mislink on this toolchain; only ESR exists — EC classifies the
+// fault). Revert after diagnosis.
+extern "C" uint64_t aarch64_last_el0_esr();
+#endif
 
 using namespace kernel;
 
@@ -297,6 +303,13 @@ JARVIS_TEST(debug_attach_parent_ok, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
     const uint64_t child_id = t->id;
     uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, child_id);
+#if defined(CONFIG_ARCH_AARCH64)
+    if (h == Neg(kEsrch)) {
+        // TMP-DIAG (#235): fresh-spinner silent death — dump the fault
+        // latch to see WHAT killed it (EC/FAR/ELR). Revert after diagnosis.
+        Logger::warn("SPAWN-DEATH esr=%x", aarch64_last_el0_esr());
+    }
+#endif
     JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy) && h != Neg(kEperm) &&
                           h != Neg(kEsrch),
                       "attach failed: 0x%lx", h);
@@ -752,13 +765,16 @@ bool debug_write_target_bytes(TaskControlBlock *t, uint64_t va,
     auto *dst = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
     for (size_t i = 0; i < len; ++i)
         dst[i] = bytes[i];
+    // Coherence mirrors the kernel bp_write_at path (issue #235): I-cache
+    // maintenance alone proved insufficient under QEMU TCG when overwriting
+    // already-executed code (stale translations keep serving pre-write
+    // bytes); invalidate the TLB entry as well so fetch re-translates.
+    arch::ArchPageTable::tlb_flush(va);
 #if defined(CONFIG_ARCH_RISCV64)
     asm volatile(".option push\n.option arch, +zifencei\nfence.i\n.option pop" ::
                      : "memory");
 #elif defined(CONFIG_ARCH_AARCH64)
     asm volatile("ic ialluis\n dsb ish\n isb" ::: "memory");
-#else
-    arch::ArchPageTable::tlb_flush(va);
 #endif
     return true;
 }
@@ -1183,14 +1199,38 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
     TaskControlBlock *c = debug_spawn_faulter(cphys);
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
 #elif defined(CONFIG_ARCH_AARCH64)
+    // Park-then-poison (#235): poisoning a LIVE task races its execution
+    // (stale translations may keep serving pre-write bytes on QEMU TCG);
+    // parking first via a transient attach makes the write land exactly
+    // like the proven test-6 path, then detach lets the default
+    // disposition apply with no debugger attached at death.
     uint64_t cphys = 0;
     TaskControlBlock *c = debug_spawn_spinner(cphys);
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
-    for (uint64_t off = 0; off < 12; off += 4) {
-        JARVIS_ASSERT_FMT(
-            debug_write_target_bytes(c, kernel::task::kUserYieldStubVa + off,
-                                     kBrkInsn, sizeof(kBrkInsn)),
-            "stub poison failed");
+    {
+        uint64_t ch = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, c->id);
+        JARVIS_ASSERT_FMT(ch != 0 && ch != Neg(kEbusy) &&
+                              ch != Neg(kEperm) && ch != Neg(kEsrch),
+                          "control attach failed: 0x%lx", ch);
+        bool cparked = false;
+        for (int i = 0; i < 100 && !cparked; ++i) {
+            if (DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, ch,
+                          kDebugScratchVa) == 0)
+                cparked = true;
+            else
+                debug_sleep_ms(2);
+        }
+        JARVIS_ASSERT_FMT(cparked, "control never parked");
+        for (uint64_t off = 0; off < 12; off += 4) {
+            JARVIS_ASSERT_FMT(
+                debug_write_target_bytes(c, kernel::task::kUserYieldStubVa +
+                                                off,
+                                         kBrkInsn, sizeof(kBrkInsn)),
+                "stub poison failed");
+        }
+        JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, ch) ==
+                              0,
+                          "control detach failed");
     }
 #else
     uint64_t cphys = 0;
@@ -1208,16 +1248,27 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
     // way the default disposition applied. Capture the id up front; any
     // deviation from (valid, ours, unterminated) counts as died.
     const uint64_t control_id = c->id;
+    const uint64_t ticks0 = arch::Timer::ticks();
     bool died = false;
+    bool seen_exec = false; // ever left READY (dispatched at least once)
     for (int i = 0; i < 50 && !died; ++i) {
         if (!TaskControlBlock::is_valid(c) || c->id != control_id ||
             c->state == TaskState::TERMINATED ||
-            c->state == TaskState::REAPED)
+            c->state == TaskState::REAPED) {
             died = true;
-        else
+        } else {
+            if (c->state != TaskState::READY)
+                seen_exec = true;
             debug_sleep_ms(2);
+        }
     }
-    JARVIS_ASSERT_FMT(died, "unattached faulter survived");
+    const uint64_t ticks1 = arch::Timer::ticks();
+    JARVIS_ASSERT_FMT(died,
+                      "unattached faulter survived exec=%d st=%d "
+                      "ticks=%lx->%lx inrq=%d prio=%lx rq_prio=%lx",
+                      seen_exec ? 1 : 0, static_cast<int>(c->state), ticks0,
+                      ticks1, c->in_ready_queue_ ? 1 : 0, c->priority,
+                      c->rq_priority_);
     // Reap only when the block is still ours and not yet reaped (a
     // system-drained or recycled task must not be touched again).
     if (TaskControlBlock::is_valid(c) && c->id == control_id &&
@@ -1305,19 +1356,24 @@ JARVIS_TEST(debug_stop_overflow_death_slot, "PRE: none | POST: none") {
                                     h, 0) == 0,
                           "continue failed");
         bool reparked = false;
+        bool ever_running = false; // dispatched at least once post-continue
         for (int j = 0; j < 100 && !reparked; ++j) {
-            if (t->debug_parked && t->state == TaskState::BLOCKED)
+            if (t->debug_parked && t->state == TaskState::BLOCKED) {
                 reparked = true;
-            else
+            } else {
+                if (t->state == TaskState::RUNNING)
+                    ever_running = true;
                 debug_sleep_ms(2);
+            }
         }
-        JARVIS_ASSERT_FMT(reparked,
-                          "no re-park after continue i=%d st=%d parked=%d "
-                          "kind=%x id=%x",
-                          i, static_cast<int>(t->state), t->debug_parked,
-                          __atomic_load_n(&t->debug_stop_kind,
-                                          __ATOMIC_ACQUIRE),
-                          __atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE));
+        JARVIS_ASSERT_FMT(
+            reparked,
+            "no re-park after continue i=%d st=%d parked=%d kind=%lx id=%lx "
+            "ever_run=%d",
+            i, static_cast<int>(t->state), t->debug_parked ? 1 : 0,
+            __atomic_load_n(&t->debug_stop_kind, __ATOMIC_ACQUIRE),
+            __atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE),
+            ever_running ? 1 : 0);
     }
     // Drain: the ring holds the newest 16, then reports empty (4 oldest
     // dropped under pressure).

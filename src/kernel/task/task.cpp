@@ -463,11 +463,16 @@ constexpr uint64_t kUserYieldStubVa = task::kUserYieldStubVa;
 static constexpr uint8_t kUserYieldStub[] = {0x31, 0xC0, 0xCD,
                                              0x80, 0xEB, 0xFA};
 #elif defined(CONFIG_ARCH_AARCH64)
-//   mov x8, #0      d2 00 00 00  ; x8 = SyscallNumber::YIELD (0)
+//   mov x8, #0      08 00 80 d2  ; x8 = SyscallNumber::YIELD (0)
 //   svc #0          01 00 00 d4
-//   b -12           18 00 00 14
+//   b .-8           FE FF FF 17  ; loop to the mov (yield forever).
+//   (Issue #235, disassembly-verified with aarch64-elf-objdump: the prior
+//   bytes set x0 (not the x8 syscall-number register) and branched +96
+//   out of the stub (18 00 00 14), so fresh tasks issued a garbage
+//   syscall then fell off into unmapped memory. Offsets are relative to
+//   the branch instruction itself.)
 static constexpr uint8_t kUserYieldStub[] = {
-    0x00, 0x00, 0x80, 0xD2, 0x01, 0x00, 0x00, 0xD4, 0x18, 0x00, 0x00, 0x14};
+    0x08, 0x00, 0x80, 0xD2, 0x01, 0x00, 0x00, 0xD4, 0xFE, 0xFF, 0xFF, 0x17};
 #elif defined(CONFIG_ARCH_RISCV64)
 //   li a7, 0        13 00 80 00  ; a7 = SyscallNumber::YIELD (0)
 //   ecall           73 00 00 00
