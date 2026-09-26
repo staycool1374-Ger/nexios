@@ -101,12 +101,20 @@ el1_sync_unexpected:
     mrs     x1, far_el1
     mrs     x2, elr_el1
     bl      aarch64_el1_unexpected_fault
+    // x0 == 0: fault recovery applied (ELR_EL1 already redirected by the
+    // C handler, issue #235) — restore and eret WITHOUT the legacy skip.
+    cbz     x0, .Lel1_recovered
     // Release return path (debug panics, never returns): restore and skip.
     ldr     x30, [sp], #16
     ldp     x2, x3, [sp], #16
     mrs     x0, elr_el1
     add     x0, x0, #4
     msr     elr_el1, x0
+    ldp     x0, x1, [sp], #16
+    eret
+.Lel1_recovered:
+    ldr     x30, [sp], #16
+    ldp     x2, x3, [sp], #16
     ldp     x0, x1, [sp], #16
     eret
 
