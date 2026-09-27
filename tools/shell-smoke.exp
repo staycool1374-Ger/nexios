@@ -1,0 +1,31 @@
+#!/usr/bin/expect -f
+# Shell-smoke regression probe (issue #218).
+# Boots an interactive run-mode target, waits for the service::Shell
+# prompt, sends `version`, and requires the prompt back.
+# Usage: shell-smoke.exp [-log file] <make-target...>
+#   e.g. shell-smoke.exp run-release-mode arm
+# Exit 0 on prompt + version round-trip, 1 on timeout/EOF.
+# Notes: single line typed at a time (16-byte UART FIFO); no escape
+# sequences (must not perturb the shell redraw path); bounded timeouts.
+set logfile ""
+set args $argv
+if {[lindex $argv 0] eq "-log"} {
+    set logfile [lindex $argv 1]
+    set args [lrange $argv 2 end]
+    log_file -a $logfile
+}
+set timeout 150
+eval spawn make $args
+expect {
+    -re {\$ $} { puts "SMOKE: prompt reached" }
+    timeout { puts "SMOKE: TIMEOUT waiting for prompt"; exit 1 }
+    eof { puts "SMOKE: EOF before prompt"; exit 1 }
+}
+send "version\r"
+expect {
+    -re {\$ $} { puts "SMOKE: version answered" }
+    timeout { puts "SMOKE: TIMEOUT after version"; exit 1 }
+    eof { puts "SMOKE: EOF after version"; exit 1 }
+}
+puts "SMOKE: PASS"
+exit 0
