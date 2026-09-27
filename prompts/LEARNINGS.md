@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #226 — debugd Phase 2 stop routing (2026-09-27, CLOSED after residue)
+- **Learned:** (1) Leaving an issue open "for merge-scoping" while a residue sub-issue (#235) plays out works if the hold reason is written down — the close-out needed zero new work once #236/#237 landed, just the acceptance re-check. (2) Phase acceptance on 2/3 arches with a tracked residue issue is a legitimate merge point (x86+riscv proven, aarch64 isolated) — stated explicitly at the time, no confusion later.
+- **Adapted:** #226 closed with acceptance re-verified (aarch64 12/12 + 31/31, x86/riscv green, audits APPROVED); Phase 4 (#232) unblocked.
+- **Measured:** close-out only, no code change.
+- **Style re-surface:** close reasons must cite the unblocking evidence (runs + reports), not just intent.
+
 ### #237 — debug_attach_rejects orphan race (2026-09-27, CLOSED)
 - **Learned:** (1) A test that races task death can NEVER assert liveness-dependent errnos: the kernel-half-entry orphan died on first dispatch, so attach flipped ESRCH/EPERM run-to-run. Determinism by construction (live spinning orphan, parent_id 0 by memset) beats timing luck. (2) First audit REJECT was check #7 only (retrieval posted late, zero code findings) — process artifacts belong on the issue BEFORE the audit call, not after. (3) `remove_child` early-returns for non-children, so `debug_reap_child` is orphan-safe without a special path.
 - **Adapted:** `debug_spawn_spinner(phys, link_child=true)` default param (existing callers untouched); orphan case spawns live + reaps + frees stub page; detach assert prints the actual errno (caught the test-1 family next).
