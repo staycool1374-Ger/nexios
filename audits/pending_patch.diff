@@ -1,243 +1,83 @@
-diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
-index 4523fb80..9759cfdc 100644
---- a/src/kernel/arch/aarch64/test_aarch64.cpp
-+++ b/src/kernel/arch/aarch64/test_aarch64.cpp
-@@ -38,6 +38,7 @@
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/arch/irq_guard.hpp>
-+#include <kernel/debug/debug_regs.hpp>
- #include <kernel/test/test_sched_helpers.hpp>
- #include <kernel/test/test_isolate.hpp>
- #include <kernel/elf/elf_loader.hpp>
-@@ -250,6 +251,63 @@ JARVIS_TEST(aarch64_el0_fault_terminates, "PRE: none | POST: none") {
+diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
+index 4069a619..40014e30 100644
+--- a/src/kernel/test/test_debug_syscall.cpp
++++ b/src/kernel/test/test_debug_syscall.cpp
+@@ -151,7 +151,8 @@ constexpr uint64_t kSpinStubVa = 0x41000000ULL;
+ ///        holds the CPU across ticks so the park hook fires
+ ///        deterministically. Returns the child with its stub page phys
+ ///        in stub_phys_out (caller frees after unmapping).
+-TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
++TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
++                                       bool link_child = true) {
+     stub_phys_out = 0;
+     auto *me = Scheduler::current_task();
+     if (me == nullptr)
+@@ -200,7 +201,10 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
+         debug_reap_child(t);
+         return nullptr;
+     }
+-    me->add_child(t);
++    // Unlinked (orphan) spinners stay parentless (parent_id 0) for the
++    // attach-rejection matrix (#237): same valid stub, no parentage.
++    if (link_child)
++        me->add_child(t);
+     {
+         arch::IrqGuard ig{};
+         Scheduler::add_task(*t);
+@@ -326,9 +330,8 @@ JARVIS_TEST(debug_attach_parent_ok, "PRE: none | POST: none") {
+         "detach toggle failed");
+     uint64_t h2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, child_id);
+     JARVIS_ASSERT_FMT(h2 != 0 && h2 != Neg(kEbusy), "re-attach failed");
+-    JARVIS_ASSERT_FMT(
+-        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2) == 0,
+-        "second detach failed");
++    uint64_t dh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2);
++    JARVIS_ASSERT_FMT(dh2 == 0, "second detach failed: 0x%lx", dh2);
+     debug_reap_child(t);
      JARVIS_TEST_PASS();
  }
- 
-+// Issue #236: the el0_sync fault path must establish a full trap frame
-+// in the debug slot (save_all, like el1_irq) so the slot holds the
-+// faulting user state instead of stale content. Faults an unattached
-+// task at an unmapped VA with stamped x0/x1, then asserts the slot (not
-+// just the ESR latch) captured the fault.
-+JARVIS_TEST(aarch64_el0_fault_frame_in_debug_slot, "PRE: none | POST: none") {
-+    using namespace kernel;
-+    size_t img_size = static_cast<size_t>(_binary_fork_marker_img_end -
-+                                          _binary_fork_marker_img_start);
-+    JARVIS_ASSERT_FMT(img_size != 0, "fork-marker image missing");
-+    elf::ElfLoader::reset();
-+    JARVIS_ASSERT_FMT(
-+        fm_write_file(kFmImagePath, _binary_fork_marker_img_start, img_size) !=
-+            0,
-+        "tmpfs stage failed");
-+    JARVIS_ASSERT_FMT(
-+        elf::ElfLoader::request_load(kFmImagePath) == elf::LoadResult::OK,
-+        "request_load failed");
-+    elf::ElfLoader::wait_loader_idle();
-+    TaskControlBlock *t = elf::ElfLoader::take_completed();
-+    JARVIS_ASSERT_FMT(t != nullptr && t->page_table_ != 0 && t->is_user_,
-+                      "take_completed failed");
-+    test::mark_vfs_touched();
-+    auto *frame = reinterpret_cast<uint64_t *>(t->context.sp_el0);
-+    JARVIS_ASSERT_FMT(frame != nullptr, "no initial frame");
-+    frame[32] = 0x5000000000ULL; // unmapped user VA: fetch faults at EL0
-+    frame[0] = 0xA110C0FFEEULL;  // stamp x0/x1: stash folding must preserve
-+    frame[1] = 0xB0B51E55ULL;
-+    t->priority = 11;
-+    t->base_priority = 11;
-+    {
-+        arch::IrqGuard ig{};
-+        Scheduler::add_task(*t);
-+    }
-+    Scheduler::reschedule();
-+    kernel::test::wait_for_termination_safe(t);
-+    JARVIS_ASSERT_FMT(t->state == TaskState::TERMINATED,
-+                      "EL0 fault did not terminate the task");
-+    uint64_t *slot = debug::debug_frame_slot(*t);
-+    JARVIS_ASSERT_FMT(slot != nullptr, "no debug slot");
-+    JARVIS_ASSERT_FMT(debug::debug_frame_is_user(slot),
-+                      "slot is not a user frame");
-+    JARVIS_ASSERT_FMT(slot[32] == 0x5000000000ULL,
-+                      "slot ELR is not the fault PC: 0x%lx", slot[32]);
-+    JARVIS_ASSERT_FMT(slot[0] == 0xA110C0FFEEULL,
-+                      "slot x0 not preserved: 0x%lx", slot[0]);
-+    JARVIS_ASSERT_FMT(slot[1] == 0xB0B51E55ULL,
-+                      "slot x1 not preserved: 0x%lx", slot[1]);
-+    if (TaskControlBlock::is_valid(t) &&
-+        t != Scheduler::current_task())
-+        (void)Scheduler::terminate_err(*t, t->exit_code);
-+    Scheduler::drain_zombie_list();
-+    fm_cleanup(kFmImagePath);
-+    test::mark_vfs_touched();
-+    JARVIS_TEST_PASS();
-+}
-+
- namespace {
- // Issue #217: kernel parent blocking in the real WAITPID syscall
- // (preemption_wait_parent_entry pattern).  The resumed flag is set only
-@@ -1197,6 +1255,7 @@ void register_aarch64_tests() {
-     JARVIS_REGISTER_TEST(aarch64_clone_frame_readback);  // issue #209
-     JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
-     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
-+    JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
- }
- 
- #endif
-\ No newline at end of file
-diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
-index 1c0811dd..05456ceb 100644
---- a/src/kernel/arch/aarch64/vectors.S
-+++ b/src/kernel/arch/aarch64/vectors.S
-@@ -118,54 +118,6 @@ el1_sync_unexpected:
-     ldp     x0, x1, [sp], #16
-     eret
- 
--// EL0 sync handler — SVC from userspace → syscall_entry
--// NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
--// EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
--// fault (data/page abort etc.) and must NOT be dispatched as a syscall
--// (ereting to the faulting PC would loop forever).
--//
--// EL0 entry also MUST switch SP_EL1 to the current task's own kernel stack
--// (the aarch64 analogue of x86 TSS.RSP0): otherwise every user task's
--// exception frames land on the dispatcher's leftover stack and corrupt it
--// across tasks.  scheduler_load_kstack_top is published by switch_to_task
--// on every dispatch.
--.type el0_sync, @function
--el0_sync:
--    // Stash user x0/x1 BEFORE any register is clobbered: the kstack load
--    // below needs a scratch register and every GPR is user state at EL0.
--    stp     x0, x1, [sp, #-16]!
--    mov     x1, sp             // carry &stash (original x1 is in the stash)
--    adrp    x0, scheduler_load_kstack_top
--    ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
--    cbz     x0, 2f
--    mov     sp, x0             // switch to the task's own kernel stack
--    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
--    stp     x0, x1, [sp, #-16]! // re-stash on the working stack
--2:
--    mrs     x0, esr_el1
--    lsr     x0, x0, #26        // EC = ESR bits [31:26]
--    cmp     x0, #0x15          // SVC from AArch64
--    b.eq    1f
--    ldp     x0, x1, [sp], #16
--    bl      aarch64_el0_fault_handler
--    // The handler terminates the faulting task and arms a deferred switch
--    // (issue #28) — apply it.  If no switch is armed (no current task;
--    // handler parked path is unreachable here) fall into a park loop:
--    // restore_all on this near-empty stack would eret into garbage.
--    adrp    x0, scheduler_save_rsp_to
--    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
--    cbz     x0, .Lel0_fault_park
--    b       irq_context_switch_common
--.Lel0_fault_park:
--    b       .Lel0_fault_park
--1:
--    ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
--    b       syscall_entry
--
--// ---------------------------------------------------------------------------
--// IRQ handlers — full register save/restore with preemptive context switch
--// ---------------------------------------------------------------------------
--
- // Save area layout (36 qwords = 288 bytes):
- //   sp+0:    x0
- //   sp+8:    x1
-@@ -174,6 +126,7 @@ el0_sync:
- //   sp+248:  SP_EL0
- //   sp+256:  ELR_EL1
- //   sp+264:  SPSR_EL1
-+// (Macros precede all users: el0_sync, el0_irq, el1_irq — issue #236.)
- 
- .macro save_all
-     sub     sp, sp, #288
-@@ -226,6 +179,62 @@ el0_sync:
-     add     sp, sp, #288
- .endm
- 
-+// EL0 sync handler — SVC from userspace → syscall_entry
-+// NOTE: any lower-EL sync exception lands here, not just SVC.  Check ESR_EL1
-+// EC: 0x15 = SVC from AArch64 → syscall path; anything else is a user-task
-+// fault (data/page abort etc.) and must NOT be dispatched as a syscall
-+// (ereting to the faulting PC would loop forever).
-+//
-+// EL0 entry also MUST switch SP_EL1 to the current task's own kernel stack
-+// (the aarch64 analogue of x86 TSS.RSP0): otherwise every user task's
-+// exception frames land on the dispatcher's leftover stack and corrupt it
-+// across tasks.  scheduler_load_kstack_top is published by switch_to_task
-+// on every dispatch.
-+.type el0_sync, @function
-+el0_sync:
-+    // Stash user x0/x1 BEFORE any register is clobbered: the kstack load
-+    // below needs a scratch register and every GPR is user state at EL0.
-+    stp     x0, x1, [sp, #-16]!
-+    mov     x1, sp             // carry &stash (original x1 is in the stash)
-+    adrp    x0, scheduler_load_kstack_top
-+    ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
-+    cbz     x0, 2f
-+    mov     sp, x0             // switch to the task's own kernel stack
-+    ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
-+    stp     x0, x1, [sp, #-16]! // re-stash on the working stack
-+2:
-+    mrs     x0, esr_el1
-+    lsr     x0, x0, #26        // EC = ESR bits [31:26]
-+    cmp     x0, #0x15          // SVC from AArch64
-+    b.eq    1f
-+    ldp     x0, x1, [sp], #16
-+    // Issue #236: establish the full trap frame in the debug slot
-+    // (kstack_top - 288) before the C handler. The slot is both the
-+    // debugger-visible frame (debug_frame_slot) and the dispatch
-+    // restore source; without save_all it keeps stale content and the
-+    // C handler's own frames descend into it. Mirrors el0_irq/el1_irq
-+    // (same x0/x1-live contract); the SVC branch above stays ahead.
-+    save_all
-+    bl      aarch64_el0_fault_handler
-+    // The handler terminates the faulting task and arms a deferred switch
-+    // (issue #28) — apply it.  If no switch is armed (no current task, or
-+    // a debugger park which arms none) fall into a park loop: the fault
-+    // frame stays on the stack for the debugger (issue #236).
-+    adrp    x0, scheduler_save_rsp_to
-+    ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
-+    cbz     x0, .Lel0_fault_park
-+    b       irq_context_switch_common
-+.Lel0_fault_park:
-+    b       .Lel0_fault_park
-+1:
-+    ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
-+    b       syscall_entry
-+
-+// ---------------------------------------------------------------------------
-+// IRQ handlers — full register save/restore with preemptive context switch
-+// ---------------------------------------------------------------------------
-+// (save_all/restore_all macros live above el0_sync; all entries share them.)
-+
- .extern scheduler_save_rsp_to
- .extern scheduler_load_rsp_from
- .extern scheduler_load_cr3_from
-diff --git a/src/kernel/debug/debug_regs.cpp b/src/kernel/debug/debug_regs.cpp
-index e6ac69d1..d2304427 100644
---- a/src/kernel/debug/debug_regs.cpp
-+++ b/src/kernel/debug/debug_regs.cpp
-@@ -55,8 +55,9 @@ constexpr uint64_t kX86SyscallCsMagic = 0xFFFFFFFF80000000ULL;
- constexpr size_t kX86BlobQwords = 23; // 164B GDB x86_64 minimal + pad
- #elif defined(CONFIG_ARCH_AARCH64)
- // vectors.S save_all/restore_all: x0-x30 (0-240), sp_el0+elr (248-255),
--// spsr (264); frame is 288 bytes. EL0 sync AND EL0 IRQ share the layout
--// (both funnel through save_all), so no kind split is needed.
-+// spsr (264); frame is 288 bytes. EL0 sync faults AND EL0/EL1 IRQs share
-+// the layout (all funnel through save_all — issue #236; the SVC path
-+// keeps its own syscall_entry frame), so no kind split is needed.
- constexpr size_t kAarch64FrameQwords = 36;
- constexpr size_t kAarch64BlobQwords = 34; // 272B: x0-x30, sp, pc, cpsr
- #elif defined(CONFIG_ARCH_RISCV64)
+@@ -349,21 +352,20 @@ JARVIS_TEST(debug_attach_rejects, "PRE: none | POST: none") {
+         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, 999999) == Neg(kEsrch),
+         "dead pid not ESRCH");
+     // Unparented child: parent_id 0 != caller -> EPERM (not ESRCH).
+-    // Dispatched (but never add_child'ed) so the normal teardown path
+-    // applies; the claim still fails on parenthood.
+-    TaskControlBlock *orphan = TaskControlBlock::create_user(
+-        reinterpret_cast<void (*)()>(0xFFFFFFFF80000000ULL), 11, 10, 32_KiB);
++    // A live spinner (never add_child'ed) stays dispatched-alive so the
++    // claim fails on parenthood deterministically (#237: the old
++    // kernel-half entry faulted instantly, racing orphan death (ESRCH)
++    // against the attach).
++    uint64_t orphan_phys = 0;
++    TaskControlBlock *orphan = debug_spawn_spinner(orphan_phys, false);
+     JARVIS_ASSERT_FMT(orphan != nullptr, "orphan spawn failed");
+-    {
+-        arch::IrqGuard ig{};
+-        Scheduler::add_task(*orphan);
+-    }
+     Scheduler::reschedule();
+     const uint64_t orphan_id = orphan->id;
+     JARVIS_ASSERT_FMT(
+         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, orphan_id) ==
+             Neg(kEperm),
+         "non-child attach not EPERM");
++    debug_free_spinner_page(orphan, orphan_phys);
+     debug_reap_child(orphan);
+     // Self-attach: not own parent -> EPERM (also a kernel task).
+     auto *me = Scheduler::current_task();
 diff --git a/test-history.txt b/test-history.txt
-index e30f0809..b591fb21 100644
+index b591fb21..4ec8b99f 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2141,3 +2141,7 @@ SUMMARY: total=2 ok=2 fail=0
- 2026-09-26 22:16:33 debug_syscall PASSED: 3 FAILED: 0 TIME: 131s STATUS: ARCH-X86_64 TIMEOUT
- 2026-09-26 22:16:33 debug_syscall PASSED: 12 FAILED: 0 TIME: 520ms STATUS: ARCH-X86_64
- 2026-09-26 22:16:55 debug_syscall PASSED: 10 FAILED: 2 TIME: 0ms STATUS: ARCH-AARCH64
-+2026-09-27 00:54:40 arch_aarch64 PASSED: 31 FAILED: 0 TIME: 238ms
-+2026-09-27 00:54:40 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 EL0-FRAME-FIX
-+2026-09-27 00:57:16 debug_syscall PASSED: 9 FAILED: 3 TIME: 0ms STATUS: ARCH-AARCH64 PRE-FIX-CONTROL
-+2026-09-27 00:58:06 debug_syscall PASSED: 12 FAILED: 0 TIME: 522ms STATUS: ARCH-X86_64
+@@ -2145,3 +2145,11 @@ SUMMARY: total=2 ok=2 fail=0
+ 2026-09-27 00:54:40 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 EL0-FRAME-FIX
+ 2026-09-27 00:57:16 debug_syscall PASSED: 9 FAILED: 3 TIME: 0ms STATUS: ARCH-AARCH64 PRE-FIX-CONTROL
+ 2026-09-27 00:58:06 debug_syscall PASSED: 12 FAILED: 0 TIME: 522ms STATUS: ARCH-X86_64
++2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN1
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 187ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN2
++2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN3
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 218ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN4
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 215ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN5
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 216ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN6
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 221ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN7
++2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 548ms STATUS: ARCH-X86_64 ORPHAN-FIX

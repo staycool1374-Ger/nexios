@@ -151,7 +151,8 @@ constexpr uint64_t kSpinStubVa = 0x41000000ULL;
 ///        holds the CPU across ticks so the park hook fires
 ///        deterministically. Returns the child with its stub page phys
 ///        in stub_phys_out (caller frees after unmapping).
-TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
+TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
+                                       bool link_child = true) {
     stub_phys_out = 0;
     auto *me = Scheduler::current_task();
     if (me == nullptr)
@@ -200,7 +201,10 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
         debug_reap_child(t);
         return nullptr;
     }
-    me->add_child(t);
+    // Unlinked (orphan) spinners stay parentless (parent_id 0) for the
+    // attach-rejection matrix (#237): same valid stub, no parentage.
+    if (link_child)
+        me->add_child(t);
     {
         arch::IrqGuard ig{};
         Scheduler::add_task(*t);
@@ -326,9 +330,8 @@ JARVIS_TEST(debug_attach_parent_ok, "PRE: none | POST: none") {
         "detach toggle failed");
     uint64_t h2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, child_id);
     JARVIS_ASSERT_FMT(h2 != 0 && h2 != Neg(kEbusy), "re-attach failed");
-    JARVIS_ASSERT_FMT(
-        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2) == 0,
-        "second detach failed");
+    uint64_t dh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2);
+    JARVIS_ASSERT_FMT(dh2 == 0, "second detach failed: 0x%lx", dh2);
     debug_reap_child(t);
     JARVIS_TEST_PASS();
 }
@@ -349,21 +352,20 @@ JARVIS_TEST(debug_attach_rejects, "PRE: none | POST: none") {
         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, 999999) == Neg(kEsrch),
         "dead pid not ESRCH");
     // Unparented child: parent_id 0 != caller -> EPERM (not ESRCH).
-    // Dispatched (but never add_child'ed) so the normal teardown path
-    // applies; the claim still fails on parenthood.
-    TaskControlBlock *orphan = TaskControlBlock::create_user(
-        reinterpret_cast<void (*)()>(0xFFFFFFFF80000000ULL), 11, 10, 32_KiB);
+    // A live spinner (never add_child'ed) stays dispatched-alive so the
+    // claim fails on parenthood deterministically (#237: the old
+    // kernel-half entry faulted instantly, racing orphan death (ESRCH)
+    // against the attach).
+    uint64_t orphan_phys = 0;
+    TaskControlBlock *orphan = debug_spawn_spinner(orphan_phys, false);
     JARVIS_ASSERT_FMT(orphan != nullptr, "orphan spawn failed");
-    {
-        arch::IrqGuard ig{};
-        Scheduler::add_task(*orphan);
-    }
     Scheduler::reschedule();
     const uint64_t orphan_id = orphan->id;
     JARVIS_ASSERT_FMT(
         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, orphan_id) ==
             Neg(kEperm),
         "non-child attach not EPERM");
+    debug_free_spinner_page(orphan, orphan_phys);
     debug_reap_child(orphan);
     // Self-attach: not own parent -> EPERM (also a kernel task).
     auto *me = Scheduler::current_task();
