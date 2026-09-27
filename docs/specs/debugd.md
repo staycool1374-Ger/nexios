@@ -124,8 +124,16 @@ Raw pid-to-handle lookup does not exist.
 - Attach selectors (exact-five preservation): `attach(0, handle)` toggles
   detach for a valid owned handle (the only detach in Phase 1);
   `attach(1, child-pid)` mints a handle on parenthood proof (launcher
-  claim); supervisor grants arrive in Phase 4. Raw pid-to-handle lookup
+  claim); supervisor grants arrive in Phase 4 (§14 NEW). Raw pid-to-handle lookup
   does not exist.
+- Grant resolution rule (normative, §14): handle resolution succeeds on
+  an owned live binding OR a live grant with generation match, and
+  only for `debugger_id == caller->id`. Denials are preserved exactly:
+  `EPERM` (no grant / attenuation failure / kernel task), `EBADF`
+  (bad, unknown, or foreign handle — the `debug_resolve` original),
+  `ESRCH` (dead target), `EBUSY` (already debugged — a grant
+  authorizes the attempt, never overrides `EBUSY`). No new errno
+  exists for grants.
 - Stops are taken at user-mode boundaries as observed at timer ticks:
   the tick records the interrupted PC per CPU, and the scheduler parks
   current when it carries a stop request, is RUNNING, and the recorded
@@ -164,6 +172,11 @@ Today a user fault terminates the task. With a debugger attached:
   event carries a task-info snapshot (state, priority, budget remaining);
   this snapshot is the sole scheduler-introspection surface of §9 — no
   separate info syscall exists.
+- Main-loop consumption contract (normative, §13 NEW): the debugd loop
+  is the sole consumer of this queue — poll → dispatch → step/continue;
+  it drains in loop order and never reorders §4 events. Debugger death
+  and grant revocation compose here through the shared disposition
+  function (fault-stopped terminate, cleanly-stopped resume).
 - Breakpoint instructions per arch (single source of truth):
   x86_64 `int3` (0xCC), aarch64 `brk #0` (0xD4200000), riscv64
   `ebreak` (0x00100073) / `c.ebreak` where C is enabled. The kernel
@@ -307,6 +320,13 @@ debugd doubles as the introspection engine — no second mechanism:
 - Determinism: RSP I/O never allocates, never blocks unboundedly,
   never takes scheduler locks; stop-event queue is fixed-capacity
   with drop-oldest accounting.
+- Loop timeouts (normative, §13 NEW): every blocking wait of the
+  main loop (event poll, continue-with-stop, reg/mem I/O) carries a
+  bounded per-I/O timeout; expiry runs the single uniform procedure
+  — cancel the wait, then detach-with-target-resumed per the
+  dispositions above. There is no infinite wait in the loop; a wedged
+  host (or wedged debugd) MUST NOT wedge the kernel or leave a
+  target stopped.
 
 ## 11. Verification strategy
 
@@ -335,12 +355,114 @@ debugd doubles as the introspection engine — no second mechanism:
 3. RSP parser core + mock-transport unit tests (§5–§6, host-runnable
    first — no kernel needed).
 4. debugd main loop + UART-IPC transport (§2, §7 v1).
+   REDUCED SCOPE (issue #232, v0.5.2): the main loop (§13 NEW) and
+   the supervisor-grant model (§14 NEW) are specified now;
+   the target C++ runtime, the launch/test-target story, and the
+   UART-IPC transport endpoint are deferred to later milestones —
+   deferred, not denied. No normative transport-byte or runtime
+   sentence may appear outside this pointer until those phases.
 5. `runelf --debug` integration (§9, gated on #77).
 6. Bare-metal checklist audit (§8) against RPi4/RISC-V bring-up.
 7. TCP transport (§7 v2, gated on Phase 9 netstack #55).
 8. Determinism qualification (§10–§11 envelope tests).
 
-## 13. Open questions (for audit, not blockers)
+## 13. debugd main loop v1 (normative — reduced Phase 4 scope)
+
+Single-threaded event loop: one loop, no worker threads, no concurrent
+RSP processing while a continue is outstanding except Ctrl-C stop
+injection (§13.3). Transport bytes are out of scope (deferred
+UART-IPC endpoint, §12 item 4); this section normatives the loop's
+protocol behavior only.
+
+- §13.1 Loop shape (pseudocontract): `recv RSP packet → validate +
+  ACK → TargetTaskController dispatch → §3 syscall(s) → RSP response`.
+  Exactly one outstanding request per connection; responses never
+  interleave.
+- §13.2 ACK/sequencing: `+` acknowledges a well-formed packet (sender
+  retransmits on `-` or timeout); malformed packets are NACKed with
+  `-` and dropped without dispatch. Ordering follows §13.1; the loop
+  MUST NOT pipeline a second request before responding to the first.
+- §13.3 Ctrl-C: byte `0x03` interrupts only the current outstanding
+  continue (stop injection on that handle set, §4 stop mechanics).
+  When idle it is a no-op heartbeat — never a global attach,
+  broadcast, or detach.
+- §13.4 Event consumption: poll (§3 event-poll selector) → dispatch
+  stop event → step/continue (§3 step/continue selectors) →
+  read/write regs/mem (§3 data selectors), referencing §4
+  stop-routing/park/event-queue and §5–§6 RSP verbs without
+  duplicating them. The queue drains in loop order (§4); the loop
+  never reorders events.
+- §13.5 Per-I/O timeout table: every blocking wait — event poll,
+  continue-with-stop, reg/mem I/O — carries a bounded timeout
+  (values assigned at implementation, all finite). Expiry runs one
+  uniform procedure: cancel the wait, then
+  detach-with-target-resumed per §10/§4 dispositions. There is no
+  infinite wait; the "no infinite wait" sentence is a conformance
+  requirement on the implementation, verified by the timeout tests
+  in §11.
+- §13.6 Discovery rule: the loop learns targets ONLY via (i)
+  launcher-claim handles (parent-only §3 attach selector) or (ii)
+  supervisor-grant objects (§14). Attach-style requests (in
+  whatever RSP spelling the transport uses — no new verb is
+  required) without a handle-or-grant are rejected `EPERM`.
+  Pid-scan and pid-to-handle lookup do not exist.
+
+## 14. Supervisor-grant model for non-child attach (normative)
+
+Fulfills the §3 promise ("attaching to any other running task
+requires a grant from its launcher or supervisor"). Issue #50
+(capability attenuation) is a v0.7.1 placeholder with no wire
+shape, so v1 defines a debug-specific grant record now; the
+record reserves an opaque `attenuation` field for future
+reconciliation with #50, which MUST NOT be interpreted until then.
+
+- §14.1 Grantor roles: (a) a launcher may grant its claim right
+  over its OWN claimed children to a named debugger; (b) PID 1
+  (init/supervisor) may grant for any user task. Nobody else may
+  grant — not arbitrary third-party debuggers, not the target
+  itself. Kernel tasks and PID 1 internals are never grantable
+  (data-plane `EPERM` per §3 stands regardless of grants).
+- §14.2 Grant record shape: (grantee debugger-id, target
+  reference, nonce/generation, single-use-or-expiry flag, opaque
+  `attenuation` reservation). Mint path (decided): a DEDICATED
+  NEW attach selector (number assigned at implementation —
+  RECOMMENDED next free after the Phase-2 selectors; no new
+  syscall number, selectors are cheap) taking
+  (target-selector, grantee-id), callable only by §14.1 grantors.
+  REJECTED alternative: mint-for-others through the existing
+  handle-toggle path with no new selector — impossible without an
+  impersonation or transfer operation, which would be a new
+  selector in disguise; rejected for dishonesty. REJECTED
+  alternative 2: waiting for #50 attenuation — blocks Phase 4 on
+  v0.7.1; rejected by scope.
+- §14.3 Resolve rule: handle resolution (cf.
+  `debug_resolve` in `src/kernel/syscall/syscall_handlers_debug.cpp`,
+  by reference without re-specifying code) succeeds on an owned live
+  binding OR a live grant with generation match, and only for
+  `debugger_id == caller->id`. Unknown/foreign handles fail with
+  the original errors (`EBADF`); dead-target detach drops the owned
+  binding as today.
+- §14.4 Denial table (preserved exactly, no new errno). Mint path
+  (target-selector key, cf. sel-1 claim precedent): `EPERM` = no
+  grant / attenuation failure / kernel task / caller not a §14.1
+  grantor; `ESRCH` = bad target reference or dead target;
+  `EBUSY` = target already debugged. Handle-resolve path (cf.
+  §14.3): `EBADF` = bad, unknown, or foreign handle; `ESRCH` =
+  dead target. A grant authorizes the attach ATTEMPT only —
+  grant-present-but-already-debugged is `EBUSY`, never overridden.
+- §14.5 Revocation + death composition: revoke triggers are
+  explicit revoke, grantor death, grantee death, and target
+  death/exit. Any trigger invalidates the grant synchronously
+  for subsequent resolves (generation bump; in-flight syscalls
+  holding a resolved binding complete or fail closed, never
+  re-resolve mid-call). Disposition runs through the ONE shared
+  function with debugger death: fault-stopped targets terminate,
+  cleanly-stopped targets resume (§4/§10). Grantee death drops
+  granted bindings exactly like owned bindings — no orphaned
+  parked tasks, composes with #191 supervision (restarted
+  debugd re-attaches explicitly, §13.6 discovery reapplies).
+
+## 15. Open questions (for audit, not blockers)
 
 - Q1: Attach granularity — whole-task only, or per-thread when
   #52 threads land? (Spec assumes task; threads reopen it.)
