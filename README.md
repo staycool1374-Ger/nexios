@@ -331,3 +331,30 @@ NexIOS relies on an automated test-driven pipeline to verify capability controls
   ```bash
   make test-full
   ```
+
+### Release Docker Image
+
+Every milestone tag (starting v0.5.1) ships a ready-made Ubuntu
+environment on GHCR. Running it clones that tag and drops you into a
+tree where all gates work — no host toolchain setup. QEMU runs
+emulated (TCG), so no KVM is needed on any host.
+
+```bash
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+# inside: make build
+# inside: make execute-test x86_64 debug debug_syscall
+```
+
+Run a gate directly without the shell:
+
+```bash
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.1 \
+    make execute-test x86_64 debug debug_syscall
+```
+
+Override the tag for development snapshots (default is the built tag):
+
+```bash
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+```
