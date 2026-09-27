@@ -20,6 +20,24 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #237 — debug_attach_rejects orphan race (2026-09-27, CLOSED)
+- **Learned:** (1) A test that races task death can NEVER assert liveness-dependent errnos: the kernel-half-entry orphan died on first dispatch, so attach flipped ESRCH/EPERM run-to-run. Determinism by construction (live spinning orphan, parent_id 0 by memset) beats timing luck. (2) First audit REJECT was check #7 only (retrieval posted late, zero code findings) — process artifacts belong on the issue BEFORE the audit call, not after. (3) `remove_child` early-returns for non-children, so `debug_reap_child` is orphan-safe without a special path.
+- **Adapted:** `debug_spawn_spinner(phys, link_child=true)` default param (existing callers untouched); orphan case spawns live + reaps + frees stub page; detach assert prints the actual errno (caught the test-1 family next).
+- **Measured:** aarch64 test 2 passes 7/7 (was ~50/50), three full 12/12 runs; x86_64 12/12; build Errors 0. SIL 3 APPROVED on re-audit (S3 timestamp-hygiene note only).
+- **Style re-surface:** test-history rows are machine-format — a shell loop wrote 7 malformed rows (caught by format grep, fixed); always verify with the format regex before committing.
+
+### #236 — aarch64 el0 fault trap frame (2026-09-27, CLOSED)
+- **Learned:** (1) The debug slot needs a WRITER on every trap path, not just an address: `el0_sync` faults never ran `save_all`, so C handler frames descended from kstack_top straight through the top-288 slot (magic probe: ~30/36 clobbered) — publish freshness and SP alignment were both proven fine, content discipline was the whole bug. (2) Stacks grow DOWN: post-`save_all` C pushes land BELOW the slot (safe by geometry) — the pre-fix clobber came from pushes starting at top-16 with no frame established. Direction reasoning beats offset arithmetic. (3) GAS macros must precede use: `save_all` lived below `el0_sync` — the fix required moving both macros (plus stale park-loop comments that denied the debug park path).
+- **Adapted:** `save_all` in `el0_sync` non-SVC path (SVC/park-loop/switch-common untouched); `debug_regs.cpp` comment synced; `aarch64_el0_fault_frame_in_debug_slot` regression test (slot ELR + x0/x1 stash preservation).
+- **Measured:** aarch64 arch_aarch64 31/31, debug_syscall 11/12 x3 (tests 9+12 fixed; test-2 flake proven pre-existing by stashed control run); x86_64 12/12; build Errors 0. SIL 3 APPROVED, no findings.
+- **Style re-surface:** pre-fix control run (stash fix, run, pop) is the cheapest causality proof for "flake vs regression" disputes — use it before theorizing.
+
+### #235 — aarch64 debugd residue (2026-09-26, CLOSED)
+- **Learned:** (1) GDB on QEMU beats static analysis for MMU mysteries: 8 scripted sessions (census → PTE-watch → TTBR → caller-ID via stack unwind + addr2line) converged where file reads circled — census proved route/park/resume worked, stack dump named `sys_task_debug_read_regs` as the panicker. (2) `VMM::get_table` silently zeroes PTEs whose target is unallocated (vmm.cpp:148-150) — ANY freer of a live page kills its mapping on the next walk; heals that re-map can mask the freer. (3) Test bugs outnumber kernel bugs in debug suites: wrong-VA poison (0x40000000 vs executed 0x41000000), unsatisfiable park-wait (attach never stops), duty-cycle reasoning must use the ACTUAL stub (spinners never yield). (4) Logger `%d` reads 8 bytes — bool/int args print garbage; use `%lx` with u64 casts (burned twice before fixing the FAIL line).
+- **Adapted:** EL1 recovery check (`2e4834c2`, mirrors riscv/x86); aarch64 stub bytes fixed; kSpinStubVa hoist + direct poison (`6c991cb5`); fault-latch ESR accessor pattern reused; residue split into #236/#237/#238.
+- **Measured:** aarch64 debug_syscall 8/12 panicking → 10/12 graceful → (with #236+#237) 12/12; x86_64 12/12 throughout; riscv64 12/12. SIL 3 APPROVED where pipelines ran.
+- **Style re-surface:** hypothesis + validation plan BEFORE code (8 GDB runs, each with a stated question); TMP-DIAG fully reverted grep-verified; QEMU processes killed after every session.
+
 ### #205 — arch_riscv64 gate proof (2026-09-22, CLOSED)
 - **Learned:** (1) Triage by direct read beats planner summaries: planner returned summary-only, self-read of one 551-line file gave the exact 13/2/1/5 split. (2) Clone semantics are arch-shaped: x86 zeroes low half for user isolation, but riscv low half IS kernel MMIO/identity — copy L0[0] (U=0, #206-safe). aarch64 survives via HHDM aliases. (3) S-mode cannot read misa/mvendorid/medeleg (illegal-insn) — M-mode-only CSRs can never gate in S; banner/banner-proof replaces them. (4) The RTC is an uptime clock: pin the epoch contract instead of deferring everything.
 - **Adapted:** L0[0] clone copy; init_stack by-ref (riscv); plic_init unmask-first; RTC 1970 pin; 5 deregistrations with pointers (#152/M-mode); counts {0,0,16}.

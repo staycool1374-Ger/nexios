@@ -206,6 +206,9 @@ Attempt 9 for details.
 ### Rule D: Debugging Escalation
 First attempt: analyze source code and inject targeted instrumentation/logging. If the root cause remains unclear after 3 analysis iterations (going in circles), use GDB batch surveillance (`make debug-test`) to gather precise evidence — backtrace, register state, memory values. Do NOT switch back to source speculation once GDB is warranted.
 
+### Rule D1: aarch64 GDB surveillance notes (#235/#236)
+`aarch64-elf-gdb` is NOT preinstalled (x86_64/riscv64 GDbs are) — `brew install aarch64-elf-gdb`. For targeted (non-panic) surveillance, launch QEMU manually (`-s -S`, serial to file) and drive `aarch64-elf-gdb build/kernel-debug.elf -batch -x <script>`: breakpoint `commands` with `silent` + `printf` + `continue` give live censuses (fault routes, map/unmap pairs, switch-slot snapshots); `monitor info registers` reads TTBR-era state the stub doesn't expose as registers. Schedule multi-minute `sleep`+poll wrappers — class runs under surveillance take 5-15 min. Do NOT use batch-mode hardware watchpoints on QEMU/aarch64 TCG (stalls the target with no output).
+
 ## 14. Catching Stray Writes with lldb Hardware Watchpoints
 
 ### Problem
