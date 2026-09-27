@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #239 — kernel supervisor-grant selectors (2026-09-27, CLOSED)
+- **Learned:** (1) Two concurrent never-blocking same-priority spinners wedge the harness deterministically on x86 — no existing test ever had 2 live spinners (all serialize via park/kill/reap); single-live-spinner discipline (park extras, or use BLOCKED daemons as passive IDs) restores green. Filed as #242, tests restructured, kernel grant code exonerated by bisection. (2) `JARVIS_TEST_PASS()` records success but does NOT return — early-return bisects fall through into double-teardown (hangs/panics from my own scaffolding); use explicit `return;`. (3) QEMU file chardevs buffer serial (~4KB lag); `arch::QemuDebugcon` port writes are immediate — use debugcon for hang localization. (4) Pre-existing universal +3 PMM spinner-table pattern (kernel-owned tables skipped) is background noise — compare against sibling tests before hunting leaks. (5) riscv64 needs ~30s/park-heavy-test (400s cap fits ~13); new tests must budget dilation or accept cap-TIMEOUT with zero FAILs.
+- **Adapted:** sel7/sel8 + grantor fields + shared disposition + drain grantor extension (spec §14 implemented); daemon-id passive grantee helper; errno-printing detach assert; riscv control left on legacy VA with note (dispatch starvation makes poison moot there).
+- **Measured:** x86_64 17/17 ×4, aarch64 17/17 ×2, riscv 15/17 zero-fail (cap); build Errors 0. SIL 3 APPROVED, zero findings.
+- **Style re-surface:** bisection scaffolding must use explicit `return;` and be reverted before verification runs count; unbuffered traces for hangs; leak claims require sibling-test comparison first.
+
 ### #226 — debugd Phase 2 stop routing (2026-09-27, CLOSED after residue)
 - **Learned:** (1) Leaving an issue open "for merge-scoping" while a residue sub-issue (#235) plays out works if the hold reason is written down — the close-out needed zero new work once #236/#237 landed, just the acceptance re-check. (2) Phase acceptance on 2/3 arches with a tracked residue issue is a legitimate merge point (x86+riscv proven, aarch64 isolated) — stated explicitly at the time, no confusion later.
 - **Adapted:** #226 closed with acceptance re-verified (aarch64 12/12 + 31/31, x86/riscv green, audits APPROVED); Phase 4 (#232) unblocked.
