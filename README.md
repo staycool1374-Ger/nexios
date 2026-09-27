@@ -37,6 +37,11 @@ Currently a monolithic kernel (47 syscalls via `int 0x82`), actively transitioni
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
+---
+
+## Diagram of actual implementation
+
+<img src="diagram.png" alt="Diagram of actual implementation"/>
 
 ---
 
