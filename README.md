@@ -284,6 +284,34 @@ git clone [https://github.com/staycool1374-Ger/nexios.git](https://github.com/st
 cd nexios
 ```
 
+#### 1b. Or skip the setup: release Docker image
+Every milestone tag (starting v0.5.1) ships a ready-made Ubuntu
+environment on GHCR — cross toolchains, QEMU/OVMF, ISO tooling, GDB —
+so all gates work with zero host setup. Running it clones that tag
+and drops you into the tree. QEMU runs emulated (TCG), so no KVM is
+needed on any host (including Apple Silicon, via the arm64 image):
+
+```bash
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+# inside the container:
+make build
+make execute-test x86_64 debug debug_syscall
+```
+
+Run a gate directly without an interactive shell:
+
+```bash
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.1 \
+    make execute-test x86_64 debug debug_syscall
+```
+
+Pin a different snapshot explicitly (default is the image's own tag):
+
+```bash
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.1
+```
+
 #### 2. Build Targets
 
 NexIOS utilizes standard C++20 freestanding toolchains across target architectures (`x86_64`, `arm64`, and `riscv64`):
@@ -331,30 +359,3 @@ NexIOS relies on an automated test-driven pipeline to verify capability controls
   ```bash
   make test-full
   ```
-
-### Release Docker Image
-
-Every milestone tag (starting v0.5.1) ships a ready-made Ubuntu
-environment on GHCR. Running it clones that tag and drops you into a
-tree where all gates work — no host toolchain setup. QEMU runs
-emulated (TCG), so no KVM is needed on any host.
-
-```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.1
-docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.1
-# inside: make build
-# inside: make execute-test x86_64 debug debug_syscall
-```
-
-Run a gate directly without the shell:
-
-```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.1 \
-    make execute-test x86_64 debug debug_syscall
-```
-
-Override the tag for development snapshots (default is the built tag):
-
-```bash
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.1
-```
