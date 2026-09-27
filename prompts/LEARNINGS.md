@@ -33,6 +33,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #244 — release boot output cleanup (2026-09-27, CLOSED)
+- **Learned:** (1) Quoted-string `-D` macros do not survive generated build rules (extra shell/eval layers strip quotes; fails only on clean rebuilds since `-D` changes bypass `.d` deps — always verify with a fresh full build, not incremental). pp-number + in-code two-level stringify is shell-proof. (2) `make build` green means nothing for release-only paths: the same change compiled in debug, failed in release — gate both builds before claiming green. (3) Test-harness serial asserts only match their own markers, so gating boot logs is safe — but verify by grep, never assume.
+- **Adapted:** `Version::picolibc_string()` + Makefile early pin; grub branding; CONFIG_DEBUG-gated boot diags; arch-suffixed banner.
+- **Measured:** release transcript verified line-by-line (banner, picolibc, zero diag lines, working `version`); `make build` Errors 0. SIL 3 APPROVED.
+- **Style re-surface:** minimal diff on user-directed cleanups (flagged lines only — left BEFORE/AFTER STVEC markers and unflagged INFO lines alone); fix auditor comments immediately (flag-name mismatch) rather than carrying them.
+
 ### #218 — run-mode multi-arch coverage (2026-09-27, CLOSED verified-no-change)
 - **Learned:** (1) Read the dispatch before assuming breakage: `run-*-mode` already forwarded `<arch>` — the issue needed verification, not a fix. Expect-driven probes (prompt + `version` round-trip, bounded timeouts, single typed line for the 16-byte FIFO) are the right shape for interactive targets. (2) One-off EOF with full transcript + no panic + no reproduction in 2 repeats = note with escalation rule, not a new issue.
 - **Adapted:** `tools/shell-smoke.exp` committed (parameterized, `-log` transcripts, nonzero on timeout/EOF); all six invocations green.
