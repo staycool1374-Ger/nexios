@@ -20,6 +20,12 @@
 
 <!-- Append new entries below; newest first. -->
 
+### #218 — run-mode multi-arch coverage (2026-09-27, CLOSED verified-no-change)
+- **Learned:** (1) Read the dispatch before assuming breakage: `run-*-mode` already forwarded `<arch>` — the issue needed verification, not a fix. Expect-driven probes (prompt + `version` round-trip, bounded timeouts, single typed line for the 16-byte FIFO) are the right shape for interactive targets. (2) One-off EOF with full transcript + no panic + no reproduction in 2 repeats = note with escalation rule, not a new issue.
+- **Adapted:** `tools/shell-smoke.exp` committed (parameterized, `-log` transcripts, nonzero on timeout/EOF); all six invocations green.
+- **Measured:** 6/6 shell-smoke passes (x86/arm/riscv × debug/release); `make build` Errors 0. Audit APPROVED (2 S3 notes).
+- **Style re-surface:** never run interactive make targets without expect + timeouts; keep QEMU processes reaped (pkill after each probe).
+
 ### #239 — kernel supervisor-grant selectors (2026-09-27, CLOSED)
 - **Learned:** (1) Two concurrent never-blocking same-priority spinners wedge the harness deterministically on x86 — no existing test ever had 2 live spinners (all serialize via park/kill/reap); single-live-spinner discipline (park extras, or use BLOCKED daemons as passive IDs) restores green. Filed as #242, tests restructured, kernel grant code exonerated by bisection. (2) `JARVIS_TEST_PASS()` records success but does NOT return — early-return bisects fall through into double-teardown (hangs/panics from my own scaffolding); use explicit `return;`. (3) QEMU file chardevs buffer serial (~4KB lag); `arch::QemuDebugcon` port writes are immediate — use debugcon for hang localization. (4) Pre-existing universal +3 PMM spinner-table pattern (kernel-owned tables skipped) is background noise — compare against sibling tests before hunting leaks. (5) riscv64 needs ~30s/park-heavy-test (400s cap fits ~13); new tests must budget dilation or accept cap-TIMEOUT with zero FAILs.
 - **Adapted:** sel7/sel8 + grantor fields + shared disposition + drain grantor extension (spec §14 implemented); daemon-id passive grantee helper; errno-printing detach assert; riscv control left on legacy VA with note (dispatch starvation makes poison moot there).
