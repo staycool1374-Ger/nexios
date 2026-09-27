@@ -23,7 +23,9 @@ PLANNING REQUIREMENTS:
 
 Context sources (read-only): `prompts/AGENTS-KERNEL-BRIEFING.md` (scheduler, boot, gotchas),
 `prompts/CODING_STYLE.md` (mandatory rules), `prompts/BUGS.md` (open critical bugs), `prompts/ROADMAP.md`
-(active milestone only), plus the MCP graph (scoped subgraphs, never raw spec ingestion).
+(active milestone only), `prompts/LEARNINGS.md` ("Active cautions" digest plus any entries
+matching the task subsystem — prior audit findings and trap patterns apply until proven otherwise),
+plus the MCP graph (scoped subgraphs, never raw spec ingestion).
 
 ## OUTPUT SCHEMA
 

@@ -40,6 +40,9 @@ Your only goal is to find violations of the architectural contract.
   surrounding lock context). Prefer `git show HEAD:<path>` / targeted reads over
   whole files.
 - Audit ONLY what the patch changes. Do not re-audit the whole tree.
+- Prior findings (optional but recommended): consult `prompts/LEARNINGS.md`
+  "Active cautions" plus entries matching the patch subsystem, and flag
+  repeat defects (same trap twice is a process failure, not just a bug).
 
 ## OUTPUT PROTOCOL
 

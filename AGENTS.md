@@ -65,7 +65,11 @@ Closing an issue is NOT the end of the cycle. Before starting new work:
 
 1. **Adapt new background knowledge:** append an entry to
    `prompts/LEARNINGS.md` (format documented there): what was learned,
-   where it is now anchored (spec/AGENTS.md/comment).
+   where it is now anchored (spec/AGENTS.md/comment). Then merge any
+   durable, cross-cycle caution from the entry into the "Active
+   cautions" digest at the top of the same file (one line each, cap
+   ~12, prune expired) — the digest is what sessions actually read,
+   so a lesson that never reaches it is effectively lost.
 2. **Refresh the knowledge base:** if the cycle invalidated anything in
    `prompts/AGENTS-KERNEL-BRIEFING.md`, STATE.md, or existing specs, update
    them now — stale docs are a defect.
@@ -92,6 +96,7 @@ If the branch does not match the intended role, do not proceed.
 - If neither: halt
 - Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
 - Read `prompts/CODING_STYLE.md` — mandatory for all code changes in every role
+- Read `prompts/LEARNINGS.md` "Active cautions" digest + the newest 3 entries — past cycles' traps apply to current work until proven otherwise
 - Current work state (objective, completed phases, next move): see `prompts/STATE.md`
 
 ## GitHub Issue Tracking (source of truth for bugs & features)

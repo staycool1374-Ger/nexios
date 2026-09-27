@@ -7,6 +7,19 @@
 > issue has a matching entry here — the FEEDBACK transition is not complete
 > without it.
 
+## Active cautions (curated digest — read at session start; cap ~12 lines)
+
+- `VMM::get_table` silently zeroes PTEs whose target is unallocated — any freer of a live page kills its mapping on the next walk (#235).
+- Trap entries must establish the frames the debugger reads: aarch64 `el0_sync` needed `save_all`; C handler frames must descend below, not into, the slot (#236).
+- `JARVIS_TEST_PASS()` records success but does NOT return — bisection needs explicit `return;` (#239).
+- Logger `%d` reads 8 bytes: use `%lx` + u64 casts; test-history rows must match the format regex (#235).
+- QEMU file chardevs buffer (~4KB); `QemuDebugcon` port writes are immediate — use debugcon for hang localization (#239).
+- sel1 attach binds, never stops; tick-parks need a user-mode interrupt within budget — park-waits must be satisfiable by construction (#235).
+- Test harness runs as init, PID 1, prio 10; spinners run prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open).
+- `aarch64-elf-gdb` is not preinstalled (`brew install`); no batch-mode hardware watchpoints on QEMU/aarch64 TCG (#235).
+- Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
+- Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
+
 ## Entry format
 
 ```
