@@ -218,7 +218,9 @@ bool taskdefs_valid() noexcept {
 // ── reboot_from_table ────────────────────────────────────────────────────
 
 void reboot_from_table() {
+#if defined(CONFIG_DEBUG)
     debug_write("[REBOOT] Rebuilding system from task-definition table\n");
+#endif
     arch::IrqGuard guard{};
 
     auto *idle = Scheduler::get_idle_task();
@@ -227,7 +229,9 @@ void reboot_from_table() {
     // old daemons and tasks are intentionally killed here, not failing.
     daemon::set_suppress_death_msg(true);
     Scheduler::set_suppress_terminated_log(true);
+#if defined(CONFIG_DEBUG)
     debug_write("[INFO]  daemon: restarting vfsd, iocd\n");
+#endif
 
     // 1. Collect all non-idle, non-current tasks (can't mutate all_tasks_
     //    during iteration, and must not release our own TCB — we're running on
@@ -406,9 +410,11 @@ void reboot_from_table() {
         }
     }
 
+#if defined(CONFIG_DEBUG)
     debug_write("[REBOOT] after add_tasks task_count()=0x");
     debug_write_hex(Scheduler::task_count());
     debug_write("\n");
+#endif
 
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning
@@ -431,6 +437,9 @@ void reboot_from_table() {
 #endif
     }
 
+    // Issue #244: reboot/idle diagnostics are debug-only (release boots
+    // straight into a clean console for the shell).
+#if defined(CONFIG_DEBUG)
     debug_write("[DIAG] reboot idle loop entered\n");
     {
         static bool dumped = false;
@@ -462,6 +471,7 @@ void reboot_from_table() {
             }
         }
     }
+#endif
     arch::sti();
     for (;;) {
         static uint64_t _idle_count = 0;

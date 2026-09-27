@@ -111,7 +111,9 @@ static bool g_run_tests = false;
 // and the post-test task-definition table (taskdefs.cpp).
 extern "C" void debug_write(const char *msg);
 void init_task_main() {
+#if defined(CONFIG_DEBUG)
     debug_write("[DIAG] init_task_main entered\n");
+#endif
     // Read /etc/fstab and mount entries
     {
         auto fstab = initrd::find("./etc/fstab");
@@ -302,9 +304,11 @@ void init_task_main() {
     kernel::elf::ElfLoader::ensure_task();
 
     // ── Run tests from init-task context (IF=1) ──────────────────
+#if defined(CONFIG_DEBUG)
     kernel::Logger::info(
         "[DIAG] init_task_main: reached test runner g_run_tests=%u",
         (unsigned)g_run_tests);
+#endif
     if (g_run_tests) {
         // BUGS.md#021 harness exemption requires init (PID 1) at priority 10
         // (its boot/test-runner duty priority) during the suite; the base
@@ -338,7 +342,8 @@ void init_task_main() {
             shell->name[i] = '\0';
             kernel::Scheduler::add_task(*shell);
             kernel::Scheduler::set_shell_task(shell);
-            kernel::Logger::info("init: shell task %u created", shell->id);
+            // Issue #244: the scheduler already logs the spawn above —
+            // no duplicate line.
         } else {
             kernel::Logger::warn("init: failed to create shell task");
         }
@@ -852,10 +857,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     debug_write("[BOOT] Memory init done\n");
 
     debug_write("[BOOT] BEFORE STVEC\n");
-    uint64_t val = 42;
-    if (val == 42) {
-        debug_write("[BOOT] val==42, all good\n");
-    }
     debug_write("[BOOT] AFTER STVEC\n");
 
     debug_write("[BOOT] Kernel init...\n");

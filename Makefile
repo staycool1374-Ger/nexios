@@ -111,12 +111,19 @@ endif
 # such as -DCONFIG_DEADLINE_ACTION=N). Pass on the command line:
 #   make debug CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=3"
 CONFIG_DEFS ?=
+# Picolibc version pin (issue #72, spec §10): defined HERE (not only at the
+# picolibc section below) because CXXFLAGS_COMMON below expands immediately
+# (:=) and bakes it into -DPICOLIBC_VERSION_NUM (pp-number, stringified in
+# version.cpp — quoted -D strings do not survive the generated rules).
+# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
+PICOLIBC_VERSION ?= 1.8.12
 CXXFLAGS_COMMON := -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
                    -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
                    -fno-threadsafe-statics \
                    -Wall -Wextra -Werror \
                    -I src -I src/lib -pipe -MMD -MP \
                    -DCONFIG_ARCH_$(ARCH_UPPER) \
+                   -DPICOLIBC_VERSION_NUM=$(PICOLIBC_VERSION) \
                    -ffunction-sections -fdata-sections \
                    $(CONFIG_DEFS)
 
@@ -452,10 +459,8 @@ $(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH_EFFECTIVE) > $(ARCH_STAMP))
 # ------------------------------------------------------------------------------
 # Shared build rules (pattern rules, libc, userspace, initrd)
 # ------------------------------------------------------------------------------
-# picolibc pin (issue #72): defined BEFORE the include — mk/rules.mk
-# static-pattern prerequisites expand at parse time.
-# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
-PICOLIBC_VERSION ?= 1.8.12
+# picolibc paths (version pin lives above CXXFLAGS_COMMON so the -D picks
+# it up; mk/rules.mk static-pattern prerequisites expand at parse time).
 PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
 PICOLIBC_SYSROOT := build/picolibc/sysroot
 include mk/rules.mk

@@ -907,11 +907,13 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
                                            uint64_t period_ticks)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
+#if defined(CONFIG_DEBUG)
     Logger::raw_write("[TCB] create pool8=");
     Logger::print_dec(MemPool::pool_free_count(8));
     Logger::raw_write(" tcnt=");
     Logger::print_dec(Scheduler::task_count());
     Logger::raw_write("\n");
+#endif
     auto *tcb = static_cast<TaskControlBlock *>(
         MemPool::alloc(sizeof(TaskControlBlock)));
     if (!tcb) {

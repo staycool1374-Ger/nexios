@@ -628,6 +628,16 @@ void Shell::shell_task_main() {
     Terminal::set_fg(COLOR_GREEN);
     Terminal::write("NexIOS RTOS ");
     Terminal::write(kernel::Version::string());
+#if defined(CONFIG_ARCH_X86_64)
+    Terminal::write(" (x86_64)");
+#elif defined(CONFIG_ARCH_AARCH64)
+    Terminal::write(" (aarch64)");
+#elif defined(CONFIG_ARCH_RISCV64)
+    Terminal::write(" (riscv64)");
+#endif
+    Terminal::write("\n");
+    Terminal::write("picolibc ");
+    Terminal::write(kernel::Version::picolibc_string());
     Terminal::write("\n");
     Terminal::set_fg(COLOR_DEFAULT);
     Terminal::write("Type 'help' for available commands\n\n");

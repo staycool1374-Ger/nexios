@@ -1,51 +1,268 @@
-diff --git a/test-history.txt b/test-history.txt
-index 2f547d9b..30327e79 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -2164,3 +2164,9 @@ SUMMARY: total=2 ok=2 fail=0
- 2026-09-27 15:09:57 debug_syscall PASSED: 15 FAILED: 0 TIME: 400s STATUS: ARCH-RISCV64 TIMEOUT-CAP
- 2026-09-27 15:20:40 debug_syscall PASSED: 17 FAILED: 0 TIME: 670ms STATUS: ARCH-X86_64 GRANT-FINAL
- 2026-09-27 15:21:00 debug_syscall PASSED: 17 FAILED: 0 TIME: 278ms STATUS: ARCH-AARCH64 GRANT-FINAL
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-X86
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-ARM
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-DEBUG-RISCV
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-X86
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-ARM
-+2026-09-27 18:13:29 shell-smoke PASSED: 1 FAILED: 0 TIME: 0ms STATUS: RUN-RELEASE-RISCV
-diff --git a/tools/shell-smoke.exp b/tools/shell-smoke.exp
-new file mode 100755
-index 00000000..77ea7c1c
---- /dev/null
-+++ b/tools/shell-smoke.exp
-@@ -0,0 +1,31 @@
-+#!/usr/bin/expect -f
-+# Shell-smoke regression probe (issue #218).
-+# Boots an interactive run-mode target, waits for the service::Shell
-+# prompt, sends `version`, and requires the prompt back.
-+# Usage: shell-smoke.exp [-log file] <make-target...>
-+#   e.g. shell-smoke.exp run-release-mode arm
-+# Exit 0 on prompt + version round-trip, 1 on timeout/EOF.
-+# Notes: single line typed at a time (16-byte UART FIFO); no escape
-+# sequences (must not perturb the shell redraw path); bounded timeouts.
-+set logfile ""
-+set args $argv
-+if {[lindex $argv 0] eq "-log"} {
-+    set logfile [lindex $argv 1]
-+    set args [lrange $argv 2 end]
-+    log_file -a $logfile
+diff --git a/Makefile b/Makefile
+index 5182030f..6d86e72d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -111,12 +111,18 @@ endif
+ # such as -DCONFIG_DEADLINE_ACTION=N). Pass on the command line:
+ #   make debug CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=3"
+ CONFIG_DEFS ?=
++# Picolibc version pin (issue #72, spec §10): defined HERE (not only at the
++# picolibc section below) because CXXFLAGS_COMMON below expands immediately
++# (:=) and bakes it into -DPICOLIBC_VERSION_STRING. Version pin: bump =
++# deliberate commit + re-verify via #75 (spec §10).
++PICOLIBC_VERSION ?= 1.8.12
+ CXXFLAGS_COMMON := -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
+                    -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
+                    -fno-threadsafe-statics \
+                    -Wall -Wextra -Werror \
+                    -I src -I src/lib -pipe -MMD -MP \
+                    -DCONFIG_ARCH_$(ARCH_UPPER) \
++                   -DPICOLIBC_VERSION_NUM=$(PICOLIBC_VERSION) \
+                    -ffunction-sections -fdata-sections \
+                    $(CONFIG_DEFS)
+ 
+@@ -452,10 +458,8 @@ $(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH_EFFECTIVE) > $(ARCH_STAMP))
+ # ------------------------------------------------------------------------------
+ # Shared build rules (pattern rules, libc, userspace, initrd)
+ # ------------------------------------------------------------------------------
+-# picolibc pin (issue #72): defined BEFORE the include — mk/rules.mk
+-# static-pattern prerequisites expand at parse time.
+-# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
+-PICOLIBC_VERSION ?= 1.8.12
++# picolibc paths (version pin lives above CXXFLAGS_COMMON so the -D picks
++# it up; mk/rules.mk static-pattern prerequisites expand at parse time).
+ PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
+ PICOLIBC_SYSROOT := build/picolibc/sysroot
+ include mk/rules.mk
+diff --git a/iso/boot/grub/grub.cfg b/iso/boot/grub/grub.cfg
+index 16280dce..73058bfc 100644
+--- a/iso/boot/grub/grub.cfg
++++ b/iso/boot/grub/grub.cfg
+@@ -2,7 +2,7 @@ set timeout=0
+ set default=0
+ insmod all_video
+ 
+-menuentry "Jarvis RTOS" {
++menuentry "NexIOS RTOS" {
+     multiboot2 /boot/kernel.elf
+     boot
+ }
+diff --git a/src/kernel/daemon/daemon_mgr.cpp b/src/kernel/daemon/daemon_mgr.cpp
+index ffc3f7ee..18be0e99 100644
+--- a/src/kernel/daemon/daemon_mgr.cpp
++++ b/src/kernel/daemon/daemon_mgr.cpp
+@@ -79,7 +79,9 @@ void reset_clear_daemons() {
+         }
+     }
+     num_daemons_ = 0;
++#if defined(CONFIG_DEBUG)
+     Logger::info("daemon_mgr: all daemon states reset");
++#endif
+ }
+ 
+ /// @brief Notify the manager that a daemon has exited.
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 625abf79..6644fbfe 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -111,7 +111,9 @@ static bool g_run_tests = false;
+ // and the post-test task-definition table (taskdefs.cpp).
+ extern "C" void debug_write(const char *msg);
+ void init_task_main() {
++#if defined(CONFIG_DEBUG)
+     debug_write("[DIAG] init_task_main entered\n");
++#endif
+     // Read /etc/fstab and mount entries
+     {
+         auto fstab = initrd::find("./etc/fstab");
+@@ -302,9 +304,11 @@ void init_task_main() {
+     kernel::elf::ElfLoader::ensure_task();
+ 
+     // ── Run tests from init-task context (IF=1) ──────────────────
++#if defined(CONFIG_DEBUG)
+     kernel::Logger::info(
+         "[DIAG] init_task_main: reached test runner g_run_tests=%u",
+         (unsigned)g_run_tests);
++#endif
+     if (g_run_tests) {
+         // BUGS.md#021 harness exemption requires init (PID 1) at priority 10
+         // (its boot/test-runner duty priority) during the suite; the base
+@@ -338,7 +342,8 @@ void init_task_main() {
+             shell->name[i] = '\0';
+             kernel::Scheduler::add_task(*shell);
+             kernel::Scheduler::set_shell_task(shell);
+-            kernel::Logger::info("init: shell task %u created", shell->id);
++            // Issue #244: the scheduler already logs the spawn above —
++            // no duplicate line.
+         } else {
+             kernel::Logger::warn("init: failed to create shell task");
+         }
+@@ -852,10 +857,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     debug_write("[BOOT] Memory init done\n");
+ 
+     debug_write("[BOOT] BEFORE STVEC\n");
+-    uint64_t val = 42;
+-    if (val == 42) {
+-        debug_write("[BOOT] val==42, all good\n");
+-    }
+     debug_write("[BOOT] AFTER STVEC\n");
+ 
+     debug_write("[BOOT] Kernel init...\n");
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index fda18afe..198b0486 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -907,11 +907,13 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
+                                            uint64_t period_ticks)
+ // NOLINTEND(bugprone-easily-swappable-parameters)
+ {
++#if defined(CONFIG_DEBUG)
+     Logger::raw_write("[TCB] create pool8=");
+     Logger::print_dec(MemPool::pool_free_count(8));
+     Logger::raw_write(" tcnt=");
+     Logger::print_dec(Scheduler::task_count());
+     Logger::raw_write("\n");
++#endif
+     auto *tcb = static_cast<TaskControlBlock *>(
+         MemPool::alloc(sizeof(TaskControlBlock)));
+     if (!tcb) {
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index 216ecf0d..1350e110 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -218,7 +218,9 @@ bool taskdefs_valid() noexcept {
+ // ── reboot_from_table ────────────────────────────────────────────────────
+ 
+ void reboot_from_table() {
++#if defined(CONFIG_DEBUG)
+     debug_write("[REBOOT] Rebuilding system from task-definition table\n");
++#endif
+     arch::IrqGuard guard{};
+ 
+     auto *idle = Scheduler::get_idle_task();
+@@ -227,7 +229,9 @@ void reboot_from_table() {
+     // old daemons and tasks are intentionally killed here, not failing.
+     daemon::set_suppress_death_msg(true);
+     Scheduler::set_suppress_terminated_log(true);
++#if defined(CONFIG_DEBUG)
+     debug_write("[INFO]  daemon: restarting vfsd, iocd\n");
++#endif
+ 
+     // 1. Collect all non-idle, non-current tasks (can't mutate all_tasks_
+     //    during iteration, and must not release our own TCB — we're running on
+@@ -406,9 +410,11 @@ void reboot_from_table() {
+         }
+     }
+ 
++#if defined(CONFIG_DEBUG)
+     debug_write("[REBOOT] after add_tasks task_count()=0x");
+     debug_write_hex(Scheduler::task_count());
+     debug_write("\n");
++#endif
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+     // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning
+@@ -431,6 +437,9 @@ void reboot_from_table() {
+ #endif
+     }
+ 
++    // Issue #244: reboot/idle diagnostics are debug-only (release boots
++    // straight into a clean console for the shell).
++#if defined(CONFIG_DEBUG)
+     debug_write("[DIAG] reboot idle loop entered\n");
+     {
+         static bool dumped = false;
+@@ -462,6 +471,7 @@ void reboot_from_table() {
+             }
+         }
+     }
++#endif
+     arch::sti();
+     for (;;) {
+         static uint64_t _idle_count = 0;
+diff --git a/src/kernel/test/test_config.cpp b/src/kernel/test/test_config.cpp
+index 7ee831b3..201f48ae 100644
+--- a/src/kernel/test/test_config.cpp
++++ b/src/kernel/test/test_config.cpp
+@@ -69,7 +69,10 @@ void parse_test_config(const char *path) {
+                      path);
+         g_test_classes[0] = "safe";
+         g_test_class_count = 1;
+-    } else {
++    } else if (g_test_class_count != 1 ||
++                 strcmp(g_test_classes[0], "none") != 0) {
++        // Skip the listing when no test class will run (issue #244):
++        // class "none" means interactive shell, not a test session.
+         Logger::info("[TEST] Loaded %u test class(es) from '%s'",
+                      (unsigned)g_test_class_count, path);
+         for (size_t i = 0; i < g_test_class_count; ++i) {
+diff --git a/src/lib/version.cpp b/src/lib/version.cpp
+index 0ed29644..03ce3f4d 100644
+--- a/src/lib/version.cpp
++++ b/src/lib/version.cpp
+@@ -29,6 +29,17 @@ const char* Version::string() {
+     return KERNEL_VERSION_STRING;
+ }
+ 
++#define NEXIOS_STR_INNER(x) #x
++#define NEXIOS_STR(x) NEXIOS_STR_INNER(x)
++
++const char* Version::picolibc_string() {
++#ifdef PICOLIBC_VERSION_NUM
++    return NEXIOS_STR(PICOLIBC_VERSION_NUM);
++#else
++    return "unknown";
++#endif
 +}
-+set timeout 150
-+eval spawn make $args
-+expect {
-+    -re {\$ $} { puts "SMOKE: prompt reached" }
-+    timeout { puts "SMOKE: TIMEOUT waiting for prompt"; exit 1 }
-+    eof { puts "SMOKE: EOF before prompt"; exit 1 }
-+}
-+send "version\r"
-+expect {
-+    -re {\$ $} { puts "SMOKE: version answered" }
-+    timeout { puts "SMOKE: TIMEOUT after version"; exit 1 }
-+    eof { puts "SMOKE: EOF after version"; exit 1 }
-+}
-+puts "SMOKE: PASS"
-+exit 0
++
+ const char* Version::build_date() {
+     return build_date_;
+ }
+diff --git a/src/lib/version.hpp b/src/lib/version.hpp
+index 4fbd97c9..93e92dec 100644
+--- a/src/lib/version.hpp
++++ b/src/lib/version.hpp
+@@ -27,6 +27,13 @@
+ /// Format: "vmajor.minor.patch-stage"
+ #define KERNEL_VERSION_STRING "v0.5.1-dev"
+ 
++/// @brief Picolibc version backing the user-space runtime (issue #244).
++/// Injected by the Makefile from PICOLIBC_VERSION as a pp-number
++/// (deliberately NOT a quoted string: the generated build rules
++/// re-evaluate quoting layers and strip string quotes).
++/// Falls back to "unknown" when some other build path compiles
++/// without it.
++
+ namespace kernel {
+ 
+ /// @brief Kernel version constants and string formatting.
+@@ -41,6 +48,7 @@ struct Version {
+     static const char* build_date();
+     static const char* build_time();
+     static const char* full_string();
++    static const char* picolibc_string();
+ };
+ 
+ } // namespace kernel
+\ No newline at end of file
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 04c3609e..9c9183df 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -628,6 +628,16 @@ void Shell::shell_task_main() {
+     Terminal::set_fg(COLOR_GREEN);
+     Terminal::write("NexIOS RTOS ");
+     Terminal::write(kernel::Version::string());
++#if defined(CONFIG_ARCH_X86_64)
++    Terminal::write(" (x86_64)");
++#elif defined(CONFIG_ARCH_AARCH64)
++    Terminal::write(" (aarch64)");
++#elif defined(CONFIG_ARCH_RISCV64)
++    Terminal::write(" (riscv64)");
++#endif
++    Terminal::write("\n");
++    Terminal::write("picolibc ");
++    Terminal::write(kernel::Version::picolibc_string());
+     Terminal::write("\n");
+     Terminal::set_fg(COLOR_DEFAULT);
+     Terminal::write("Type 'help' for available commands\n\n");

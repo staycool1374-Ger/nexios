@@ -27,6 +27,13 @@
 /// Format: "vmajor.minor.patch-stage"
 #define KERNEL_VERSION_STRING "v0.5.1-dev"
 
+/// @brief Picolibc version backing the user-space runtime (issue #244).
+/// Injected by the Makefile from PICOLIBC_VERSION as a pp-number
+/// (deliberately NOT a quoted string: the generated build rules
+/// re-evaluate quoting layers and strip string quotes).
+/// Falls back to "unknown" when some other build path compiles
+/// without it.
+
 namespace kernel {
 
 /// @brief Kernel version constants and string formatting.
@@ -41,6 +48,7 @@ struct Version {
     static const char* build_date();
     static const char* build_time();
     static const char* full_string();
+    static const char* picolibc_string();
 };
 
 } // namespace kernel

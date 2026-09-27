@@ -29,6 +29,17 @@ const char* Version::string() {
     return KERNEL_VERSION_STRING;
 }
 
+#define NEXIOS_STR_INNER(x) #x
+#define NEXIOS_STR(x) NEXIOS_STR_INNER(x)
+
+const char* Version::picolibc_string() {
+#ifdef PICOLIBC_VERSION_NUM
+    return NEXIOS_STR(PICOLIBC_VERSION_NUM);
+#else
+    return "unknown";
+#endif
+}
+
 const char* Version::build_date() {
     return build_date_;
 }

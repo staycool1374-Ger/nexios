@@ -79,7 +79,9 @@ void reset_clear_daemons() {
         }
     }
     num_daemons_ = 0;
+#if defined(CONFIG_DEBUG)
     Logger::info("daemon_mgr: all daemon states reset");
+#endif
 }
 
 /// @brief Notify the manager that a daemon has exited.

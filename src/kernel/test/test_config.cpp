@@ -69,7 +69,10 @@ void parse_test_config(const char *path) {
                      path);
         g_test_classes[0] = "safe";
         g_test_class_count = 1;
-    } else {
+    } else if (g_test_class_count != 1 ||
+                 strcmp(g_test_classes[0], "none") != 0) {
+        // Skip the listing when no test class will run (issue #244):
+        // class "none" means interactive shell, not a test session.
         Logger::info("[TEST] Loaded %u test class(es) from '%s'",
                      (unsigned)g_test_class_count, path);
         for (size_t i = 0; i < g_test_class_count; ++i) {
