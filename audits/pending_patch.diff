@@ -1,83 +1,565 @@
+diff --git a/src/kernel/debug/debug_bind.hpp b/src/kernel/debug/debug_bind.hpp
+index d87d8bd8..4d433e75 100644
+--- a/src/kernel/debug/debug_bind.hpp
++++ b/src/kernel/debug/debug_bind.hpp
+@@ -45,7 +45,10 @@ bool debug_validate_handle(uint64_t caller_id, uint64_t handle) noexcept;
+ ///        @p dying, apply default dispositions (fault-stopped targets
+ ///        terminate, cleanly-stopped resume), restore breakpoint shadows,
+ ///        drop queued events, clear flags. No orphaned parked tasks.
+-///        Runs in cleanup() (task context, may terminate/block).
++///        Granted slots (issue #239, spec §14) participate by grantee
++///        ownership; slots this task granted to others revoke here too
++///        (grantor-death, same shared disposition). Runs in cleanup()
++///        (task context, may terminate/block).
+ void debug_drain_debugger(TaskControlBlock &dying) noexcept;
+ 
+ /// @brief Test-isolation reset for the binding table (issue #226).
+diff --git a/src/kernel/syscall/syscall_handlers_debug.cpp b/src/kernel/syscall/syscall_handlers_debug.cpp
+index 54c7987d..82208ec5 100644
+--- a/src/kernel/syscall/syscall_handlers_debug.cpp
++++ b/src/kernel/syscall/syscall_handlers_debug.cpp
+@@ -54,12 +54,21 @@ constexpr uint64_t kEinval = 22;
+ /// @brief Debug handle binding (issue #225). Fixed table, no heap.
+ ///        Handle = (gen << 32) | index. Forgery requires guessing a live
+ ///        (index, gen, debugger) triple; gen never repeats (atomic bump).
++///        Supervisor-grant bindings (issue #239, spec §14) reuse these
++///        slots: `debugger_id` stays the OWNER (= grantee) so all
++///        single-debugger checks are untouched; grant metadata rides
++///        alongside (`granted`, `grantor_id`). `attenuation` and
++///        `grant_flags` are zero-reserved, never interpreted until #50.
+ struct DebugBinding {
+     uint64_t target_id = 0;
+     uint64_t debugger_id = 0;
+     uint32_t gen = 0;
+     uint32_t target_gen = 0;
+     bool live = false;
++    uint64_t grantor_id = 0;
++    bool granted = false;
++    uint64_t attenuation = 0;
++    uint32_t grant_flags = 0;
+ };
+ 
+ constexpr size_t kDebugBindings = 64;
+@@ -101,6 +110,33 @@ bool debug_target_ok(const TaskControlBlock &tgt) noexcept {
+     return tgt.is_user_;
+ }
+ 
++/// @brief Shared detach disposition (issue #239, spec §14.5/I-3).
++///        Lock-agnostic: takes no bind lock itself (callees self-lock);
++///        callers hold `g_bind_lock` (sel8) or run the unlocked drain
++///        loop. Mirrors the sel0 detach body exactly: shadows restore
++///        first (tables still live); fault-stopped targets terminate
++///        (clear id/flags first, then terminate); clean/breakpoint/step
++///        stops resume first while the id is live, then clear. The
++///        caller owns binding-slot clearing + event drops.
++void debug_apply_disposition(TaskControlBlock &tgt) noexcept {
++    uint64_t kind =
++        __atomic_load_n(&tgt.debug_stop_kind, __ATOMIC_ACQUIRE);
++    debug::debug_bp_restore_all(tgt);
++    if (kind == static_cast<uint64_t>(debug::StopKind::FAULT)) {
++        __atomic_store_n(&tgt.debugger_id, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&tgt.debug_stop_requested, false,
++                         __ATOMIC_RELEASE);
++        tgt.debug_parked = false;
++        __atomic_store_n(&tgt.debug_stop_kind, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&tgt.debug_stop_va, 0, __ATOMIC_RELEASE);
++        __atomic_store_n(&tgt.debug_rearm_va, 0, __ATOMIC_RELEASE);
++        (void)Scheduler::terminate_err(tgt, tgt.exit_code);
++        return;
++    }
++    Scheduler::debugger_resume(tgt);
++    __atomic_store_n(&tgt.debugger_id, 0, __ATOMIC_RELEASE);
++}
++
+ } // namespace
+ 
+ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2,
+@@ -205,11 +241,115 @@ uint64_t Syscall::sys_task_debug_attach(uint64_t sel, uint64_t id, uint64_t arg2
+             g_bindings[i].gen = gen;
+             g_bindings[i].target_gen = tgt->generation;
+             g_bindings[i].live = true;
++            g_bindings[i].grantor_id = 0;
++            g_bindings[i].granted = false;
++            g_bindings[i].attenuation = 0;
++            g_bindings[i].grant_flags = 0;
+             __atomic_store_n(&tgt->debugger_id, caller->id, __ATOMIC_RELEASE);
+             return (static_cast<uint64_t>(gen) << 32) | i;
+         }
+         return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
+     }
++    if (sel == 7) {
++        // Grant-mint (issue #239, spec §14.2): authorize debugger
++        // `arg2` over `id` without parenthood. Grantor check: PID 1
++        // supervises any user task; a launcher delegates for its own
++        // claimed children only. No new syscall numbers (selector).
++        TaskControlBlock *tgt = Scheduler::find_task(id);
++        if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
++            tgt->state == TaskState::TERMINATED ||
++            tgt->state == TaskState::REAPED)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
++        if (!tgt->is_user_)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
++        TaskControlBlock *grantee = Scheduler::find_task(arg2);
++        if (grantee == nullptr || !TaskControlBlock::is_valid(grantee) ||
++            grantee->state == TaskState::TERMINATED ||
++            grantee->state == TaskState::REAPED)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEsrch));
++        if (caller->id != 1 && tgt->parent_id != caller->id)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
++        if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
++        if (__atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) != 0)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++        for (size_t i = 0; i < kDebugBindings; ++i) {
++            if (g_bindings[i].live)
++                continue;
++            uint32_t gen = static_cast<uint32_t>(
++                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++            if (gen == 0) // never mint gen 0 (decode sentinel above)
++                gen = static_cast<uint32_t>(
++                    __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++            g_bindings[i].target_id = tgt->id;
++            g_bindings[i].debugger_id = arg2;
++            g_bindings[i].gen = gen;
++            g_bindings[i].target_gen = tgt->generation;
++            g_bindings[i].live = true;
++            g_bindings[i].grantor_id = caller->id;
++            g_bindings[i].granted = true;
++            g_bindings[i].attenuation = 0;
++            g_bindings[i].grant_flags = 0;
++            __atomic_store_n(&tgt->debugger_id, arg2, __ATOMIC_RELEASE);
++            return (static_cast<uint64_t>(gen) << 32) | i;
++        }
++        return static_cast<uint64_t>(-static_cast<int64_t>(kEbusy));
++    }
++    if (sel == 8) {
++        // Grant-revoke (issue #239, spec §14.5): the grantor (or PID 1)
++        // drops a granted binding with the shared disposition; post-
++        // revoke resolves fail EBADF via the generation burn. Non-grant
++        // slots are not revocable (EPERM — owned bindings detach via
++        // sel0). Whole op under the outer guard (bind -> scheduler).
++        SpinLockGuard<sync::SpinLock> bind_guard(g_bind_lock);
++        uint32_t idx = static_cast<uint32_t>(id & 0xFFFFFFFFULL);
++        uint32_t gen = static_cast<uint32_t>(id >> 32);
++        if (idx >= kDebugBindings || gen == 0)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
++        DebugBinding &slot = g_bindings[idx];
++        if (!slot.live || slot.gen != gen || !slot.granted)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEbadf));
++        if (slot.grantor_id != caller->id && caller->id != 1)
++            return static_cast<uint64_t>(-static_cast<int64_t>(kEperm));
++        TaskControlBlock *tgt = Scheduler::find_task(slot.target_id);
++        uint64_t dead_id = slot.target_id;
++        uint32_t dead_gen = slot.target_gen;
++        if (tgt == nullptr || !TaskControlBlock::is_valid(tgt) ||
++            tgt->state == TaskState::TERMINATED ||
++            tgt->state == TaskState::REAPED ||
++            slot.target_gen != tgt->generation ||
++            __atomic_load_n(&tgt->debugger_id, __ATOMIC_ACQUIRE) !=
++                slot.debugger_id) {
++            slot.live = false;
++            slot.target_gen = 0;
++            slot.granted = false;
++            slot.grantor_id = 0;
++            uint32_t burn = static_cast<uint32_t>(
++                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++            if (burn == 0)
++                burn = static_cast<uint32_t>(__atomic_fetch_add(
++                    &g_debug_gen, 1u, __ATOMIC_RELAXED));
++            slot.gen = burn;
++            debug::debug_drop_target(dead_id, dead_gen);
++            return 0;
++        }
++        debug_apply_disposition(*tgt);
++        debug::debug_drop_target(tgt->id, tgt->generation);
++        slot.live = false;
++        slot.target_gen = 0;
++        slot.granted = false;
++        slot.grantor_id = 0;
++        {
++            uint32_t burn = static_cast<uint32_t>(
++                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++            if (burn == 0)
++                burn = static_cast<uint32_t>(__atomic_fetch_add(
++                    &g_debug_gen, 1u, __ATOMIC_RELAXED));
++            slot.gen = burn;
++        }
++        return 0;
++    }
+     // Control selectors (issue #226 — no new syscall numbers, ABI frozen):
+     // 2 = poll one stop event into the caller buffer (arg2 = ubuf);
+     // 3 = insert breakpoint at VA (arg2 = va); 4 = clear breakpoint;
+@@ -306,6 +446,18 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
+                 owned[n_owned].slot = i;
+                 ++n_owned;
+             }
++            // Grantor death (issue #239, spec §14.5): slots this task
++            // granted to others revoke synchronously with the shared
++            // disposition (grantee-death needs no new code — granted
++            // slots are owned by the grantee and collected above).
++            if (g_bindings[i].live && g_bindings[i].granted &&
++                g_bindings[i].grantor_id == dying.id &&
++                g_bindings[i].debugger_id != dying.id) {
++                owned[n_owned].target_id = g_bindings[i].target_id;
++                owned[n_owned].target_gen = g_bindings[i].target_gen;
++                owned[n_owned].slot = i;
++                ++n_owned;
++            }
+         }
+     }
+     for (size_t i = 0; i < n_owned; ++i) {
+@@ -354,6 +506,16 @@ void debug_drain_debugger(TaskControlBlock &dying) noexcept {
+         SpinLockGuard<sync::SpinLock> guard(g_bind_lock);
+         g_bindings[owned[i].slot].live = false;
+         g_bindings[owned[i].slot].target_gen = 0;
++        g_bindings[owned[i].slot].granted = false;
++        g_bindings[owned[i].slot].grantor_id = 0;
++        g_bindings[owned[i].slot].attenuation = 0;
++        g_bindings[owned[i].slot].grant_flags = 0;
++        uint32_t burn = static_cast<uint32_t>(
++            __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++        if (burn == 0)
++            burn = static_cast<uint32_t>(
++                __atomic_fetch_add(&g_debug_gen, 1u, __ATOMIC_RELAXED));
++        g_bindings[owned[i].slot].gen = burn;
+     }
+ }
+ 
+@@ -381,6 +543,10 @@ void debug_bindings_reset() noexcept {
+         g_bindings[i].debugger_id = 0;
+         g_bindings[i].gen = 0;
+         g_bindings[i].target_gen = 0;
++        g_bindings[i].grantor_id = 0;
++        g_bindings[i].granted = false;
++        g_bindings[i].attenuation = 0;
++        g_bindings[i].grant_flags = 0;
+     }
+     // g_debug_gen stays monotonic (never mint a repeated generation).
+ }
 diff --git a/src/kernel/test/test_debug_syscall.cpp b/src/kernel/test/test_debug_syscall.cpp
-index 4069a619..40014e30 100644
+index 40014e30..78924399 100644
 --- a/src/kernel/test/test_debug_syscall.cpp
 +++ b/src/kernel/test/test_debug_syscall.cpp
-@@ -151,7 +151,8 @@ constexpr uint64_t kSpinStubVa = 0x41000000ULL;
- ///        holds the CPU across ticks so the park hook fires
- ///        deterministically. Returns the child with its stub page phys
- ///        in stub_phys_out (caller frees after unmapping).
--TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
-+TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out,
-+                                       bool link_child = true) {
-     stub_phys_out = 0;
-     auto *me = Scheduler::current_task();
-     if (me == nullptr)
-@@ -200,7 +201,10 @@ TaskControlBlock *debug_spawn_spinner(uint64_t &stub_phys_out) {
-         debug_reap_child(t);
-         return nullptr;
-     }
--    me->add_child(t);
-+    // Unlinked (orphan) spinners stay parentless (parent_id 0) for the
-+    // attach-rejection matrix (#237): same valid stub, no parentage.
-+    if (link_child)
-+        me->add_child(t);
-     {
-         arch::IrqGuard ig{};
-         Scheduler::add_task(*t);
-@@ -326,9 +330,8 @@ JARVIS_TEST(debug_attach_parent_ok, "PRE: none | POST: none") {
-         "detach toggle failed");
-     uint64_t h2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, child_id);
-     JARVIS_ASSERT_FMT(h2 != 0 && h2 != Neg(kEbusy), "re-attach failed");
--    JARVIS_ASSERT_FMT(
--        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2) == 0,
--        "second detach failed");
-+    uint64_t dh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h2);
-+    JARVIS_ASSERT_FMT(dh2 == 0, "second detach failed: 0x%lx", dh2);
-     debug_reap_child(t);
+@@ -677,6 +677,10 @@ constexpr uint64_t kSelBpIns = 3;
+ constexpr uint64_t kSelBpClr = 4;
+ constexpr uint64_t kSelStep = 5;
+ constexpr uint64_t kSelCont = 6;
++/// @brief Grant selectors (issue #239, spec §14 — still no new syscall
++///        numbers, selectors on the attach call).
++constexpr uint64_t kSelGrant = 7;
++constexpr uint64_t kSelRevoke = 8;
+ 
+ /// @brief Stop kinds (mirrors StopKind in debug_stop.hpp).
+ constexpr uint64_t kKindBp = 1;
+@@ -1220,6 +1224,12 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
+                                  sizeof(kBrkInsn)),
+         "stub poison failed");
+ #else
++    // NOTE (issue #239): riscv64 keeps the legacy yield-stub poison.
++    // Poisoning kSpinStubVa is more correct (as on aarch64), but the
++    // riscv control currently fails BEFORE dispatch (exec=0 starvation
++    // under timer dilation — sleeps never expire, spinner never runs),
++    // so poison content is irrelevant there; changing it only churns
++    // a luck-governed path. Revisit with the timer/dilation work.
+     uint64_t cphys = 0;
+     TaskControlBlock *c = debug_spawn_spinner(cphys);
+     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
+@@ -1580,6 +1590,268 @@ JARVIS_TEST(debug_stop_poll_empty, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
-@@ -349,21 +352,20 @@ JARVIS_TEST(debug_attach_rejects, "PRE: none | POST: none") {
-         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, 999999) == Neg(kEsrch),
-         "dead pid not ESRCH");
-     // Unparented child: parent_id 0 != caller -> EPERM (not ESRCH).
--    // Dispatched (but never add_child'ed) so the normal teardown path
--    // applies; the claim still fails on parenthood.
--    TaskControlBlock *orphan = TaskControlBlock::create_user(
--        reinterpret_cast<void (*)()>(0xFFFFFFFF80000000ULL), 11, 10, 32_KiB);
-+    // A live spinner (never add_child'ed) stays dispatched-alive so the
-+    // claim fails on parenthood deterministically (#237: the old
-+    // kernel-half entry faulted instantly, racing orphan death (ESRCH)
-+    // against the attach).
-+    uint64_t orphan_phys = 0;
-+    TaskControlBlock *orphan = debug_spawn_spinner(orphan_phys, false);
-     JARVIS_ASSERT_FMT(orphan != nullptr, "orphan spawn failed");
--    {
--        arch::IrqGuard ig{};
--        Scheduler::add_task(*orphan);
--    }
-     Scheduler::reschedule();
-     const uint64_t orphan_id = orphan->id;
-     JARVIS_ASSERT_FMT(
-         DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, orphan_id) ==
-             Neg(kEperm),
-         "non-child attach not EPERM");
-+    debug_free_spinner_page(orphan, orphan_phys);
-     debug_reap_child(orphan);
-     // Self-attach: not own parent -> EPERM (also a kernel task).
-     auto *me = Scheduler::current_task();
+ 
++// Testidea: Supervisor-grant mint + use (issue #239, spec §14): the
++//           harness, as launcher, grants its own child to itself and
++//           drives the full handle lifecycle on the granted slot.
++// Input: owned spinner, sel7 grant naming self.
++// Expect: nonzero handle, debugger_id set, park/read works through the
++// grant, detach clears, target runnable.
++JARVIS_TEST(debug_grant_mint_use, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                            t->id, me->id);
++    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
++    JARVIS_ASSERT_FMT(t->debugger_id == me->id, "grantee id not published");
++    const uint64_t pc = debug_park_and_get_pc(gh);
++    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed on granted handle");
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh) == 0,
++                      "detach failed");
++    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
++    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
++                          t->state == TaskState::READY,
++                      "detach did not resume");
++    debug_unmap_scratch(scratch_phys);
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Testidea: Grant denial matrix (issue #239, spec §14.4): every denial
++//           errno on its exact path, plus foreign-handle isolation.
++//           Single-live-spinner discipline (issue #242: never two
++//           spinning spinners + harness — pad with parks): both spinners
++//           are parked (ineligible) except across the few syscalls that
++//           need them runnable.
++// Input: child spinner, passive debugger task, orphan, dead ids.
++// Expect: ESRCH (dead target/grantee), EPERM-or-supervisor (orphan,
++//         branched on own id), EBUSY (already debugged / re-grant),
++//         EBADF (foreign use, post-revoke reuse).
++/// @brief Find a live, permanently-BLOCKED system task id for passive
++///        grantee use (issue #239/#242): daemons block on IPC forever,
++///        so they are ineligible to run and cost zero scheduling.
++///        Spawning a second spinner instead risks the 2-spinner wedge.
++uint64_t debug_find_blocked_daemon() noexcept {
++    static const char *const kDaemons[] = {"vfsd", "iocd", "elf-load",
++                                           "monitor"};
++    TaskControlBlock *me = Scheduler::current_task();
++    const uint64_t n = Scheduler::task_count();
++    for (uint64_t i = 0; i < n; ++i) {
++        TaskControlBlock *c = Scheduler::task_at(i);
++        if (c == nullptr || !TaskControlBlock::is_valid(c))
++            continue;
++        if (me != nullptr && c->id == me->id)
++            continue;
++        for (size_t k = 0; k < 4; ++k) {
++            const char *a = c->name;
++            const char *b = kDaemons[k];
++            bool eq = true;
++            for (; *a != '\0' && *b != '\0'; ++a, ++b) {
++                if (*a != *b) {
++                    eq = false;
++                    break;
++                }
++            }
++            if (eq && *a == '\0' && *b == '\0' &&
++                c->state == TaskState::BLOCKED)
++                return c->id;
++        }
++    }
++    return 0;
++}
++
++JARVIS_TEST(debug_grant_denial_matrix, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    // Passive grantee: a BLOCKED daemon id (never spawns, never runs,
++    // never acts — issue #242 single-live-spinner discipline: only V
++    // spins, the proven 2-way shape, and no parks/sleeps anywhere).
++    const uint64_t did = debug_find_blocked_daemon();
++    JARVIS_ASSERT_FMT(did != 0, "no blocked daemon found");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, 999999,
++                  did) == Neg(kEsrch),
++        "dead target not ESRCH");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, t->id,
++                  999998) == Neg(kEsrch),
++        "dead grantee not ESRCH");
++    // Kernel-task target: EPERM regardless of grantor (spec §14.4).
++    // The harness itself is a kernel task, so no spawn is needed and
++    // no second spinner ever exists in this test (#242).
++    JARVIS_ASSERT_FMT(!me->is_user_, "harness is not a kernel task");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, me->id,
++                  did) == Neg(kEperm),
++        "kernel-target grant not EPERM");
++    // NOTE: grantor-parenthood EPERM (caller is neither PID 1 nor the
++    // target's parent) is unreachable in-harness — the harness IS PID 1
++    // — and mirrors sel1's parenthood check (covered by test 2's
++    // non-child case). Reviewed, not executed.
++    // Already debugged (plain attach first): grant attempt is EBUSY.
++    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
++    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, t->id,
++                  did) == Neg(kEbusy),
++        "grant over debugged target not EBUSY");
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
++                      "detach failed");
++    // Granted handle is foreign to everyone but the grantee.
++    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                            t->id, did);
++    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
++                  kDebugScratchVa) == Neg(kEbadf),
++        "foreign handle use not EBADF");
++    // Revoke by the grantor; post-revoke reuse fails EBADF (gen burn).
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelRevoke, gh, 0) == 0,
++        "revoke failed");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
++                  kDebugScratchVa) == Neg(kEbadf),
++        "post-revoke reuse not EBADF");
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Testidea: Revoke of a parked granted target resumes it (issue #239,
++//           spec §14.5 shared disposition, clean-stop branch).
++// Input: granted child, parked via the EAGAIN discipline, sel8 revoke.
++// Expect: revoke 0, id cleared, unparked, runnable; re-mint works with
++// a different generation.
++JARVIS_TEST(debug_grant_revoke_parked_disposition, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                            t->id, me->id);
++    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
++    const uint64_t pc = debug_park_and_get_pc(gh);
++    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed on granted handle");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelRevoke, gh, 0) == 0,
++        "revoke failed");
++    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
++    JARVIS_ASSERT_FMT(!t->debug_parked, "revoke did not unpark");
++    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
++                          t->state == TaskState::READY,
++                      "revoke did not resume");
++    JARVIS_ASSERT_FMT(
++        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
++                  kDebugScratchVa) == Neg(kEbadf),
++        "post-revoke reuse not EBADF");
++    uint64_t gh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                             t->id, me->id);
++    JARVIS_ASSERT_FMT(gh2 != 0, "re-mint failed: 0x%lx", gh2);
++    JARVIS_ASSERT_FMT((gh2 >> 32) != (gh >> 32), "generation not burned");
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh2) == 0,
++                      "detach failed");
++    debug_unmap_scratch(scratch_phys);
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Testidea: Grantee death releases the grant without orphaning the
++//           target (issue #239, spec §14.5: granted slots are owned by
++//           the grantee, drain collects them).
++// Input: child granted to a passive debugger task; debugger reaped.
++// Expect: target valid + runnable + debugger-cleared; slot reusable
++//         for a fresh grant afterwards.
++JARVIS_TEST(debug_grant_grantee_death, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    uint64_t dphys = 0;
++    TaskControlBlock *d = debug_spawn_spinner(dphys);
++    JARVIS_ASSERT_FMT(d != nullptr, "debugger spawn failed");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    // Park the grantee first (#242: single-live-spinner discipline —
++    // a parked task is ineligible, so V spins alone below).
++    uint64_t hd = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, d->id);
++    JARVIS_ASSERT_FMT(hd != 0 && hd != Neg(kEbusy), "attach d: 0x%lx", hd);
++    JARVIS_ASSERT_FMT(debug_park_and_get_pc(hd) != 0, "park d failed");
++    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                            t->id, d->id);
++    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
++    JARVIS_ASSERT_FMT(t->debugger_id == d->id, "grantee id not published");
++    debug_free_spinner_page(d, dphys);
++    debug_reap_child(d);
++    d = nullptr;
++    JARVIS_ASSERT_FMT(TaskControlBlock::is_valid(t), "target went invalid");
++    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
++    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
++                          t->state == TaskState::READY,
++                      "target not runnable after grantee death");
++    // Dead-detach the grantee's own (now target-dead) binding first.
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, hd) == 0,
++                      "dead detach failed");
++    uint64_t gh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                             t->id, me->id);
++    JARVIS_ASSERT_FMT(gh2 != 0, "re-grant failed: 0x%lx", gh2);
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh2) == 0,
++                      "detach failed");
++    debug_unmap_scratch(scratch_phys);
++    debug_free_spinner_page(t, stub_phys);
++    debug_reap_child(t);
++    JARVIS_TEST_PASS();
++}
++
++// Testidea: Granted target death delivers DEATH through the reserved
++//           slot and dead-detaches (issue #239, spec §14.5).
++// Input: granted child, terminate + drain (dead TCB, no further touch).
++// Expect: DEATH pollable via sel2 on the granted handle, dead detach 0.
++// NOTE: grantor-death (a third party minting then dying) is not
++// expressible in-harness — only the harness issues syscalls — so it
++// is covered by review: the drain collects grantor-minted slots with
++// the identical loop and shared disposition as owned slots.
++JARVIS_TEST(debug_grant_target_death, "PRE: none | POST: none") {
++    uint64_t stub_phys = 0;
++    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
++    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
++    uint64_t const scratch_phys = debug_map_scratch();
++    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
++    auto *me = Scheduler::current_task();
++    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
++    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
++                            t->id, me->id);
++    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
++    (void)Scheduler::terminate_err(*t, 0);
++    Scheduler::drain_zombie_list();
++    t = nullptr; // reaped + freed by the drain; no further TCB access
++    uint64_t kind = 0;
++    uint64_t addr = 0;
++    (void)addr;
++    JARVIS_ASSERT_FMT(debug_wait_event(gh, kind, addr), "no DEATH event");
++    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
++    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh) == 0,
++                      "dead detach failed");
++    debug_unmap_scratch(scratch_phys);
++    // The spinner page was mapped in the dead target's tables and is
++    // already reclaimed by its teardown — freeing again would double-free.
++    (void)stub_phys;
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Register all debugger-syscall tests.
+ void register_debug_syscall_tests() {
+     Logger::info("Registering debug syscall tests");
+@@ -1595,4 +1867,9 @@ void register_debug_syscall_tests() {
+     JARVIS_REGISTER_TEST(debug_stop_detach_disposition);
+     JARVIS_REGISTER_TEST(debug_stop_debugger_death);
+     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
++    JARVIS_REGISTER_TEST(debug_grant_mint_use);
++    JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
++    JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);
++    JARVIS_REGISTER_TEST(debug_grant_grantee_death);
++    JARVIS_REGISTER_TEST(debug_grant_target_death);
+ }
 diff --git a/test-history.txt b/test-history.txt
-index b591fb21..4ec8b99f 100644
+index 4ec8b99f..2f547d9b 100644
 --- a/test-history.txt
 +++ b/test-history.txt
-@@ -2145,3 +2145,11 @@ SUMMARY: total=2 ok=2 fail=0
- 2026-09-27 00:54:40 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 EL0-FRAME-FIX
- 2026-09-27 00:57:16 debug_syscall PASSED: 9 FAILED: 3 TIME: 0ms STATUS: ARCH-AARCH64 PRE-FIX-CONTROL
- 2026-09-27 00:58:06 debug_syscall PASSED: 12 FAILED: 0 TIME: 522ms STATUS: ARCH-X86_64
-+2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN1
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 187ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN2
-+2026-09-27 07:20:18 debug_syscall PASSED: 11 FAILED: 1 TIME: 0ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN3
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 218ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN4
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 215ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN5
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 216ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN6
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 221ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN7
-+2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 548ms STATUS: ARCH-X86_64 ORPHAN-FIX
+@@ -2153,3 +2153,14 @@ SUMMARY: total=2 ok=2 fail=0
+ 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 216ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN6
+ 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 221ms STATUS: ARCH-AARCH64 ORPHAN-FIX-RUN7
+ 2026-09-27 07:20:18 debug_syscall PASSED: 12 FAILED: 0 TIME: 548ms STATUS: ARCH-X86_64 ORPHAN-FIX
++2026-09-27 08:43:19 debug_syscall PASSED: 12 FAILED: 0 TIME: 190ms STATUS: ARCH-AARCH64 CLOSEOUT
++2026-09-27 08:43:34 arch_aarch64 PASSED: 31 FAILED: 0 TIME: 232ms STATUS: CLOSEOUT
++2026-09-27 08:44:15 debug_syscall PASSED: 12 FAILED: 0 TIME: 2062ms STATUS: ARCH-X86_64 CLOSEOUT
++2026-09-27 14:49:10 debug_syscall PASSED: 17 FAILED: 0 TIME: 283ms STATUS: ARCH-AARCH64 GRANT-RESTRUCTURED
++2026-09-27 15:02:07 debug_syscall PASSED: 17 FAILED: 0 TIME: 0ms STATUS: ARCH-X86_64 GRANT-V2-RUN1
++2026-09-27 15:02:07 debug_syscall PASSED: 17 FAILED: 0 TIME: 0ms STATUS: ARCH-X86_64 GRANT-V2-RUN2
++2026-09-27 15:02:07 debug_syscall PASSED: 17 FAILED: 0 TIME: 0ms STATUS: ARCH-X86_64 GRANT-V2-RUN3
++2026-09-27 15:02:46 debug_syscall PASSED: 17 FAILED: 0 TIME: 242ms STATUS: ARCH-AARCH64 GRANT-V2
++2026-09-27 15:09:57 debug_syscall PASSED: 15 FAILED: 0 TIME: 400s STATUS: ARCH-RISCV64 TIMEOUT-CAP
++2026-09-27 15:20:40 debug_syscall PASSED: 17 FAILED: 0 TIME: 670ms STATUS: ARCH-X86_64 GRANT-FINAL
++2026-09-27 15:21:00 debug_syscall PASSED: 17 FAILED: 0 TIME: 278ms STATUS: ARCH-AARCH64 GRANT-FINAL

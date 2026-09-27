@@ -45,7 +45,10 @@ bool debug_validate_handle(uint64_t caller_id, uint64_t handle) noexcept;
 ///        @p dying, apply default dispositions (fault-stopped targets
 ///        terminate, cleanly-stopped resume), restore breakpoint shadows,
 ///        drop queued events, clear flags. No orphaned parked tasks.
-///        Runs in cleanup() (task context, may terminate/block).
+///        Granted slots (issue #239, spec §14) participate by grantee
+///        ownership; slots this task granted to others revoke here too
+///        (grantor-death, same shared disposition). Runs in cleanup()
+///        (task context, may terminate/block).
 void debug_drain_debugger(TaskControlBlock &dying) noexcept;
 
 /// @brief Test-isolation reset for the binding table (issue #226).

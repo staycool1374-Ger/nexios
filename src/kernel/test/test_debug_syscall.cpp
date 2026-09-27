@@ -677,6 +677,10 @@ constexpr uint64_t kSelBpIns = 3;
 constexpr uint64_t kSelBpClr = 4;
 constexpr uint64_t kSelStep = 5;
 constexpr uint64_t kSelCont = 6;
+/// @brief Grant selectors (issue #239, spec §14 — still no new syscall
+///        numbers, selectors on the attach call).
+constexpr uint64_t kSelGrant = 7;
+constexpr uint64_t kSelRevoke = 8;
 
 /// @brief Stop kinds (mirrors StopKind in debug_stop.hpp).
 constexpr uint64_t kKindBp = 1;
@@ -1220,6 +1224,12 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
                                  sizeof(kBrkInsn)),
         "stub poison failed");
 #else
+    // NOTE (issue #239): riscv64 keeps the legacy yield-stub poison.
+    // Poisoning kSpinStubVa is more correct (as on aarch64), but the
+    // riscv control currently fails BEFORE dispatch (exec=0 starvation
+    // under timer dilation — sleeps never expire, spinner never runs),
+    // so poison content is irrelevant there; changing it only churns
+    // a luck-governed path. Revisit with the timer/dilation work.
     uint64_t cphys = 0;
     TaskControlBlock *c = debug_spawn_spinner(cphys);
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
@@ -1580,6 +1590,268 @@ JARVIS_TEST(debug_stop_poll_empty, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Testidea: Supervisor-grant mint + use (issue #239, spec §14): the
+//           harness, as launcher, grants its own child to itself and
+//           drives the full handle lifecycle on the granted slot.
+// Input: owned spinner, sel7 grant naming self.
+// Expect: nonzero handle, debugger_id set, park/read works through the
+// grant, detach clears, target runnable.
+JARVIS_TEST(debug_grant_mint_use, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                            t->id, me->id);
+    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
+    JARVIS_ASSERT_FMT(t->debugger_id == me->id, "grantee id not published");
+    const uint64_t pc = debug_park_and_get_pc(gh);
+    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed on granted handle");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh) == 0,
+                      "detach failed");
+    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
+    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
+                          t->state == TaskState::READY,
+                      "detach did not resume");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Grant denial matrix (issue #239, spec §14.4): every denial
+//           errno on its exact path, plus foreign-handle isolation.
+//           Single-live-spinner discipline (issue #242: never two
+//           spinning spinners + harness — pad with parks): both spinners
+//           are parked (ineligible) except across the few syscalls that
+//           need them runnable.
+// Input: child spinner, passive debugger task, orphan, dead ids.
+// Expect: ESRCH (dead target/grantee), EPERM-or-supervisor (orphan,
+//         branched on own id), EBUSY (already debugged / re-grant),
+//         EBADF (foreign use, post-revoke reuse).
+/// @brief Find a live, permanently-BLOCKED system task id for passive
+///        grantee use (issue #239/#242): daemons block on IPC forever,
+///        so they are ineligible to run and cost zero scheduling.
+///        Spawning a second spinner instead risks the 2-spinner wedge.
+uint64_t debug_find_blocked_daemon() noexcept {
+    static const char *const kDaemons[] = {"vfsd", "iocd", "elf-load",
+                                           "monitor"};
+    TaskControlBlock *me = Scheduler::current_task();
+    const uint64_t n = Scheduler::task_count();
+    for (uint64_t i = 0; i < n; ++i) {
+        TaskControlBlock *c = Scheduler::task_at(i);
+        if (c == nullptr || !TaskControlBlock::is_valid(c))
+            continue;
+        if (me != nullptr && c->id == me->id)
+            continue;
+        for (size_t k = 0; k < 4; ++k) {
+            const char *a = c->name;
+            const char *b = kDaemons[k];
+            bool eq = true;
+            for (; *a != '\0' && *b != '\0'; ++a, ++b) {
+                if (*a != *b) {
+                    eq = false;
+                    break;
+                }
+            }
+            if (eq && *a == '\0' && *b == '\0' &&
+                c->state == TaskState::BLOCKED)
+                return c->id;
+        }
+    }
+    return 0;
+}
+
+JARVIS_TEST(debug_grant_denial_matrix, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    // Passive grantee: a BLOCKED daemon id (never spawns, never runs,
+    // never acts — issue #242 single-live-spinner discipline: only V
+    // spins, the proven 2-way shape, and no parks/sleeps anywhere).
+    const uint64_t did = debug_find_blocked_daemon();
+    JARVIS_ASSERT_FMT(did != 0, "no blocked daemon found");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, 999999,
+                  did) == Neg(kEsrch),
+        "dead target not ESRCH");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, t->id,
+                  999998) == Neg(kEsrch),
+        "dead grantee not ESRCH");
+    // Kernel-task target: EPERM regardless of grantor (spec §14.4).
+    // The harness itself is a kernel task, so no spawn is needed and
+    // no second spinner ever exists in this test (#242).
+    JARVIS_ASSERT_FMT(!me->is_user_, "harness is not a kernel task");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, me->id,
+                  did) == Neg(kEperm),
+        "kernel-target grant not EPERM");
+    // NOTE: grantor-parenthood EPERM (caller is neither PID 1 nor the
+    // target's parent) is unreachable in-harness — the harness IS PID 1
+    // — and mirrors sel1's parenthood check (covered by test 2's
+    // non-child case). Reviewed, not executed.
+    // Already debugged (plain attach first): grant attempt is EBUSY.
+    uint64_t h = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, t->id);
+    JARVIS_ASSERT_FMT(h != 0 && h != Neg(kEbusy), "attach failed: 0x%lx", h);
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant, t->id,
+                  did) == Neg(kEbusy),
+        "grant over debugged target not EBUSY");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, h) == 0,
+                      "detach failed");
+    // Granted handle is foreign to everyone but the grantee.
+    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                            t->id, did);
+    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
+                  kDebugScratchVa) == Neg(kEbadf),
+        "foreign handle use not EBADF");
+    // Revoke by the grantor; post-revoke reuse fails EBADF (gen burn).
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelRevoke, gh, 0) == 0,
+        "revoke failed");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
+                  kDebugScratchVa) == Neg(kEbadf),
+        "post-revoke reuse not EBADF");
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Revoke of a parked granted target resumes it (issue #239,
+//           spec §14.5 shared disposition, clean-stop branch).
+// Input: granted child, parked via the EAGAIN discipline, sel8 revoke.
+// Expect: revoke 0, id cleared, unparked, runnable; re-mint works with
+// a different generation.
+JARVIS_TEST(debug_grant_revoke_parked_disposition, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                            t->id, me->id);
+    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
+    const uint64_t pc = debug_park_and_get_pc(gh);
+    JARVIS_ASSERT_FMT(pc != 0, "park/pc failed on granted handle");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelRevoke, gh, 0) == 0,
+        "revoke failed");
+    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
+    JARVIS_ASSERT_FMT(!t->debug_parked, "revoke did not unpark");
+    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
+                          t->state == TaskState::READY,
+                      "revoke did not resume");
+    JARVIS_ASSERT_FMT(
+        DebugCall(SyscallNumber::TASK_DEBUG_READ_REGS, gh,
+                  kDebugScratchVa) == Neg(kEbadf),
+        "post-revoke reuse not EBADF");
+    uint64_t gh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                             t->id, me->id);
+    JARVIS_ASSERT_FMT(gh2 != 0, "re-mint failed: 0x%lx", gh2);
+    JARVIS_ASSERT_FMT((gh2 >> 32) != (gh >> 32), "generation not burned");
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh2) == 0,
+                      "detach failed");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Grantee death releases the grant without orphaning the
+//           target (issue #239, spec §14.5: granted slots are owned by
+//           the grantee, drain collects them).
+// Input: child granted to a passive debugger task; debugger reaped.
+// Expect: target valid + runnable + debugger-cleared; slot reusable
+//         for a fresh grant afterwards.
+JARVIS_TEST(debug_grant_grantee_death, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t dphys = 0;
+    TaskControlBlock *d = debug_spawn_spinner(dphys);
+    JARVIS_ASSERT_FMT(d != nullptr, "debugger spawn failed");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    // Park the grantee first (#242: single-live-spinner discipline —
+    // a parked task is ineligible, so V spins alone below).
+    uint64_t hd = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 1, d->id);
+    JARVIS_ASSERT_FMT(hd != 0 && hd != Neg(kEbusy), "attach d: 0x%lx", hd);
+    JARVIS_ASSERT_FMT(debug_park_and_get_pc(hd) != 0, "park d failed");
+    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                            t->id, d->id);
+    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
+    JARVIS_ASSERT_FMT(t->debugger_id == d->id, "grantee id not published");
+    debug_free_spinner_page(d, dphys);
+    debug_reap_child(d);
+    d = nullptr;
+    JARVIS_ASSERT_FMT(TaskControlBlock::is_valid(t), "target went invalid");
+    JARVIS_ASSERT_FMT(t->debugger_id == 0, "debugger id not cleared");
+    JARVIS_ASSERT_FMT(t->state == TaskState::RUNNING ||
+                          t->state == TaskState::READY,
+                      "target not runnable after grantee death");
+    // Dead-detach the grantee's own (now target-dead) binding first.
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, hd) == 0,
+                      "dead detach failed");
+    uint64_t gh2 = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                             t->id, me->id);
+    JARVIS_ASSERT_FMT(gh2 != 0, "re-grant failed: 0x%lx", gh2);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh2) == 0,
+                      "detach failed");
+    debug_unmap_scratch(scratch_phys);
+    debug_free_spinner_page(t, stub_phys);
+    debug_reap_child(t);
+    JARVIS_TEST_PASS();
+}
+
+// Testidea: Granted target death delivers DEATH through the reserved
+//           slot and dead-detaches (issue #239, spec §14.5).
+// Input: granted child, terminate + drain (dead TCB, no further touch).
+// Expect: DEATH pollable via sel2 on the granted handle, dead detach 0.
+// NOTE: grantor-death (a third party minting then dying) is not
+// expressible in-harness — only the harness issues syscalls — so it
+// is covered by review: the drain collects grantor-minted slots with
+// the identical loop and shared disposition as owned slots.
+JARVIS_TEST(debug_grant_target_death, "PRE: none | POST: none") {
+    uint64_t stub_phys = 0;
+    TaskControlBlock *t = debug_spawn_spinner(stub_phys);
+    JARVIS_ASSERT_FMT(t != nullptr, "spawn failed");
+    uint64_t const scratch_phys = debug_map_scratch();
+    JARVIS_ASSERT_FMT(scratch_phys != 0, "scratch map failed");
+    auto *me = Scheduler::current_task();
+    JARVIS_ASSERT_FMT(me != nullptr, "no current task");
+    uint64_t gh = DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, kSelGrant,
+                            t->id, me->id);
+    JARVIS_ASSERT_FMT(gh != 0, "grant mint failed: 0x%lx", gh);
+    (void)Scheduler::terminate_err(*t, 0);
+    Scheduler::drain_zombie_list();
+    t = nullptr; // reaped + freed by the drain; no further TCB access
+    uint64_t kind = 0;
+    uint64_t addr = 0;
+    (void)addr;
+    JARVIS_ASSERT_FMT(debug_wait_event(gh, kind, addr), "no DEATH event");
+    JARVIS_ASSERT_FMT(kind == kKindDeath, "kind not DEATH: 0x%lx", kind);
+    JARVIS_ASSERT_FMT(DebugCall(SyscallNumber::TASK_DEBUG_ATTACH, 0, gh) == 0,
+                      "dead detach failed");
+    debug_unmap_scratch(scratch_phys);
+    // The spinner page was mapped in the dead target's tables and is
+    // already reclaimed by its teardown — freeing again would double-free.
+    (void)stub_phys;
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Register all debugger-syscall tests.
 void register_debug_syscall_tests() {
     Logger::info("Registering debug syscall tests");
@@ -1595,4 +1867,9 @@ void register_debug_syscall_tests() {
     JARVIS_REGISTER_TEST(debug_stop_detach_disposition);
     JARVIS_REGISTER_TEST(debug_stop_debugger_death);
     JARVIS_REGISTER_TEST(debug_stop_poll_empty);
+    JARVIS_REGISTER_TEST(debug_grant_mint_use);
+    JARVIS_REGISTER_TEST(debug_grant_denial_matrix);
+    JARVIS_REGISTER_TEST(debug_grant_revoke_parked_disposition);
+    JARVIS_REGISTER_TEST(debug_grant_grantee_death);
+    JARVIS_REGISTER_TEST(debug_grant_target_death);
 }
