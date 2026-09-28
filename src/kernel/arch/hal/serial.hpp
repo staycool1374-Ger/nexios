@@ -43,7 +43,7 @@ class Serial {
     ///        COM1 inline poll and the Keyboard stub both miss the UART).
     ///        True with the oldest pending byte iff RX data is ready;
     ///        false immediately otherwise (never waits, never spins).
-    ///        riscv64 always returns false (no SBI console input wired).
+    ///        riscv64 polls the virt 16550A LSR (issue #247).
     /// @param[out] c Received character (untouched when returning false).
     /// @return True iff a byte was available and stored in c.
     static bool poll_getchar(char &c);

@@ -9,17 +9,17 @@
 
 ## Active cautions (curated digest — read at session start; cap ~12 lines)
 
-- `VMM::get_table` silently zeroes PTEs whose target is unallocated — any freer of a live page kills its mapping on the next walk (#235).
 - Trap entries must establish the frames the debugger reads: aarch64 `el0_sync` needed `save_all`; C handler frames must descend below, not into, the slot (#236).
 - `JARVIS_TEST_PASS()` records success but does NOT return — bisection needs explicit `return;` (#239).
 - Logger `%d` reads 8 bytes: use `%lx` + u64 casts; test-history rows must match the format regex (#235).
 - QEMU file chardevs buffer (~4KB); `QemuDebugcon` port writes are immediate — use debugcon for hang localization (#239).
 - sel1 attach binds, never stops; tick-parks need a user-mode interrupt within budget — park-waits must be satisfiable by construction (#235).
 - Test harness runs as init, PID 1, prio 10; spinners run prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open).
-- `aarch64-elf-gdb` is not preinstalled (`brew install`); no batch-mode hardware watchpoints on QEMU/aarch64 TCG (#235).
 - Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
 - Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
 - Shell-smoke must assert command OUTPUT (`Kernel: `), never a bare re-prompt — async background output redraws the prompt and fakes round-trips (#245).
+- `-serial mon:stdio` mux eats typed bytes (monitor grabs them) — deterministic E2E input needs TCP/file serial; expect-on-mux stalls past all timeouts (#247).
+- Expected-count rows rot silently: count actual `JARVIS_REGISTER_TEST` lines before bumping (row said 24, 28 registered) (#247).
 - Direct `make build/kernel.elf` drops target-specific LTO flags and skips stamp guards: always `make clean` when switching debug/release in the shared build/ dir (#246).
 
 ## Entry format
@@ -34,6 +34,12 @@
 ## Entries
 
 <!-- Append new entries below; newest first. -->
+
+### #247 — riscv64 UART input via 16550A MMIO poll (2026-09-28, awaiting close)
+- **Learned:** (1) riscv64 low half is identity-mapped in S-mode: raw-phys `0x10000000` MMIO works with zero VMM/HHDM work (same precedent as PLIC + the existing LSR TEMT probe) — TX stays SBI ecall, RX via `mmio_read8`, and the MCR-loopback test pins their coherence. (2) `-serial mon:stdio` feeds typed bytes to the monitor, not the guest — `shell-smoke.exp` stalled past all 3×150s windows on a HEALTHY guest; deterministic E2E input needs TCP/file serial (python socket probe: prompt → `version` → `Kernel: ` → prompt, PASS). (3) `test_expected_counts.hpp` rows rot: count live `JARVIS_REGISTER_TEST` lines first (row said 24, 28 registered → corrected to 30).
+- **Adapted:** `Serial::poll_getchar/getchar` on the virt 16550A LSR (riscv64/serial.cpp, x86/aarch64 mirror); `riscv64_uart_poll_idle_false` + `riscv64_uart_poll_loopback` (MCR save/restore); counts 24→30; hal/serial.hpp comment updated.
+- **Measured:** arch_riscv64 **30/30** zero deltas; release TCP-serial round-trip PASS; `make build` Errors 0. SIL 3 APPROVED (2 S3: loopback window, LSR/RBR TOCTOU — both accepted single-reader). Release-link-after-debug needs `make clean` (open #246, documented pre-session).
+- **Style re-surface:** §10.5 named constexprs (no magic MMIO addrs), §6 bounded loops (zero-wait poll, bounded getchar, 16-deep test drains), §7 full doc-blocks on new tests, fail-closed `'\0'` sentinel matching x86/aarch64.
 
 ### #248 — shell echo trips async-output detector (2026-09-28, awaiting close)
 - **Learned:** `Terminal::serial_putchar` is arch-asymmetric by design: x86 bypasses `Serial::putchar` (raw COM1, uncounted) while non-x86 routes through it (counted) — so the shell's own echo is invisible to the `write_count` async guard on x86 but trips a redraw per keystroke on serial-only arches. Cursor/status-bar writers are fb-only (verified silent), leaving echo + backspace-echo as the only in-loop foreground writes. Fix is 2 re-sync lines, not a detector redesign.

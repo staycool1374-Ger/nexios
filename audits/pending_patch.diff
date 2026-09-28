@@ -1,21 +1,200 @@
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index b82ca686f..5f59017d6 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -519,12 +519,16 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
-             if (pos > 0) {
-                 --pos;
-                 Terminal::putchar('\b');
-+                // Issue #248: this echo is ours, not async background
-+                // output — re-sync so the guard above does not redraw.
-+                prompt_serial = arch::Serial::write_count();
-             }
-             continue;
-         }
-         if (pos < max_len - 1) {
-             buf[pos++] = c;
-             Terminal::putchar(c);
-+            prompt_serial = arch::Serial::write_count(); // issue #248
-         }
-     }
+diff --git a/src/kernel/arch/hal/serial.hpp b/src/kernel/arch/hal/serial.hpp
+index 07947453b..d349c5105 100644
+--- a/src/kernel/arch/hal/serial.hpp
++++ b/src/kernel/arch/hal/serial.hpp
+@@ -43,7 +43,7 @@ class Serial {
+     ///        COM1 inline poll and the Keyboard stub both miss the UART).
+     ///        True with the oldest pending byte iff RX data is ready;
+     ///        false immediately otherwise (never waits, never spins).
+-    ///        riscv64 always returns false (no SBI console input wired).
++    ///        riscv64 polls the virt 16550A LSR (issue #247).
+     /// @param[out] c Received character (untouched when returning false).
+     /// @return True iff a byte was available and stored in c.
+     static bool poll_getchar(char &c);
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index 11685b066..804ef57e4 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -20,16 +20,30 @@
+ /// @brief RISC-V64 serial port driver — uses SBI ecall for output.
+ 
+ #include <kernel/arch/serial.hpp>
++#include <kernel/arch/hal/io.hpp>
+ #include <types.hpp>
+ 
+ namespace arch {
+ 
++/// @brief QEMU virt 16550A UART base (issue #247): raw physical address,
++///        directly dereferenceable in S-mode (riscv64 low half is
++///        identity-mapped — same precedent as the PLIC accessors and the
++///        LSR probe in test_riscv64.cpp).
++static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
++static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
++static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
++static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
++static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
++
+ /// @brief Number of characters written to the console since boot.
+ /// The interactive shell snapshots this before drawing its prompt (see
+ /// arch::Serial::write_count contract in arch/hal/serial.hpp).
+ static volatile uint64_t s_serial_write_count = 0;
+ 
+-/// @brief Initialize the serial port (no-op on RISC-V64; SBI handles it).
++/// @brief Initialize the serial port (no-op on RISC-V64).
++/// The virt 16550A divisor is pre-initialized by OpenSBI/QEMU;
++/// reprogramming it risks breaking the S-mode SBI TX path, so RX-only
++/// polling attaches to the live configuration (issue #247).
+ void Serial::init() {
  }
+ 
+@@ -54,20 +68,46 @@ uint64_t Serial::write_count() noexcept {
+     return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
+ }
+ 
+-/// @brief Read a character from serial (stub — always returns NUL).
+-/// @return Always '\0' (no SBI getchar in S-mode).
++/// @brief Read a character from the virt 16550A RX FIFO (issue #247).
++/// Waits (bounded) for LSR data-ready; returns '\0' when nothing arrives
++/// (FLAW-08 — never hangs). TX stays on the SBI ecall path.
++/// @return The received character, or '\0' on bounded-wait expiry.
+ char Serial::getchar() {
+-    return '\0';
++    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
++    int wait_idx = 0;
++    for (wait_idx = 0; wait_idx < SERIAL_RX_WAIT_ITERS; ++wait_idx) {
++        if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) !=
++            0) {
++            break;
++        }
++        arch::pause();
++    }
++    if (wait_idx >= SERIAL_RX_WAIT_ITERS) {
++        return '\0'; // no data (not a valid console character)
++    }
++    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
++    return static_cast<char>(arch::mmio_read8(rbr_addr));
+ }
+ 
+-/// @brief Non-blocking receive poll (issue #245): always false on riscv64
+-///        (no SBI console input wired — the interactive shell has no input
+-///        source here yet, same as before; out of scope for #245).
+-/// @param[out] c Untouched.
+-/// @return Always false.
++/// @brief Non-blocking receive poll (issue #247): the interactive shell's
++///        only input source on riscv64 (no PS/2, Keyboard is a stub).
++///        Zero-wait LSR check — never spins, so the shell nap loop keeps
++///        its 20ms latency bound even when the FIFO is empty.
++/// @param[out] c Oldest pending RX byte when data is ready (untouched
++///        otherwise).
++/// @return True iff the LSR data-ready bit was set and c holds a byte.
+ bool Serial::poll_getchar(char &c) {
+-    (void)c;
+-    return false;
++    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
++    if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) == 0) {
++        return false;
++    }
++    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
++    c = static_cast<char>(arch::mmio_read8(rbr_addr));
++    return true;
+ }
+ 
+ /// @brief Write a null-terminated string via SBI ecall.
+diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+index 501c2c8ba..de8d6a601 100644
+--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+@@ -457,6 +457,67 @@ JARVIS_TEST(riscv64_sbi_console_putchar) {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Serial::poll_getchar() reports empty on an idle RX FIFO
++// (issue #247 — the shell's only riscv64 input source must be a zero-wait
++// poll; true would mean stray bytes, false is the idle norm).
++// Input: Drain up to one FIFO depth (16) via poll_getchar, then poll once.
++// Expect: Final poll returns false; bounded (no waits anywhere).
++// Depends: arch::Serial
++JARVIS_TEST(riscv64_uart_poll_idle_false) {
++    char drain = 0;
++    for (int i = 0; i < 16; ++i) {
++        if (!arch::Serial::poll_getchar(drain)) {
++            break;
++        }
++    }
++    char c = 0;
++    JARVIS_ASSERT_FMT(!arch::Serial::poll_getchar(c),
++                      "poll_getchar true on idle FIFO");
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Serial::poll_getchar() loopback contract (issue #247) — false
++// on an empty FIFO, true + the byte after a loopback transmit, false once
++// drained. The looped byte is written via SBI putchar, so the sequence
++// also pins SBI-TX/MMIO-RX coherence on the shared virt UART.
++// Input: MCR loopback on; drain; poll (expect false); putchar('Q');
++// poll (expect true 'Q'); poll (expect false); MCR restore.
++// Expect: false/true('Q')/false sequence; MCR restored; bounded.
++// Depends: arch::Serial, arch::mmio_read8, arch::mmio_write8
++JARVIS_TEST(riscv64_uart_poll_loopback, "PRE: iocd | POST: none") {
++    constexpr uint64_t uart_base = 0x10000000ULL;
++    constexpr uint64_t uart_mcr_off = 4;
++    constexpr uint8_t uart_mcr_loopback = 0x10;
++    arch::Serial::init();
++    volatile void *mcr_ptr =
++        reinterpret_cast<volatile void *>(uart_base + uart_mcr_off);
++    const volatile void *mcr_rd = mcr_ptr;
++    uint8_t saved_mcr = arch::mmio_read8(mcr_rd);
++    arch::mmio_write8(mcr_ptr,
++                      static_cast<uint8_t>(saved_mcr | uart_mcr_loopback));
++    char drain = 0;
++    for (int i = 0; i < 16; ++i) {
++        if (!arch::Serial::poll_getchar(drain)) {
++            break;
++        }
++    }
++    char idle = 0;
++    bool idle_got = arch::Serial::poll_getchar(idle);
++    arch::Serial::putchar('Q');
++    char c = 0;
++    bool got = arch::Serial::poll_getchar(c);
++    char drained = 0;
++    bool drained_got = arch::Serial::poll_getchar(drained);
++    arch::mmio_write8(mcr_ptr, saved_mcr);
++    JARVIS_ASSERT(!idle_got);
++    JARVIS_ASSERT(got);
++    JARVIS_ASSERT_EQ('Q', c);
++    JARVIS_ASSERT(!drained_got);
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Read vendor and device ID from PCI bus 0 device 0 function 0 via
+ /// ECAM.
+ JARVIS_TEST(riscv64_pci_ecam_read) {
+@@ -1285,6 +1346,8 @@ void register_riscv64_tests() {
+     // parsing or tentative FS-enable follow-up work.
+     // JARVIS_REGISTER_TEST(riscv64_fpu_extension_detection);
+     JARVIS_REGISTER_TEST(riscv64_sbi_console_putchar);
++    JARVIS_REGISTER_TEST(riscv64_uart_poll_idle_false);  // issue #247
++    JARVIS_REGISTER_TEST(riscv64_uart_poll_loopback);    // issue #247
+     JARVIS_REGISTER_TEST(riscv64_pci_ecam_read);
+     JARVIS_REGISTER_TEST(riscv64_rtc_mtime_read);
+     JARVIS_REGISTER_TEST(riscv64_satp_csr);
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 9cd29b26f..33cc37ff5 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -251,7 +251,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+-    {"arch_riscv64",          0,    0,      24      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall)
++    {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
+ #endif
+ 
+     // bench

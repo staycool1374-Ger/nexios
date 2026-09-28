@@ -457,6 +457,67 @@ JARVIS_TEST(riscv64_sbi_console_putchar) {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Serial::poll_getchar() reports empty on an idle RX FIFO
+// (issue #247 — the shell's only riscv64 input source must be a zero-wait
+// poll; true would mean stray bytes, false is the idle norm).
+// Input: Drain up to one FIFO depth (16) via poll_getchar, then poll once.
+// Expect: Final poll returns false; bounded (no waits anywhere).
+// Depends: arch::Serial
+JARVIS_TEST(riscv64_uart_poll_idle_false) {
+    char drain = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (!arch::Serial::poll_getchar(drain)) {
+            break;
+        }
+    }
+    char c = 0;
+    JARVIS_ASSERT_FMT(!arch::Serial::poll_getchar(c),
+                      "poll_getchar true on idle FIFO");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Serial::poll_getchar() loopback contract (issue #247) — false
+// on an empty FIFO, true + the byte after a loopback transmit, false once
+// drained. The looped byte is written via SBI putchar, so the sequence
+// also pins SBI-TX/MMIO-RX coherence on the shared virt UART.
+// Input: MCR loopback on; drain; poll (expect false); putchar('Q');
+// poll (expect true 'Q'); poll (expect false); MCR restore.
+// Expect: false/true('Q')/false sequence; MCR restored; bounded.
+// Depends: arch::Serial, arch::mmio_read8, arch::mmio_write8
+JARVIS_TEST(riscv64_uart_poll_loopback, "PRE: iocd | POST: none") {
+    constexpr uint64_t uart_base = 0x10000000ULL;
+    constexpr uint64_t uart_mcr_off = 4;
+    constexpr uint8_t uart_mcr_loopback = 0x10;
+    arch::Serial::init();
+    volatile void *mcr_ptr =
+        reinterpret_cast<volatile void *>(uart_base + uart_mcr_off);
+    const volatile void *mcr_rd = mcr_ptr;
+    uint8_t saved_mcr = arch::mmio_read8(mcr_rd);
+    arch::mmio_write8(mcr_ptr,
+                      static_cast<uint8_t>(saved_mcr | uart_mcr_loopback));
+    char drain = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (!arch::Serial::poll_getchar(drain)) {
+            break;
+        }
+    }
+    char idle = 0;
+    bool idle_got = arch::Serial::poll_getchar(idle);
+    arch::Serial::putchar('Q');
+    char c = 0;
+    bool got = arch::Serial::poll_getchar(c);
+    char drained = 0;
+    bool drained_got = arch::Serial::poll_getchar(drained);
+    arch::mmio_write8(mcr_ptr, saved_mcr);
+    JARVIS_ASSERT(!idle_got);
+    JARVIS_ASSERT(got);
+    JARVIS_ASSERT_EQ('Q', c);
+    JARVIS_ASSERT(!drained_got);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Read vendor and device ID from PCI bus 0 device 0 function 0 via
 /// ECAM.
 JARVIS_TEST(riscv64_pci_ecam_read) {
@@ -1285,6 +1346,8 @@ void register_riscv64_tests() {
     // parsing or tentative FS-enable follow-up work.
     // JARVIS_REGISTER_TEST(riscv64_fpu_extension_detection);
     JARVIS_REGISTER_TEST(riscv64_sbi_console_putchar);
+    JARVIS_REGISTER_TEST(riscv64_uart_poll_idle_false);  // issue #247
+    JARVIS_REGISTER_TEST(riscv64_uart_poll_loopback);    // issue #247
     JARVIS_REGISTER_TEST(riscv64_pci_ecam_read);
     JARVIS_REGISTER_TEST(riscv64_rtc_mtime_read);
     JARVIS_REGISTER_TEST(riscv64_satp_csr);
