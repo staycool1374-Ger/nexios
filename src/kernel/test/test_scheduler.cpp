@@ -660,16 +660,19 @@ JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Drive the convicted #249 drop end to end: enqueue a task
-// while it is current, take next_task()'s candidate==current evict branch,
-// and prove the on_tick sweep repairs the resulting wedge without
-// touching the evict branch itself.
-// Input: READY fixture queued above harness prio, set current, next_task
-// (evicts), restore harness (BLOCKED-guarded so restore re-queues
-// nothing), re-READY, on_tick.
-// Expect: Post-evict wedge signature (READY, both flags false, peek
-// null); post-tick re-queued, state READY, counter +1.
-// Depends: Scheduler::next_task evict branch, on_tick sweep
+// Testidea: A wake targeting the executing task defers instead of
+// linking (issue #250 current-never-queued): no queued-while-current
+// window exists for next_task's candidate==current branch to evict, so
+// the #249 wedge cannot form; set_current back consumes the deferral.
+// Input: READY fixture set current; enqueue_ready (self-wake);
+// next_task (must not touch it); set_current back (consume).
+// Expect: After self-wake: READY, both flags false, ready_deferred_
+// set, undiscoverable by peek. After next_task: victim untouched,
+// someone else picked. After restore: flag cleared, queued,
+// dispatchable, rescue counter unchanged throughout (sweep never
+// fires — nothing stranded).
+// Depends: enqueue_ready deferral, next_task evict branch,
+// set_current consume, stuck_rescue_count
 JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
     TaskPtr evicted = create_test_task(5, 0);
     JARVIS_ASSERT(evicted.get() != nullptr);
@@ -679,38 +682,71 @@ JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
     {
         arch::IrqGuard irq_guard;
         evicted->state = TaskState::READY;
-        Scheduler::enqueue_ready(*evicted);
-        JARVIS_ASSERT(evicted->in_ready_queue_);
-        Scheduler::set_priority(*evicted, 11);
         Scheduler::set_current(*evicted);
-        TaskControlBlock *picked = Scheduler::next_task();
-        JARVIS_ASSERT(!evicted->in_ready_queue_);
-        JARVIS_ASSERT(evicted->runq_next_ == nullptr);
-        (void)picked;
-        evicted->state = TaskState::BLOCKED;
-        Scheduler::set_current(*harness);
-        evicted->state = TaskState::READY;
+        // Self-wake while current: defer, never link.
+        Scheduler::enqueue_ready(*evicted);
+        JARVIS_ASSERT(evicted->state == TaskState::READY);
         JARVIS_ASSERT(!evicted->in_ready_queue_);
         JARVIS_ASSERT(!evicted->in_edf_queue_);
-        {
-            // Blindness proof: same as above — the evicted task must not
-            // be what dispatch would pick.
-            auto *peeked = Scheduler::rq_own().peek_highest();
-            JARVIS_ASSERT_FMT(
-                peeked != evicted.get(), "peek returned the stranded task");
-        }
-        uint64_t before = Scheduler::stuck_rescue_count();
-        Scheduler::on_tick();
-        // Same rescue + dispatchability contract as above (dispatch may
-        // legitimately mark the picked task RUNNING).
+        JARVIS_ASSERT(evicted->ready_deferred_);
+        JARVIS_ASSERT(Scheduler::rq_own().peek_highest() != evicted.get());
+        // The evict branch has no victim: next_task picks another task
+        // and leaves the deferral (and the current task) alone.
+        TaskControlBlock *picked = Scheduler::next_task();
+        JARVIS_ASSERT(picked != evicted.get());
+        JARVIS_ASSERT(evicted->ready_deferred_);
+        JARVIS_ASSERT(!evicted->in_ready_queue_);
+        // Restore consumes the deferral: flag cleared, queued,
+        // dispatchable; the sweep never fired (counter still zero).
+        Scheduler::set_current(*harness);
+        JARVIS_ASSERT(!evicted->ready_deferred_);
+        JARVIS_ASSERT(evicted->in_ready_queue_);
         JARVIS_ASSERT(evicted->state == TaskState::READY ||
                       evicted->state == TaskState::RUNNING);
-        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
-        bool dispatchable = evicted->in_ready_queue_ ||
-                            Scheduler::SwSlots::next_task_id() ==
-                                evicted->id;
-        JARVIS_ASSERT(dispatchable);
+        JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
         Scheduler::dequeue_ready(*evicted);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The retained next_task candidate==current evict branch still
+// drops a queued-while-current task safely (audit S3 on #250: the branch
+// is defense-in-depth and needs direct cover now that wakes defer).
+// Input: READY fixture linked RAW (manager-level, bypassing the deferral
+// on purpose) above harness prio, set current, next_task, restore.
+// Expect: next_task evicts the victim (unlinked, flags false) and returns
+// another task; restore re-queues via consume; rescue counter stays zero
+// (evict-while-current is handled, never stranded).
+// Depends: next_task evict branch, set_current consume, stuck_rescue_count
+JARVIS_TEST(scheduler_evict_queued_current_drops_safely,
+            "PRE: none | POST: none") {
+    TaskPtr victim = create_test_task(5, 0);
+    JARVIS_ASSERT(victim.get() != nullptr);
+    auto *harness = Scheduler::current_task();
+    JARVIS_ASSERT(harness != nullptr);
+    Scheduler::reset_stuck_rescue_count_for_test();
+    {
+        arch::IrqGuard irq_guard;
+        victim->state = TaskState::READY;
+        Scheduler::set_priority(*victim, 11);
+        Scheduler::set_current(*victim);
+        // Deliberate stale window via the raw manager (public API would
+        // defer): victim is current AND linked.
+        Scheduler::rq_own().enqueue(*victim, 11);
+        JARVIS_ASSERT(victim->in_ready_queue_);
+        TaskControlBlock *picked = Scheduler::next_task();
+        JARVIS_ASSERT(picked != victim.get());
+        JARVIS_ASSERT(!victim->in_ready_queue_);
+        JARVIS_ASSERT(victim->runq_next_ == nullptr);
+        // Restore consumes: queued, dispatchable, sweep never fired.
+        Scheduler::set_current(*harness);
+        JARVIS_ASSERT(!victim->ready_deferred_);
+        JARVIS_ASSERT(victim->in_ready_queue_);
+        JARVIS_ASSERT(victim->state == TaskState::READY ||
+                      victim->state == TaskState::RUNNING);
+        JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
+        Scheduler::dequeue_ready(*victim);
     }
     JARVIS_TEST_PASS();
 }
@@ -736,4 +772,5 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_loadavg_step_math);
     JARVIS_REGISTER_TEST(scheduler_stranded_ready_rescued);    // issue #249
     JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
+    JARVIS_REGISTER_TEST(scheduler_evict_queued_current_drops_safely); // #250
 }

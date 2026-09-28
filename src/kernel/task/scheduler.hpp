@@ -587,6 +587,13 @@ class Scheduler {
     static void enqueue_ready(TaskControlBlock &task) noexcept;
     /// @brief Removes a task from the O(1) ready queue.
     static void dequeue_ready(TaskControlBlock &task) noexcept;
+    /// @brief Routing half of enqueue_ready (issue #250): EDF/bitmap
+    ///        placement with no H2 ownership check and no wake-while-current
+    ///        deferral. Only the deschedule-side consume sites
+    ///        (switch_to_task, set_current) may call this — every other
+    ///        wake path must go through enqueue_ready so a wake of the
+    ///        running task defers instead of linking (current-never-queued).
+    static void enqueue_ready_inner(TaskControlBlock &task) noexcept;
     /// @brief Moves a task from one priority queue to another (re-index).
     static void move_priority(TaskControlBlock &task, uint64_t old_prio,
                               uint64_t new_prio) noexcept;
@@ -680,6 +687,8 @@ class Scheduler {
         TaskControlBlock *edf_next;
         TaskControlBlock *edf_prev;
         bool in_edf_queue;
+        /// @brief Wake-while-current deferral flag (issue #250).
+        bool ready_deferred;
         /// @brief Dispatch policy + exemption (issue #19).
         SchedPolicy sched_policy;
         bool edf_exempt;
@@ -1042,6 +1051,11 @@ struct SwSlots {
     static uint64_t stuck_rescue_count_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
+    /// @brief Rescue warn cadence (issue #249): a warn per rescue feeds
+    ///        serial + redraw timing back into the race window it reports
+    ///        (observed self-sustaining flood). Log the 1st rescue and
+    ///        every Nth; the exact counter stays the detector.
+    static constexpr uint64_t STRANDED_RESCUE_WARN_EVERY = 64;
     /// @brief Decayed load averages (issue #172, top loadavg triplet).
     ///        Integer EMA of the per-tick non-idle sample, updated on the
     ///        BSP on_tick() tail under scheduler_lock_; readers use

@@ -1,78 +1,39 @@
-diff --git a/docs/specs/debugd.md b/docs/specs/debugd.md
---- a/docs/specs/debugd.md
-+++ b/docs/specs/debugd.md
-@@ -127,11 +127,12 @@
-   claim); supervisor grants arrive in Phase 4 (§14 NEW). Raw pid-to-handle lookup
-   does not exist.
--- Grant resolution rule (normative, §14): handle resolution succeeds on
--  an owned live binding OR a live grant with generation match, and
--  only for `debugger_id == caller->id`. Denials are preserved exactly:
--  `EPERM` (no grant / attenuation failure / kernel task), `ESRCH`
--  (bad or unknown handle, dead target), `EBUSY` (already debugged —
--  a grant authorizes the attempt, never overrides `EBUSY`). No new
--  errno exists for grants.
-+- Grant resolution rule (normative, §14): handle resolution succeeds on
-+  an owned live binding OR a live grant with generation match, and
-+  only for `debugger_id == caller->id`. Denials are preserved exactly:
-+  `EPERM` (no grant / attenuation failure / kernel task), `EBADF`
-+  (bad, unknown, or foreign handle — the `debug_resolve` original),
-+  `ESRCH` (dead target), `EBUSY` (already debugged — a grant
-+  authorizes the attempt, never overrides `EBUSY`). No new errno
-+  exists for grants.
- - Stops are taken at user-mode boundaries as observed at timer ticks:
-   the tick records the interrupted PC per CPU, and the scheduler parks
-@@ -435,28 +435,30 @@
-   alternative 2: waiting for #50 attenuation — blocks Phase 4 on
-   v0.7.1; rejected by scope.
--- §14.3 Resolve rule: handle resolution (cf.
--  `src/kernel/debug/debug_bind.hpp::debug_resolve`, by reference
--  without re-specifying code) succeeds on an owned live binding
--  OR a live grant with generation match, and only for
--  `debugger_id == caller->id`. Unknown/foreign handles fail with
--  the original errors; dead-target detach drops the owned
--  binding as today.
--- §14.4 Denial table (preserved exactly, no new errno):
--  `EPERM` = no grant / attenuation failure / kernel task;
--  `ESRCH` = bad or unknown handle, or dead target;
--  `EBUSY` = target already debugged. A grant authorizes the
--  attach ATTEMPT only — grant-present-but-already-debugged is
--  `EBUSY`, never overridden.
--- §14.5 Revocation + death composition: revoke triggers are
--  explicit revoke, grantor death, grantee death, and target
--  death/exit. Any trigger invalidates the grant synchronously
--  for subsequent resolves (generation bump; in-flight syscalls
--  holding a resolved binding complete or fail closed, never
--  re-resolve mid-call). Disposition runs through the ONE shared
--  function with debugger death: fault-stopped targets terminate,
--  cleanly-stopped targets resume (§4/§10). Grantee death drops
--  granted bindings exactly like owned bindings — no orphaned
--  parked tasks, composes with #191 supervision (restarted
--  debugd re-attaches explicitly, §14.6 discovery reapplies).
-+- §14.3 Resolve rule: handle resolution (cf.
-+  `debug_resolve` in `src/kernel/syscall/syscall_handlers_debug.cpp`,
-+  by reference without re-specifying code) succeeds on an owned live
-+  binding OR a live grant with generation match, and only for
-+  `debugger_id == caller->id`. Unknown/foreign handles fail with
-+  the original errors (`EBADF`); dead-target detach drops the owned
-+  binding as today.
-+- §14.4 Denial table (preserved exactly, no new errno). Mint path
-+  (target-selector key, cf. sel-1 claim precedent): `EPERM` = no
-+  grant / attenuation failure / kernel task / caller not a §14.1
-+  grantor; `ESRCH` = bad target reference or dead target;
-+  `EBUSY` = target already debugged. Handle-resolve path (cf.
-+  §14.3): `EBADF` = bad, unknown, or foreign handle; `ESRCH` =
-+  dead target. A grant authorizes the attach ATTEMPT only —
-+  grant-present-but-already-debugged is `EBUSY`, never overridden.
-+- §14.5 Revocation + death composition: revoke triggers are
-+  explicit revoke, grantor death, grantee death, and target
-+  death/exit. Any trigger invalidates the grant synchronously
-+  for subsequent resolves (generation bump; in-flight syscalls
-+  holding a resolved binding complete or fail closed, never
-+  re-resolve mid-call). Disposition runs through the ONE shared
-+  function with debugger death: fault-stopped targets terminate,
-+  cleanly-stopped targets resume (§4/§10). Grantee death drops
-+  granted bindings exactly like owned bindings — no orphaned
-+  parked tasks, composes with #191 supervision (restarted
-+  debugd re-attaches explicitly, §13.6 discovery reapplies).
- 
- ## 15. Open questions (for audit, not blockers)
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -1362,6 +1362,11 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
+     arch::IrqGuard irq_guard{};
++    // Issue #250 (audit): capture liveness BEFORE the READY write below.
++    // The wake-while-current defer guard must observe the pre-wake state:
++    // TERMINATED/REAPED tasks are never deferred (§12.1).
++    const bool wake_live = (task.state != TaskState::TERMINATED &&
++                            task.state != TaskState::REAPED);
+     task.state = TaskState::READY;
+     uint64_t target = queue_target(task);
+     if (task.is_user_ && target != 0)
+         target = 0; // shared-TSS backstop (see enqueue_ready)
+     uint64_t here = sched_cpu();
+@@ -1388,12 +1393,19 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
+         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+         if (&task == Scheduler::current_task()) {
+-            if (task.state != TaskState::TERMINATED &&
+-                task.state != TaskState::REAPED) {
++            // Mirror enqueue_ready's defensive unlink (audit): the local
++            // current may still be linked on another CPU's queue after an
++            // affinity change under it; clearing flags without unlinking
++            // orphans the node. `target` is already user-clamped above.
++            if (wake_live) {
+                 task.state = TaskState::READY;
+                 task.ready_deferred_ = true;
+             }
+-            task.in_ready_queue_ = false;
+-            task.in_edf_queue_ = false;
++            if (task.in_ready_queue_) {
++                rq_for(target).remove(task, task.rq_priority_);
++                task.in_ready_queue_ = false;
++            }
++            if (task.in_edf_queue_)
++                edf_remove(task, target);
+             return;
+         }
+         task.in_ready_queue_ = false;

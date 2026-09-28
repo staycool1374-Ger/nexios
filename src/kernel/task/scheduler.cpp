@@ -521,6 +521,36 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
             return;
         }
     }
+    // Issue #250: wake-while-current deferral (current-never-queued).
+    // A wake targeting the executing task must not physically link it —
+    // the next next_task() would evict it via the candidate==current
+    // branch and strand it READY with empty queues. Mark READY (unless
+    // dead — TERMINATED/REAPED are never deferred, §12.1), set the flag,
+    // unlink defensively (cannot happen by invariant; fail-closed), and
+    // return; the deschedule paths consume the flag (switch_to_task,
+    // set_current). EDF-eligible self-wakes defer identically.
+    if (&task == Scheduler::current_task() &&
+        Scheduler::queue_target(task) == Scheduler::sched_cpu()) {
+        if (task.state != TaskState::TERMINATED &&
+            task.state != TaskState::REAPED) {
+            task.state = TaskState::READY;
+            task.ready_deferred_ = true;
+        }
+        if (task.in_ready_queue_) {
+            rq_for(queue_target(task)).remove(task, task.rq_priority_);
+            task.in_ready_queue_ = false;
+        }
+        if (task.in_edf_queue_)
+            edf_remove(task, queue_target(task));
+        return;
+    }
+    Scheduler::enqueue_ready_inner(task);
+}
+
+// Issue #250: routing half of enqueue_ready (no H2 check, no deferral).
+// Deschedule-side consume only (the task is leaving the CPU, so linking
+// it cannot create a queued-while-current window).
+void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
     // Issue #25 C1: shared-TSS backstop — user tasks never leave CPU0 no
     // matter what the mask says (set_affinity clamps persistently; this
     // covers every other path to AP execution).
@@ -555,6 +585,10 @@ void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
     if (task.in_edf_queue_)
         edf_remove(task, queue_target(task));
     rq_task(task).remove(task, effective_priority(&task));
+    // Issue #250: leaving the queue voids any wake-while-current deferral
+    // (a blocking task is no longer runnable; a later wake re-enqueues
+    // normally since the task is no longer current).
+    task.ready_deferred_ = false;
     // Issue #221: a task leaving the ready queue must not remain the target
     // of a pending deferred-switch arm.  The arm was published when the task
     // was READY; if the task blocks (or dies) before the epilogue applies
@@ -1327,6 +1361,11 @@ uint64_t Scheduler::remaining_memory_budget() noexcept {
 
 void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
     arch::IrqGuard irq_guard{};
+    // Issue #250 (audit): capture liveness BEFORE the READY write below.
+    // The wake-while-current defer guard must observe the pre-wake state:
+    // TERMINATED/REAPED tasks are never deferred (§12.1).
+    const bool wake_live = (task.state != TaskState::TERMINATED &&
+                            task.state != TaskState::REAPED);
     task.state = TaskState::READY;
     uint64_t target = queue_target(task);
     if (task.is_user_ && target != 0)
@@ -1348,7 +1387,27 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
 #endif
         // Target not up (or single-core build): direct-enqueue under the
         // global lock; the task waits like single-core parked work.
+        // Issue #250: same wake-while-current deferral as enqueue_ready
+        // (a task affine elsewhere can still be the local current after
+        // an affinity change under it).
         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        if (&task == Scheduler::current_task()) {
+            // Mirror enqueue_ready's defensive unlink (audit): the local
+            // current may still be linked on another CPU's queue after an
+            // affinity change under it; clearing flags without unlinking
+            // orphans the node. `target` is already user-clamped above.
+            if (wake_live) {
+                task.state = TaskState::READY;
+                task.ready_deferred_ = true;
+            }
+            if (task.in_ready_queue_) {
+                rq_for(target).remove(task, task.rq_priority_);
+                task.in_ready_queue_ = false;
+            }
+            if (task.in_edf_queue_)
+                edf_remove(task, target);
+            return;
+        }
         task.in_ready_queue_ = false;
         rq_for(target).enqueue(task, effective_priority(&task));
         return;
@@ -2201,13 +2260,17 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
     // dequeue_highest returns null, which never happens while the receiver
     // sits in the queue).  See docs/specs/ipc.md §4 (H2) and
     // docs/specs/scheduler.md §6 (VIOL-1).
+    // Issue #250: consume a wake-while-current deferral the same way as
+    // switch_to_task (clear-then-inner: enqueue_ready would re-defer
+    // since old is still current until set_current_ptr below).
     if (old && old != &task && !is_idle_task(old) &&
         old->magic == TaskControlBlock::TCB_MAGIC &&
         (old->state == TaskState::READY ||
          old->state == TaskState::RUNNING)) {
         old->in_ready_queue_ = false;
         old->rq_priority_ = 0;
-        enqueue_ready(*old);
+        old->ready_deferred_ = false;
+        enqueue_ready_inner(*old);
     }
 
     set_current_ptr(&task);
@@ -2851,9 +2914,20 @@ void Scheduler::on_tick() noexcept {
             }
             if (phys)
                 continue; // flag/link desync the other way — not ours
-            ++stuck_rescue_count_;
-            Logger::warn("sched: stranded READY rescued id=%lx eff=%lx",
-                         task->id, effective_priority(task));
+            // Issue #250: a legitimately-deferred task is always current
+            // while flagged (wake-side mirror), and the sweep already
+            // skips current — so non-current + flagged is a lost-consume
+            // bug, not a valid deferral. Clear and rescue anyway (never
+            // skip: skipping on flag would reintroduce the wedge on flag
+            // loss).
+            task->ready_deferred_ = false;
+            uint64_t rescue_no = ++stuck_rescue_count_;
+            if (rescue_no == 1 ||
+                (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                Logger::warn(
+                    "sched: stranded READY rescued #%lx id=%lx eff=%lx",
+                    rescue_no, task->id, effective_priority(task));
+            }
             enqueue_ready(*task);
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
                              __ATOMIC_RELEASE);
@@ -3992,6 +4066,23 @@ static void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         current->state = TaskState::READY;
         Scheduler::enqueue_ready(*current);
     }
+    // Issue #250: consume a wake-while-current deferral. The task is
+    // leaving the CPU here, so linking it cannot recreate the
+    // queued-while-current window — but enqueue_ready would re-defer
+    // (current is still current until the epilogue updates it), hence the
+    // deschedule-side inner routing. Only runnable, unqueued states
+    // consume; anything else just drops the stale flag (a concurrent
+    // BLOCKED transition already cleared it via dequeue_ready).
+    if (current->ready_deferred_) {
+        current->ready_deferred_ = false;
+        if (!current->in_ready_queue_ && !current->in_edf_queue_ &&
+            (current->state == TaskState::READY ||
+             current->state == TaskState::RUNNING)) {
+            if (current->state == TaskState::RUNNING)
+                current->state = TaskState::READY;
+            Scheduler::enqueue_ready_inner(*current);
+        }
+    }
     next.state = TaskState::RUNNING;
     // Issue #172: snapshot dispatch placement for cpuinfo/top.  Single
     // writer (this CPU dispatching next), release-store; shell readers
@@ -4648,6 +4739,7 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].edf_next = t->edf_next_;
         out[idx].edf_prev = t->edf_prev_;
         out[idx].in_edf_queue = t->in_edf_queue_;
+        out[idx].ready_deferred = t->ready_deferred_;
         out[idx].sched_policy = t->sched_policy;
         out[idx].edf_exempt = t->edf_exempt;
         out[idx].cpu_affinity = t->cpu_affinity;
@@ -4739,6 +4831,7 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->edf_next_ = saved[j].edf_next;
             t->edf_prev_ = saved[j].edf_prev;
             t->in_edf_queue_ = saved[j].in_edf_queue;
+            t->ready_deferred_ = saved[j].ready_deferred;
             t->sched_policy = saved[j].sched_policy;
             t->edf_exempt = saved[j].edf_exempt;
             t->cpu_affinity = saved[j].cpu_affinity;

@@ -974,6 +974,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->edf_next_ = nullptr;
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
     tcb->remaining_ticks = period_ticks;
     tcb->wcet_ticks = 0;
     tcb->wcet_overrun_fired = false;
@@ -1199,6 +1200,7 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->edf_next_ = nullptr;
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
     tcb->remaining_ticks = period_ticks;
     tcb->memory_budget_pages_ = 0;
     tcb->memory_used_pages_ = 0;
@@ -1397,6 +1399,7 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->edf_next_ = nullptr;
     tcb->edf_prev_ = nullptr;
     tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
     tcb->remaining_ticks = parent->remaining_ticks;
     tcb->exit_code = 0;
     tcb->waiting_child_pid = 0;

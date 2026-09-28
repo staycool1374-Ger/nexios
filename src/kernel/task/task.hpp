@@ -273,8 +273,9 @@ struct TaskControlBlock {
           needed_lib_count(0),
           runq_next_(nullptr), runq_prev_(nullptr), dl_next_(nullptr),
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
-          in_ready_queue_(false), rq_priority_(0), all_bucket_(0),
-          zombie_next_(nullptr), waiting_child_pid(0),
+            in_ready_queue_(false), ready_deferred_(false),
+           rq_priority_(0), all_bucket_(0),
+           zombie_next_(nullptr), waiting_child_pid(0),
           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
           alarm_armed(false), recv_timeout_armed(false),
           recv_timed_out(false),
@@ -478,6 +479,12 @@ struct TaskControlBlock {
     /// @brief True if this task is currently in the ready queue.
     /// Used to prevent double-enqueue.
     bool in_ready_queue_;
+    /// @brief Wake-while-current deferral (issue #250): a wake targeting
+    ///        the executing task marks READY + sets this instead of
+    ///        linking (current-never-queued). Consumed (cleared +
+    ///        enqueued) at the next deschedule point; cleared on every
+    ///        dequeue. Never set on a non-current task.
+    bool ready_deferred_;
     /// @brief Priority at which this task was enqueued in the ready queue.
     uint64_t rq_priority_;
     /// @brief Priority bucket in AllTasksRegistry (set at append, never
