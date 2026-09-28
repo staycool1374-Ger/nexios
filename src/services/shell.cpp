@@ -519,12 +519,16 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
             if (pos > 0) {
                 --pos;
                 Terminal::putchar('\b');
+                // Issue #248: this echo is ours, not async background
+                // output — re-sync so the guard above does not redraw.
+                prompt_serial = arch::Serial::write_count();
             }
             continue;
         }
         if (pos < max_len - 1) {
             buf[pos++] = c;
             Terminal::putchar(c);
+            prompt_serial = arch::Serial::write_count(); // issue #248
         }
     }
 }
