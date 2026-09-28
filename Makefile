@@ -1029,7 +1029,8 @@ _do_execute_test:
 	if [ "$(CLASS)" = "none" ]; then \
 	    if command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then \
 	        printf '  %-7s %s\n' 'QEMU' 'Starting (Ctrl+A then X to exit)…'; \
-	        $(QEMU_SYSTEM) $(QEMU_FLAGS_INTERACTIVE); \
+	        printf '  %-7s %s\n' 'GDB' 'stub on :1234 (if debug build)'; \
+	        $(QEMU_SYSTEM) $(QEMU_FLAGS_INTERACTIVE) $(if $(filter debug,$(BUILD)),-s); \
 	    else \
 	        echo "QEMU missing."; echo $(PKG_HINT); exit 1; \
 	    fi; \
