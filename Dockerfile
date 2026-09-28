@@ -10,7 +10,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git make python3 wget ccache cpio meson ninja-build \
     nasm \
-    xorriso mtools dosfstools grub-pc-bin grub-common \
+    xorriso mtools dosfstools grub-pc-bin grub-efi-amd64-bin grub-common \
     gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
