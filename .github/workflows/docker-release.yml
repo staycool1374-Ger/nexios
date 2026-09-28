@@ -51,7 +51,14 @@ jobs:
           context: .
           file: Dockerfile
           platforms: ${{ github.event_name == 'workflow_dispatch' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          # Dispatch (manual validation) must also push: the image is
+          # built with `load` on the build runner, but dogfood runs on a
+          # DIFFERENT runner, so a locally-loaded image is unreachable
+          # there (proven 2026-09-28: "Unable to find image locally" +
+          # GHCR HEAD denied). Branch tags (:main) are push-safe; release
+          # tags additionally get :latest. A failing build never moves a
+          # git tag either way.
+          push: true
           load: ${{ github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -68,8 +75,7 @@ jobs:
     needs: build-push
     runs-on: ubuntu-24.04
     steps:
-      - name: Pull release image (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Pull release image
         run: docker pull ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }}
 
       - name: make build inside the image
