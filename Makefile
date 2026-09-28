@@ -148,7 +148,11 @@ ifeq ($(ARCH),x86_64)
     AR          := $(X86_64_TRIPLET)ar
     OBJCOPY     := $(X86_64_TRIPLET)objcopy
 
-    CXXFLAGS    := $(CXXFLAGS_COMMON) -m64 -mno-red-zone -mgeneral-regs-only -mcmodel=large
+    # Issue #251: -fno-pie — Debian/Ubuntu linux-gnu drivers default to PIE
+    # (same precedent as riscv64, issue #222); PIE+GOT codegen under LTO
+    # misresolved extern GOT slots past the image end (RSP := wild bytes,
+    # pre-serial triple fault). The link is -no-pie; compile must match it.
+    CXXFLAGS    := $(CXXFLAGS_COMMON) -fno-pie -m64 -mno-red-zone -mgeneral-regs-only -mcmodel=large
     CCFLAGS     := -m64 -static -nostdlib -ffreestanding -O2 -pipe -MMD -MP \
                    -ffunction-sections -fdata-sections
 
