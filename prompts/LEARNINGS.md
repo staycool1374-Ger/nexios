@@ -17,7 +17,8 @@
 - Test harness runs as init, PID 1, prio 10; spinners run prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open).
 - Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
 - Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
-- Shell-smoke must assert command OUTPUT (`Kernel: `), never a bare re-prompt — async background output redraws the prompt and fakes round-trips (#245).
+- Ubuntu GCC defaults to PIE: GOT+LTO can misresolve extern slots past image end (pre-serial triple fault) — match compile (`-fno-pie`, cf. #222) to the `-no-pie` link; hidden visibility only patches single symbols (#251).
+- Container-only faults need exact-binary forensics (artifact upload + addr2line/objdump), never cross-toolchain guessing; `-d int` tick-vector histograms separate "no ticks" from "stuck with ticks" (#251).
 - `-serial mon:stdio` mux eats typed bytes (monitor grabs them) — deterministic E2E input needs TCP/file serial; expect-on-mux stalls past all timeouts (#247).
 - Expected-count rows rot silently: count actual `JARVIS_REGISTER_TEST` lines before bumping (row said 24, 28 registered) (#247).
 - Direct `make build/kernel.elf` drops target-specific LTO flags and skips stamp guards: always `make clean` when switching debug/release in the shared build/ dir (#246).
@@ -34,6 +35,12 @@
 ## Entries
 
 <!-- Append new entries below; newest first. -->
+
+### #251 — Ubuntu-only pre-serial triple fault: PIE-GOT slots, hidden, -fno-pie (2026-09-28, CLOSED; tick-hang follow-up #252)
+- **Learned:** (1) Ubuntu GCC defaults to PIE: GOT codegen under LTO resolved an extern value-load through a slot past image end (GOT+0x418D90 = 0xA1F468 vs last mapped VA 0x989000) → RSP := non-image bytes (`0x2928656361725f72`, absent from ELF) → next call faults → firmware IDT (still live, unmapped) can't be walked → nested #PF → #DF → triple fault, zero serial. (2) Auditor veto is load-bearing: my address-of "fix" was a semantic inversion (stack.asm descriptor `dq kernel_stack+16384` — only value-load yields the top; `&` points into .rodata + diverges from set_tss_rsp0); rejected_patch.diff applied verbatim. (3) Single-symbol hidden visibility fixed the RSP load (re-probe: RSP sane) but a second static (IDT::entries_) failed identically → class fix `-fno-pie` matching the `-no-pie` link (riscv64 already had it per #222 — search in-tree precedent before theorizing toolchain bugs). (4) Container-debug recipe: TEMP-branch artifact upload (exact map+ELF) + `-d int`; tick-vector histograms over wall time convict tick-stop (609×v=e0 then 0 for 116s).
+- **Adapted:** `-fno-pie` on x86_64 CXXFLAGS + hidden externs (defense, kept); aarch64 `-fno-pie` gap noted as follow-up; #252 filed for the residual tick-stop hang (first tick-dependent test hangs, local 17/17).
+- **Measured:** in-container boot + tests 1–3/17 post-fix; local `debug_syscall` 17/17 675ms; 6 image fixes + 2 kernel fixes; 9 dispatches; audits: 1 REJECT→verbatim→APPROVED (#251) + 6 APPROVED (#243 chain).
+- **Style re-surface:** §5 fail-closed (fix at the right layer — per-symbol patching was unbounded, global flag closed the class); minimal diffs; TEMP-DIAG reverted + branches deleted (grep-verified); test-history machine-format rows; §11 no new concurrency surface (early-boot single-CPU).
 
 ### #250 — root-cause race: wake-while-current deferral (2026-09-28, CLOSED)
 - **Learned:** (1) Enforce invariants at the WAKE source, not the dispatch sink: making queued-while-current unrepresentable (`ready_deferred_` + deschedule-side consume via `enqueue_ready_inner`) kills the victim class the evict branch preyed on. (2) Planner order tricks need verification: "clear flag before call" was insufficient because the defer predicate keys on currentness, not the flag — the inner-helper split was the correct construction. (3) `set_task_ready` wrote READY before its liveness guard (dead-code guard resurrected zombies) + cleared flags without unlinking — audit iter-1 caught both; rejected patches applied verbatim. (4) Post-rescue dispatch legitimately marks tasks RUNNING — assert dispatchability (queued OR armed-to), never exact flags. (5) Snapshot fields: capture/restore symmetrically (plan said force-false; symmetry won).
