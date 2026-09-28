@@ -1,13 +1,13 @@
 diff --git a/Dockerfile b/Dockerfile
-index db6f048fd..cf0063b0f 100644
+index cf0063b0f..e4fd6c66a 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -8,7 +8,7 @@ FROM ubuntu:24.04
  ARG DEBIAN_FRONTEND=noninteractive
  
  RUN apt-get update && apt-get install -y --no-install-recommends \
--    build-essential git make python3 wget ccache \
-+    build-essential git make python3 wget ccache cpio \
+-    build-essential git make python3 wget ccache cpio \
++    build-essential git make python3 wget ccache cpio meson ninja-build \
      nasm \
      xorriso mtools dosfstools grub-pc-bin grub-common \
      gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
