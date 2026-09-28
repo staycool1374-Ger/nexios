@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qemu-system-x86 qemu-system-arm qemu-system-misc ovmf \
     expect gdb-multiarch coreutils ca-certificates \
  && ln -sf /usr/bin/timeout /usr/local/bin/gtimeout \
+ && ln -sf /usr/bin/stdbuf /usr/local/bin/gstdbuf \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/x86_64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/aarch64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/riscv64-linux-gnu-gdb \
