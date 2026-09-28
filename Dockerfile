@@ -8,7 +8,7 @@ FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential git make python3 wget ccache \
+    build-essential git make python3 wget ccache cpio \
     nasm \
     xorriso mtools dosfstools grub-pc-bin grub-common \
     gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
