@@ -530,7 +530,18 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 #if defined(CONFIG_ARCH_X86_64)
     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
-    extern const uint64_t kernel_stack_top;
+    // Issue #251: hidden visibility forces direct (non-GOT) binding.
+    // Ubuntu GCC defaults to PIE and resolved this extern's GOT slot to an
+    // address past the image end under LTO, loading RSP with wild RAM bytes
+    // (pre-serial triple fault). Hidden visibility is the toolchain-layer
+    // fix: the access pattern matches every other extern the linker binds.
+    extern const uint64_t kernel_stack_top __attribute__((visibility("hidden")));
+    // Issue #251: kernel_stack_top is a rodata DESCRIPTOR (stack.asm:
+    // `kernel_stack_top: dq kernel_stack + 16384`); only the value-load
+    // yields the linked stack top, while `&kernel_stack_top` is the
+    // descriptor slot's own address (and diverges from set_tss_rsp0
+    // below). The Ubuntu-GCC+LTO GOT misresolution must be fixed at the
+    // toolchain/linker layer, not by changing load semantics here.
     asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
     kernel::gs::boot_info().multiboot_magic = magic;
     kernel::gs::boot_info().multiboot_info = mb_info;
@@ -572,7 +583,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::percpu_init_bsp(0);
 #endif
 #if defined(CONFIG_ARCH_X86_64)
-    extern const uint64_t kernel_stack_top;
+    // Issue #251: same hidden-visibility binding as the RSP switch above —
+    // RSP and TSS.RSP0 must resolve to the identical descriptor value.
+    extern const uint64_t kernel_stack_top __attribute__((visibility("hidden")));
     arch::GDT::set_tss_rsp0(kernel_stack_top);
 
     // Enable x87 FPU: clear CR0.EM (bit 2), set CR0.NE (bit 5), set CR0.MP (bit

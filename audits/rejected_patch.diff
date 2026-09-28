@@ -1,39 +1,24 @@
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -1362,6 +1362,11 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
-     arch::IrqGuard irq_guard{};
-+    // Issue #250 (audit): capture liveness BEFORE the READY write below.
-+    // The wake-while-current defer guard must observe the pre-wake state:
-+    // TERMINATED/REAPED tasks are never deferred (§12.1).
-+    const bool wake_live = (task.state != TaskState::TERMINATED &&
-+                            task.state != TaskState::REAPED);
-     task.state = TaskState::READY;
-     uint64_t target = queue_target(task);
-     if (task.is_user_ && target != 0)
-         target = 0; // shared-TSS backstop (see enqueue_ready)
-     uint64_t here = sched_cpu();
-@@ -1388,12 +1393,19 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
-         SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
-         if (&task == Scheduler::current_task()) {
--            if (task.state != TaskState::TERMINATED &&
--                task.state != TaskState::REAPED) {
-+            // Mirror enqueue_ready's defensive unlink (audit): the local
-+            // current may still be linked on another CPU's queue after an
-+            // affinity change under it; clearing flags without unlinking
-+            // orphans the node. `target` is already user-clamped above.
-+            if (wake_live) {
-                 task.state = TaskState::READY;
-                 task.ready_deferred_ = true;
-             }
--            task.in_ready_queue_ = false;
--            task.in_edf_queue_ = false;
-+            if (task.in_ready_queue_) {
-+                rq_for(target).remove(task, task.rq_priority_);
-+                task.in_ready_queue_ = false;
-+            }
-+            if (task.in_edf_queue_)
-+                edf_remove(task, target);
-             return;
-         }
-         task.in_ready_queue_ = false;
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -531,13 +531,13 @@
+ #if defined(CONFIG_ARCH_X86_64)
+     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
+     extern const uint64_t kernel_stack_top;
+-    // Issue #251: take the ADDRESS explicitly. A value-load ("r"(symbol))
+-    // relies on the toolchain resolving the symbol's GOT slot for a double
+-    // dereference; Ubuntu-GCC+LTO misresolved it (slot past image end),
+-    // loading RSP with wild RAM bytes and triple-faulting pre-serial.
+-    // Address-of uses the single-load pattern every other extern access
+-    // (e.g. try_set_multiboot one line above) resolves correctly with.
+-    asm volatile("mov %0, %%rsp\n" : : "r"(&kernel_stack_top));
++    // Issue #251: kernel_stack_top is a rodata DESCRIPTOR (stack.asm:
++    // `kernel_stack_top: dq kernel_stack + 16384`); only the value-load
++    // yields the linked stack top, while `&kernel_stack_top` is the
++    // descriptor slot's own address (and diverges from set_tss_rsp0
++    // below). The Ubuntu-GCC+LTO GOT misresolution must be fixed at the
++    // toolchain/linker layer, not by changing load semantics here.
++    asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
+     kernel::gs::boot_info().multiboot_magic = magic;
+     kernel::gs::boot_info().multiboot_info = mb_info;
+ #elif defined(CONFIG_ARCH_AARCH64)
