@@ -20,6 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/x86_64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/aarch64-linux-gnu-gdb \
  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/riscv64-linux-gnu-gdb \
+ # Bare-metal x86_64-elf-* toolchain for tools/build-picolibc.sh
+ # (tools/picolibc-x86_64-elf.ini): mirrors the host-symlink fake in
+ # .github/workflows/ci.yml (Setup cross-compiler symlinks) — the
+ # Linux-triplet packages above serve the kernel build, not picolibc.
+ && ln -sf /usr/bin/gcc /usr/local/bin/x86_64-elf-gcc \
+ && ln -sf /usr/bin/g++ /usr/local/bin/x86_64-elf-g++ \
+ && ln -sf /usr/bin/ld /usr/local/bin/x86_64-elf-ld \
+ && ln -sf /usr/bin/ar /usr/local/bin/x86_64-elf-ar \
+ && ln -sf /usr/bin/objcopy /usr/local/bin/x86_64-elf-objcopy \
  && rm -rf /var/lib/apt/lists/*
 
 # Tag this image was built for; the entrypoint clones it by default.
