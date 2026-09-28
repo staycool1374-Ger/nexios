@@ -35,6 +35,7 @@
 #include <logger.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/sync/mutex.hpp>
+#include <kernel/sync/notify.hpp>
 #include <kernel/sync/queue.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -614,6 +615,25 @@ JARVIS_TEST(sync_queue_wake_sender_on_receive, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: A latched notify consumed without blocking never disturbs the
+// scheduler rescue counter (issue #249) — the healthy immediate-consume
+// path must not look like a wedge.
+// Input: notify(1) with no waiter (latch set); record counter; wait().
+// Expect: wait returns 1 immediately with no BLOCKED transition, waiter
+// never registered, rescue counter unchanged, harness untouched.
+// Depends: kernel::sync::Notify, stuck_rescue_count
+JARVIS_TEST(sync_notify_latch_no_rescue, "PRE: none | POST: none") {
+    sync::Notify note;
+    note.init();
+    note.notify(1);
+    uint64_t before = Scheduler::stuck_rescue_count();
+    uint64_t value = note.wait();
+    JARVIS_ASSERT_EQ(1ULL, value);
+    JARVIS_ASSERT_EQ(before, Scheduler::stuck_rescue_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all sync primitive unit tests with the test framework.
 // Input: None
 // Expect: All semaphore, mutex, and queue tests are registered via
@@ -634,6 +654,7 @@ void register_sync_tests() {
     JARVIS_REGISTER_TEST(sync_queue_send_blocks_when_full);
     JARVIS_REGISTER_TEST(sync_queue_receive_blocks_when_empty);
     JARVIS_REGISTER_TEST(sync_queue_wake_sender_on_receive);
+    JARVIS_REGISTER_TEST(sync_notify_latch_no_rescue); // issue #249
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

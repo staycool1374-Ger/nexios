@@ -832,6 +832,14 @@ void Scheduler::reset_migration_counts() noexcept {
         __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
 }
 
+uint64_t Scheduler::stuck_rescue_count() noexcept {
+    return __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_stuck_rescue_count_for_test() noexcept {
+    __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
 void Scheduler::balancer_tick() noexcept {
     // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
     if (sched_cpu() != 0)
@@ -1671,6 +1679,7 @@ constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
 constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
 constinit uint64_t Scheduler::zombie_count_ = 0;
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
+uint64_t Scheduler::stuck_rescue_count_ = {};
 uint64_t Scheduler::loadavg_1min_ = 0;
 uint64_t Scheduler::loadavg_5min_ = 0;
 uint64_t Scheduler::loadavg_15min_ = 0;
@@ -2801,6 +2810,54 @@ void Scheduler::on_tick() noexcept {
         // Timerfd waiter wakes live in the PosixTime registry (slots are
         // not TCB fields): same lock position, leaf posix lock only.
         time::PosixTime::reapply_wakes(sched_cpu());
+
+        // Issue #249: stranded-READY rescue. A non-current, non-idle task
+        // that is READY but physically queued nowhere is undispatchable
+        // (observed: shell id 6 wedged after an enqueue-while-current was
+        // evicted by next_task's candidate==current branch, which pops and
+        // clears in_ready_queue_; the unconditional dequeue_ready in
+        // Notify::wait cannot repair a loss that happens after the last
+        // dequeue, and the orphan detector above requires inrq==1 so it
+        // is blind to this signature). Wake paths that strand a task do
+        // not recur, so re-apply level-triggered every tick until the
+        // task dispatches or dies. Detection-first: count + warn per
+        // rescue (H2-ENQDEAD precedent) so a recurring wake-loss can never
+        // hide behind the heal. EDF-eligible tasks are owned by
+        // edf_peek_valid_own — never touch them here. Bounded by
+        // STRANDED_RESCUE_SCAN_MAX; no foreign locks, no allocation,
+        // never clobbers a non-READY state (H2 guard, copied from #18).
+        uint64_t sweep_count = 0;
+        for (auto *task = all_tasks_.first_ptr();
+             task != nullptr && sweep_count < STRANDED_RESCUE_SCAN_MAX;
+             task = all_tasks_.next_ptr(task)) {
+            ++sweep_count;
+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (is_idle_task(task) || task == current_task())
+                continue;
+            if (queue_target(*task) != sched_cpu())
+                continue; // issue #25 C1: own-CPU tasks only
+            if (edf_eligible(*task))
+                continue; // EDF path owns these (edf_peek_valid_own)
+            if (task->state != TaskState::READY)
+                continue; // never clobber RUNNING/BLOCKED/etc (H2)
+            if (task->in_ready_queue_ || task->in_edf_queue_)
+                continue; // only the wedge signature
+            bool phys = false;
+            for (uint64_t prio_idx = 0;
+                 prio_idx <= CONFIG_PRIORITY_CEILING && !phys; ++prio_idx) {
+                if (rq_task(*task).queue(prio_idx).contains(*task))
+                    phys = true;
+            }
+            if (phys)
+                continue; // flag/link desync the other way — not ours
+            ++stuck_rescue_count_;
+            Logger::warn("sched: stranded READY rescued id=%lx eff=%lx",
+                         task->id, effective_priority(task));
+            enqueue_ready(*task);
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+        }
 
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).

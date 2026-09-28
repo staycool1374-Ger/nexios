@@ -35,7 +35,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // synchronization
     {"synchronization_spinlock", 10, 0,      0      },  // spinlock(9) + spinlock_stress(1)
-    {"synchronization_sync", 19,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives + block-pattern (6)
+    {"synchronization_sync", 20,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives + block-pattern (6) + notify latch no-rescue (issue #249)
     {"synchronization_locking", 19, 0,       0      },  // locking(13) + locking_stress(6)
     {"synchronization_lock_order",  4, 0,    0      },  // nested SpinLock acquisition order
     {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
@@ -45,7 +45,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
 
     // scheduler
-    {"scheduler_core",       17,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172)
+    {"scheduler_core",       19,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249)
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy

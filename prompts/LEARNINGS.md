@@ -11,9 +11,9 @@
 
 - Trap entries must establish the frames the debugger reads: aarch64 `el0_sync` needed `save_all`; C handler frames must descend below, not into, the slot (#236).
 - `JARVIS_TEST_PASS()` records success but does NOT return — bisection needs explicit `return;` (#239).
-- Logger `%d` reads 8 bytes: use `%lx` + u64 casts; test-history rows must match the format regex (#235).
+- Logger `%d` reads 8 bytes (use `%lx` + u64 casts); `%lx` self-prefixes `0x` (never write `0x%lx`); test-history rows must match the format regex (#235, #249).
 - QEMU file chardevs buffer (~4KB); `QemuDebugcon` port writes are immediate — use debugcon for hang localization (#239).
-- sel1 attach binds, never stops; tick-parks need a user-mode interrupt within budget — park-waits must be satisfiable by construction (#235).
+- `next_task` evicts queued-while-current candidates (`candidate==current` branch) — the loss is invisible to the `inrq==1` orphan detector; needs a level-triggered backstop (#249).
 - Test harness runs as init, PID 1, prio 10; spinners run prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open).
 - Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
 - Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
@@ -34,6 +34,12 @@
 ## Entries
 
 <!-- Append new entries below; newest first. -->
+
+### #249 — x86 shell wedges READY-but-unqueued, tick-side rescue (2026-09-28, awaiting close)
+- **Learned:** (1) Convicted interleave: enqueue-while-current (tick notify pre-deschedule, or the interrupts-disabled `RUNNING+enqueue` rollback) → `next_task` `candidate==current` evict pops + clears inrq → READY + unqueued + non-current forever; the `inrq==1` orphan detector is blind to it. (2) on_tick order matters for asserts: sweeps run before the RMS tail, so a rescued task may be RUNNING + dispatch-armed by assert time — assert dispatchability (requeued OR armed-to), never exact flags; `TaskState` order is READY=0/RUNNING=1. (3) Blindness asserts must compare peek against the fixture, not null — idle id 0 legitimately sits queued as fallback. (4) Live-forensics recipe: TCB state/queue fields + bitmap words + Notify raw via `nm` addresses when GDB scoping fails; auto-detach (`quit` in batch) leaves the guest running (verified via CPU-time advance).
+- **Adapted:** on_tick stranded-READY sweep + `stuck_rescue_count_` + warn-per-rescue (scheduler.cpp/hpp, detection-first so heals can't mask recurrence); one-line backstop citations at notify.cpp/shell.cpp; `scheduler_stranded_ready_rescued` + `scheduler_evict_current_then_rescued` + `sync_notify_latch_no_rescue`; counts sync 19→20, scheduler_core 17→19.
+- **Measured:** scheduler_core **19/19**, synchronization_sync **20/20** zero deltas; x86 stock shell-smoke PASS on fixed binary; `make build` Errors 0. SIL 3 APPROVED (2 S3 cosmetic: `%lx` hex convention, check-7 on stated evidence).
+- **Style re-surface:** §11.2 INV-2 (READY implies dispatchable) + §11.4 (priority only via helper — test used `set_priority`, never direct writes); §6 bounded loops with named bound + debug/release control-flow parity; §10.3 init + §10.6 descriptive names; fail-closed READY-only sweep guard (never clobber RUNNING/BLOCKED).
 
 ### #247 — riscv64 UART input via 16550A MMIO poll (2026-09-28, awaiting close)
 - **Learned:** (1) riscv64 low half is identity-mapped in S-mode: raw-phys `0x10000000` MMIO works with zero VMM/HHDM work (same precedent as PLIC + the existing LSR TEMT probe) — TX stays SBI ecall, RX via `mmio_read8`, and the MCR-loopback test pins their coherence. (2) `-serial mon:stdio` feeds typed bytes to the monitor, not the guest — `shell-smoke.exp` stalled past all 3×150s windows on a HEALTHY guest; deterministic E2E input needs TCP/file serial (python socket probe: prompt → `version` → `Kernel: ` → prompt, PASS). (3) `test_expected_counts.hpp` rows rot: count live `JARVIS_REGISTER_TEST` lines first (row said 24, 28 registered → corrected to 30).

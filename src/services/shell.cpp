@@ -151,6 +151,9 @@ void shell_idle_nap(uint64_t timeout_us) {
     shell_input_notify().wait();
     shell_nap_armed = false;
     kernel::time::TimerWheel::cancel(shell_nap_handle);
+    // A wake lost between enqueue and dispatch strands a READY shell
+    // with empty queues (issue #249); the on_tick stranded-READY sweep
+    // re-queues level-triggered, so the next loop iteration proceeds.
 }
 } // namespace
 

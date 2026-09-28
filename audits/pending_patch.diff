@@ -1,200 +1,329 @@
-diff --git a/src/kernel/arch/hal/serial.hpp b/src/kernel/arch/hal/serial.hpp
-index 07947453b..d349c5105 100644
---- a/src/kernel/arch/hal/serial.hpp
-+++ b/src/kernel/arch/hal/serial.hpp
-@@ -43,7 +43,7 @@ class Serial {
-     ///        COM1 inline poll and the Keyboard stub both miss the UART).
-     ///        True with the oldest pending byte iff RX data is ready;
-     ///        false immediately otherwise (never waits, never spins).
--    ///        riscv64 always returns false (no SBI console input wired).
-+    ///        riscv64 polls the virt 16550A LSR (issue #247).
-     /// @param[out] c Received character (untouched when returning false).
-     /// @return True iff a byte was available and stored in c.
-     static bool poll_getchar(char &c);
-diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
-index 11685b066..804ef57e4 100644
---- a/src/kernel/arch/riscv64/serial.cpp
-+++ b/src/kernel/arch/riscv64/serial.cpp
-@@ -20,16 +20,30 @@
- /// @brief RISC-V64 serial port driver — uses SBI ecall for output.
+diff --git a/src/kernel/sync/notify.cpp b/src/kernel/sync/notify.cpp
+index e0d4ecd51..50bfced2b 100644
+--- a/src/kernel/sync/notify.cpp
++++ b/src/kernel/sync/notify.cpp
+@@ -142,6 +142,8 @@ uint64_t Notify::wait() {
+     // deferred switch — the ISR-side notify() would spin forever on it.
+     // Dequeue so a BLOCKED task is never physically queued (INV-2
+     // desync — release-build live-lock if the switch applies late).
++    // Level-triggered backstop for the inverse wedge (READY but queued
++    // nowhere, issue #249): the on_tick stranded-READY sweep re-queues.
+     Scheduler::dequeue_ready(*task);
+     Scheduler::reschedule();
  
- #include <kernel/arch/serial.hpp>
-+#include <kernel/arch/hal/io.hpp>
- #include <types.hpp>
+diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
+index 0ef0393ab..0463d7156 100644
+--- a/src/kernel/task/scheduler.cpp
++++ b/src/kernel/task/scheduler.cpp
+@@ -832,6 +832,14 @@ void Scheduler::reset_migration_counts() noexcept {
+         __atomic_store_n(&migration_count_[c], 0ULL, __ATOMIC_RELAXED);
+ }
  
- namespace arch {
- 
-+/// @brief QEMU virt 16550A UART base (issue #247): raw physical address,
-+///        directly dereferenceable in S-mode (riscv64 low half is
-+///        identity-mapped — same precedent as the PLIC accessors and the
-+///        LSR probe in test_riscv64.cpp).
-+static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
-+static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
-+static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
-+static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
-+static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
++uint64_t Scheduler::stuck_rescue_count() noexcept {
++    return __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
++}
 +
- /// @brief Number of characters written to the console since boot.
- /// The interactive shell snapshots this before drawing its prompt (see
- /// arch::Serial::write_count contract in arch/hal/serial.hpp).
- static volatile uint64_t s_serial_write_count = 0;
++void Scheduler::reset_stuck_rescue_count_for_test() noexcept {
++    __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
++}
++
+ void Scheduler::balancer_tick() noexcept {
+     // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
+     if (sched_cpu() != 0)
+@@ -1671,6 +1679,7 @@ constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
+ constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
+ constinit uint64_t Scheduler::zombie_count_ = 0;
+ uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
++uint64_t Scheduler::stuck_rescue_count_ = {};
+ uint64_t Scheduler::loadavg_1min_ = 0;
+ uint64_t Scheduler::loadavg_5min_ = 0;
+ uint64_t Scheduler::loadavg_15min_ = 0;
+@@ -2802,6 +2811,54 @@ void Scheduler::on_tick() noexcept {
+         // not TCB fields): same lock position, leaf posix lock only.
+         time::PosixTime::reapply_wakes(sched_cpu());
  
--/// @brief Initialize the serial port (no-op on RISC-V64; SBI handles it).
-+/// @brief Initialize the serial port (no-op on RISC-V64).
-+/// The virt 16550A divisor is pre-initialized by OpenSBI/QEMU;
-+/// reprogramming it risks breaking the S-mode SBI TX path, so RX-only
-+/// polling attaches to the live configuration (issue #247).
- void Serial::init() {
- }
- 
-@@ -54,20 +68,46 @@ uint64_t Serial::write_count() noexcept {
-     return __atomic_load_n(&s_serial_write_count, __ATOMIC_RELAXED);
- }
- 
--/// @brief Read a character from serial (stub — always returns NUL).
--/// @return Always '\0' (no SBI getchar in S-mode).
-+/// @brief Read a character from the virt 16550A RX FIFO (issue #247).
-+/// Waits (bounded) for LSR data-ready; returns '\0' when nothing arrives
-+/// (FLAW-08 — never hangs). TX stays on the SBI ecall path.
-+/// @return The received character, or '\0' on bounded-wait expiry.
- char Serial::getchar() {
--    return '\0';
-+    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
-+        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
-+    int wait_idx = 0;
-+    for (wait_idx = 0; wait_idx < SERIAL_RX_WAIT_ITERS; ++wait_idx) {
-+        if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) !=
-+            0) {
-+            break;
++        // Issue #249: stranded-READY rescue. A non-current, non-idle task
++        // that is READY but physically queued nowhere is undispatchable
++        // (observed: shell id 6 wedged after an enqueue-while-current was
++        // evicted by next_task's candidate==current branch, which pops and
++        // clears in_ready_queue_; the unconditional dequeue_ready in
++        // Notify::wait cannot repair a loss that happens after the last
++        // dequeue, and the orphan detector above requires inrq==1 so it
++        // is blind to this signature). Wake paths that strand a task do
++        // not recur, so re-apply level-triggered every tick until the
++        // task dispatches or dies. Detection-first: count + warn per
++        // rescue (H2-ENQDEAD precedent) so a recurring wake-loss can never
++        // hide behind the heal. EDF-eligible tasks are owned by
++        // edf_peek_valid_own — never touch them here. Bounded by
++        // STRANDED_RESCUE_SCAN_MAX; no foreign locks, no allocation,
++        // never clobbers a non-READY state (H2 guard, copied from #18).
++        uint64_t sweep_count = 0;
++        for (auto *task = all_tasks_.first_ptr();
++             task != nullptr && sweep_count < STRANDED_RESCUE_SCAN_MAX;
++             task = all_tasks_.next_ptr(task)) {
++            ++sweep_count;
++            if (task->magic != TaskControlBlock::TCB_MAGIC)
++                continue;
++            if (is_idle_task(task) || task == current_task())
++                continue;
++            if (queue_target(*task) != sched_cpu())
++                continue; // issue #25 C1: own-CPU tasks only
++            if (edf_eligible(*task))
++                continue; // EDF path owns these (edf_peek_valid_own)
++            if (task->state != TaskState::READY)
++                continue; // never clobber RUNNING/BLOCKED/etc (H2)
++            if (task->in_ready_queue_ || task->in_edf_queue_)
++                continue; // only the wedge signature
++            bool phys = false;
++            for (uint64_t prio_idx = 0;
++                 prio_idx <= CONFIG_PRIORITY_CEILING && !phys; ++prio_idx) {
++                if (rq_task(*task).queue(prio_idx).contains(*task))
++                    phys = true;
++            }
++            if (phys)
++                continue; // flag/link desync the other way — not ours
++            ++stuck_rescue_count_;
++            Logger::warn("sched: stranded READY rescued id=%lx eff=%lx",
++                         task->id, effective_priority(task));
++            enqueue_ready(*task);
++            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
++                             __ATOMIC_RELEASE);
 +        }
-+        arch::pause();
-+    }
-+    if (wait_idx >= SERIAL_RX_WAIT_ITERS) {
-+        return '\0'; // no data (not a valid console character)
-+    }
-+    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
-+        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
-+    return static_cast<char>(arch::mmio_read8(rbr_addr));
- }
++
+         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
+         // only tasks affine to this CPU (AP-affine tasks are not serviced).
+         // Issue #154: executed_ticks is execution time — only the
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 03880c2e6..3793e8a41 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -336,6 +336,12 @@ class Scheduler {
+     static uint64_t up_cpu_count() noexcept;
+     /// @brief Reset balancer migration counters (test isolation).
+     static void reset_migration_counts() noexcept;
++    /// @brief Stranded-READY rescues since boot (issue #249 tick sweep).
++    ///        Detection-first telemetry: incremented only on an actual
++    ///        re-queue so a recurring wake-loss stays observable.
++    static uint64_t stuck_rescue_count() noexcept;
++    /// @brief Reset the rescue counter (test isolation).
++    static void reset_stuck_rescue_count_for_test() noexcept;
+     /// @brief Depth spread that triggers migration (issue #61).
+     static constexpr uint64_t BALANCER_THRESHOLD = 2;
+     /// @brief Migration cap per tick (issue #61, RT budget bound).
+@@ -1030,6 +1036,12 @@ struct SwSlots {
+     ///        (issue #61).  Own-CPU writes under scheduler_lock_;
+     ///        readers use atomics; reset by reset_migration_counts().
+     static uint64_t migration_count_[CONFIG_MAX_CPUS];
++    /// @brief Stranded-READY rescues since boot (issue #249).  Tick-owned
++    ///        write under scheduler_lock_; readers use atomics; reset by
++    ///        reset_stuck_rescue_count_for_test().
++    static uint64_t stuck_rescue_count_;
++    /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
++    static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
+     /// @brief Decayed load averages (issue #172, top loadavg triplet).
+     ///        Integer EMA of the per-tick non-idle sample, updated on the
+     ///        BSP on_tick() tail under scheduler_lock_; readers use
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 33cc37ff5..4e465c95e 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -35,7 +35,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
  
--/// @brief Non-blocking receive poll (issue #245): always false on riscv64
--///        (no SBI console input wired — the interactive shell has no input
--///        source here yet, same as before; out of scope for #245).
--/// @param[out] c Untouched.
--/// @return Always false.
-+/// @brief Non-blocking receive poll (issue #247): the interactive shell's
-+///        only input source on riscv64 (no PS/2, Keyboard is a stub).
-+///        Zero-wait LSR check — never spins, so the shell nap loop keeps
-+///        its 20ms latency bound even when the FIFO is empty.
-+/// @param[out] c Oldest pending RX byte when data is ready (untouched
-+///        otherwise).
-+/// @return True iff the LSR data-ready bit was set and c holds a byte.
- bool Serial::poll_getchar(char &c) {
--    (void)c;
--    return false;
-+    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
-+        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
-+    if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) == 0) {
-+        return false;
-+    }
-+    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
-+        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
-+    c = static_cast<char>(arch::mmio_read8(rbr_addr));
-+    return true;
- }
+     // synchronization
+     {"synchronization_spinlock", 10, 0,      0      },  // spinlock(9) + spinlock_stress(1)
+-    {"synchronization_sync", 19,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives + block-pattern (6)
++    {"synchronization_sync", 20,    0,       0      },  // semaphore/mutex/queue/eventgroup primitives + block-pattern (6) + notify latch no-rescue (issue #249)
+     {"synchronization_locking", 19, 0,       0      },  // locking(13) + locking_stress(6)
+     {"synchronization_lock_order",  4, 0,    0      },  // nested SpinLock acquisition order
+     {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
+@@ -45,7 +45,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
  
- /// @brief Write a null-terminated string via SBI ecall.
-diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
-index 501c2c8ba..de8d6a601 100644
---- a/src/kernel/arch/riscv64/test_riscv64.cpp
-+++ b/src/kernel/arch/riscv64/test_riscv64.cpp
-@@ -457,6 +457,67 @@ JARVIS_TEST(riscv64_sbi_console_putchar) {
+     // scheduler
+-    {"scheduler_core",       17,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172)
++    {"scheduler_core",       19,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249)
+     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
+     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
+     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
+diff --git a/src/kernel/test/test_scheduler.cpp b/src/kernel/test/test_scheduler.cpp
+index 9bb5835fb..5f8935890 100644
+--- a/src/kernel/test/test_scheduler.cpp
++++ b/src/kernel/test/test_scheduler.cpp
+@@ -611,6 +611,110 @@ JARVIS_TEST(scheduler_loadavg_step_math, "PRE: none | POST: none") {
      JARVIS_TEST_PASS();
  }
  
 +// Runmode: kernel
-+// Testidea: Serial::poll_getchar() reports empty on an idle RX FIFO
-+// (issue #247 — the shell's only riscv64 input source must be a zero-wait
-+// poll; true would mean stray bytes, false is the idle norm).
-+// Input: Drain up to one FIFO depth (16) via poll_getchar, then poll once.
-+// Expect: Final poll returns false; bounded (no waits anywhere).
-+// Depends: arch::Serial
-+JARVIS_TEST(riscv64_uart_poll_idle_false) {
-+    char drain = 0;
-+    for (int i = 0; i < 16; ++i) {
-+        if (!arch::Serial::poll_getchar(drain)) {
-+            break;
++// Testidea: on_tick stranded-READY sweep re-queues a READY-but-unqueued
++// task (issue #249 shell wedge signature) and counts the rescue.
++// Input: Registered BLOCKED fixture (period 0: never EDF, never in the
++// deadline list) flipped to READY, never queued; counter reset;
++// Scheduler::on_tick().
++// Expect: Blind peek finds nothing dispatchable; after the tick the task
++// is re-queued, state still READY, rescue counter +1.
++// Depends: Scheduler::on_tick, stuck_rescue_count
++JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
++    TaskPtr rescued = create_test_task(5, 0);
++    JARVIS_ASSERT(rescued.get() != nullptr);
++    Scheduler::reset_stuck_rescue_count_for_test();
++    {
++        arch::IrqGuard irq_guard;
++        rescued->state = TaskState::READY;
++        JARVIS_ASSERT(!rescued->in_ready_queue_);
++        JARVIS_ASSERT(!rescued->in_edf_queue_);
++        {
++            // Blindness proof: the undiscoverable fixture must not be
++            // what dispatch would pick (idle id 0 legitimately sits
++            // queued as the fallback candidate).
++            auto *peeked = Scheduler::rq_own().peek_highest();
++            JARVIS_ASSERT_FMT(
++                peeked != rescued.get(), "peek returned the stranded task");
 +        }
++        uint64_t before = Scheduler::stuck_rescue_count();
++        Scheduler::on_tick();
++        // Rescue + dispatchability: the sweep re-queued (counter +1) and
++        // the task is either still queued or was already selected for
++        // dispatch by the on_tick tail (RMS arms, no apply in tests).
++        // State must never be clobbered by the sweep.
++        JARVIS_ASSERT_FMT(rescued->state == TaskState::READY ||
++                              rescued->state == TaskState::RUNNING,
++                          "t1 st=%lx inrq=%lx arid=%lx",
++                          static_cast<uint64_t>(rescued->state),
++                          rescued->in_ready_queue_ ? 1ULL : 0ULL,
++                          Scheduler::SwSlots::next_task_id());
++        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
++        bool dispatchable = rescued->in_ready_queue_ ||
++                            Scheduler::SwSlots::next_task_id() ==
++                                rescued->id;
++        JARVIS_ASSERT(dispatchable);
++        Scheduler::dequeue_ready(*rescued);
 +    }
-+    char c = 0;
-+    JARVIS_ASSERT_FMT(!arch::Serial::poll_getchar(c),
-+                      "poll_getchar true on idle FIFO");
 +    JARVIS_TEST_PASS();
 +}
 +
 +// Runmode: kernel
-+// Testidea: Serial::poll_getchar() loopback contract (issue #247) — false
-+// on an empty FIFO, true + the byte after a loopback transmit, false once
-+// drained. The looped byte is written via SBI putchar, so the sequence
-+// also pins SBI-TX/MMIO-RX coherence on the shared virt UART.
-+// Input: MCR loopback on; drain; poll (expect false); putchar('Q');
-+// poll (expect true 'Q'); poll (expect false); MCR restore.
-+// Expect: false/true('Q')/false sequence; MCR restored; bounded.
-+// Depends: arch::Serial, arch::mmio_read8, arch::mmio_write8
-+JARVIS_TEST(riscv64_uart_poll_loopback, "PRE: iocd | POST: none") {
-+    constexpr uint64_t uart_base = 0x10000000ULL;
-+    constexpr uint64_t uart_mcr_off = 4;
-+    constexpr uint8_t uart_mcr_loopback = 0x10;
-+    arch::Serial::init();
-+    volatile void *mcr_ptr =
-+        reinterpret_cast<volatile void *>(uart_base + uart_mcr_off);
-+    const volatile void *mcr_rd = mcr_ptr;
-+    uint8_t saved_mcr = arch::mmio_read8(mcr_rd);
-+    arch::mmio_write8(mcr_ptr,
-+                      static_cast<uint8_t>(saved_mcr | uart_mcr_loopback));
-+    char drain = 0;
-+    for (int i = 0; i < 16; ++i) {
-+        if (!arch::Serial::poll_getchar(drain)) {
-+            break;
++// Testidea: Drive the convicted #249 drop end to end: enqueue a task
++// while it is current, take next_task()'s candidate==current evict branch,
++// and prove the on_tick sweep repairs the resulting wedge without
++// touching the evict branch itself.
++// Input: READY fixture queued above harness prio, set current, next_task
++// (evicts), restore harness (BLOCKED-guarded so restore re-queues
++// nothing), re-READY, on_tick.
++// Expect: Post-evict wedge signature (READY, both flags false, peek
++// null); post-tick re-queued, state READY, counter +1.
++// Depends: Scheduler::next_task evict branch, on_tick sweep
++JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
++    TaskPtr evicted = create_test_task(5, 0);
++    JARVIS_ASSERT(evicted.get() != nullptr);
++    auto *harness = Scheduler::current_task();
++    JARVIS_ASSERT(harness != nullptr);
++    Scheduler::reset_stuck_rescue_count_for_test();
++    {
++        arch::IrqGuard irq_guard;
++        evicted->state = TaskState::READY;
++        Scheduler::enqueue_ready(*evicted);
++        JARVIS_ASSERT(evicted->in_ready_queue_);
++        Scheduler::set_priority(*evicted, 11);
++        Scheduler::set_current(*evicted);
++        TaskControlBlock *picked = Scheduler::next_task();
++        JARVIS_ASSERT(!evicted->in_ready_queue_);
++        JARVIS_ASSERT(evicted->runq_next_ == nullptr);
++        (void)picked;
++        evicted->state = TaskState::BLOCKED;
++        Scheduler::set_current(*harness);
++        evicted->state = TaskState::READY;
++        JARVIS_ASSERT(!evicted->in_ready_queue_);
++        JARVIS_ASSERT(!evicted->in_edf_queue_);
++        {
++            // Blindness proof: same as above — the evicted task must not
++            // be what dispatch would pick.
++            auto *peeked = Scheduler::rq_own().peek_highest();
++            JARVIS_ASSERT_FMT(
++                peeked != evicted.get(), "peek returned the stranded task");
 +        }
++        uint64_t before = Scheduler::stuck_rescue_count();
++        Scheduler::on_tick();
++        // Same rescue + dispatchability contract as above (dispatch may
++        // legitimately mark the picked task RUNNING).
++        JARVIS_ASSERT(evicted->state == TaskState::READY ||
++                      evicted->state == TaskState::RUNNING);
++        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
++        bool dispatchable = evicted->in_ready_queue_ ||
++                            Scheduler::SwSlots::next_task_id() ==
++                                evicted->id;
++        JARVIS_ASSERT(dispatchable);
++        Scheduler::dequeue_ready(*evicted);
 +    }
-+    char idle = 0;
-+    bool idle_got = arch::Serial::poll_getchar(idle);
-+    arch::Serial::putchar('Q');
-+    char c = 0;
-+    bool got = arch::Serial::poll_getchar(c);
-+    char drained = 0;
-+    bool drained_got = arch::Serial::poll_getchar(drained);
-+    arch::mmio_write8(mcr_ptr, saved_mcr);
-+    JARVIS_ASSERT(!idle_got);
-+    JARVIS_ASSERT(got);
-+    JARVIS_ASSERT_EQ('Q', c);
-+    JARVIS_ASSERT(!drained_got);
 +    JARVIS_TEST_PASS();
 +}
 +
- /// @brief Read vendor and device ID from PCI bus 0 device 0 function 0 via
- /// ECAM.
- JARVIS_TEST(riscv64_pci_ecam_read) {
-@@ -1285,6 +1346,8 @@ void register_riscv64_tests() {
-     // parsing or tentative FS-enable follow-up work.
-     // JARVIS_REGISTER_TEST(riscv64_fpu_extension_detection);
-     JARVIS_REGISTER_TEST(riscv64_sbi_console_putchar);
-+    JARVIS_REGISTER_TEST(riscv64_uart_poll_idle_false);  // issue #247
-+    JARVIS_REGISTER_TEST(riscv64_uart_poll_loopback);    // issue #247
-     JARVIS_REGISTER_TEST(riscv64_pci_ecam_read);
-     JARVIS_REGISTER_TEST(riscv64_rtc_mtime_read);
-     JARVIS_REGISTER_TEST(riscv64_satp_csr);
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 9cd29b26f..33cc37ff5 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -251,7 +251,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
- #endif
- #if defined(CONFIG_ARCH_RISCV64)
--    {"arch_riscv64",          0,    0,      24      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall)
-+    {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
- #endif
+ void register_scheduler_tests() {
+     Logger::info("Registering scheduler tests");
+     JARVIS_REGISTER_TEST(scheduler_task_count);
+@@ -630,4 +734,6 @@ void register_scheduler_tests() {
+     JARVIS_REGISTER_TEST(scheduler_equal_priority_fifo);
+     JARVIS_REGISTER_TEST(scheduler_no_spurious_switch);
+     JARVIS_REGISTER_TEST(scheduler_loadavg_step_math);
++    JARVIS_REGISTER_TEST(scheduler_stranded_ready_rescued);    // issue #249
++    JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
+ }
+diff --git a/src/kernel/test/test_sync.cpp b/src/kernel/test/test_sync.cpp
+index f98a9a1a2..353ac1096 100644
+--- a/src/kernel/test/test_sync.cpp
++++ b/src/kernel/test/test_sync.cpp
+@@ -35,6 +35,7 @@
+ #include <logger.hpp>
+ #include <kernel/sync/semaphore.hpp>
+ #include <kernel/sync/mutex.hpp>
++#include <kernel/sync/notify.hpp>
+ #include <kernel/sync/queue.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
+@@ -613,6 +614,25 @@ JARVIS_TEST(sync_queue_wake_sender_on_receive, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
  
-     // bench
++// Runmode: kernel
++// Testidea: A latched notify consumed without blocking never disturbs the
++// scheduler rescue counter (issue #249) — the healthy immediate-consume
++// path must not look like a wedge.
++// Input: notify(1) with no waiter (latch set); record counter; wait().
++// Expect: wait returns 1 immediately with no BLOCKED transition, waiter
++// never registered, rescue counter unchanged, harness untouched.
++// Depends: kernel::sync::Notify, stuck_rescue_count
++JARVIS_TEST(sync_notify_latch_no_rescue, "PRE: none | POST: none") {
++    sync::Notify note;
++    note.init();
++    note.notify(1);
++    uint64_t before = Scheduler::stuck_rescue_count();
++    uint64_t value = note.wait();
++    JARVIS_ASSERT_EQ(1ULL, value);
++    JARVIS_ASSERT_EQ(before, Scheduler::stuck_rescue_count());
++    JARVIS_TEST_PASS();
++}
++
+ // Runmode: kernel
+ // Testidea: Registers all sync primitive unit tests with the test framework.
+ // Input: None
+@@ -634,6 +654,7 @@ void register_sync_tests() {
+     JARVIS_REGISTER_TEST(sync_queue_send_blocks_when_full);
+     JARVIS_REGISTER_TEST(sync_queue_receive_blocks_when_empty);
+     JARVIS_REGISTER_TEST(sync_queue_wake_sender_on_receive);
++    JARVIS_REGISTER_TEST(sync_notify_latch_no_rescue); // issue #249
+ }
+ #ifndef __clang__
+ #pragma GCC diagnostic pop
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 5f59017d6..d43a53dac 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -151,6 +151,9 @@ void shell_idle_nap(uint64_t timeout_us) {
+     shell_input_notify().wait();
+     shell_nap_armed = false;
+     kernel::time::TimerWheel::cancel(shell_nap_handle);
++    // A wake lost between enqueue and dispatch strands a READY shell
++    // with empty queues (issue #249); the on_tick stranded-READY sweep
++    // re-queues level-triggered, so the next loop iteration proceeds.
+ }
+ } // namespace
+ 

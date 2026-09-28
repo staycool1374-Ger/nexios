@@ -336,6 +336,12 @@ class Scheduler {
     static uint64_t up_cpu_count() noexcept;
     /// @brief Reset balancer migration counters (test isolation).
     static void reset_migration_counts() noexcept;
+    /// @brief Stranded-READY rescues since boot (issue #249 tick sweep).
+    ///        Detection-first telemetry: incremented only on an actual
+    ///        re-queue so a recurring wake-loss stays observable.
+    static uint64_t stuck_rescue_count() noexcept;
+    /// @brief Reset the rescue counter (test isolation).
+    static void reset_stuck_rescue_count_for_test() noexcept;
     /// @brief Depth spread that triggers migration (issue #61).
     static constexpr uint64_t BALANCER_THRESHOLD = 2;
     /// @brief Migration cap per tick (issue #61, RT budget bound).
@@ -1030,6 +1036,12 @@ struct SwSlots {
     ///        (issue #61).  Own-CPU writes under scheduler_lock_;
     ///        readers use atomics; reset by reset_migration_counts().
     static uint64_t migration_count_[CONFIG_MAX_CPUS];
+    /// @brief Stranded-READY rescues since boot (issue #249).  Tick-owned
+    ///        write under scheduler_lock_; readers use atomics; reset by
+    ///        reset_stuck_rescue_count_for_test().
+    static uint64_t stuck_rescue_count_;
+    /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
+    static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
     /// @brief Decayed load averages (issue #172, top loadavg triplet).
     ///        Integer EMA of the per-tick non-idle sample, updated on the
     ///        BSP on_tick() tail under scheduler_lock_; readers use

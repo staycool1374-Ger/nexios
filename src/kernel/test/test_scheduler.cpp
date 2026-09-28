@@ -611,6 +611,110 @@ JARVIS_TEST(scheduler_loadavg_step_math, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: on_tick stranded-READY sweep re-queues a READY-but-unqueued
+// task (issue #249 shell wedge signature) and counts the rescue.
+// Input: Registered BLOCKED fixture (period 0: never EDF, never in the
+// deadline list) flipped to READY, never queued; counter reset;
+// Scheduler::on_tick().
+// Expect: Blind peek finds nothing dispatchable; after the tick the task
+// is re-queued, state still READY, rescue counter +1.
+// Depends: Scheduler::on_tick, stuck_rescue_count
+JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
+    TaskPtr rescued = create_test_task(5, 0);
+    JARVIS_ASSERT(rescued.get() != nullptr);
+    Scheduler::reset_stuck_rescue_count_for_test();
+    {
+        arch::IrqGuard irq_guard;
+        rescued->state = TaskState::READY;
+        JARVIS_ASSERT(!rescued->in_ready_queue_);
+        JARVIS_ASSERT(!rescued->in_edf_queue_);
+        {
+            // Blindness proof: the undiscoverable fixture must not be
+            // what dispatch would pick (idle id 0 legitimately sits
+            // queued as the fallback candidate).
+            auto *peeked = Scheduler::rq_own().peek_highest();
+            JARVIS_ASSERT_FMT(
+                peeked != rescued.get(), "peek returned the stranded task");
+        }
+        uint64_t before = Scheduler::stuck_rescue_count();
+        Scheduler::on_tick();
+        // Rescue + dispatchability: the sweep re-queued (counter +1) and
+        // the task is either still queued or was already selected for
+        // dispatch by the on_tick tail (RMS arms, no apply in tests).
+        // State must never be clobbered by the sweep.
+        JARVIS_ASSERT_FMT(rescued->state == TaskState::READY ||
+                              rescued->state == TaskState::RUNNING,
+                          "t1 st=%lx inrq=%lx arid=%lx",
+                          static_cast<uint64_t>(rescued->state),
+                          rescued->in_ready_queue_ ? 1ULL : 0ULL,
+                          Scheduler::SwSlots::next_task_id());
+        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
+        bool dispatchable = rescued->in_ready_queue_ ||
+                            Scheduler::SwSlots::next_task_id() ==
+                                rescued->id;
+        JARVIS_ASSERT(dispatchable);
+        Scheduler::dequeue_ready(*rescued);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Drive the convicted #249 drop end to end: enqueue a task
+// while it is current, take next_task()'s candidate==current evict branch,
+// and prove the on_tick sweep repairs the resulting wedge without
+// touching the evict branch itself.
+// Input: READY fixture queued above harness prio, set current, next_task
+// (evicts), restore harness (BLOCKED-guarded so restore re-queues
+// nothing), re-READY, on_tick.
+// Expect: Post-evict wedge signature (READY, both flags false, peek
+// null); post-tick re-queued, state READY, counter +1.
+// Depends: Scheduler::next_task evict branch, on_tick sweep
+JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
+    TaskPtr evicted = create_test_task(5, 0);
+    JARVIS_ASSERT(evicted.get() != nullptr);
+    auto *harness = Scheduler::current_task();
+    JARVIS_ASSERT(harness != nullptr);
+    Scheduler::reset_stuck_rescue_count_for_test();
+    {
+        arch::IrqGuard irq_guard;
+        evicted->state = TaskState::READY;
+        Scheduler::enqueue_ready(*evicted);
+        JARVIS_ASSERT(evicted->in_ready_queue_);
+        Scheduler::set_priority(*evicted, 11);
+        Scheduler::set_current(*evicted);
+        TaskControlBlock *picked = Scheduler::next_task();
+        JARVIS_ASSERT(!evicted->in_ready_queue_);
+        JARVIS_ASSERT(evicted->runq_next_ == nullptr);
+        (void)picked;
+        evicted->state = TaskState::BLOCKED;
+        Scheduler::set_current(*harness);
+        evicted->state = TaskState::READY;
+        JARVIS_ASSERT(!evicted->in_ready_queue_);
+        JARVIS_ASSERT(!evicted->in_edf_queue_);
+        {
+            // Blindness proof: same as above — the evicted task must not
+            // be what dispatch would pick.
+            auto *peeked = Scheduler::rq_own().peek_highest();
+            JARVIS_ASSERT_FMT(
+                peeked != evicted.get(), "peek returned the stranded task");
+        }
+        uint64_t before = Scheduler::stuck_rescue_count();
+        Scheduler::on_tick();
+        // Same rescue + dispatchability contract as above (dispatch may
+        // legitimately mark the picked task RUNNING).
+        JARVIS_ASSERT(evicted->state == TaskState::READY ||
+                      evicted->state == TaskState::RUNNING);
+        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
+        bool dispatchable = evicted->in_ready_queue_ ||
+                            Scheduler::SwSlots::next_task_id() ==
+                                evicted->id;
+        JARVIS_ASSERT(dispatchable);
+        Scheduler::dequeue_ready(*evicted);
+    }
+    JARVIS_TEST_PASS();
+}
+
 void register_scheduler_tests() {
     Logger::info("Registering scheduler tests");
     JARVIS_REGISTER_TEST(scheduler_task_count);
@@ -630,4 +734,6 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_equal_priority_fifo);
     JARVIS_REGISTER_TEST(scheduler_no_spurious_switch);
     JARVIS_REGISTER_TEST(scheduler_loadavg_step_math);
+    JARVIS_REGISTER_TEST(scheduler_stranded_ready_rescued);    // issue #249
+    JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
 }

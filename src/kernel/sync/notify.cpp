@@ -142,6 +142,8 @@ uint64_t Notify::wait() {
     // deferred switch — the ISR-side notify() would spin forever on it.
     // Dequeue so a BLOCKED task is never physically queued (INV-2
     // desync — release-build live-lock if the switch applies late).
+    // Level-triggered backstop for the inverse wedge (READY but queued
+    // nowhere, issue #249): the on_tick stranded-READY sweep re-queues.
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
