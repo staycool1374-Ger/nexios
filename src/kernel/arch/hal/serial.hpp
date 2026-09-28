@@ -38,6 +38,15 @@ class Serial {
     /// @brief Receive a single character (blocking).
     /// @return The received character.
     static char getchar();
+    /// @brief Non-blocking receive poll (issue #245: the interactive shell
+    ///        has no input source on architectures without PS/2 — the x86
+    ///        COM1 inline poll and the Keyboard stub both miss the UART).
+    ///        True with the oldest pending byte iff RX data is ready;
+    ///        false immediately otherwise (never waits, never spins).
+    ///        riscv64 always returns false (no SBI console input wired).
+    /// @param[out] c Received character (untouched when returning false).
+    /// @return True iff a byte was available and stored in c.
+    static bool poll_getchar(char &c);
     /// @brief Transmit a null-terminated string.
     /// @param str Null-terminated string to transmit.
     static void puts(const char *str);

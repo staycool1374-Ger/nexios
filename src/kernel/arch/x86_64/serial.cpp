@@ -94,6 +94,16 @@ char Serial::getchar() {
     return static_cast<char>(inb(arch::COM1));
 }
 
+/// @brief Non-blocking receive poll (issue #245).
+/// @param[out] c Oldest pending RX byte when data is ready.
+/// @return True iff the LSR data-ready bit was set and c holds a byte.
+bool Serial::poll_getchar(char &c) {
+    if ((inb(arch::COM1 + 5) & 0x01) == 0)
+        return false;
+    c = static_cast<char>(inb(arch::COM1));
+    return true;
+}
+
 /// @brief Write a null-terminated string to the serial port.
 /// @param s Null-terminated string to transmit.
 void Serial::puts(const char *s) {

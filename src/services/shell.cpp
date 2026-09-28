@@ -479,14 +479,10 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         }
 
         char c = 0;
-        bool got_char = false;
-
-#if defined(CONFIG_ARCH_X86_64)
-        if (arch::inb(arch::COM1_LSR) & 1) {
-            c = static_cast<char>(arch::inb(arch::COM1));
-            got_char = true;
-        }
-#endif
+        // Issue #245: poll the UART first on every architecture (the old
+        // x86-only COM1 inline poll never ran on aarch64/riscv64), then
+        // fall back to the (PS/2-backed, x86-only) Keyboard path.
+        bool got_char = arch::Serial::poll_getchar(c);
 
         if (!got_char) {
             got_char = arch::Keyboard::getchar(c);
@@ -1657,7 +1653,10 @@ void Shell::cmd_top(int argc, const char** argv) {
         bool quit = false;
         while (arch::Timer::ticks() < deadline) {
             char c = 0;
-            if (arch::Keyboard::getchar(c) && (c == 'q' || c == 'Q')) {
+            bool got = arch::Serial::poll_getchar(c); // issue #245
+            if (!got)
+                got = arch::Keyboard::getchar(c);
+            if (got && (c == 'q' || c == 'Q')) {
                 quit = true;
                 break;
             }
@@ -2548,10 +2547,7 @@ void Shell::cmd_read(int argc, const char** argv) {
     size_t pos = 0;
     for (;;) {
         char c = 0;
-        bool got = false;
-#if defined(CONFIG_ARCH_X86_64)
-        if (arch::inb(arch::COM1_LSR) & 1) { c = static_cast<char>(arch::inb(arch::COM1)); got = true; }
-#endif
+        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
         if (!got) got = arch::Keyboard::getchar(c);
         if (!got) {
             // Same idle nap as readline (read builtin efficiency).
@@ -3268,7 +3264,9 @@ void Shell::cmd_less(int argc, const char** argv) {
                     Terminal::write("--More--");
                     char c = 0;
                     for (;;) {
-                        bool got = arch::Keyboard::getchar(c);
+                        bool got = arch::Serial::poll_getchar(c); // #245
+                        if (!got)
+                            got = arch::Keyboard::getchar(c);
                         if (got && (c == 'q' || c == 'Q')) {
                             Terminal::putchar('\n');
                             return;
@@ -3285,7 +3283,9 @@ void Shell::cmd_less(int argc, const char** argv) {
 
     char c = 0;
     for (;;) {
-        bool got = arch::Keyboard::getchar(c);
+        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
+        if (!got)
+            got = arch::Keyboard::getchar(c);
         if (got && (c == 'q' || c == 'Q')) {
             Terminal::putchar('\n');
             return;

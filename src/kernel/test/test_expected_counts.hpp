@@ -110,7 +110,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
     {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush
     {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
-    {"hal_serial_logic",       6,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar
+    {"hal_serial_logic",       7,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar + poll_getchar loopback (issue #245)
     {"acpi_parse",             5,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity + mb2 zero-size bound + scan repeat (#180)
     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
@@ -248,7 +248,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   30,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217)
+    {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      24      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall)

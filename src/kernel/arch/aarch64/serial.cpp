@@ -111,6 +111,19 @@ char Serial::getchar() {
     return mmio_read32(UART_BASE + UART_DR / 4) & 0xFF;
 }
 
+/// @brief Non-blocking receive poll (issue #245): the interactive shell's
+///        only input source on aarch64 (no PS/2, Keyboard is a stub).
+///        Zero-wait FR check — never spins, so the shell nap loop keeps its
+///        20ms latency bound even when the FIFO is empty.
+/// @param[out] c Oldest pending RX byte when the FIFO is non-empty.
+/// @return True iff FR.RXFE was clear and c holds a byte.
+bool Serial::poll_getchar(char &c) {
+    if ((mmio_read32(UART_BASE + UART_FR / 4) & (1 << 4)) != 0)
+        return false; // RXFE: receive FIFO empty
+    c = static_cast<char>(mmio_read32(UART_BASE + UART_DR / 4) & 0xFF);
+    return true;
+}
+
 /// @brief Write a null-terminated string to the serial port.
 /// @param[in] s Null-terminated string to transmit.
 void Serial::puts(const char *s) {

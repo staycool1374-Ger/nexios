@@ -179,6 +179,36 @@ JARVIS_TEST(serial_getchar_idle_returns_nul, "PRE: iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Serial::poll_getchar() non-blocking contract (issue #245) —
+// false immediately on an empty FIFO, true + the byte after a loopback
+// transmit, false again once drained. The shell's input poll on every
+// architecture.
+// Input: Loopback on; drain; poll (expect false); putchar('Q');
+// poll (expect true 'Q'); poll (expect false); loopback off.
+// Expect: false/true('Q')/false sequence; bounded (no waits anywhere).
+// Depends: arch::Serial
+JARVIS_TEST(serial_poll_getchar_loopback, "PRE: iocd | POST: none") {
+    Serial::init();
+    outb(COM1 + REG_MCR, inb(COM1 + REG_MCR) | MCR_LOOPBACK);
+    for (int i = 0; i < 16 && (inb(COM1 + REG_LSR) & 0x01); ++i)
+        (void)inb(COM1 + REG_DATA);
+    char idle = 0;
+    bool idle_got = Serial::poll_getchar(idle);
+    Serial::putchar('Q');
+    char c = 0;
+    bool got = Serial::poll_getchar(c);
+    char drained = 0;
+    bool drained_got = Serial::poll_getchar(drained);
+    outb(COM1 + REG_MCR, inb(COM1 + REG_MCR) & static_cast<uint8_t>(~MCR_LOOPBACK));
+    restore_uart();
+    JARVIS_ASSERT(!idle_got);
+    JARVIS_ASSERT(got);
+    JARVIS_ASSERT_EQ('Q', c);
+    JARVIS_ASSERT(!drained_got);
+    JARVIS_TEST_PASS();
+}
+
 void register_serial_logic_tests() {
     Logger::info("Registering serial logic tests");
     JARVIS_REGISTER_TEST(serial_init_register_state);
@@ -187,5 +217,6 @@ void register_serial_logic_tests() {
     JARVIS_REGISTER_TEST(serial_loopback_newline_expansion);
     JARVIS_REGISTER_TEST(serial_puts_and_write_count);
     JARVIS_REGISTER_TEST(serial_getchar_idle_returns_nul);
+    JARVIS_REGISTER_TEST(serial_poll_getchar_loopback); // issue #245
 }
 #endif // CONFIG_ARCH_X86_64

@@ -1,10 +1,15 @@
 #!/usr/bin/expect -f
 # Shell-smoke regression probe (issue #218).
 # Boots an interactive run-mode target, waits for the service::Shell
-# prompt, sends `version`, and requires the prompt back.
+# prompt, sends `version`, and requires the command's real output plus
+# the prompt back.
+# Issue #245 hardening: a bare re-prompt proves NOTHING (async background
+# output redraws the prompt via draw_prompt, faking a round-trip while
+# typed bytes rot unread in the FIFO). The `Kernel: ` line from
+# cmd_version is required before the prompt match.
 # Usage: shell-smoke.exp [-log file] <make-target...>
 #   e.g. shell-smoke.exp run-release-mode arm
-# Exit 0 on prompt + version round-trip, 1 on timeout/EOF.
+# Exit 0 on prompt + version output + prompt, 1 on timeout/EOF.
 # Notes: single line typed at a time (16-byte UART FIFO); no escape
 # sequences (must not perturb the shell redraw path); bounded timeouts.
 set logfile ""
@@ -23,9 +28,14 @@ expect {
 }
 send "version\r"
 expect {
-    -re {\$ $} { puts "SMOKE: version answered" }
-    timeout { puts "SMOKE: TIMEOUT after version"; exit 1 }
-    eof { puts "SMOKE: EOF after version"; exit 1 }
+    -re {Kernel: } { puts "SMOKE: version output seen" }
+    timeout { puts "SMOKE: TIMEOUT waiting for version output (input dead?)"; exit 1 }
+    eof { puts "SMOKE: EOF waiting for version output"; exit 1 }
+}
+expect {
+    -re {\$ $} { puts "SMOKE: prompt back" }
+    timeout { puts "SMOKE: TIMEOUT waiting for prompt back"; exit 1 }
+    eof { puts "SMOKE: EOF waiting for prompt back"; exit 1 }
 }
 puts "SMOKE: PASS"
 exit 0

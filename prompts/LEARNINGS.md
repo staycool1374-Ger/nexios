@@ -19,6 +19,8 @@
 - `aarch64-elf-gdb` is not preinstalled (`brew install`); no batch-mode hardware watchpoints on QEMU/aarch64 TCG (#235).
 - Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
 - Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
+- Shell-smoke must assert command OUTPUT (`Kernel: `), never a bare re-prompt — async background output redraws the prompt and fakes round-trips (#245).
+- Direct `make build/kernel.elf` drops target-specific LTO flags and skips stamp guards: always `make clean` when switching debug/release in the shared build/ dir (#246).
 
 ## Entry format
 
@@ -32,6 +34,12 @@
 ## Entries
 
 <!-- Append new entries below; newest first. -->
+
+### #245 — aarch64 shell input dead: no UART poll source (2026-09-28, awaiting close)
+- **Learned:** (1) Forensics can convict the wrong subsystem: every wheel datum (armed + overdue entry, live_count 1, BLOCKED shell, advancing ticks) was the NORMAL steady state of a healthy 50Hz nap loop — sampling BLOCKED at 99.9% duty is expected, not evidence. The discriminating experiment was the cheapest one: hardened shell-smoke showed no echo and no `version` output, i.e. bytes rotting in the FIFO. Run the cheap end-to-end discriminator BEFORE deep GDB. (2) A passing E2E probe can be vacuous: expect matched a redrawn prompt triggered by async output (`user-app terminated` → write_count advance → draw_prompt) — require command output, not UI state. (3) `make build` red-on-main from an earlier commit is still my gate to fix: the #244 idle-loop counter pushed `hlt()` out of the checker's 10-line window (widened to 20 with cited cause). (4) Shared-`build/` + direct `$(KERNEL)` target = LTO-link trap when mixing debug/release (#246 filed, workaround `make clean`).
+- **Adapted:** `Serial::poll_getchar(char&)` (x86 LSR / PL011 FR-RXFE zero-wait; riscv false + #247 follow-up) wired into all 4 shell input sites (readline, read builtin, top quit-key, pager), replacing x86-only COM1 ifdefs; hardened `shell-smoke.exp` (`Kernel: ` required); `serial_poll_getchar_loopback` (x86) + `aarch64_pl011_poll_idle_false` regression tests; planner F-branches formally retired on the issue with per-branch disproof.
+- **Measured:** hal_serial_logic 7/7, arch_aarch64 32/32, arm release typed-`version` ECHO + full output + prompt-back, x86 release hardened SMOKE PASS, `make build` Errors 0. SIL 3 APPROVED (3 S3; comment-accuracy note fixed same-cycle, riscv carried to #247).
+- **Style re-surface:** auditor reads comments as claims — fix flagged wording immediately even when code is approved; test-history rows stay machine-format (append-only, one row per run).
 
 ### #244 — release boot output cleanup (2026-09-27, CLOSED)
 - **Learned:** (1) Quoted-string `-D` macros do not survive generated build rules (extra shell/eval layers strip quotes; fails only on clean rebuilds since `-D` changes bypass `.d` deps — always verify with a fresh full build, not incremental). pp-number + in-code two-level stringify is shell-proof. (2) `make build` green means nothing for release-only paths: the same change compiled in debug, failed in release — gate both builds before claiming green. (3) Test-harness serial asserts only match their own markers, so gating boot logs is safe — but verify by grep, never assume.

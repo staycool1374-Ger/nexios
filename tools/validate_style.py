@@ -359,7 +359,12 @@ class LoopBoundsChecker(Checker):
         ]
 
         def is_blocking_loop(start_line: int) -> bool:
-            for i in range(start_line, min(start_line + 10, len(lines))):
+            # Window covers the loop head plus a debug-counted body: the
+            # kernel idle loop (taskdefs.cpp, #244 follow-up) carries a
+            # CONFIG_DEBUG iteration counter above its arch::hlt(), pushing
+            # the halt 14 lines below the `for (;;)` — a 10-line window
+            # false-positives on the canonical legitimate halt loop.
+            for i in range(start_line, min(start_line + 20, len(lines))):
                 line = lines[i]
                 if any(p in line for p in blocking_patterns):
                     return True

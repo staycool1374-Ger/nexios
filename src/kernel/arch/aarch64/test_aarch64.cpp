@@ -759,6 +759,22 @@ JARVIS_TEST(aarch64_uart_putc) {
     JARVIS_TEST_PASS();
 }
 
+/// @brief PL011 poll_getchar() reports empty on an idle RX FIFO
+/// (issue #245: the shell's only aarch64 input source must be a
+/// zero-wait poll — true would mean stray bytes, false is the idle norm).
+/// Drains up to one FIFO depth first so earlier output cannot flake it.
+JARVIS_TEST(aarch64_pl011_poll_idle_false) {
+    char drain = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (!arch::Serial::poll_getchar(drain))
+            break;
+    }
+    char c = 0;
+    JARVIS_ASSERT_FMT(!arch::Serial::poll_getchar(c),
+                      "poll_getchar true on idle FIFO");
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Read PCI vendor/device ID via ECAM at BDF 0:0:0.
 JARVIS_TEST(aarch64_pci_ecam_read) {
     arch::PciBdf bdf{0, 0, 0};
@@ -1256,6 +1272,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
+    JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
 }
 
 #endif

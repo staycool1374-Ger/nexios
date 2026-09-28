@@ -1,268 +1,325 @@
-diff --git a/Makefile b/Makefile
-index 5182030f..6d86e72d 100644
---- a/Makefile
-+++ b/Makefile
-@@ -111,12 +111,18 @@ endif
- # such as -DCONFIG_DEADLINE_ACTION=N). Pass on the command line:
- #   make debug CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=3"
- CONFIG_DEFS ?=
-+# Picolibc version pin (issue #72, spec §10): defined HERE (not only at the
-+# picolibc section below) because CXXFLAGS_COMMON below expands immediately
-+# (:=) and bakes it into -DPICOLIBC_VERSION_STRING. Version pin: bump =
-+# deliberate commit + re-verify via #75 (spec §10).
-+PICOLIBC_VERSION ?= 1.8.12
- CXXFLAGS_COMMON := -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
-                    -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
-                    -fno-threadsafe-statics \
-                    -Wall -Wextra -Werror \
-                    -I src -I src/lib -pipe -MMD -MP \
-                    -DCONFIG_ARCH_$(ARCH_UPPER) \
-+                   -DPICOLIBC_VERSION_NUM=$(PICOLIBC_VERSION) \
-                    -ffunction-sections -fdata-sections \
-                    $(CONFIG_DEFS)
- 
-@@ -452,10 +458,8 @@ $(shell mkdir -p $(dir $(ARCH_STAMP)) && echo $(ARCH_EFFECTIVE) > $(ARCH_STAMP))
- # ------------------------------------------------------------------------------
- # Shared build rules (pattern rules, libc, userspace, initrd)
- # ------------------------------------------------------------------------------
--# picolibc pin (issue #72): defined BEFORE the include — mk/rules.mk
--# static-pattern prerequisites expand at parse time.
--# Version pin: bump = deliberate commit + re-verify via #75 (spec §10).
--PICOLIBC_VERSION ?= 1.8.12
-+# picolibc paths (version pin lives above CXXFLAGS_COMMON so the -D picks
-+# it up; mk/rules.mk static-pattern prerequisites expand at parse time).
- PICOLIBC_TARBALL := third_party/picolibc-$(PICOLIBC_VERSION).tar.xz
- PICOLIBC_SYSROOT := build/picolibc/sysroot
- include mk/rules.mk
-diff --git a/iso/boot/grub/grub.cfg b/iso/boot/grub/grub.cfg
-index 16280dce..73058bfc 100644
---- a/iso/boot/grub/grub.cfg
-+++ b/iso/boot/grub/grub.cfg
-@@ -2,7 +2,7 @@ set timeout=0
- set default=0
- insmod all_video
- 
--menuentry "Jarvis RTOS" {
-+menuentry "NexIOS RTOS" {
-     multiboot2 /boot/kernel.elf
-     boot
- }
-diff --git a/src/kernel/daemon/daemon_mgr.cpp b/src/kernel/daemon/daemon_mgr.cpp
-index ffc3f7ee..18be0e99 100644
---- a/src/kernel/daemon/daemon_mgr.cpp
-+++ b/src/kernel/daemon/daemon_mgr.cpp
-@@ -79,7 +79,9 @@ void reset_clear_daemons() {
-         }
-     }
-     num_daemons_ = 0;
-+#if defined(CONFIG_DEBUG)
-     Logger::info("daemon_mgr: all daemon states reset");
-+#endif
+diff --git a/src/kernel/arch/aarch64/serial.cpp b/src/kernel/arch/aarch64/serial.cpp
+index c72c943d..54d5ecf1 100644
+--- a/src/kernel/arch/aarch64/serial.cpp
++++ b/src/kernel/arch/aarch64/serial.cpp
+@@ -111,6 +111,19 @@ char Serial::getchar() {
+     return mmio_read32(UART_BASE + UART_DR / 4) & 0xFF;
  }
  
- /// @brief Notify the manager that a daemon has exited.
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 625abf79..6644fbfe 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -111,7 +111,9 @@ static bool g_run_tests = false;
- // and the post-test task-definition table (taskdefs.cpp).
- extern "C" void debug_write(const char *msg);
- void init_task_main() {
-+#if defined(CONFIG_DEBUG)
-     debug_write("[DIAG] init_task_main entered\n");
-+#endif
-     // Read /etc/fstab and mount entries
-     {
-         auto fstab = initrd::find("./etc/fstab");
-@@ -302,9 +304,11 @@ void init_task_main() {
-     kernel::elf::ElfLoader::ensure_task();
- 
-     // ── Run tests from init-task context (IF=1) ──────────────────
-+#if defined(CONFIG_DEBUG)
-     kernel::Logger::info(
-         "[DIAG] init_task_main: reached test runner g_run_tests=%u",
-         (unsigned)g_run_tests);
-+#endif
-     if (g_run_tests) {
-         // BUGS.md#021 harness exemption requires init (PID 1) at priority 10
-         // (its boot/test-runner duty priority) during the suite; the base
-@@ -338,7 +342,8 @@ void init_task_main() {
-             shell->name[i] = '\0';
-             kernel::Scheduler::add_task(*shell);
-             kernel::Scheduler::set_shell_task(shell);
--            kernel::Logger::info("init: shell task %u created", shell->id);
-+            // Issue #244: the scheduler already logs the spawn above —
-+            // no duplicate line.
-         } else {
-             kernel::Logger::warn("init: failed to create shell task");
-         }
-@@ -852,10 +857,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     debug_write("[BOOT] Memory init done\n");
- 
-     debug_write("[BOOT] BEFORE STVEC\n");
--    uint64_t val = 42;
--    if (val == 42) {
--        debug_write("[BOOT] val==42, all good\n");
--    }
-     debug_write("[BOOT] AFTER STVEC\n");
- 
-     debug_write("[BOOT] Kernel init...\n");
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index fda18afe..198b0486 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -907,11 +907,13 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
-                                            uint64_t period_ticks)
- // NOLINTEND(bugprone-easily-swappable-parameters)
- {
-+#if defined(CONFIG_DEBUG)
-     Logger::raw_write("[TCB] create pool8=");
-     Logger::print_dec(MemPool::pool_free_count(8));
-     Logger::raw_write(" tcnt=");
-     Logger::print_dec(Scheduler::task_count());
-     Logger::raw_write("\n");
-+#endif
-     auto *tcb = static_cast<TaskControlBlock *>(
-         MemPool::alloc(sizeof(TaskControlBlock)));
-     if (!tcb) {
-diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
-index 216ecf0d..1350e110 100644
---- a/src/kernel/task/taskdefs.cpp
-+++ b/src/kernel/task/taskdefs.cpp
-@@ -218,7 +218,9 @@ bool taskdefs_valid() noexcept {
- // ── reboot_from_table ────────────────────────────────────────────────────
- 
- void reboot_from_table() {
-+#if defined(CONFIG_DEBUG)
-     debug_write("[REBOOT] Rebuilding system from task-definition table\n");
-+#endif
-     arch::IrqGuard guard{};
- 
-     auto *idle = Scheduler::get_idle_task();
-@@ -227,7 +229,9 @@ void reboot_from_table() {
-     // old daemons and tasks are intentionally killed here, not failing.
-     daemon::set_suppress_death_msg(true);
-     Scheduler::set_suppress_terminated_log(true);
-+#if defined(CONFIG_DEBUG)
-     debug_write("[INFO]  daemon: restarting vfsd, iocd\n");
-+#endif
- 
-     // 1. Collect all non-idle, non-current tasks (can't mutate all_tasks_
-     //    during iteration, and must not release our own TCB — we're running on
-@@ -406,9 +410,11 @@ void reboot_from_table() {
-         }
-     }
- 
-+#if defined(CONFIG_DEBUG)
-     debug_write("[REBOOT] after add_tasks task_count()=0x");
-     debug_write_hex(Scheduler::task_count());
-     debug_write("\n");
-+#endif
- 
- #if defined(CONFIG_ARCH_X86_64)
-     // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning
-@@ -431,6 +437,9 @@ void reboot_from_table() {
- #endif
-     }
- 
-+    // Issue #244: reboot/idle diagnostics are debug-only (release boots
-+    // straight into a clean console for the shell).
-+#if defined(CONFIG_DEBUG)
-     debug_write("[DIAG] reboot idle loop entered\n");
-     {
-         static bool dumped = false;
-@@ -462,6 +471,7 @@ void reboot_from_table() {
-             }
-         }
-     }
-+#endif
-     arch::sti();
-     for (;;) {
-         static uint64_t _idle_count = 0;
-diff --git a/src/kernel/test/test_config.cpp b/src/kernel/test/test_config.cpp
-index 7ee831b3..201f48ae 100644
---- a/src/kernel/test/test_config.cpp
-+++ b/src/kernel/test/test_config.cpp
-@@ -69,7 +69,10 @@ void parse_test_config(const char *path) {
-                      path);
-         g_test_classes[0] = "safe";
-         g_test_class_count = 1;
--    } else {
-+    } else if (g_test_class_count != 1 ||
-+                 strcmp(g_test_classes[0], "none") != 0) {
-+        // Skip the listing when no test class will run (issue #244):
-+        // class "none" means interactive shell, not a test session.
-         Logger::info("[TEST] Loaded %u test class(es) from '%s'",
-                      (unsigned)g_test_class_count, path);
-         for (size_t i = 0; i < g_test_class_count; ++i) {
-diff --git a/src/lib/version.cpp b/src/lib/version.cpp
-index 0ed29644..03ce3f4d 100644
---- a/src/lib/version.cpp
-+++ b/src/lib/version.cpp
-@@ -29,6 +29,17 @@ const char* Version::string() {
-     return KERNEL_VERSION_STRING;
- }
- 
-+#define NEXIOS_STR_INNER(x) #x
-+#define NEXIOS_STR(x) NEXIOS_STR_INNER(x)
-+
-+const char* Version::picolibc_string() {
-+#ifdef PICOLIBC_VERSION_NUM
-+    return NEXIOS_STR(PICOLIBC_VERSION_NUM);
-+#else
-+    return "unknown";
-+#endif
++/// @brief Non-blocking receive poll (issue #245): the interactive shell's
++///        only input source on aarch64 (no PS/2, Keyboard is a stub).
++///        Zero-wait FR check — never spins, so the shell nap loop keeps its
++///        20ms latency bound even when the FIFO is empty.
++/// @param[out] c Oldest pending RX byte when the FIFO is non-empty.
++/// @return True iff FR.RXFE was clear and c holds a byte.
++bool Serial::poll_getchar(char &c) {
++    if ((mmio_read32(UART_BASE + UART_FR / 4) & (1 << 4)) != 0)
++        return false; // RXFE: receive FIFO empty
++    c = static_cast<char>(mmio_read32(UART_BASE + UART_DR / 4) & 0xFF);
++    return true;
 +}
 +
- const char* Version::build_date() {
-     return build_date_;
+ /// @brief Write a null-terminated string to the serial port.
+ /// @param[in] s Null-terminated string to transmit.
+ void Serial::puts(const char *s) {
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index 9759cfdc..dce4dd0f 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -759,6 +759,22 @@ JARVIS_TEST(aarch64_uart_putc) {
+     JARVIS_TEST_PASS();
  }
-diff --git a/src/lib/version.hpp b/src/lib/version.hpp
-index 4fbd97c9..93e92dec 100644
---- a/src/lib/version.hpp
-+++ b/src/lib/version.hpp
-@@ -27,6 +27,13 @@
- /// Format: "vmajor.minor.patch-stage"
- #define KERNEL_VERSION_STRING "v0.5.1-dev"
  
-+/// @brief Picolibc version backing the user-space runtime (issue #244).
-+/// Injected by the Makefile from PICOLIBC_VERSION as a pp-number
-+/// (deliberately NOT a quoted string: the generated build rules
-+/// re-evaluate quoting layers and strip string quotes).
-+/// Falls back to "unknown" when some other build path compiles
-+/// without it.
++/// @brief PL011 poll_getchar() reports empty on an idle RX FIFO
++/// (issue #245: the shell's only aarch64 input source must be a
++/// zero-wait poll — true would mean stray bytes, false is the idle norm).
++/// Drains up to one FIFO depth first so earlier output cannot flake it.
++JARVIS_TEST(aarch64_pl011_poll_idle_false) {
++    char drain = 0;
++    for (int i = 0; i < 16; ++i) {
++        if (!arch::Serial::poll_getchar(drain))
++            break;
++    }
++    char c = 0;
++    JARVIS_ASSERT_FMT(!arch::Serial::poll_getchar(c),
++                      "poll_getchar true on idle FIFO");
++    JARVIS_TEST_PASS();
++}
 +
- namespace kernel {
+ /// @brief Read PCI vendor/device ID via ECAM at BDF 0:0:0.
+ JARVIS_TEST(aarch64_pci_ecam_read) {
+     arch::PciBdf bdf{0, 0, 0};
+@@ -1256,6 +1272,7 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_terminates);  // issue #28
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_wakes_waitpid_parent);  // #217
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
++    JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
+ }
  
- /// @brief Kernel version constants and string formatting.
-@@ -41,6 +48,7 @@ struct Version {
-     static const char* build_date();
-     static const char* build_time();
-     static const char* full_string();
-+    static const char* picolibc_string();
- };
- 
- } // namespace kernel
+ #endif
 \ No newline at end of file
+diff --git a/src/kernel/arch/hal/serial.hpp b/src/kernel/arch/hal/serial.hpp
+index 22f60315..07947453 100644
+--- a/src/kernel/arch/hal/serial.hpp
++++ b/src/kernel/arch/hal/serial.hpp
+@@ -38,6 +38,15 @@ class Serial {
+     /// @brief Receive a single character (blocking).
+     /// @return The received character.
+     static char getchar();
++    /// @brief Non-blocking receive poll (issue #245: the interactive shell
++    ///        has no input source on architectures without PS/2 — the x86
++    ///        COM1 inline poll and the Keyboard stub both miss the UART).
++    ///        True with the oldest pending byte iff RX data is ready;
++    ///        false immediately otherwise (never waits, never spins).
++    ///        riscv64 always returns false (no SBI console input wired).
++    /// @param[out] c Received character (untouched when returning false).
++    /// @return True iff a byte was available and stored in c.
++    static bool poll_getchar(char &c);
+     /// @brief Transmit a null-terminated string.
+     /// @param str Null-terminated string to transmit.
+     static void puts(const char *str);
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index 8cb25fc9..11685b06 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -55,11 +55,21 @@ uint64_t Serial::write_count() noexcept {
+ }
+ 
+ /// @brief Read a character from serial (stub — always returns NUL).
+-/// @return Always '\\0' (no SBI getchar in S-mode).
++/// @return Always '\0' (no SBI getchar in S-mode).
+ char Serial::getchar() {
+     return '\0';
+ }
+ 
++/// @brief Non-blocking receive poll (issue #245): always false on riscv64
++///        (no SBI console input wired — the interactive shell has no input
++///        source here yet, same as before; out of scope for #245).
++/// @param[out] c Untouched.
++/// @return Always false.
++bool Serial::poll_getchar(char &c) {
++    (void)c;
++    return false;
++}
++
+ /// @brief Write a null-terminated string via SBI ecall.
+ /// @param s Null-terminated string to output.
+ void Serial::puts(const char *s) {
+diff --git a/src/kernel/arch/x86_64/serial.cpp b/src/kernel/arch/x86_64/serial.cpp
+index bb7caead..623e1e50 100644
+--- a/src/kernel/arch/x86_64/serial.cpp
++++ b/src/kernel/arch/x86_64/serial.cpp
+@@ -94,6 +94,16 @@ char Serial::getchar() {
+     return static_cast<char>(inb(arch::COM1));
+ }
+ 
++/// @brief Non-blocking receive poll (issue #245).
++/// @param[out] c Oldest pending RX byte when data is ready.
++/// @return True iff the LSR data-ready bit was set and c holds a byte.
++bool Serial::poll_getchar(char &c) {
++    if ((inb(arch::COM1 + 5) & 0x01) == 0)
++        return false;
++    c = static_cast<char>(inb(arch::COM1));
++    return true;
++}
++
+ /// @brief Write a null-terminated string to the serial port.
+ /// @param s Null-terminated string to transmit.
+ void Serial::puts(const char *s) {
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 7df7b45a..9cd29b26 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -110,7 +110,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
+     {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush
+     {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
+-    {"hal_serial_logic",       6,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar
++    {"hal_serial_logic",       7,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar + poll_getchar loopback (issue #245)
+     {"acpi_parse",             5,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity + mb2 zero-size bound + scan repeat (#180)
+     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
+     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
+@@ -248,7 +248,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   30,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217)
++    {"arch_aarch64",          0,   32,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,      24      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall)
+diff --git a/src/kernel/test/test_serial_logic.cpp b/src/kernel/test/test_serial_logic.cpp
+index 725c6c7c..33182acd 100644
+--- a/src/kernel/test/test_serial_logic.cpp
++++ b/src/kernel/test/test_serial_logic.cpp
+@@ -179,6 +179,36 @@ JARVIS_TEST(serial_getchar_idle_returns_nul, "PRE: iocd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: Serial::poll_getchar() non-blocking contract (issue #245) —
++// false immediately on an empty FIFO, true + the byte after a loopback
++// transmit, false again once drained. The shell's input poll on every
++// architecture.
++// Input: Loopback on; drain; poll (expect false); putchar('Q');
++// poll (expect true 'Q'); poll (expect false); loopback off.
++// Expect: false/true('Q')/false sequence; bounded (no waits anywhere).
++// Depends: arch::Serial
++JARVIS_TEST(serial_poll_getchar_loopback, "PRE: iocd | POST: none") {
++    Serial::init();
++    outb(COM1 + REG_MCR, inb(COM1 + REG_MCR) | MCR_LOOPBACK);
++    for (int i = 0; i < 16 && (inb(COM1 + REG_LSR) & 0x01); ++i)
++        (void)inb(COM1 + REG_DATA);
++    char idle = 0;
++    bool idle_got = Serial::poll_getchar(idle);
++    Serial::putchar('Q');
++    char c = 0;
++    bool got = Serial::poll_getchar(c);
++    char drained = 0;
++    bool drained_got = Serial::poll_getchar(drained);
++    outb(COM1 + REG_MCR, inb(COM1 + REG_MCR) & static_cast<uint8_t>(~MCR_LOOPBACK));
++    restore_uart();
++    JARVIS_ASSERT(!idle_got);
++    JARVIS_ASSERT(got);
++    JARVIS_ASSERT_EQ('Q', c);
++    JARVIS_ASSERT(!drained_got);
++    JARVIS_TEST_PASS();
++}
++
+ void register_serial_logic_tests() {
+     Logger::info("Registering serial logic tests");
+     JARVIS_REGISTER_TEST(serial_init_register_state);
+@@ -187,5 +217,6 @@ void register_serial_logic_tests() {
+     JARVIS_REGISTER_TEST(serial_loopback_newline_expansion);
+     JARVIS_REGISTER_TEST(serial_puts_and_write_count);
+     JARVIS_REGISTER_TEST(serial_getchar_idle_returns_nul);
++    JARVIS_REGISTER_TEST(serial_poll_getchar_loopback); // issue #245
+ }
+ #endif // CONFIG_ARCH_X86_64
 diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index 04c3609e..9c9183df 100644
+index 9c9183df..b82ca686 100644
 --- a/src/services/shell.cpp
 +++ b/src/services/shell.cpp
-@@ -628,6 +628,16 @@ void Shell::shell_task_main() {
-     Terminal::set_fg(COLOR_GREEN);
-     Terminal::write("NexIOS RTOS ");
-     Terminal::write(kernel::Version::string());
-+#if defined(CONFIG_ARCH_X86_64)
-+    Terminal::write(" (x86_64)");
-+#elif defined(CONFIG_ARCH_AARCH64)
-+    Terminal::write(" (aarch64)");
-+#elif defined(CONFIG_ARCH_RISCV64)
-+    Terminal::write(" (riscv64)");
-+#endif
-+    Terminal::write("\n");
-+    Terminal::write("picolibc ");
-+    Terminal::write(kernel::Version::picolibc_string());
-     Terminal::write("\n");
-     Terminal::set_fg(COLOR_DEFAULT);
-     Terminal::write("Type 'help' for available commands\n\n");
+@@ -479,14 +479,10 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
+         }
+ 
+         char c = 0;
+-        bool got_char = false;
+-
+-#if defined(CONFIG_ARCH_X86_64)
+-        if (arch::inb(arch::COM1_LSR) & 1) {
+-            c = static_cast<char>(arch::inb(arch::COM1));
+-            got_char = true;
+-        }
+-#endif
++        // Issue #245: poll the UART first on every architecture (the old
++        // x86-only COM1 inline poll never ran on aarch64/riscv64), then
++        // fall back to the (PS/2-backed, x86-only) Keyboard path.
++        bool got_char = arch::Serial::poll_getchar(c);
+ 
+         if (!got_char) {
+             got_char = arch::Keyboard::getchar(c);
+@@ -1657,7 +1653,10 @@ void Shell::cmd_top(int argc, const char** argv) {
+         bool quit = false;
+         while (arch::Timer::ticks() < deadline) {
+             char c = 0;
+-            if (arch::Keyboard::getchar(c) && (c == 'q' || c == 'Q')) {
++            bool got = arch::Serial::poll_getchar(c); // issue #245
++            if (!got)
++                got = arch::Keyboard::getchar(c);
++            if (got && (c == 'q' || c == 'Q')) {
+                 quit = true;
+                 break;
+             }
+@@ -2548,10 +2547,7 @@ void Shell::cmd_read(int argc, const char** argv) {
+     size_t pos = 0;
+     for (;;) {
+         char c = 0;
+-        bool got = false;
+-#if defined(CONFIG_ARCH_X86_64)
+-        if (arch::inb(arch::COM1_LSR) & 1) { c = static_cast<char>(arch::inb(arch::COM1)); got = true; }
+-#endif
++        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
+         if (!got) got = arch::Keyboard::getchar(c);
+         if (!got) {
+             // Same idle nap as readline (read builtin efficiency).
+@@ -3268,7 +3264,9 @@ void Shell::cmd_less(int argc, const char** argv) {
+                     Terminal::write("--More--");
+                     char c = 0;
+                     for (;;) {
+-                        bool got = arch::Keyboard::getchar(c);
++                        bool got = arch::Serial::poll_getchar(c); // #245
++                        if (!got)
++                            got = arch::Keyboard::getchar(c);
+                         if (got && (c == 'q' || c == 'Q')) {
+                             Terminal::putchar('\n');
+                             return;
+@@ -3285,7 +3283,9 @@ void Shell::cmd_less(int argc, const char** argv) {
+ 
+     char c = 0;
+     for (;;) {
+-        bool got = arch::Keyboard::getchar(c);
++        bool got = arch::Serial::poll_getchar(c); // issue #245: UART source
++        if (!got)
++            got = arch::Keyboard::getchar(c);
+         if (got && (c == 'q' || c == 'Q')) {
+             Terminal::putchar('\n');
+             return;
+diff --git a/tools/shell-smoke.exp b/tools/shell-smoke.exp
+index 77ea7c1c..50a93abe 100755
+--- a/tools/shell-smoke.exp
++++ b/tools/shell-smoke.exp
+@@ -1,10 +1,15 @@
+ #!/usr/bin/expect -f
+ # Shell-smoke regression probe (issue #218).
+ # Boots an interactive run-mode target, waits for the service::Shell
+-# prompt, sends `version`, and requires the prompt back.
++# prompt, sends `version`, and requires the command's real output plus
++# the prompt back.
++# Issue #245 hardening: a bare re-prompt proves NOTHING (async background
++# output redraws the prompt via draw_prompt, faking a round-trip while
++# typed bytes rot unread in the FIFO). The `Kernel: ` line from
++# cmd_version is required before the prompt match.
+ # Usage: shell-smoke.exp [-log file] <make-target...>
+ #   e.g. shell-smoke.exp run-release-mode arm
+-# Exit 0 on prompt + version round-trip, 1 on timeout/EOF.
++# Exit 0 on prompt + version output + prompt, 1 on timeout/EOF.
+ # Notes: single line typed at a time (16-byte UART FIFO); no escape
+ # sequences (must not perturb the shell redraw path); bounded timeouts.
+ set logfile ""
+@@ -23,9 +28,14 @@ expect {
+ }
+ send "version\r"
+ expect {
+-    -re {\$ $} { puts "SMOKE: version answered" }
+-    timeout { puts "SMOKE: TIMEOUT after version"; exit 1 }
+-    eof { puts "SMOKE: EOF after version"; exit 1 }
++    -re {Kernel: } { puts "SMOKE: version output seen" }
++    timeout { puts "SMOKE: TIMEOUT waiting for version output (input dead?)"; exit 1 }
++    eof { puts "SMOKE: EOF waiting for version output"; exit 1 }
++}
++expect {
++    -re {\$ $} { puts "SMOKE: prompt back" }
++    timeout { puts "SMOKE: TIMEOUT waiting for prompt back"; exit 1 }
++    eof { puts "SMOKE: EOF waiting for prompt back"; exit 1 }
+ }
+ puts "SMOKE: PASS"
+ exit 0
+diff --git a/tools/validate_style.py b/tools/validate_style.py
+index 3c630470..bd34e560 100644
+--- a/tools/validate_style.py
++++ b/tools/validate_style.py
+@@ -359,7 +359,12 @@ class LoopBoundsChecker(Checker):
+         ]
+ 
+         def is_blocking_loop(start_line: int) -> bool:
+-            for i in range(start_line, min(start_line + 10, len(lines))):
++            # Window covers the loop head plus a debug-counted body: the
++            # kernel idle loop (taskdefs.cpp, #244 follow-up) carries a
++            # CONFIG_DEBUG iteration counter above its arch::hlt(), pushing
++            # the halt 14 lines below the `for (;;)` — a 10-line window
++            # false-positives on the canonical legitimate halt loop.
++            for i in range(start_line, min(start_line + 20, len(lines))):
+                 line = lines[i]
+                 if any(p in line for p in blocking_patterns):
+                     return True

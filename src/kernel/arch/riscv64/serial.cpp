@@ -55,9 +55,19 @@ uint64_t Serial::write_count() noexcept {
 }
 
 /// @brief Read a character from serial (stub — always returns NUL).
-/// @return Always '\\0' (no SBI getchar in S-mode).
+/// @return Always '\0' (no SBI getchar in S-mode).
 char Serial::getchar() {
     return '\0';
+}
+
+/// @brief Non-blocking receive poll (issue #245): always false on riscv64
+///        (no SBI console input wired — the interactive shell has no input
+///        source here yet, same as before; out of scope for #245).
+/// @param[out] c Untouched.
+/// @return Always false.
+bool Serial::poll_getchar(char &c) {
+    (void)c;
+    return false;
 }
 
 /// @brief Write a null-terminated string via SBI ecall.
