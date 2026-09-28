@@ -474,19 +474,6 @@ void reboot_from_table() {
 #endif
     arch::sti();
     for (;;) {
-        // Issue #244 follow-up: the idle counter is a debug-only
-        // liveness trace. Unconditionally it floods the console (every
-        // 100k idle iterations, rapid when hlt is cheap), which both
-        // spams the shell prompt (each line trips the redraw path) and
-        // buries real input/output.
-#if defined(CONFIG_DEBUG)
-        static uint64_t _idle_count = 0;
-        if (++_idle_count % 100000 == 0) {
-            debug_write("[DIAG] idle loop count=");
-            debug_write_hex(_idle_count);
-            debug_write("\n");
-        }
-#endif
         arch::hlt();
     }
     __builtin_unreachable();
