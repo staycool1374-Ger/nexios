@@ -1,19 +1,166 @@
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 86cb65702..c4b1b3f78 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -160,6 +169,14 @@ void TaskControlBlock::init_sporadic_server(
- ///        The task's own id serves as the cspace_id decoded from handles
- ///        (no global registry in iteration-1 CSpace; handles are validated
- ///        against the current task's root CNode only).
-+///        Issue #265 contract note: the 8-bit truncation is a same-CNode
-+///        self-consistency tag, NOT a global identity.  lookup() always
-+///        resolves inside the caller's own CNode with slot+gen+rights fully
-+///        mediating, so aliased tags across tasks grant no cross-task access
-+///        and nothing can exhaust (CNodes free on task death).  The mask is
-+///        load-bearing: storing the full id while the wire format stays
-+///        8-bit would self-reject every task with id > 255.  A future global
-+///        cspace registry must widen CAP_HANDLE_IDBITS first.
- void TaskControlBlock::ensure_cspace() noexcept {
-     if (cspace_)
-         return;
+diff --git a/Makefile b/Makefile
+index f37f7d043..e15c73f17 100644
+--- a/Makefile
++++ b/Makefile
+@@ -513,7 +513,7 @@ build/kernel/test/test_isolate.o: $(TEST_REGISTRY_GEN)
+ # ------------------------------------------------------------------------------
+ .PHONY: help all build check-style run-debug-mode run-release-mode \
+         execute-test debug-test debug-shell \
+-        test symbols objdump debug release profiling rr-record rr-replay \
++        test symbols objdump debug release release-elf check-release-stamp profiling rr-record rr-replay \
+         run-renode renode-test check-config config-summary test-registry-gen
+ 
+ test-registry-gen: $(TEST_REGISTRY_GEN)
+@@ -728,7 +728,8 @@ endif
+ ifeq ($(_DISPATCH_IN_PROGRESS),)
+ ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
+ cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
+-release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
++RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
++release: CXXFLAGS += $(RELEASE_CXXFLAGS)
+ release: $(TEST_REGISTRY_GEN)
+ release:
+ ifneq ($(ARCH),x86_64)
+@@ -751,11 +752,39 @@ endif
+ 	@printf '  %-7s %s\n' 'DONE' "Release ISO: $(RELEASE_ISO) (tests: $$(cat release/.baked-test-config))"
+ 	@echo ""
+ 	@echo "  Validate with:  make release-test"
++# ------------------------------------------------------------------------------
++# Release kernel ELF for non-x86 run/test flows (issue #246).  A direct
++# $(KERNEL) goal inherits no target-specific flags and no stamp guard, so
++# stale debug objects (-flto/-DCONFIG_DEBUG) get relinked without the LTO
++# plugin.  release-elf builds with the same flags as `release` (shared
++# RELEASE_CXXFLAGS, expanded per-make-parse with that make's CXX) and cleans
++# unless the tree already holds release objects for this ARCH (arch switches
++# already self-clean via the parse-time ARCH_STAMP block above).
++# ------------------------------------------------------------------------------
++release-elf: CXXFLAGS += $(RELEASE_CXXFLAGS)
++# Prerequisite order is load-bearing (serial make builds left-to-right, same
++# pattern as `profiling: clean $(OBJ) ...` below): the stamp check cleans
++# first, then the registry header regenerates (clean deletes it), then the
++# kernel links.  $(KERNEL) itself also depends on $(TEST_REGISTRY_GEN).
++release-elf: check-release-stamp $(TEST_REGISTRY_GEN) $(KERNEL)
++# Release-build stamp (issue #246): clean on same-arch build-type switch.
++# Inverse-compatible: a later `make debug` sees stamp != debug and cleans via
++# the untouched check-build-stamp branch (a); `make release` always cleans.
++check-release-stamp:
++	@if [ "$$(cat $(BUILD_STAMP) 2>/dev/null)" != "release" ]; then \
++	    printf '  %-7s %s\n' 'CLEAN' 'Release objects stale/missing'; \
++	    $(MAKE) clean >/dev/null 2>&1; \
++	fi; \
++	mkdir -p $(dir $(BUILD_STAMP)); echo release > $(BUILD_STAMP)
+ else
+ # Issue #210: positional build-type under a dispatcher — no-op here, the
+ # worker recursion (`$(MAKE) release ARCH=…`) builds the real target.
+ release:
+ 	@true
++release-elf:
++	@true
++check-release-stamp:
++	@true
+ endif
+ 
+ # ------------------------------------------------------------------------------
+@@ -1019,7 +1048,7 @@ _do_execute_test:
+  	    elif [ "$(BUILD)" = "release" ] && [ "$(ARCH)" = "x86_64" ]; then \
+  	        $(MAKE) release ARCH=$(ARCH) || exit 1; \
+ 	    elif [ "$(BUILD)" = "release" ]; then \
+-	        $(MAKE) $(KERNEL) ARCH=$(ARCH) || exit 1; \
++	        $(MAKE) release-elf ARCH=$(ARCH) || exit 1; \
+ 	        if [ "$(ARCH)" = "riscv64" ]; then \
+ 	            $(MAKE) $(KERNEL_RISCV_BIN) ARCH=$(ARCH) KERNEL_DEBUG=$(KERNEL) || exit 1; \
+ 	        fi; \
+diff --git a/src/kernel/test/test_cap_mmio.cpp b/src/kernel/test/test_cap_mmio.cpp
+index 6f632a40e..e2c299983 100644
+--- a/src/kernel/test/test_cap_mmio.cpp
++++ b/src/kernel/test/test_cap_mmio.cpp
+@@ -62,12 +62,17 @@ TaskControlBlock *run_cap_task(void (*entry)(), uint64_t prio = 11,
+ }
+ 
+ /// @brief True if every byte of @p buf is 0xFF.
++///        x86-only: every call site asserts the x86 IOPB bitmap, which has
++///        no counterpart off x86 (stub returns nullptr, guarded at each
++///        site), so the helper itself is x86-only.
++#if defined(CONFIG_ARCH_X86_64)
+ bool all_deny(const uint8_t *buf, size_t len) {
+     for (size_t i = 0; i < len; ++i)
+         if (buf[i] != 0xFF)
+             return false;
+     return true;
+ }
++#endif // CONFIG_ARCH_X86_64
+ 
+ // -- shared result flags for the syscall-dispatch task --
+ uint64_t g_grant_ret = 0;
+@@ -330,7 +335,11 @@ JARVIS_TEST(ioport_grant_dispatch_happy, "PRE: none | POST: none") {
+ 
+     // Task cleanup() released the slot: owner null, TSS default-deny again.
+     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
++#if defined(CONFIG_ARCH_X86_64)
++    // No IOPB bitmap off x86 (stub returns nullptr by design); without this
++    // guard the analyzer flags the null deref (and non-x86 would crash).
+     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
++#endif
+     JARVIS_TEST_PASS();
+ }
+ 
+@@ -433,7 +442,10 @@ JARVIS_TEST(ioport_switch_applies_and_restores, "PRE: none | POST: none") {
+     // Non-granted user task: default-deny, owner cleared.
+     arch::iopb_switch_to(*b);
+     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
++#if defined(CONFIG_ARCH_X86_64)
++    // No IOPB bitmap off x86 (stub returns nullptr by design).
+     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
++#endif
+     JARVIS_ASSERT(!arch::iopb_port_allowed(*b, 0x60));
+ 
+     // Switch back restores A's grants.
+@@ -468,7 +480,10 @@ JARVIS_TEST(ioport_task_cleanup_releases_slot_and_remasks, "PRE: none | POST: no
+         // TaskPtr dtor: remove_task + cleanup -> iopb_release.
+     }
+     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
++#if defined(CONFIG_ARCH_X86_64)
++    // No IOPB bitmap off x86 (stub returns nullptr by design).
+     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
++#endif
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/src/lib/compiler_rt.cpp b/src/lib/compiler_rt.cpp
+index dce0055f7..e5e633430 100644
+--- a/src/lib/compiler_rt.cpp
++++ b/src/lib/compiler_rt.cpp
+@@ -61,3 +61,33 @@ __attribute__((externally_visible)) unsigned long __ctzdi2(unsigned long val) {
+ }
+ 
+ #endif // defined(CONFIG_ARCH_RISCV64)
++
++#if defined(CONFIG_ARCH_AARCH64)
++
++// Issue #246 validation: aarch64 lowers __builtin_strncpy to a strncpy
++// libcall (x86_64 inlines the same sites), and release links via raw ld
++// (no -flto, so no compiler-driver libgcc fallback) — the link fails with
++// undefined `strncpy`.  Arch-gated (x86_64 never references it; an
++// unconditional definition would also be safe — static linking prefers our
++// .o over libgcc.a members — but the gate documents exactly who needs it).
++// externally_visible: LTO must not internalize/GC a runtime libcall
++// (issue #204 precedent).
++extern "C" {
++
++__attribute__((externally_visible)) char *strncpy(char *dest, const char *src,
++                                                 unsigned long n) {
++    unsigned long i = 0;
++    while (i < n && src[i]) {
++        dest[i] = src[i];
++        ++i;
++    }
++    while (i < n) {
++        dest[i] = '\0';
++        ++i;
++    }
++    return dest;
++}
++
++}
++
++#endif // defined(CONFIG_ARCH_AARCH64)

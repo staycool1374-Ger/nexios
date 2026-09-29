@@ -62,12 +62,17 @@ TaskControlBlock *run_cap_task(void (*entry)(), uint64_t prio = 11,
 }
 
 /// @brief True if every byte of @p buf is 0xFF.
+///        x86-only: every call site asserts the x86 IOPB bitmap, which has
+///        no counterpart off x86 (stub returns nullptr, guarded at each
+///        site), so the helper itself is x86-only.
+#if defined(CONFIG_ARCH_X86_64)
 bool all_deny(const uint8_t *buf, size_t len) {
     for (size_t i = 0; i < len; ++i)
         if (buf[i] != 0xFF)
             return false;
     return true;
 }
+#endif // CONFIG_ARCH_X86_64
 
 // -- shared result flags for the syscall-dispatch task --
 uint64_t g_grant_ret = 0;
@@ -330,7 +335,11 @@ JARVIS_TEST(ioport_grant_dispatch_happy, "PRE: none | POST: none") {
 
     // Task cleanup() released the slot: owner null, TSS default-deny again.
     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
+#if defined(CONFIG_ARCH_X86_64)
+    // No IOPB bitmap off x86 (stub returns nullptr by design); without this
+    // guard the analyzer flags the null deref (and non-x86 would crash).
     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
+#endif
     JARVIS_TEST_PASS();
 }
 
@@ -433,7 +442,10 @@ JARVIS_TEST(ioport_switch_applies_and_restores, "PRE: none | POST: none") {
     // Non-granted user task: default-deny, owner cleared.
     arch::iopb_switch_to(*b);
     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
+#if defined(CONFIG_ARCH_X86_64)
+    // No IOPB bitmap off x86 (stub returns nullptr by design).
     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
+#endif
     JARVIS_ASSERT(!arch::iopb_port_allowed(*b, 0x60));
 
     // Switch back restores A's grants.
@@ -468,7 +480,10 @@ JARVIS_TEST(ioport_task_cleanup_releases_slot_and_remasks, "PRE: none | POST: no
         // TaskPtr dtor: remove_task + cleanup -> iopb_release.
     }
     JARVIS_ASSERT(arch::iopb_loaded_owner() == nullptr);
+#if defined(CONFIG_ARCH_X86_64)
+    // No IOPB bitmap off x86 (stub returns nullptr by design).
     JARVIS_ASSERT(all_deny(arch::GDT::iopb_bitmap(), 8192));
+#endif
     JARVIS_TEST_PASS();
 }
 

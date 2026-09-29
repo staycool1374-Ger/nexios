@@ -61,3 +61,33 @@ __attribute__((externally_visible)) unsigned long __ctzdi2(unsigned long val) {
 }
 
 #endif // defined(CONFIG_ARCH_RISCV64)
+
+#if defined(CONFIG_ARCH_AARCH64)
+
+// Issue #246 validation: aarch64 lowers __builtin_strncpy to a strncpy
+// libcall (x86_64 inlines the same sites), and release links via raw ld
+// (no -flto, so no compiler-driver libgcc fallback) — the link fails with
+// undefined `strncpy`.  Arch-gated (x86_64 never references it; an
+// unconditional definition would also be safe — static linking prefers our
+// .o over libgcc.a members — but the gate documents exactly who needs it).
+// externally_visible: LTO must not internalize/GC a runtime libcall
+// (issue #204 precedent).
+extern "C" {
+
+__attribute__((externally_visible)) char *strncpy(char *dest, const char *src,
+                                                 unsigned long n) {
+    unsigned long i = 0;
+    while (i < n && src[i]) {
+        dest[i] = src[i];
+        ++i;
+    }
+    while (i < n) {
+        dest[i] = '\0';
+        ++i;
+    }
+    return dest;
+}
+
+}
+
+#endif // defined(CONFIG_ARCH_AARCH64)

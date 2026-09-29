@@ -513,7 +513,7 @@ build/kernel/test/test_isolate.o: $(TEST_REGISTRY_GEN)
 # ------------------------------------------------------------------------------
 .PHONY: help all build check-style run-debug-mode run-release-mode \
         execute-test debug-test debug-shell \
-        test symbols objdump debug release profiling rr-record rr-replay \
+        test symbols objdump debug release release-elf check-release-stamp profiling rr-record rr-replay \
         run-renode renode-test check-config config-summary test-registry-gen
 
 test-registry-gen: $(TEST_REGISTRY_GEN)
@@ -728,7 +728,8 @@ endif
 ifeq ($(_DISPATCH_IN_PROGRESS),)
 ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
 cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
-release: CXXFLAGS += -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
+RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
+release: CXXFLAGS += $(RELEASE_CXXFLAGS)
 release: $(TEST_REGISTRY_GEN)
 release:
 ifneq ($(ARCH),x86_64)
@@ -751,10 +752,38 @@ endif
 	@printf '  %-7s %s\n' 'DONE' "Release ISO: $(RELEASE_ISO) (tests: $$(cat release/.baked-test-config))"
 	@echo ""
 	@echo "  Validate with:  make release-test"
+# ------------------------------------------------------------------------------
+# Release kernel ELF for non-x86 run/test flows (issue #246).  A direct
+# $(KERNEL) goal inherits no target-specific flags and no stamp guard, so
+# stale debug objects (-flto/-DCONFIG_DEBUG) get relinked without the LTO
+# plugin.  release-elf builds with the same flags as `release` (shared
+# RELEASE_CXXFLAGS, expanded per-make-parse with that make's CXX) and cleans
+# unless the tree already holds release objects for this ARCH (arch switches
+# already self-clean via the parse-time ARCH_STAMP block above).
+# ------------------------------------------------------------------------------
+release-elf: CXXFLAGS += $(RELEASE_CXXFLAGS)
+# Prerequisite order is load-bearing (serial make builds left-to-right, same
+# pattern as `profiling: clean $(OBJ) ...` below): the stamp check cleans
+# first, then the registry header regenerates (clean deletes it), then the
+# kernel links.  $(KERNEL) itself also depends on $(TEST_REGISTRY_GEN).
+release-elf: check-release-stamp $(TEST_REGISTRY_GEN) $(KERNEL)
+# Release-build stamp (issue #246): clean on same-arch build-type switch.
+# Inverse-compatible: a later `make debug` sees stamp != debug and cleans via
+# the untouched check-build-stamp branch (a); `make release` always cleans.
+check-release-stamp:
+	@if [ "$$(cat $(BUILD_STAMP) 2>/dev/null)" != "release" ]; then \
+	    printf '  %-7s %s\n' 'CLEAN' 'Release objects stale/missing'; \
+	    $(MAKE) clean >/dev/null 2>&1; \
+	fi; \
+	mkdir -p $(dir $(BUILD_STAMP)); echo release > $(BUILD_STAMP)
 else
 # Issue #210: positional build-type under a dispatcher — no-op here, the
 # worker recursion (`$(MAKE) release ARCH=…`) builds the real target.
 release:
+	@true
+release-elf:
+	@true
+check-release-stamp:
 	@true
 endif
 
@@ -1019,7 +1048,7 @@ _do_execute_test:
  	    elif [ "$(BUILD)" = "release" ] && [ "$(ARCH)" = "x86_64" ]; then \
  	        $(MAKE) release ARCH=$(ARCH) || exit 1; \
 	    elif [ "$(BUILD)" = "release" ]; then \
-	        $(MAKE) $(KERNEL) ARCH=$(ARCH) || exit 1; \
+	        $(MAKE) release-elf ARCH=$(ARCH) || exit 1; \
 	        if [ "$(ARCH)" = "riscv64" ]; then \
 	            $(MAKE) $(KERNEL_RISCV_BIN) ARCH=$(ARCH) KERNEL_DEBUG=$(KERNEL) || exit 1; \
 	        fi; \
