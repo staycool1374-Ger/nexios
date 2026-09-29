@@ -1,17 +1,19 @@
-diff --git a/Makefile b/Makefile
-index c7787a527..f37f7d043 100644
---- a/Makefile
-+++ b/Makefile
-@@ -148,7 +148,11 @@ ifeq ($(ARCH),x86_64)
-     AR          := $(X86_64_TRIPLET)ar
-     OBJCOPY     := $(X86_64_TRIPLET)objcopy
- 
--    CXXFLAGS    := $(CXXFLAGS_COMMON) -m64 -mno-red-zone -mgeneral-regs-only -mcmodel=large
-+    # Issue #251: -fno-pie — Debian/Ubuntu linux-gnu drivers default to PIE
-+    # (same precedent as riscv64, issue #222); PIE+GOT codegen under LTO
-+    # misresolved extern GOT slots past the image end (RSP := wild bytes,
-+    # pre-serial triple fault). The link is -no-pie; compile must match it.
-+    CXXFLAGS    := $(CXXFLAGS_COMMON) -fno-pie -m64 -mno-red-zone -mgeneral-regs-only -mcmodel=large
-     CCFLAGS     := -m64 -static -nostdlib -ffreestanding -O2 -pipe -MMD -MP \
-                    -ffunction-sections -fdata-sections
- 
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 2b3df2a7f..23371cdfe 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1675,7 +1675,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+     // would otherwise be misclassified as a fatal kernel exception.  BUGS.md#020
+     // root cause #3: the user-app write path dereferences a user VA that is out
+     // of range / unmapped; with recovery honored the syscall returns -EFAULT.
+-    if (kernel::g_user_access_recover_ip && regs) {
++    // Issue #252: gate on the #PF vector (14).  An un-gated check fires for
++    // ANY vector — including a timer tick (0xE0) landing inside a guarded
++    // copy — clobbering the ISR frame return RIP, disarming recovery, and
++    // returning before the tail EOI, which wedges the APIC (ISR stuck) and
++    // stops all ticks.  (aarch64/riscv64 route recovery from fault
++    // dispatchers only; this aligns x86_64 with them.)
++    if (vector == 14 && kernel::g_user_access_recover_ip && regs) {
+         regs[17] = kernel::g_user_access_recover_ip;
+         kernel::g_user_access_recover_ip = 0;
+         return;

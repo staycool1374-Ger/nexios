@@ -1675,7 +1675,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
     // would otherwise be misclassified as a fatal kernel exception.  BUGS.md#020
     // root cause #3: the user-app write path dereferences a user VA that is out
     // of range / unmapped; with recovery honored the syscall returns -EFAULT.
-    if (kernel::g_user_access_recover_ip && regs) {
+    // Issue #252: gate on the #PF vector (14).  An un-gated check fires for
+    // ANY vector — including a timer tick (0xE0) landing inside a guarded
+    // copy — clobbering the ISR frame return RIP, disarming recovery, and
+    // returning before the tail EOI, which wedges the APIC (ISR stuck) and
+    // stops all ticks.  (aarch64/riscv64 route recovery from fault
+    // dispatchers only; this aligns x86_64 with them.)
+    if (vector == 14 && kernel::g_user_access_recover_ip && regs) {
         regs[17] = kernel::g_user_access_recover_ip;
         kernel::g_user_access_recover_ip = 0;
         return;
