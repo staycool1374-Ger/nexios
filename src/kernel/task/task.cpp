@@ -76,12 +76,21 @@ size_t g_recent_tasks_idx = 0;
 
 namespace kernel {
 namespace debug {
+// Issue #264: per-slot single-writer contract. The slot index is claimed
+// with an atomic fetch-add (no new lock: creation paths must not acquire
+// spinlocks for diagnostics — lock-order risk), so concurrent writers land
+// in distinct slots: no mixed entry-from-A/tcb-from-B records, no lost
+// updates. The ring is write-only diagnostics (also GDB-readable
+// post-mortem); any future READER must pair acquire semantics with these
+// slot writes.
 void record_task_entry(uint64_t entry, uint64_t tcb) {
-    auto &r = g_recent_tasks[g_recent_tasks_idx % kRecentTasks];
+    size_t my_idx = __atomic_fetch_add(&g_recent_tasks_idx, 1UL,
+                                       __ATOMIC_RELAXED) %
+                    kRecentTasks;
+    auto &r = g_recent_tasks[my_idx];
     r.entry = entry;
     r.tcb = tcb;
     r.ticks = 0;
-    g_recent_tasks_idx++;
 }
 /// @brief If `value` equals the low 32 bits or full value of a recently
 /// created task's `entry`, return that task's tcb address; else 0.
