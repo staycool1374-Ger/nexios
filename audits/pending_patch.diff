@@ -1,19 +1,24 @@
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index 2b3df2a7f..23371cdfe 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1675,7 +1675,13 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
-     // would otherwise be misclassified as a fatal kernel exception.  BUGS.md#020
-     // root cause #3: the user-app write path dereferences a user VA that is out
-     // of range / unmapped; with recovery honored the syscall returns -EFAULT.
--    if (kernel::g_user_access_recover_ip && regs) {
-+    // Issue #252: gate on the #PF vector (14).  An un-gated check fires for
-+    // ANY vector — including a timer tick (0xE0) landing inside a guarded
-+    // copy — clobbering the ISR frame return RIP, disarming recovery, and
-+    // returning before the tail EOI, which wedges the APIC (ISR stuck) and
-+    // stops all ticks.  (aarch64/riscv64 route recovery from fault
-+    // dispatchers only; this aligns x86_64 with them.)
-+    if (vector == 14 && kernel::g_user_access_recover_ip && regs) {
-         regs[17] = kernel::g_user_access_recover_ip;
-         kernel::g_user_access_recover_ip = 0;
-         return;
+diff --git a/Dockerfile b/Dockerfile
+index fed14e1db..99cc075ce 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -7,10 +7,18 @@ FROM ubuntu:24.04
+ 
+ ARG DEBIAN_FRONTEND=noninteractive
+ 
++# Buildx target arch (auto-filled: amd64/arm64). grub-efi-amd64-bin exists
++# only on amd64 (absent from Ubuntu ports) — install it conditionally so
++# the arm64 leg builds. x86_64 QEMU tests need the UEFI El Torito entry
++# it provides (BIOS-only ISOs don't boot under OVMF); aarch64/riscv64
++# boot via -kernel ELF and never touch GRUB.
++ARG TARGETARCH
++
+ RUN apt-get update && apt-get install -y --no-install-recommends \
+     build-essential git make python3 wget ccache cpio meson ninja-build \
+     nasm \
+-    xorriso mtools dosfstools grub-pc-bin grub-efi-amd64-bin grub-common \
++    xorriso mtools dosfstools grub-pc-bin grub-common \
++    $(if [ "$TARGETARCH" = "amd64" ]; then echo grub-efi-amd64-bin; fi) \
+     gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+     gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \

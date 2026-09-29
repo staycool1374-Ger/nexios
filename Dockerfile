@@ -7,10 +7,18 @@ FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+# Buildx target arch (auto-filled: amd64/arm64). grub-efi-amd64-bin exists
+# only on amd64 (absent from Ubuntu ports) — install it conditionally so
+# the arm64 leg builds. x86_64 QEMU tests need the UEFI El Torito entry
+# it provides (BIOS-only ISOs don't boot under OVMF); aarch64/riscv64
+# boot via -kernel ELF and never touch GRUB.
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git make python3 wget ccache cpio meson ninja-build \
     nasm \
-    xorriso mtools dosfstools grub-pc-bin grub-efi-amd64-bin grub-common \
+    xorriso mtools dosfstools grub-pc-bin grub-common \
+    $(if [ "$TARGETARCH" = "amd64" ]; then echo grub-efi-amd64-bin; fi) \
     gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
