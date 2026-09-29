@@ -14,11 +14,12 @@
 - Logger `%d` reads 8 bytes (use `%lx` + u64 casts); `%lx` self-prefixes `0x` (never write `0x%lx`); test-history rows must match the format regex (#235, #249).
 - Per-event warns on a hot path feed serial/redraw timing back into the reported race (self-sustaining flood) — throttle detectors: exact counter + 1st + every Nth (#249).
 - `next_task` evicts queued-while-current candidates (`candidate==current` branch) — the loss is invisible to the `inrq==1` orphan detector; needs a level-triggered backstop (#249).
-- Test harness runs as init, PID 1, prio 10; spinners run prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open).
-- Flake-vs-regression disputes: pre-fix control run first (stash fix, run, pop) before theorizing (#236).
+- Test harness timing discipline: init runs prio 10, spinners prio 11 — never two concurrent never-blocking spinners (scheduler wedge, #242 open); flake-vs-regression disputes need a pre-fix control run first (stash fix, run, pop) (#236).
 - Audit check #7 needs graphify/vault queries WITH dispositions posted on the issue thread before the audit call (a REJECT-class miss twice: #237, #243).
 - Ubuntu GCC defaults to PIE: GOT+LTO can misresolve extern slots past image end (pre-serial triple fault) — match compile (`-fno-pie`, cf. #222) to the `-no-pie` link; hidden visibility only patches single symbols (#251).
-- Container-only faults need exact-binary forensics (artifact upload + addr2line/objdump), never cross-toolchain guessing; `-d int` tick-vector histograms separate "no ticks" from "stuck with ticks" (#251).
+- x86 fault-recovery must be vector-gated (#PF only): an IRQ inside a guarded copy otherwise hijacks recovery + skips EOI, wedging the APIC with ticks dead (#252).
+- Frozen APIC counter + ~100% vCPU + IF=1 spins = host virtual-time freeze (retry, don't chase); full I..R marker flow = healthy tick path; exact-binary forensics (artifact + addr2line) + `-d int` + GDB halt + `monitor info lapic` is the container-debug ladder (#251/#252).
+- Workflow YAML quoting: never hand-write awk single-quotes inside `bash -c '...'` — use `'\''` escaping or generate programmatically (burned twice: #252 probes).
 - `-serial mon:stdio` mux eats typed bytes (monitor grabs them) — deterministic E2E input needs TCP/file serial; expect-on-mux stalls past all timeouts (#247).
 - Expected-count rows rot silently: count actual `JARVIS_REGISTER_TEST` lines before bumping (row said 24, 28 registered) (#247).
 - Direct `make build/kernel.elf` drops target-specific LTO flags and skips stamp guards: always `make clean` when switching debug/release in the shared build/ dir (#246).
@@ -35,6 +36,12 @@
 ## Entries
 
 <!-- Append new entries below; newest first. -->
+
+### #252 — APIC EOI-skip via ungated safe_copy recovery + GH virtual-time freezes (2026-09-29, CLOSED; #243 open with retry policy)
+- **Learned:** (1) x86 `handle_interrupt_c` funnels ALL vectors through the safe_copy fault-recovery check; a tick inside a guarded copy clobbered the ISR frame RIP, disarmed recovery, and skipped tail EOI → APIC kept vector 224 in-service (proven via `monitor info lapic`: ISR pending, TPR 0, LVT unmasked+periodic, timer armed) → ticks stop → sleeps hang with IF=1 at 112% CPU. Gate on `#PF`/vector 14 (aarch64/riscv route from fault dispatchers only). (2) Forensics ladder, each rung decisive in turn: artifact upload (exact ELF+map) → addr2line/objdump (fault = higherhalf_entry+0xF8) → `-d int` (609×v=e0 then 0) → debugcon phase markers (full I..R cycles = healthy path) → GDB halt (nanosleep pause-spin, IF=1) → `monitor info lapic` + host-side QEMU CPU% (starvation vs spin). (3) Residual reds are environmental: frozen APIC `current_count` across 10s + ~112% vCPU + IF=1 spins = QEMU virtual-time freeze under host load; green-once (17/17, 236ms) + variance (hang test 4/13/boot-crawl) + steady local green confirm flake, not logic. (4) Workflow YAML: awk single-quotes inside `bash -c '...'` need `'\''` escaping — burned twice; generate programmatically.
+- **Adapted:** vector-14 gate (kernel.cpp, APPROVED); #243 retry-policy note; flake family #238/#242 referenced; all TEMP branches deleted (API-verified empty).
+- **Measured:** dogfood 17/17 once; reds with tick counts 133/609/237k at stall; local 17/17 steady; 1 audit APPROVED (no REJECT this issue).
+- **Style re-surface:** §5 fail-closed preserved (real #PF still redirects; non-#PF falls through to EOI); minimal one-condition diff; no test changes; TEMP-DIAG reverted.
 
 ### #251 — Ubuntu-only pre-serial triple fault: PIE-GOT slots, hidden, -fno-pie (2026-09-28, CLOSED; tick-hang follow-up #252)
 - **Learned:** (1) Ubuntu GCC defaults to PIE: GOT codegen under LTO resolved an extern value-load through a slot past image end (GOT+0x418D90 = 0xA1F468 vs last mapped VA 0x989000) → RSP := non-image bytes (`0x2928656361725f72`, absent from ELF) → next call faults → firmware IDT (still live, unmapped) can't be walked → nested #PF → #DF → triple fault, zero serial. (2) Auditor veto is load-bearing: my address-of "fix" was a semantic inversion (stack.asm descriptor `dq kernel_stack+16384` — only value-load yields the top; `&` points into .rodata + diverges from set_tss_rsp0); rejected_patch.diff applied verbatim. (3) Single-symbol hidden visibility fixed the RSP load (re-probe: RSP sane) but a second static (IDT::entries_) failed identically → class fix `-fno-pie` matching the `-no-pie` link (riscv64 already had it per #222 — search in-tree precedent before theorizing toolchain bugs). (4) Container-debug recipe: TEMP-branch artifact upload (exact map+ELF) + `-d int`; tick-vector histograms over wall time convict tick-stop (609×v=e0 then 0 for 116s).
