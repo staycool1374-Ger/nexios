@@ -1,4 +1,4 @@
 var riscv64_2early__init_8cpp =
 [
-    [ "EarlyInitStub", "struct_early_init_stub.html", "struct_early_init_stub" ]
+    [ "arch::early_irq_init", "namespacearch.html#a78513919ed4d338079bb56b6c548c84f", null ]
 ];

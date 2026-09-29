@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -212,10 +212,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cpu__context_8
 <div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span> </div>
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>} <span class="comment">// namespace kernel</span></div>
 </div>
-<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:31</div></div>
+<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
 <div class="ttc" id="anamespacearch_html_a74ee5e38b6239c12f5cadd479e625d7d"><div class="ttname"><a href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch::per_cpu</a></div><div class="ttdeci">PerCpu per_cpu[CONFIG_MAX_CPUS]</div><div class="ttdef"><b>Definition</b> percpu.cpp:9</div></div>
 <div class="ttc" id="anamespacearch_html_ac53772566e53832b14ccedb8d6ae2d4e"><div class="ttname"><a href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a></div><div class="ttdeci">uint64_t cpu_index() noexcept</div><div class="ttdoc">Current CPU index — single-core archs are always CPU 0.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:31</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_a0571e17de31b74de7a47a25459361c20"><div class="ttname"><a href="namespacekernel.html#a0571e17de31b74de7a47a25459361c20">kernel::isr_nesting_own</a></div><div class="ttdeci">uint64_t &amp; isr_nesting_own()</div><div class="ttdoc">Own-CPU ISR nesting depth (single-core archs: the plain global).</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:98</div></div>
 <div class="ttc" id="anamespacekernel_html_a18ec7fa3e1cedad227d48e45f9633829"><div class="ttname"><a href="namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829">kernel::fpu_owner</a></div><div class="ttdeci">TaskControlBlock * fpu_owner</div><div class="ttdoc">Tracks which task&#39;s FPU state is currently in the registers. Single-core archs ONLY: the plain global...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:113</div></div>
 <div class="ttc" id="anamespacekernel_html_a20a07952a9e22c0be3a6711567475133"><div class="ttname"><a href="namespacekernel.html#a20a07952a9e22c0be3a6711567475133">kernel::cpu_ctx</a></div><div class="ttdeci">CpuContext &amp; cpu_ctx(uint64_t cpu)</div><div class="ttdoc">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/sna...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:76</div></div>

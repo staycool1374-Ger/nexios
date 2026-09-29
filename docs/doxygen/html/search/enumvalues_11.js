@@ -7,5 +7,6 @@ var searchData=
   ['tf_5fkernel_4',['TF_KERNEL',['../namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a758901b7d4ff562bfcf86fd8d1a08252',1,'kernel::test']]],
   ['tf_5frelease_5',['TF_RELEASE',['../namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924ae3d35c95598236fc836dc51c0e3982c8',1,'kernel::test']]],
   ['tf_5fuser_6',['TF_USER',['../namespacekernel_1_1test.html#a3c3d9504ac5a18a5220063a8e94b0924a6ef6b63d678fd3b18029892f6956a47c',1,'kernel::test']]],
-  ['timeout_7',['TIMEOUT',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a070a0fb40f6c308ab544b227660aadff',1,'kernel']]]
+  ['timeout_7',['TIMEOUT',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a070a0fb40f6c308ab544b227660aadff',1,'kernel']]],
+  ['timer_5ffreq_5funknown_8',['TIMER_FREQ_UNKNOWN',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a',1,'arch']]]
 ];

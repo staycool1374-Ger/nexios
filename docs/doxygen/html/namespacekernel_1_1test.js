@@ -29,6 +29,7 @@ var namespacekernel_1_1test =
     [ "forever_entry", "namespacekernel_1_1test.html#a9a26c096fcccf73fa199e553d354ab15", null ],
     [ "get_test_class_count", "namespacekernel_1_1test.html#a499e498dbadd7417450754e39ff8d025", null ],
     [ "get_test_classes", "namespacekernel_1_1test.html#adef941cb96fe1a42d92076d37649d84a", null ],
+    [ "make_synthetic_clone_frame", "namespacekernel_1_1test.html#a5f11b3daec7f81082d98cc76b23a14b3", null ],
     [ "mark_vfs_touched", "namespacekernel_1_1test.html#ac3dcbb860f4f6469142dd4dd33b78398", null ],
     [ "parse_test_config", "namespacekernel_1_1test.html#aabafa220128e328e46c2c19135411898", null ],
     [ "print_report", "namespacekernel_1_1test.html#a0fb9d643d01186cc11f1c2868176b39c", null ],

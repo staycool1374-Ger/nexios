@@ -53,6 +53,7 @@ var global__state_8cpp =
     [ "multiboot_info_ptr", "global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9", null ],
     [ "multiboot_magic", "global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a", null ],
     [ "scheduler_corruption_count", "global__state_8cpp.html#a0f9de4949789f8c2d559e134c0bca614", null ],
+    [ "scheduler_force_apply", "global__state_8cpp.html#a823de1fdeaceb58b6ea33199342a0b43", null ],
     [ "scheduler_kernel_cr3", "global__state_8cpp.html#acf3d43b7766a9a34a8eb7c6020ca4be8", null ],
     [ "scheduler_load_cr3_from", "global__state_8cpp.html#a3942c1b7ed6d3a34d02d0b5e09309586", null ],
     [ "scheduler_load_kstack_base", "global__state_8cpp.html#a4b408757cb3f937ec09d754ff766532f", null ],

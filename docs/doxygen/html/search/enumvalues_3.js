@@ -10,5 +10,7 @@ var searchData=
   ['cont_7',['CONT',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a53f6b3ace3aa40916de167636293ac80',1,'kernel']]],
   ['copying_5fsegments_8',['COPYING_SEGMENTS',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9',1,'kernel::elf']]],
   ['corrupted_9',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]],
-  ['create_10',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]]
+  ['create_10',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]],
+  ['ctrl_5fprobe_5ffailed_11',['CTRL_PROBE_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2',1,'arch']]],
+  ['ctrl_5ftimeout_12',['CTRL_TIMEOUT',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620',1,'arch']]]
 ];

@@ -8,5 +8,5 @@ var dir_5d78c82c73cee529a313d94efe356afe =
     [ "serial.cpp", "riscv64_2serial_8cpp.html", null ],
     [ "test_riscv64.cpp", "test__riscv64_8cpp.html", null ],
     [ "test_stubs.cpp", "riscv64_2test__stubs_8cpp.html", "riscv64_2test__stubs_8cpp" ],
-    [ "timer.cpp", "riscv64_2timer_8cpp.html", null ]
+    [ "timer.cpp", "riscv64_2timer_8cpp.html", "riscv64_2timer_8cpp" ]
 ];

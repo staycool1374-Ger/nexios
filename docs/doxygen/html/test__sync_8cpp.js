@@ -10,6 +10,7 @@ var test__sync_8cpp =
     [ "JARVIS_TEST", "test__sync_8cpp.html#a89ccae6fcb3dcd2a163ba23f759d029e", null ],
     [ "JARVIS_TEST", "test__sync_8cpp.html#af2387d6e9dfaf30a9c7231caba3c77b0", null ],
     [ "JARVIS_TEST", "test__sync_8cpp.html#a237245b18a76ba27caea922249a135b7", null ],
+    [ "JARVIS_TEST", "test__sync_8cpp.html#a55da564c3ac1f2e05be5d6ab629d06f0", null ],
     [ "JARVIS_TEST", "test__sync_8cpp.html#ad5a34b3fb8948fc3a9a385cc1ad11d53", null ],
     [ "JARVIS_TEST", "test__sync_8cpp.html#a0804f60ecbec108a0798d1ca16268ac1", null ],
     [ "JARVIS_TEST", "test__sync_8cpp.html#a323441beeb9f456ed05217f9c35bfc37", null ],

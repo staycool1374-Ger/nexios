@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -135,6 +135,8 @@ Files</h2></td></tr>
 <tr class="memdesc:acpi_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map only the first 128 MiB, but QEMU places ACPI tables near the top of RAM, so every accessed page is explicitly mapped on demand (HHDM + VMM::map_page, APIC/framebuffer pattern). Every table access is bounds-checked against the declared length and every signature + checksum is validated before the data is trusted (fail-closed probe). <br /></td></tr>
 <tr class="memitem:acpi_2Ehpp" id="r_acpi_2Ehpp"><td class="memItemLeft"><a href="acpi_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="acpi_8hpp.html">acpi.hpp</a></td></tr>
 <tr class="memdesc:acpi_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal ACPI/DMAR discovery for live VT-d (issue #9, phase-2). GRUB provides the RSDP through multiboot2 tags 14 (ACPI old / RSDP v1) and 15 (ACPI new / RSDP v2); the parser validates the checksum, walks RSDT/XSDT to the DMAR table and extracts the first DRHD remapping-unit base. Fail-closed: any malformed / checksum-mismatched table yields an empty DmarInfo (a corrupt table must never program an IOMMU). x86_64-only. <br /></td></tr>
+<tr class="memitem:early_5Finit_2Ecpp" id="r_early_5Finit_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2early__init_8cpp.html">early_init.cpp</a></td></tr>
+<tr class="memdesc:x86__64_2early__init_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer → TSC calibration. Mirrors the production order in <a class="el" href="kernel_8cpp.html">kernel.cpp</a> so the boot path and the conformance tests exercise the same sequence. <br /></td></tr>
 <tr class="memitem:keyboard_2Ecpp" id="r_keyboard_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="keyboard_8cpp.html">keyboard.cpp</a></td></tr>
 <tr class="memdesc:keyboard_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">PS/2 keyboard driver — translates scancodes to ASCII characters and manages a ring-buffer input queue. <br /></td></tr>
 <tr class="memitem:madt_2Ehpp" id="r_madt_2Ehpp"><td class="memItemLeft"><a href="madt_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="madt_8hpp.html">madt.hpp</a></td></tr>

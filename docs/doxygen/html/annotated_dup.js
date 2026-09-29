@@ -32,6 +32,9 @@ var annotated_dup =
         [ "MsixCap", "classkernel_1_1cap_1_1_msix_cap.html", "classkernel_1_1cap_1_1_msix_cap" ],
         [ "UntypedMem", "classkernel_1_1cap_1_1_untyped_mem.html", "classkernel_1_1cap_1_1_untyped_mem" ]
       ] ],
+      [ "debug", "namespacekernel_1_1debug.html", [
+        [ "StopEvent", "structkernel_1_1debug_1_1_stop_event.html", "structkernel_1_1debug_1_1_stop_event" ]
+      ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
         [ "TcbWriteLog", "structkernel_1_1diag_1_1_tcb_write_log.html", "structkernel_1_1diag_1_1_tcb_write_log" ]
       ] ],
@@ -140,7 +143,6 @@ var annotated_dup =
     [ "adopt_lock_t", "structadopt__lock__t.html", null ],
     [ "BenchResult", "struct_bench_result.html", "struct_bench_result" ],
     [ "DefaultDeleter", "struct_default_deleter.html", "struct_default_deleter" ],
-    [ "EarlyInitStub", "struct_early_init_stub.html", "struct_early_init_stub" ],
     [ "Fat32TestFixture", "struct_fat32_test_fixture.html", "struct_fat32_test_fixture" ],
     [ "fdt_header", "structfdt__header.html", "structfdt__header" ],
     [ "fdt_node_header", "structfdt__node__header.html", "structfdt__node__header" ],

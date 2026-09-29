@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -192,6 +192,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:aed16b217483080d1d9bfec6f56472775"><td class="mdescLeft">&#160;</td><td class="mdescRight">Teardown for a triple of tasks (see terminate_and_drain2).  <br /></td></tr>
 <tr class="memitem:a5fe8e4fe371af9ccda6c34673f1d6133" id="r_a5fe8e4fe371af9ccda6c34673f1d6133"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5fe8e4fe371af9ccda6c34673f1d6133">wait_for_termination_safe</a> (<a class="el" href="#af219b4b081470c65fb5140fbabdd424c">TaskControlBlock</a> *task)</td></tr>
 <tr class="memdesc:a5fe8e4fe371af9ccda6c34673f1d6133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Safely wait for task termination in a test harness. The raw <span class="tt"><a class="el" href="namespacekernel.html#a058eeb27b3f54e789e5f17935940c161">while</a> (t-&gt;state != TERMINATED) hlt()</span> pattern reads the TCB even after the zombie reaper has freed + 0xDD-poisoned it (e.g. when the scheduler is momentarily idle between test tasks) — the poisoned state is never TERMINATED, so the harness spins forever (H2 residual hang). is_valid() checks magic FIRST (<a class="el" href="task_8hpp.html" title="Task control block and state definitions for the kernel scheduler.">task.hpp</a>), so a freed block reads magic != TCB_MAGIC and the wait exits. Also re-arms scheduler_need_resched so the timer ISR keeps driving the suite.  <br /></td></tr>
+<tr class="memitem:a5f11b3daec7f81082d98cc76b23a14b3" id="r_a5f11b3daec7f81082d98cc76b23a14b3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5f11b3daec7f81082d98cc76b23a14b3">make_synthetic_clone_frame</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>(&amp;regs)[37], <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry=0x1000, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stack=0x80000000)</td></tr>
+<tr class="memdesc:a5f11b3daec7f81082d98cc76b23a14b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build a synthetic per-arch register frame for TaskControlBlock::clone() (issue #215). Sized for the arch frame layout so clone() never reads out of bounds: x86_64 reads regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1, SPSR_EL1), riscv64 reads regs[0..36]. Callers declare 37 slots on every arch; each arch populates its own PC/SP slots (content is otherwise zero — no test asserts frame echo).  <br /></td></tr>
 <tr class="memitem:a3682848fa74834ef280e24ea7c67ff5e" id="r_a3682848fa74834ef280e24ea7c67ff5e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3682848fa74834ef280e24ea7c67ff5e">watchdog_arm</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> ms, const char *test_name)</td></tr>
 <tr class="memdesc:a3682848fa74834ef280e24ea7c67ff5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm the watchdog with both TSC-based and PIT-based timers. PIT channel 1 one-shot (~55ms) + TSC deadline.  <br /></td></tr>
 <tr class="memitem:a0a6da7c5576fe1c48584026927954c24" id="r_a0a6da7c5576fe1c48584026927954c24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0a6da7c5576fe1c48584026927954c24">watchdog_disarm</a> ()</td></tr>
@@ -609,6 +611,50 @@ Here is the call graph for this function:</div>
 
 <p>Get the list of test classes to run (populated by parse_test_config). </p>
 <dl class="section return"><dt>Returns</dt><dd>Null-terminated array of class names </dd></dl>
+
+</div>
+</div>
+<a id="a5f11b3daec7f81082d98cc76b23a14b3" name="a5f11b3daec7f81082d98cc76b23a14b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5f11b3daec7f81082d98cc76b23a14b3">&#9670;&#160;</a></span>make_synthetic_clone_frame()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::test::make_synthetic_clone_frame </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>(&amp;)</td>          <td class="paramname"><span class="paramname"><em>regs</em></span>[37], </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>entry</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0x1000</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>stack</em></span><span class="paramdefsep"> = </span><span class="paramdefval">0x80000000</span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Build a synthetic per-arch register frame for TaskControlBlock::clone() (issue #215). Sized for the arch frame layout so clone() never reads out of bounds: x86_64 reads regs[0..21], aarch64 reads regs[0..33] (x0-x30, SP_EL0, ELR_EL1, SPSR_EL1), riscv64 reads regs[0..36]. Callers declare 37 slots on every arch; each arch populates its own PC/SP slots (content is otherwise zero — no test asserts frame echo). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">regs</td><td>37-slot frame to fill. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">entry</td><td>Entry-point/PC value for the arch's program-counter slot. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">stack</td><td>Stack-pointer value for the arch's SP slot. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

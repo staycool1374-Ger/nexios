@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -132,12 +132,12 @@ Directories</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
 <tr class="memitem:early_5Finit_2Ecpp" id="r_early_5Finit_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2early__init_8cpp.html">early_init.cpp</a></td></tr>
-<tr class="memdesc:riscv64_2early__init_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stub file — early RISC-V64 init is performed in boot.S (assembly). Exists only to satisfy the build system's expectation of a .cpp file. <br /></td></tr>
+<tr class="memdesc:riscv64_2early__init_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">riscv64 early IRQ bring-up (issue #198): stvec/IDT → PLIC (threshold 0 + supervisor external enable) → SBI timer → mtime-frequency calibration. Mirrors <a class="el" href="kernel_8cpp.html">kernel.cpp</a> boot order. Raw early init (trap vector, MMU) stays in boot.S (assembly). <br /></td></tr>
 <tr class="memitem:idt_2Ecpp" id="r_idt_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2idt_8cpp.html">idt.cpp</a></td></tr>
 <tr class="memdesc:riscv64_2idt_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 interrupt dispatch table (stvec-based) — registers per-vector ISR handlers and dispatches via trap_vector. <br /></td></tr>
 <tr class="memitem:interrupt_5Fcontroller_2Ecpp" id="r_interrupt_5Fcontroller_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2interrupt__controller_8cpp.html">interrupt_controller.cpp</a></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2rtc_8cpp.html">rtc.cpp</a></td></tr>
-<tr class="memdesc:riscv64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 RTC driver — reads wall-clock time via the mtime CSR. <br /></td></tr>
+<tr class="memdesc:riscv64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 RTC driver — uptime clock via the mtime CSR (NOT a wall clock: seconds since boot rendered from a 1970 epoch; a goldfish-rtc wall-clock driver is follow-up work). <br /></td></tr>
 <tr class="memitem:serial_2Ecpp" id="r_serial_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2serial_8cpp.html">serial.cpp</a></td></tr>
 <tr class="memdesc:riscv64_2serial_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 serial port driver — uses SBI ecall for output. <br /></td></tr>
 <tr class="memitem:test_5Friscv64_2Ecpp" id="r_test_5Friscv64_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__riscv64_8cpp.html">test_riscv64.cpp</a></td></tr>

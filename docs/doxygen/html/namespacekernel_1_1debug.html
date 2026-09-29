@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -119,13 +119,75 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:StopEvent" id="r_StopEvent"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1debug_1_1_stop_event.html">StopEvent</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop event (64 bytes, plain layout — also the user ABI for the ATTACH selector-2 poll: copied verbatim to the debugger buffer).  <a href="structkernel_1_1debug_1_1_stop_event.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
 <tr class="memitem:a516d263e9a9dd5318b938067a1e3b353" id="r_a516d263e9a9dd5318b938067a1e3b353"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a516d263e9a9dd5318b938067a1e3b353">L</a> = <a class="el" href="classkernel_1_1_logger.html">Logger</a></td></tr>
 <tr class="memitem:a4c63317d15f89eed657007431bb35cb9" id="r_a4c63317d15f89eed657007431bb35cb9"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="#a4c63317d15f89eed657007431bb35cb9">S</a> = <a class="el" href="classkernel_1_1_scheduler.html">Scheduler</a></td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a7d0517c41ce6d04323f7b0a3e74d388f" id="r_a7d0517c41ce6d04323f7b0a3e74d388f"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388f">StopKind</a> : uint64_t { <a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388fafd14a8e38e53a8241e49cfbe48095de3">BREAKPOINT</a> = 1
+, <a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388fa522f694f92e679d874a1cc2b2616c3d7">STEP</a> = 2
+, <a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388fa893b3aaf1661e3717b18e8335ff93a72">FAULT</a> = 3
+, <a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388fabf5ddcfbfeb1c3affd54efad7069aac9">DEATH</a> = 4
+ }</td></tr>
+<tr class="memdesc:a7d0517c41ce6d04323f7b0a3e74d388f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stop-event kinds (spec §4). Zero is never enqueued (TCB debug_stop_kind == 0 means cleanly parked, not fault-stopped).  <a href="#a7d0517c41ce6d04323f7b0a3e74d388f">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a893cb407d22ea88b636bde7608b880a1" id="r_a893cb407d22ea88b636bde7608b880a1"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a893cb407d22ea88b636bde7608b880a1">debug_validate_handle</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> caller_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> handle) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a893cb407d22ea88b636bde7608b880a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handle validation without liveness (issue #226): live binding owned by <code class="param">caller</code> for <code class="param">handle</code>? Takes g_bind_lock internally — never call with it held (the lock is non-recursive; nesting self-deadlocks, e.g. poll-then-lookup).  <br /></td></tr>
+<tr class="memitem:a880ff81d5f4d6bf9b01a5f2ed20b2e05" id="r_a880ff81d5f4d6bf9b01a5f2ed20b2e05"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a880ff81d5f4d6bf9b01a5f2ed20b2e05">debug_drain_debugger</a> (TaskControlBlock &amp;dying) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a880ff81d5f4d6bf9b01a5f2ed20b2e05"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debugger-death fail-safe: for every live binding owned by <code class="param">dying</code>, apply default dispositions (fault-stopped targets terminate, cleanly-stopped resume), restore breakpoint shadows, drop queued events, clear flags. No orphaned parked tasks. Granted slots (issue #239, spec §14) participate by grantee ownership; slots this task granted to others revoke here too (grantor-death, same shared disposition). Runs in cleanup() (task context, may terminate/block).  <br /></td></tr>
+<tr class="memitem:a09bf0af36b25162c96df4370d87c2595" id="r_a09bf0af36b25162c96df4370d87c2595"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a09bf0af36b25162c96df4370d87c2595">debug_bindings_reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a09bf0af36b25162c96df4370d87c2595"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-isolation reset for the binding table (issue #226).  <br /></td></tr>
+<tr class="memitem:aa887cd887dd78c1a514176958c747070" id="r_aa887cd887dd78c1a514176958c747070"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa887cd887dd78c1a514176958c747070">debug_collect_owned</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debugger_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *ids_out, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *gens_out, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> cap) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aa887cd887dd78c1a514176958c747070"><td class="mdescLeft">&#160;</td><td class="mdescRight">Owned-target snapshot for the stop poll (issue #226): collects all (target_id, target_gen) pairs owned by <code class="param">debugger_id</code> (up to <code class="param">cap</code>) under g_bind_lock and releases it before returning, so the poll can scan the stop queue WITHOUT nesting bind inside the queue lock (lock order is bind -&gt; stop everywhere; nesting stop -&gt; bind would invert detach's bind -&gt; stop and deadlock).  <br /></td></tr>
+<tr class="memitem:adc84da64ce75071400ed00b1705acb96" id="r_adc84da64ce75071400ed00b1705acb96"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adc84da64ce75071400ed00b1705acb96">debug_blob_bytes</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:adc84da64ce75071400ed00b1705acb96"><td class="mdescLeft">&#160;</td><td class="mdescRight">GDB register blob size in bytes for this arch (164/272/264).  <br /></td></tr>
+<tr class="memitem:a323ba93131d78bd149949ff7d7d8cd32" id="r_a323ba93131d78bd149949ff7d7d8cd32"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a323ba93131d78bd149949ff7d7d8cd32">debug_frame_slot</a> (const TaskControlBlock &amp;tcb) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a323ba93131d78bd149949ff7d7d8cd32"><td class="mdescLeft">&#160;</td><td class="mdescRight">U-trap frame slot base for a task (kstack_top - frame size), or nullptr when the task has no kernel stack (yet).  <br /></td></tr>
+<tr class="memitem:a906212d3a145bb353d79d627032ee759" id="r_a906212d3a145bb353d79d627032ee759"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a906212d3a145bb353d79d627032ee759">debug_frame_is_user</a> (const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *frame) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a906212d3a145bb353d79d627032ee759"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when the slot holds a user-mode trap frame (arch magic check). Fail-closed gate for all codec reads/writes.  <br /></td></tr>
+<tr class="memitem:a1468d93c02ba1436b5a09e3e0e1b4825" id="r_a1468d93c02ba1436b5a09e3e0e1b4825"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1468d93c02ba1436b5a09e3e0e1b4825">debug_read_regs</a> (const TaskControlBlock &amp;tcb, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *blob_out, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> blob_qwords) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a1468d93c02ba1436b5a09e3e0e1b4825"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the task's user registers into blob_out (qwords).  <br /></td></tr>
+<tr class="memitem:ae70a742c8c462e516c06a9af82b55258" id="r_ae70a742c8c462e516c06a9af82b55258"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae70a742c8c462e516c06a9af82b55258">debug_write_regs</a> (TaskControlBlock &amp;tcb, const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *blob_in, <a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> blob_qwords) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae70a742c8c462e516c06a9af82b55258"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write blob_in into the task's live U-trap frame (takes effect on resume — the return path restores from that frame).  <br /></td></tr>
+<tr class="memitem:aa12d00119d664f5407c3ef417781baf6" id="r_aa12d00119d664f5407c3ef417781baf6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa12d00119d664f5407c3ef417781baf6">debug_step_arm</a> (TaskControlBlock &amp;tcb) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:aa12d00119d664f5407c3ef417781baf6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm a single step in the task's live U-trap frame (issue #226): x86 sets TF (RFLAGS bit 8, tick or syscall frame slot) with IF masked across the one instruction. aarch64/RISC-V report false — the caller emulates via a temp breakpoint instead (AArch64 is fixed-4B so pc+4 is exact; RISC-V decodes RVC; neither depends on the QEMU/silicon single-step debug model).  <br /></td></tr>
+<tr class="memitem:a8fc24d896b69e34fe3580013516e7314" id="r_a8fc24d896b69e34fe3580013516e7314"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8fc24d896b69e34fe3580013516e7314">debug_step_disarm</a> (TaskControlBlock &amp;tcb) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a8fc24d896b69e34fe3580013516e7314"><td class="mdescLeft">&#160;</td><td class="mdescRight">Disarm a step armed by debug_step_arm (issue #226): clears TF and restores IF. Fail-open true when the frame is gone (target died — nothing to clear, and completion must still proceed).  <br /></td></tr>
+<tr class="memitem:ab32e690298a0ec155075a435c8466b2a" id="r_ab32e690298a0ec155075a435c8466b2a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab32e690298a0ec155075a435c8466b2a">debug_step_complete</a> (TaskControlBlock &amp;target) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ab32e690298a0ec155075a435c8466b2a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Forward: STEP-completion trailer (defined below).  <br /></td></tr>
+<tr class="memitem:a2c8f28a30ede46d24969f5d4817076b8" id="r_a2c8f28a30ede46d24969f5d4817076b8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a2c8f28a30ede46d24969f5d4817076b8">debug_route_fault</a> (TaskControlBlock &amp;target, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kind, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> num, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> addr) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a2c8f28a30ede46d24969f5d4817076b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Route a trap on <code class="param">target</code> to its debugger (ISR fault context). Enqueues the stop event, parks the target (BLOCKED + dequeued, stop kind/VA latched), pokes the debugger Notify, and arms the deferred switch away. Returns true when routed (caller skips the default terminate/signal disposition); false when unattached or ineligible (caller applies the existing disposition unchanged).  <br /></td></tr>
+<tr class="memitem:a0c4ddb96910b6104cec7c2fc209c782b" id="r_a0c4ddb96910b6104cec7c2fc209c782b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0c4ddb96910b6104cec7c2fc209c782b">debug_poll_event</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> debugger_id, <a class="el" href="structkernel_1_1debug_1_1_stop_event.html">StopEvent</a> &amp;out) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a0c4ddb96910b6104cec7c2fc209c782b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Non-blocking dequeue of the oldest stop event for <code class="param">debugger_id</code>. Locking: snapshots owned bindings first (bind released), then scans under the queue lock only — never nests bind inside stop (see debug_collect_owned; detach orders bind -&gt; stop).  <br /></td></tr>
+<tr class="memitem:a415173839a69c2f083a85d815bdf1f86" id="r_a415173839a69c2f083a85d815bdf1f86"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a415173839a69c2f083a85d815bdf1f86">debug_dropped_count</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a415173839a69c2f083a85d815bdf1f86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Events dropped (overflow) since boot. Reported alongside polls.  <br /></td></tr>
+<tr class="memitem:a4788dbc13c6053023410f30d2aeeb308" id="r_a4788dbc13c6053023410f30d2aeeb308"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4788dbc13c6053023410f30d2aeeb308">debug_bp_insert</a> (TaskControlBlock &amp;target, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a4788dbc13c6053023410f30d2aeeb308"><td class="mdescLeft">&#160;</td><td class="mdescRight">Insert a software breakpoint at <code class="param">va</code> in <code class="param">target</code> (kernel shadow authoritative). Idempotent re-insert returns true.  <br /></td></tr>
+<tr class="memitem:a1dcb162af701bb078c775f9fe0e760f2" id="r_a1dcb162af701bb078c775f9fe0e760f2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a1dcb162af701bb078c775f9fe0e760f2">debug_bp_clear</a> (TaskControlBlock &amp;target, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> va) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a1dcb162af701bb078c775f9fe0e760f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the breakpoint at <code class="param">va</code>, restoring original bytes.  <br /></td></tr>
+<tr class="memitem:a9e729af53e119ce8a6e8420d0926fde2" id="r_a9e729af53e119ce8a6e8420d0926fde2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9e729af53e119ce8a6e8420d0926fde2">debug_bp_restore_all</a> (TaskControlBlock &amp;target) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a9e729af53e119ce8a6e8420d0926fde2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore all shadowed breakpoints of <code class="param">target</code> (detach + death).  <br /></td></tr>
+<tr class="memitem:ab418a7dead513550e8631285e3856e75" id="r_ab418a7dead513550e8631285e3856e75"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab418a7dead513550e8631285e3856e75">debug_bp_match</a> (TaskControlBlock &amp;target, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pc) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ab418a7dead513550e8631285e3856e75"><td class="mdescLeft">&#160;</td><td class="mdescRight">Match a trap PC against <code class="param">target's</code> shadows.  <br /></td></tr>
+<tr class="memitem:a3f194ceaed043f78d0d53780463b7a95" id="r_a3f194ceaed043f78d0d53780463b7a95"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3f194ceaed043f78d0d53780463b7a95">debug_continue</a> (TaskControlBlock &amp;target) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a3f194ceaed043f78d0d53780463b7a95"><td class="mdescLeft">&#160;</td><td class="mdescRight">Continue a parked <code class="param">target:</code> plain resume, or single-step-over with re-arm when stopped on a breakpoint (restores orig byte, arms one step, resumes; the STEP completion re-inserts).  <br /></td></tr>
+<tr class="memitem:a6844256c85a889488a4b3de0adc28f6c" id="r_a6844256c85a889488a4b3de0adc28f6c"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6844256c85a889488a4b3de0adc28f6c">debug_step</a> (TaskControlBlock &amp;target) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a6844256c85a889488a4b3de0adc28f6c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single-step a parked <code class="param">target</code> (arch-native TF/SS or RISC-V next-insn emulation). Resumes the target; arrival routes a STEP event through debug_route_fault.  <br /></td></tr>
+<tr class="memitem:ae06768db20c0174541f81596c57c0b3d" id="r_ae06768db20c0174541f81596c57c0b3d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae06768db20c0174541f81596c57c0b3d">debug_publish_death</a> (TaskControlBlock &amp;dying) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:ae06768db20c0174541f81596c57c0b3d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Publish a task-death stop event (reserved slot, never dropped) and poke the debugger. Runs in cleanup() before page-table free while bindings and Notify are intact.  <br /></td></tr>
+<tr class="memitem:abc4ac3085cdd74f5bd69a449260bd1fe" id="r_abc4ac3085cdd74f5bd69a449260bd1fe"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abc4ac3085cdd74f5bd69a449260bd1fe">debug_drop_target</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> target_id, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> target_gen) <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:abc4ac3085cdd74f5bd69a449260bd1fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Drop all queued events + shadows for a target by id (detach and dead-target paths — works after the TCB is gone, no byte restore).  <br /></td></tr>
+<tr class="memitem:a121798458bea262541cf5797c06876a6" id="r_a121798458bea262541cf5797c06876a6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a121798458bea262541cf5797c06876a6">debug_snapshot_reset</a> () <a class="el" href="namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf">noexcept</a></td></tr>
+<tr class="memdesc:a121798458bea262541cf5797c06876a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-isolation reset: bindings, stop queue, shadows (issue #226). Wired into test_isolate alongside DeathNotify.  <br /></td></tr>
 <tr class="memitem:a9c80a5a9a3a6f52efef1fabf4192ab72" id="r_a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9c80a5a9a3a6f52efef1fabf4192ab72">dump_scheduler_info</a> ()</td></tr>
 <tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print three hex key-value pairs.  <br /></td></tr>
 <tr class="memitem:ade0bc324da03fcc112cdb93eb35f220b" id="r_ade0bc324da03fcc112cdb93eb35f220b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade0bc324da03fcc112cdb93eb35f220b">dump_task_info</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> task_id)</td></tr>
@@ -140,6 +202,11 @@ Functions</h2></td></tr>
 <tr class="memitem:ae301850b7dcbeb7beaeb3dc92d909ddf" id="r_ae301850b7dcbeb7beaeb3dc92d909ddf"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae301850b7dcbeb7beaeb3dc92d909ddf">record_task_entry</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> entry, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> tcb)</td></tr>
 <tr class="memitem:a094fd17ebd41a3d23a3ac83dbab61387" id="r_a094fd17ebd41a3d23a3ac83dbab61387"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a094fd17ebd41a3d23a3ac83dbab61387">find_entry_owner</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> value)</td></tr>
 <tr class="memdesc:a094fd17ebd41a3d23a3ac83dbab61387"><td class="mdescLeft">&#160;</td><td class="mdescRight">If <span class="tt">value</span> equals the low 32 bits or full value of a recently created task's <span class="tt">entry</span>, return that task's tcb address; else 0.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a5e5df53bd66d0f3c153ecca098da7850" id="r_a5e5df53bd66d0f3c153ecca098da7850"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5e5df53bd66d0f3c153ecca098da7850">DEBUG_STOP_PULSE</a> = 0xDE8B6001ULL</td></tr>
+<tr class="memdesc:a5e5df53bd66d0f3c153ecca098da7850"><td class="mdescLeft">&#160;</td><td class="mdescRight">Notify pulse delivered to the debugger TCB on every enqueue. Distinct from DEATH_WAKE_PULSE (different recipient contract:  <br /></td></tr>
 </table>
 <a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
 <a id="a516d263e9a9dd5318b938067a1e3b353" name="a516d263e9a9dd5318b938067a1e3b353"></a>
@@ -170,7 +237,844 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="a7d0517c41ce6d04323f7b0a3e74d388f" name="a7d0517c41ce6d04323f7b0a3e74d388f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7d0517c41ce6d04323f7b0a3e74d388f">&#9670;&#160;</a></span>StopKind</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388f">kernel::debug::StopKind</a> : <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Stop-event kinds (spec §4). Zero is never enqueued (TCB debug_stop_kind == 0 means cleanly parked, not fault-stopped). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a7d0517c41ce6d04323f7b0a3e74d388fafd14a8e38e53a8241e49cfbe48095de3" name="a7d0517c41ce6d04323f7b0a3e74d388fafd14a8e38e53a8241e49cfbe48095de3"></a>BREAKPOINT&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a7d0517c41ce6d04323f7b0a3e74d388fa522f694f92e679d874a1cc2b2616c3d7" name="a7d0517c41ce6d04323f7b0a3e74d388fa522f694f92e679d874a1cc2b2616c3d7"></a>STEP&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a7d0517c41ce6d04323f7b0a3e74d388fa893b3aaf1661e3717b18e8335ff93a72" name="a7d0517c41ce6d04323f7b0a3e74d388fa893b3aaf1661e3717b18e8335ff93a72"></a>FAULT&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a7d0517c41ce6d04323f7b0a3e74d388fabf5ddcfbfeb1c3affd54efad7069aac9" name="a7d0517c41ce6d04323f7b0a3e74d388fabf5ddcfbfeb1c3affd54efad7069aac9"></a>DEATH&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a09bf0af36b25162c96df4370d87c2595" name="a09bf0af36b25162c96df4370d87c2595"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09bf0af36b25162c96df4370d87c2595">&#9670;&#160;</a></span>debug_bindings_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_bindings_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test-isolation reset for the binding table (issue #226). </p>
+
+</div>
+</div>
+<a id="adc84da64ce75071400ed00b1705acb96" name="adc84da64ce75071400ed00b1705acb96"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adc84da64ce75071400ed00b1705acb96">&#9670;&#160;</a></span>debug_blob_bytes()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::debug::debug_blob_bytes </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GDB register blob size in bytes for this arch (164/272/264). </p>
+
+</div>
+</div>
+<a id="a1dcb162af701bb078c775f9fe0e760f2" name="a1dcb162af701bb078c775f9fe0e760f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1dcb162af701bb078c775f9fe0e760f2">&#9670;&#160;</a></span>debug_bp_clear()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_bp_clear </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Clear the breakpoint at <code class="param">va</code>, restoring original bytes. </p>
+<dl class="section return"><dt>Returns</dt><dd>false when no shadow exists for (target, va). </dd></dl>
+
+</div>
+</div>
+<a id="a4788dbc13c6053023410f30d2aeeb308" name="a4788dbc13c6053023410f30d2aeeb308"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4788dbc13c6053023410f30d2aeeb308">&#9670;&#160;</a></span>debug_bp_insert()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_bp_insert </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Insert a software breakpoint at <code class="param">va</code> in <code class="param">target</code> (kernel shadow authoritative). Idempotent re-insert returns true. </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the table is full, the VA is unmapped, or the target is not debuggable. </dd></dl>
+
+</div>
+</div>
+<a id="ab418a7dead513550e8631285e3856e75" name="ab418a7dead513550e8631285e3856e75"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab418a7dead513550e8631285e3856e75">&#9670;&#160;</a></span>debug_bp_match()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::debug::debug_bp_match </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>pc</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Match a trap PC against <code class="param">target's</code> shadows. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">pc</td><td>Trap-adjusted PC (x86: RIP-1 for int3; ARM/RISC-V: ELR/sepc). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>VA of the shadow hit, 0 when no shadow matches. </dd></dl>
+
+</div>
+</div>
+<a id="a9e729af53e119ce8a6e8420d0926fde2" name="a9e729af53e119ce8a6e8420d0926fde2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e729af53e119ce8a6e8420d0926fde2">&#9670;&#160;</a></span>debug_bp_restore_all()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_bp_restore_all </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Restore all shadowed breakpoints of <code class="param">target</code> (detach + death). </p>
+
+</div>
+</div>
+<a id="aa887cd887dd78c1a514176958c747070" name="aa887cd887dd78c1a514176958c747070"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa887cd887dd78c1a514176958c747070">&#9670;&#160;</a></span>debug_collect_owned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a> kernel::debug::debug_collect_owned </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>debugger_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>ids_out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *</td>          <td class="paramname"><span class="paramname"><em>gens_out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>cap</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Owned-target snapshot for the stop poll (issue #226): collects all (target_id, target_gen) pairs owned by <code class="param">debugger_id</code> (up to <code class="param">cap</code>) under g_bind_lock and releases it before returning, so the poll can scan the stop queue WITHOUT nesting bind inside the queue lock (lock order is bind -&gt; stop everywhere; nesting stop -&gt; bind would invert detach's bind -&gt; stop and deadlock). </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of pairs stored (0 when none). </dd></dl>
+
+</div>
+</div>
+<a id="a3f194ceaed043f78d0d53780463b7a95" name="a3f194ceaed043f78d0d53780463b7a95"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f194ceaed043f78d0d53780463b7a95">&#9670;&#160;</a></span>debug_continue()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_continue </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Continue a parked <code class="param">target:</code> plain resume, or single-step-over with re-arm when stopped on a breakpoint (restores orig byte, arms one step, resumes; the STEP completion re-inserts). </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the target is not parked for this debugger. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a3f194ceaed043f78d0d53780463b7a95_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a3f194ceaed043f78d0d53780463b7a95_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a880ff81d5f4d6bf9b01a5f2ed20b2e05" name="a880ff81d5f4d6bf9b01a5f2ed20b2e05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a880ff81d5f4d6bf9b01a5f2ed20b2e05">&#9670;&#160;</a></span>debug_drain_debugger()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_drain_debugger </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>dying</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Debugger-death fail-safe: for every live binding owned by <code class="param">dying</code>, apply default dispositions (fault-stopped targets terminate, cleanly-stopped resume), restore breakpoint shadows, drop queued events, clear flags. No orphaned parked tasks. Granted slots (issue #239, spec §14) participate by grantee ownership; slots this task granted to others revoke here too (grantor-death, same shared disposition). Runs in cleanup() (task context, may terminate/block). </p>
+<p>Debugger-death fail-safe (cleanup() hook): for every binding owned by <code class="param">dying</code>, apply default dispositions (fault-stopped targets terminate, cleanly-stopped resume), restore shadows, drop queued events, clear flags. No orphaned parked tasks. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a880ff81d5f4d6bf9b01a5f2ed20b2e05_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a880ff81d5f4d6bf9b01a5f2ed20b2e05_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="abc4ac3085cdd74f5bd69a449260bd1fe" name="abc4ac3085cdd74f5bd69a449260bd1fe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abc4ac3085cdd74f5bd69a449260bd1fe">&#9670;&#160;</a></span>debug_drop_target()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_drop_target </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>target_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>target_gen</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Drop all queued events + shadows for a target by id (detach and dead-target paths — works after the TCB is gone, no byte restore). </p>
+
+</div>
+</div>
+<a id="a415173839a69c2f083a85d815bdf1f86" name="a415173839a69c2f083a85d815bdf1f86"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a415173839a69c2f083a85d815bdf1f86">&#9670;&#160;</a></span>debug_dropped_count()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::debug::debug_dropped_count </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Events dropped (overflow) since boot. Reported alongside polls. </p>
+<dl class="section return"><dt>Returns</dt><dd>Monotonic drop-oldest count (death-evicted deaths counted too). </dd></dl>
+
+</div>
+</div>
+<a id="a906212d3a145bb353d79d627032ee759" name="a906212d3a145bb353d79d627032ee759"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a906212d3a145bb353d79d627032ee759">&#9670;&#160;</a></span>debug_frame_is_user()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_frame_is_user </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>frame</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when the slot holds a user-mode trap frame (arch magic check). Fail-closed gate for all codec reads/writes. </p>
+
+</div>
+</div>
+<a id="a323ba93131d78bd149949ff7d7d8cd32" name="a323ba93131d78bd149949ff7d7d8cd32"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a323ba93131d78bd149949ff7d7d8cd32">&#9670;&#160;</a></span>debug_frame_slot()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> * kernel::debug::debug_frame_slot </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>U-trap frame slot base for a task (kstack_top - frame size), or nullptr when the task has no kernel stack (yet). </p>
+
+</div>
+</div>
+<a id="a0c4ddb96910b6104cec7c2fc209c782b" name="a0c4ddb96910b6104cec7c2fc209c782b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c4ddb96910b6104cec7c2fc209c782b">&#9670;&#160;</a></span>debug_poll_event()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_poll_event </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>debugger_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1debug_1_1_stop_event.html">StopEvent</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Non-blocking dequeue of the oldest stop event for <code class="param">debugger_id</code>. Locking: snapshots owned bindings first (bind released), then scans under the queue lock only — never nests bind inside stop (see debug_collect_owned; detach orders bind -&gt; stop). </p>
+<dl class="section return"><dt>Returns</dt><dd>true with <code class="param">out</code> filled; false when the queue holds nothing for this debugger (caller reports EAGAIN). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a0c4ddb96910b6104cec7c2fc209c782b_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a0c4ddb96910b6104cec7c2fc209c782b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="ae06768db20c0174541f81596c57c0b3d" name="ae06768db20c0174541f81596c57c0b3d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae06768db20c0174541f81596c57c0b3d">&#9670;&#160;</a></span>debug_publish_death()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_publish_death </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>dying</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Publish a task-death stop event (reserved slot, never dropped) and poke the debugger. Runs in cleanup() before page-table free while bindings and Notify are intact. </p>
+
+</div>
+</div>
+<a id="a1468d93c02ba1436b5a09e3e0e1b4825" name="a1468d93c02ba1436b5a09e3e0e1b4825"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1468d93c02ba1436b5a09e3e0e1b4825">&#9670;&#160;</a></span>debug_read_regs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_read_regs </td>
+          <td>(</td>
+          <td class="paramtype">const TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>blob_out</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>blob_qwords</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read the task's user registers into blob_out (qwords). </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the slot is missing/non-user or the blob is short. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a1468d93c02ba1436b5a09e3e0e1b4825_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a1468d93c02ba1436b5a09e3e0e1b4825_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a2c8f28a30ede46d24969f5d4817076b8" name="a2c8f28a30ede46d24969f5d4817076b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2c8f28a30ede46d24969f5d4817076b8">&#9670;&#160;</a></span>debug_route_fault()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_route_fault </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>kind</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>num</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>addr</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Route a trap on <code class="param">target</code> to its debugger (ISR fault context). Enqueues the stop event, parks the target (BLOCKED + dequeued, stop kind/VA latched), pokes the debugger Notify, and arms the deferred switch away. Returns true when routed (caller skips the default terminate/signal disposition); false when unattached or ineligible (caller applies the existing disposition unchanged). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">kind</td><td><a class="el" href="#a7d0517c41ce6d04323f7b0a3e74d388f" title="Stop-event kinds (spec §4). Zero is never enqueued (TCB debug_stop_kind == 0 means cleanly parked,...">StopKind</a> numerics (BREAKPOINT/STEP/FAULT). </td></tr>
+    <tr><td class="paramname">num</td><td>Arch fault identifier (vector / scause / ESR EC). </td></tr>
+    <tr><td class="paramname">addr</td><td>Fault address or stop VA (CR2 / FAR / stval / pc). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a2c8f28a30ede46d24969f5d4817076b8_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a2c8f28a30ede46d24969f5d4817076b8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a121798458bea262541cf5797c06876a6" name="a121798458bea262541cf5797c06876a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a121798458bea262541cf5797c06876a6">&#9670;&#160;</a></span>debug_snapshot_reset()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_snapshot_reset </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Test-isolation reset: bindings, stop queue, shadows (issue #226). Wired into test_isolate alongside DeathNotify. </p>
+
+</div>
+</div>
+<a id="a6844256c85a889488a4b3de0adc28f6c" name="a6844256c85a889488a4b3de0adc28f6c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6844256c85a889488a4b3de0adc28f6c">&#9670;&#160;</a></span>debug_step()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_step </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Single-step a parked <code class="param">target</code> (arch-native TF/SS or RISC-V next-insn emulation). Resumes the target; arrival routes a STEP event through debug_route_fault. </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the target is not parked or the arch step fails. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a6844256c85a889488a4b3de0adc28f6c_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a6844256c85a889488a4b3de0adc28f6c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="aa12d00119d664f5407c3ef417781baf6" name="aa12d00119d664f5407c3ef417781baf6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa12d00119d664f5407c3ef417781baf6">&#9670;&#160;</a></span>debug_step_arm()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_step_arm </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Arm a single step in the task's live U-trap frame (issue #226): x86 sets TF (RFLAGS bit 8, tick or syscall frame slot) with IF masked across the one instruction. aarch64/RISC-V report false — the caller emulates via a temp breakpoint instead (AArch64 is fixed-4B so pc+4 is exact; RISC-V decodes RVC; neither depends on the QEMU/silicon single-step debug model). </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the slot is missing/non-user or the arch emulates. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_aa12d00119d664f5407c3ef417781baf6_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_aa12d00119d664f5407c3ef417781baf6_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="ab32e690298a0ec155075a435c8466b2a" name="ab32e690298a0ec155075a435c8466b2a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab32e690298a0ec155075a435c8466b2a">&#9670;&#160;</a></span>debug_step_complete()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_step_complete </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>target</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Forward: STEP-completion trailer (defined below). </p>
+<p>STEP-completion trailer shared by the router: disarm the arch step state and re-insert a step-over breakpoint when armed. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_ab32e690298a0ec155075a435c8466b2a_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ab32e690298a0ec155075a435c8466b2a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="a8fc24d896b69e34fe3580013516e7314" name="a8fc24d896b69e34fe3580013516e7314"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8fc24d896b69e34fe3580013516e7314">&#9670;&#160;</a></span>debug_step_disarm()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::debug::debug_step_disarm </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Disarm a step armed by debug_step_arm (issue #226): clears TF and restores IF. Fail-open true when the frame is gone (target died — nothing to clear, and completion must still proceed). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_a8fc24d896b69e34fe3580013516e7314_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a8fc24d896b69e34fe3580013516e7314_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="a893cb407d22ea88b636bde7608b880a1" name="a893cb407d22ea88b636bde7608b880a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a893cb407d22ea88b636bde7608b880a1">&#9670;&#160;</a></span>debug_validate_handle()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_validate_handle </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>caller_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>handle</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Handle validation without liveness (issue #226): live binding owned by <code class="param">caller</code> for <code class="param">handle</code>? Takes g_bind_lock internally — never call with it held (the lock is non-recursive; nesting self-deadlocks, e.g. poll-then-lookup). </p>
+<dl class="section return"><dt>Returns</dt><dd>true when the handle decodes to a live owned binding. </dd></dl>
+
+</div>
+</div>
+<a id="ae70a742c8c462e516c06a9af82b55258" name="ae70a742c8c462e516c06a9af82b55258"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae70a742c8c462e516c06a9af82b55258">&#9670;&#160;</a></span>debug_write_regs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::debug::debug_write_regs </td>
+          <td>(</td>
+          <td class="paramtype">TaskControlBlock &amp;</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>blob_in</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a2d35ca4f92b748b22e8674ea36a6c875">size_t</a></td>          <td class="paramname"><span class="paramname"><em>blob_qwords</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Write blob_in into the task's live U-trap frame (takes effect on resume — the return path restores from that frame). </p>
+<dl class="section return"><dt>Returns</dt><dd>false when the slot is missing/non-user or the blob is short. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1debug_ae70a742c8c462e516c06a9af82b55258_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ae70a742c8c462e516c06a9af82b55258_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
 <a id="a70b0bd6c79eac81164d116b1c7b780d7" name="a70b0bd6c79eac81164d116b1c7b780d7"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a70b0bd6c79eac81164d116b1c7b780d7">&#9670;&#160;</a></span>dump_all_tasks()</h2>
 
@@ -191,7 +1095,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a70b0bd6c79eac81164d116b1c7b780d7_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a70b0bd6c79eac81164d116b1c7b780d7_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -217,7 +1121,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_a9c80a5a9a3a6f52efef1fabf4192ab72_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_a9c80a5a9a3a6f52efef1fabf4192ab72_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -248,7 +1152,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ade0bc324da03fcc112cdb93eb35f220b_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ade0bc324da03fcc112cdb93eb35f220b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -391,8 +1295,33 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1debug_ad4e746d8bc125cec09030517a74f8180_cgraph.png" border="0" usemap="#anamespacekernel_1_1debug_ad4e746d8bc125cec09030517a74f8180_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 13 -->
 </div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a5e5df53bd66d0f3c153ecca098da7850" name="a5e5df53bd66d0f3c153ecca098da7850"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e5df53bd66d0f3c153ecca098da7850">&#9670;&#160;</a></span>DEBUG_STOP_PULSE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::debug::DEBUG_STOP_PULSE = 0xDE8B6001ULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Notify pulse delivered to the debugger TCB on every enqueue. Distinct from DEATH_WAKE_PULSE (different recipient contract: </p>
 
 </div>
 </div>

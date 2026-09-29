@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -250,6 +250,8 @@ Macros</h2></td></tr>
 <tr class="memitem:a0ff10bacfb6e11a5da4a904a75232081" id="r_a0ff10bacfb6e11a5da4a904a75232081"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0ff10bacfb6e11a5da4a904a75232081">CONFIG_USER_MMIO_REGION_SIZE</a>&#160;&#160;&#160;0x200000ULL</td></tr>
 <tr class="memitem:a3062b6e90047fbde5b9f3562e1a728b0" id="r_a3062b6e90047fbde5b9f3562e1a728b0"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a3062b6e90047fbde5b9f3562e1a728b0">CONFIG_CAP_MAX_FRAME_MAPS</a>&#160;&#160;&#160;8</td></tr>
 <tr class="memitem:af0283e1c9144b2b00b2ecd9d6d9525d8" id="r_af0283e1c9144b2b00b2ecd9d6d9525d8"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af0283e1c9144b2b00b2ecd9d6d9525d8">CONFIG_CAP_MAX_DEATH_WATCHES</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:ae789582adc0801a733e0efbe633ed200" id="r_ae789582adc0801a733e0efbe633ed200"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae789582adc0801a733e0efbe633ed200">CONFIG_DEBUG_MAX_STOPS</a>&#160;&#160;&#160;16</td></tr>
+<tr class="memitem:a728257b7b9189815e8fd31b9244dabf2" id="r_a728257b7b9189815e8fd31b9244dabf2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a728257b7b9189815e8fd31b9244dabf2">CONFIG_DEBUG_MAX_BREAKS</a>&#160;&#160;&#160;64</td></tr>
 <tr class="memitem:a099e380af1009e729fb8652beb22adb5" id="r_a099e380af1009e729fb8652beb22adb5"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a099e380af1009e729fb8652beb22adb5">CONFIG_CAP_MAX_PAGER_CLIENTS</a>&#160;&#160;&#160;8</td></tr>
 <tr class="memitem:a79634fa97a61d28d0ecd1f0004dab5f7" id="r_a79634fa97a61d28d0ecd1f0004dab5f7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a79634fa97a61d28d0ecd1f0004dab5f7">CONFIG_PAGER_FAULT_TIMEOUT_TICKS</a>&#160;&#160;&#160;1000</td></tr>
 <tr class="memitem:a0e8bd4d6885656c82396aadaf5d70290" id="r_a0e8bd4d6885656c82396aadaf5d70290"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0e8bd4d6885656c82396aadaf5d70290">CONFIG_PAGER_MAX_PAGES_PER_FAULT</a>&#160;&#160;&#160;4</td></tr>
@@ -628,6 +630,36 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>Decouple deadline scanning from the timer ISR via a dedicated watchdog task. When &gt;0, scheduler spawns [deadline-mon] at priority 127 during init(). The monitor waits on an atomic flag (lock-free handoff) and calls scan_deadlines() in task context where full scheduler_lock_ and inline KILL cleanup are safe. When 0, inline scanning in on_tick() is used. Default: 0 (inline). </p>
+
+</div>
+</div>
+<a id="a728257b7b9189815e8fd31b9244dabf2" name="a728257b7b9189815e8fd31b9244dabf2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a728257b7b9189815e8fd31b9244dabf2">&#9670;&#160;</a></span>CONFIG_DEBUG_MAX_BREAKS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEBUG_MAX_BREAKS&#160;&#160;&#160;64</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum number of kernel-owned software-breakpoint shadows across all debug targets (issue #226, spec docs/specs/debugd.md §4). Each entry shadows the original instruction bytes for one breakpoint VA. Mirrors the controller-side table capacity. Static bounded array. </p>
+
+</div>
+</div>
+<a id="ae789582adc0801a733e0efbe633ed200" name="ae789582adc0801a733e0efbe633ed200"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae789582adc0801a733e0efbe633ed200">&#9670;&#160;</a></span>CONFIG_DEBUG_MAX_STOPS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_DEBUG_MAX_STOPS&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Maximum number of queued debugger stop events in the DebugStop ring (issue #226, spec docs/specs/debugd.md §4). One extra slot is reserved for task-death events (never dropped); normal events drop-oldest with a counter when full. Static bounded array — no dynamic allocation. </p>
 
 </div>
 </div>

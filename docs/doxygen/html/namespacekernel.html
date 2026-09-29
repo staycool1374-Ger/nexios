@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -118,6 +118,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
   <div class="headertitle"><div class="title">kernel Namespace Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it.  
+<a href="#details">More...</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
@@ -315,6 +318,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a9799f9b32ab65aeb956ce8717fe91bc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolve a path and open it as a file descriptor.  <br /></td></tr>
 <tr class="memitem:a0ecf34d3e30ff218069c96a3645cf261" id="r_a0ecf34d3e30ff218069c96a3645cf261"><td class="memItemLeft"><a class="el" href="classkernel_1_1cap_1_1_c_node.html">cap::CNode</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0ecf34d3e30ff218069c96a3645cf261">current_cspace</a> ()</td></tr>
 <tr class="memdesc:a0ecf34d3e30ff218069c96a3645cf261"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resolves the current task's root CNode, creating it lazily on the first capability syscall. Returns nullptr if the CSpace cannot be allocated (MemPool exhaustion).  <br /></td></tr>
+<tr class="memitem:a90086829567f6b5bf9c0730a8f3d7b08" id="r_a90086829567f6b5bf9c0730a8f3d7b08"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a90086829567f6b5bf9c0730a8f3d7b08">debug_data_begin</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> caller_id, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> handle, TaskControlBlock *&amp;tgt_out)</td></tr>
+<tr class="memdesc:a90086829567f6b5bf9c0730a8f3d7b08"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared prologue for the four data calls: resolve + gate + EAGAIN arming. Returns 0 with tgt set when the target's state may be read; otherwise a Linux errno.  <br /></td></tr>
 <tr class="memitem:a39fa71941abf971947793936af03c774" id="r_a39fa71941abf971947793936af03c774"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a39fa71941abf971947793936af03c774">is_timerfd_vnode</a> (const vfs::Vnode *node)</td></tr>
 <tr class="memdesc:a39fa71941abf971947793936af03c774"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when a vnode is a timerfd (ops-pointer identity — never parses private_data of foreign vnodes). External linkage for the sys_read branch; timerfd_ops itself stays TU-local.  <br /></td></tr>
 <tr class="memitem:aa583fe65545291d14aa9afd4b95f2576" id="r_aa583fe65545291d14aa9afd4b95f2576"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa583fe65545291d14aa9afd4b95f2576">timerfd_read_entry</a> (vfs::Vnode &amp;node, <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> *buffer, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> count, bool nonblock)</td></tr>
@@ -409,6 +414,8 @@ Variables</h2></td></tr>
 <tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
 <tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:afb68be65bad6d813cd555b20b9500a4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU reschedule request flag (task-context producers; each CPU's timer ISR is the sole publisher of its own switch buffer — the single-writer-per-tick discipline from the two-publisher fix).  <br /></td></tr>
+<tr class="memitem:a914ef87f8e792f89a48aafc7c67b3112" id="r_a914ef87f8e792f89a48aafc7c67b3112"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a914ef87f8e792f89a48aafc7c67b3112">scheduler_force_apply</a> [<a class="el" href="nexios__config_8h.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a914ef87f8e792f89a48aafc7c67b3112"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU one-shot force-apply for terminate-driven arms (issue #221). Set by switch_away_from_terminating when it publishes (or keeps) a switch-away arm; the riscv64 trap epilogue applies the pending arm unconditionally while set, then clears it. Without this, a terminating task's epilogue can gate-skip the arm and sret back into the dead task (double-fault park, IRQs masked).  <br /></td></tr>
 <tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
 <tr class="memitem:a9280448447d20124500fb1be0a0ed68f" id="r_a9280448447d20124500fb1be0a0ed68f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9280448447d20124500fb1be0a0ed68f">deadline_detection_integrity</a></td></tr>
@@ -450,7 +457,9 @@ Variables</h2></td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645" id="r_a74cc18daff81587aac344bfc7b70f645"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a74cc18daff81587aac344bfc7b70f645">_is_reference_v&lt; T &amp;&amp; &gt;</a> = true</td></tr>
 </table>
-<a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. </p>
+</div><a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
 <a id="ae89f8530616ba6e58eebc1f5104f6e5c" name="ae89f8530616ba6e58eebc1f5104f6e5c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ae89f8530616ba6e58eebc1f5104f6e5c">&#9670;&#160;</a></span>sighandler_t</h2>
 
@@ -1413,6 +1422,34 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 4 -->
 </div>
+
+</div>
+</div>
+<a id="a90086829567f6b5bf9c0730a8f3d7b08" name="a90086829567f6b5bf9c0730a8f3d7b08"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90086829567f6b5bf9c0730a8f3d7b08">&#9670;&#160;</a></span>debug_data_begin()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::debug_data_begin </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>caller_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>handle</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">TaskControlBlock *&amp;</td>          <td class="paramname"><span class="paramname"><em>tgt_out</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Shared prologue for the four data calls: resolve + gate + EAGAIN arming. Returns 0 with tgt set when the target's state may be read; otherwise a Linux errno. </p>
 
 </div>
 </div>
@@ -2686,6 +2723,30 @@ template&lt;typename T&gt; </div>
 </div><div class="memdoc">
 
 <p>Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced. </p>
+
+</div>
+</div>
+<a id="a914ef87f8e792f89a48aafc7c67b3112" name="a914ef87f8e792f89a48aafc7c67b3112"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a914ef87f8e792f89a48aafc7c67b3112">&#9670;&#160;</a></span>scheduler_force_apply</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> kernel::scheduler_force_apply</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-CPU one-shot force-apply for terminate-driven arms (issue #221). Set by switch_away_from_terminating when it publishes (or keeps) a switch-away arm; the riscv64 trap epilogue applies the pending arm unconditionally while set, then clears it. Without this, a terminating task's epilogue can gate-skip the arm and sret back into the dead task (double-fault park, IRQs masked). </p>
 
 </div>
 </div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__isolate_
 <code>#include &lt;<a class="el" href="iocd_8hpp_source.html">kernel/driver/iocd.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__thread_8hpp_source.html">kernel/irq_thread.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="page__table_8hpp_source.html">kernel/arch/page_table.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="tlb__shootdown_8hpp_source.html">kernel/memory/tlb_shootdown.hpp</a>&gt;</code><br />
@@ -147,6 +148,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__isolate_
 <code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="frame__map_8hpp_source.html">kernel/cap/frame_map.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="death__notify_8hpp_source.html">kernel/ipc/death_notify.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__stop_8hpp_source.html">kernel/debug/debug_stop.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__bind_8hpp_source.html">kernel/debug/debug_bind.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="pager__registry_8hpp_source.html">kernel/ipc/pager_registry.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="msix_8hpp_source.html">kernel/cap/msix.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
@@ -161,6 +164,7 @@ Include dependency graph for test_isolate.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
+<tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_VERSION as a pp-number (deliberately NOT a quoted string: the generated build rules re-evaluate quoting layers and strip string quotes). Falls back to "unknown" when some other build path compiles without it. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Atest" id="r_kernel_3A_3Atest"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1test.html">kernel::test</a></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>

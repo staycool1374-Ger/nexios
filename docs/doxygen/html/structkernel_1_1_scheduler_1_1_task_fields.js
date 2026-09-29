@@ -24,6 +24,7 @@ var structkernel_1_1_scheduler_1_1_task_fields =
     [ "pending_signals", "structkernel_1_1_scheduler_1_1_task_fields.html#a3a8da7e0197955ddbcf5c91d5e2886bc", null ],
     [ "period_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#aaacdfbcd2ceec6cccdfca7ab10cc66f0", null ],
     [ "priority", "structkernel_1_1_scheduler_1_1_task_fields.html#a06613a61eb8e6bf0b9a70d68163af9f3", null ],
+    [ "ready_deferred", "structkernel_1_1_scheduler_1_1_task_fields.html#a690a5b7cb0235bc41bd56a75e5659459", null ],
     [ "recv_timed_out", "structkernel_1_1_scheduler_1_1_task_fields.html#a4c33f7cfacc100183cec02955be0ec63", null ],
     [ "recv_timeout_armed", "structkernel_1_1_scheduler_1_1_task_fields.html#a49ab52b96140dca92d3c5760c8fc2b7e", null ],
     [ "remaining_ticks", "structkernel_1_1_scheduler_1_1_task_fields.html#a5220916172caf562cc65cb8143cc48d0", null ],

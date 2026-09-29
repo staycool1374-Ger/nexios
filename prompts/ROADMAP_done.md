@@ -1,5 +1,42 @@
 # Completed Roadmap Items
 
+## v0.5.1 — Bring-up Multi-Arch Boot (RELEASED 2026-09-29)
+
+**Purpose:** Bring aarch64 and riscv64 to production boot with syscall ABI
+conformance, user-task execution, and debugd groundwork. Milestone v0.5.1
+(milestone 13): all issues closed except #243 (release Docker image,
+deferred by owner order).
+
+- **aarch64 production boot** (#28: page-table/HHDM fixes, ECAM base,
+  x8 syscall dispatch, EL0 fault policy + waitpid-parent wake #217;
+  #104 EL0 fork smoke; #214 EL1 fail-stop exposing ECAM rot; #215 stale
+  clone conventions; #212 SVC synchronous deschedule; #208 IPC
+  arrival-wake gate; #209 clone frame readback; #210 arch-switch
+  double-build).
+- **riscv64 production boot** (#29 Sv39 bring-up; #152 HHDM/identity
+  flags; #185 ECALL ABI + #203 runtime test; #204 link; #205 gate proof;
+  #206 U-mode M1 ECALL round trip; #207 release integration; #219 SIE
+  window; #220 post-ECALL x2 transparency).
+- **Syscall ABI conformance** (#30: per-arch trap-number/register
+  tests, GIC window fix) + **run-mode coverage** (#218 shell-smoke
+  probes for all arches × builds).
+- **debugd groundwork** (#225 syscalls, #226 stop routing, #224 RSP
+  parser, #235 aarch64 residue).
+- **Scheduler races** (#249 stranded-READY sweep + #250
+  wake-while-current deferral + warn throttle) **+ shell/UART bring-up**
+  (#245 poll source, #247 riscv64 MMIO poll, #248 echo guard).
+- **Release-validation fallout, fixed in-tree** (#251 Ubuntu PIE-GOT
+  boot fault: hidden visibility + `-fno-pie`; #252 APIC EOI-skip gate;
+  both SIL 3 audited) — found dogfooding the release Docker image
+  (#243 infra landed: Dockerfile, entrypoint, per-tag GHCR workflow).
+
+Gates at completion (2026-09-29): debug test-full **20/20 (1610/1610)**
+(core 493, ipc 81, capability 147, proc_elf 83, storage 143, servers 62,
+drivers 107, hal 122, smp 81, smp_multicpu 18, deadline 125, ui 68,
+logging_debug 29, random 17, bench 22, task_tcb_log 1, ahci_live 5,
+iommu_live 6; task_fpu/testrunner specials), release test-full **18/18
++ 2 skips (85/85)**, `make build` Errors 0.
+
 ## v0.5.0 — picolibc + ABI (RELEASED 2026-09-20)
 
 **Purpose:** Freeze the syscall ABI at v1.0, integrate picolibc as the

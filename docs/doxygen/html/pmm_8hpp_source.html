@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -262,86 +262,88 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pmm_8hpp_sourc
 <div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>        kernel::test::PtPoolSnapshot &amp;out);</div>
 <div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore_pool_snapshot(</div>
 <div class="line"><a id="l00270" name="l00270"></a><span class="lineno">  270</span>        <span class="keyword">const</span> kernel::test::PtPoolSnapshot &amp;src);</div>
-<div class="line"><a id="l00272" name="l00272"></a><span class="lineno">  272</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_start() noexcept {</div>
-<div class="line"><a id="l00273" name="l00273"></a><span class="lineno">  273</span>        <span class="keywordflow">return</span> page_table_pool_start_;</div>
-<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>    }</div>
-<div class="line"><a id="l00276" name="l00276"></a><span class="lineno">  276</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_end() noexcept {</div>
-<div class="line"><a id="l00277" name="l00277"></a><span class="lineno">  277</span>        <span class="keywordflow">return</span> page_table_pool_end_;</div>
-<div class="line"><a id="l00278" name="l00278"></a><span class="lineno">  278</span>    }</div>
-<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_used_pages() noexcept;</div>
-<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_total_pages() noexcept;</div>
-<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_generation() noexcept { <span class="keywordflow">return</span> pool_generation_; }</div>
-<div class="line"><a id="l00289" name="l00289"></a><span class="lineno">  289</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_bump_generation() noexcept { ++pool_generation_; }</div>
-<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_refcount() noexcept { <span class="keywordflow">return</span> pool_refcount_; }</div>
-<div class="line"><a id="l00293" name="l00293"></a><span class="lineno">  293</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_ref_inc() noexcept { ++pool_refcount_; }</div>
-<div class="line"><a id="l00295" name="l00295"></a><span class="lineno">  295</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_ref_dec() noexcept { --pool_refcount_; }</div>
-<div class="line"><a id="l00297" name="l00297"></a><span class="lineno">  297</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_mapped() noexcept { <span class="keywordflow">return</span> pool_mapped_; }</div>
-<div class="line"><a id="l00299" name="l00299"></a><span class="lineno">  299</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_set_tainted() noexcept {</div>
-<div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span>        pool_tainted_ = <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00301" name="l00301"></a><span class="lineno">  301</span>    }</div>
-<div class="line"><a id="l00303" name="l00303"></a><span class="lineno">  303</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_set_poisoned() noexcept {</div>
-<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span>        pool_poisoned_ = <span class="keyword">true</span>;</div>
-<div class="line"><a id="l00305" name="l00305"></a><span class="lineno">  305</span>    }</div>
-<div class="line"><a id="l00307" name="l00307"></a><span class="lineno">  307</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_tainted() noexcept {</div>
-<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>        <span class="keywordflow">return</span> pool_tainted_;</div>
-<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span>    }</div>
-<div class="line"><a id="l00311" name="l00311"></a><span class="lineno">  311</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_poisoned() noexcept {</div>
-<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>        <span class="keywordflow">return</span> pool_poisoned_;</div>
-<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span>    }</div>
-<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span></div>
-<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> rebuild_free_list() noexcept;</div>
-<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span> </div>
-<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span>  private:</div>
-<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span>    static constexpr <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PAGE_SIZE = CONFIG_PAGE_SIZE;</div>
-<div class="line"><a id="l00324" name="l00324"></a><span class="lineno">  324</span> </div>
-<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> total_pages_;</div>
-<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_pages_;</div>
-<div class="line"><a id="l00327" name="l00327"></a><span class="lineno">  327</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_;</div>
-<div class="line"><a id="l00328" name="l00328"></a><span class="lineno">  328</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_size_;</div>
-<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_bitmap_;</div>
-<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_pool_start_;</div>
-<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_pool_end_;</div>
-<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span>    static constinit <span class="keywordtype">bool</span> pool_tainted_;</div>
-<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>    static constinit <span class="keywordtype">bool</span> pool_poisoned_;</div>
-<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span>    static constinit <span class="keywordtype">bool</span> pool_mapped_;</div>
-<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_generation_;</div>
-<div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_refcount_;</div>
-<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span>    static constinit OOMHandler oom_handler_;</div>
-<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span></div>
-<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_list_;</div>
-<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_head_;</div>
-<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_free_head_;</div>
-<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span></div>
-<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> window_base_page_;</div>
-<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> window_end_page_;</div>
-<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span></div>
-<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div>
-<div class="line"><a id="l00355" name="l00355"></a><span class="lineno">  355</span>        color_cursor_[cache::NUM_COLORS];</div>
-<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span></div>
-<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span>    static <span class="keywordtype">void</span> bitmap_set(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span>    static <span class="keywordtype">void</span> bitmap_clear(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span>    static <span class="keywordtype">bool</span> bitmap_test(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00367" name="l00367"></a><span class="lineno">  367</span></div>
-<div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span>    static <span class="keywordtype">void</span> owner_set_user(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span>    static <span class="keywordtype">void</span> owner_set_kernel(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00377" name="l00377"></a><span class="lineno">  377</span>    static <span class="keywordtype">bool</span> owner_test(<span class="keywordtype">size_t</span> index);</div>
-<div class="line"><a id="l00378" name="l00378"></a><span class="lineno">  378</span></div>
-<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_user(<span class="keywordtype">size_t</span> count);</div>
-<div class="line"><a id="l00386" name="l00386"></a><span class="lineno">  386</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_kernel(<span class="keywordtype">size_t</span> count);</div>
-<div class="line"><a id="l00391" name="l00391"></a><span class="lineno">  391</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_colored_kernel(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> color);</div>
-<div class="line"><a id="l00396" name="l00396"></a><span class="lineno">  396</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_colored_user(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> color);</div>
-<div class="line"><a id="l00397" name="l00397"></a><span class="lineno">  397</span>};</div>
-<div class="line"><a id="l00398" name="l00398"></a><span class="lineno">  398</span> </div>
-<div class="line"><a id="l00399" name="l00399"></a><span class="lineno">  399</span>} <span class="comment">// namespace kernel</span></div>
+<div class="line"><a id="l00274" name="l00274"></a><span class="lineno">  274</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> post_snapshot_overlay_clear() noexcept;</div>
+<div class="line"><a id="l00279" name="l00279"></a><span class="lineno">  279</span>    static <span class="keywordtype">void</span> post_snapshot_overlay_apply() noexcept;</div>
+<div class="line"><a id="l00281" name="l00281"></a><span class="lineno">  281</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_start() noexcept {</div>
+<div class="line"><a id="l00282" name="l00282"></a><span class="lineno">  282</span>        <span class="keywordflow">return</span> page_table_pool_start_;</div>
+<div class="line"><a id="l00283" name="l00283"></a><span class="lineno">  283</span>    }</div>
+<div class="line"><a id="l00285" name="l00285"></a><span class="lineno">  285</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_end() noexcept {</div>
+<div class="line"><a id="l00286" name="l00286"></a><span class="lineno">  286</span>        <span class="keywordflow">return</span> page_table_pool_end_;</div>
+<div class="line"><a id="l00287" name="l00287"></a><span class="lineno">  287</span>    }</div>
+<div class="line"><a id="l00291" name="l00291"></a><span class="lineno">  291</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_used_pages() noexcept;</div>
+<div class="line"><a id="l00294" name="l00294"></a><span class="lineno">  294</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_total_pages() noexcept;</div>
+<div class="line"><a id="l00296" name="l00296"></a><span class="lineno">  296</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_generation() noexcept { <span class="keywordflow">return</span> pool_generation_; }</div>
+<div class="line"><a id="l00298" name="l00298"></a><span class="lineno">  298</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_bump_generation() noexcept { ++pool_generation_; }</div>
+<div class="line"><a id="l00300" name="l00300"></a><span class="lineno">  300</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_refcount() noexcept { <span class="keywordflow">return</span> pool_refcount_; }</div>
+<div class="line"><a id="l00302" name="l00302"></a><span class="lineno">  302</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_ref_inc() noexcept { ++pool_refcount_; }</div>
+<div class="line"><a id="l00304" name="l00304"></a><span class="lineno">  304</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_ref_dec() noexcept { --pool_refcount_; }</div>
+<div class="line"><a id="l00306" name="l00306"></a><span class="lineno">  306</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_mapped() noexcept { <span class="keywordflow">return</span> pool_mapped_; }</div>
+<div class="line"><a id="l00308" name="l00308"></a><span class="lineno">  308</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_set_tainted() noexcept {</div>
+<div class="line"><a id="l00309" name="l00309"></a><span class="lineno">  309</span>        pool_tainted_ = <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00310" name="l00310"></a><span class="lineno">  310</span>    }</div>
+<div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> pool_set_poisoned() noexcept {</div>
+<div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span>        pool_poisoned_ = <span class="keyword">true</span>;</div>
+<div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span>    }</div>
+<div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_tainted() noexcept {</div>
+<div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span>        <span class="keywordflow">return</span> pool_tainted_;</div>
+<div class="line"><a id="l00318" name="l00318"></a><span class="lineno">  318</span>    }</div>
+<div class="line"><a id="l00320" name="l00320"></a><span class="lineno">  320</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> pool_is_poisoned() noexcept {</div>
+<div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span>        <span class="keywordflow">return</span> pool_poisoned_;</div>
+<div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span>    }</div>
+<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span></div>
+<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> rebuild_free_list() noexcept;</div>
+<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span> </div>
+<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span>  private:</div>
+<div class="line"><a id="l00332" name="l00332"></a><span class="lineno">  332</span>    static constexpr <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> PAGE_SIZE = CONFIG_PAGE_SIZE;</div>
+<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span> </div>
+<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> total_pages_;</div>
+<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_pages_;</div>
+<div class="line"><a id="l00336" name="l00336"></a><span class="lineno">  336</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_;</div>
+<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> bitmap_size_;</div>
+<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> owner_bitmap_;</div>
+<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_pool_start_;</div>
+<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> page_table_pool_end_;</div>
+<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span>    static constinit <span class="keywordtype">bool</span> pool_tainted_;</div>
+<div class="line"><a id="l00342" name="l00342"></a><span class="lineno">  342</span>    static constinit <span class="keywordtype">bool</span> pool_poisoned_;</div>
+<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span>    static constinit <span class="keywordtype">bool</span> pool_mapped_;</div>
+<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_generation_;</div>
+<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_refcount_;</div>
+<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span>    static constinit OOMHandler oom_handler_;</div>
+<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span></div>
+<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_list_;</div>
+<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> free_head_;</div>
+<div class="line"><a id="l00353" name="l00353"></a><span class="lineno">  353</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> pool_free_head_;</div>
+<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span></div>
+<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> window_base_page_;</div>
+<div class="line"><a id="l00358" name="l00358"></a><span class="lineno">  358</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> window_end_page_;</div>
+<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span></div>
+<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span>    static constinit <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></div>
+<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span>        color_cursor_[cache::NUM_COLORS];</div>
+<div class="line"><a id="l00365" name="l00365"></a><span class="lineno">  365</span></div>
+<div class="line"><a id="l00368" name="l00368"></a><span class="lineno">  368</span>    static <span class="keywordtype">void</span> bitmap_set(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00371" name="l00371"></a><span class="lineno">  371</span>    static <span class="keywordtype">void</span> bitmap_clear(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00375" name="l00375"></a><span class="lineno">  375</span>    static <span class="keywordtype">bool</span> bitmap_test(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00376" name="l00376"></a><span class="lineno">  376</span></div>
+<div class="line"><a id="l00379" name="l00379"></a><span class="lineno">  379</span>    static <span class="keywordtype">void</span> owner_set_user(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span>    static <span class="keywordtype">void</span> owner_set_kernel(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00386" name="l00386"></a><span class="lineno">  386</span>    static <span class="keywordtype">bool</span> owner_test(<span class="keywordtype">size_t</span> index);</div>
+<div class="line"><a id="l00387" name="l00387"></a><span class="lineno">  387</span></div>
+<div class="line"><a id="l00391" name="l00391"></a><span class="lineno">  391</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_user(<span class="keywordtype">size_t</span> count);</div>
+<div class="line"><a id="l00395" name="l00395"></a><span class="lineno">  395</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_kernel(<span class="keywordtype">size_t</span> count);</div>
+<div class="line"><a id="l00400" name="l00400"></a><span class="lineno">  400</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_colored_kernel(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> color);</div>
+<div class="line"><a id="l00405" name="l00405"></a><span class="lineno">  405</span>    static <a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> try_alloc_colored_user(<a class="code hl_typedef" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> color);</div>
+<div class="line"><a id="l00406" name="l00406"></a><span class="lineno">  406</span>};</div>
+<div class="line"><a id="l00407" name="l00407"></a><span class="lineno">  407</span> </div>
+<div class="line"><a id="l00408" name="l00408"></a><span class="lineno">  408</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="acache__color_8hpp_html"><div class="ttname"><a href="cache__color_8hpp.html">cache_color.hpp</a></div><div class="ttdoc">Cache coloring contract (issue #62).</div></div>
 <div class="ttc" id="aconstants_8hpp_html"><div class="ttname"><a href="constants_8hpp.html">constants.hpp</a></div><div class="ttdoc">Central hardware and memory-layout constants (no magic numbers).</div></div>
 <div class="ttc" id="anamespacearch_html_a9e56d1c39ac66468549b4230ebb9f5af"><div class="ttname"><a href="namespacearch.html#a9e56d1c39ac66468549b4230ebb9f5af">arch::PAGE_SIZE</a></div><div class="ttdeci">constexpr uint64_t PAGE_SIZE</div><div class="ttdef"><b>Definition</b> constants.hpp:63</div></div>
 <div class="ttc" id="anamespacearch_html_ae0a5af75fabcbd33d35318bdc4f59957"><div class="ttname"><a href="namespacearch.html#ae0a5af75fabcbd33d35318bdc4f59957">arch::HHDM_WINDOW_SIZE</a></div><div class="ttdeci">constexpr uint64_t HHDM_WINDOW_SIZE</div><div class="ttdoc">Size of the PMM allocatable window — the linear-mapped RAM span the page allocator scans....</div><div class="ttdef"><b>Definition</b> constants.hpp:45</div></div>
 <div class="ttc" id="anamespaceinitrd_html_a7b70f1cbe142d57f40fb7691d81ce5de"><div class="ttname"><a href="namespaceinitrd.html#a7b70f1cbe142d57f40fb7691d81ce5de">initrd::init</a></div><div class="ttdeci">void init(const uint8_t *start, const uint8_t *end)</div><div class="ttdef"><b>Definition</b> initrd.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_1_1cache_html_a73ec3fc0b065a58526639da49f802c4c"><div class="ttname"><a href="namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c">kernel::cache::color_of</a></div><div class="ttdeci">constexpr uint64_t color_of(uint64_t phys_addr) noexcept</div><div class="ttdoc">Page color of a physical address (pure, lock-free, any ctx).</div><div class="ttdef"><b>Definition</b> cache_color.hpp:46</div></div>
-<div class="ttc" id="anamespacekernel_1_1test_html"><div class="ttname"><a href="namespacekernel_1_1test.html">kernel::test</a></div><div class="ttdef"><b>Definition</b> global_state.cpp:112</div></div>
+<div class="ttc" id="anamespacekernel_1_1test_html"><div class="ttname"><a href="namespacekernel_1_1test.html">kernel::test</a></div><div class="ttdef"><b>Definition</b> global_state.cpp:117</div></div>
 <div class="ttc" id="anamespacekernel_1_1vfs_html_a6281f0779a982cc0f19a98b36495e7b3"><div class="ttname"><a href="namespacekernel_1_1vfs.html#a6281f0779a982cc0f19a98b36495e7b3">kernel::vfs::init_err</a></div><div class="ttdeci">VfsError init_err()</div><div class="ttdoc">Initialize the VFS subsystem with error code return.</div><div class="ttdef"><b>Definition</b> vfs.cpp:452</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Picolibc version backing the user-space runtime (issue #244). Injected by the Makefile from PICOLIBC_...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="apmm__errors_8hpp_html"><div class="ttname"><a href="pmm__errors_8hpp.html">pmm_errors.hpp</a></div><div class="ttdoc">Physical Memory Manager error codes and string lookup.</div></div>
 <div class="ttc" id="astructkernel_1_1test_1_1_pt_pool_snapshot_html"><div class="ttname"><a href="structkernel_1_1test_1_1_pt_pool_snapshot.html">kernel::test::PtPoolSnapshot</a></div><div class="ttdef"><b>Definition</b> test_isolate.hpp:63</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

@@ -14,5 +14,6 @@ var searchData=
   ['simpletaskdeleter_11',['SimpleTaskDeleter',['../struct_simple_task_deleter.html',1,'']]],
   ['spinlockguard_12',['SpinLockGuard',['../class_spin_lock_guard.html',1,'']]],
   ['stat_13',['stat',['../structstat.html',1,'']]],
-  ['swslots_14',['SwSlots',['../structkernel_1_1_scheduler_1_1_sw_slots.html',1,'kernel::Scheduler']]]
+  ['stopevent_14',['StopEvent',['../structkernel_1_1debug_1_1_stop_event.html',1,'kernel::debug']]],
+  ['swslots_15',['SwSlots',['../structkernel_1_1_scheduler_1_1_sw_slots.html',1,'kernel::Scheduler']]]
 ];

@@ -1,6 +1,6 @@
 # NexIOS RTOS — Development Roadmap
 
-**Build:** v0.5.1-dev | **Last Release:** v0.5.0 | **Completed milestones:** v0.2.x — v0.5.0 (see `ROADMAP_done.md`)
+**Build:** v0.5.1 | **Last Release:** v0.5.1 | **Completed milestones:** v0.2.x — v0.5.1 (see `ROADMAP_done.md`)
 
 > **NOTE (2026-09-17):** the user explicitly overrode the "pointers only, no
 > work items" rule for this file and requested a full sorted listing
@@ -16,9 +16,8 @@
 - **Zero-Allocation tmpfs Operations:** Ensure the initial `tmpfs` implementation relies on the pre-existing fixed `MemPool` / `BufferPool` infrastructure for its nodes to avoid unbounded allocations that violate resource tracking limits.
 
 ## Active Development
-- **v0.5.1 Bring-up Multi-Arch Boot** ([milestone 13](https://github.com/staycool1374-Ger/nexios/milestone/13)): aarch64/riscv64 production boot + ABI conformance.
 - **v0.5.2 Userspace Subsystems** ([milestone 15](https://github.com/staycool1374-Ger/nexios/milestone/15)): #162–#166 open.
-- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.5.0).
+- Past release records: see `ROADMAP_done.md` (v0.2.x — v0.5.1).
 
 ## Topic Coverage Map (subsystem review 2026-09-17)
 | Topic | Status | Issues |
@@ -47,17 +46,8 @@
 ## v0.4.10 — Test-Coverage Closure, Areas < 80% (RELEASED, see ROADMAP_done.md)
 - All 16 coverage issues #124–#139 closed, plus #182 (dead-code removal).
 
-## v0.5.1 — Bring-up Multi-Arch Boot (OPEN)
-- #28 [closed] aarch64 production boot path.
-- #29 [closed] riscv64 production boot path (Sv39 MMU, PLIC, UART, timer).
-- #30 [closed] Per-arch syscall ABI conformance tests.
-- #104 [closed] aarch64 fork/clone EL0 smoke test.
-- #152 [open] riscv64 map/unmap hhdm/identity flags (follow-up of #60; sub-issues complete, verify-and-close pending).
-- #206 [open] riscv64 U-mode user tasks — M1 ECALL round trip DONE (SIL 3 approved); M2 loader wiring remains.
-- #203 [open] riscv64 ECALL dispatch runtime test (unblocked by #206 M1).
-- #207 [open] riscv64 release + gate integration.
-- #219 [closed] riscv64 sret-restore SIE window (single-andi gate, APPROVED).
-- #220 [closed] riscv64 post-ECALL x2 transparency (t0-park fix, APPROVED).
+## v0.5.1 — Bring-up Multi-Arch Boot (RELEASED, see ROADMAP_done.md)
+- All milestone issues closed except #243 (release Docker image, deferred by owner order): multi-arch boot, ABI conformance, debugd phases, scheduler race fixes.
 
 ## v0.5.2 — Userspace Subsystems (NEW, OPEN)- #162 [open] Demand paging / CoW subsystem — fault classifier, per-VMA policy, CoW refcounts, pager integration.
 - #163 [open] Stack unwinding in user-space — frame-pointer walk, crash/profiler integration.

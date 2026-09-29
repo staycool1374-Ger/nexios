@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -136,12 +136,13 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a1b90692348e0b01a55537750a2e25318" id="r_a1b90692348e0b01a55537750a2e25318"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#a1b90692348e0b01a55537750a2e25318">build_date</a> ()</td></tr>
 <tr class="memitem:ab8a7b6147736f55162bc5b5d88cb3b26" id="r_ab8a7b6147736f55162bc5b5d88cb3b26"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#ab8a7b6147736f55162bc5b5d88cb3b26">build_time</a> ()</td></tr>
 <tr class="memitem:a6900c1bf9a13fb19ffdef8f8288bafe8" id="r_a6900c1bf9a13fb19ffdef8f8288bafe8"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#a6900c1bf9a13fb19ffdef8f8288bafe8">full_string</a> ()</td></tr>
+<tr class="memitem:aed11ebd7bded5cfb2ef3e1d51ce86d68" id="r_aed11ebd7bded5cfb2ef3e1d51ce86d68"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#aed11ebd7bded5cfb2ef3e1d51ce86d68">picolibc_string</a> ()</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:a3e2dcc490e3869f520c78346ca18425a" id="r_a3e2dcc490e3869f520c78346ca18425a"><td class="memItemLeft">static constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a3e2dcc490e3869f520c78346ca18425a">major</a> = 0</td></tr>
 <tr class="memitem:a651719f6269816e291c01c144e4cb9c4" id="r_a651719f6269816e291c01c144e4cb9c4"><td class="memItemLeft">static constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a651719f6269816e291c01c144e4cb9c4">minor</a> = 5</td></tr>
-<tr class="memitem:a9bd3f78524e2f139c3bfe397a89efc2f" id="r_a9bd3f78524e2f139c3bfe397a89efc2f"><td class="memItemLeft">static constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a9bd3f78524e2f139c3bfe397a89efc2f">patch</a> = 0</td></tr>
+<tr class="memitem:a9bd3f78524e2f139c3bfe397a89efc2f" id="r_a9bd3f78524e2f139c3bfe397a89efc2f"><td class="memItemLeft">static constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a9bd3f78524e2f139c3bfe397a89efc2f">patch</a> = 1</td></tr>
 <tr class="memitem:a8547427f278d7deaba58223598f3b074" id="r_a8547427f278d7deaba58223598f3b074"><td class="memItemLeft">static constexpr const char *&#160;</td><td class="memItemRight"><a class="el" href="#a8547427f278d7deaba58223598f3b074">stage</a> = &quot;&quot;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -209,6 +210,31 @@ Static Public Attributes</h2></td></tr>
       <table class="memname">
         <tr>
           <td class="memname">const char * kernel::Version::full_string </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aed11ebd7bded5cfb2ef3e1d51ce86d68" name="aed11ebd7bded5cfb2ef3e1d51ce86d68"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aed11ebd7bded5cfb2ef3e1d51ce86d68">&#9670;&#160;</a></span>picolibc_string()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * kernel::Version::picolibc_string </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>
@@ -303,7 +329,7 @@ Static Public Attributes</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">unsigned kernel::Version::patch = 0</td>
+          <td class="memname">unsigned kernel::Version::patch = 1</td>
         </tr>
       </table>
   </td>

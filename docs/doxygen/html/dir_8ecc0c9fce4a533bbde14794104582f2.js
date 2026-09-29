@@ -3,6 +3,7 @@ var dir_8ecc0c9fce4a533bbde14794104582f2 =
     [ "bits.hpp", "bits_8hpp.html", null ],
     [ "context.hpp", "hal_2context_8hpp.html", null ],
     [ "cpuid.hpp", "hal_2cpuid_8hpp.html", null ],
+    [ "early_init.hpp", "hal_2early__init_8hpp.html", "hal_2early__init_8hpp" ],
     [ "gdt.hpp", "hal_2gdt_8hpp.html", null ],
     [ "idt.hpp", "hal_2idt_8hpp.html", null ],
     [ "interrupt_controller.hpp", "hal_2interrupt__controller_8hpp.html", null ],

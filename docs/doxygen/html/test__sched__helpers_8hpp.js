@@ -4,6 +4,7 @@ var test__sched__helpers_8hpp =
     [ "kernel::test::create_forever_task", "namespacekernel_1_1test.html#afc3a2ab344e9fd124b6995c4332a1067", null ],
     [ "create_test_task", "test__sched__helpers_8hpp.html#adaf685bd992e296e30fb7358c5f28b9a", null ],
     [ "kernel::test::forever_entry", "namespacekernel_1_1test.html#a9a26c096fcccf73fa199e553d354ab15", null ],
+    [ "kernel::test::make_synthetic_clone_frame", "namespacekernel_1_1test.html#a5f11b3daec7f81082d98cc76b23a14b3", null ],
     [ "kernel::test::terminate_and_drain", "namespacekernel_1_1test.html#a93254b4e527b1ef044a6f9fb022f1123", null ],
     [ "kernel::test::terminate_and_drain2", "namespacekernel_1_1test.html#a89714861e1c19a6975ca08da1f2b2cc6", null ],
     [ "kernel::test::terminate_and_drain3", "namespacekernel_1_1test.html#aed16b217483080d1d9bfec6f56472775", null ],

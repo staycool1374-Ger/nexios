@@ -5,6 +5,7 @@ var dir_86f15235f1dbace123bd765dedac1e4b =
     [ "syscall_errors.hpp", "syscall__errors_8hpp.html", null ],
     [ "syscall_handlers_cap.cpp", "syscall__handlers__cap_8cpp.html", "syscall__handlers__cap_8cpp" ],
     [ "syscall_handlers_death.cpp", "syscall__handlers__death_8cpp.html", null ],
+    [ "syscall_handlers_debug.cpp", "syscall__handlers__debug_8cpp.html", "syscall__handlers__debug_8cpp" ],
     [ "syscall_handlers_fs.cpp", "syscall__handlers__fs_8cpp.html", null ],
     [ "syscall_handlers_iommu.cpp", "syscall__handlers__iommu_8cpp.html", "syscall__handlers__iommu_8cpp" ],
     [ "syscall_handlers_ipc.cpp", "syscall__handlers__ipc_8cpp.html", null ],

@@ -26,7 +26,8 @@ var searchData=
   ['sigusr2_23',['SIGUSR2',['../namespacekernel.html#aab4cc62899bcb5fcce7228da55cd0e18aec2c8804a8dac6a866e1a43cfce32fc1',1,'kernel']]],
   ['sipi_24',['SIPI',['../classarch_1_1_a_p_i_c.html#a6b06edfa4ecc78977b1dfc0025eddc64a1152a0f2f9073d5e2e6a81d8c4d90a86',1,'arch::APIC']]],
   ['started_25',['STARTED',['../namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa17130e6c806885e23770df1519b18eb7',1,'kernel::elf']]],
-  ['stop_26',['STOP',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111',1,'kernel']]],
-  ['sync_27',['SYNC',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3',1,'kernel::log']]],
-  ['syscall_28',['SYSCALL',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b',1,'kernel::log']]]
+  ['step_26',['STEP',['../namespacekernel_1_1debug.html#a7d0517c41ce6d04323f7b0a3e74d388fa522f694f92e679d874a1cc2b2616c3d7',1,'kernel::debug']]],
+  ['stop_27',['STOP',['../namespacekernel.html#a02b711df5b135d6792ce2fa4369c7749a615a46af313786fc4e349f34118be111',1,'kernel']]],
+  ['sync_28',['SYNC',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa274ccef15a21e829d03293a6fd1974f3',1,'kernel::log']]],
+  ['syscall_29',['SYSCALL',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aa45f1e61f22cb04eb7a6a39016b56db9b',1,'kernel::log']]]
 ];

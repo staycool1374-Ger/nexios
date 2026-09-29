@@ -24,6 +24,6 @@ var dir_c85d3e3c5052e9ad9ce18c6863244a25 =
     [ "types.hpp", "types_8hpp.html", "types_8hpp" ],
     [ "unique_ptr.hpp", "unique__ptr_8hpp.html", "unique__ptr_8hpp" ],
     [ "utils.hpp", "utils_8hpp.html", "utils_8hpp" ],
-    [ "version.cpp", "version_8cpp.html", null ],
+    [ "version.cpp", "version_8cpp.html", "version_8cpp" ],
     [ "version.hpp", "version_8hpp.html", "version_8hpp" ]
 ];

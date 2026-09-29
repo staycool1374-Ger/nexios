@@ -20,18 +20,7 @@ var namespacekernel =
       [ "set_suppress_death_msg", "namespacekernel_1_1daemon.html#a21cc42dcf871a137a3918d82dcc1ecf4", null ],
       [ "terminate", "namespacekernel_1_1daemon.html#a80477af4a63abcab7534fbffba7db6f2", null ]
     ] ],
-    [ "debug", "namespacekernel_1_1debug.html", [
-      [ "L", "namespacekernel_1_1debug.html#a516d263e9a9dd5318b938067a1e3b353", null ],
-      [ "S", "namespacekernel_1_1debug.html#a4c63317d15f89eed657007431bb35cb9", null ],
-      [ "dump_all_tasks", "namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7", null ],
-      [ "dump_scheduler_info", "namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72", null ],
-      [ "dump_task_info", "namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b", null ],
-      [ "find_entry_owner", "namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387", null ],
-      [ "fmt_str", "namespacekernel_1_1debug.html#adc744b33c8c6fcc879f99b6094f3a8ae", null ],
-      [ "fmt_u64", "namespacekernel_1_1debug.html#abfe4175e0b1de7e6d86961cee076ef9d", null ],
-      [ "record_task_entry", "namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf", null ],
-      [ "trace", "namespacekernel_1_1debug.html#ad4e746d8bc125cec09030517a74f8180", null ]
-    ] ],
+    [ "debug", "namespacekernel_1_1debug.html", "namespacekernel_1_1debug" ],
     [ "diag", "namespacekernel_1_1diag.html", "namespacekernel_1_1diag" ],
     [ "dma", "namespacekernel_1_1dma.html", [
       [ "alloc_buffer", "namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9", null ],
@@ -239,6 +228,7 @@ var namespacekernel =
     [ "cpu_ctx", "namespacekernel.html#a20a07952a9e22c0be3a6711567475133", null ],
     [ "current_cpu", "namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749", null ],
     [ "current_cspace", "namespacekernel.html#a0ecf34d3e30ff218069c96a3645cf261", null ],
+    [ "debug_data_begin", "namespacekernel.html#a90086829567f6b5bf9c0730a8f3d7b08", null ],
     [ "for", "namespacekernel.html#a1dae18e023980d3a17ebc183f9986bd3", null ],
     [ "fpu_owner_own", "namespacekernel.html#a68d19d20b85d9992222d05be6deb3e54", null ],
     [ "init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
@@ -297,6 +287,7 @@ var namespacekernel =
     [ "noexcept", "namespacekernel.html#ac84f34d32e4683fb9c3f512c093068cf", null ],
     [ "return", "namespacekernel.html#a3bc3a31c6af358bc14fd59ca1ec1d75e", null ],
     [ "scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],
+    [ "scheduler_force_apply", "namespacekernel.html#a914ef87f8e792f89a48aafc7c67b3112", null ],
     [ "scheduler_kernel_cr3", "namespacekernel.html#a45c7ed02104a8f2dc79052a0301a16c3", null ],
     [ "scheduler_load_cr3_from", "namespacekernel.html#ab2ec048806a6cd223e72e927ab792e6b", null ],
     [ "scheduler_load_kstack_base", "namespacekernel.html#a37bdeed47659d598826673faf0480073", null ],

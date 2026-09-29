@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('riscv64_2rtc_8
 </div><!--header-->
 <div class="contents">
 
-<p>RISC-V64 RTC driver — reads wall-clock time via the mtime CSR.  
+<p>RISC-V64 RTC driver — uptime clock via the mtime CSR (NOT a wall clock: seconds since boot rendered from a 1970 epoch; a goldfish-rtc wall-clock driver is follow-up work).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="rtc_8hpp_source.html">kernel/arch/rtc.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
@@ -136,7 +136,7 @@ Namespaces</h2></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>RISC-V64 RTC driver — reads wall-clock time via the mtime CSR. </p>
+<div class="textblock"><p>RISC-V64 RTC driver — uptime clock via the mtime CSR (NOT a wall clock: seconds since boot rendered from a 1970 epoch; a goldfish-rtc wall-clock driver is follow-up work). </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

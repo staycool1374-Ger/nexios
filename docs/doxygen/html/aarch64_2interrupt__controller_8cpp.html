@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -120,9 +120,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2inter
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="interrupt__controller_8hpp_source.html">kernel/arch/interrupt_controller.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="serial_8hpp_source.html">kernel/arch/serial.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="idt_8hpp_source.html">kernel/arch/idt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="gic_8hpp_source.html">kernel/arch/aarch64/hal/gic.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kernel_8hpp_source.html">kernel/kernel.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="debug__stop_8hpp_source.html">kernel/debug/debug_stop.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="signal_8hpp_source.html">signal.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for interrupt_controller.cpp:</div>
 <div class="dyncontent">
@@ -137,10 +142,21 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac7375681b455a01cbd2c161dbb0409c2">arch::gic_redist_ready</a> ()</td></tr>
+<tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#af44c28e0176ac64b504464bbd30f31b2">arch::handle_gic_irq</a> (void)</td></tr>
 <tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
 <tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a02f1e46be9bd915e24696367061cebf5">arch::aarch64_el0_fault_handler</a> ()</td></tr>
-<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issue #184). Non-SVC faults from EL0 land here. EL0 tasks do not run yet (bring-up issue #28), so any arrival is deeply wrong: latch ESR/FAR/ELR for post-mortem GDB and park the CPU. Runs with interrupts masked (vector entry); must not re-enable IRQs, touch the scheduler, or return (vectors.S erets on return, but there is no task to resume to).  <br /></td></tr>
+<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
+<tr class="memitem:a3269bc0a72901a59c9d013f16c8d903a" id="r_a3269bc0a72901a59c9d013f16c8d903a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3269bc0a72901a59c9d013f16c8d903a">arch::aarch64_last_el0_esr</a> ()</td></tr>
+<tr class="memdesc:a3269bc0a72901a59c9d013f16c8d903a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem readback of the last latched EL0 fault ESR (tests).  <br /></td></tr>
+<tr class="memitem:a0e1ac99f29b4f897dae9fda1b149c673" id="r_a0e1ac99f29b4f897dae9fda1b149c673"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a0e1ac99f29b4f897dae9fda1b149c673">arch::aarch64_el1_unexpected_fault</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> esr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> far, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> elr)</td></tr>
+<tr class="memdesc:a0e1ac99f29b4f897dae9fda1b149c673"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL1 unexpected-sync-fault handler called from vectors.S (issue #214). Fault recovery for safe_copy_from/to_user is checked FIRST (issue #235; mirrors riscv64_exception_dispatch and x86 <a class="el" href="kernel_8cpp.html">kernel.cpp</a>:1664): while a guarded copy runs, ANY EL1 fault redirects ELR_EL1 to the recovery label so the copy returns false instead of panicking. Returns 0 when recovery was applied (asm stub restores + erets WITHOUT the legacy skip), 1 otherwise. Any other EL1 sync fault is a kernel bug — the old skip-and-eret behavior masked them (issue #209). Dumps ESR/FAR/ELR over the lock-free UART path (bounded poll, byte-drop; no Logger format strings — lx hangs) and panics in debug builds. In release builds returns 1 and the asm stub resumes with the legacy skip. Runs with interrupts masked (vector entry); must not re-enable IRQs or touch the scheduler. Recovery resume is safe: the guarded copy's recovery label needs no caller-saved state (same contract the x86/riscv recovery paths rely on).  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:afd9b85181132acd76811d0e433804c37" id="r_afd9b85181132acd76811d0e433804c37"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#afd9b85181132acd76811d0e433804c37">arch::GIC_MAX_IRQ</a> = 64</td></tr>
+<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

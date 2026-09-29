@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -173,6 +173,8 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a46a67df21dda58b1f1b3d7e2e2f874f1"><td class="mdescLeft">&#160;</td><td class="mdescRight">EDF-ready intrusive list pointers + membership (issue #19, POD copy — same in-place rationale as runq links).  <br /></td></tr>
 <tr class="memitem:a1fd45030d04709d36f055fbea992cb54" id="r_a1fd45030d04709d36f055fbea992cb54"><td class="memItemLeft">TaskControlBlock *&#160;</td><td class="memItemRight"><a class="el" href="#a1fd45030d04709d36f055fbea992cb54">edf_prev</a></td></tr>
 <tr class="memitem:a97d6fb570527865aa28d3abf1b0f7a42" id="r_a97d6fb570527865aa28d3abf1b0f7a42"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a97d6fb570527865aa28d3abf1b0f7a42">in_edf_queue</a></td></tr>
+<tr class="memitem:a690a5b7cb0235bc41bd56a75e5659459" id="r_a690a5b7cb0235bc41bd56a75e5659459"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a690a5b7cb0235bc41bd56a75e5659459">ready_deferred</a></td></tr>
+<tr class="memdesc:a690a5b7cb0235bc41bd56a75e5659459"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wake-while-current deferral flag (issue #250).  <br /></td></tr>
 <tr class="memitem:a070de214a76cbaa040b511236225ce25" id="r_a070de214a76cbaa040b511236225ce25"><td class="memItemLeft">SchedPolicy&#160;</td><td class="memItemRight"><a class="el" href="#a070de214a76cbaa040b511236225ce25">sched_policy</a></td></tr>
 <tr class="memdesc:a070de214a76cbaa040b511236225ce25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch policy + exemption (issue #19).  <br /></td></tr>
 <tr class="memitem:a00d9fba27f08499499eb1fe397a20cff" id="r_a00d9fba27f08499499eb1fe397a20cff"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a00d9fba27f08499499eb1fe397a20cff">edf_exempt</a></td></tr>
@@ -535,6 +537,22 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a690a5b7cb0235bc41bd56a75e5659459" name="a690a5b7cb0235bc41bd56a75e5659459"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a690a5b7cb0235bc41bd56a75e5659459">&#9670;&#160;</a></span>ready_deferred</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::Scheduler::TaskFields::ready_deferred</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Wake-while-current deferral flag (issue #250). </p>
 
 </div>
 </div>

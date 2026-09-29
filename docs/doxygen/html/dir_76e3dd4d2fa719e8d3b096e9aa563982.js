@@ -8,6 +8,7 @@ var dir_76e3dd4d2fa719e8d3b096e9aa563982 =
     [ "context.hpp", "context_8hpp.html", null ],
     [ "cpu_context.hpp", "cpu__context_8hpp.html", "cpu__context_8hpp" ],
     [ "cpuid.hpp", "cpuid_8hpp.html", null ],
+    [ "early_init.hpp", "early__init_8hpp.html", null ],
     [ "gdt.hpp", "gdt_8hpp.html", null ],
     [ "idt.hpp", "idt_8hpp.html", null ],
     [ "interrupt_controller.hpp", "interrupt__controller_8hpp.html", null ],

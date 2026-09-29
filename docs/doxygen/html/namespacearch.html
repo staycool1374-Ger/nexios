@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.0</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.1</span>
    </div>
   </td>
  </tr>
@@ -137,6 +137,20 @@ Data Structures</h2></td></tr>
 <tr class="memitem:TprGuard" id="r_TprGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_tpr_guard.html">TprGuard</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII guard that raises the calling CPU's TPR to a priority class on construction and restores the saved class on destruction. Never replaces IrqGuard: callers keep their existing scheduler_lock_ + IF=0 discipline (INV-TPR2); TPR only narrows which vectors may preempt. No-op when the LAPIC is off (accessors are fail-closed).  <a href="classarch_1_1_tpr_guard.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:aecd76646787c7d438e3d8c235ca1c2f0" id="r_aecd76646787c7d438e3d8c235ca1c2f0"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0ae0aa021e21dddbd6d8cecec71e9cf564">OK</a> = 0
+, <a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0ac4d9f59f0aae4208d81e4344492e9a89">BAD_FREQ</a> = 1
+, <a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0a9b5d5959351014c61c07627ae9c3e72e">MMIO_MAP_FAILED</a> = 2
+, <a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2">CTRL_PROBE_FAILED</a> = 3
+, <br />
+&#160;&#160;<a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620">CTRL_TIMEOUT</a> = 4
+, <a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a">TIMER_FREQ_UNKNOWN</a> = 5
+<br />
+ }</td></tr>
+<tr class="memdesc:aecd76646787c7d438e3d8c235ca1c2f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Early IRQ-init outcome (issue #198). Reachable failures are error codes, never ENSURE/panic (CODING_STYLE §5).  <a href="#aecd76646787c7d438e3d8c235ca1c2f0">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ae75234524de4f60ea09150c8da54576b" id="r_ae75234524de4f60ea09150c8da54576b"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ae75234524de4f60ea09150c8da54576b">pan_init</a> ()</td></tr>
@@ -151,12 +165,22 @@ Functions</h2></td></tr>
 <tr class="memitem:a4da73406011eca3290f9e1baebeb720e" id="r_a4da73406011eca3290f9e1baebeb720e"><td class="memItemLeft">volatile <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a4da73406011eca3290f9e1baebeb720e">gicr_rd_reg</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> offset)</td></tr>
 <tr class="memitem:a0be0121227150927d9c3e750b7d86455" id="r_a0be0121227150927d9c3e750b7d86455"><td class="memItemLeft">volatile <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0be0121227150927d9c3e750b7d86455">gicr_sgi_reg</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> offset)</td></tr>
 <tr class="memitem:a46488b8cc19b71e9d4bd3d8ea44603e4" id="r_a46488b8cc19b71e9d4bd3d8ea44603e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a46488b8cc19b71e9d4bd3d8ea44603e4">exception_entry</a> (void)</td></tr>
+<tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2">gic_redist_ready</a> ()</td></tr>
+<tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af44c28e0176ac64b504464bbd30f31b2">handle_gic_irq</a> (void)</td></tr>
 <tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches all non-spurious INTIDs via the IDT table.  <br /></td></tr>
 <tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a02f1e46be9bd915e24696367061cebf5">aarch64_el0_fault_handler</a> ()</td></tr>
-<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issue #184). Non-SVC faults from EL0 land here. EL0 tasks do not run yet (bring-up issue #28), so any arrival is deeply wrong: latch ESR/FAR/ELR for post-mortem GDB and park the CPU. Runs with interrupts masked (vector entry); must not re-enable IRQs, touch the scheduler, or return (vectors.S erets on return, but there is no task to resume to).  <br /></td></tr>
+<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
+<tr class="memitem:a3269bc0a72901a59c9d013f16c8d903a" id="r_a3269bc0a72901a59c9d013f16c8d903a"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3269bc0a72901a59c9d013f16c8d903a">aarch64_last_el0_esr</a> ()</td></tr>
+<tr class="memdesc:a3269bc0a72901a59c9d013f16c8d903a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem readback of the last latched EL0 fault ESR (tests).  <br /></td></tr>
+<tr class="memitem:a0e1ac99f29b4f897dae9fda1b149c673" id="r_a0e1ac99f29b4f897dae9fda1b149c673"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0e1ac99f29b4f897dae9fda1b149c673">aarch64_el1_unexpected_fault</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> esr, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> far, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> elr)</td></tr>
+<tr class="memdesc:a0e1ac99f29b4f897dae9fda1b149c673"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL1 unexpected-sync-fault handler called from vectors.S (issue #214). Fault recovery for safe_copy_from/to_user is checked FIRST (issue #235; mirrors riscv64_exception_dispatch and x86 <a class="el" href="kernel_8cpp.html">kernel.cpp</a>:1664): while a guarded copy runs, ANY EL1 fault redirects ELR_EL1 to the recovery label so the copy returns false instead of panicking. Returns 0 when recovery was applied (asm stub restores + erets WITHOUT the legacy skip), 1 otherwise. Any other EL1 sync fault is a kernel bug — the old skip-and-eret behavior masked them (issue #209). Dumps ESR/FAR/ELR over the lock-free UART path (bounded poll, byte-drop; no Logger format strings — lx hangs) and panics in debug builds. In release builds returns 1 and the asm stub resumes with the legacy skip. Runs with interrupts masked (vector entry); must not re-enable IRQs or touch the scheduler. Recovery resume is safe: the guarded copy's recovery label needs no caller-saved state (same contract the x86/riscv recovery paths rely on).  <br /></td></tr>
 <tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac53772566e53832b14ccedb8d6ae2d4e">cpu_index</a> () noexcept</td></tr>
 <tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
+<tr class="memitem:a78513919ed4d338079bb56b6c548c84f" id="r_a78513919ed4d338079bb56b6c548c84f"><td class="memItemLeft"><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78513919ed4d338079bb56b6c548c84f">early_irq_init</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> frequency_hz)</td></tr>
+<tr class="memdesc:a78513919ed4d338079bb56b6c548c84f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterruptController::init → Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result.  <br /></td></tr>
+<tr class="memitem:ac82b85b800ec3060a62a5921a7d638d8" id="r_ac82b85b800ec3060a62a5921a7d638d8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac82b85b800ec3060a62a5921a7d638d8">early_irq_init_ap</a> ()</td></tr>
+<tr class="memdesc:ac82b85b800ec3060a62a5921a7d638d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>.  <br /></td></tr>
 <tr class="memitem:abf043d19ff557eda98a5f62a99c78568" id="r_abf043d19ff557eda98a5f62a99c78568"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#abf043d19ff557eda98a5f62a99c78568">iopb_claim</a> (kernel::TaskControlBlock &amp;)</td></tr>
 <tr class="memitem:a43e6d91ea884caad134906534ca1f4d0" id="r_a43e6d91ea884caad134906534ca1f4d0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a43e6d91ea884caad134906534ca1f4d0">iopb_release</a> (kernel::TaskControlBlock &amp;)</td></tr>
 <tr class="memitem:a2c4c9fbb4236aa0576c8efa8c1c3dec9" id="r_a2c4c9fbb4236aa0576c8efa8c1c3dec9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a2c4c9fbb4236aa0576c8efa8c1c3dec9">iopb_grant_range</a> (kernel::TaskControlBlock &amp;, <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>, <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>)</td></tr>
@@ -192,6 +216,14 @@ Functions</h2></td></tr>
 <tr class="memitem:a8dcc3bc98dc325b9ed085730ea58aaec" id="r_a8dcc3bc98dc325b9ed085730ea58aaec"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a8dcc3bc98dc325b9ed085730ea58aaec">plic_complete</a> (<a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> intid)</td></tr>
 <tr class="memitem:abcb80cfbe5c335ca7659697f28452a7b" id="r_abcb80cfbe5c335ca7659697f28452a7b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abcb80cfbe5c335ca7659697f28452a7b">handle_plic_trap</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:ade82e23d3659eed529a27355052fcdac" id="r_ade82e23d3659eed529a27355052fcdac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ade82e23d3659eed529a27355052fcdac">handle_kernel_exception</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sepc, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> scause, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> stval)</td></tr>
+<tr class="memitem:ae334d0e2cfa3562725380393b13ad72f" id="r_ae334d0e2cfa3562725380393b13ad72f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae334d0e2cfa3562725380393b13ad72f">riscv64_u_fault_handler</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *frame)</td></tr>
+<tr class="memdesc:ae334d0e2cfa3562725380393b13ad72f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate a U-mode faulting task (issue #206 M2, mirrors aarch64_el0_fault_handler). Runs IRQ-masked from the trap entry; must not re-enable IRQs and must NOT call Scheduler::terminate (ISR-unsafe) — marks TERMINATED, wakes a waitpid parent, and arms the deferred switch via switch_away_from_terminating. The asm return path applies the pending switch. Parks only when there is no live user task to kill.  <br /></td></tr>
+<tr class="memitem:a00d3887d8d39eb243c45eb49577ee7cb" id="r_a00d3887d8d39eb243c45eb49577ee7cb"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a00d3887d8d39eb243c45eb49577ee7cb">riscv64_last_u_scause</a> ()</td></tr>
+<tr class="memdesc:a00d3887d8d39eb243c45eb49577ee7cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem readback of the last latched U-mode fault (tests).  <br /></td></tr>
+<tr class="memitem:aadd6a90c89a8fe5171cd3310696e41a9" id="r_aadd6a90c89a8fe5171cd3310696e41a9"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aadd6a90c89a8fe5171cd3310696e41a9">riscv64_last_u_stval</a> ()</td></tr>
+<tr class="memitem:ac6db9b4c73ef7a5e992a8e46071cfe58" id="r_ac6db9b4c73ef7a5e992a8e46071cfe58"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac6db9b4c73ef7a5e992a8e46071cfe58">riscv64_last_u_sepc</a> ()</td></tr>
+<tr class="memitem:a2e08cb6a99be2296fd2c32a5f33a22da" id="r_a2e08cb6a99be2296fd2c32a5f33a22da"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2e08cb6a99be2296fd2c32a5f33a22da">riscv64_exception_dispatch</a> (<a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *frame, <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> sstatus)</td></tr>
+<tr class="memdesc:a2e08cb6a99be2296fd2c32a5f33a22da"><td class="mdescLeft">&#160;</td><td class="mdescRight">SPP-gated exception dispatch (issue #206 M2). U-mode (SPP==0) faults terminate the task; S-mode faults keep the SBI-dump + panic path (kernel bug).  <br /></td></tr>
 <tr class="memitem:a92da100858fccb20607b0cb06a6c0bb2" id="r_a92da100858fccb20607b0cb06a6c0bb2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a92da100858fccb20607b0cb06a6c0bb2">pcid_init</a> ()</td></tr>
 <tr class="memdesc:a92da100858fccb20607b0cb06a6c0bb2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Probe CPU support once at boot (BSP).  <br /></td></tr>
 <tr class="memitem:ad68968a927e70486a43470b95d5fa854" id="r_ad68968a927e70486a43470b95d5fa854"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad68968a927e70486a43470b95d5fa854">pcid_supported</a> ()</td></tr>
@@ -219,6 +251,7 @@ Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:a84c3ad81d357b03972adf4feea72835a" id="r_a84c3ad81d357b03972adf4feea72835a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a84c3ad81d357b03972adf4feea72835a">g_pan_supported</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memitem:ab3367f411b4781353ffa472a20fe3056" id="r_ab3367f411b4781353ffa472a20fe3056"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab3367f411b4781353ffa472a20fe3056">g_early_irq_done</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memitem:a12f8e4c8b8adadb460137a2c9fd4ba14" id="r_a12f8e4c8b8adadb460137a2c9fd4ba14"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a12f8e4c8b8adadb460137a2c9fd4ba14">GICD_BASE</a> = 0x08000000ULL</td></tr>
 <tr class="memitem:a3b94ff78f7b9fc3de77542c57af2703a" id="r_a3b94ff78f7b9fc3de77542c57af2703a"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3b94ff78f7b9fc3de77542c57af2703a">GICC_BASE</a> = 0x08010000ULL</td></tr>
 <tr class="memitem:a024087ec76a8f9982b009fa6696f23dd" id="r_a024087ec76a8f9982b009fa6696f23dd"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a024087ec76a8f9982b009fa6696f23dd">GICR_RD_BASE</a> = 0x080A0000ULL</td></tr>
@@ -237,6 +270,10 @@ Variables</h2></td></tr>
 <tr class="memitem:af6d482207fc1d589711fe7f535470893" id="r_af6d482207fc1d589711fe7f535470893"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af6d482207fc1d589711fe7f535470893">GICD_NSACR</a> = 0x0E00</td></tr>
 <tr class="memitem:aebf085a47380ef9e7303c1aa568f5f2e" id="r_aebf085a47380ef9e7303c1aa568f5f2e"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aebf085a47380ef9e7303c1aa568f5f2e">GICD_SGIR</a> = 0x0F00</td></tr>
 <tr class="memitem:a7250075e1293fefcadae16792b540e49" id="r_a7250075e1293fefcadae16792b540e49"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7250075e1293fefcadae16792b540e49">GICR_WAKER</a> = 0x0014</td></tr>
+<tr class="memitem:aeb8904daa05f0ab2d29338a6cc1a685c" id="r_aeb8904daa05f0ab2d29338a6cc1a685c"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb8904daa05f0ab2d29338a6cc1a685c">GICR_WAKER_CHILDREN_ONLINE</a> = 1U &lt;&lt; 1</td></tr>
+<tr class="memdesc:aeb8904daa05f0ab2d29338a6cc1a685c"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICR_WAKER.Children_Online bit: redistributor finished its wake-up.  <br /></td></tr>
+<tr class="memitem:ad410a2c6d620490a71f7ab1cc2cecc1d" id="r_ad410a2c6d620490a71f7ab1cc2cecc1d"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad410a2c6d620490a71f7ab1cc2cecc1d">GICR_WAKER_MAX_POLLS</a> = 1000000</td></tr>
+<tr class="memdesc:ad410a2c6d620490a71f7ab1cc2cecc1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init).  <br /></td></tr>
 <tr class="memitem:ad3c0b10a2051dab9d984ab330e0ee9be" id="r_ad3c0b10a2051dab9d984ab330e0ee9be"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad3c0b10a2051dab9d984ab330e0ee9be">GICR_IGROUPR0</a> = 0x0080</td></tr>
 <tr class="memitem:a78d90969cf2e5838fd65f902472d8bed" id="r_a78d90969cf2e5838fd65f902472d8bed"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a78d90969cf2e5838fd65f902472d8bed">GICR_ISENABLER0</a> = 0x0100</td></tr>
 <tr class="memitem:a0a572c70d81a18206016f3c795172fd5" id="r_a0a572c70d81a18206016f3c795172fd5"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0a572c70d81a18206016f3c795172fd5">GICR_ICENABLER0</a> = 0x0180</td></tr>
@@ -258,6 +295,8 @@ Variables</h2></td></tr>
 <tr class="memitem:a607d71551b23fa906a8ddbdb3c6a3af2" id="r_a607d71551b23fa906a8ddbdb3c6a3af2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a607d71551b23fa906a8ddbdb3c6a3af2">INTID_VIRTIO2</a> = 38</td></tr>
 <tr class="memitem:af13221a37481c42ba06dfad672246264" id="r_af13221a37481c42ba06dfad672246264"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af13221a37481c42ba06dfad672246264">INTID_VIRTIO3</a> = 39</td></tr>
 <tr class="memitem:a646aecfdaea719de77bae2c37a43d95a" id="r_a646aecfdaea719de77bae2c37a43d95a"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a646aecfdaea719de77bae2c37a43d95a">INTID_VIRTIO4</a> = 40</td></tr>
+<tr class="memitem:afd9b85181132acd76811d0e433804c37" id="r_afd9b85181132acd76811d0e433804c37"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afd9b85181132acd76811d0e433804c37">GIC_MAX_IRQ</a> = 64</td></tr>
+<tr class="memdesc:afd9b85181132acd76811d0e433804c37"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO.  <br /></td></tr>
 <tr class="memitem:a8330daf1138ba3f2466d81406d1ab6c0" id="r_a8330daf1138ba3f2466d81406d1ab6c0"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8330daf1138ba3f2466d81406d1ab6c0">PL031_BASE</a> = 0x09010000ULL</td></tr>
 <tr class="memitem:a585a77a747cf6637b9dfc9119564b96f" id="r_a585a77a747cf6637b9dfc9119564b96f"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a585a77a747cf6637b9dfc9119564b96f">PL031_DATA</a> = 0x0000</td></tr>
 <tr class="memdesc:a585a77a747cf6637b9dfc9119564b96f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current time (Unix secs).  <br /></td></tr>
@@ -275,6 +314,14 @@ Variables</h2></td></tr>
 <tr class="memitem:a9c39a084cebdfc926cd28dd5ac4bd7f1" id="r_a9c39a084cebdfc926cd28dd5ac4bd7f1"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9c39a084cebdfc926cd28dd5ac4bd7f1">IRQ_VIRTIO4</a> = 5</td></tr>
 <tr class="memitem:a59a16d1b88e89b79e36c5af717b1eb31" id="r_a59a16d1b88e89b79e36c5af717b1eb31"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a59a16d1b88e89b79e36c5af717b1eb31">IRQ_UART</a> = 10</td></tr>
 <tr class="memitem:aa595a02252ff6e7295062c376298dfea" id="r_aa595a02252ff6e7295062c376298dfea"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa595a02252ff6e7295062c376298dfea">IRQ_KEYBOARD</a> = 12</td></tr>
+<tr class="memitem:ab590e0485f5d482d57eb19d3262cf29a" id="r_ab590e0485f5d482d57eb19d3262cf29a"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab590e0485f5d482d57eb19d3262cf29a">PLIC_MAX_IRQ</a> = 32</td></tr>
+<tr class="memdesc:ab590e0485f5d482d57eb19d3262cf29a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes a single 32-line enable word; lines &gt;= 32 have no defined register and must not touch MMIO.  <br /></td></tr>
+<tr class="memitem:ad37d8b3caad2a620051abadb426467a2" id="r_ad37d8b3caad2a620051abadb426467a2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad37d8b3caad2a620051abadb426467a2">RISCV_MTIME_FREQ_HZ</a> = 10000000</td></tr>
+<tr class="memdesc:ad37d8b3caad2a620051abadb426467a2"><td class="mdescLeft">&#160;</td><td class="mdescRight">QEMU virt mtime input frequency (issue #198: was a bare 10000000 literal in two places). Real hardware fills this from the device tree / SBI environment (issue #29 follow-up).  <br /></td></tr>
+<tr class="memitem:a7ce701e24002556d383fa1e4fa018dd2" id="r_a7ce701e24002556d383fa1e4fa018dd2"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7ce701e24002556d383fa1e4fa018dd2">SBI_LEGACY_SET_TIMER</a> = 0</td></tr>
+<tr class="memdesc:a7ce701e24002556d383fa1e4fa018dd2"><td class="mdescLeft">&#160;</td><td class="mdescRight">SBI legacy SET_TIMER extension id (ecall a7 = 0).  <br /></td></tr>
+<tr class="memitem:aea1d2d632f96e8d9538233984e274d99" id="r_aea1d2d632f96e8d9538233984e274d99"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aea1d2d632f96e8d9538233984e274d99">MTIMECMP_DISARMED</a> = ~0ULL</td></tr>
+<tr class="memdesc:aea1d2d632f96e8d9538233984e274d99"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fail-closed disarm deadline: mtimecmp parked at the maximum so no supervisor timer interrupt can fire (mtime is unreadable-free and mtimecmp unwritable-clear from S-mode).  <br /></td></tr>
 <tr class="memitem:aabce4ce1e12afd68caf560773edc154f" id="r_aabce4ce1e12afd68caf560773edc154f"><td class="memItemLeft"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aabce4ce1e12afd68caf560773edc154f">__isr_vector</a> []</td></tr>
 <tr class="memdesc:aabce4ce1e12afd68caf560773edc154f"><td class="mdescLeft">&#160;</td><td class="mdescRight">External ISR vector table defined in the linker or assembly entry point.  <br /></td></tr>
 <tr class="memitem:a01fc41f7bc66d833a4ddd66bbb110727" id="r_a01fc41f7bc66d833a4ddd66bbb110727"><td class="memItemLeft">constexpr <a class="el" href="types_8hpp.html#a64be82add362de7c99ce6671d7f4f0a6">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01fc41f7bc66d833a4ddd66bbb110727">PCID_MAX</a> = 4095</td></tr>
@@ -327,7 +374,46 @@ Variables</h2></td></tr>
 <p>INTID ranges (GICv3): 0-15 SGI (software-generated, IPI) 16-31 PPI (private per-core: timer, PMU, etc.) 32-1019 SPI (shared: UART, virtio, RTC, etc.)</p>
 <p>Memory map (QEMU virt): PLIC_BASE = 0x0C00_0000 Priority = base + 0x0000_0000 (one 4-byte word per source) Pending = base + 0x0000_1000 Enable = base + 0x0000_2000 (one bit per source) Threshold = base + 0x0020_0000 Claim/Complete= base + 0x0020_0004</p>
 <p>IRQ map (QEMU virt): 0 = reserved 1-8 = virtio-mmio devices 9 = (unused) 10 = UART 11 = (unused) 12 = keyboard (PS/2) </p>
-</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+</div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="aecd76646787c7d438e3d8c235ca1c2f0" name="aecd76646787c7d438e3d8c235ca1c2f0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aecd76646787c7d438e3d8c235ca1c2f0">&#9670;&#160;</a></span>EarlyIrqResult</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0">arch::EarlyIrqResult</a> : <a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Early IRQ-init outcome (issue #198). Reachable failures are error codes, never ENSURE/panic (CODING_STYLE §5). </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0ae0aa021e21dddbd6d8cecec71e9cf564" name="aecd76646787c7d438e3d8c235ca1c2f0ae0aa021e21dddbd6d8cecec71e9cf564"></a>OK&#160;</td><td class="fielddoc"><p>All four stages completed. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0ac4d9f59f0aae4208d81e4344492e9a89" name="aecd76646787c7d438e3d8c235ca1c2f0ac4d9f59f0aae4208d81e4344492e9a89"></a>BAD_FREQ&#160;</td><td class="fielddoc"><p>frequency_hz == 0 (caller error). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a9b5d5959351014c61c07627ae9c3e72e" name="aecd76646787c7d438e3d8c235ca1c2f0a9b5d5959351014c61c07627ae9c3e72e"></a>MMIO_MAP_FAILED&#160;</td><td class="fielddoc"><p>Controller MMIO window could not be mapped. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2" name="aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2"></a>CTRL_PROBE_FAILED&#160;</td><td class="fielddoc"><p>Controller version/probe unreadable. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620" name="aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620"></a>CTRL_TIMEOUT&#160;</td><td class="fielddoc"><p>Controller ready-poll (GIC redistributor WAKER) did not complete within its bound. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a" name="aecd76646787c7d438e3d8c235ca1c2f0a8d814dc140a613884bce790ddd87b54a"></a>TIMER_FREQ_UNKNOWN&#160;</td><td class="fielddoc"><p>Timer backing frequency still 0 after init. </p>
+</td></tr>
+</table>
+
+</div>
+</div>
+<a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a02f1e46be9bd915e24696367061cebf5" name="a02f1e46be9bd915e24696367061cebf5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a02f1e46be9bd915e24696367061cebf5">&#9670;&#160;</a></span>aarch64_el0_fault_handler()</h2>
 
@@ -343,7 +429,66 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>EL0 synchronous-fault handler called from vectors.S (issue #184). Non-SVC faults from EL0 land here. EL0 tasks do not run yet (bring-up issue #28), so any arrival is deeply wrong: latch ESR/FAR/ELR for post-mortem GDB and park the CPU. Runs with interrupts masked (vector entry); must not re-enable IRQs, touch the scheduler, or return (vectors.S erets on return, but there is no task to resume to). </p>
+<p>EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a02f1e46be9bd915e24696367061cebf5_cgraph.png" border="0" usemap="#anamespacearch_a02f1e46be9bd915e24696367061cebf5_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a0e1ac99f29b4f897dae9fda1b149c673" name="a0e1ac99f29b4f897dae9fda1b149c673"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e1ac99f29b4f897dae9fda1b149c673">&#9670;&#160;</a></span>aarch64_el1_unexpected_fault()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::aarch64_el1_unexpected_fault </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>esr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>far</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>elr</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>EL1 unexpected-sync-fault handler called from vectors.S (issue #214). Fault recovery for safe_copy_from/to_user is checked FIRST (issue #235; mirrors riscv64_exception_dispatch and x86 <a class="el" href="kernel_8cpp.html">kernel.cpp</a>:1664): while a guarded copy runs, ANY EL1 fault redirects ELR_EL1 to the recovery label so the copy returns false instead of panicking. Returns 0 when recovery was applied (asm stub restores + erets WITHOUT the legacy skip), 1 otherwise. Any other EL1 sync fault is a kernel bug — the old skip-and-eret behavior masked them (issue #209). Dumps ESR/FAR/ELR over the lock-free UART path (bounded poll, byte-drop; no Logger format strings — lx hangs) and panics in debug builds. In release builds returns 1 and the asm stub resumes with the legacy skip. Runs with interrupts masked (vector entry); must not re-enable IRQs or touch the scheduler. Recovery resume is safe: the guarded copy's recovery label needs no caller-saved state (same contract the x86/riscv recovery paths rely on). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a0e1ac99f29b4f897dae9fda1b149c673_cgraph.png" border="0" usemap="#anamespacearch_a0e1ac99f29b4f897dae9fda1b149c673_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a3269bc0a72901a59c9d013f16c8d903a" name="a3269bc0a72901a59c9d013f16c8d903a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3269bc0a72901a59c9d013f16c8d903a">&#9670;&#160;</a></span>aarch64_last_el0_esr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::aarch64_last_el0_esr </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Post-mortem readback of the last latched EL0 fault ESR (tests). </p>
 
 </div>
 </div>
@@ -374,6 +519,58 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="a78513919ed4d338079bb56b6c548c84f" name="a78513919ed4d338079bb56b6c548c84f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78513919ed4d338079bb56b6c548c84f">&#9670;&#160;</a></span>early_irq_init()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0">EarlyIrqResult</a> arch::early_irq_init </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>frequency_hz</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterruptController::init → Timer::init(frequency_hz) → Timer::calibrate. Idempotent (BOOT_ONLY): a second call repeats the sequence with no hardware side-effect delta and returns the same result. </p>
+<p>aarch64 early IRQ bring-up (issue #198): VBAR/IDT → GIC (distributor + redistributor + CPU interface) → generic timer → counter-frequency calibration. Mirrors <a class="el" href="kernel_8cpp.html">kernel.cpp</a> boot order.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">frequency_hz</td><td>Desired system-tick rate in Hz (must be nonzero). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="#aecd76646787c7d438e3d8c235ca1c2f0" title="Early IRQ-init outcome (issue #198). Reachable failures are error codes, never ENSURE/panic (CODING_S...">EarlyIrqResult</a> outcome; OK on success. </dd></dl>
+
+</div>
+</div>
+<a id="ac82b85b800ec3060a62a5921a7d638d8" name="ac82b85b800ec3060a62a5921a7d638d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac82b85b800ec3060a62a5921a7d638d8">&#9670;&#160;</a></span>early_irq_init_ap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::early_irq_init_ap </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Per-AP early IRQ enable (x86_64 only): LAPIC init + IDT load. Touches per-CPU state only; the shared distributor/PIC setup from <a class="el" href="#a78513919ed4d338079bb56b6c548c84f" title="Run the ordered early IRQ bring-up for this architecture. Stages: IDT::init + IDT::load → ArchInterru...">early_irq_init()</a> is never repeated here. Defined in <a class="el" href="x86__64_2early__init_8cpp.html" title="x86_64 early IRQ bring-up (issue #198): IDT → legacy PIC → local/APIC (+ I/O APIC) → PIT/APIC timer →...">src/kernel/arch/x86_64/early_init.cpp</a>. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph.png" border="0" usemap="#anamespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
 <a id="a46488b8cc19b71e9d4bd3d8ea44603e4" name="a46488b8cc19b71e9d4bd3d8ea44603e4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a46488b8cc19b71e9d4bd3d8ea44603e4">&#9670;&#160;</a></span>exception_entry()</h2>
 
@@ -392,7 +589,33 @@ Variables</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a46488b8cc19b71e9d4bd3d8ea44603e4_cgraph.png" border="0" usemap="#anamespacearch_a46488b8cc19b71e9d4bd3d8ea44603e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="ac7375681b455a01cbd2c161dbb0409c2" name="ac7375681b455a01cbd2c161dbb0409c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac7375681b455a01cbd2c161dbb0409c2">&#9670;&#160;</a></span>gic_redist_ready()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::gic_redist_ready </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit. </p>
+<dl class="section return"><dt>Returns</dt><dd>true when interrupt delivery hardware is usable. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ac7375681b455a01cbd2c161dbb0409c2_cgraph.png" border="0" usemap="#anamespacearch_ac7375681b455a01cbd2c161dbb0409c2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -642,7 +865,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af44c28e0176ac64b504464bbd30f31b2_cgraph.png" border="0" usemap="#anamespacearch_af44c28e0176ac64b504464bbd30f31b2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -674,7 +897,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ade82e23d3659eed529a27355052fcdac_cgraph.png" border="0" usemap="#anamespacearch_ade82e23d3659eed529a27355052fcdac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -706,7 +929,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_abcb80cfbe5c335ca7659697f28452a7b_cgraph.png" border="0" usemap="#anamespacearch_abcb80cfbe5c335ca7659697f28452a7b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -1051,7 +1274,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af42ba0c651229ba30e96c82094e72d88_cgraph.png" border="0" usemap="#anamespacearch_af42ba0c651229ba30e96c82094e72d88_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -1108,7 +1331,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a11748e0603d0f9b77d1198c4e14fd224_cgraph.png" border="0" usemap="#anamespacearch_a11748e0603d0f9b77d1198c4e14fd224_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1135,7 +1358,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af1db3b0c561e94a99c8f3f6d020093f5_cgraph.png" border="0" usemap="#anamespacearch_af1db3b0c561e94a99c8f3f6d020093f5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -1167,7 +1390,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ab8a3d0ed72e0355f607878da738a53e4_cgraph.png" border="0" usemap="#anamespacearch_ab8a3d0ed72e0355f607878da738a53e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -1194,7 +1417,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_adc4b509b8ba2e26aae708fff98409565_cgraph.png" border="0" usemap="#anamespacearch_adc4b509b8ba2e26aae708fff98409565_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -1238,7 +1461,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a68057e54d9a90d6545678a5b77d8b604_cgraph.png" border="0" usemap="#anamespacearch_a68057e54d9a90d6545678a5b77d8b604_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -1265,7 +1488,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a064392a919e573428b1ba326b8cdb64d_cgraph.png" border="0" usemap="#anamespacearch_a064392a919e573428b1ba326b8cdb64d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -1297,7 +1520,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ab73dfb2ec66dbef323c5e5cd372e3ff8_cgraph.png" border="0" usemap="#anamespacearch_ab73dfb2ec66dbef323c5e5cd372e3ff8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -1320,7 +1543,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a5f0b29e66c1ded4cde61c7ccd0dc2b4c_cgraph.png" border="0" usemap="#anamespacearch_a5f0b29e66c1ded4cde61c7ccd0dc2b4c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1347,7 +1570,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ac1b280a31f7bae1f896d90239ed96348_cgraph.png" border="0" usemap="#anamespacearch_ac1b280a31f7bae1f896d90239ed96348_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1427,7 +1650,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a7b9a139f7af44bc665d24c1731c6f19c_cgraph.png" border="0" usemap="#anamespacearch_a7b9a139f7af44bc665d24c1731c6f19c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1450,7 +1673,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a8fd92f41ff58ee30a496023a66c4482f_cgraph.png" border="0" usemap="#anamespacearch_a8fd92f41ff58ee30a496023a66c4482f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1473,7 +1696,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph.png" border="0" usemap="#anamespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1780,6 +2003,126 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a2e08cb6a99be2296fd2c32a5f33a22da" name="a2e08cb6a99be2296fd2c32a5f33a22da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e08cb6a99be2296fd2c32a5f33a22da">&#9670;&#160;</a></span>riscv64_exception_dispatch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::riscv64_exception_dispatch </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>frame</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>sstatus</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>SPP-gated exception dispatch (issue #206 M2). U-mode (SPP==0) faults terminate the task; S-mode faults keep the SBI-dump + panic path (kernel bug). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">frame</td><td>Trap save area base (sp). </td></tr>
+    <tr><td class="paramname">sstatus</td><td>Live sstatus (SPP bit 8 discriminates). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a2e08cb6a99be2296fd2c32a5f33a22da_cgraph.png" border="0" usemap="#anamespacearch_a2e08cb6a99be2296fd2c32a5f33a22da_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 21 -->
+</div>
+
+</div>
+</div>
+<a id="a00d3887d8d39eb243c45eb49577ee7cb" name="a00d3887d8d39eb243c45eb49577ee7cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00d3887d8d39eb243c45eb49577ee7cb">&#9670;&#160;</a></span>riscv64_last_u_scause()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::riscv64_last_u_scause </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Post-mortem readback of the last latched U-mode fault (tests). </p>
+
+</div>
+</div>
+<a id="ac6db9b4c73ef7a5e992a8e46071cfe58" name="ac6db9b4c73ef7a5e992a8e46071cfe58"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6db9b4c73ef7a5e992a8e46071cfe58">&#9670;&#160;</a></span>riscv64_last_u_sepc()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::riscv64_last_u_sepc </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aadd6a90c89a8fe5171cd3310696e41a9" name="aadd6a90c89a8fe5171cd3310696e41a9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aadd6a90c89a8fe5171cd3310696e41a9">&#9670;&#160;</a></span>riscv64_last_u_stval()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::riscv64_last_u_stval </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae334d0e2cfa3562725380393b13ad72f" name="ae334d0e2cfa3562725380393b13ad72f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae334d0e2cfa3562725380393b13ad72f">&#9670;&#160;</a></span>riscv64_u_fault_handler()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::riscv64_u_fault_handler </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>frame</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Terminate a U-mode faulting task (issue #206 M2, mirrors aarch64_el0_fault_handler). Runs IRQ-masked from the trap entry; must not re-enable IRQs and must NOT call Scheduler::terminate (ISR-unsafe) — marks TERMINATED, wakes a waitpid parent, and arms the deferred switch via switch_away_from_terminating. The asm return path applies the pending switch. Parks only when there is no live user task to kill. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">frame</td><td>Trap save area (OFF_* layout: SEPC=idx31, SCAUSE=idx33, STVAL=idx34). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ae334d0e2cfa3562725380393b13ad72f_cgraph.png" border="0" usemap="#anamespacearch_ae334d0e2cfa3562725380393b13ad72f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 22 -->
+</div>
+
+</div>
+</div>
 <a id="a12155265301dd4e78b8ed8523ff7353f" name="a12155265301dd4e78b8ed8523ff7353f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a12155265301dd4e78b8ed8523ff7353f">&#9670;&#160;</a></span>virtio_find_device()</h2>
 
@@ -1802,7 +2145,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a12155265301dd4e78b8ed8523ff7353f_cgraph.png" border="0" usemap="#anamespacearch_a12155265301dd4e78b8ed8523ff7353f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1861,7 +2204,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a1888fb8a7b37d30dec1c191cacb1fbf2_cgraph.png" border="0" usemap="#anamespacearch_a1888fb8a7b37d30dec1c191cacb1fbf2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -1888,7 +2231,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a61b1d4d8c642abd27d65bb1f64405e58_cgraph.png" border="0" usemap="#anamespacearch_a61b1d4d8c642abd27d65bb1f64405e58_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -1935,7 +2278,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a9feefbea1a3cdebff8c58cb8dec3d426_cgraph.png" border="0" usemap="#anamespacearch_a9feefbea1a3cdebff8c58cb8dec3d426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -2361,6 +2704,20 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ab3367f411b4781353ffa472a20fe3056" name="ab3367f411b4781353ffa472a20fe3056"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3367f411b4781353ffa472a20fe3056">&#9670;&#160;</a></span>g_early_irq_done</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::g_early_irq_done = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a84c3ad81d357b03972adf4feea72835a" name="a84c3ad81d357b03972adf4feea72835a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a84c3ad81d357b03972adf4feea72835a">&#9670;&#160;</a></span>g_pan_supported</h2>
 
@@ -2372,6 +2729,30 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="afd9b85181132acd76811d0e433804c37" name="afd9b85181132acd76811d0e433804c37"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd9b85181132acd76811d0e433804c37">&#9670;&#160;</a></span>GIC_MAX_IRQ</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::GIC_MAX_IRQ = 64</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Valid IRQ window for mask/unmask (issue #198): the snapshot covers distributor words 0..1 and the IDT has 64 slots, so lines &gt;= 64 have no defined state and must not touch MMIO. </p>
 
 </div>
 </div>
@@ -3041,6 +3422,54 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aeb8904daa05f0ab2d29338a6cc1a685c" name="aeb8904daa05f0ab2d29338a6cc1a685c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeb8904daa05f0ab2d29338a6cc1a685c">&#9670;&#160;</a></span>GICR_WAKER_CHILDREN_ONLINE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> arch::GICR_WAKER_CHILDREN_ONLINE = 1U &lt;&lt; 1</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICR_WAKER.Children_Online bit: redistributor finished its wake-up. </p>
+
+</div>
+</div>
+<a id="ad410a2c6d620490a71f7ab1cc2cecc1d" name="ad410a2c6d620490a71f7ab1cc2cecc1d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad410a2c6d620490a71f7ab1cc2cecc1d">&#9670;&#160;</a></span>GICR_WAKER_MAX_POLLS</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a398ec93d6bf48539b258a3dd78e32c82">uint32_t</a> arch::GICR_WAKER_MAX_POLLS = 1000000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Bounded poll budget for redistributor wake-up (issue #198, INV-1: boot hangs are forbidden — expiry surfaces via <a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2" title="Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online,...">gic_redist_ready()</a> as CTRL_TIMEOUT from early_irq_init, which then skips Timer::init). </p>
+
+</div>
+</div>
 <a id="a57c6bb74fdc3ee11eecab91b0142e95b" name="a57c6bb74fdc3ee11eecab91b0142e95b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a57c6bb74fdc3ee11eecab91b0142e95b">&#9670;&#160;</a></span>HHDM_OFFSET</h2>
 
@@ -3399,6 +3828,30 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aea1d2d632f96e8d9538233984e274d99" name="aea1d2d632f96e8d9538233984e274d99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea1d2d632f96e8d9538233984e274d99">&#9670;&#160;</a></span>MTIMECMP_DISARMED</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::MTIMECMP_DISARMED = ~0ULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Fail-closed disarm deadline: mtimecmp parked at the maximum so no supervisor timer interrupt can fire (mtime is unreadable-free and mtimecmp unwritable-clear from S-mode). </p>
+
+</div>
+</div>
 <a id="a9e56d1c39ac66468549b4230ebb9f5af" name="a9e56d1c39ac66468549b4230ebb9f5af"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9e56d1c39ac66468549b4230ebb9f5af">&#9670;&#160;</a></span>PAGE_SIZE</h2>
 
@@ -3617,6 +4070,30 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="ab590e0485f5d482d57eb19d3262cf29a" name="ab590e0485f5d482d57eb19d3262cf29a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab590e0485f5d482d57eb19d3262cf29a">&#9670;&#160;</a></span>PLIC_MAX_IRQ</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a0ba18cab9bd5513695cbe748e9bb4879">uint8_t</a> arch::PLIC_MAX_IRQ = 32</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes a single 32-line enable word; lines &gt;= 32 have no defined register and must not touch MMIO. </p>
+
+</div>
+</div>
 <a id="abb1979d1597b729886beeba2e2bf02e9" name="abb1979d1597b729886beeba2e2bf02e9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#abb1979d1597b729886beeba2e2bf02e9">&#9670;&#160;</a></span>PLIC_PENDING</h2>
 
@@ -3818,6 +4295,54 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Fallback RAM base when the firmware/bootloader provides no memory regions (QEMU virt machine layout for the non-x86 targets; x86_64 RAM starts at physical 0). </p>
+
+</div>
+</div>
+<a id="ad37d8b3caad2a620051abadb426467a2" name="ad37d8b3caad2a620051abadb426467a2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad37d8b3caad2a620051abadb426467a2">&#9670;&#160;</a></span>RISCV_MTIME_FREQ_HZ</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::RISCV_MTIME_FREQ_HZ = 10000000</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>QEMU virt mtime input frequency (issue #198: was a bare 10000000 literal in two places). Real hardware fills this from the device tree / SBI environment (issue #29 follow-up). </p>
+
+</div>
+</div>
+<a id="a7ce701e24002556d383fa1e4fa018dd2" name="a7ce701e24002556d383fa1e4fa018dd2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ce701e24002556d383fa1e4fa018dd2">&#9670;&#160;</a></span>SBI_LEGACY_SET_TIMER</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8hpp.html#a4fd212339282cce62b0d2700490de00f">uint64_t</a> arch::SBI_LEGACY_SET_TIMER = 0</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>SBI legacy SET_TIMER extension id (ecall a7 = 0). </p>
 
 </div>
 </div>

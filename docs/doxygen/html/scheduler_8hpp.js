@@ -8,6 +8,7 @@ var scheduler_8hpp =
     [ "kernel::deadline_detection_integrity", "namespacekernel.html#a9280448447d20124500fb1be0a0ed68f", null ],
     [ "kernel::fpu_nm_depth_max", "namespacekernel.html#a0635983d70bccde24c7125eba436d74e", null ],
     [ "kernel::scheduler_corruption_count", "namespacekernel.html#a48b013f336f1cc7c0546ff7a5aa9db11", null ],
+    [ "kernel::scheduler_force_apply", "namespacekernel.html#a914ef87f8e792f89a48aafc7c67b3112", null ],
     [ "kernel::scheduler_kernel_cr3", "namespacekernel.html#a45c7ed02104a8f2dc79052a0301a16c3", null ],
     [ "kernel::scheduler_load_cr3_from", "namespacekernel.html#ab2ec048806a6cd223e72e927ab792e6b", null ],
     [ "kernel::scheduler_load_kstack_base", "namespacekernel.html#a37bdeed47659d598826673faf0480073", null ],

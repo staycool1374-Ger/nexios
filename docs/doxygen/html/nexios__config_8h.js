@@ -20,6 +20,8 @@ var nexios__config_8h =
     [ "CONFIG_DEADLINE_MISS_DETECTION", "nexios__config_8h.html#ad7f0edb3b1228f6361d92c6cfa81fc30", null ],
     [ "CONFIG_DEADLINE_MONITOR_PID", "nexios__config_8h.html#adbfd2982bfd8abcdb392578155755823", null ],
     [ "CONFIG_DEADLINE_MONITOR_TASK", "nexios__config_8h.html#a9a7951d5ba3d567a2f0e372fd5540a44", null ],
+    [ "CONFIG_DEBUG_MAX_BREAKS", "nexios__config_8h.html#a728257b7b9189815e8fd31b9244dabf2", null ],
+    [ "CONFIG_DEBUG_MAX_STOPS", "nexios__config_8h.html#ae789582adc0801a733e0efbe633ed200", null ],
     [ "CONFIG_DM_PRIO_MAX", "nexios__config_8h.html#a43d9dab37b65e95fa2ac5777a4de4d95", null ],
     [ "CONFIG_DM_PRIO_MIN", "nexios__config_8h.html#a5455f1222d9acfec0d65194205357b96", null ],
     [ "CONFIG_DMESG_CAPACITY", "nexios__config_8h.html#a15f72011bdc6888b3a6aef544acc4604", null ],

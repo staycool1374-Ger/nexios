@@ -39,6 +39,8 @@ var gic_8hpp =
     [ "arch::GICR_RD_BASE", "namespacearch.html#a024087ec76a8f9982b009fa6696f23dd", null ],
     [ "arch::GICR_SGI_BASE", "namespacearch.html#aea75d86f398e56dec26a630d41bc1b91", null ],
     [ "arch::GICR_WAKER", "namespacearch.html#a7250075e1293fefcadae16792b540e49", null ],
+    [ "arch::GICR_WAKER_CHILDREN_ONLINE", "namespacearch.html#aeb8904daa05f0ab2d29338a6cc1a685c", null ],
+    [ "arch::GICR_WAKER_MAX_POLLS", "namespacearch.html#ad410a2c6d620490a71f7ab1cc2cecc1d", null ],
     [ "arch::INTID_RTC", "namespacearch.html#aa58e5a794a7b439c68022656d6277820", null ],
     [ "arch::INTID_UART0", "namespacearch.html#a9b746daa507660e7743691e667ca07db", null ],
     [ "arch::INTID_VIRTIO0", "namespacearch.html#acc5915b44b2ed7809dcb53701534dd45", null ],

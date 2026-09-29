@@ -28,6 +28,7 @@ var searchData=
   ['queue_5fsize_25',['queue_size',['../test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9',1,'test_virtio_blk_req.cpp']]],
   ['queue_5ftails_26',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]],
   ['queue_5ftarget_27',['queue_target',['../classkernel_1_1_scheduler.html#a06e0324382db7afdbdb491d3341ca23f',1,'kernel::Scheduler']]],
-  ['quiesce_5fenter_28',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
-  ['quiesce_5fexit_29',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
+  ['quiesce_5fdepth_28',['quiesce_depth',['../classkernel_1_1_scheduler.html#ad451e4e6a8f758693464c15aa889c2cc',1,'kernel::Scheduler']]],
+  ['quiesce_5fenter_29',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
+  ['quiesce_5fexit_30',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
 ];
