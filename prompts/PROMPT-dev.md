@@ -88,12 +88,14 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Update `Doxyfile` PROJECT_NUMBER to release version
 - Run `doxygen Doxyfile`
 - Update version strings in `README.md` and `readme.html`
+- Actualize `README.md` "Recent Release Highlights": prepend a `### **vX.Y.Z — Name**` section (same 4-bullet shape as prior releases); `readme.html` carries no highlights section (version line only)
 - Move completed roadmap items from `prompts/ROADMAP.md` → `prompts/ROADMAP_done.md`; update `EXECUTIVE OVERRIDE` to next target
 - Strip `-dev` from `KERNEL_VERSION_STRING` and set `stage = ""` in `version.hpp`
 - Regenerate manifest: `tree -I "build|obj|.git|node_modules" > ../project_structure.txt`
 - Commit all changes: `git add -A && git commit -m "release: v$(major).$(minor).$(patch)"`
 - Push: `git push origin main`
 - Tag: `git tag v$(major).$(minor).$(patch) && git push origin v$(major).$(minor).$(patch)`
+- Create the GitHub Release page object (a pushed tag alone creates none): `gh release create v$(major).$(minor).$(patch) --title "vX.Y.Z — Name" --notes "<scope>. Gates: debug <n>, release <n>."` — verify it shows as Latest
 - Mirror to Nextcloud: `mkdir -p ~/Nextcloud/arnold/jarvis/ && rsync -a --delete --exclude=build --exclude=.git ~/jarvis/ ~/Nextcloud/arnold/jarvis/`
 
 **Post-release (new dev cycle):**
